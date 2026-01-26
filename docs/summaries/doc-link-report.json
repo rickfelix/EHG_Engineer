@@ -1,0 +1,1552 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-01-26T18:33:53.707Z",
+  "commitSha": "d720b1a26a9fdf426f6921bac8e9459b246f7e11",
+  "summary": {
+    "totalFiles": 2562,
+    "totalLinks": 3384,
+    "brokenLinks": 183,
+    "filesWithBroken": 87,
+    "passRate": 94.6,
+    "byType": {
+      "file": 153,
+      "anchor": 26,
+      "directory": 4
+    }
+  },
+  "brokenLinkDetails": [
+    {
+      "file": "docs\\01_architecture\\aegis-system-overview.md",
+      "broken": [
+        {
+          "text": "SD-AEGIS-GOVERNANCE-001",
+          "href": "../../docs/reference/SD-AEGIS-GOVERNANCE-001.md",
+          "error": "File not found: ../../docs/reference/SD-AEGIS-GOVERNANCE-001.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\01_architecture\\multi-repo-architecture.md",
+      "broken": [
+        {
+          "text": "Deployment Guide",
+          "href": "../06_deployment/deployment-guide.md",
+          "error": "File not found: ../06_deployment/deployment-guide.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\01_architecture\\UNIFIED-FRONTEND-ARCHITECTURE.md",
+      "broken": [
+        {
+          "text": "Multi-Application Testing Architecture",
+          "href": "../05_testing/architecture.md",
+          "error": "File not found: ../05_testing/architecture.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\02_api\\README-EHG.md",
+      "broken": [
+        {
+          "text": "LICENSE",
+          "href": "LICENSE",
+          "error": "File not found: LICENSE",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\03_protocols_and_standards\\DOCUMENTATION_STANDARDS.md",
+      "broken": [
+        {
+          "text": ".*\\",
+          "href": "\" docs/ | grep -v http | validate_links\r\n\r\n# Generate report\r\ngenerate_doc_health_report > docs/10_reports/documentation/$(date +%Y-%m-%d",
+          "error": "File not found: \" docs/ | grep -v http | validate_links\r\n\r\n",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\03_protocols_and_standards\\gate0-workflow-entry-enforcement.md",
+      "broken": [
+        {
+          "text": "LEO Protocol v4.3.3 Overview",
+          "href": "./LEO_v4.3.3_overview.md",
+          "error": "File not found: ./LEO_v4.3.3_overview.md",
+          "type": "file"
+        },
+        {
+          "text": "Strategic Directive Workflow",
+          "href": "../workflow/strategic-directive-workflow.md",
+          "error": "File not found: ../workflow/strategic-directive-workflow.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\04_features\\prd-grounding-validation.md",
+      "broken": [
+        {
+          "text": "PRD Generation Pipeline",
+          "href": "../03_protocols_and_standards/LEO_v4.3_PRD_GENERATION.md",
+          "error": "File not found: ../03_protocols_and_standards/LEO_v4.3_PRD_GENERATION.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\05_testing\\enhanced-debugging-readme.md",
+      "broken": [
+        {
+          "text": "API Reference",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\05_testing\\enhanced-index.md",
+      "broken": [
+        {
+          "text": "API Reference",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        },
+        {
+          "text": "Architecture Documentation",
+          "href": "./ENHANCED_TESTING_ARCHITECTURE.md",
+          "error": "File not found: ./ENHANCED_TESTING_ARCHITECTURE.md",
+          "type": "file"
+        },
+        {
+          "text": "TestCollaborationCoordinator",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md#testcollaborationcoordinator",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        },
+        {
+          "text": "EnhancedTestingSubAgent",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md#enhancedtestingsubagent",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        },
+        {
+          "text": "EnhancedDebuggingSubAgent",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md#enhanceddebuggingsubagent",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        },
+        {
+          "text": "TestHandoff Interface",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md#testhandoff",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        },
+        {
+          "text": "System Overview",
+          "href": "./ENHANCED_TESTING_ARCHITECTURE.md#system-overview",
+          "error": "File not found: ./ENHANCED_TESTING_ARCHITECTURE.md",
+          "type": "file"
+        },
+        {
+          "text": "Component Architecture",
+          "href": "./ENHANCED_TESTING_ARCHITECTURE.md#detailed-component-architecture",
+          "error": "File not found: ./ENHANCED_TESTING_ARCHITECTURE.md",
+          "type": "file"
+        },
+        {
+          "text": "Self-Healing Selectors",
+          "href": "./ENHANCED_TESTING_ARCHITECTURE.md#self-healing-selector-architecture",
+          "error": "File not found: ./ENHANCED_TESTING_ARCHITECTURE.md",
+          "type": "file"
+        },
+        {
+          "text": "API Reference",
+          "href": "./ENHANCED_TESTING_API_REFERENCE.md",
+          "error": "File not found: ./ENHANCED_TESTING_API_REFERENCE.md",
+          "type": "file"
+        },
+        {
+          "text": "Architecture Documentation",
+          "href": "./ENHANCED_TESTING_ARCHITECTURE.md",
+          "error": "File not found: ./ENHANCED_TESTING_ARCHITECTURE.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\06_deployment\\validation-tools.md",
+      "broken": [
+        {
+          "text": "CI/CD Workflows",
+          "href": "../../.github/workflows/",
+          "error": "Directory without index: ../../.github/workflows/",
+          "type": "directory"
+        }
+      ]
+    },
+    {
+      "file": "docs\\analysis\\DOCUMENTATION_STRUCTURE_ASSESSMENT.md",
+      "broken": [
+        {
+          "text": "Topic A",
+          "href": "../01_architecture/topic-a.md",
+          "error": "File not found: ../01_architecture/topic-a.md",
+          "type": "file"
+        },
+        {
+          "text": "Pattern C",
+          "href": "../reference/pattern-c.md",
+          "error": "File not found: ../reference/pattern-c.md",
+          "type": "file"
+        },
+        {
+          "text": "Your First SD",
+          "href": "guides/DEVELOPER_ONBOARDING.md",
+          "error": "File not found: guides/DEVELOPER_ONBOARDING.md",
+          "type": "file"
+        },
+        {
+          "text": "LEAD Phase",
+          "href": "../CLAUDE_LEAD.md",
+          "error": "File not found: ../CLAUDE_LEAD.md",
+          "type": "file"
+        },
+        {
+          "text": "PLAN Phase",
+          "href": "../CLAUDE_PLAN.md",
+          "error": "File not found: ../CLAUDE_PLAN.md",
+          "type": "file"
+        },
+        {
+          "text": "EXEC Phase",
+          "href": "../CLAUDE_EXEC.md",
+          "error": "File not found: ../CLAUDE_EXEC.md",
+          "type": "file"
+        },
+        {
+          "text": "Get Started in 5 Minutes",
+          "href": "../04_features/SIMPLE_PROJECT_SETUP.md",
+          "error": "File not found: ../04_features/SIMPLE_PROJECT_SETUP.md",
+          "type": "file"
+        },
+        {
+          "text": "Developer Onboarding",
+          "href": "DEVELOPER_ONBOARDING.md",
+          "error": "File not found: DEVELOPER_ONBOARDING.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE_LEAD.md",
+          "href": "../CLAUDE_LEAD.md",
+          "error": "File not found: ../CLAUDE_LEAD.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE_PLAN.md",
+          "href": "../CLAUDE_PLAN.md",
+          "error": "File not found: ../CLAUDE_PLAN.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE_EXEC.md",
+          "href": "../CLAUDE_EXEC.md",
+          "error": "File not found: ../CLAUDE_EXEC.md",
+          "type": "file"
+        },
+        {
+          "text": "06_deployment/",
+          "href": "06_deployment/",
+          "error": "File not found: 06_deployment/",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\DOCUMENTATION_CLEANUP_AUDIT_2025-12-29.md",
+      "broken": [
+        {
+          "text": "CLAUDE.md",
+          "href": "../CLAUDE.md",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "archive/protocols/",
+          "href": "archive/protocols/",
+          "error": "File not found: archive/protocols/",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\DOCUMENTATION_IMPROVEMENT_SUMMARY.md",
+      "broken": [
+        {
+          "text": "Get Started in 5 Minutes",
+          "href": "../04_features/SIMPLE_PROJECT_SETUP.md",
+          "error": "File not found: ../04_features/SIMPLE_PROJECT_SETUP.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\DOCUMENTATION_MAP.md",
+      "broken": [
+        {
+          "text": "Quick Setup",
+          "href": "../04_features/SIMPLE_PROJECT_SETUP.md",
+          "error": "File not found: ../04_features/SIMPLE_PROJECT_SETUP.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol Intro",
+          "href": "../CLAUDE.md",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "Contributing Guidelines",
+          "href": "../CONTRIBUTING.md",
+          "error": "File not found: ../CONTRIBUTING.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE_LEAD.md",
+          "href": "../CLAUDE_LEAD.md",
+          "error": "File not found: ../CLAUDE_LEAD.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE_PLAN.md",
+          "href": "../CLAUDE_PLAN.md",
+          "error": "File not found: ../CLAUDE_PLAN.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE_EXEC.md",
+          "href": "../CLAUDE_EXEC.md",
+          "error": "File not found: ../CLAUDE_EXEC.md",
+          "type": "file"
+        },
+        {
+          "text": "Testing Agent",
+          "href": "../.claude/agents/testing-agent.md",
+          "error": "File not found: ../.claude/agents/testing-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "UAT Agent",
+          "href": "../.claude/agents/uat-agent.md",
+          "error": "File not found: ../.claude/agents/uat-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "docmon-agent.md",
+          "href": "../.claude/agents/docmon-agent.md",
+          "error": "File not found: ../.claude/agents/docmon-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "database-agent.md",
+          "href": "../.claude/agents/database-agent.md",
+          "error": "File not found: ../.claude/agents/database-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "design-agent.md",
+          "href": "../.claude/agents/design-agent.md",
+          "error": "File not found: ../.claude/agents/design-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "testing-agent.md",
+          "href": "../.claude/agents/testing-agent.md",
+          "error": "File not found: ../.claude/agents/testing-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "security-agent.md",
+          "href": "../.claude/agents/security-agent.md",
+          "error": "File not found: ../.claude/agents/security-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "validation-agent.md",
+          "href": "../.claude/agents/validation-agent.md",
+          "error": "File not found: ../.claude/agents/validation-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "Execute Sub-Agent",
+          "href": "reference/native-sub-agent-invocation.md",
+          "error": "File not found: reference/native-sub-agent-invocation.md",
+          "type": "file"
+        },
+        {
+          "text": "Protocol Self-Improvement",
+          "href": "reference/protocol-self-improvement.md",
+          "error": "File not found: reference/protocol-self-improvement.md",
+          "type": "file"
+        },
+        {
+          "text": "01_architecture/",
+          "href": "../05_testing/architecture.md",
+          "error": "File not found: ../05_testing/architecture.md",
+          "type": "file"
+        },
+        {
+          "text": "02_api/",
+          "href": "02_api/",
+          "error": "File not found: 02_api/",
+          "type": "file"
+        },
+        {
+          "text": "API Patterns",
+          "href": "../.claude/agents/api-agent.md",
+          "error": "File not found: ../.claude/agents/api-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "04_features/",
+          "href": "04_features/",
+          "error": "File not found: 04_features/",
+          "type": "file"
+        },
+        {
+          "text": "05_testing/",
+          "href": "05_testing/",
+          "error": "File not found: 05_testing/",
+          "type": "file"
+        },
+        {
+          "text": "06_deployment/",
+          "href": "06_deployment/",
+          "error": "File not found: 06_deployment/",
+          "type": "file"
+        },
+        {
+          "text": "Summaries",
+          "href": "summaries/",
+          "error": "File not found: summaries/",
+          "type": "file"
+        },
+        {
+          "text": "Deployment Troubleshooting",
+          "href": "06_deployment/",
+          "error": "File not found: 06_deployment/",
+          "type": "file"
+        },
+        {
+          "text": "Performance Patterns",
+          "href": "../.claude/agents/performance-agent.md",
+          "error": "File not found: ../.claude/agents/performance-agent.md",
+          "type": "file"
+        },
+        {
+          "text": "Architecture Docs",
+          "href": "../05_testing/architecture.md",
+          "error": "File not found: ../05_testing/architecture.md",
+          "type": "file"
+        },
+        {
+          "text": "ADR Documents",
+          "href": "../05_testing/architecture.md",
+          "error": "File not found: ../05_testing/architecture.md",
+          "type": "file"
+        },
+        {
+          "text": "02_api/",
+          "href": "02_api/",
+          "error": "File not found: 02_api/",
+          "type": "file"
+        },
+        {
+          "text": "Database Schema",
+          "href": "../reference/database-schema-overview.md",
+          "error": "File not found: ../reference/database-schema-overview.md",
+          "type": "file"
+        },
+        {
+          "text": "CLAUDE.md",
+          "href": "../CLAUDE.md",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "CHANGELOG.md",
+          "href": "../CHANGELOG.md",
+          "error": "File not found: ../CHANGELOG.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-001.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-002.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-003.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-004.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-005.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-006.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-007.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-008.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-009.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-010.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-011.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-012.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-013.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-014.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\backlog\\issues\\WF-015.md",
+      "broken": [
+        {
+          "text": "Stages Definition",
+          "href": "../../stages.yaml",
+          "error": "File not found: ../../stages.yaml",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\archive\\v1-40-stage-workflow\\crewai_compliance_policy.md",
+      "broken": [
+        {
+          "text": "EHG CrewAI Architecture",
+          "href": "/docs/architecture/crewai/",
+          "error": "File not found: /docs/architecture/crewai/",
+          "type": "file"
+        },
+        {
+          "text": "Stage Dossiers",
+          "href": "/docs/workflow/critique/stage-01.md through stage-40.md",
+          "error": "File not found: /docs/workflow/critique/stage-01.md through stage-40.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\governance\\protocol-constitution-guide.md",
+      "broken": [
+        {
+          "text": "AI Quality Judge Implementation",
+          "href": "../../scripts/modules/ai-quality-judge/",
+          "error": "Directory without index: ../../scripts/modules/ai-quality-judge/",
+          "type": "directory"
+        }
+      ]
+    },
+    {
+      "file": "docs\\guides\\architectural-guidelines.md",
+      "broken": [
+        {
+          "text": "Database Loader Consolidation",
+          "href": "./DATABASE_LOADER_CONSOLIDATION.md",
+          "error": "File not found: ./DATABASE_LOADER_CONSOLIDATION.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol Documentation",
+          "href": "./03_protocols_and_standards/",
+          "error": "File not found: ./03_protocols_and_standards/",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\guides\\design-ui-ux-workflow.md",
+      "broken": [
+        {
+          "text": "Audit Script",
+          "href": "../scripts/design-ui-ux-audit.js",
+          "error": "File not found: ../scripts/design-ui-ux-audit.js",
+          "type": "file"
+        },
+        {
+          "text": "Design Command",
+          "href": "../.claude/commands/leo-design.md",
+          "error": "File not found: ../.claude/commands/leo-design.md",
+          "type": "file"
+        },
+        {
+          "text": "Database Migration",
+          "href": "../database/migrations/expand-design-subagent-triggers.sql",
+          "error": "File not found: ../database/migrations/expand-design-subagent-triggers.sql",
+          "type": "file"
+        },
+        {
+          "text": "Design Agent Persona",
+          "href": "../lib/agents/personas/sub-agents/design-agent.json",
+          "error": "File not found: ../lib/agents/personas/sub-agents/design-agent.json",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\guides\\hybrid-sub-agent-workflow.md",
+      "broken": [
+        {
+          "text": "Native Sub-Agent Invocation Guide",
+          "href": "../reference/native-sub-agent-invocation.md",
+          "error": "File not found: ../reference/native-sub-agent-invocation.md",
+          "type": "file"
+        },
+        {
+          "text": "Database-First Architecture",
+          "href": "../reference/database-first.md",
+          "error": "File not found: ../reference/database-first.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\guides\\windows-setup-guide.md",
+      "broken": [
+        {
+          "text": "LEO Protocol Documentation",
+          "href": "../reference/leo-protocol-guide.md",
+          "error": "File not found: ../reference/leo-protocol-guide.md",
+          "type": "file"
+        },
+        {
+          "text": "Database Schema Reference",
+          "href": "../reference/schema/",
+          "error": "Directory without index: ../reference/schema/",
+          "type": "directory"
+        }
+      ]
+    },
+    {
+      "file": "docs\\INDEX.md",
+      "broken": [
+        {
+          "text": "LEO Stack README",
+          "href": "../scripts/README-LEO-STACK.md",
+          "error": "File not found: ../scripts/README-LEO-STACK.md",
+          "type": "file"
+        },
+        {
+          "text": "workflows/",
+          "href": "workflows/",
+          "error": "File not found: workflows/",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\leo\\sub-agents\\design-sub-agent-guide.md",
+      "broken": [
+        {
+          "text": "Utility Library Guide",
+          "href": "./utility-library-guide.md",
+          "error": "File not found: ./utility-library-guide.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\leo\\sub-agents\\native-invocation.md",
+      "broken": [
+        {
+          "text": "LEO Protocol CLAUDE.md",
+          "href": "../../CLAUDE.md",
+          "error": "File not found: ../../CLAUDE.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\leo\\sub-agents\\patterns-guide.md",
+      "broken": [
+        {
+          "text": "Utility Library Guide",
+          "href": "./utility-library-guide.md",
+          "error": "File not found: ./utility-library-guide.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol Core",
+          "href": "../CLAUDE_CORE.md",
+          "error": "File not found: ../CLAUDE_CORE.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\planning\\documentation-cleanup-master-plan.md",
+      "broken": [
+        {
+          "text": "text",
+          "href": "path",
+          "error": "File not found: path",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\agentic-context-engineering-v3.md",
+      "broken": [
+        {
+          "text": "Generic Sub-Agent Executor Framework",
+          "href": "./generic-sub-agent-executor-framework.md",
+          "error": "File not found: ./generic-sub-agent-executor-framework.md",
+          "type": "file"
+        },
+        {
+          "text": "Sub-Agent Compression System",
+          "href": "./sub-agent-compression.md",
+          "error": "File not found: ./sub-agent-compression.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\audit-format-spec.md",
+      "broken": [
+        {
+          "text": "Runtime Audit Protocol",
+          "href": "../protocols/runtime-audit-protocol.md",
+          "error": "File not found: ../protocols/runtime-audit-protocol.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\child-sd-llm-generation.md",
+      "broken": [
+        {
+          "text": "LEAD-TO-PLAN Handoff Verification",
+          "href": "../leo/handoffs/lead-to-plan.md",
+          "error": "File not found: ../leo/handoffs/lead-to-plan.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\claude-md-optimization.md",
+      "broken": [
+        {
+          "text": "CLAUDE File Generator",
+          "href": "../reference/claude-md-generation.md",
+          "error": "File not found: ../reference/claude-md-generation.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\context-tracking-system.md",
+      "broken": [
+        {
+          "text": "Token Accounting Research (Dec 2025)",
+          "href": "../../research/token-accounting-research.md",
+          "error": "File not found: ../../research/token-accounting-research.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\docs-info-architecture.md",
+      "broken": [
+        {
+          "text": "Parent SD",
+          "href": "../../sds/SD-PARENT-001.md",
+          "error": "File not found: ../../sds/SD-PARENT-001.md",
+          "type": "file"
+        },
+        {
+          "text": "link",
+          "href": "./folder",
+          "error": "File not found: ./folder",
+          "type": "file"
+        },
+        {
+          "text": "Document Title",
+          "href": "relative/path/to/doc.md",
+          "error": "File not found: relative/path/to/doc.md",
+          "type": "file"
+        },
+        {
+          "text": "Document Title",
+          "href": "relative/path/to/doc.md",
+          "error": "File not found: relative/path/to/doc.md",
+          "type": "file"
+        },
+        {
+          "text": "Document Title",
+          "href": "relative/path/to/doc.md",
+          "error": "File not found: relative/path/to/doc.md",
+          "type": "file"
+        },
+        {
+          "text": "Document Title",
+          "href": "relative/path/to/doc.md",
+          "error": "File not found: relative/path/to/doc.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol Overview",
+          "href": "../03_protocols_and_standards/LEO_v4.3.3.md",
+          "error": "File not found: ../03_protocols_and_standards/LEO_v4.3.3.md",
+          "type": "file"
+        },
+        {
+          "text": "Creating Documentation",
+          "href": "../guides/guide-creating-docs.md",
+          "error": "File not found: ../guides/guide-creating-docs.md",
+          "type": "file"
+        },
+        {
+          "text": "{Document Title}",
+          "href": "./{file-name}.md",
+          "error": "File not found: ./{file-name}.md",
+          "type": "file"
+        },
+        {
+          "text": "{Document Title}",
+          "href": "./{file-name}.md",
+          "error": "File not found: ./{file-name}.md",
+          "type": "file"
+        },
+        {
+          "text": "{Document Title}",
+          "href": "./{file-name}.md",
+          "error": "File not found: ./{file-name}.md",
+          "type": "file"
+        },
+        {
+          "text": "Most Used Doc 1",
+          "href": "./{file}.md",
+          "error": "File not found: ./{file}.md",
+          "type": "file"
+        },
+        {
+          "text": "Most Used Doc 2",
+          "href": "./{file}.md",
+          "error": "File not found: ./{file}.md",
+          "type": "file"
+        },
+        {
+          "text": "`../other-dir/`",
+          "href": "../other-dir/",
+          "error": "File not found: ../other-dir/",
+          "type": "file"
+        },
+        {
+          "text": "Schema Overview",
+          "href": "./database-schema-overview.md",
+          "error": "File not found: ./database-schema-overview.md",
+          "type": "file"
+        },
+        {
+          "text": ".*\\",
+          "href": "\\.\\..*\\.md",
+          "error": "File not found: \\.\\..*\\.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol v4.3.3",
+          "href": "../03_protocols_and_standards/LEO_v4.3.3.md",
+          "error": "File not found: ../03_protocols_and_standards/LEO_v4.3.3.md",
+          "type": "file"
+        },
+        {
+          "text": "DOCMON Sub-Agent Guide",
+          "href": "../agents/DOCMON-guide.md",
+          "error": "File not found: ../agents/DOCMON-guide.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\governance-library-guide.md",
+      "broken": [
+        {
+          "text": "level",
+          "href": "message, context",
+          "error": "File not found: message, context",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\leo-protocol-testing-improvements-2025-10-12.md",
+      "broken": [
+        {
+          "text": "Over-Engineering Rubric",
+          "href": "../CLAUDE.md#lead-over-engineering-evaluation-process",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "Strategic Validation Gate",
+          "href": "../CLAUDE.md#lead-pre-approval-strategic-validation-gate",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "Pre-EXEC Checklist",
+          "href": "../CLAUDE.md#plan-pre-exec-checklist",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "EXEC Implementation Requirements",
+          "href": "../CLAUDE.md#exec-agent-implementation-requirements",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol Overview",
+          "href": "../CLAUDE.md",
+          "error": "File not found: ../CLAUDE.md",
+          "type": "file"
+        },
+        {
+          "text": "Unified Handoff System",
+          "href": "./unified-handoff-system.md",
+          "error": "File not found: ./unified-handoff-system.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\multi-repo-module.md",
+      "broken": [
+        {
+          "text": "Ship Command Documentation",
+          "href": "../.claude/commands/ship.md",
+          "error": "File not found: ../.claude/commands/ship.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\README.md",
+      "broken": [
+        {
+          "text": "database-schema-overview.md",
+          "href": "database-schema-overview.md",
+          "error": "File not found: database-schema-overview.md",
+          "type": "file"
+        },
+        {
+          "text": "sub-agent-compression.md",
+          "href": "sub-agent-compression.md",
+          "error": "File not found: sub-agent-compression.md",
+          "type": "file"
+        },
+        {
+          "text": "native-sub-agent-invocation.md",
+          "href": "native-sub-agent-invocation.md",
+          "error": "File not found: native-sub-agent-invocation.md",
+          "type": "file"
+        },
+        {
+          "text": "generic-sub-agent-executor-framework.md",
+          "href": "generic-sub-agent-executor-framework.md",
+          "error": "File not found: generic-sub-agent-executor-framework.md",
+          "type": "file"
+        },
+        {
+          "text": "claude-md-router-architecture.md",
+          "href": "claude-md-router-architecture.md",
+          "error": "File not found: claude-md-router-architecture.md",
+          "type": "file"
+        },
+        {
+          "text": "protocol-self-improvement.md",
+          "href": "protocol-self-improvement.md",
+          "error": "File not found: protocol-self-improvement.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\retrospective-signals-api.md",
+      "broken": [
+        {
+          "text": "Retrospective Quality Gate",
+          "href": "./retrospective-quality-gate.md",
+          "error": "File not found: ./retrospective-quality-gate.md",
+          "type": "file"
+        },
+        {
+          "text": "LEO Protocol v4.3.3",
+          "href": "../03_protocols_and_standards/LEO_v4.3.3.md",
+          "error": "File not found: ../03_protocols_and_standards/LEO_v4.3.3.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\session-summary-feature.md",
+      "broken": [
+        {
+          "text": "Orchestrator Completion Hook",
+          "href": "../reference/orchestrator-hooks.md",
+          "error": "File not found: ../reference/orchestrator-hooks.md",
+          "type": "file"
+        },
+        {
+          "text": "Secret Redaction Patterns",
+          "href": "../security/secret-redaction-patterns.md",
+          "error": "File not found: ../security/secret-redaction-patterns.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\reference\\uat-command-platform.md",
+      "broken": [
+        {
+          "text": "Quality Gate Patterns",
+          "href": "quality-gate-patterns.md",
+          "error": "File not found: quality-gate-patterns.md",
+          "type": "file"
+        },
+        {
+          "text": "Risk Assessment Guide",
+          "href": "risk-assessment-guide.md",
+          "error": "File not found: risk-assessment-guide.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\stages\\README.md",
+      "broken": [
+        {
+          "text": "individual/",
+          "href": "individual/",
+          "error": "Directory without index: individual/",
+          "type": "directory"
+        }
+      ]
+    },
+    {
+      "file": "docs\\summaries\\implementations\\CATEGORY_FIELD_DEPRECATION_COMPLETE.md",
+      "broken": [
+        {
+          "text": "SD Type Classification Rules",
+          "href": "../../../CLAUDE_CORE.md#sd-type-classification",
+          "error": "Anchor #sd-type-classification not found in ../../../CLAUDE_CORE.md",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\summaries\\implementations\\SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001-implementation.md",
+      "broken": [
+        {
+          "text": "LEO Protocol v4.3.3",
+          "href": "../../03_protocols_and_standards/LEO_v4.3.3.md",
+          "error": "File not found: ../../03_protocols_and_standards/LEO_v4.3.3.md",
+          "type": "file"
+        },
+        {
+          "text": "Sub-Agent: RETRO",
+          "href": "../../leo/sub-agents/RETRO.md",
+          "error": "File not found: ../../leo/sub-agents/RETRO.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\summaries\\implementations\\SD-LEO-INFRA-PROACTIVE-BRANCH-ENFORCEMENT-001-implementation.md",
+      "broken": [
+        {
+          "text": "LEO Protocol v4.3.3",
+          "href": "../../03_protocols_and_standards/LEO_v4.3.3.md",
+          "error": "File not found: ../../03_protocols_and_standards/LEO_v4.3.3.md",
+          "type": "file"
+        },
+        {
+          "text": "Git Branch Verification",
+          "href": "../../reference/git-branch-verification.md",
+          "error": "File not found: ../../reference/git-branch-verification.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\summaries\\VISION_V2_GLASS_COCKPIT.md",
+      "broken": [
+        {
+          "text": "Chairman's Glass Cockpit Dashboard",
+          "href": "/C:/Users/rickf/.gemini/antigravity/brain/51d9a722-c9c0-47ba-ad9c-0d455ecc11ae/chairman_dashboard_wireframe_1765555358156.png",
+          "error": "File not found: /C:/Users/rickf/.gemini/antigravity/brain/51d9a722-c9c0-47ba-ad9c-0d455ecc11ae/chairman_dashboard_wireframe_1765555358156.png",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\testing\\README.md",
+      "broken": [
+        {
+          "text": "Locator Strategy Guide",
+          "href": "./locator-strategy-guide.md",
+          "error": "File not found: ./locator-strategy-guide.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\vision\\specs\\01-database-schema.md",
+      "broken": [
+        {
+          "text": "Architect's Addendum",
+          "href": "../../plans/resilient-stargazing-pancake.md",
+          "error": "File not found: ../../plans/resilient-stargazing-pancake.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\best_practices.md",
+      "broken": [
+        {
+          "text": "CLAUDE.md",
+          "href": "/CLAUDE.md",
+          "error": "File not found: /CLAUDE.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\crewai_compliance_policy.md",
+      "broken": [
+        {
+          "text": "EHG CrewAI Architecture",
+          "href": "/docs/architecture/crewai/",
+          "error": "File not found: /docs/architecture/crewai/",
+          "type": "file"
+        },
+        {
+          "text": "Stage Dossiers",
+          "href": "/docs/workflow/critique/stage-01.md through stage-40.md",
+          "error": "File not found: /docs/workflow/critique/stage-01.md through stage-40.md",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-01-draft-idea-and-chairman-review.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L119",
+          "error": "Anchor #L119 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-02-ai-multi-model-critique.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L159",
+          "error": "Anchor #L159 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-03-market-validation-and-rat.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L199",
+          "error": "Anchor #L199 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-04-competitive-intelligence.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L239",
+          "error": "Anchor #L239 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-05-profitability-forecasting.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L279",
+          "error": "Anchor #L279 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-06-risk-evaluation-matrix.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L319",
+          "error": "Anchor #L319 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-07-pricing-strategy.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L359",
+          "error": "Anchor #L359 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-08-business-model-canvas.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L399",
+          "error": "Anchor #L399 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-09-exit-oriented-design.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L439",
+          "error": "Anchor #L439 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-10-strategic-naming.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L479",
+          "error": "Anchor #L479 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-11-go-to-market-strategy.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L519",
+          "error": "Anchor #L519 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-12-sales-and-success-logic.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L559",
+          "error": "Anchor #L559 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-13-tech-stack-interrogation.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L599",
+          "error": "Anchor #L599 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-14-data-model-and-architecture.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L639",
+          "error": "Anchor #L639 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-15-epic-and-user-story-breakdown.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L679",
+          "error": "Anchor #L679 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-16-spec-driven-schema-generation.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L719",
+          "error": "Anchor #L719 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-17-environment-and-agent-config.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L759",
+          "error": "Anchor #L759 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-18-mvp-development-loop.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L799",
+          "error": "Anchor #L799 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-19-integration-and-api-layer.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L839",
+          "error": "Anchor #L839 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-20-security-and-performance.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L879",
+          "error": "Anchor #L879 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-21-qa-and-uat.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L919",
+          "error": "Anchor #L919 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-22-deployment-and-infrastructure.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L959",
+          "error": "Anchor #L959 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-23-production-launch.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L999",
+          "error": "Anchor #L999 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-24-analytics-and-feedback.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L1039",
+          "error": "Anchor #L1039 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    },
+    {
+      "file": "docs\\workflow\\stages\\stage-25-optimization-and-scale.md",
+      "broken": [
+        {
+          "text": "stages_v2.yaml",
+          "href": "../stages_v2.yaml#L1079",
+          "error": "Anchor #L1079 not found in ../stages_v2.yaml",
+          "type": "anchor"
+        }
+      ]
+    }
+  ]
+}
