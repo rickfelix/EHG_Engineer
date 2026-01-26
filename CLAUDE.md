@@ -358,6 +358,79 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 - + Phase file: 43k avg (22%) ✅
 - + Reference doc: 58k (29%) ✅
 
+## Orchestrator SD Decision Guide
+
+### When to Use Orchestrator Pattern
+
+Use the orchestrator pattern when an SD has ANY of these characteristics:
+
+| Signal | Example | Decision |
+|--------|---------|----------|
+| 2+ independent workstreams | "Backend migration + Frontend updates + Documentation" | → Orchestrator |
+| Sequencing constraints | "Child B depends on Child A's database changes" | → Orchestrator |
+| Parallel execution needed | "Multiple teams working simultaneously" | → Orchestrator |
+| Multi-phase initiative | "Foundation → Implementation → Polish" | → Orchestrator |
+| Total scope > 2 weeks | Large feature with many moving parts | → Consider orchestrator |
+
+**NOT orchestrator** (use standard SD):
+- Single workstream with clear scope
+- Work can be done in one EXEC cycle
+- No ordering dependencies
+- Estimated completion < 1 week
+
+### Required Artifacts for Orchestrator SDs
+
+Before starting orchestrator work, ensure these exist:
+
+1. **Parent SD** (status: draft initially)
+   - `relationship_type: 'parent'`
+   - Clear description of what children will accomplish together
+   - `metadata.is_orchestrator: true` or `metadata.pattern_type: 'orchestrator'`
+
+2. **All Child SDs** (created upfront)
+   - Each child has `parent_sd_id` pointing to parent
+   - Each child has own `sd_type` (may differ from siblings)
+   - Dependencies documented in `dependency_chain` if ordering matters
+
+3. **Parent PRD** (derived from children)
+   - Contains Child Inventory section
+   - Contains Traceability Map (parent requirements → child SD IDs)
+   - Documents cross-cutting requirements and sequencing rationale
+
+### Preflight Command
+
+**Always run before starting orchestrator work**:
+```bash
+node scripts/orchestrator-preflight.js SD-XXX-001
+```
+
+**With structured output** (for CI/automation):
+```bash
+node scripts/orchestrator-preflight.js SD-XXX-001 --json
+```
+
+**With validation enforcement** (exits non-zero on issues):
+```bash
+node scripts/orchestrator-preflight.js SD-XXX-001 --validate
+```
+
+### Common Preflight Errors and Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `NO_CHILDREN` | Parent declared but no child SDs | Create child SDs with `parent_sd_id` |
+| `NO_DERIVATION_MAPPING` | Parent PRD lacks traceability | Add child→requirement mapping table |
+| `CHILD_EXECUTING_BEFORE_ORCHESTRATOR_APPROVAL` | Children started before parent approved | Complete orchestrator LEAD approval first |
+
+### Quick Reference
+
+| Item | Location/Command |
+|------|------------------|
+| Orchestrator preflight | `node scripts/orchestrator-preflight.js <SD-ID>` |
+| Child preflight | `node scripts/child-sd-preflight.js <CHILD-SD-ID>` |
+| Pattern documentation | CLAUDE_CORE.md "Orchestrator SD Workflow Pattern" section |
+| Database functions | `is_orchestrator_sd()`, `calculate_orchestrator_progress()` |
+
 ## Sub-Agent Trigger Keywords (Quick Reference)
 
 **CRITICAL**: When user query contains these keywords, PROACTIVELY invoke the corresponding sub-agent via Task tool.
