@@ -97,6 +97,84 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
 }
 
 /**
+ * Get implementation context constraints for PRD generation
+ * Prevents LLM from hallucinating irrelevant requirements
+ * SD-LEO-INFRA-PRD-GROUNDING-VALIDATION-001
+ *
+ * @param {string} context - Implementation context (cli, web, api, database, infrastructure, hybrid)
+ * @returns {string|null} Context-specific constraints or null if no special constraints
+ */
+function getImplementationContextConstraints(context) {
+  const constraints = {
+    cli: `**DO NOT INCLUDE requirements related to**:
+- WCAG 2.1 accessibility (color contrast, screen readers, keyboard navigation)
+- Responsive design or mobile layouts
+- Browser compatibility or CSS styling
+- Theme support (light/dark mode)
+- UI render performance (500ms SLA, etc.)
+- Component architecture or UI frameworks
+
+**FOCUS ON**:
+- Command-line argument parsing and validation
+- Exit codes and error messages
+- Terminal output formatting
+- Signal handling (SIGINT, SIGTERM)
+- Piping and file I/O
+- Environment variable handling`,
+
+    api: `**DO NOT INCLUDE requirements related to**:
+- UI/UX design or user interface components
+- WCAG accessibility for visual elements
+- Frontend performance metrics
+- Browser-specific behavior
+
+**FOCUS ON**:
+- REST/GraphQL endpoint design
+- Request/response schemas
+- HTTP status codes and error handling
+- Authentication and authorization
+- Rate limiting and throttling
+- API versioning
+- Documentation (OpenAPI/Swagger)`,
+
+    database: `**DO NOT INCLUDE requirements related to**:
+- UI components or user interface
+- Frontend frameworks or styling
+- User interaction flows
+- Browser compatibility
+
+**FOCUS ON**:
+- Schema design and migrations
+- RLS policies and security
+- Index optimization
+- Data integrity constraints
+- Transaction handling
+- Backup and recovery
+- Query performance`,
+
+    infrastructure: `**DO NOT INCLUDE requirements related to**:
+- End-user UI or visual design
+- WCAG accessibility for user interfaces
+- Customer-facing features
+- User journey or experience
+
+**FOCUS ON**:
+- System configuration and setup
+- Developer tooling and scripts
+- CI/CD pipeline integration
+- Monitoring and logging
+- Internal process automation
+- Documentation and runbooks`,
+
+    hybrid: 'This SD involves multiple implementation contexts. Requirements should be tagged with their applicable context (CLI, Web, API, Database) to ensure traceability.',
+
+    web: null // Default context, no special constraints
+  };
+
+  return constraints[context] || constraints.web;
+}
+
+/**
  * Build comprehensive context string for PRD generation
  * Includes ALL available SD metadata for thorough PRD generation
  * Also includes existing user stories for consistency
@@ -118,6 +196,7 @@ export function buildPRDGenerationContext(sd, context = {}) {
 **Category**: ${sd.category || 'Not specified'}
 **Priority**: ${sd.priority || 'Not specified'}
 **Status**: ${sd.status || 'draft'}
+**Implementation Context**: ${sd.implementation_context || 'web'}
 
 ### Description
 ${sd.description || 'No description provided'}
@@ -256,7 +335,18 @@ ${context.existingStories.map(story => {
 }).join('\n\n')}`);
   }
 
-  // 9. Generation Instructions - Comprehensive
+  // 9. Implementation Context Constraints (SD-LEO-INFRA-PRD-GROUNDING-VALIDATION-001)
+  const implementationContext = sd.implementation_context || 'web';
+  const contextConstraints = getImplementationContextConstraints(implementationContext);
+  if (contextConstraints) {
+    sections.push(`## IMPLEMENTATION CONTEXT CONSTRAINTS
+
+**Target Platform**: ${implementationContext.toUpperCase()}
+
+${contextConstraints}`);
+  }
+
+  // 10. Generation Instructions - Comprehensive
   sections.push(`## TASK - GENERATE COMPREHENSIVE PRD
 
 Using ALL the context above, generate a complete PRD that:

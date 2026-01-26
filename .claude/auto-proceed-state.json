@@ -1,13 +1,12 @@
 {
-  "isActive": true,
+  "isActive": false,
   "wasInterrupted": false,
-  "currentSd": "SD-LEO-ENH-AUTO-PROCEED-001-12",
-  "currentPhase": "EXEC",
-  "currentTask": "Implementing Detect All-Blocked State",
+  "currentSd": null,
+  "currentPhase": null,
+  "currentTask": null,
   "lastInterruptedAt": null,
   "lastResumedAt": null,
-  "resumeCount": 0,
+  "resumeCount": 2,
   "version": "1.0.0",
-  "clearedAt": "2026-01-25T15:55:08.459Z",
-  "lastUpdatedAt": "2026-01-26T00:32:53.789Z"
+  "clearedAt": "2026-01-26T03:30:47.349Z"
 }
