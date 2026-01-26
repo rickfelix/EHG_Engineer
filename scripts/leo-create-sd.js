@@ -217,6 +217,8 @@ async function createChild(parentKey, index = 0) {
     priority: parent.priority || 'medium',
     rationale: `Child of ${parent.sd_key}`,
     parentId: parent.id,
+    // Pass inherited category to maintain alignment (RCA from SD-LEO-ENH-AUTO-PROCEED-001-12)
+    category: inheritedFields.category || null,
     // Pass inherited fields to createSD (SD-LEO-FIX-METADATA-001)
     success_metrics: inheritedFields.success_metrics || null,
     strategic_objectives: inheritedFields.strategic_objectives || null,
@@ -245,6 +247,12 @@ async function createChild(parentKey, index = 0) {
  */
 function inheritStrategicFields(parent) {
   const inherited = {};
+
+  // CRITICAL: Inherit category from parent to maintain alignment (RCA from SD-LEO-ENH-AUTO-PROCEED-001-12)
+  // This prevents the sd_type/category mismatch that causes progress calculation issues
+  if (parent.category) {
+    inherited.category = parent.category;
+  }
 
   // Inherit strategic_objectives if parent has them
   if (parent.strategic_objectives && Array.isArray(parent.strategic_objectives) && parent.strategic_objectives.length > 0) {
@@ -378,6 +386,8 @@ async function createSD(options) {
     rationale,
     parentId = null,
     metadata = {},
+    // Allow passing explicit category (for child SDs inheriting from parent)
+    category: explicitCategory = null,
     // Allow passing explicit success fields (for sources like UAT, learn, or inherited from parent)
     success_metrics = null,
     success_criteria = null,
@@ -387,6 +397,36 @@ async function createSD(options) {
 
   // Map user-friendly type to valid database sd_type
   const dbType = mapToDbType(type);
+
+  // PREVENTIVE CONTROL: Validate sd_type/category alignment (RCA from SD-LEO-ENH-AUTO-PROCEED-001-12)
+  // sd_type controls validation profiles, category controls gate overrides - misalignment causes issues
+  // Use explicit category if provided (e.g., inherited from parent), otherwise derive from type
+  const categoryValue = explicitCategory || (type.charAt(0).toUpperCase() + type.slice(1));
+  const normalizedCategory = categoryValue.toLowerCase();
+  const normalizedDbType = dbType.toLowerCase();
+
+  // Check for common misalignments that cause progress calculation issues
+  if (normalizedDbType !== normalizedCategory) {
+    // Some misalignments are acceptable (documentation vs docs, bugfix vs bug)
+    const acceptableMappings = {
+      'documentation': ['docs', 'documentation'],
+      'bugfix': ['bug', 'bugfix'],
+      'infrastructure': ['infrastructure', 'infra'],
+      'feature': ['feature', 'enhancement']
+    };
+
+    const isAcceptable = acceptableMappings[normalizedDbType]?.includes(normalizedCategory) ||
+                         acceptableMappings[normalizedCategory]?.includes(normalizedDbType);
+
+    if (!isAcceptable && !explicitCategory) {
+      // Only warn if category wasn't explicitly provided (inherited categories are intentional)
+      console.log('\n⚠️  SD TYPE/CATEGORY ALIGNMENT WARNING');
+      console.log(`   sd_type: '${dbType}' (controls validation profile)`);
+      console.log(`   category: '${categoryValue}' (controls gate overrides)`);
+      console.log('   These fields should generally align to avoid progress calculation issues.');
+      console.log('   Consider using consistent values or update after creation.\n');
+    }
+  }
 
   // Build success fields - use provided values or generate defaults
   // IMPORTANT: Do NOT use JSON.stringify() - Supabase handles JSONB natively
@@ -403,7 +443,7 @@ async function createSD(options) {
     sd_type: dbType,
     status: 'draft',
     priority,
-    category: type.charAt(0).toUpperCase() + type.slice(1),
+    category: categoryValue,  // Use calculated value (may be inherited from parent)
     current_phase: 'LEAD',
     target_application: 'EHG_Engineer',
     created_by: 'Claude',
