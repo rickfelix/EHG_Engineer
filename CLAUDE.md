@@ -309,7 +309,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-26 8:07:43 PM
+**Last Generated**: 2026-01-26 8:24:17 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -360,32 +360,32 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 
 | Sub-Agent | Trigger Keywords |
 |-----------|------------------|
-| `ANALYTICS` | analytics tracking, user analytics, conversion tracking, funnel analysis, kpi dashboard, metrics dashboard, google analytics, mixpanel, analytics, metrics (+18 more) |
-| `API` | api endpoint, rest api, graphql api, create endpoint, add endpoint, api route, backend route, api design, swagger, openapi (+27 more) |
-| `CRM` | crm system, customer relationship, salesforce integration, hubspot setup, contact management, lead tracking, crm, salesforce, hubspot, contact (+10 more) |
-| `DATABASE` | database migration, db migration, create table, alter table, add column, rls policy, row level security, supabase migration, postgres schema, foreign key (+37 more) |
-| `DEPENDENCY` | npm install, yarn add, pnpm add, package update, dependency update, npm audit, security advisory, dependency vulnerability, outdated packages, npm (+22 more) |
-| `DESIGN` | ui design, ux design, component design, design system, accessibility, a11y, wcag, responsive design, mobile layout, dark mode (+35 more) |
-| `DOCMON` | update documentation, add documentation, document this, api documentation, readme update, jsdoc, tsdoc, missing docs, documentation, docs (+16 more) |
-| `FINANCIAL` | financial model, profit and loss, p&l statement, cash flow analysis, burn rate, runway calculation, revenue projection, financial, finance, revenue (+16 more) |
-| `GITHUB` | create pr, pull request, merge pr, github actions, ci pipeline, github workflow, code review, git merge, git rebase, git (+24 more) |
-| `LAUNCH` | launch checklist, go live checklist, production deployment, deploy to production, release to production, ready to launch, ship to prod, launch, deploy, deployment (+15 more) |
-| `MARKETING` | marketing strategy, go to market, gtm strategy, content marketing, seo strategy, brand awareness, marketing campaign, marketing, market, brand (+14 more) |
-| `MONITORING` | system monitoring, application monitoring, error monitoring, uptime monitoring, alerting system, health check, datadog, prometheus, sentry, monitoring (+20 more) |
-| `PERFORMANCE` | performance optimization, speed optimization, slow query, n+1 query, memory leak, cpu usage, response time, load time, bottleneck, performance issue (+27 more) |
-| `PRICING` | pricing strategy, pricing model, subscription pricing, tiered pricing, unit economics, cac ltv, pricing page, pricing, price, subscription (+15 more) |
-| `QUICKFIX` | quick fix, quickfix, hotfix, small fix, minor fix, one liner, simple fix, easy fix, trivial fix, fix (+13 more) |
-| `RCA` | root cause, root-cause, 5 whys, five whys, fishbone, ishikawa, fault tree, causal analysis, why is this happening, what caused this (+32 more) |
-| `REGRESSION` | backward compatible, backwards compatible, breaking change, no behavior change, regression test, before and after, refactor safely, api signature, refactor, refactoring (+19 more) |
-| `RETRO` | retrospective, post-mortem, postmortem, lessons learned, what went well, what went wrong, action items, continuous improvement, sprint retrospective, what did we learn (+21 more) |
-| `RISK` | risk assessment, risk analysis, risk mitigation, high risk, security risk, architecture decision, system design, tradeoff analysis, pros and cons, risk (+21 more) |
-| `SALES` | sales strategy, sales process, sales pipeline, sales playbook, close deal, sales cycle, objection handling, sales, sell, selling (+14 more) |
-| `SECURITY` | security vulnerability, authentication bypass, sql injection, xss attack, csrf vulnerability, hardcoded secret, exposed credential, api key exposed, security audit, penetration test (+33 more) |
-| `STORIES` | user story, user stories, acceptance criteria, definition of done, as a user, i want to, so that, epic, feature request, story (+19 more) |
-| `TESTING` | write tests, add tests, create tests, unit test, integration test, e2e test, end to end test, test coverage, playwright test, jest test (+30 more) |
-| `UAT` | user acceptance test, uat test, manual test, human test, acceptance criteria, user journey, happy path, test scenario, click through, uat (+23 more) |
-| `VALIDATION` | already exists, already implemented, check if exists, duplicate check, codebase search, existing implementation, before i build, validate, validation, verify (+17 more) |
-| `VALUATION` | company valuation, startup valuation, fundraising round, series a, exit strategy, acquisition target, dcf analysis, valuation, fundraising, funding (+15 more) |
+| `ANALYTICS` | analytics tracking, conversion tracking, funnel analysis, google analytics, kpi dashboard, metrics dashboard, mixpanel, user analytics, AARRR, KPI (+24 more) |
+| `API` | add endpoint, api design, api endpoint, api route, backend route, create endpoint, graphql api, openapi, rest api, swagger (+37 more) |
+| `CRM` | contact management, crm system, customer relationship, hubspot setup, lead tracking, salesforce integration, CRM, HubSpot, Salesforce, account (+14 more) |
+| `DATABASE` | EXEC_IMPLEMENTATION_COMPLETE, add column, alter table, create table, data model, database migration, database schema, db migration, erd, foreign key (+79 more) |
+| `DEPENDENCY` | dependency update, dependency vulnerability, npm audit, npm install, outdated packages, package update, pnpm add, security advisory, yarn add, CVE (+29 more) |
+| `DESIGN` | a11y, accessibility, component design, dark mode, design system, mobile layout, responsive design, shadcn, ui design, ux design (+67 more) |
+| `DOCMON` | DAILY_DOCMON_CHECK, EXEC_COMPLETION, EXEC_IMPLEMENTATION, FILE_CREATED, HANDOFF_ACCEPTED, HANDOFF_CREATED, LEAD_APPROVAL, LEAD_HANDOFF_CREATION, LEAD_SD_CREATION, PHASE_TRANSITION (+30 more) |
+| `FINANCIAL` | burn rate, cash flow analysis, financial model, p&l statement, profit and loss, revenue projection, runway calculation, EBITDA, P&L, break even (+21 more) |
+| `GITHUB` | EXEC_IMPLEMENTATION_COMPLETE, LEAD_APPROVAL_COMPLETE, PLAN_VERIFICATION_PASS, ci pipeline, code review, create pr, git merge, git rebase, github actions, github workflow (+33 more) |
+| `LAUNCH` | deploy to production, go live checklist, launch checklist, production deployment, ready to launch, release to production, ship to prod, GA release, beta release, cutover (+20 more) |
+| `MARKETING` | brand awareness, content marketing, go to market, gtm strategy, marketing campaign, marketing strategy, seo strategy, GTM, SEO, advertising (+20 more) |
+| `MONITORING` | alerting system, application monitoring, datadog, error monitoring, health check, prometheus, sentry, system monitoring, uptime monitoring, Datadog (+23 more) |
+| `PERFORMANCE` | bottleneck, cpu usage, load time, memory leak, n+1 query, performance issue, performance optimization, response time, slow query, speed optimization (+27 more) |
+| `PRICING` | cac ltv, pricing model, pricing page, pricing strategy, subscription pricing, tiered pricing, unit economics, CAC, LTV, arpu (+19 more) |
+| `QUICKFIX` | easy fix, hotfix, minor fix, one liner, quick fix, quickfix, simple fix, small fix, trivial fix, adjust (+13 more) |
+| `RCA` | 5 whys, causal analysis, ci_pipeline_failure, fault tree, fishbone, five whys, get to the bottom, handoff_rejection, ishikawa, keeps happening (+46 more) |
+| `REGRESSION` | api signature, backward compatible, backwards compatible, before and after, breaking change, no behavior change, refactor safely, regression test, DRY violation, backward (+34 more) |
+| `RETRO` | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION, PLAN_VERIFICATION_COMPLETE, action items, continuous improvement, learn from this, lessons learned, post-mortem, postmortem, retrospective (+49 more) |
+| `RISK` | architecture decision, high risk, pros and cons, risk analysis, risk assessment, risk mitigation, security risk, system design, tradeoff analysis, LEAD_PRE_APPROVAL (+79 more) |
+| `SALES` | close deal, objection handling, sales cycle, sales pipeline, sales playbook, sales process, sales strategy, close, closing, deal (+17 more) |
+| `SECURITY` | api key exposed, authentication bypass, csrf vulnerability, cve, exposed credential, hardcoded secret, owasp, penetration test, security audit, security vulnerability (+34 more) |
+| `STORIES` | acceptance criteria, as a user, definition of done, epic, feature request, i want to, so that, user stories, user story, PLAN_PRD (+23 more) |
+| `TESTING` | EXEC_IMPLEMENTATION_COMPLETE, add tests, create tests, e2e test, end to end test, integration test, jest test, playwright test, spec file, test coverage (+42 more) |
+| `UAT` | acceptance criteria, click through, happy path, human test, manual test, test scenario, uat test, user acceptance test, user journey, TEST-AUTH (+31 more) |
+| `VALIDATION` | already exists, already implemented, before i build, check if exists, codebase search, duplicate check, existing implementation, codebase, codebase check, conflict (+18 more) |
+| `VALUATION` | acquisition target, company valuation, dcf analysis, exit strategy, fundraising round, series a, startup valuation, DCF, IPO, Series A (+20 more) |
 
 *Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
 
