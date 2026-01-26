@@ -14,6 +14,9 @@ import dotenv from 'dotenv';
 import { getNextReadyChild, getOrchestratorContext } from '../child-sd-selector.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
 
+// Status line integration (SD-LEO-ENH-AUTO-PROCEED-001-13)
+import LEOStatusLine from '../../../../scripts/leo-status-line.js';
+
 import {
   getSDWorkflow,
   displayWorkflowRecommendation,
@@ -283,6 +286,18 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
 }
 
 /**
+ * Map handoff type to LEO Protocol phase
+ * Used for status line display (SD-LEO-ENH-AUTO-PROCEED-001-13)
+ */
+function mapHandoffToPhase(handoffType) {
+  const type = (handoffType || '').toUpperCase();
+  if (type.includes('LEAD')) return 'LEAD';
+  if (type.includes('PLAN')) return 'PLAN';
+  if (type.includes('EXEC')) return 'EXEC';
+  return 'EXEC'; // Default
+}
+
+/**
  * Handle execute command
  */
 export async function handleExecuteCommand(handoffType, sdId, args) {
@@ -362,6 +377,26 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     const multiRepoCheck = checkMultiRepoStatus(workflowInfo.sd);
     if (!multiRepoCheck.passed) {
       displayMultiRepoStatus(multiRepoCheck, handoffType);
+    }
+
+    // SD-LEO-ENH-AUTO-PROCEED-001-13: Update status line with AUTO-PROCEED info
+    try {
+      const autoProceedInfo = await resolveAutoProceed({ supabase: system.supabase, verbose: false });
+      const phase = mapHandoffToPhase(handoffType);
+      const progress = workflowInfo.sd?.progress ?? 0;
+
+      const statusLine = new LEOStatusLine();
+      statusLine.updateForAutoProceed({
+        isActive: autoProceedInfo.autoProceed,
+        sdKey: workflowInfo.sd?.sd_key || sdId,
+        phase,
+        progress
+      });
+    } catch (statusErr) {
+      // Non-fatal - status line update should not block handoff
+      if (process.env.DEBUG) {
+        console.log(`   ℹ️  Status line update skipped: ${statusErr.message}`);
+      }
     }
   }
 

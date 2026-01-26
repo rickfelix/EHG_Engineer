@@ -28,7 +28,10 @@ class LEOStatusLine {
       visionQA: '👁️ Vision QA | {project} | {appId} | {testGoal}',
       validation: '✅ Validation | {project} | {type} | Score: {score}',
       minimal: '📍 {project} | {branch} | {context}',
-      debug: '🔍 Debug Mode | {project} | {info}'
+      debug: '🔍 Debug Mode | {project} | {info}',
+      // AUTO-PROCEED mode templates (SD-LEO-ENH-AUTO-PROCEED-001-13)
+      autoProceed: '🤖 AUTO-PROCEED: {autoProceedStatus} | {phase} | {progress}%',
+      autoProceedFull: '🤖 AUTO-PROCEED: {autoProceedStatus} | {phase} | {progress}% | {sd}'
     };
     
     // Load or initialize status
@@ -235,11 +238,65 @@ class LEOStatusLine {
       active: true
     };
     this.saveStatus();
-    
+
     const statusLine = this.formatVisionQAStatus();
     this.setStatusLine(statusLine);
-    
+
     return statusLine;
+  }
+
+  /**
+   * Update for AUTO-PROCEED mode when starting SD work
+   * SD-LEO-ENH-AUTO-PROCEED-001-13 implementation
+   *
+   * @param {Object} options - AUTO-PROCEED state options
+   * @param {boolean} options.isActive - Whether AUTO-PROCEED is ON
+   * @param {string} options.sdKey - Current SD key (e.g., "SD-XXX-001")
+   * @param {string} options.phase - Current phase (LEAD/PLAN/EXEC)
+   * @param {number} options.progress - Progress percentage (0-100)
+   * @returns {string} Formatted status line
+   */
+  updateForAutoProceed({ isActive, sdKey, phase, progress }) {
+    this.statusCache.autoProceed = {
+      isActive: isActive ?? true,
+      sdKey: sdKey || null,
+      phase: phase || 'LEAD',
+      progress: progress ?? 0
+    };
+    this.statusCache.currentSD = sdKey;
+    this.statusCache.phase = phase;
+    this.saveStatus();
+
+    const statusLine = this.formatAutoProceedStatus();
+    this.setStatusLine(statusLine);
+
+    return statusLine;
+  }
+
+  /**
+   * Format AUTO-PROCEED status line
+   * Format: AUTO-PROCEED: ON | PLAN | 30% (optionally with SD key)
+   */
+  formatAutoProceedStatus() {
+    const ap = this.statusCache.autoProceed;
+    if (!ap) {
+      return this.templates.default;
+    }
+
+    const status = ap.isActive ? 'ON' : 'OFF';
+    const phase = ap.phase || 'LEAD';
+    const progress = ap.progress ?? 0;
+
+    // Use full template if SD key is available
+    const template = ap.sdKey ? this.templates.autoProceedFull : this.templates.autoProceed;
+
+    return template
+      .replace('{autoProceedStatus}', status)
+      .replace('{phase}', phase)
+      .replace('{progress}', progress)
+      .replace('{sd}', ap.sdKey || '')
+      .replace('{project}', this.getCurrentProject())
+      .replace('{branch}', this.getCurrentBranch());
   }
 
   /**
@@ -521,6 +578,7 @@ Commands:
   task <id>         Set current task
   handoff <from> <to> [artifact]  Update for handoff
   visionqa <appId> [goal]         Update for Vision QA
+  autoproceed <on|off> <phase> <progress> [sd]  Update AUTO-PROCEED status
   
 Examples:
   leo-status-line show
@@ -531,6 +589,7 @@ Examples:
   leo-status-line task EES-001
   leo-status-line handoff PLAN EXEC "Task decomposition"
   leo-status-line visionqa APP-001 "Test checkout flow"
+  leo-status-line autoproceed on EXEC 30 SD-XXX-001
 `);
     process.exit(0);
   }
@@ -602,7 +661,20 @@ Examples:
         console.error('❌ App ID required');
       }
       break;
-      
+
+    case 'autoproceed':
+      if (args[1] && args[2]) {
+        const isActive = args[1].toLowerCase() === 'on';
+        const phase = args[2].toUpperCase();
+        const progress = parseInt(args[3]) || 0;
+        const sdKey = args[4] || null;
+        const status = statusLine.updateForAutoProceed({ isActive, phase, progress, sdKey });
+        console.log(`✅ AUTO-PROCEED updated: ${status}`);
+      } else {
+        console.error('❌ Usage: autoproceed <on|off> <phase> <progress> [sd]');
+      }
+      break;
+
     default:
       console.error(`❌ Unknown command: ${command}`);
       console.log('Run "leo-status-line --help" for usage');

@@ -596,15 +596,26 @@ function displayResults(sd, phase, strategy, patterns, retrospectives) {
       console.log(`   Date: ${new Date(retro.conducted_date).toLocaleDateString()}`);
 
       // Show key learnings (first 2)
+      // key_learnings can be array of strings OR array of objects {learning: "...", evidence: "...", category: "..."}
       if (retro.key_learnings && retro.key_learnings.length > 0) {
-        console.log(`   Key Learning: ${retro.key_learnings[0].substring(0, 70)}${retro.key_learnings[0].length > 70 ? '...' : ''}`);
+        const firstLearning = typeof retro.key_learnings[0] === 'string'
+          ? retro.key_learnings[0]
+          : retro.key_learnings[0]?.learning || JSON.stringify(retro.key_learnings[0]);
+        console.log(`   Key Learning: ${firstLearning.substring(0, 70)}${firstLearning.length > 70 ? '...' : ''}`);
       }
 
       // Show success or failure pattern (context-dependent)
+      // Patterns can be array of strings OR array of objects {pattern: "...", ...}
+      const extractPatternText = (pattern) => {
+        if (typeof pattern === 'string') return pattern;
+        return pattern?.pattern || pattern?.description || JSON.stringify(pattern);
+      };
       if (phase === 'PLAN' && retro.success_patterns && retro.success_patterns.length > 0) {
-        console.log(`   Success Pattern: ${retro.success_patterns[0].substring(0, 70)}${retro.success_patterns[0].length > 70 ? '...' : ''}`);
+        const patternText = extractPatternText(retro.success_patterns[0]);
+        console.log(`   Success Pattern: ${patternText.substring(0, 70)}${patternText.length > 70 ? '...' : ''}`);
       } else if (retro.failure_patterns && retro.failure_patterns.length > 0) {
-        console.log(`   Failure Pattern: ${retro.failure_patterns[0].substring(0, 70)}${retro.failure_patterns[0].length > 70 ? '...' : ''}`);
+        const patternText = extractPatternText(retro.failure_patterns[0]);
+        console.log(`   Failure Pattern: ${patternText.substring(0, 70)}${patternText.length > 70 ? '...' : ''}`);
       }
 
       console.log('');
