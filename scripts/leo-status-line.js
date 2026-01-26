@@ -8,7 +8,12 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync  } from 'child_process';
+import { execSync } from 'child_process';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 class LEOStatusLine {
   constructor() {
@@ -17,7 +22,12 @@ class LEOStatusLine {
     this.statusCache = null;
     this.cacheTimeout = 5000; // 5 seconds cache
     this.lastUpdate = 0;
-    
+
+    // SD-LEO-ENH-AUTO-PROCEED-001-14: Throttling for AUTO-PROCEED updates
+    this.apUpdateThrottle = 100; // 100ms minimum interval (max 10 updates/sec)
+    this.lastApUpdate = 0;
+    this.telemetryPath = path.join(process.cwd(), '.claude', 'status-line-telemetry.json');
+
     // Status line templates (enhanced with project and branch info)
     this.templates = {
       default: '🏗️ {project} | {branch} | LEO v3.1.5.9',
@@ -246,22 +256,88 @@ class LEOStatusLine {
   }
 
   /**
+   * Get Supabase client (lazy initialization)
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: For auto-detecting child progress
+   */
+  getSupabaseClient() {
+    if (!this._supabase) {
+      const url = process.env.SUPABASE_URL;
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (url && key) {
+        this._supabase = createClient(url, key);
+      }
+    }
+    return this._supabase;
+  }
+
+  /**
+   * Fetch child progress from database for an SD
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Auto-detect if SD is a child of an orchestrator
+   *
+   * @param {string} sdKey - The SD key to check
+   * @returns {Promise<{current: number, total: number}|null>} Child progress or null
+   */
+  async fetchChildProgressFromDatabase(sdKey) {
+    const supabase = this.getSupabaseClient();
+    if (!supabase || !sdKey) return null;
+
+    try {
+      // Check if this SD has a parent (is a child of an orchestrator)
+      const { data: sd, error: sdError } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, parent_sd_id')
+        .eq('id', sdKey)
+        .single();
+
+      if (sdError || !sd?.parent_sd_id) {
+        return null; // Not a child SD
+      }
+
+      // Get sibling completion count
+      const { data: siblings, error: sibError } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, status')
+        .eq('parent_sd_id', sd.parent_sd_id);
+
+      if (sibError || !siblings) return null;
+
+      const total = siblings.length;
+      const completed = siblings.filter(s => s.status === 'completed').length;
+
+      return { current: completed, total };
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  /**
    * Update for AUTO-PROCEED mode when starting SD work
-   * SD-LEO-ENH-AUTO-PROCEED-001-13 implementation
+   * SD-LEO-ENH-AUTO-PROCEED-001-13/14 implementation
    *
    * @param {Object} options - AUTO-PROCEED state options
    * @param {boolean} options.isActive - Whether AUTO-PROCEED is ON
    * @param {string} options.sdKey - Current SD key (e.g., "SD-XXX-001")
    * @param {string} options.phase - Current phase (LEAD/PLAN/EXEC)
    * @param {number} options.progress - Progress percentage (0-100)
-   * @returns {string} Formatted status line
+   * @param {Object} options.childProgress - Child progress (auto-detected if not provided)
+   * @returns {Promise<string>} Formatted status line
    */
-  updateForAutoProceed({ isActive, sdKey, phase, progress }) {
+  async updateForAutoProceed({ isActive, sdKey, phase, progress, childProgress }) {
+    // SD-LEO-ENH-AUTO-PROCEED-001-14: Auto-detect child progress from database
+    let resolvedChildProgress = childProgress;
+    if (!childProgress && sdKey) {
+      resolvedChildProgress = await this.fetchChildProgressFromDatabase(sdKey);
+    }
+
     this.statusCache.autoProceed = {
       isActive: isActive ?? true,
       sdKey: sdKey || null,
       phase: phase || 'LEAD',
-      progress: progress ?? 0
+      progress: progress ?? 0,
+      childProgress: {
+        current: resolvedChildProgress?.current ?? null,
+        total: resolvedChildProgress?.total ?? null
+      }
     };
     this.statusCache.currentSD = sdKey;
     this.statusCache.phase = phase;
@@ -274,8 +350,135 @@ class LEOStatusLine {
   }
 
   /**
+   * Clear AUTO-PROCEED state (for session start or when not working on an SD)
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Prevent stale child progress from showing
+   */
+  clearAutoProceed() {
+    this.statusCache.autoProceed = {
+      isActive: false,
+      sdKey: null,
+      phase: null,
+      progress: 0,
+      childProgress: {
+        current: null,
+        total: null
+      }
+    };
+    this.statusCache.currentSD = null;
+    this.saveStatus();
+    this.refreshStatusLine();
+  }
+
+  /**
+   * Update child progress with throttling
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Real-time child progress updates
+   *
+   * @param {number} current - Completed child count
+   * @param {number} total - Total child count (null if unknown)
+   * @returns {boolean} Whether the update was applied (false if throttled)
+   */
+  updateChildProgress(current, total) {
+    const now = Date.now();
+
+    // Throttle updates to prevent UI jank (max 10 updates/sec)
+    if (now - this.lastApUpdate < this.apUpdateThrottle) {
+      return false;
+    }
+
+    this.lastApUpdate = now;
+
+    // Clamp current to total if both are known (FR-3: X never exceeds Y)
+    let safeCurrent = current;
+    if (current !== null && total !== null && current > total) {
+      safeCurrent = total;
+      this.recordTelemetry({
+        timestamp: new Date().toISOString(),
+        operation: 'child_progress_clamped',
+        original: current,
+        clamped: safeCurrent,
+        total,
+        tag: 'statusline_child_progress_inconsistent'
+      });
+    }
+
+    if (!this.statusCache.autoProceed) {
+      this.statusCache.autoProceed = { isActive: false, childProgress: {} };
+    }
+    this.statusCache.autoProceed.childProgress = { current: safeCurrent, total };
+
+    this.saveStatus();
+    this.refreshStatusLine();
+    return true;
+  }
+
+  /**
+   * Build child progress segment for status line
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Format: "Child X/Y" or "Child X/?"
+   */
+  buildChildProgressSegment(childProgress) {
+    const { current, total } = childProgress || {};
+    if (current === null || current === undefined) return '';
+    if (total === null || total === undefined) return `Child ${current}/?`;
+    return `Child ${Math.min(current, total)}/${total}`;
+  }
+
+  /**
+   * Refresh the status line based on current state
+   * SD-LEO-ENH-AUTO-PROCEED-001-14
+   */
+  refreshStatusLine() {
+    const startTime = Date.now();
+    let statusLine;
+    if (this.statusCache.autoProceed?.isActive) {
+      statusLine = this.formatAutoProceedStatus();
+    } else if (this.statusCache.activeRole) {
+      statusLine = this.formatStatusLine(this.statusCache.activeRole);
+    } else {
+      statusLine = this.formatStatusLine();
+    }
+    this.setStatusLine(statusLine);
+
+    const latency = Date.now() - startTime;
+    if (latency > 100) {
+      this.recordTelemetry({
+        timestamp: new Date().toISOString(),
+        operation: 'status_line_update',
+        latency_ms: latency,
+        warning: 'exceeded_100ms_target'
+      });
+    }
+  }
+
+  /**
+   * Record telemetry event
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Client-side telemetry for status line updates
+   */
+  recordTelemetry(event) {
+    try {
+      const claudeDir = path.dirname(this.telemetryPath);
+      if (!fs.existsSync(claudeDir)) {
+        fs.mkdirSync(claudeDir, { recursive: true });
+      }
+      let telemetry = [];
+      if (fs.existsSync(this.telemetryPath)) {
+        try {
+          telemetry = JSON.parse(fs.readFileSync(this.telemetryPath, 'utf8'));
+        } catch (_e) {
+          telemetry = [];
+        }
+      }
+      telemetry.push(event);
+      if (telemetry.length > 100) telemetry = telemetry.slice(-100);
+      fs.writeFileSync(this.telemetryPath, JSON.stringify(telemetry, null, 2));
+    } catch (_error) {
+      // Silent fail
+    }
+  }
+
+  /**
    * Format AUTO-PROCEED status line
-   * Format: AUTO-PROCEED: ON | PLAN | 30% (optionally with SD key)
+   * Format: AUTO-PROCEED: ON | PLAN | 30% | Child X/Y (optionally with SD key)
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Enhanced with child progress segment
    */
   formatAutoProceedStatus() {
     const ap = this.statusCache.autoProceed;
@@ -286,33 +489,41 @@ class LEOStatusLine {
     const status = ap.isActive ? 'ON' : 'OFF';
     const phase = ap.phase || 'LEAD';
     const progress = ap.progress ?? 0;
+    const childSegment = this.buildChildProgressSegment(ap.childProgress);
 
-    // Use full template if SD key is available
     const template = ap.sdKey ? this.templates.autoProceedFull : this.templates.autoProceed;
 
-    return template
+    let statusLine = template
       .replace('{autoProceedStatus}', status)
       .replace('{phase}', phase)
       .replace('{progress}', progress)
       .replace('{sd}', ap.sdKey || '')
       .replace('{project}', this.getCurrentProject())
       .replace('{branch}', this.getCurrentBranch());
+
+    // Append child progress segment if available
+    if (childSegment) {
+      statusLine += ` | ${childSegment}`;
+    }
+
+    return statusLine;
   }
 
   /**
    * Format status line based on current state
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Enhanced to append AUTO segment when active
    */
   formatStatusLine(role = null) {
     const activeRole = role || this.statusCache.activeRole;
-    
+
     if (!activeRole) {
       return this.templates.default;
     }
-    
+
     let template = this.templates[activeRole.toLowerCase()] || this.templates.minimal;
-    
+
     // Replace placeholders
-    template = template
+    let statusLine = template
       .replace('{sd}', this.statusCache.currentSD || 'No SD')
       .replace('{task}', this.statusCache.currentTask || 'No Task')
       .replace('{phase}', this.statusCache.phase || 'Discovery')
@@ -321,8 +532,38 @@ class LEOStatusLine {
       .replace('{project}', this.getCurrentProject())
       .replace('{branch}', this.getCurrentBranch())
       .replace('{context}', this.getContextSummary());
-    
-    return template;
+
+    // SD-LEO-ENH-AUTO-PROCEED-001-14: Append AUTO-PROCEED segment if active (FR-1)
+    const ap = this.statusCache.autoProceed;
+    if (ap?.isActive) {
+      const apSegment = this.buildAutoSegment(ap);
+      if (apSegment) {
+        statusLine += ` | ${apSegment}`;
+      }
+    }
+
+    return statusLine;
+  }
+
+  /**
+   * Build compact AUTO-PROCEED segment for appending to existing status lines
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Format: "AUTO | EXEC | Child X/Y"
+   */
+  buildAutoSegment(ap) {
+    if (!ap?.isActive) return '';
+
+    const parts = ['🤖 AUTO'];
+
+    if (ap.phase) {
+      parts.push(ap.phase);
+    }
+
+    const childSegment = this.buildChildProgressSegment(ap.childProgress);
+    if (childSegment) {
+      parts.push(childSegment);
+    }
+
+    return parts.join(' | ');
   }
 
   /**
