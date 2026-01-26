@@ -43,6 +43,10 @@ import {
   getValidationRequirements
 } from '../../lib/utils/sd-type-validation.js';
 import {
+  validatePRDGrounding,
+  formatValidationResults
+} from '../../lib/prd-grounding-validator.js';
+import {
   extractPersonasFromSD,
   isPersonaIngestionEnabled,
   isPersonaPromptInjectionEnabled,
@@ -162,7 +166,7 @@ async function fetchSDData(supabase, sdId) {
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, uuid_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata')
+    .select('id, uuid_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata, implementation_context, exploration_summary')
     .eq(queryField, sdId)
     .single();
 
@@ -337,6 +341,36 @@ async function handleLLMPRDGeneration(supabase, prdId, sdId, sdIdValue, sdData, 
 
     if (llmPrdContent) {
       await updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llmPrdContent);
+
+      // Run grounding validation (SD-LEO-INFRA-PRD-GROUNDING-VALIDATION-001)
+      console.log('\n   🔍 Running grounding validation...');
+      const groundingResults = validatePRDGrounding(llmPrdContent, sdData, {
+        implementationContext: sdData.implementation_context,
+        explorationSummary: sdData.exploration_summary || sdData.metadata?.exploration_summary
+      });
+
+      if (groundingResults.has_issues) {
+        console.log('\n' + formatValidationResults(groundingResults));
+
+        // Store validation results in PRD metadata
+        const { error: updateError } = await supabase
+          .from('product_requirements_v2')
+          .update({
+            metadata: {
+              ...llmPrdContent.metadata,
+              grounding_validation: groundingResults
+            }
+          })
+          .eq('id', prdId);
+
+        if (updateError) {
+          console.warn('   Failed to store grounding validation results:', updateError.message);
+        } else {
+          console.log('   Grounding validation results stored in PRD metadata');
+        }
+      } else {
+        console.log(`   ✅ Grounding validation passed (${(groundingResults.average_confidence * 100).toFixed(0)}% average confidence)`);
+      }
     } else {
       console.log('   LLM generation skipped or failed, PRD has template content');
       console.log('   PRD content will need manual updates to pass quality validation');
