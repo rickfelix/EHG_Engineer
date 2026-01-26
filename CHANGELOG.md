@@ -2,6 +2,40 @@
 
 ## 2026-01-26
 
+### Infrastructure
+- **SD-LEO-INFRA-FORMALIZE-ORCHESTRATOR-WORKFLOW-001: Formalize Orchestrator SD Workflow Pattern** - PR #675
+  - **Purpose**: Codify orchestrator SD workflow pattern discovered during SD-LEO-GEN-RENAME-COLUMNS-SELF-001 execution
+  - **Changes**:
+    - Enhanced CLAUDE_CORE.md with "Orchestrator SD Workflow Pattern" section (lines 818-948)
+    - Added "Orchestrator SD Decision Guide" to CLAUDE.md with decision table and artifacts
+    - Enhanced `orchestrator-preflight.js` to v2.0.0 with auto-detection, JSON output (--json), validation mode (--validate)
+    - Created `docs/reference/parent-prd-derivation-guide.md` with complete PRD template and traceability mapping
+    - Added `.github/workflows/orchestrator-preflight.yml` CI enforcement for orchestrator compliance
+  - **Key Features**:
+    - Three detection methods: explicit metadata, database children, heuristic content analysis
+    - Artifact validation: children exist, parent PRD derivation, status checks, protocol references
+    - JSON mode for programmatic integration, validation mode for CI/CD gates
+  - **Impact**: Orchestrator SDs now have formal workflow documentation, automated preflight validation, and CI enforcement
+  - **Files Modified**: 5 files, +826/-34 lines
+  - **Pattern Origin**: SD-LEO-GEN-RENAME-COLUMNS-SELF-001
+
+- **SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-002: Remove legacy_id Column References** - PR #673
+  - **Root Cause**: Code still referencing `legacy_id` column after it was dropped from `strategic_directives_v2` table on 2026-01-24
+  - **Patterns Resolved**:
+    - PAT-EXECSQL-001: exec_sql function missing (verified migration already applied)
+    - PAT-LEGACYID-001: legacy_id column references in active code
+  - **Fix**: Updated 7 files to use `sd_key` instead of `legacy_id`:
+    - `lib/sub-agents/github.js` - SD lookup for CI validation
+    - `lib/sub-agents/testing/index.js` - SD type check for non-UI tests
+    - `lib/sub-agents/retro/db-operations.js` - Retrospective SD lookup
+    - `lib/sub-agents/retro/action-items.js` - SD key fallback chain
+    - `lib/sub-agents/retro/generators.js` - SD key fallback chain
+    - `lib/templates/prd-template.js` - PRD ID generation and metadata
+    - `lib/utils/sd-type-guard.js` - SD audit and update functions
+  - **Database Cleanup**: Verified migrations already applied, no further database changes needed
+  - **Impact**: Prevents runtime errors from referencing dropped columns, improves code correctness
+  - **Source**: Auto-created by `/learn` command based on retrospective patterns
+
 ### Bugfix
 - **SD-LEO-FIX-PARENT-BLOCK-001: Fix Parent SD Metadata Synchronization** - PR #669
   - **Root Cause**: Database trigger only set `sd_type='orchestrator'` but NOT `metadata.is_parent=true`, causing OrchestratorCompletionGuardian to fail silently
