@@ -9,6 +9,7 @@ import ResultBuilder from '../ResultBuilder.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
+import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -56,6 +57,9 @@ export class BaseExecutor {
     try {
       // Step 1: Load SD
       const sd = await this.sdRepo.getById(sdId);
+
+      // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
+      await this._checkAndExecutePendingMigrations(sd, options);
 
       // Step 2: Pre-execution setup (optional, override in subclass)
       const setupResult = await this.setup(sdId, sd, options);
@@ -251,6 +255,74 @@ export class BaseExecutor {
   }
 
   // ============ Helper methods ============
+
+  /**
+   * Pre-handoff migration check
+   *
+   * CRITICAL: This check MUST USE the DATABASE sub-agent to execute any
+   * pending migrations. The DATABASE sub-agent is the authoritative executor
+   * for all migration work.
+   *
+   * Checks for pending database migrations (uncommitted manual updates,
+   * SD-specific migrations not yet executed) and engages the DATABASE
+   * sub-agent to execute them automatically.
+   *
+   * Retry Strategy (implemented in pending-migrations-check.js):
+   * - Attempt 1: Standard DATABASE sub-agent invocation
+   * - Attempt 2: Consult issue_patterns for known solutions, retry with context
+   * - Attempt 3: Consult retrospectives for similar past issues, retry with learnings
+   * - Only after 3 failed attempts: Escalate to user
+   *
+   * Non-blocking: Errors are logged but handoff continues (with warning)
+   *
+   * @param {object} sd - SD record
+   * @param {object} options - Handoff options
+   */
+  async _checkAndExecutePendingMigrations(sd, options = {}) {
+    try {
+      // Skip migration check if explicitly disabled
+      if (options.skipMigrationCheck === true) {
+        console.log('   [Migration Check] Skipped (disabled via options)');
+        return;
+      }
+
+      const result = await checkPendingMigrations(this.supabase, sd, {
+        autoExecute: options.autoExecuteMigrations !== false
+      });
+
+      // Store result for potential gate validation
+      this._migrationCheckResult = result;
+
+      // Log retry statistics if attempts were made
+      if (result.executionAttempted && result.attemptsUsed > 0) {
+        console.log(`   [Migration Check] Attempts used: ${result.attemptsUsed}/3`);
+        if (result.knowledgeBaseConsulted) {
+          console.log('   [Migration Check] Knowledge base was consulted for solutions');
+        }
+      }
+
+      // If there are still pending migrations after all retry attempts
+      if (result.hasPendingMigrations && result.errors.length > 0) {
+        console.log('\n   ╔════════════════════════════════════════════════════════════╗');
+        console.log('   ║  ⚠️  MIGRATION EXECUTION INCOMPLETE - MANUAL ACTION NEEDED ║');
+        console.log('   ╚════════════════════════════════════════════════════════════╝');
+        console.log('');
+        console.log('   The DATABASE sub-agent attempted execution but could not complete.');
+        console.log('   The handoff will continue, but you MUST manually execute these:');
+        result.uncommittedManualUpdates.forEach(f => console.log(`      • ${f}`));
+        result.pendingMigrations.forEach(m => console.log(`      • ${m.file}`));
+        console.log('');
+        console.log('   Options:');
+        console.log('   1. Run: node scripts/execute-manual-migrations.js');
+        console.log('   2. Use /escalate to perform RCA on the failure');
+        console.log('   3. Execute the SQL manually via psql or Supabase dashboard');
+        console.log('');
+      }
+    } catch (error) {
+      // Non-fatal - allow handoff to proceed
+      console.log(`   [Migration Check] ⚠️ Error (non-blocking): ${error.message}`);
+    }
+  }
 
   /**
    * SD-LEARN-010:US-004: Auto-trigger DATABASE sub-agent for schema SDs
