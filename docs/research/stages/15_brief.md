@@ -1,5 +1,14 @@
 # Stage 15 Research Brief: Pricing Strategy & Revenue Architecture
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, architecture, workflow
+
 ## Focus Area
 Develop comprehensive pricing strategy and revenue model.
 

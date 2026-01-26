@@ -1,5 +1,14 @@
 # EXEC Agent Guide: Using Component Recommendations
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: api, testing, feature, guide
+
 **Purpose**: Guide EXEC agents on how to use semantic component recommendations in PRDs
 
 **Status**: Active (v1.0)

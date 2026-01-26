@@ -1,5 +1,14 @@
 # Stage 8 Agent Orchestration & Governance
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: sd, handoff, validation, reference
+
 ## CrewAI Agent Mapping
 
 **Current State**: No CrewAI agent mapping defined for Stage 8

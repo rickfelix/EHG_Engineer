@@ -1,7 +1,7 @@
 # Stage 23: Production Launch
 
 ## Metadata
-- **Category**: Workflow
+- **Category**: Protocol
 - **Status**: Approved
 - **Version**: 2.0.0
 - **Author**: Documentation Sub-Agent (DOCMON)
@@ -115,7 +115,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L999) - Stage 23 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-launch-and-learn) - Phase context
+- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-launch-learn) - Phase context
 - [Stage 22: Deployment & Infrastructure](stage-22-deployment-and-infrastructure.md) - Previous stage
 - [Stage 24: Analytics & Feedback](stage-24-analytics-and-feedback.md) - Next stage
 

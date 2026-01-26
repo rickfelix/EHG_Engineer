@@ -1,5 +1,14 @@
 # Stage 3: Gaps & Implementation Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, schema, feature
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-03.md:87-114
 
 ---

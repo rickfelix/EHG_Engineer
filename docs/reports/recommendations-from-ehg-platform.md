@@ -1,5 +1,14 @@
 # Recommendations: What to Bring from EHG Platform to EHG_Engineer
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 **Date**: 2025-01-15  
 **Author**: EXEC Agent  
 **Purpose**: Identify valuable components from the main EHG platform that could enhance EHG_Engineer

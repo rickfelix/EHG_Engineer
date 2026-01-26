@@ -1,5 +1,14 @@
 # LEO Protocol Status Reference Card
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, protocol, leo
+
 ## Quick Reference for Valid Database Status Values
 
 ### 🎯 Strategic Directives (SD)

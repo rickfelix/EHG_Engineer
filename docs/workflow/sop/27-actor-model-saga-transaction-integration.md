@@ -1,5 +1,14 @@
 # 27. Actor Model & Saga Transaction Integration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, security, validation
+
 - **Owner**: EXEC
 - **Depends on**: 26
 - **Purpose**: Implement distributed transaction patterns and actor model architecture.

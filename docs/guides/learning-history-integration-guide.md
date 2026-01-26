@@ -1,5 +1,14 @@
 # Learning History System - Integration Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 **Version**: 1.0
 **Last Updated**: 2025-10-02
 **Status**: Active

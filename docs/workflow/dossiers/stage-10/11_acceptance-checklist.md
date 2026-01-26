@@ -1,5 +1,14 @@
 # Stage 10: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, schema, security, feature
+
 **Dossier Version**: 1.0 (Phase 5)
 **Target Score**: ≥85/100 (aiming for 92+ as recursion hub, matching Stage 5)
 **Review Date**: 2025-11-05

@@ -744,8 +744,8 @@ SQL
 ## Related Documentation
 
 - [LEO 5.0 Task System Architecture](../01_architecture/leo-5-task-system.md) - Technical architecture
-- [Handoff System Documentation](../reference/handoff-system.md) - Handoff mechanics
-- [Command Ecosystem](../reference/command-ecosystem.md) - Inter-command workflows
+- [Handoff System Documentation](../leo/handoffs/handoff-system-guide.md) - Handoff mechanics
+- [Command Ecosystem](../leo/commands/command-ecosystem.md) - Inter-command workflows
 
 ## Version History
 

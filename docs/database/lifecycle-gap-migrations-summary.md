@@ -1,5 +1,14 @@
 # Lifecycle Gap Migrations Summary
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, api, testing, e2e
+
 **SD**: SD-LIFECYCLE-GAP
 **Created**: 2026-01-19
 **Purpose**: Database migrations for venture lifecycle gap remediation features

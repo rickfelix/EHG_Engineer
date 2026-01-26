@@ -1,5 +1,14 @@
 # Stage 11: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, feature, guide, sd
+
 **Target Score**: ≥85/100 (Phase 6 contract standard)
 
 **Scoring Method**: 8 criteria × 0-5 scale × 2.5 multiplier = 0-100 points

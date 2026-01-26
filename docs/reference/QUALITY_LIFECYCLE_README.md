@@ -1,5 +1,14 @@
 # Quality Lifecycle System Documentation
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, rls, feature
+
 **Orchestrator**: SD-QUALITY-LIFECYCLE-001
 **Status**: Completed (100%)
 **Version**: 1.0.0

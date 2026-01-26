@@ -1,5 +1,14 @@
 # Research Summary: EVA Autonomy Levels (L0-L4)
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: api, security, authorization, leo
+
 **SD Reference**: SD-RESEARCH-107 (EVA Intent-vs-Reality Analysis Model)
 **Document**: EVA Autonomy Levels (L0–L4) – Safe AI Governance Model.pdf
 **Pages**: 21

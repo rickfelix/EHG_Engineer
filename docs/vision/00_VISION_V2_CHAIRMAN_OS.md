@@ -1,5 +1,14 @@
 # EHG VISION v2: THE CHAIRMAN'S OPERATING SYSTEM
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, testing, unit
+
 **Status:** APPROVED
 **Date:** December 2025
 **Scope:** Architecture, UX, Database, and Workflow

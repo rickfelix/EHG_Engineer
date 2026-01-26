@@ -1,5 +1,14 @@
 # Genesis Codebase Quick Reference
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: api, feature, guide, infrastructure
+
 > **Load this when**: Working on Genesis features, auditing Genesis implementation, debugging Genesis issues
 
 ---

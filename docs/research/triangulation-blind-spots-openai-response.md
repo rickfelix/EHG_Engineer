@@ -1,4 +1,13 @@
 # Triangulation Research: Blind Spots
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, unit, migration, security
+
 ## OpenAI Research Response
 
 **Date**: 2026-01-01

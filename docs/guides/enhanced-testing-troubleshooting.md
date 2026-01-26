@@ -1,5 +1,14 @@
 # Enhanced Testing and Debugging Sub-Agents Troubleshooting Guide
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Table of Contents
 
 1. [Quick Diagnostics](#quick-diagnostics)

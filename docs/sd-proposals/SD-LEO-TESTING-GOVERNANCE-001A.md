@@ -1,5 +1,14 @@
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001A
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: testing, e2e, feature, protocol
+
 ## Mandate TESTING Sub-Agent Validation Gate
 
 **Proposed ID:** SD-LEO-TESTING-GOVERNANCE-001A

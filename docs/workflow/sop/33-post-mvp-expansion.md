@@ -1,5 +1,14 @@
 # 33. Post-MVP Expansion
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, feature, workflow
+
 - **Owner**: PLAN
 - **Depends on**: 32
 - **Purpose**: Expand features and capabilities based on market feedback.

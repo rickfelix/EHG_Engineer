@@ -1,5 +1,14 @@
 # Stage 25: Agent Orchestration (QualityAssuranceCrew)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 
 **Crew Name**: QualityAssuranceCrew

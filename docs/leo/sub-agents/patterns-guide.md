@@ -1,5 +1,14 @@
 # Sub-Agent Patterns Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, migration
+
 **SD-REFACTOR-SUBAGENTS-001: Sub-Agent Base Class & Pattern Extraction**
 
 This guide documents the LEO Protocol sub-agent architecture, patterns, and best practices for creating new sub-agents.
@@ -441,7 +450,7 @@ console.log(JSON.stringify(result, null, 2));
 
 ## Related Documentation
 
-- [Governance Library Guide](./governance-library-guide.md) - Exception handling patterns
+- [Governance Library Guide](../../reference/governance-library-guide.md) - Exception handling patterns
 - [Utility Library Guide](./utility-library-guide.md) - Shared utilities
 - [LEO Protocol Core](../CLAUDE_CORE.md) - Protocol execution philosophy
 

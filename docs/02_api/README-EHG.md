@@ -1,5 +1,14 @@
 # EHG Engineer - LEO Protocol Development Environment
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 [![LEO Protocol](https://img.shields.io/badge/LEO%20Protocol-v4.1.2-blue)]()
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()

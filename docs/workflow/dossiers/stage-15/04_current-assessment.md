@@ -1,5 +1,14 @@
 # Stage 15: Current Assessment - Rubric Analysis
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, unit, schema
+
 **Source**: `/mnt/c/_EHG/EHG_Engineer/docs/workflow/critique/stage-15.md`
 **Lines**: 1-72
 **Commit**: EHG_Engineer@6ef8cf4

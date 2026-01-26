@@ -1,5 +1,14 @@
 # Stage Review Framework - Chairman-Driven Governance
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Version**: 1.0
 **Created**: 2025-11-07
 **Authority**: Chairman
@@ -1006,16 +1015,16 @@ Read file_path: "/mnt/c/_EHG/EHG/src/components/ventures/VentureCard.tsx"
 ## Related Documentation
 
 **Core Framework:**
-- [Stage Review Template](/docs/workflow/review_templates/stage_review_template.md) - Detailed template for all 5 review files
-- [Source Stage Metadata Field](/docs/workflow/source_stage_metadata_field.md) - Database metadata specification
+- [Stage Review Template](review_templates/stage_review_template.md) - Detailed template for all 5 review files
+- [Source Stage Metadata Field](source_stage_metadata_field.md) - Database metadata specification
 
 **Policies & Best Practices:**
-- [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md) - Formal policy on mandatory CrewAI implementation
-- [Stage Review Lessons](/docs/workflow/stage_review_lessons.md) - Living log of lessons learned
-- [Best Practices Index](/docs/workflow/best_practices.md) - Central index for all best practices
+- [CrewAI Compliance Policy](crewai_compliance_policy.md) - Formal policy on mandatory CrewAI implementation
+- [Stage Review Lessons](stage_review_lessons.md) - Living log of lessons learned
+- [Best Practices Index](best_practices.md) - Central index for all best practices
 
 **Governance:**
-- [Exception Documentation](/docs/governance/exceptions/) - Directory for Chairman-approved exceptions
+- [Exception Documentation](../governance/exceptions) - Directory for Chairman-approved exceptions
 - Strategic Directives: Query `strategic_directives_v2` table with `metadata->>'spawned_from_review' = 'true'`
 
 ---

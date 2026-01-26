@@ -1,5 +1,14 @@
 # Stage 9: Metrics & Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, sd, validation, workflow
+
 **Purpose**: Define KPIs, SQL queries, dashboard designs, and alerting rules for Stage 9.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:379-382 "metrics: Gap coverage, Opportunity size, Capability score"

@@ -1,5 +1,14 @@
 # Semantic Component Selector - Deployment Guide
 
+
+## Metadata
+- **Category**: Deployment
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, api, testing, migration
+
 **Feature**: Semantic Component Recommendations with Explainable AI
 **Version**: 1.0
 **Date**: 2025-10-18

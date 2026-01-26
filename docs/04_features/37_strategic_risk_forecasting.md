@@ -1,5 +1,14 @@
 # Stage 37 – Strategic Intelligence Module: Risk Forecasting Enhanced PRD
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, schema, authentication, feature
+
 > **Legacy Documentation**: This document represents the 40-stage model concept. For the current 25-stage model implementation, see:
 > - [Risk Re-calibration Protocol](./risk-recalibration-protocol.md) (SD-LIFECYCLE-GAP-005)
 > - [Venture Lifecycle Gap Remediation Overview](./venture-lifecycle-gap-remediation-overview.md)

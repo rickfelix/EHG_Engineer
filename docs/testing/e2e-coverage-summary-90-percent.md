@@ -1,4 +1,13 @@
 # E2E Coverage Gap Analysis - Executive Summary
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 **Target**: 90% Coverage | **Current**: 25% Coverage | **Gap**: 65% (146 items)
 
 ---

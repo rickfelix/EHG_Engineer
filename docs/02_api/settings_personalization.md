@@ -1,5 +1,14 @@
 # Stage 49 – Settings & Personalization Enhanced PRD
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Status: ✅ 100% Complete
 
 ## 1. Enhanced Executive Summary

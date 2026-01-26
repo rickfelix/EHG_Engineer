@@ -1,5 +1,14 @@
 # Stage 20: Professional SOP (Standard Operating Procedures)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, schema
+
 ## Purpose
 
 Step-by-step execution procedures for Stage 20 (Enhanced Context Loading), enabling EXEC/EVA agents to execute consistently across ventures.

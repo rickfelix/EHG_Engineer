@@ -1,5 +1,14 @@
 # Stage 12: Current Assessment (Critique Analysis)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Source Reference
 
 **File**: `docs/workflow/critique/stage-12.md`

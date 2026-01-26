@@ -1,5 +1,14 @@
 # Strategic Directives v2 Schema Mapping Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, e2e, migration, schema
+
 **Purpose**: Quick reference for mapping field names when creating Strategic Directives
 **Use Case**: Prevents schema mismatch errors when writing SQL or scripts
 **Last Updated**: 2025-11-03

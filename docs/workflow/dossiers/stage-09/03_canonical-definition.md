@@ -1,5 +1,14 @@
 # Stage 9: Canonical Definition (from stages.yaml)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, feature, workflow, ci
+
 **Purpose**: Full YAML definition from authoritative source (stages.yaml).
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:365-409 "id: 9, title: Gap Analysis & Market Opportunity"

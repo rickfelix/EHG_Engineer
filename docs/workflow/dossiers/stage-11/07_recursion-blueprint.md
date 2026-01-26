@@ -1,5 +1,14 @@
 # Stage 11: Recursion Blueprint
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, schema, guide, sd
+
 **Status**: ⚠️ **NO RECURSION DEFINED** (Honest gap documented)
 
 **Consistency Scan Result**: N/N/N (No recursion triggers found in critique or adjacent stages)

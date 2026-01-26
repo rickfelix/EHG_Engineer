@@ -1,5 +1,14 @@
 # Stage 17: Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, schema
+
 ## Source Authority
 
 **Primary Source**: `docs/workflow/stages.yaml`

@@ -1,5 +1,14 @@
 # 6-Step SD Evaluation Checklist
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, unit
+
 ## 5-Step SD Evaluation Checklist
 
 **MANDATORY**: All agents (LEAD, PLAN) MUST complete these steps when evaluating a Strategic Directive:

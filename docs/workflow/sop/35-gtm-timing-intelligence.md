@@ -1,5 +1,14 @@
 # 35. GTM Timing Intelligence
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, workflow, ci
+
 - **Owner**: LEAD
 - **Depends on**: 34
 - **Purpose**: Optimize go-to-market timing using market intelligence.

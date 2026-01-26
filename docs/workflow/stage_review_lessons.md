@@ -1,5 +1,14 @@
 # Stage Review Lessons Learned - Living Log
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, e2e, migration
+
 **Version**: 1.0
 **Created**: 2025-11-07
 **Authority**: Chairman
@@ -227,10 +236,10 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 
 ## Related Documentation
 
-- [Review Process](/docs/workflow/review_process.md) - Framework procedures
-- [Stage Review Template](/docs/workflow/review_templates/stage_review_template.md) - Section 5.9 feeds this log
-- [Best Practices Index](/docs/workflow/best_practices.md) - Consolidated best practices
-- [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md) - Policy triggered by lessons learned
+- [Review Process](review_process.md) - Framework procedures
+- [Stage Review Template](review_templates/stage_review_template.md) - Section 5.9 feeds this log
+- [Best Practices Index](best_practices.md) - Consolidated best practices
+- [CrewAI Compliance Policy](crewai_compliance_policy.md) - Policy triggered by lessons learned
 
 ---
 

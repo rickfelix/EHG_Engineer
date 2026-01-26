@@ -1,5 +1,14 @@
 # Team Migration Guide: Template-Based LEO Protocol
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, migration, schema
+
 **Generated**: September 27, 2025
 **Status**: Production Ready
 **Version**: LEO Protocol v4.2.0

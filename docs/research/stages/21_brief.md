@@ -1,5 +1,14 @@
 # Stage 21 Research Brief: Final Pre-Flight Check
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, validation, workflow
+
 ## Focus Area
 Comprehensive validation before development phase begins.
 

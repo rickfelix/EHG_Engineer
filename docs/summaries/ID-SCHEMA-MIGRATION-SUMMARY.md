@@ -1,5 +1,14 @@
 # ID Schema Standardization - Complete Solution
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 **Created**: 2025-10-04
 **Status**: Ready for Execution
 **Priority**: HIGH (blocks LEO Protocol handoffs)

@@ -1,5 +1,14 @@
 # Capability Router Protocol
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, api, testing, migration
+
 **SD**: SD-LIFECYCLE-GAP-004 - Multi-Venture Portfolio Coordination
 **Created**: 2026-01-19
 **Status**: Active

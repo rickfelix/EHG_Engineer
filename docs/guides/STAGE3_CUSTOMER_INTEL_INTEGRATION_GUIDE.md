@@ -1,5 +1,14 @@
 # Stage 3 Customer Intelligence Integration Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, api, testing, e2e
+
 **Related**: SD-CUSTOMER-INTEL-001
 **Status**: UI Components Complete, Integration Pending
 **Date**: 2025-10-11

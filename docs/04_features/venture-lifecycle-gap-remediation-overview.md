@@ -1,5 +1,14 @@
 # Venture Lifecycle Gap Remediation (SD-LIFECYCLE-GAP-000)
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, unit, migration, schema
+
 **SD**: SD-LIFECYCLE-GAP-000
 **Status**: COMPLETED
 **Date Completed**: 2026-01-18

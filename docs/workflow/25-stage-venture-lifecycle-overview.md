@@ -1,5 +1,14 @@
 # 25-Stage Venture Lifecycle Overview
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: api, unit, schema, security
+
 **Version**: 2.0 (Venture Vision v2.0)
 **Status**: Active
 **Last Updated**: 2026-01-18

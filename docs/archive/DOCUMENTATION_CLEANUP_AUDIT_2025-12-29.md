@@ -524,12 +524,12 @@ node scripts/archive-old-protocol-docs.js --version "v3.x" --version "v4.0-v4.2"
 - [DOCUMENTATION_CLEANUP_COMPLETE.md](DOCUMENTATION_CLEANUP_COMPLETE.md) - Oct 2024 cleanup (42→75 score)
 
 **Standards**:
-- [DOCUMENTATION_STANDARDS.md](DOCUMENTATION_STANDARDS.md) - v1.1.0 (Oct 2024)
-- [FILE_NUMBERING_AUDIT.md](FILE_NUMBERING_AUDIT.md) - Numbering system explanation
+- [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - v1.1.0 (Oct 2024)
+- [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) - Numbering system explanation
 
 **Database-First Enforcement**:
 - SD-A11Y-FEATURE-BRANCH-001 - Zero markdown violations achievement
-- [database-agent-patterns.md](reference/database-agent-patterns.md) - Database agent best practices
+- [database-agent-patterns.md](../reference/database-agent-patterns.md) - Database agent best practices
 
 **LEO Protocol**:
 - [CLAUDE.md](../CLAUDE.md) - Active protocol router (v4.3.3)

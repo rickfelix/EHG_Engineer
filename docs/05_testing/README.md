@@ -3,8 +3,8 @@
 This directory contains testing strategies, QA workflows, test scenarios, and quality assurance documentation for the EHG Engineer project.
 
 ## Metadata
-- **Category**: testing
-- **Status**: active
+- **Category**: Testing
+- **Status**: Approved
 - **Last Updated**: 2025-10-24
 
 ---
@@ -183,16 +183,16 @@ tests/
 
 ## Navigation
 
-- **Parent**: [Documentation Home](/docs/README.md)
-- **Next**: [06 Deployment](/docs/06_deployment/README.md)
-- **Previous**: [04 Features](/docs/04_features/README.md)
+- **Parent**: [Documentation Home](../01_architecture/README.md)
+- **Next**: [06 Deployment](../06_deployment/README.md)
+- **Previous**: [04 Features](../04_features/README.md)
 
 ---
 
 ## Contributing
 
 When adding new testing documentation:
-1. Follow [DOCUMENTATION_STANDARDS.md](/docs/DOCUMENTATION_STANDARDS.md)
+1. Follow [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md)
 2. Include metadata headers
 3. Link to related test files
 4. Document test scenarios and expected outcomes

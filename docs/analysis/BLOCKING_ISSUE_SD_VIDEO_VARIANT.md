@@ -1,5 +1,14 @@
 # BLOCKING ISSUE: SD-VIDEO-VARIANT-001 LEAD→PLAN Handoff
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Date**: 2025-10-10  
 **Severity**: BLOCKING  
 **Phase**: LEAD → PLAN Transition  

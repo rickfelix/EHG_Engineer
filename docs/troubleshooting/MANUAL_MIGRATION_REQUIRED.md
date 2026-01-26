@@ -1,5 +1,14 @@
 # ⚠️ MANUAL DATABASE MIGRATION REQUIRED
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, sd, directive
+
 **Why**: Supabase anon key doesn't have permissions to create tables directly.
 **Time**: 5 minutes
 **Priority**: CRITICAL for automation

@@ -1,5 +1,14 @@
 # Phase 0 MVP: Haiku-First Model Allocation (Week 1)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, api, testing, e2e
+
 **Target**: Enable Haiku-first model allocation with intelligent escalation by end of week
 **Effort**: ~3.5 hours of implementation
 **Complexity**: Low (mostly configuration changes, not architectural)

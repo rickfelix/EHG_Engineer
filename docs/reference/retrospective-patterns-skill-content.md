@@ -1,5 +1,14 @@
 # Retrospective Patterns Skill
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, e2e, unit
+
 **Skill Type**: Documentation and Process Improvement
 **Target Audience**: Claude Code Models (LEAD, PLAN, EXEC agents)
 **Storage**: `leo_skills` table (skill_key: 'retrospective-patterns')

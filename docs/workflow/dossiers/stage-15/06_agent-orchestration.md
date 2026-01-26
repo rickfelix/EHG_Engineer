@@ -1,5 +1,14 @@
 # Stage 15: Agent Orchestration & Governance Mapping
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, feature
+
 **Purpose**: CrewAI implementation guide and governance framework for Pricing Strategy & Revenue Architecture
 **Owner**: LEAD agent
 **Agent Type**: Strategic planning agent with financial analysis capabilities

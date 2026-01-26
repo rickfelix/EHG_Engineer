@@ -1,5 +1,14 @@
 # Stage 3: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: handoff, validation, reference, workflow
+
 **Status**: ⚠️ **Partially Defined** (PLAN agent referenced, validation agents not mapped)
 
 ---

@@ -1,5 +1,14 @@
 # Agent Patterns Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, security
+
 **SD-REFACTOR-AGENTS-001: Agent Base Class & Pattern Extraction**
 
 This guide documents the LEO Protocol agent architecture, base class patterns, and state machine integration.
@@ -398,10 +407,10 @@ jobs:
 
 ## Related Documentation
 
-- [Sub-Agent Patterns Guide](./sub-agent-patterns-guide.md) - Sub-agent patterns
+- [Sub-Agent Patterns Guide](agent-patterns-guide.md) - Sub-agent patterns
 - [Governance Library Guide](./governance-library-guide.md) - Exception handling
-- [Design Sub-Agent Guide](./design-sub-agent-guide.md) - DESIGN patterns
-- [Retro Sub-Agent Guide](./retro-sub-agent-guide.md) - RETRO patterns
+- [Design Sub-Agent Guide](../leo/sub-agents/design-sub-agent-guide.md) - DESIGN patterns
+- [Retro Sub-Agent Guide](../leo/sub-agents/retro-sub-agent-guide.md) - RETRO patterns
 
 ---
 

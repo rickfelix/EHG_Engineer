@@ -1,5 +1,14 @@
 # Dynamic Model Allocation Framework - Complete Research & Implementation Plan
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, api, testing, unit
+
 **Status**: RESEARCH COMPLETE, READY FOR IMPLEMENTATION
 **Date**: 2025-12-06
 **Approval Required**: Chairman sign-off on Haiku-first strategy

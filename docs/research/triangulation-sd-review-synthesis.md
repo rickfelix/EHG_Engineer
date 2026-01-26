@@ -1,4 +1,13 @@
 # SD Review Triangulation Synthesis
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, unit, migration, schema
+
 ## Cross-AI Analysis: OpenAI + AntiGravity + Claude Code
 
 **Date**: 2026-01-01

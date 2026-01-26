@@ -1,5 +1,14 @@
 # LEO Protocol GitHub CI/CD Integration Setup Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, api, testing, migration
+
 ## Overview
 
 This guide covers the complete setup of GitHub CI/CD integration with the LEO Protocol, enabling automated pipeline monitoring, failure detection, and resolution workflows.

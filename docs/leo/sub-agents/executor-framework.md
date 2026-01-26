@@ -1,5 +1,14 @@
 # Generic Sub-Agent Executor Framework
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, e2e, migration
+
 **Created**: 2025-10-11 (SD-SUBAGENT-IMPROVE-001)
 **Purpose**: Standardized execution framework that automatically loads sub-agent instructions from database
 **Status**: Production-Ready ✅

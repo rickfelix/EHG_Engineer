@@ -1,5 +1,14 @@
 # LEO Protocol Vision QA Integration (Extension v3.1.5.9)
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 **Status: PROPOSED - Vision QA System Integration**
 **Created: 2025-01-30**
 **Purpose: Define when and how LEO Protocol agents utilize the Vision QA System**

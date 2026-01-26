@@ -1,5 +1,14 @@
 # Stage 4: Recursion Blueprint
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: feature, sd, validation, workflow
+
 **Status**: ⚠️ **MINIMAL RECURSION SUPPORT** (Header present, no details)
 
 **Consistency Scan Result**: Y/N/N (Recursion section header exists but no trigger details)

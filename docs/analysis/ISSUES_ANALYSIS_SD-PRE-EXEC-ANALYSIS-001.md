@@ -1,5 +1,14 @@
 # Issues Analysis: SD-PRE-EXEC-ANALYSIS-001
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, migration, schema
+
 **Date**: 2025-10-19
 **SD**: SD-PRE-EXEC-ANALYSIS-001 - Automated Pre-EXEC Dependency & Impact Analysis
 **Status**: COMPLETED (with workarounds)

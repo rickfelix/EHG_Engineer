@@ -1,5 +1,14 @@
 # LEO Protocol Gate System Documentation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 
 The LEO Protocol Gate System enforces quality standards through deterministic validation gates. Each gate must score at or above the SD type threshold to pass (60-90%, typically 85% for features), ensuring PRDs meet all requirements before implementation. See "SD Type Awareness" section in Gate 3 for the complete threshold table.

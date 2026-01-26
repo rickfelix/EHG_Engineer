@@ -1,5 +1,14 @@
 # BMAD Method User Guide for LEO Protocol
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, e2e
+
 **Version**: 1.0
 **Last Updated**: 2025-10-13
 **Protocol**: LEO v4.2.0 (Story Gates)
@@ -13,7 +22,7 @@
 5. [Sub-Agent Usage](#sub-agent-usage)
 6. [Integration Points](#integration-points)
 7. [Troubleshooting](#troubleshooting)
-8. [Metrics & Impact](#metrics--impact)
+8. [Metrics & Impact](#metrics-impact)
 
 ---
 

@@ -1,5 +1,14 @@
 # Research Plan: Claude Code Context Management for LEO Protocol Enhancement
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, unit, schema, security
+
 **Objective**: Deep research into Claude Code's context and memory management system to optimize LEO Protocol agent workflows and handoffs.
 
 **Date**: 2025-08-30

@@ -1,5 +1,14 @@
 # Foundation Verification — P0 Strategic Directives (CORRECTED)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, rls, security, sd
+
 **Generated**: 2025-11-06 (CORRECTED after RLS bypass)
 **Database**: strategic_directives_v2 @ EHG_Engineer (dedlbzhpgkmetvhbkyzq)
 **Total SDs in Database**: **255 records**

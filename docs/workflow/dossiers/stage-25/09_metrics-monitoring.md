@@ -1,5 +1,14 @@
 # Stage 25: Metrics & Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, e2e, unit, directive
+
 ## Overview
 
 **Purpose**: Define KPIs, Supabase queries, and dashboards for monitoring Stage 25 (Quality Assurance) execution.

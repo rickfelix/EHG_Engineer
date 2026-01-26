@@ -1,5 +1,14 @@
 # 12. Adaptive Naming Module
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, security, guide
+
 - **Owner**: PLAN
 - **Depends on**: 11
 - **Purpose**: Optimize naming for different markets and contexts.

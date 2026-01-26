@@ -1,5 +1,14 @@
 # GitHub Sub-Agent Safety Enhancements
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, unit
+
 **Date**: 2025-11-17
 **Initiative**: Data Loss Prevention
 **Trigger**: 3-hour rework incident due to commits being overwritten

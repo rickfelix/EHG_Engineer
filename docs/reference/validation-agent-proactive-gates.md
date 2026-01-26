@@ -1,5 +1,14 @@
 # Validation Agent Proactive Gates Quick Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, migration
+
 **Status**: ACTIVE
 **Last Updated**: 2025-10-12
 **Purpose**: Quick reference for mandatory validation gates and enforcement

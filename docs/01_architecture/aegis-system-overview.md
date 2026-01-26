@@ -28,7 +28,7 @@ AEGIS (Autonomous Enforcement and Governance Integration System) is a unified da
 - [Adapter Pattern](#adapter-pattern)
 - [Feature Flags](#feature-flags)
 - [Enforcement Engine](#enforcement-engine)
-- [Performance & Caching](#performance--caching)
+- [Performance & Caching](#performance-caching)
 
 ## System Architecture
 

@@ -1,5 +1,14 @@
 # Claude Code Hooks Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, api, testing, migration
+
 **Document Type**: Technical Reference
 **System**: Claude Code Hook System
 **Last Updated**: 2026-01-24

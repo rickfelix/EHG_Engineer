@@ -1,5 +1,14 @@
 # Stage 2: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, handoff, reference, workflow
+
 **Status**: ⚠️ **Partially Defined** (EVA referenced, specialist agents not mapped)
 
 ---

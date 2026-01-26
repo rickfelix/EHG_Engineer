@@ -1,5 +1,14 @@
 # How to Add a New Project - Super Simple Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: guide, leo, supabase
+
 ## You Only Need 3 Things:
 1. Your project name (like "my-app")
 2. Your GitHub username 

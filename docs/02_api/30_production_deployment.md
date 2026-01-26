@@ -1,5 +1,14 @@
 # Stage 30 – Production Deployment Enhanced PRD (v4)
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## EHG Management Model Integration
 
 ### Corporate Governance & Deployment Authority

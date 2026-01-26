@@ -1,5 +1,14 @@
 # Genesis Ritual: The Collapse of the Wave Function
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, schema, rls
+
 > **Document Version: GENESIS-V3.1**
 > **Vision Version: 3.1**
 > **Status: RATIFIED**

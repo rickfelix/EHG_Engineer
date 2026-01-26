@@ -1,5 +1,14 @@
 # Stage 17: Current Assessment (Critique Analysis)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: testing, unit, schema, security
+
 ## Source Authority
 
 **Critique File**: `docs/workflow/critique/stage-17.md`

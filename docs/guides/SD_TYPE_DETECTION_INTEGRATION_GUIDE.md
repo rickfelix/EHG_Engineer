@@ -1,5 +1,14 @@
 # SD Type Detection Integration Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, unit
+
 **Created**: 2025-10-18
 **Purpose**: Guide for integrating sd-type-detection.js into progress calculation and deliverable creation workflows
 **Issue**: Resolves Issue #4 from SD-PLAN-PRESENT-001 retrospective

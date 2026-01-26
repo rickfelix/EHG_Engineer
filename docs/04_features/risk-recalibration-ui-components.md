@@ -1,5 +1,14 @@
 # Risk Re-calibration UI Components
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, api, testing, e2e
+
 **SD**: SD-LIFECYCLE-GAP-005 - Strategic Risk Forecasting (Phase Boundary Gates)
 **Created**: 2026-01-19
 **Status**: Complete

@@ -1,5 +1,14 @@
 # Stage 33 Research Brief: Post-MVP Expansion
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, feature, guide, workflow
+
 ## Focus Area
 Expand features and capabilities based on market feedback.
 

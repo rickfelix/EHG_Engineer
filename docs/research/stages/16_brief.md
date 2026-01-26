@@ -1,5 +1,14 @@
 # Stage 16 Research Brief: AI CEO Agent Development
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Configure and deploy AI CEO agent for autonomous venture management.
 

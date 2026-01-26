@@ -1,5 +1,14 @@
 # Professional SOP: Exit-Oriented Design Execution
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, protocol
+
 ## Scope
 This Standard Operating Procedure defines the step-by-step execution protocol for Stage 13 (Exit-Oriented Design), owned by the Chairman for strategic exit planning.
 

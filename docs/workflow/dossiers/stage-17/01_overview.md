@@ -1,5 +1,14 @@
 # Stage 17 Operating Dossier: GTM Strategist Agent Development
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, sd, directive, validation
+
 ## Executive Summary
 
 **Stage ID**: 17

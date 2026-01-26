@@ -1,5 +1,14 @@
 # Research Summary: Security & Compliance Framework
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: api, schema, rls, security
+
 **SD Reference**: SD-RESEARCH-108 (Security, Compliance & AI Auditability)
 **Document**: Security & Compliance Framework for Autonomous AI Ventures.pdf
 **Pages**: 7

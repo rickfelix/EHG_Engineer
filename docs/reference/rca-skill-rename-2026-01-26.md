@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Category**: Reference
-- **Status**: Completed
+- **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: LEO Protocol Team
 - **Last Updated**: 2026-01-26

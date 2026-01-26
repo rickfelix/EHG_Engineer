@@ -1,5 +1,14 @@
 # Stage 8 Gaps & Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 This document identifies gaps, missing artifacts, and proposed improvements for Stage 8 (Problem Decomposition Engine). Each gap is linked to relevant Strategic Directives for systematic resolution.

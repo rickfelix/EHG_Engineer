@@ -1,5 +1,14 @@
 # Multi-Database Architecture for EHG_Engineer
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, migration, schema
+
 > **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: Both EHG and EHG_Engineer now use the **consolidated database** (`dedlbzhpgkmetvhbkyzq`). The old EHG database (`liapbndqlqxdcgpwntbv`) is DEPRECATED.
 
 ## Executive Summary

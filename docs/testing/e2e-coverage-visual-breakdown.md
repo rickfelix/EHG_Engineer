@@ -1,5 +1,14 @@
 # E2E Coverage Visual Breakdown - 90% Target
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 ## Current vs Target Coverage
 
 ```

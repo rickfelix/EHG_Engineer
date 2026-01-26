@@ -1,5 +1,14 @@
 # Trademark Guidance Strategy Analysis for EHG's Naming Engine
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, unit, feature
+
 **Source**: OpenAI/ChatGPT Deep Research
 **Date**: 2026-01-04
 **Topic**: Trademark Guidance Strategy for Venture Naming Engine

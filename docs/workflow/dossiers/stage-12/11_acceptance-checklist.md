@@ -1,5 +1,14 @@
 # Stage 12: Acceptance Checklist & Quality Gate
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, schema, protocol
+
 ## Acceptance Criteria (8 Dimensions)
 
 This checklist evaluates the Stage 12 dossier quality across 8 dimensions. Target score: ≥85/100 (Phase 6 contract requirement).

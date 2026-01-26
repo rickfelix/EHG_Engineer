@@ -1,5 +1,14 @@
 # DATABASE - Knowledge Summary
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, guide
+
 **Generated**: 2025-10-25  
 **Purpose**: Quick reference for database lessons learned  
 **Source**: 1 patterns, 0 retrospectives  

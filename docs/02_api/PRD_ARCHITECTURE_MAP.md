@@ -1,5 +1,14 @@
 # PRD Architecture Map
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 > **Purpose**: This map categorizes all 82 enhanced PRDs to clarify what needs to be built in Lovable (Platform) versus what becomes configuration data (Workflows) or AI orchestration (Agents).
 
 ## Architecture Categories Overview

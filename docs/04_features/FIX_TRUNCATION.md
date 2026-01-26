@@ -1,5 +1,14 @@
 # Fix Output Truncation in Claude Code
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: feature, protocol, leo, documentation
+
 ## The Problem
 When using LEO Protocol commands, you might see truncated output with messages like "42 lines, Ctrl+R to expand". This is a Claude Code terminal display issue, NOT a problem with LEO Protocol.
 

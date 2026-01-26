@@ -1,5 +1,14 @@
 # Stage 5 Research Brief: Profitability Forecasting
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Create financial models and profitability projections for the venture.
 

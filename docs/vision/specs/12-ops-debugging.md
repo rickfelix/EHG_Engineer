@@ -1,5 +1,14 @@
 # Ops Debugging Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, schema, rls
+
 **Vision v2 Chairman's OS - Trace Viewer & Replay Safety**
 
 > "When something breaks at 3 AM, you need to understand why by 3:05 AM."

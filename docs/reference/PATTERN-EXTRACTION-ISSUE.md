@@ -1,5 +1,14 @@
 # Pattern Extraction Script Bug [FIXED]
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: testing, leo, sd, documentation
+
 **File**: `lib/learning/issue-knowledge-base.js`
 **Function**: `createPattern()` (line 228)
 **Issue**: Incorrect pattern ID generation due to timestamp collision

@@ -1,5 +1,14 @@
 # Stage 1: Dossier Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, reference, workflow, automation
+
 **Target Score**: ≥85 / 100
 
 ## Scoring Rubric

@@ -1,5 +1,14 @@
 # SD-VWC-INTUITIVE-FLOW-001 Checkpoint 2 Planning
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, testing, e2e, unit
+
 **Phase**: PLAN
 **Checkpoint**: 2 of 3
 **Estimated Effort**: 9 hours (5h tests + 4h accessibility)

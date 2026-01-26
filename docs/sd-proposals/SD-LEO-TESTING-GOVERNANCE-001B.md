@@ -1,5 +1,14 @@
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001B
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, testing, e2e, unit
+
 ## Test Evidence Auto-Capture Gate
 
 **Proposed ID:** SD-LEO-TESTING-GOVERNANCE-001B

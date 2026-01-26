@@ -1,5 +1,14 @@
 # STORIES Agent Analysis & User Story Verification Workflow
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, testing, e2e, schema
+
 **Date**: 2025-12-06
 **Context**: Model optimization investigation revealed issues with STORIES agent pass rates and user story implementation verification
 

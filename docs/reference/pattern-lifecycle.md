@@ -1,5 +1,14 @@
 # Issue Pattern Lifecycle Management
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, migration
+
 ## Overview
 
 The LEO Protocol includes an intelligent pattern recognition system that tracks recurring issues, learns from retrospectives, and proactively creates Strategic Directives when patterns indicate systemic problems.

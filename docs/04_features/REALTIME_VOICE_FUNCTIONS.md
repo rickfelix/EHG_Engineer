@@ -1,5 +1,14 @@
 # OpenAI Real-Time Voice Function Calling Documentation
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, rls
+
 ## Overview
 This document explains how EVA's real-time voice interface integrates with database queries using OpenAI's function calling feature. This allows EVA to answer questions about user data during voice conversations.
 

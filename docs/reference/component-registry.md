@@ -1,5 +1,14 @@
 # Component Registry
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, migration, feature, protocol
+
 Reference document for locating UI components created by Strategic Directives.
 
 ## SD-UNIFIED-PATH-3.1: Glass Cockpit Components

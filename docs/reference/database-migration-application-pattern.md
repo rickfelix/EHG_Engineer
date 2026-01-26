@@ -1,5 +1,14 @@
 # Database Migration Application Pattern
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-23
+- **Tags**: database, e2e, migration, rls
+
 **Last Updated**: 2026-01-23
 **Lesson Source**: SD-VWC-PHASE4-001 Checkpoint 1, SD-LEO-HARDEN-VALIDATION-001
 **Root Cause**: Database sub-agent incorrectly stated manual application required

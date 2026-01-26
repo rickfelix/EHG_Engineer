@@ -1,5 +1,14 @@
 # EHG VISION v3.4 ADDENDUM: Operational Infrastructure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, unit
+
 **Status:** DRAFT - Pending Chairman Ratification
 **Date:** January 2, 2026
 **Supplements:** 00_VISION_V3_THE_ASSET_FACTORY.md (V3.3)

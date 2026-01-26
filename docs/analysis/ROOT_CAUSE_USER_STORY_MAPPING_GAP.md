@@ -1,5 +1,14 @@
 # Root Cause Analysis: User Story → E2E Test Mapping Gap
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, protocol
+
 **Date**: 2025-10-18
 **SD Affected**: SD-VIF-INTEL-001 (and likely others)
 **Priority**: CRITICAL

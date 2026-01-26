@@ -1,5 +1,14 @@
 # Invisible Sub-Agent System - Usage Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 ## 🎯 System Status: ACTIVATED
 
 The invisible sub-agent system is now active and ready to use!

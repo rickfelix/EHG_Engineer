@@ -1,5 +1,14 @@
 # Stage 9: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: feature, sd, validation, documentation
+
 **Purpose**: Quality gate scoring for Stage 9 Operating Dossier (Phase 5 contract).
 
 **Target**: ≥85/100 points to pass acceptance

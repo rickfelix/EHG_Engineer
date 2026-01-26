@@ -1,5 +1,14 @@
 # Stage 30 Research Brief: Production Deployment
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, deployment, workflow
+
 ## Focus Area
 Deploy to production with zero-downtime and rollback capabilities.
 

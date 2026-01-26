@@ -1,5 +1,14 @@
 # Stage 7: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, validation, architecture, postgres
+
 **Purpose**: Define tunable parameters for Stage 7 (Comprehensive Planning Suite) to allow Chairman/Admin customization
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:274-319 "Comprehensive Planning Suite"

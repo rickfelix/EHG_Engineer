@@ -1,5 +1,14 @@
 # Stage 8 Recursion Blueprint (DETAILED)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 Stage 8 (Problem Decomposition Engine) is a **PRIMARY RECURSION TARGET** in the unified venture creation system. Downstream technical validation failures (particularly from Stage 10 Comprehensive Technical Review) can invalidate decomposition assumptions, triggering recursion back to Stage 8 to re-decompose the problem with updated technical constraints.

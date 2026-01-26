@@ -1,5 +1,14 @@
 # Stage 15: Configurability Matrix & Tunable Parameters
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, feature, guide, sd
+
 **Purpose**: Define adjustable parameters for customizing Stage 15 execution across different contexts
 **Owner**: LEAD agent
 **Configuration Scope**: Per-venture, per-market, per-product pricing strategy variations

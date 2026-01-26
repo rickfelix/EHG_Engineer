@@ -1,5 +1,14 @@
 # Dashboard Resilience Improvements
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, schema, sd
+
 ## Root Issues Discovered
 
 From the SD-2025-001 investigation, we identified critical gaps between database schema and dashboard expectations:

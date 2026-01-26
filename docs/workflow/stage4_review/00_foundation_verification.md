@@ -1,5 +1,14 @@
 # Foundation Verification — P0 Strategic Directives
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, sd, directive, validation
+
 **Generated**: 2025-11-06
 **Database**: strategic_directives_v2 @ Supabase (dedlbzhpgkmetvhbkyzq)
 **Query Date**: 2025-11-06

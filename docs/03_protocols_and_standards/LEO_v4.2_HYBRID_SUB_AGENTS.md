@@ -1,5 +1,14 @@
 # LEO Protocol v4.2 - Hybrid Sub-Agent System
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Version**: 4.2.0  
 **Status**: Enhancement  
 **Date**: 2025-09-03  

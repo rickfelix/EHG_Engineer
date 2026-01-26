@@ -1,5 +1,14 @@
 # Proactive Context Monitoring
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, guide, protocol, leo
+
 **Generated**: 2025-10-28T21:47:56.039Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE

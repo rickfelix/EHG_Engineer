@@ -343,19 +343,19 @@ docs/
 ## Documentation References
 
 **Created During Cleanup**:
-- [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) - Numbering system explanation
-- [ROOT_FILES_CATEGORIZATION.md](/docs/ROOT_FILES_CATEGORIZATION.md) - File move planning
-- [archive/protocols/README.md](/docs/archive/protocols/README.md) - Protocol archive guide
+- [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) - Numbering system explanation
+- [ROOT_FILES_CATEGORIZATION.md](../01_architecture/ROOT_FILES_CATEGORIZATION.md) - File move planning
+- [archive/protocols/README.md](protocols/README.md) - Protocol archive guide
 
 **Updated**:
-- [DOCUMENTATION_STANDARDS.md](/docs/DOCUMENTATION_STANDARDS.md) - Standards v1.1.0
-- [reference/database-agent-patterns.md](/docs/reference/database-agent-patterns.md) - Database patterns
+- [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Standards v1.1.0
+- [reference/database-agent-patterns.md](../reference/database-agent-patterns.md) - Database patterns
 
 **Key Directories**:
-- [guides/](/docs/guides/) - How-to guides (53 files)
-- [reference/](/docs/reference/) - Quick reference (20+ files)
-- [summaries/](/docs/summaries/) - Implementation summaries (24 files)
-- [reports/](/docs/reports/) - Audit & analysis reports (13 files)
+- [guides/](../guides) - How-to guides (53 files)
+- [reference/](../reference) - Quick reference (20+ files)
+- [summaries/](../summaries) - Implementation summaries (24 files)
+- [reports/](v1-40-stage-workflow/reports/VENTURE_WORKFLOW_40_STAGES_ARCHITECT_REVIEW.md) - Audit & analysis reports (13 files)
 
 ---
 

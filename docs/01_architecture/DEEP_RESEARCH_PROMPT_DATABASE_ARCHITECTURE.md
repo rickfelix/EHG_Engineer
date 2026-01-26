@@ -1,5 +1,14 @@
 # Deep Research Prompt: Multi-Database Architecture for EHG_Engineer
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 ## Context & Problem Statement
 
 **EHG_Engineer** is a meta-application that manages and operates on OTHER applications, each with their own Supabase instances. Currently facing critical limitations:

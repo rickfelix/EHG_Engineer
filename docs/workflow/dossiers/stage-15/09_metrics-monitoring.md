@@ -1,5 +1,14 @@
 # Stage 15: Metrics, Monitoring & Dashboards
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 **Purpose**: Define KPIs, tracking queries, and monitoring dashboards for Pricing Strategy & Revenue Architecture
 **Owner**: LEAD agent
 **Monitoring Frequency**: Monthly (first year), Quarterly (thereafter)

@@ -1,5 +1,14 @@
 # 17. GTM Strategist Agent Development
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, security, workflow
+
 - **Owner**: LEAD
 - **Depends on**: 16
 - **Purpose**: Deploy go-to-market strategist agent for marketing automation.

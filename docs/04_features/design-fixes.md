@@ -1,5 +1,14 @@
 # Design Fix Guide
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: feature, guide, ci
+
 **Generated**: 2025-09-04T01:33:21.469Z
 **Score**: 0/100
 

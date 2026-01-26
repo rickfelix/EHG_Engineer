@@ -1,5 +1,14 @@
 # Stage 4: Competitive Intelligence & Market Defense — Operating Dossier
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: feature, protocol, validation, reference
+
 **Generated**: 2025-11-05
 **Version**: 1.0
 **Protocol**: Stage Operating Dossier v1.0

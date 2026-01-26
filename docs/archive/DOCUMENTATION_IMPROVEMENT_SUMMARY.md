@@ -1,7 +1,7 @@
 # Documentation Improvement Summary - Quick Action Guide
 
 **Date**: 2025-12-29
-**Assessment**: [Full Report](analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
+**Assessment**: [Full Report](../analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
 **Status**: Ready for implementation
 
 ---
@@ -32,8 +32,8 @@
 ```bash
 # Edit /README.md, add at top:
 ## Quick Start
-→ **[Get Started in 5 Minutes](docs/guides/SIMPLE_PROJECT_SETUP.md)**
-→ [Documentation Map](docs/DOCUMENTATION_MAP.md)
+→ **[Get Started in 5 Minutes](../04_features/SIMPLE_PROJECT_SETUP.md)**
+→ [Documentation Map](DOCUMENTATION_MAP.md)
 ```
 
 ### 2. Create Documentation Map (1 hour)
@@ -240,5 +240,5 @@ Follow complete 4-week roadmap from assessment report
 ---
 
 **Assessment by**: DOCMON Sub-Agent (Information Architecture Lead)
-**Full Report**: [docs/analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md](analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
+**Full Report**: [docs/analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md](../analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
 **Ready for**: Immediate implementation

@@ -1,5 +1,14 @@
 # Campaign Monitoring & Recovery System
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, api, testing, feature
+
 ## Overview
 
 Intelligent monitoring system for the autonomous real testing campaign with crash detection, auto-restart, and health monitoring.

@@ -1,5 +1,14 @@
 # Stage 15: Pricing Strategy & Revenue Architecture - Operating Dossier
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: security, protocol, sd, validation
+
 **REGENERATION NOTE**: This dossier is dynamically generated from authoritative sources (`stages.yaml`, `critique/stage-15.md`) and MUST be regenerated after ANY update to those sources. Direct edits to this dossier will be overwritten. To modify Stage 15 specifications, edit the source files and regenerate using the Phase 7 contract protocol.
 
 ## Executive Summary

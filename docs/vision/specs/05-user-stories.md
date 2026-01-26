@@ -1,5 +1,14 @@
 # User Stories & Personas Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, schema, directive
+
 **Vision v2 Chairman's OS - Human Workflow Definitions**
 
 > "The system adapts to the human, not the other way around."

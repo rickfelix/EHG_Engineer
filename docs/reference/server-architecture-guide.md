@@ -1,5 +1,14 @@
 # Server Architecture Guide
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, guide, protocol, leo
+
 **SD-REFACTOR-SERVER-001: Server Architecture Documentation**
 
 This guide documents the EHG_Engineer server architecture, API endpoint patterns, and WebSocket integration.
@@ -420,8 +429,8 @@ export function handleOpenAIError(error) {
 
 ## Related Documentation
 
-- [Handoff System Guide](./handoff-system-guide.md) - Handoff API endpoints
-- [Sub-Agent Patterns Guide](./sub-agent-patterns-guide.md) - Sub-agent execution
+- [Handoff System Guide](../leo/handoffs/handoff-system-guide.md) - Handoff API endpoints
+- [Sub-Agent Patterns Guide](agent-patterns-guide.md) - Sub-agent execution
 - [Agent Patterns Guide](./agent-patterns-guide.md) - Agent architecture
 
 ---

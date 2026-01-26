@@ -1,5 +1,14 @@
 # Stage 59 – Governance & Compliance Enhanced PRD (v4)
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, schema
+
 > **TRUTH_STATUS: SCAFFOLD_ONLY**
 > Database schema exists for GDPR compliance (consent, deletion, export tables). User-facing UI and API endpoints are NOT implemented.
 

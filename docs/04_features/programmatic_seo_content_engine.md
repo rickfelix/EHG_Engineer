@@ -1,4 +1,13 @@
 # Programmatic SEO Content Engine
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, unit, schema
+
 ## Executive Summary
 
 This document specifies a comprehensive Programmatic SEO system that generates 100-1000s of targeted, high-quality pages automatically. The system creates comparison pages, location-based content, use-case pages, and feature documentation at scale while maintaining quality and relevance.

@@ -1,5 +1,14 @@
 # Stage 20: Stage Map and Dependency Graph
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Workflow Position
 
 ```

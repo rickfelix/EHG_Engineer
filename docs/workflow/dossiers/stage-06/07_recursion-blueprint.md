@@ -1,5 +1,14 @@
 # Stage 6: Recursion Blueprint
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, testing, e2e, unit
+
 **Status**: ⚠️ **PROPOSED RECURSION SUPPORT** (Referenced in Stage 5, not detailed in Stage 6 critique)
 
 **Consistency Scan Result**: N/N/Y (No recursion section in Stage 6 critique; recursion inferred from Stage 5 critique)

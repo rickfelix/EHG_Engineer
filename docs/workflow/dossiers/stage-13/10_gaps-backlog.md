@@ -1,5 +1,14 @@
 # Gaps & Backlog: Stage 13 Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Identified Gaps (from Critique)
 
 ### Gap 1: Limited Automation for Manual Processes

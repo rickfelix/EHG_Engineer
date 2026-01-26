@@ -1,5 +1,14 @@
 # Database Trigger Fix Report: SD-GENESIS-V31-MASON-P1
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, testing, migration, schema
+
 **Date**: 2025-12-31
 **SD**: SD-GENESIS-V31-MASON-P1
 **Issue**: Column "name" does not exist error blocking SD completion

@@ -1,5 +1,14 @@
 # EHG Engineer API Documentation
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 The EHG Engineer system provides REST API endpoints for managing Strategic Directives (SDs), Product Requirements Documents (PRDs), Ventures, and various AI-powered features.
@@ -31,7 +40,7 @@ Currently, the API is designed for development use. In production, implement app
 9. [Calibration API](#calibration-api-sovereign-pipe-v370)
 10. [Testing Campaign API](#testing-campaign-api)
 11. [PR Review System](#pr-review-system)
-12. [Dashboard & Status](#dashboard--status)
+12. [Dashboard & Status](#dashboard-status)
 13. [Venture-Scoped API (v2)](#venture-scoped-api-v2)
 14. [WebSocket API](#websocket-api)
 15. [Error Handling](#error-handling)

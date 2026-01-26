@@ -1,5 +1,14 @@
 # Boundary Examples - DO/DON'T Reference Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, schema, security, guide
+
 *Generated: 2025-09-26T13:59:46.307Z*
 *Source: Database + Codebase Analysis*
 

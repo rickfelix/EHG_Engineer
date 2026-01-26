@@ -1,5 +1,14 @@
 # 1. Draft Idea
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, security, validation
+
 - **Depends on**: None
 - **Purpose**: Capture and validate initial venture ideas with AI assistance and Chairman feedback.
 

@@ -1,5 +1,14 @@
 # 24. MVP Engine: Automated Feedback Iteration
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, unit, security, workflow
+
 - **Owner**: EVA
 - **Depends on**: 23
 - **Purpose**: Automated iteration engine for rapid MVP improvements.

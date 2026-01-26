@@ -1,5 +1,14 @@
 # Stage 05 – Profitability Forecasting Enhanced PRD (v4)
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 **Status:** EHG Integrated • **Owner:** PLAN Agent (Financial Analysis) • **Scope:** Multi-agent financial modeling with Chairman oversight  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Voice-Enabled Financial Modeling
 **Enhancement Level:** EHG Management Model Integration

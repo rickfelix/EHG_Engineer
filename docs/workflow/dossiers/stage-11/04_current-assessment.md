@@ -1,5 +1,14 @@
 # Stage 11: Current Assessment (Critique Scores)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, unit, schema
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-11.md:1-72
 
 **Overall Score**: 3.0/5.0 (Functional but needs optimization)

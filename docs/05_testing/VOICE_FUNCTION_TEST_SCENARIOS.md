@@ -1,5 +1,14 @@
 # Voice Function Test Scenarios
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, rls, authentication
+
 ## Overview
 This document provides test scenarios to verify that EVA's real-time voice interface correctly interprets user queries and executes the appropriate database functions.
 

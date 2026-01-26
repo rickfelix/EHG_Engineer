@@ -1,5 +1,14 @@
 # Stage 4 Chairman Decision
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: api, testing, unit, feature
+
 **Decision Date**: 2025-11-07
 **Reviewer**: Chairman
 **Review Status**: Complete

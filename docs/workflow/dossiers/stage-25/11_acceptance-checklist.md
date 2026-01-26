@@ -1,5 +1,14 @@
 # Stage 25: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 **Purpose**: Evaluate Stage 25 Operating Dossier quality against 8 criteria.

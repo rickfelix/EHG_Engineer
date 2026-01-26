@@ -1,5 +1,14 @@
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001D
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, testing, migration, schema
+
 ## Test Coverage Metrics in Retrospectives
 
 **Proposed ID:** SD-LEO-TESTING-GOVERNANCE-001D

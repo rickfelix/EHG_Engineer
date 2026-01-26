@@ -1,5 +1,14 @@
 # Stage 15: Recursion Blueprint & Trigger Conditions
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 **Purpose**: Define conditions that trigger re-entry into Stage 15 (Pricing Strategy & Revenue Architecture)
 **Recursion Status**: NOT CURRENTLY DEFINED (proposal required)
 **Owner**: LEAD agent

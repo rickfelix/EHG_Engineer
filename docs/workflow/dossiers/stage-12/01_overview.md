@@ -1,5 +1,14 @@
 # Stage 12: Adaptive Naming Module - Executive Overview
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: testing, schema, guide, validation
+
 ## Regeneration Note
 **This dossier was regenerated under Phase 6 contract specifications** (identical to Phase 5 standards) to ensure full compliance with evidence-based documentation requirements, structured recursion blueprints, and acceptance gate scoring. All 11 files follow the canonical format established in Phase 5.
 

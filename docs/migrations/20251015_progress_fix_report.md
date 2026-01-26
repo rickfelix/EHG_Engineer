@@ -1,5 +1,14 @@
 # Progress Trigger Table Consolidation Fix - Report
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, leo, sd
+
 ## Migration Applied Successfully ✅
 
 **Date**: 2025-10-15

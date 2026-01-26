@@ -1,8 +1,8 @@
 # Context Preservation System
 
 ## Metadata
-- **Category**: Operations
-- **Status**: Active
+- **Category**: Deployment
+- **Status**: Approved
 - **Version**: 2.0.0
 - **Author**: DOCMON Sub-Agent
 - **Last Updated**: 2026-01-26

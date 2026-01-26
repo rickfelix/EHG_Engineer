@@ -1,5 +1,14 @@
 # Stage 04 – Competitive Intelligence with B2C SaaS KPI Tracking (Enhanced v3)
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, unit, migration
+
 **Status:** Production-Ready • **Owner:** EVA Core + Competitive Intelligence Engine  
 **Scope:** Automated KPI tracking, public data aggregation, strategic opportunity analysis  
 **Stack:** React + TypeScript/Zod • Supabase • OpenAI • Public Data APIs

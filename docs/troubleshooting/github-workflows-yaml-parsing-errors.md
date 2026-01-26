@@ -1,5 +1,14 @@
 # Branch Cleanup Workflow Fix - Analysis & Resolution
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: api, testing, guide, validation
+
 ## Problem Summary
 
 **Issue**: The `.github/workflows/branch-cleanup.yml` workflow was failing with 0s runtime and empty jobs array.

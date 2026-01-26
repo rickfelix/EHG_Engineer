@@ -1,5 +1,14 @@
 # Stage 18: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, migration, rls
+
 ## Purpose
 
 This document defines the multi-agent architecture for automating Stage 18 (Documentation Sync to GitHub) using CrewAI. The **DocSyncCrew** orchestrates 4 specialized agents to execute the 3 substages with minimal human intervention.

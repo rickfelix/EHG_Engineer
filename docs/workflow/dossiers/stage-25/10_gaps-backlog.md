@@ -1,5 +1,14 @@
 # Stage 25: Gaps & Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, testing, e2e, unit
+
 ## Overview
 
 **Purpose**: Identify gaps in Stage 25 (Quality Assurance) definition and propose Strategic Directives to address them.

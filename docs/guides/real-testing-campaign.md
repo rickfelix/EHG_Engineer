@@ -1,5 +1,14 @@
 # Real Testing Campaign Guide
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, unit
+
 ## Overview
 
 This campaign executes **actual Vitest unit tests and Playwright E2E tests** for all completed Strategic Directives, replacing the previous placeholder testing with real validation.

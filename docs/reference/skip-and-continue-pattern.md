@@ -395,7 +395,7 @@ The following operations **halt execution** on error:
 - [AUTO-PROCEED Discovery](../discovery/auto-proceed-enhancement-discovery.md) - Decision D16
 - [Handoff System](../leo/handoffs/) - Gate validation flow
 - [BaseExecutor](../../scripts/modules/handoff/executors/BaseExecutor.js) - Integration point
-- [System Events Schema](../database/schema/system_events.md) - Event storage
+- [System Events Schema](schema/engineer/tables/system_events.md) - Event storage
 
 ## Changelog
 

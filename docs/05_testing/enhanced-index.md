@@ -1,5 +1,14 @@
 # Enhanced Testing and Debugging Sub-Agents Documentation Index
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: api, testing, e2e, migration
+
 ## Overview
 
 This is the comprehensive documentation suite for the Enhanced Testing and Debugging Sub-Agents Collaboration system - a revolutionary approach to test automation implementing Pareto-optimized improvements that deliver 80% better results with 20% effort.
@@ -8,7 +17,7 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 
 ### 📚 Main Documentation
 
-1. **[Enhanced Testing and Debugging README](./ENHANCED_TESTING_DEBUGGING_README.md)**
+1. **[Enhanced Testing and Debugging README](enhanced-debugging-readme.md)**
    - System overview and quick start guide
    - Key features and benefits
    - Performance metrics and improvements
@@ -20,13 +29,13 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
    - Error classification and fix generation details
    - Event system documentation
 
-3. **[Integration Guide](./ENHANCED_TESTING_INTEGRATION_GUIDE.md)**
+3. **[Integration Guide](../guides/enhanced-testing-integration.md)**
    - Step-by-step integration instructions
    - Playwright, Jest, and CI/CD integration
    - Migration from basic testing agents
    - Real-world implementation examples
 
-4. **[Troubleshooting Guide](./ENHANCED_TESTING_TROUBLESHOOTING.md)**
+4. **[Troubleshooting Guide](../guides/enhanced-testing-troubleshooting.md)**
    - Common issues and solutions
    - Performance optimization techniques
    - Debug utilities and health checks
@@ -40,7 +49,7 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 
 ### 📖 Supporting Documentation
 
-6. **[Collaboration Playbook](./TESTING_DEBUGGING_COLLABORATION_PLAYBOOK.md)**
+6. **[Collaboration Playbook](../guides/testing-debugging-collaboration-playbook.md)**
    - Detailed playbook for testing and debugging collaboration
    - Implementation patterns and best practices
    - Success metrics and KPIs
@@ -48,9 +57,9 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 ## Quick Navigation
 
 ### Getting Started
-- [Quick Start Guide](./ENHANCED_TESTING_DEBUGGING_README.md#quick-start)
-- [Installation Instructions](./ENHANCED_TESTING_INTEGRATION_GUIDE.md#environment-setup)
-- [First Test Example](./ENHANCED_TESTING_INTEGRATION_GUIDE.md#basic-integration)
+- [Quick Start Guide](enhanced-debugging-readme.md)
+- [Installation Instructions](../guides/enhanced-testing-integration.md)
+- [First Test Example](../guides/enhanced-testing-integration.md)
 
 ### API Documentation
 - [TestCollaborationCoordinator](./ENHANCED_TESTING_API_REFERENCE.md#testcollaborationcoordinator)
@@ -59,14 +68,14 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 - [TestHandoff Interface](./ENHANCED_TESTING_API_REFERENCE.md#testhandoff)
 
 ### Integration Examples
-- [Playwright Integration](./ENHANCED_TESTING_INTEGRATION_GUIDE.md#playwright-integration)
-- [Jest Integration](./ENHANCED_TESTING_INTEGRATION_GUIDE.md#jest-integration)
-- [CI/CD Pipeline](./ENHANCED_TESTING_INTEGRATION_GUIDE.md#cicd-pipeline-integration)
+- [Playwright Integration](../guides/enhanced-testing-integration.md)
+- [Jest Integration](../guides/enhanced-testing-integration.md)
+- [CI/CD Pipeline](../guides/enhanced-testing-integration.md)
 
 ### Troubleshooting
-- [Health Check Script](./ENHANCED_TESTING_TROUBLESHOOTING.md#quick-diagnostics)
-- [Common Issues](./ENHANCED_TESTING_TROUBLESHOOTING.md#common-issues)
-- [Performance Problems](./ENHANCED_TESTING_TROUBLESHOOTING.md#performance-problems)
+- [Health Check Script](../guides/enhanced-testing-troubleshooting.md)
+- [Common Issues](../guides/enhanced-testing-troubleshooting.md)
+- [Performance Problems](../guides/enhanced-testing-troubleshooting.md)
 
 ### Architecture Deep Dive
 - [System Overview](./ENHANCED_TESTING_ARCHITECTURE.md#system-overview)
@@ -124,10 +133,10 @@ The system delivers measurable improvements:
 ## Getting Help
 
 ### Documentation Navigation
-1. **New users**: Start with the [README](./ENHANCED_TESTING_DEBUGGING_README.md)
+1. **New users**: Start with the [README](enhanced-debugging-readme.md)
 2. **Developers**: Review the [API Reference](./ENHANCED_TESTING_API_REFERENCE.md)
-3. **Integration teams**: Follow the [Integration Guide](./ENHANCED_TESTING_INTEGRATION_GUIDE.md)
-4. **Issues**: Check the [Troubleshooting Guide](./ENHANCED_TESTING_TROUBLESHOOTING.md)
+3. **Integration teams**: Follow the [Integration Guide](../guides/enhanced-testing-integration.md)
+4. **Issues**: Check the [Troubleshooting Guide](../guides/enhanced-testing-troubleshooting.md)
 5. **Architecture**: Study the [Architecture Documentation](./ENHANCED_TESTING_ARCHITECTURE.md)
 
 ### Support Resources

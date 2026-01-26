@@ -1,5 +1,14 @@
 # SDKeyGenerator Module - Reference Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, migration
+
 **Module**: `scripts/modules/sd-key-generator.js`
 **SD**: SD-LEO-SDKEY-001
 **Purpose**: Centralized Strategic Directive key generation with source traceability

@@ -1,5 +1,14 @@
 # LEO Protocol v4.3 - Sub-Agent Enforcement Amendment
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, e2e
+
 ## Problem Statement
 Sub-agents are defined but not enforced, leading to incomplete verification and missed quality checks.
 

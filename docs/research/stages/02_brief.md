@@ -1,5 +1,14 @@
 # Stage 2 Research Brief: AI Review
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Multi-agent AI system reviews and critiques the idea from multiple perspectives.
 

@@ -1,4 +1,13 @@
 # Triangulation Research: Blind Spots
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, unit
+
 ## Claude Code Independent Research Response
 
 **Date**: 2026-01-01

@@ -1,5 +1,14 @@
 # LEO Protocol v4.4.2 - Testing Governance Changelog
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, e2e, unit
+
 **Release Date**: 2026-01-05
 **Status**: ACTIVE
 **Previous Version**: 4.3.3 (UI Parity Governance)
@@ -362,8 +371,8 @@ node scripts/regenerate-all-schema-docs.js
 
 ### Core Protocol Docs
 - [LEO Protocol v4.4.2 Testing Governance](./LEO_v4.4.2_testing_governance.md) - Full specification
-- [Handoff System Guide](../reference/handoff-system-guide.md) - Gate architecture
-- [LEO Gates Documentation](../leo/gates.md) - Gate 2A-3 validation
+- [Handoff System Guide](../leo/handoffs/handoff-system-guide.md) - Gate architecture
+- [LEO Gates Documentation](../leo/gates/gates.md) - Gate 2A-3 validation
 
 ### Implementation Details
 - [ExecToPlanExecutor](../../scripts/modules/handoff/executors/ExecToPlanExecutor.js) - Gate implementation

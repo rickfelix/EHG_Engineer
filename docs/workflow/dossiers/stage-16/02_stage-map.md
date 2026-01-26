@@ -1,5 +1,14 @@
 # Stage 16 Dependency Map & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, e2e, unit
+
 ## Visual Dependency Graph
 
 ```mermaid

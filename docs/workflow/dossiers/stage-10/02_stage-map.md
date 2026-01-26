@@ -1,5 +1,14 @@
 # Stage 10: Stage Map & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, validation, workflow, ci
+
 **Status**: Ideation Phase (Stages 1-10)
 **Position**: Final stage of Ideation phase, critical technical gate before Planning phase
 

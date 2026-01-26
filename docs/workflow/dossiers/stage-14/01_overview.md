@@ -1,5 +1,14 @@
 # Stage 14 Operating Dossier: Comprehensive Development Preparation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: security, validation, infrastructure, workflow
+
 ## Regeneration Note
 This dossier is a living document tied to specific commits. If stages.yaml or critique/stage-14.md change, regenerate using:
 ```bash

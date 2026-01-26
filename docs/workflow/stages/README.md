@@ -1,7 +1,7 @@
 # 25-Stage Venture Lifecycle Documentation Index
 
 ## Metadata
-- **Category**: Index
+- **Category**: Guide
 - **Status**: Approved
 - **Version**: 2.1
 - **Author**: Documentation Sub-Agent (DOCMON)

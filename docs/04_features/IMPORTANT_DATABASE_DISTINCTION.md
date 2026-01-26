@@ -1,5 +1,14 @@
 # IMPORTANT: Unified Database Architecture
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, feature, protocol
+
 > **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: As of December 2024, EHG and EHG_Engineer
 > now share a **consolidated database**. The old EHG database has been deprecated.
 

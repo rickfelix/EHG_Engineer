@@ -1,5 +1,14 @@
 # EHG 2026 Deep Research Prompts
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, api, migration, schema
+
 **Generated**: 2025-11-29
 **Parent SD**: SD-RESEARCH-000
 **Total Research Domains**: 8

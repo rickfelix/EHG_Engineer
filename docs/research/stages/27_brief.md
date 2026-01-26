@@ -1,5 +1,14 @@
 # Stage 27 Research Brief: Actor Model & Saga Transaction Integration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, architecture, workflow
+
 ## Focus Area
 Implement distributed transaction patterns and actor model architecture.
 

@@ -1,5 +1,14 @@
 # Chairman Decision Summary — Foundation Layer
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, feature, guide, sd
+
 **Generated**: 2025-11-06
 **Status**: ⏸️ **PAUSED AT FOUNDATION** — Awaiting Chairman Decision
 **Decision Required**: Wave 1 P0 SDs vs. Defer vs. Stage-by-Stage Approach

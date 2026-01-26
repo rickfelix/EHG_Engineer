@@ -1,5 +1,14 @@
 # Stage 15: Acceptance Checklist & Quality Gate Scoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: sd, directive, validation, documentation
+
 **Purpose**: Evaluate Stage 15 dossier completeness and quality using 8 standardized criteria
 **Target Score**: ≥85/100 (Minimum acceptable), Target 100/100 (Excellent)
 **Scoring Method**: Binary (0 or points) for each criterion, sum to total score

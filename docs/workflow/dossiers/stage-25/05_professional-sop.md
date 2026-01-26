@@ -1,5 +1,14 @@
 # Stage 25: Professional SOP (Standard Operating Procedures)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 ## Purpose
 
 Step-by-step execution procedures for Stage 25 (Quality Assurance), enabling EXEC/QA agents to execute consistently across ventures.

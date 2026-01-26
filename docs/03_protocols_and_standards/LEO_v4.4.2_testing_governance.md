@@ -1,5 +1,14 @@
 # LEO Protocol v4.4.2/v4.4.3 - Testing Governance Enhancement
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, testing, e2e, unit
+
 **Status**: ACTIVE
 **Current Version**: 4.4.3
 **Base Version**: 4.4.2 (2026-01-05)
@@ -708,9 +717,9 @@ node scripts/regenerate-all-schema-docs.js
 
 ## Related Documentation
 
-- [Handoff System Guide](../reference/handoff-system-guide.md) - Gate architecture
-- [LEO Gates Documentation](../leo/gates.md) - Gate 2A-3 validation
-- [Testing Sub-Agent](../reference/sub-agents/testing.md) - TESTING sub-agent details
+- [Handoff System Guide](../leo/handoffs/handoff-system-guide.md) - Gate architecture
+- [LEO Gates Documentation](../leo/gates/gates.md) - Gate 2A-3 validation
+- [Testing Sub-Agent](../05_testing/testing_qa.md) - TESTING sub-agent details
 - [Schema Documentation](../reference/schema/engineer/tables/retrospectives.md) - retrospectives table schema
 
 ---

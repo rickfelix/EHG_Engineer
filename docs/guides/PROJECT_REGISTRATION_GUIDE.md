@@ -1,5 +1,14 @@
 # LEO Protocol - Project Registration Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: guide, protocol, leo, supabase
+
 ## Quick Start (3 Simple Steps)
 
 ### Step 1: Copy the Template

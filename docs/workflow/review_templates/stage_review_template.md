@@ -1,5 +1,14 @@
 # Stage [XX] Review - [Stage Name]
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Review Date**: YYYY-MM-DD
 **Reviewer**: Chairman
 **Stage Number**: [XX]
@@ -1237,16 +1246,16 @@ After completing this review, key findings should be appended to `/docs/workflow
 ## Related Documentation
 
 **Core Framework**:
-- [Stage Review Process](/docs/workflow/review_process.md) - Step-by-step review procedures
-- [Source Stage Metadata Field](/docs/workflow/source_stage_metadata_field.md) - Database metadata spec
+- [Stage Review Process](../review_process.md) - Step-by-step review procedures
+- [Source Stage Metadata Field](../source_stage_metadata_field.md) - Database metadata spec
 
 **Policies & Best Practices**:
-- [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md) - **MANDATORY** for all stages
-- [Stage Review Lessons](/docs/workflow/stage_review_lessons.md) - Living log of lessons learned
-- [Best Practices Index](/docs/workflow/best_practices.md) - Central index for all best practices
+- [CrewAI Compliance Policy](../crewai_compliance_policy.md) - **MANDATORY** for all stages
+- [Stage Review Lessons](../stage_review_lessons.md) - Living log of lessons learned
+- [Best Practices Index](../best_practices.md) - Central index for all best practices
 
 **Governance**:
-- [Exception Documentation](/docs/governance/exceptions/) - Chairman-approved exceptions directory
+- [Exception Documentation](../../governance/exceptions) - Chairman-approved exceptions directory
 
 ---
 

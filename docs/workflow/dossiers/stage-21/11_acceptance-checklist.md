@@ -1,5 +1,14 @@
 # Stage 21: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, sd
+
 ## Purpose
 
 This checklist provides objective criteria for validating Stage 21 completion, targeting **≥90/100 points** (production-ready threshold).

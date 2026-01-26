@@ -176,9 +176,9 @@ docs/archive/
 
 ## Navigation
 
-- **Parent**: [Archive Home](/docs/archive/README.md)
-- **Active Protocols**: [03 Protocols & Standards](/docs/03_protocols_and_standards/README.md)
-- **Documentation Home**: [Docs Home](/docs/README.md)
+- **Parent**: [Archive Home](../README.md)
+- **Active Protocols**: [03 Protocols & Standards](../../03_protocols_and_standards/README.md)
+- **Documentation Home**: [Docs Home](../../01_architecture/README.md)
 
 ---
 

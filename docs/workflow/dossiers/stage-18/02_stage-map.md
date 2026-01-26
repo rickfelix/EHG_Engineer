@@ -1,5 +1,14 @@
 # Stage 18: Stage Map and Dependencies
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Workflow Position
 
 **Stage 18: Documentation Sync to GitHub** occupies position 18 of 40 in the venture development workflow (45% complete).

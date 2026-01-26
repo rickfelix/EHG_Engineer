@@ -1,5 +1,14 @@
 # Database Connection Guide - Multi-Database Architecture
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 ## Overview
 
 The EHG Engineer application is designed to manage multiple Supabase instances across different applications. This guide documents the successful solution for programmatic database management, including table creation and DDL operations.

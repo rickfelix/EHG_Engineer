@@ -1,5 +1,14 @@
 # Stage 21: Gaps and Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: sd, workflow, automation, ci
+
 ## Gap Overview
 
 **Current Score**: 2.9/5  

@@ -1,5 +1,14 @@
 # SD Script Validation Report
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 **Generated**: 2025-10-19
 **Purpose**: Ensure all SD creation scripts have proper fields per strategic_directives_v2 schema
 

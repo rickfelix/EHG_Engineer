@@ -1,5 +1,14 @@
 # Stage 18: Documentation Sync to GitHub - Executive Overview
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, sd, directive
+
 ## Purpose of This Dossier
 
 This Operating Dossier provides comprehensive operational guidance for **Stage 18: Documentation Sync to GitHub**, the version control synchronization stage in the 40-stage venture development workflow. This document serves as the single source of truth for executing Stage 18 with precision, automation, and measurable outcomes.

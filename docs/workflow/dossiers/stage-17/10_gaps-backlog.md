@@ -1,5 +1,14 @@
 # Stage 17: Gaps and Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 This document maps improvement areas identified in the Stage 17 critique to proposed Strategic Directives (SDs). Each gap represents an opportunity to enhance GTM strategist agent capabilities, automation level, or operational resilience.

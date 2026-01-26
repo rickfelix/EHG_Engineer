@@ -1,5 +1,14 @@
 # Stage 14 Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, validation, infrastructure, workflow
+
 ## Source YAML (stages.yaml:597-642)
 
 ```yaml

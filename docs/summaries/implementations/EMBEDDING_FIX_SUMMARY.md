@@ -1,5 +1,14 @@
 # Retrospective Trigger Fix Summary
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 **Issue ID**: SD-2025-1016-EMBEDDING-FIX
 **Date**: 2025-10-16
 **Status**: Ready to Apply

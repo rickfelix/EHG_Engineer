@@ -1,5 +1,14 @@
 # Stage 08 – Problem Decomposition Engine PRD (Enhanced Technical Specification)
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 > **⚠️ LARGE FILE NOTICE**: This file is 51KB (approximately 1,800+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
 
 **Status:** Enhanced for Lovable.dev • **Owner:** EVA Core • **Scope:** AI-powered hierarchical problem decomposition  

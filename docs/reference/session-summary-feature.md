@@ -1,7 +1,7 @@
 # Session Summary Feature
 
 ## Metadata
-- **Category**: Infrastructure
+- **Category**: Deployment
 - **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: SD-LEO-ENH-AUTO-PROCEED-001-08

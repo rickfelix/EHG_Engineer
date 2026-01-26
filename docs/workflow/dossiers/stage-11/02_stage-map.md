@@ -1,5 +1,14 @@
 # Stage 11: Stage Map & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: testing, guide, validation, architecture
+
 **Position**: Ideation Phase (Stages 1-10) → **STAGE 11** → Execution Phase (Stages 12+)
 
 **Critical Path**: No (not on critical path per critique)

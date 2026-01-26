@@ -1,5 +1,14 @@
 # Dynamic Model Allocation Framework Research Report
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, api, testing, e2e
+
 **Research Conductor**: Claude Sonnet 4.5
 **Date**: 2025-12-06
 **Codebase**: EHG_Engineer (LEO Protocol Management System)

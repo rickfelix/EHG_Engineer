@@ -1,5 +1,14 @@
 # Validation Failure Patterns to Avoid
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, unit
+
 **Generated**: 2025-10-28T21:47:56.142Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE

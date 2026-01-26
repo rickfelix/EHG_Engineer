@@ -1,5 +1,14 @@
 # Stage 7: Metrics & Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: sd, validation, architecture, workflow
+
 **Purpose**: Track Stage 7 (Comprehensive Planning Suite) performance, quality, and outcomes
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:287-290 "metrics: Plan completeness, Timeline feasibility, Resource efficiency"

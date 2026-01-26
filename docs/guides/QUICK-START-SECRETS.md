@@ -1,5 +1,14 @@
 # Quick Start: Fix CI/CD in 15 Minutes ⚡
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, guide
+
 **Total Time**: 15 minutes
 **Fixes**: 8+ failing workflows
 

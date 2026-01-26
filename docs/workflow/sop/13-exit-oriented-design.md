@@ -1,5 +1,14 @@
 # 13. Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, workflow, ci
+
 - **Owner**: Chairman
 - **Depends on**: 12
 - **Purpose**: Design venture with exit strategy and value maximization in mind.

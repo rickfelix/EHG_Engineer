@@ -1,5 +1,14 @@
 # Stage 9: Stage Map & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, validation, workflow, ci
+
 **Purpose**: Visualize Stage 9's position in the 40-stage venture lifecycle and its dependency relationships.
 
 ---

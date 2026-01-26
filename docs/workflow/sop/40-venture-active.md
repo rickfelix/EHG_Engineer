@@ -1,5 +1,14 @@
 # 40. Venture Active
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, unit, security, workflow
+
 - **Owner**: Chairman
 - **Depends on**: 39
 - **Purpose**: Active venture management with growth optimization and exit readiness.

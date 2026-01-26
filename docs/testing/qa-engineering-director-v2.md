@@ -1,5 +1,14 @@
 # Enhanced QA Engineering Director v2.0
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, migration
+
 ## Overview
 
 Intelligent testing automation based on SD-RECONNECT-009 retrospective learnings. Saves **3-4 hours per SD** through automated pre-flight checks, smart test execution, and elimination of manual steps.

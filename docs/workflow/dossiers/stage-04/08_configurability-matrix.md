@@ -1,5 +1,14 @@
 # Stage 4: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, feature, validation, workflow
+
 **Purpose**: Identify tunable parameters for Stage 4 execution
 
 ---

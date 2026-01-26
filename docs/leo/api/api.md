@@ -1,5 +1,14 @@
 # LEO Protocol API Documentation
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, security
+
 ## Overview
 
 The LEO Protocol API provides programmatic access to gate validation, sub-agent coordination, and real-time status updates. All endpoints require authentication and are rate-limited.

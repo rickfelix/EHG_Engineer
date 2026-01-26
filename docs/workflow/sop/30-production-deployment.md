@@ -1,5 +1,14 @@
 # 30. Production Deployment
 
+
+## Metadata
+- **Category**: Deployment
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, validation, deployment
+
 - **Owner**: EXEC
 - **Depends on**: 29
 - **Purpose**: Deploy to production with zero-downtime and rollback capabilities.

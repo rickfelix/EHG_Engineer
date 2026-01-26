@@ -1,5 +1,14 @@
 # Quality Lifecycle System - User Guide
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, schema, rls
+
 **Status**: Completed
 **Version**: 1.0.0
 **Orchestrator SD**: SD-QUALITY-LIFECYCLE-001

@@ -1,5 +1,14 @@
 # 🤖 LEO Sub-Agent Commands
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, migration
+
 ## ✅ REAL Claude Code Slash Commands!
 
 **These ARE actual slash commands** that appear in Claude Code's slash command menu when you type `/`.

@@ -1,5 +1,14 @@
 # Stage 8 Dependency Graph & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, protocol, handoff
+
 ## Visual Workflow Position
 
 ```

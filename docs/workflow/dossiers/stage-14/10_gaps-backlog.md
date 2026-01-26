@@ -1,5 +1,14 @@
 # Stage 14 Gaps & Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, unit, schema, guide
+
 ## Identified Gaps from Critique
 
 ### Gap 1: Limited Automation

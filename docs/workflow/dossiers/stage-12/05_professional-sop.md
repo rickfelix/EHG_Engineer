@@ -1,5 +1,14 @@
 # Stage 12: Professional Standard Operating Procedure (SOP)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, guide
+
 ## Purpose & Scope
 
 This SOP provides step-by-step execution instructions for **Stage 12: Adaptive Naming Module**, covering all three substages from entry gate validation through exit gate completion.

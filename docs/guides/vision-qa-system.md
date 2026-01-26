@@ -1,5 +1,14 @@
 # Vision-Based QA System Documentation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, schema
+
 ## Overview
 
 The Vision QA System is an autonomous testing framework that combines Playwright browser automation with multimodal Large Language Models (LLMs) to perform intelligent UI testing. The system implements an **Observe → Think → Act** loop that allows it to navigate applications, identify bugs, and achieve test goals without explicit step-by-step instructions.

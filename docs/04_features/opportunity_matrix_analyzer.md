@@ -1,5 +1,14 @@
 # Opportunity Matrix Analyzer - Enhanced PRD
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, unit, schema
+
 ## Executive Summary
 
 **The Opportunity Matrix Analyzer** is a strategic competitive intelligence tool that automatically identifies and categorizes market opportunities based on competitor weaknesses, market gaps, and strategic positioning. It provides actionable insights for B2C SaaS ventures to exploit competitive vulnerabilities and capture market share.

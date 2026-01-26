@@ -1,5 +1,14 @@
 # NPM Scripts Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, e2e
+
 This guide documents all 140+ npm scripts available in EHG_Engineer.
 
 ## Quick Reference

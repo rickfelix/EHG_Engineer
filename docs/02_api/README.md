@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Category**: API
-- **Status**: Active
+- **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: Documentation Sub-Agent
 - **Last Updated**: 2025-10-24
@@ -22,7 +22,7 @@ This directory contains API documentation for EHG_Engineer, organized by develop
 - **Letter variants (a/b/c)** - parallel implementations or progressive enhancements
 - **Example**: `04a`, `04c` exist but `04b` missing = intentional gap
 
-**See**: [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) for complete numbering explanation
+**See**: [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) for complete numbering explanation
 
 ---
 
@@ -41,5 +41,5 @@ This directory contains API documentation for EHG_Engineer, organized by develop
 ## Related Documentation
 
 - [Architecture](../01_architecture/README.md)
-- [User Guides](../03_guides/README.md)
+- [User Guides](../01_architecture/README.md)
 - [Testing](../05_testing/README.md)

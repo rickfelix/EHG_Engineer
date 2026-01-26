@@ -1,5 +1,14 @@
 # Script Creation Guidelines
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-23
+- **Tags**: database, testing, e2e, migration
+
 **LEO Protocol v4.3.3+ | Database-First Enforcement**
 
 ## Critical Policy: No One-Off Scripts

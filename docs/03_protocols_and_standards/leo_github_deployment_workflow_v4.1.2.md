@@ -1,5 +1,14 @@
 # LEO Protocol v4.1.2 - GitHub Deployment Workflow Specification
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, security, authorization
+
 **Version**: 1.0.0  
 **Based On**: LEO Protocol v4.1.2 (Database-First Enforcement Update)  
 **Date**: 2025-09-01  

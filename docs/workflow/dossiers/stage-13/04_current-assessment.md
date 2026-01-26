@@ -1,5 +1,14 @@
 # Current Assessment: Stage 13 Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, security, handoff
+
 ## Critique Source
 **File**: `docs/workflow/critique/stage-13.md`
 **Lines**: 1-72

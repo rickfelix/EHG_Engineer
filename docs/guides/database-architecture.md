@@ -1,5 +1,14 @@
 # EHG_Engineer Database Architecture Guide
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, migration, schema
+
 ## Critical Understanding: Multiple Database Architecture
 
 ### Overview

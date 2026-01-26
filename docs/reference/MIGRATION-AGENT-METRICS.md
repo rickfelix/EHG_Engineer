@@ -1,5 +1,14 @@
 # Agent Metrics Database Migration
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, testing, migration, schema
+
 ## Quick Start
 
 Apply the agent performance metrics schema to enable observability tracking:

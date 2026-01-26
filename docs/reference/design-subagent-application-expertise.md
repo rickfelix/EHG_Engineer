@@ -1,5 +1,14 @@
 # Design Sub-Agent Application Expertise Enhancement
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 **Version**: 4.2.0
 **Date**: 2025-10-03
 **Status**: ✅ Complete

@@ -1,5 +1,14 @@
 # Configurability Matrix: Stage 13 Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, sd
+
 ## Overview
 This document defines all tunable parameters for Stage 13 execution, enabling customization based on venture characteristics, market conditions, and stakeholder preferences.
 

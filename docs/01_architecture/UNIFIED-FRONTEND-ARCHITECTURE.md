@@ -1,5 +1,14 @@
 # Unified Frontend Architecture
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, migration
+
 **SD Reference**: SD-ARCH-EHG-007
 **Effective Date**: December 2024
 **Status**: ACTIVE

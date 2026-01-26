@@ -1,5 +1,14 @@
 # LEO Protocol v4.2.0 - Git Commit Guidelines
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, migration
+
 **Version**: 1.0.0
 **Based On**: LEO Protocol v4.2.0 (Story Gates & Automated Release Control)
 **Date**: 2025-09-26

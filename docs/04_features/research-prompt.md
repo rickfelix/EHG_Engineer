@@ -1,5 +1,14 @@
 # Deep Research Prompt: Voice API Strategy for EVA Assistant
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 ## Project Context & Background
 
 **Current Platform:** EHG Ventures Portfolio Management Platform

@@ -1,5 +1,14 @@
 # Stage 15: Canonical YAML Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, feature, protocol, handoff
+
 **Source File**: `/mnt/c/_EHG/EHG_Engineer/docs/workflow/stages.yaml`
 **Line Range**: 643-688 (46 lines)
 **Commit**: EHG_Engineer@6ef8cf4

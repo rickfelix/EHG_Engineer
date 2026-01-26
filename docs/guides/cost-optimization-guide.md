@@ -1,5 +1,14 @@
 # Cost Optimization Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, guide, supabase
+
 **Generated**: 2025-09-04T01:33:20.402Z
 **Cost Efficiency Score**: 0/100
 **Current Status**: FREE_TIER

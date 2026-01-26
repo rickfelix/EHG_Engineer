@@ -1,5 +1,14 @@
 # EHG VISION v3.3: THE ASSET FACTORY
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, migration
+
 **Status:** RATIFIED
 **Date:** January 1, 2026
 **Supersedes:** 00_VISION_V2_CHAIRMAN_OS.md

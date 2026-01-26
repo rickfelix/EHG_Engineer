@@ -1,5 +1,14 @@
 # Stage 12 Research Brief: Adaptive Naming Module
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Optimize naming for different markets and contexts.
 

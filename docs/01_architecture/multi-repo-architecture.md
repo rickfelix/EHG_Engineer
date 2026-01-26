@@ -1,5 +1,14 @@
 # Multi-Repository Architecture
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, testing, e2e
+
 **Last Updated**: 2026-01-18
 **Status**: Active
 **Version**: 1.0
@@ -527,7 +536,7 @@ bash scripts/leo-stack.sh stop      # Stop both servers
 
 - [Multi-Repo Module API Reference](../reference/multi-repo-module.md)
 - [Ship Command Documentation](../../.claude/commands/ship.md)
-- [LEO Protocol Overview](../03_protocols_and_standards/leo-protocol.md)
+- [LEO Protocol Overview](../reference/schema/engineer/tables/leo_protocols.md)
 - [Deployment Guide](../06_deployment/deployment-guide.md)
 
 ---

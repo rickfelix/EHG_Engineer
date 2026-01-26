@@ -1,5 +1,14 @@
 # Russian Judge AI Quality Assessment System
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, unit
+
 **Version:** 1.2.0-boilerplate-detection
 **Status:** ACTIVE (Advisory Mode)
 **Last Updated:** 2026-01-21

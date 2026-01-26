@@ -1,5 +1,14 @@
 # Stage 37 Research Brief: Strategic Risk Forecasting
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Forecast and prepare for strategic risks and market changes.
 

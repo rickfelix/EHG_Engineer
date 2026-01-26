@@ -1,5 +1,14 @@
 # Stage 10: Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: security, validation, architecture, workflow
+
 **Source**: stages.yaml (single source of truth)
 **Lines**: 410-460
 

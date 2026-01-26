@@ -1,5 +1,14 @@
 # Audit File Format Specification
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, testing, migration, security
+
 **Version**: 1.0
 **Date**: 2025-12-28
 **Status**: Active

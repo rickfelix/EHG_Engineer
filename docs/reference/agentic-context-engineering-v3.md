@@ -1,5 +1,14 @@
 # Agentic Context Engineering v3.0
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, migration, protocol
+
 **Created**: 2025-12-11 (SD-FOUND-AGENTIC-CONTEXT-001)
 **Purpose**: Reduce sub-agent context overhead by 50-70% through contract-based handoffs with artifact pointers
 **Status**: Production-Ready

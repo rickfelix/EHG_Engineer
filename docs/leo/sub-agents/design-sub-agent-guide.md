@@ -1,5 +1,14 @@
 # Design Sub-Agent Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, feature, guide, protocol
+
 **SD-REFACTOR-DESIGN-001: Design Sub-Agent Modularization**
 
 This guide documents the DESIGN sub-agent architecture, component sizing patterns, and UI/UX validation best practices.
@@ -390,8 +399,8 @@ checkLOC();
 
 ## Related Documentation
 
-- [Sub-Agent Patterns Guide](./sub-agent-patterns-guide.md) - Base sub-agent patterns
-- [Governance Library Guide](./governance-library-guide.md) - Exception handling
+- [Sub-Agent Patterns Guide](../../reference/agent-patterns-guide.md) - Base sub-agent patterns
+- [Governance Library Guide](../../reference/governance-library-guide.md) - Exception handling
 - [Utility Library Guide](./utility-library-guide.md) - Shared utilities
 
 ---

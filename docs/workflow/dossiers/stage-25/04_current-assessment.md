@@ -1,5 +1,14 @@
 # Stage 25: Current Assessment (Critique Analysis)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, testing, e2e, unit
+
 ## Source Material
 
 **File**: `docs/workflow/critique/stage-25.md`

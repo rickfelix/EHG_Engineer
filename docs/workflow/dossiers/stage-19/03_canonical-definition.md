@@ -1,5 +1,14 @@
 # Stage 19: Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Purpose
 
 This document provides the complete, authoritative definition of Stage 19 (Tri-Party Integration Verification) as specified in the EHG_Engineer workflow repository. All implementations, executions, and evaluations of Stage 19 MUST reference this canonical source.

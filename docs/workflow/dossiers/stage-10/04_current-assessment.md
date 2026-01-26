@@ -1,5 +1,14 @@
 # Stage 10: Current Assessment
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, security, validation
+
 **Source**: docs/workflow/critique/stage-10.md
 **Overall Score**: 3.2/5.0
 **Status**: Functional but needs optimization

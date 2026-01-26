@@ -1,5 +1,14 @@
 # Stage 17 Operating Dossier: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, security, sd, directive
+
 ## Purpose
 
 This checklist evaluates the completeness and quality of the Stage 17 Operating Dossier against the specification provided in the generation contract. Target score: 100/100.

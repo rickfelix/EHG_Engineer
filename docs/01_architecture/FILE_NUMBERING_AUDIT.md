@@ -1,5 +1,14 @@
 # File Numbering Audit Report
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: api, testing, security, feature
+
 **Date**: 2025-10-24
 **Purpose**: Document file numbering patterns and gaps in API and Features directories
 **Status**: Audit complete - decisions needed on gap handling
@@ -248,7 +257,7 @@ This is **intentional** - stages belong to their functional area, not forced int
 Files are numbered by development stage (1-40), not sequence:
 - **Gaps are intentional** - represent skipped or future stages
 - **Letter variants (a/b/c)** - parallel implementations or enhancements
-- See [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) for complete explanation
+- See [FILE_NUMBERING_AUDIT.md](FILE_NUMBERING_AUDIT.md) for complete explanation
 ```
 
 ### Add to 04_features/README.md
@@ -260,7 +269,7 @@ Files use stage-gate numbering (1-40):
 - **Missing numbers**: Skipped stages or implemented elsewhere
 - **Letter variants**: Multiple approaches to same stage (e.g., 34a/34b/34c)
 - **Cross-directory**: Some stages in other directories (e.g., 22 in 05_testing/)
-- See [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) for details
+- See [FILE_NUMBERING_AUDIT.md](FILE_NUMBERING_AUDIT.md) for details
 ```
 
 ---

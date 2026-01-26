@@ -1,4 +1,13 @@
 # SD Review: Claude Code Independent Analysis
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, unit, migration
+
 ## Ground-Truth Validation
 
 **Date**: 2026-01-01

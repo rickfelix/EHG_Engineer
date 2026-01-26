@@ -1,5 +1,14 @@
 # Acceptance Checklist: Stage 13 Exit-Oriented Design Dossier
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, protocol
+
 ## Quality Gate Scoring (8 Criteria, 100 Points Total)
 
 ### 1. Completeness (15 points)

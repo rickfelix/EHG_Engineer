@@ -1,5 +1,14 @@
 # EHG Legal Document Generator: Build, Buy, or Skip?
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, unit, sd
+
 **Source**: Anthropic/Claude Research
 **Date**: 2026-01-04
 **Topic**: Legal Document Generator Strategy for Venture Factory

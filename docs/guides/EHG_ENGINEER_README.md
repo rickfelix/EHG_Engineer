@@ -1,5 +1,14 @@
 # EHG_Engineer - LEO Protocol Backend & Engine
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, migration
+
 > **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: EHG is now the **unified frontend** (user + admin features at `/admin/*` routes). EHG_Engineer is **backend API only**. Both share the consolidated database.
 
 ## Current Architecture

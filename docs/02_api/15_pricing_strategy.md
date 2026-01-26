@@ -1,5 +1,14 @@
 # Stage 15 – Pricing Strategy Enhanced PRD (v4)
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 > **⚠️ LARGE FILE NOTICE**: This file is 71KB (approximately 2,500+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
 
 **Status:** EHG Integrated • **Owner:** LEAD Agent (Strategic Pricing) • **Scope:** Multi-agent pricing with Chairman approval  

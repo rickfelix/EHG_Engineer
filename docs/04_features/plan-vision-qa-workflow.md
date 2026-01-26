@@ -1,4 +1,13 @@
 # PLAN Agent Workflow with Vision QA Integration
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: testing, feature, protocol, leo
+
 ## LEO Protocol v3.1.5.9
 
 ### Step 1: Receive Strategic Directive with Vision QA Status

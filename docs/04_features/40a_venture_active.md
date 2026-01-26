@@ -1,5 +1,14 @@
 # Stage 40 – Venture Active: Strategic Growth & Portfolio Governance Enhanced PRD
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, authentication
+
 ## 1. Executive Summary
 
 ### Implementation Readiness: PRODUCTION READY

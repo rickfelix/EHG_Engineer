@@ -1,5 +1,14 @@
 # Stage 41 – EVA Assistant & Orchestration Enhanced PRD (v4)
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 ## EHG Management Model Integration
 
 ### Performance Drive Cycle Orchestration

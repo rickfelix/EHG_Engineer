@@ -11,14 +11,14 @@ This directory contains user guides, setup instructions, and operational procedu
 
 | Category | Files | Description |
 |----------|-------|-------------|
-| [LEO Protocol](#leo-protocol--sub-agents) | 9 | Protocol usage, sub-agents, enforcement |
+| [LEO Protocol](#leo-protocol-sub-agents) | 9 | Protocol usage, sub-agents, enforcement |
 | [Database](#database) | 5 | Migrations, architecture, connectivity |
-| [Testing](#testing--qa) | 8 | UAT, E2E, debugging |
+| [Testing](#testing-qa) | 8 | UAT, E2E, debugging |
 | [Project Setup](#project-setup) | 6 | Getting started guides |
 | [SD/PRD Creation](#sdprd-creation) | 7 | Strategic directives and PRDs |
-| [UI & Design](#ui--design) | 3 | Design workflow, validation |
-| [AI & Semantic Search](#ai--semantic-search) | 5 | AI tools, semantic search |
-| [Business & Venture](#business--venture) | 6 | Campaign, dashboard, BMAD |
+| [UI & Design](#ui-design) | 3 | Design workflow, validation |
+| [AI & Semantic Search](#ai-semantic-search) | 5 | AI tools, semantic search |
+| [Business & Venture](#business-venture) | 6 | Campaign, dashboard, BMAD |
 | [Integration](#integration) | 4 | Multi-app, Supabase |
 | [Other](#other-guides) | 3 | Miscellaneous guides |
 
@@ -32,7 +32,7 @@ This directory contains user guides, setup instructions, and operational procedu
 |-------|-------------|
 | [leo-protocol-quick-reference.md](leo-protocol-quick-reference.md) | Quick reference for LEO Protocol v4.3.3 |
 | [AI_GUIDE.md](AI_GUIDE.md) | AI integration guide (v4.1.2 patterns) |
-| [LEO_COMMANDS.md](LEO_COMMANDS.md) | LEO command reference |
+| [LEO_COMMANDS.md](../leo/commands/leo-commands.md) | LEO command reference |
 | [LEAD_MANDATORY_CHECKLIST.md](LEAD_MANDATORY_CHECKLIST.md) | LEAD agent mandatory checklist |
 | [leo-protocol-enforcement-guide.md](leo-protocol-enforcement-guide.md) | Protocol enforcement patterns |
 | [INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md](INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md) | Sub-agent activation and patterns |

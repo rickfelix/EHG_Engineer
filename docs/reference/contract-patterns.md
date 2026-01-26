@@ -1,5 +1,14 @@
 # SD Contract Patterns
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, feature
+
 Parent-child SD contract system for enforcing consistency across SD hierarchies.
 
 ## Overview

@@ -1,5 +1,14 @@
 # Quality Lifecycle UI Integration - Triangulation Synthesis
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: unit, schema, protocol, leo
+
 **Date**: 2026-01-17
 **Reviewers**: Claude (Opus 4.5), OpenAI GPT-4o, AntiGravity (Gemini)
 **Subject**: Quality Lifecycle System Integration with EHG Application

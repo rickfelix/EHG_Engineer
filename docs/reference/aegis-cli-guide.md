@@ -26,16 +26,16 @@ The AEGIS CLI (`scripts/governance.js`) provides a command-line interface for go
 
 ## Table of Contents
 
-- [Installation & Setup](#installation--setup)
+- [Installation & Setup](#installation-setup)
 - [Command Summary](#command-summary)
 - [Command Reference](#command-reference)
-  - [constitutions](#constitutions---list-all-constitutions)
-  - [list](#list---list-governance-rules)
-  - [validate](#validate---validate-context)
-  - [violations](#violations---list-violations)
-  - [stats](#stats---compliance-statistics)
+  - [constitutions](#constitutions-list-all-constitutions)
+  - [list](#list-list-governance-rules)
+  - [validate](#validate-validate-context)
+  - [violations](#violations-list-violations)
+  - [stats](#stats-compliance-statistics)
 - [Common Workflows](#common-workflows)
-- [Scripting & Automation](#scripting--automation)
+- [Scripting & Automation](#scripting-automation)
 - [Troubleshooting](#troubleshooting)
 
 ## Installation & Setup

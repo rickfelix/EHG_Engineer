@@ -1,5 +1,14 @@
 # Handoff System Known Issues
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, unit, schema, guide
+
 **Last Updated**: 2026-01-20
 
 This document tracks known bugs, workarounds, and improvement opportunities in the LEO Protocol handoff system.
@@ -191,5 +200,5 @@ The handoff system guide (`docs/leo/handoffs/handoff-system-guide.md`) documents
 ## Related Documentation
 
 - [Handoff System Guide](./handoff-system-guide.md) - Architecture and gate patterns
-- [SD Validation Profiles](./sd-validation-profiles.md) - Type-specific validation rules
-- [Database Schema: sd_phase_handoffs](./schema/engineer/tables/sd_phase_handoffs.md) - Table constraints
+- [SD Validation Profiles](../../reference/sd-validation-profiles.md) - Type-specific validation rules
+- [Database Schema: sd_phase_handoffs](../../reference/schema/engineer/tables/sd_phase_handoffs.md) - Table constraints

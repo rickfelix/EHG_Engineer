@@ -1,5 +1,14 @@
 # Supabase Connection Issue - RESOLVED
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, sd, directive
+
 ## Problem Summary
 - **Direct connection failed**: IPv6-only endpoint unreachable from WSL2
 - **Pooler connection failed**: Incorrect username format

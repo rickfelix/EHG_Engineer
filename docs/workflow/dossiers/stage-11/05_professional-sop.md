@@ -1,5 +1,14 @@
 # Stage 11: Professional Standard Operating Procedure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, security
+
 **Execution Owner**: LEAD Agent
 
 **Estimated Duration**: 5-7 business days (manual), 2-3 days (assisted with automation)

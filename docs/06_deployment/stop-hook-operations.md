@@ -1,5 +1,14 @@
 # Stop Hook Sub-Agent Enforcement - Operational Runbook
 
+
+## Metadata
+- **Category**: Deployment
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, schema
+
 **Document Type**: Operational Runbook
 **System**: Claude Code Stop Hook
 **Component**: `scripts/hooks/stop-subagent-enforcement.js`

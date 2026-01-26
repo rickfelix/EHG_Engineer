@@ -1,5 +1,14 @@
 # Stage 8 Current Assessment (Critique Rubric)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, security, guide
+
 ## Overall Rubric Score
 
 **Source**: `EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-08.md:3-16`

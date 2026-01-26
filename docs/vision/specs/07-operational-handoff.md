@@ -1,5 +1,14 @@
 # Operational Handoff Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, schema, rls
+
 **Vision v2 Chairman's OS - Stage 25 Mode Transition**
 
 > "The venture doesn't end at Stage 25. It transforms."
