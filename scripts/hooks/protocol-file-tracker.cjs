@@ -75,6 +75,7 @@ function isProtocolFile(filePath) {
 
 /**
  * Process hook input and track protocol file reads
+ * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Enhanced to detect partial reads
  */
 function processHookInput(hookInput) {
   const toolName = hookInput.tool_name || '';
@@ -95,11 +96,38 @@ function processHookInput(hookInput) {
     return;
   }
 
+  // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Detect partial read parameters
+  const hasLimit = toolInputData.limit !== undefined;
+  const hasOffset = toolInputData.offset !== undefined;
+  const isPartialRead = hasLimit || hasOffset;
+
   // Mark protocol file as read in session state
   const state = readSessionState();
 
   if (!state.protocolFilesRead) {
     state.protocolFilesRead = [];
+  }
+
+  // Initialize partial read tracking
+  if (!state.protocolFilesPartiallyRead) {
+    state.protocolFilesPartiallyRead = {};
+  }
+
+  // Track partial reads with details
+  if (isPartialRead) {
+    state.protocolFilesPartiallyRead[protocolFile] = {
+      limit: toolInputData.limit,
+      offset: toolInputData.offset,
+      timestamp: new Date().toISOString(),
+      wasPartial: true
+    };
+    console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${protocolFile} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset})`);
+  } else {
+    // Full read clears any previous partial read flag
+    if (state.protocolFilesPartiallyRead[protocolFile]) {
+      delete state.protocolFilesPartiallyRead[protocolFile];
+      console.log(`[protocol-file-tracker] ✅ Full read of ${protocolFile} clears partial read flag`);
+    }
   }
 
   if (!state.protocolFilesRead.includes(protocolFile)) {
@@ -110,6 +138,9 @@ function processHookInput(hookInput) {
     if (writeSessionState(state)) {
       console.log(`[protocol-file-tracker] Marked ${protocolFile} as read`);
     }
+  } else {
+    // File was already read, just update the state for partial read tracking
+    writeSessionState(state);
   }
 }
 

@@ -97,6 +97,17 @@ export function isProtocolFileRead(filename) {
 }
 
 /**
+ * Check if a protocol file was only partially read (with limit/offset)
+ * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001
+ * @param {string} filename - The protocol file to check
+ * @returns {Object|null} Partial read details or null if not partial
+ */
+export function getPartialReadDetails(filename) {
+  const state = readSessionState();
+  return state.protocolFilesPartiallyRead?.[filename] || null;
+}
+
+/**
  * Clear protocol file read state (for testing or session reset)
  */
 export function clearProtocolFileReadState() {
@@ -159,6 +170,48 @@ export async function validateProtocolFileRead(handoffType, _ctx) {
     const state = readSessionState();
     const readAt = state.protocolFilesReadAt?.[requiredFile];
     console.log(`   ✅ Protocol file has been read${readAt ? ` at ${readAt}` : ''}`);
+
+    // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Check for partial reads
+    const partialReadDetails = getPartialReadDetails(requiredFile);
+    const warnings = [];
+    let score = 100;
+
+    if (partialReadDetails) {
+      console.log(`   ⚠️  PARTIAL READ DETECTED for ${requiredFile}`);
+      console.log(`      Limit: ${partialReadDetails.limit}, Offset: ${partialReadDetails.offset}`);
+      console.log(`      Timestamp: ${partialReadDetails.timestamp}`);
+      console.log('');
+      console.log('   📚 PARTIAL READ WARNING:');
+      console.log('   The protocol file was read with limit/offset parameters.');
+      console.log('   This means NOT the entire file was read, which may cause');
+      console.log('   critical requirements in later sections to be missed.');
+      console.log('');
+      console.log('   RECOMMENDATION: Re-read the file WITHOUT limit/offset');
+      console.log('   to ensure all instructions are captured.');
+
+      warnings.push(`Partial read detected for ${requiredFile}: limit=${partialReadDetails.limit}, offset=${partialReadDetails.offset}`);
+      warnings.push('Protocol files MUST be read in full. Re-read without limit/offset to clear this warning.');
+      score = 80; // Reduced score but still passing
+
+      // Emit structured log for PASS_WITH_WARNING
+      emitStructuredLog({
+        event: 'PROTOCOL_FILE_READ_GATE',
+        status: 'PASS_PARTIAL_READ_WARNING',
+        handoff_type: handoffType,
+        required_file: requiredFile,
+        partial_read_details: partialReadDetails,
+        session_id: state.sessionId || 'unknown',
+        timestamp: new Date().toISOString()
+      });
+
+      return {
+        pass: true,
+        score: score,
+        max_score: 100,
+        issues: [],
+        warnings: warnings
+      };
+    }
 
     // Emit structured log for PASS
     emitStructuredLog({
@@ -328,6 +381,7 @@ export default {
   createProtocolFileReadGate,
   markProtocolFileRead,
   isProtocolFileRead,
+  getPartialReadDetails,
   clearProtocolFileReadState,
   bypassProtocolFileReadGate,
   HANDOFF_FILE_REQUIREMENTS
