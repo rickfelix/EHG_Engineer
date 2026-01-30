@@ -21,6 +21,11 @@ import {
   SD_SOURCES,
   SD_TYPES
 } from './modules/sd-key-generator.js';
+import {
+  checkGate,
+  getArtifacts,
+  getStatus as getPhase0Status
+} from './modules/phase-0/leo-integration.js';
 
 dotenv.config();
 
@@ -546,6 +551,68 @@ Examples:
         process.exit(1);
       }
 
+      // SD-LEO-FIX-PHASE0-INTEGRATION-001: Phase 0 Intent Discovery Gate
+      // Check if Phase 0 is required for this SD type before proceeding
+      const gateResult = checkGate(type);
+
+      if (gateResult.action === 'start') {
+        // Phase 0 required but not started
+        console.log('\n' + '═'.repeat(60));
+        console.log('🔮 PHASE 0 INTENT DISCOVERY REQUIRED');
+        console.log('═'.repeat(60));
+        console.log(`   SD Type: ${type}`);
+        console.log(`   Title: ${title}`);
+        console.log('');
+        console.log('   Feature and enhancement SDs require Phase 0 Intent Discovery');
+        console.log('   to ensure proper scoping and crystallized requirements.');
+        console.log('');
+        console.log('📋 To start Phase 0:');
+        console.log('   Use /leo create interactively to begin the discovery process.');
+        console.log('   The discovery will ask clarifying questions one at a time.');
+        console.log('');
+        console.log('   After Phase 0 completes, run this command again.');
+        console.log('═'.repeat(60));
+        process.exit(0);
+      }
+
+      if (gateResult.action === 'resume') {
+        // Phase 0 in progress but not complete
+        const status = getPhase0Status();
+        console.log('\n' + '═'.repeat(60));
+        console.log('🔮 PHASE 0 IN PROGRESS');
+        console.log('═'.repeat(60));
+        console.log(`   Questions answered: ${status.questionsAnswered}/${status.minQuestions} minimum`);
+        console.log(`   Has intent summary: ${status.hasIntentSummary ? '✓' : '✗'}`);
+        console.log(`   Out of scope items: ${status.outOfScopeCount}/${status.minOutOfScope} minimum`);
+        console.log(`   Crystallization: ${(status.crystallizationScore * 100).toFixed(0)}% (need ${(status.threshold * 100).toFixed(0)}%)`);
+        console.log('');
+        console.log('📋 To continue Phase 0:');
+        console.log('   Use /leo create interactively to continue the discovery process.');
+        console.log('');
+        console.log('   To reset and start over: node scripts/phase-0-cli.js reset');
+        console.log('═'.repeat(60));
+        process.exit(0);
+      }
+
+      // Phase 0 not required or complete - proceed with SD creation
+      // Check if Phase 0 artifacts are available to enrich metadata
+      let phase0Metadata = {};
+      if (gateResult.action === 'proceed' && gateResult.session) {
+        // Session exists and is complete - extract artifacts
+        const artifacts = getArtifacts(gateResult.session);
+        phase0Metadata = {
+          phase_0: {
+            intent_summary: artifacts.intentSummary,
+            out_of_scope: artifacts.outOfScope,
+            crystallization_score: artifacts.crystallizationScore,
+            questions_answered: artifacts.questionsAnswered,
+            ehg_stage: artifacts.ehgStage,
+            completed_at: new Date().toISOString()
+          }
+        };
+        console.log('\n✓ Phase 0 artifacts loaded into SD metadata');
+      }
+
       const sdKey = await generateSDKey({ source, type, title });
       await createSD({
         sdKey,
@@ -553,7 +620,10 @@ Examples:
         description: title,
         type,
         rationale: 'Created via /leo create',
-        metadata: { source: source.toLowerCase() }
+        metadata: {
+          source: source.toLowerCase(),
+          ...phase0Metadata
+        }
       });
     }
   } catch (err) {
