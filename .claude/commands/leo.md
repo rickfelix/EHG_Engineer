@@ -666,14 +666,22 @@ node scripts/child-sd-preflight.js SD-XXX-001
 
 **CRITICAL**: Before starting work on ANY SD (new, existing, or child), you MUST load the required context files in this order:
 
-#### Step 1: ALWAYS Read CLAUDE_CORE.md First
+#### Step 1: ALWAYS Read CLAUDE.md and CLAUDE_CORE.md First
 ```
+Read tool: CLAUDE.md
 Read tool: CLAUDE_CORE.md
 ```
-This provides:
+
+**CLAUDE.md provides**:
+- Sub-agent trigger keywords (CRITICAL for proactive invocation)
+- Skill intent detection patterns
+- AUTO-PROCEED mode configuration
+- Session initialization guidance
+
+**CLAUDE_CORE.md provides**:
 - SD type definitions and workflow requirements
 - PRD requirements, handoff counts, gate thresholds
-- Sub-agent invocation requirements
+- Sub-agent configuration and model routing
 - Validation gate definitions
 
 **This applies to ALL SDs including children of orchestrators.**
@@ -688,7 +696,8 @@ Based on the SD's `current_phase`, load the appropriate file:
 | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
 
 #### Why This Matters
-Without loading CLAUDE_CORE.md:
+Without loading CLAUDE.md and CLAUDE_CORE.md:
+- Sub-agent trigger keywords are unknown (agents won't invoke proactively)
 - SD type requirements are unknown
 - Gate thresholds may be violated
 - Required sub-agents may be skipped
@@ -736,12 +745,17 @@ Child SDs with incomplete dependencies show as BLOCKED.
 **CRITICAL**: When creating new strategic directives, you MUST read these reference documents BEFORE creating the SD:
 
 #### Required Reading
-1. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
+1. **CLAUDE.md** - Router with sub-agent trigger keywords
+   - Contains actionable trigger keywords for proactive sub-agent invocation
+   - Skill intent detection patterns
+   - AUTO-PROCEED mode behavior
+
+2. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
    - Contains SD type definitions and their mandatory requirements
    - Specifies PRD requirements, handoff counts, and gate thresholds per SD type
    - Defines the LEAD→PLAN→EXEC workflow phases
 
-2. **docs/database/strategic_directives_v2_field_reference.md** - Complete field reference
+3. **docs/database/strategic_directives_v2_field_reference.md** - Complete field reference
    - Defines all required and optional fields
    - Explains `id` vs `uuid_id` usage
    - Documents JSONB array structures (key_changes, success_criteria, dependencies, etc.)
@@ -750,6 +764,7 @@ Child SDs with incomplete dependencies show as BLOCKED.
 
 #### SD Creation Checklist
 Before creating any SD, ensure you:
+- [ ] Read CLAUDE.md for sub-agent trigger keywords
 - [ ] Read CLAUDE_CORE.md for SD type requirements
 - [ ] Read field reference for required fields and formats
 - [ ] Use proper ID format: `SD-{CATEGORY}-{NUMBER}` (e.g., SD-FEATURE-001)
@@ -767,4 +782,4 @@ Before creating any SD, ensure you:
 | `fix` | NO | 1 | 70% |
 | `documentation` | NO | 1 | 60% |
 
-**Note**: Always verify current requirements from CLAUDE_CORE.md as they may be updated.
+**Note**: Always verify current requirements from CLAUDE.md and CLAUDE_CORE.md as they may be updated.
