@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-30T10:43:20.618Z
+**Generated**: 2026-01-30T13:00:06.703Z
 **Rows**: 2
 **RLS**: Enabled (2 policies)
 
@@ -52,7 +52,7 @@
 - `risk_assessments_data_migration_risk_check`: CHECK (((data_migration_risk >= 1) AND (data_migration_risk <= 10)))
 - `risk_assessments_integration_risk_check`: CHECK (((integration_risk >= 1) AND (integration_risk <= 10)))
 - `risk_assessments_performance_risk_check`: CHECK (((performance_risk >= 1) AND (performance_risk <= 10)))
-- `risk_assessments_phase_check`: CHECK ((phase = ANY (ARRAY['LEAD_PRE_APPROVAL'::text, 'PLAN_PRD'::text, 'EXEC_IMPL'::text, 'PLAN_VERIFY'::text])))
+- `risk_assessments_phase_check`: CHECK ((phase = ANY (ARRAY['LEAD_PRE_APPROVAL'::text, 'PLAN_PRD'::text, 'EXEC_IMPL'::text, 'PLAN_VERIFY'::text, 'LEAD'::text, 'LEAD_APPROVAL'::text, 'PLAN'::text, 'EXEC'::text, 'VERIFY'::text, 'PLAN_VERIFICATION'::text])))
 - `risk_assessments_risk_level_check`: CHECK ((risk_level = ANY (ARRAY['LOW'::text, 'MEDIUM'::text, 'HIGH'::text, 'CRITICAL'::text])))
 - `risk_assessments_security_risk_check`: CHECK (((security_risk >= 1) AND (security_risk <= 10)))
 - `risk_assessments_technical_complexity_check`: CHECK (((technical_complexity >= 1) AND (technical_complexity <= 10)))
