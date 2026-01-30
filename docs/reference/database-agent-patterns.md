@@ -1039,6 +1039,94 @@ node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 ---
 
+### ❌ Anti-Pattern 8: JSON.stringify() on JSONB Fields
+
+**What It Looks Like**:
+```javascript
+// WRONG: Stringify JSONB fields before Supabase insert
+const { data, error } = await supabase
+  .from('strategic_directives_v2')
+  .insert({
+    id: 'SD-XXX-001',
+    key_changes: JSON.stringify(['Change 1', 'Change 2']),        // ❌ Wrong
+    success_criteria: JSON.stringify([{criterion: 'X'}]),         // ❌ Wrong
+    success_metrics: JSON.stringify([{metric: 'Y'}])              // ❌ Wrong
+  });
+
+// Result: JSONB columns store STRING type instead of ARRAY type
+// Database: key_changes = "[\"Change 1\",\"Change 2\"]"  (string)
+// Expected: key_changes = ["Change 1", "Change 2"]       (array)
+```
+
+**Why It's Wrong**:
+- **Double-encoding**: Supabase client auto-serializes JSONB → calling `JSON.stringify()` stringifies twice
+- **Type mismatch**: Database stores STRING where ARRAY is expected
+- **Constraint violations**: `jsonb_typeof(field) = 'array'` constraints fail
+- **Query failures**: JSONB array functions like `jsonb_array_length()` fail with "cannot get array length of a scalar"
+- **Cascading failures**: 655 SDs affected, 300+ fields stored as strings, handoff validations blocked
+
+**Root Cause Pattern**: PAT-JSONB-STRING-TYPE (RCA 2026-01-30)
+- Legacy scripts called `JSON.stringify()` before Supabase insert
+- Supabase client handles JSONB serialization automatically
+- No validation prevented double-encoding
+
+**Right Approach**:
+```javascript
+// CORRECT: Pass JavaScript objects/arrays directly
+const { data, error } = await supabase
+  .from('strategic_directives_v2')
+  .insert({
+    id: 'SD-XXX-001',
+    key_changes: ['Change 1', 'Change 2'],                        // ✅ Array
+    success_criteria: [{criterion: 'X', measure: 'Y'}],          // ✅ Array of objects
+    success_metrics: [{metric: 'Coverage', target: '80%'}]       // ✅ Array of objects
+  });
+
+// Supabase client handles JSONB serialization
+// Database stores proper JSONB array type
+```
+
+**Quality Controls Implemented**:
+1. **Database constraints**: `ALTER TABLE ADD CONSTRAINT field_is_array CHECK (jsonb_typeof(field) = 'array')`
+2. **Integrity check script**: `npm run data:integrity` - scans for string-type JSONB fields
+3. **Auto-fix script**: `npm run data:integrity:fix` - converts strings to proper arrays
+4. **Healing script**: `npm run data:heal-metrics:fix` - adds default values to empty fields
+5. **Migration**: `database/migrations/20260130_add_jsonb_type_constraints.sql`
+
+**Detection**:
+```bash
+# Check for JSONB string type issues
+npm run data:integrity
+
+# Output:
+# 📛 STRING TYPE ISSUES: 118 fields across 49 SDs
+# ⚠️  EMPTY ARRAY ISSUES: 0 fields across 0 SDs
+```
+
+**Remediation**:
+```bash
+# Automated fix (converts strings → arrays, adds defaults)
+npm run data:integrity:fix
+
+# Result: 655 SDs healed, 0 remaining issues
+```
+
+**Evidence**:
+- **SD-LEO-INFRA-INTEGRATE-STRUNKIAN-WRITING-001**: LEAD-TO-PLAN handoff blocked by empty `key_principles` (string type)
+- **Legacy scripts**: `scripts/create-security-sds.js`, `scripts/update-sd-video-variant-scope.cjs` - Fixed (removed JSON.stringify calls)
+- **Impact**: 85 SDs, 486 fields had string type issues across multiple fix runs
+- **Root Cause**: PAT-JSONB-STRING-TYPE (documented in `docs/reference/rca-auto-proceed-empty-metrics-2026-01-30.md`)
+
+**Lessons Learned**:
+- ✅ Trust the ORM/client library for JSONB handling
+- ✅ Add database constraints to prevent invalid types (`NOT VALID` for existing data)
+- ✅ Create integrity check scripts for proactive detection
+- ✅ Provide auto-healing scripts for mass remediation
+- ❌ Never manually stringify JSONB fields before insert/update
+- ❌ Don't assume client libraries need manual serialization
+
+---
+
 ## Success Patterns
 
 ### Pattern 1: Proactive Schema Validation

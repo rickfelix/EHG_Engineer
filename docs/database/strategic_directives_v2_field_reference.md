@@ -170,6 +170,48 @@ const sdType = sd.sd_type || sd.category || 'feature';
 
 **If validation fails, you'll see**: `success_metrics AND success_criteria are both empty or have invalid structure`
 
+### 🔒 Database Constraints (Added 2026-01-30)
+
+**JSONB Type Validation Constraints** - Prevent string storage in JSONB array fields:
+
+```sql
+-- Ensures JSONB fields contain proper arrays, not stringified JSON
+ALTER TABLE strategic_directives_v2
+  ADD CONSTRAINT success_criteria_is_array
+  CHECK (success_criteria IS NULL OR jsonb_typeof(success_criteria) = 'array') NOT VALID;
+
+ALTER TABLE strategic_directives_v2
+  ADD CONSTRAINT success_metrics_is_array
+  CHECK (success_metrics IS NULL OR jsonb_typeof(success_metrics) = 'array') NOT VALID;
+
+ALTER TABLE strategic_directives_v2
+  ADD CONSTRAINT key_principles_is_array
+  CHECK (key_principles IS NULL OR jsonb_typeof(key_principles) = 'array') NOT VALID;
+
+ALTER TABLE strategic_directives_v2
+  ADD CONSTRAINT key_changes_is_array
+  CHECK (key_changes IS NULL OR jsonb_typeof(key_changes) = 'array') NOT VALID;
+
+ALTER TABLE strategic_directives_v2
+  ADD CONSTRAINT key_principles_not_empty
+  CHECK (key_principles IS NULL OR jsonb_array_length(key_principles) >= 1) NOT VALID;
+```
+
+**Migration**: `database/migrations/20260130_add_jsonb_type_constraints.sql`
+
+**Quality Control Scripts**:
+- `npm run data:integrity` - Check for JSONB string type issues
+- `npm run data:integrity:fix` - Auto-convert strings to proper arrays
+- `npm run data:heal-metrics:fix` - Add default values to empty fields
+
+**Root Cause Fix**: PAT-JSONB-STRING-TYPE (RCA 2026-01-30)
+- **Problem**: Legacy scripts called `JSON.stringify()` on JSONB fields before Supabase insert
+- **Impact**: 655 SDs had ~300 fields stored as strings instead of arrays
+- **Solution**: Removed JSON.stringify calls, added constraints, created healing scripts
+- **Lesson**: Supabase client handles JSONB serialization automatically - never manually stringify
+
+**Related Documentation**: See `docs/reference/database-agent-patterns.md` - Anti-Pattern 8
+
 ---
 
 ## 👥 Governance & Approval

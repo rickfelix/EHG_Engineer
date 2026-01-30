@@ -95,11 +95,13 @@ async function updateSDScope() {
   }
 
   // Update SD in database
+  // FIXED: Don't JSON.stringify JSONB fields - Supabase handles serialization
+  // Root cause fix: PAT-JSONB-STRING-TYPE (RCA 2026-01-30)
   const { data: updated, error: updateError } = await supabase
     .from('strategic_directives_v2')
     .update({
-      scope: JSON.stringify(scope),
-      success_criteria: JSON.stringify(success_criteria),
+      scope: scope,                       // Pass directly, not stringified
+      success_criteria: success_criteria, // Pass directly, not stringified
       updated_at: new Date().toISOString()
     })
     .eq('id', sdId)
