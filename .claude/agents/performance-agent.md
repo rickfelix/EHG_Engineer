@@ -44,3 +44,96 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 - **Early Measurement**: Performance validation during implementation prevents late-stage optimization rework
 
 **Core Philosophy**: "Measure early, optimize as needed, prevent regressions."
+
+---
+
+## Vercel React Validation Phases (6-8)
+
+SD-LEO-FIX-PERFORMANCE-PHASES-001: Phases 6-8 extend the validation framework with Vercel React best practices.
+Reference: `.claude/context/PERFORMANCE-INDEX.md`
+
+### Phase 6: Waterfall Detection
+
+**Purpose**: Identify sequential async patterns that cause request waterfalls
+
+**Detection Patterns**:
+- Sequential `await` statements that could be parallelized
+- `useEffect` with nested fetch calls
+- Server components with chained data fetching
+
+**Validation**:
+```javascript
+// BAD: Waterfall
+const user = await getUser();
+const posts = await getPosts();
+
+// GOOD: Parallel
+const [user, posts] = await Promise.all([getUser(), getPosts()]);
+```
+
+**Gate Behavior**: ADVISORY for all SD types (recommends Promise.all)
+
+### Phase 7: Barrel Import Audit
+
+**Purpose**: Detect tree-shaking failures from barrel exports
+
+**Detection Patterns**:
+- `export * from './module'` patterns
+- Imports from barrel index files (`import { x } from './components'`)
+- Bundle size impact from re-exports
+
+**Validation**:
+```bash
+# Detect barrel exports
+grep -r "export \* from" src/
+```
+
+**Gate Behavior**:
+| SD Type | Enforcement |
+|---------|-------------|
+| feature | REQUIRED (blocks new violations) |
+| performance | REQUIRED |
+| enhancement | REQUIRED |
+| bugfix | ADVISORY |
+| infrastructure | SKIP |
+| documentation | SKIP |
+
+**Remediation**: See `.claude/skills/barrel-remediation.md`
+
+### Phase 8: Server Cache Check
+
+**Purpose**: Validate caching strategies for server-rendered content
+
+**Validation Targets**:
+- Static generation usage (`generateStaticParams`)
+- Cache headers on API routes
+- ISR configuration for dynamic content
+- Redundant computation detection
+
+**Key Patterns**:
+```javascript
+// GOOD: Static generation
+export async function generateStaticParams() {
+  const posts = await getPosts();
+  return posts.map((post) => ({ slug: post.slug }));
+}
+
+// GOOD: Cache configuration
+export const revalidate = 3600; // Revalidate every hour
+```
+
+**Gate Behavior**: ADVISORY (recommends caching strategies)
+
+---
+
+## Enforcement by SD Type
+
+| SD Type | Phase 6 (Waterfall) | Phase 7 (Barrel) | Phase 8 (Cache) |
+|---------|---------------------|------------------|-----------------|
+| feature | ADVISORY | REQUIRED | ADVISORY |
+| performance | REQUIRED | REQUIRED | REQUIRED |
+| enhancement | ADVISORY | REQUIRED | ADVISORY |
+| bugfix | ADVISORY | ADVISORY | ADVISORY |
+| infrastructure | SKIP | SKIP | SKIP |
+| documentation | SKIP | SKIP | SKIP |
+| refactor | ADVISORY | ADVISORY | ADVISORY |
