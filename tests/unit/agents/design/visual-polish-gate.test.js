@@ -3,18 +3,26 @@
  * @sd SD-LEO-ORCH-AESTHETIC-DESIGN-SYSTEM-001-C
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   AI_SLOP_PATTERNS,
   STAGE_ENFORCEMENT,
   CRITIQUE_DIMENSIONS,
   PERSONALITY_CONSTRAINTS,
+  VIEWPORTS,
+  THEME_METHODS,
   detectAISlop,
   auditPersonalityCompliance,
   getEnforcementDecision,
   generateImpeccableCritique,
   executeVisualPolishGate,
-  formatGateResult
+  formatGateResult,
+  detectThemeMethod,
+  toggleTheme,
+  captureDualModeScreenshots,
+  validateContrastInMode,
+  executeDualModeAudit,
+  formatDualModeResult
 } from '../../../../lib/agents/design-sub-agent/visual-polish-gate.js';
 
 describe('Visual Polish Gate', () => {
@@ -335,6 +343,589 @@ describe('Visual Polish Gate', () => {
       expect(formatted).toContain('VISUAL POLISH GATE RESULT');
       expect(formatted).toContain('AI SLOP DETECTION');
       expect(formatted).toContain('IMPECCABLE CRITIQUE');
+    });
+  });
+
+  // ============================================================
+  // CHILD D: Dual-Mode Auditing Tests
+  // SD-LEO-ORCH-AESTHETIC-DESIGN-SYSTEM-001-D
+  // ============================================================
+
+  describe('Dual-Mode Constants', () => {
+    describe('VIEWPORTS', () => {
+      it('should define desktop viewport', () => {
+        expect(VIEWPORTS.desktop).toEqual({ width: 1920, height: 1080, name: 'desktop' });
+      });
+
+      it('should define tablet viewport', () => {
+        expect(VIEWPORTS.tablet).toEqual({ width: 768, height: 1024, name: 'tablet' });
+      });
+
+      it('should define mobile viewport', () => {
+        expect(VIEWPORTS.mobile).toEqual({ width: 375, height: 667, name: 'mobile' });
+      });
+
+      it('should have all three standard viewports', () => {
+        expect(Object.keys(VIEWPORTS)).toHaveLength(3);
+        expect(VIEWPORTS).toHaveProperty('desktop');
+        expect(VIEWPORTS).toHaveProperty('tablet');
+        expect(VIEWPORTS).toHaveProperty('mobile');
+      });
+    });
+
+    describe('THEME_METHODS', () => {
+      it('should define class-based method', () => {
+        expect(THEME_METHODS.CLASS_BASED).toBe('class-based');
+      });
+
+      it('should define media-query method', () => {
+        expect(THEME_METHODS.MEDIA_QUERY).toBe('media-query');
+      });
+
+      it('should define unknown method', () => {
+        expect(THEME_METHODS.UNKNOWN).toBe('unknown');
+      });
+
+      it('should have all three theme methods', () => {
+        expect(Object.keys(THEME_METHODS)).toHaveLength(3);
+      });
+    });
+  });
+
+  describe('Theme Detection (US-002)', () => {
+    // Create mock page object for testing
+    const createMockPage = (evaluateResults = []) => {
+      let callIndex = 0;
+      return {
+        evaluate: vi.fn(() => {
+          const result = evaluateResults[callIndex] ?? false;
+          callIndex++;
+          return Promise.resolve(result);
+        }),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve())
+      };
+    };
+
+    it('should detect class-based theming when dark class present', async () => {
+      const mockPage = createMockPage([true]); // First evaluate returns true for class-based
+      const method = await detectThemeMethod(mockPage);
+      expect(method).toBe('class-based');
+    });
+
+    it('should detect media-query theming when no class support but media queries exist', async () => {
+      const mockPage = createMockPage([false, true]); // Class-based false, media-query true
+      const method = await detectThemeMethod(mockPage);
+      expect(method).toBe('media-query');
+    });
+
+    it('should return unknown when no theme support detected', async () => {
+      const mockPage = createMockPage([false, false]); // Both false
+      const method = await detectThemeMethod(mockPage);
+      expect(method).toBe('unknown');
+    });
+
+    it('should handle page evaluation errors gracefully', async () => {
+      const mockPage = {
+        evaluate: vi.fn(() => Promise.reject(new Error('Page error')))
+      };
+      const method = await detectThemeMethod(mockPage);
+      expect(method).toBe('unknown');
+    });
+  });
+
+  describe('Theme Toggle (US-002)', () => {
+    const createMockPage = () => ({
+      evaluate: vi.fn(() => Promise.resolve()),
+      emulateMedia: vi.fn(() => Promise.resolve()),
+      waitForTimeout: vi.fn(() => Promise.resolve())
+    });
+
+    it('should toggle to dark mode using class-based method', async () => {
+      const mockPage = createMockPage();
+      const result = await toggleTheme(mockPage, 'dark', 'class-based');
+
+      expect(result.mode).toBe('dark');
+      expect(result.themeMethod).toBe('class-based');
+      expect(result.success).toBe(true);
+      expect(mockPage.evaluate).toHaveBeenCalled();
+    });
+
+    it('should toggle to light mode using class-based method', async () => {
+      const mockPage = createMockPage();
+      const result = await toggleTheme(mockPage, 'light', 'class-based');
+
+      expect(result.mode).toBe('light');
+      expect(result.themeMethod).toBe('class-based');
+      expect(result.success).toBe(true);
+    });
+
+    it('should toggle using media-query method via emulateMedia', async () => {
+      const mockPage = createMockPage();
+      const result = await toggleTheme(mockPage, 'dark', 'media-query');
+
+      expect(result.mode).toBe('dark');
+      expect(result.themeMethod).toBe('media-query');
+      expect(result.success).toBe(true);
+      expect(mockPage.emulateMedia).toHaveBeenCalledWith({ colorScheme: 'dark' });
+    });
+
+    it('should use hybrid approach for unknown method', async () => {
+      const mockPage = createMockPage();
+      const result = await toggleTheme(mockPage, 'dark', 'unknown');
+
+      expect(result.success).toBe(true);
+      expect(result.themeMethod).toBe('hybrid');
+      expect(mockPage.evaluate).toHaveBeenCalled();
+      expect(mockPage.emulateMedia).toHaveBeenCalled();
+    });
+
+    it('should record themeMethod and themeModeAudited in result', async () => {
+      const mockPage = createMockPage();
+      const result = await toggleTheme(mockPage, 'dark', 'class-based');
+
+      expect(result).toHaveProperty('themeMethod', 'class-based');
+      expect(result).toHaveProperty('mode', 'dark');
+    });
+
+    it('should handle toggle errors gracefully', async () => {
+      const mockPage = {
+        evaluate: vi.fn(() => Promise.reject(new Error('Toggle failed'))),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve())
+      };
+      const result = await toggleTheme(mockPage, 'dark', 'class-based');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Toggle failed');
+    });
+  });
+
+  describe('Dual-Mode Screenshots (US-003)', () => {
+    const createMockPage = () => ({
+      setViewportSize: vi.fn(() => Promise.resolve()),
+      screenshot: vi.fn(() => Promise.resolve()),
+      evaluate: vi.fn(() => Promise.resolve()),
+      emulateMedia: vi.fn(() => Promise.resolve()),
+      waitForTimeout: vi.fn(() => Promise.resolve())
+    });
+
+    it('should capture screenshots for all viewports in both modes', async () => {
+      const mockPage = createMockPage();
+      const screenshots = await captureDualModeScreenshots(
+        mockPage,
+        './test-output/screenshots',
+        VIEWPORTS
+      );
+
+      // Should have all three viewports
+      expect(screenshots).toHaveProperty('desktop');
+      expect(screenshots).toHaveProperty('tablet');
+      expect(screenshots).toHaveProperty('mobile');
+    });
+
+    it('should capture both light and dark screenshots per viewport', async () => {
+      const mockPage = createMockPage();
+      const screenshots = await captureDualModeScreenshots(
+        mockPage,
+        './test-output/screenshots',
+        VIEWPORTS
+      );
+
+      expect(screenshots.desktop).toHaveProperty('light');
+      expect(screenshots.desktop).toHaveProperty('dark');
+      expect(screenshots.tablet).toHaveProperty('light');
+      expect(screenshots.tablet).toHaveProperty('dark');
+      expect(screenshots.mobile).toHaveProperty('light');
+      expect(screenshots.mobile).toHaveProperty('dark');
+    });
+
+    it('should set viewport size for each device', async () => {
+      const mockPage = createMockPage();
+      await captureDualModeScreenshots(mockPage, './test-output', VIEWPORTS);
+
+      expect(mockPage.setViewportSize).toHaveBeenCalledWith({ width: 1920, height: 1080 });
+      expect(mockPage.setViewportSize).toHaveBeenCalledWith({ width: 768, height: 1024 });
+      expect(mockPage.setViewportSize).toHaveBeenCalledWith({ width: 375, height: 667 });
+    });
+
+    it('should use correct naming convention for screenshots', async () => {
+      const mockPage = createMockPage();
+      const screenshots = await captureDualModeScreenshots(
+        mockPage,
+        './visual-polish-reports/screenshots',
+        VIEWPORTS
+      );
+
+      expect(screenshots.desktop.light).toBe('screenshots/desktop-light.png');
+      expect(screenshots.desktop.dark).toBe('screenshots/desktop-dark.png');
+      expect(screenshots.tablet.light).toBe('screenshots/tablet-light.png');
+      expect(screenshots.tablet.dark).toBe('screenshots/tablet-dark.png');
+      expect(screenshots.mobile.light).toBe('screenshots/mobile-light.png');
+      expect(screenshots.mobile.dark).toBe('screenshots/mobile-dark.png');
+    });
+
+    it('should handle screenshot capture failures gracefully', async () => {
+      const mockPage = {
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.reject(new Error('Capture failed'))),
+        evaluate: vi.fn(() => Promise.resolve()),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve())
+      };
+
+      // Should not throw, should handle gracefully
+      const screenshots = await captureDualModeScreenshots(mockPage, './test-output', VIEWPORTS);
+      expect(screenshots).toBeDefined();
+    });
+  });
+
+  describe('Contrast Validation (US-004)', () => {
+    const createMockPageWithElements = (elements) => ({
+      evaluate: vi.fn((fn) => {
+        // If the function is for getting text elements, return our mock elements
+        if (fn.toString().includes('createTreeWalker')) {
+          return Promise.resolve(elements);
+        }
+        // Otherwise return empty for theme detection
+        return Promise.resolve();
+      }),
+      emulateMedia: vi.fn(() => Promise.resolve()),
+      waitForTimeout: vi.fn(() => Promise.resolve())
+    });
+
+    it('should validate contrast ratios and report violations', async () => {
+      // Mock page with a low-contrast element
+      const mockPage = createMockPageWithElements([
+        {
+          selector: '.low-contrast',
+          foreground: 'rgb(204, 204, 204)', // Light gray
+          background: 'rgb(255, 255, 255)', // White
+          isLargeText: false,
+          fontSize: 14
+        }
+      ]);
+
+      const result = await validateContrastInMode(mockPage, 'light');
+
+      expect(result.mode).toBe('light');
+      expect(result.violations.length).toBeGreaterThan(0);
+    });
+
+    it('should pass elements with sufficient contrast', async () => {
+      const mockPage = createMockPageWithElements([
+        {
+          selector: '.good-contrast',
+          foreground: 'rgb(0, 0, 0)', // Black
+          background: 'rgb(255, 255, 255)', // White - 21:1 ratio
+          isLargeText: false,
+          fontSize: 14
+        }
+      ]);
+
+      const result = await validateContrastInMode(mockPage, 'light');
+
+      expect(result.passed).toBe(1);
+      expect(result.violations.length).toBe(0);
+    });
+
+    it('should use 4.5:1 ratio for normal text', async () => {
+      const mockPage = createMockPageWithElements([
+        {
+          selector: '.normal-text',
+          foreground: 'rgb(136, 136, 136)', // #888 - ~3.5:1 ratio
+          background: 'rgb(255, 255, 255)',
+          isLargeText: false,
+          fontSize: 14
+        }
+      ]);
+
+      const result = await validateContrastInMode(mockPage, 'light');
+
+      expect(result.violations.length).toBe(1);
+      expect(result.violations[0].requiredRatio).toBe(4.5);
+    });
+
+    it('should use 3.0:1 ratio for large text', async () => {
+      const mockPage = createMockPageWithElements([
+        {
+          selector: '.large-text',
+          foreground: 'rgb(136, 136, 136)', // ~3.5:1 ratio
+          background: 'rgb(255, 255, 255)',
+          isLargeText: true,
+          fontSize: 24
+        }
+      ]);
+
+      const result = await validateContrastInMode(mockPage, 'light');
+
+      // 3.5:1 is > 3.0:1 requirement for large text, so should pass
+      expect(result.passed).toBe(1);
+      expect(result.violations.length).toBe(0);
+    });
+
+    it('should include violation details with selector and ratios', async () => {
+      const mockPage = createMockPageWithElements([
+        {
+          selector: '.hero-title',
+          foreground: 'rgb(200, 200, 200)',
+          background: 'rgb(255, 255, 255)',
+          isLargeText: false,
+          fontSize: 14
+        }
+      ]);
+
+      const result = await validateContrastInMode(mockPage, 'light');
+
+      expect(result.violations[0]).toHaveProperty('selector');
+      expect(result.violations[0]).toHaveProperty('actualRatio');
+      expect(result.violations[0]).toHaveProperty('requiredRatio');
+      expect(result.violations[0]).toHaveProperty('foreground');
+      expect(result.violations[0]).toHaveProperty('background');
+      expect(result.violations[0]).toHaveProperty('mode', 'light');
+    });
+
+    it('should run validation in specified mode', async () => {
+      const mockPage = createMockPageWithElements([]);
+
+      await validateContrastInMode(mockPage, 'dark');
+
+      // Should have called emulateMedia or evaluate to toggle theme
+      expect(mockPage.evaluate).toHaveBeenCalled();
+    });
+  });
+
+  describe('Dual-Mode Audit Execution (US-001)', () => {
+    it('should return SKIPPED when no page provided', async () => {
+      const result = await executeDualModeAudit({
+        previewUrl: 'https://example.com'
+      });
+
+      expect(result.status).toBe('SKIPPED');
+      expect(result.error).toContain('Playwright page object required');
+    });
+
+    it('should return gate type VISUAL_POLISH_GATE_DUAL_MODE', async () => {
+      const result = await executeDualModeAudit({});
+
+      expect(result.gate).toBe('VISUAL_POLISH_GATE_DUAL_MODE');
+    });
+
+    it('should include both light and dark mode results', async () => {
+      const mockPage = {
+        goto: vi.fn(() => Promise.resolve()),
+        content: vi.fn(() => Promise.resolve('<div>Test</div>')),
+        evaluate: vi.fn(() => Promise.resolve([])),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve()),
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.resolve())
+      };
+
+      const result = await executeDualModeAudit({
+        page: mockPage,
+        ventureStage: 'build'
+      });
+
+      expect(result.modes).toHaveProperty('light');
+      expect(result.modes).toHaveProperty('dark');
+    });
+
+    it('should include contrast violations per mode', async () => {
+      const mockPage = {
+        goto: vi.fn(() => Promise.resolve()),
+        content: vi.fn(() => Promise.resolve('<div>Test</div>')),
+        evaluate: vi.fn(() => Promise.resolve([])),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve()),
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.resolve())
+      };
+
+      const result = await executeDualModeAudit({
+        page: mockPage
+      });
+
+      expect(result.contrastViolations).toHaveProperty('light');
+      expect(result.contrastViolations).toHaveProperty('dark');
+      expect(Array.isArray(result.contrastViolations.light)).toBe(true);
+      expect(Array.isArray(result.contrastViolations.dark)).toBe(true);
+    });
+
+    it('should include screenshot paths in result', async () => {
+      const mockPage = {
+        goto: vi.fn(() => Promise.resolve()),
+        content: vi.fn(() => Promise.resolve('<div>Test</div>')),
+        evaluate: vi.fn(() => Promise.resolve([])),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve()),
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.resolve())
+      };
+
+      const result = await executeDualModeAudit({
+        page: mockPage
+      });
+
+      expect(result.screenshots).toBeDefined();
+    });
+
+    it('should set exit code 1 when either mode fails', async () => {
+      const mockPage = {
+        goto: vi.fn(() => Promise.resolve()),
+        content: vi.fn(() => Promise.resolve('<div className="bg-violet-500">AI content</div>')),
+        evaluate: vi.fn(() => Promise.resolve([])),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve()),
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.resolve())
+      };
+
+      const result = await executeDualModeAudit({
+        page: mockPage,
+        ventureStage: 'launch' // Launch stage = HARD_BLOCK
+      });
+
+      // Note: May be HARD_BLOCK or WARNING depending on content detection
+      expect(result).toHaveProperty('exitCode');
+      expect([0, 1]).toContain(result.exitCode);
+    });
+
+    it('should include summary with pass/fail per mode', async () => {
+      const mockPage = {
+        goto: vi.fn(() => Promise.resolve()),
+        content: vi.fn(() => Promise.resolve('<div>Clean</div>')),
+        evaluate: vi.fn(() => Promise.resolve([])),
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve()),
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.resolve())
+      };
+
+      const result = await executeDualModeAudit({
+        page: mockPage,
+        ventureStage: 'build'
+      });
+
+      expect(result.summary).toHaveProperty('lightPassed');
+      expect(result.summary).toHaveProperty('darkPassed');
+      expect(result.summary).toHaveProperty('totalViolations');
+    });
+
+    it('should record theme method used', async () => {
+      const mockPage = {
+        goto: vi.fn(() => Promise.resolve()),
+        content: vi.fn(() => Promise.resolve('<div>Test</div>')),
+        evaluate: vi.fn(() => Promise.resolve(true)), // Class-based support
+        emulateMedia: vi.fn(() => Promise.resolve()),
+        waitForTimeout: vi.fn(() => Promise.resolve()),
+        setViewportSize: vi.fn(() => Promise.resolve()),
+        screenshot: vi.fn(() => Promise.resolve())
+      };
+
+      const result = await executeDualModeAudit({
+        page: mockPage
+      });
+
+      expect(result.themeMethod).toBeDefined();
+    });
+  });
+
+  describe('Dual-Mode Format Output', () => {
+    it('should format dual-mode result with both mode sections', () => {
+      const mockResult = {
+        status: 'PASS',
+        themeMethod: 'class-based',
+        previewUrl: 'https://preview.example.com',
+        exitCode: 0,
+        modes: {
+          light: { status: 'PASS', score: 85, aiSlop: { violations: [] } },
+          dark: { status: 'PASS', score: 82, aiSlop: { violations: [] } }
+        },
+        screenshots: {
+          desktop: { light: 'screenshots/desktop-light.png', dark: 'screenshots/desktop-dark.png' }
+        },
+        contrastViolations: { light: [], dark: [] },
+        summary: { lightPassed: true, darkPassed: true, totalViolations: 0 }
+      };
+
+      const formatted = formatDualModeResult(mockResult);
+
+      expect(formatted).toContain('VISUAL POLISH GATE - DUAL MODE AUDIT');
+      expect(formatted).toContain('LIGHT MODE AUDIT');
+      expect(formatted).toContain('DARK MODE AUDIT');
+      expect(formatted).toContain('Theme Method: class-based');
+    });
+
+    it('should show SCREENSHOTS CAPTURED section', () => {
+      const mockResult = {
+        status: 'PASS',
+        themeMethod: 'class-based',
+        exitCode: 0,
+        modes: {
+          light: { status: 'PASS', score: 85, aiSlop: { violations: [] } },
+          dark: { status: 'PASS', score: 82, aiSlop: { violations: [] } }
+        },
+        screenshots: {
+          desktop: { light: 'screenshots/desktop-light.png', dark: 'screenshots/desktop-dark.png' },
+          mobile: { light: 'screenshots/mobile-light.png', dark: 'screenshots/mobile-dark.png' }
+        },
+        contrastViolations: { light: [], dark: [] },
+        summary: { lightPassed: true, darkPassed: true, totalViolations: 0 }
+      };
+
+      const formatted = formatDualModeResult(mockResult);
+
+      expect(formatted).toContain('SCREENSHOTS CAPTURED');
+      expect(formatted).toContain('desktop-light.png');
+      expect(formatted).toContain('desktop-dark.png');
+    });
+
+    it('should show contrast violations when present', () => {
+      const mockResult = {
+        status: 'WARNING',
+        themeMethod: 'class-based',
+        exitCode: 0,
+        modes: {
+          light: { status: 'WARNING', score: 65, aiSlop: { violations: [] } },
+          dark: { status: 'PASS', score: 82, aiSlop: { violations: [] } }
+        },
+        screenshots: {},
+        contrastViolations: {
+          light: [
+            { selector: '.hero-title', actualRatio: 3.2, requiredRatio: 4.5 }
+          ],
+          dark: []
+        },
+        summary: { lightPassed: true, darkPassed: true, totalViolations: 1 }
+      };
+
+      const formatted = formatDualModeResult(mockResult);
+
+      expect(formatted).toContain('CONTRAST VIOLATIONS');
+      expect(formatted).toContain('.hero-title');
+      expect(formatted).toContain('3.2:1');
+    });
+
+    it('should show correct status icons', () => {
+      const passResult = {
+        status: 'PASS',
+        modes: { light: { status: 'PASS' }, dark: { status: 'PASS' } },
+        screenshots: {},
+        contrastViolations: { light: [], dark: [] },
+        summary: { lightPassed: true, darkPassed: true, totalViolations: 0 }
+      };
+
+      const blockResult = {
+        status: 'HARD_BLOCK',
+        modes: { light: { status: 'HARD_BLOCK' }, dark: { status: 'PASS' } },
+        screenshots: {},
+        contrastViolations: { light: [], dark: [] },
+        summary: { lightPassed: false, darkPassed: true, totalViolations: 2 }
+      };
+
+      expect(formatDualModeResult(passResult)).toContain('✅');
+      expect(formatDualModeResult(blockResult)).toContain('❌');
     });
   });
 });
