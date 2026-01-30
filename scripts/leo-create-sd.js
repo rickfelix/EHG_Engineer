@@ -21,8 +21,17 @@ import {
   SD_SOURCES,
   SD_TYPES
 } from './modules/sd-key-generator.js';
+import {
+  isProtocolFileRead,
+  markProtocolFileRead
+} from './modules/handoff/gates/protocol-file-read-gate.js';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
+
+// Protocol file requirement for SD creation
+const REQUIRED_PROTOCOL_FILE = 'CLAUDE_LEAD.md';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -235,6 +244,44 @@ async function createChild(parentKey, index = 0) {
 }
 
 // ============================================================================
+// Protocol File Validation
+// ============================================================================
+
+/**
+ * Validate that CLAUDE_LEAD.md has been read before SD creation
+ * Part of the "read before you do" pattern:
+ *   - Read CLAUDE_LEAD.md → Create SD → Do LEAD work
+ *   - Read CLAUDE_PLAN.md → LEAD-TO-PLAN handoff → Do PLAN work
+ *   - Read CLAUDE_EXEC.md → PLAN-TO-EXEC handoff → Do EXEC work
+ *
+ * @returns {Object} { valid: boolean, fallback: boolean }
+ */
+function validateLeadProtocolRead() {
+  // Check session state first
+  if (isProtocolFileRead(REQUIRED_PROTOCOL_FILE)) {
+    return { valid: true, fallback: false };
+  }
+
+  // Fallback: check if file exists on disk (same pattern as handoff gates)
+  const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const filePath = path.join(projectDir, REQUIRED_PROTOCOL_FILE);
+
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    if (stats.size > 100) {
+      // Mark as read for future checks
+      markProtocolFileRead(REQUIRED_PROTOCOL_FILE);
+      console.log(`   ⚠️  ${REQUIRED_PROTOCOL_FILE} exists but wasn't tracked in session state`);
+      console.log('   ✅ FALLBACK: Allowing SD creation (file exists on disk)');
+      return { valid: true, fallback: true };
+    }
+  }
+
+  // Neither session state nor file exists - block
+  return { valid: false, fallback: false };
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -321,7 +368,7 @@ function mapToDbType(userType) {
  * Build default success_metrics based on SD type and title
  * Ensures validator requirements (3+ items with {metric, target}) are met
  */
-function buildDefaultSuccessMetrics(type, title) {
+function buildDefaultSuccessMetrics(type, _title) {
   const baseMetrics = [
     {
       metric: 'Implementation completeness',
@@ -357,7 +404,7 @@ function buildDefaultSuccessMetrics(type, title) {
  * Build default success_criteria based on SD type
  * Returns array of strings (qualitative acceptance criteria)
  */
-function buildDefaultSuccessCriteria(type, title) {
+function buildDefaultSuccessCriteria(type, _title) {
   const baseCriteria = [
     'All implementation items from scope are complete',
     'Code passes lint and type checks',
@@ -377,6 +424,27 @@ function buildDefaultSuccessCriteria(type, title) {
  * Create SD in database
  */
 async function createSD(options) {
+  // GATE: Validate CLAUDE_LEAD.md has been read
+  // Design: "Read before you do" - read the protocol file for the phase you're entering
+  const protocolCheck = validateLeadProtocolRead();
+  if (!protocolCheck.valid) {
+    console.error('\n' + '═'.repeat(60));
+    console.error('❌ SD CREATION BLOCKED');
+    console.error('═'.repeat(60));
+    console.error(`   Protocol file not read: ${REQUIRED_PROTOCOL_FILE}`);
+    console.error('');
+    console.error('   📚 LEO Protocol requires reading CLAUDE_LEAD.md before');
+    console.error('   creating a Strategic Directive. This ensures you understand');
+    console.error('   LEAD phase requirements, SD approval workflow, and');
+    console.error('   simplicity-first principles.');
+    console.error('');
+    console.error('   ACTION REQUIRED:');
+    console.error(`   1. Read ${REQUIRED_PROTOCOL_FILE}`);
+    console.error('   2. Re-run SD creation');
+    console.error('═'.repeat(60));
+    process.exit(1);
+  }
+
   const {
     sdKey,
     title,

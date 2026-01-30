@@ -142,6 +142,15 @@ npm run sd:next
 ### If argument starts with "create" or "c":
 Launch the SD creation wizard. Parse additional flags:
 
+**PREREQUISITE: Read CLAUDE_LEAD.md First**
+
+Before creating any SD, verify that CLAUDE_LEAD.md has been read. This ensures you understand:
+- LEAD phase requirements and approval workflow
+- Simplicity-first principles
+- SD creation guidelines
+
+The leo-create-sd.js script enforces this gate and will block creation if CLAUDE_LEAD.md wasn't read.
+
 **Context-Based Type Inference (MANDATORY FIRST STEP):**
 
 Before asking the user anything, analyze the recent conversation context to infer the SD type:
@@ -745,17 +754,22 @@ Child SDs with incomplete dependencies show as BLOCKED.
 **CRITICAL**: When creating new strategic directives, you MUST read these reference documents BEFORE creating the SD:
 
 #### Required Reading
-1. **CLAUDE.md** - Router with sub-agent trigger keywords
+1. **CLAUDE_LEAD.md** - LEAD phase requirements (ENFORCED GATE)
+   - SD creation guidelines and approval workflow
+   - Simplicity-first principles
+   - **This is enforced by leo-create-sd.js - SD creation will be blocked if not read**
+
+2. **CLAUDE.md** - Router with sub-agent trigger keywords
    - Contains actionable trigger keywords for proactive sub-agent invocation
    - Skill intent detection patterns
    - AUTO-PROCEED mode behavior
 
-2. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
+3. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
    - Contains SD type definitions and their mandatory requirements
    - Specifies PRD requirements, handoff counts, and gate thresholds per SD type
    - Defines the LEAD→PLAN→EXEC workflow phases
 
-3. **docs/database/strategic_directives_v2_field_reference.md** - Complete field reference
+4. **docs/database/strategic_directives_v2_field_reference.md** - Complete field reference
    - Defines all required and optional fields
    - Explains `id` vs `uuid_id` usage
    - Documents JSONB array structures (key_changes, success_criteria, dependencies, etc.)
@@ -764,6 +778,7 @@ Child SDs with incomplete dependencies show as BLOCKED.
 
 #### SD Creation Checklist
 Before creating any SD, ensure you:
+- [ ] Read CLAUDE_LEAD.md for LEAD phase requirements (ENFORCED - creation blocked otherwise)
 - [ ] Read CLAUDE.md for sub-agent trigger keywords
 - [ ] Read CLAUDE_CORE.md for SD type requirements
 - [ ] Read field reference for required fields and formats

@@ -114,13 +114,13 @@ class GateComposer {
   getGatesForType(type) {
     const GATE_REGISTRY = {
       'LEAD-TO-PLAN': [
-        'GATE_PROTOCOL_FILE_READ',  // NEW: Requires CLAUDE_LEAD.md read
+        'GATE_PROTOCOL_FILE_READ',  // Requires CLAUDE_PLAN.md read (prepare for PLAN phase)
         'GATE_SD_TRANSITION_READINESS',
         'TARGET_APPLICATION_VALIDATION',
         'BASELINE_DEBT_CHECK'
       ],
       'PLAN-TO-EXEC': [
-        'GATE_PROTOCOL_FILE_READ',  // NEW: Requires CLAUDE_PLAN.md read
+        'GATE_PROTOCOL_FILE_READ',  // Requires CLAUDE_EXEC.md read (prepare for EXEC phase)
         'PREREQUISITE_HANDOFF_CHECK',
         'GATE_ARCHITECTURE_VERIFICATION',
         'BMAD_PLAN_TO_EXEC',
@@ -129,7 +129,7 @@ class GateComposer {
         'GATE6_BRANCH_ENFORCEMENT'
       ],
       'EXEC-TO-PLAN': [
-        'GATE_PROTOCOL_FILE_READ',  // NEW: Requires CLAUDE_EXEC.md read
+        'GATE_PROTOCOL_FILE_READ',  // Requires CLAUDE_PLAN.md read (returning to PLAN phase)
         // ... other gates
       ],
       'PLAN-TO-LEAD': [
@@ -986,11 +986,16 @@ LIMIT 10;
 
 ### Protocol File Requirements
 
-| Handoff Type | Required File | Purpose |
-|--------------|---------------|---------|
-| LEAD-TO-PLAN | CLAUDE_LEAD.md | LEAD phase operations, SD approval workflow |
-| PLAN-TO-EXEC | CLAUDE_PLAN.md | PLAN phase operations, PRD guidelines |
-| EXEC-TO-PLAN | CLAUDE_EXEC.md | EXEC phase operations, implementation patterns |
+| Action | Required File | Purpose |
+|--------|---------------|---------|
+| SD Creation | CLAUDE_LEAD.md | Prepare for LEAD phase - SD approval workflow, simplicity principles |
+| LEAD-TO-PLAN | CLAUDE_PLAN.md | Prepare for PLAN phase - PRD creation guidelines |
+| PLAN-TO-EXEC | CLAUDE_EXEC.md | Prepare for EXEC phase - implementation patterns |
+| EXEC-TO-PLAN | CLAUDE_PLAN.md | Returning to PLAN phase - verification guidelines |
+
+**Design Rationale**: Read the file for the phase you're *entering*, not the phase you're *leaving*. This ensures you're prepared for the work ahead.
+
+**SD Creation Gate**: The `/leo create` command validates that CLAUDE_LEAD.md has been read before allowing SD creation. This ensures the agent understands LEAD phase requirements before creating work items.
 
 ### How It Works
 
@@ -1024,9 +1029,9 @@ When a handoff executes, the gate checks session state:
 // scripts/modules/handoff/gates/protocol-file-read-gate.js
 
 const HANDOFF_FILE_REQUIREMENTS = {
-  'LEAD-TO-PLAN': 'CLAUDE_LEAD.md',
-  'PLAN-TO-EXEC': 'CLAUDE_PLAN.md',
-  'EXEC-TO-PLAN': 'CLAUDE_EXEC.md'
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',   // Prepare for PLAN phase
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',   // Prepare for EXEC phase
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN.md'    // Returning to PLAN phase
 };
 
 export async function validateProtocolFileRead(handoffType, _ctx) {
@@ -1239,6 +1244,7 @@ Coverage includes:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-01-30 | Fixed protocol file requirements - now reads file for phase you're ENTERING, not leaving |
 | 1.3.0 | 2026-01-24 | Added SD-Type-Aware Validation Policy documentation (Section 9) |
 | 1.2.0 | 2026-01-24 | Added GATE_PROTOCOL_FILE_READ documentation (protocol familiarization enforcement) |
 | 1.1.0 | 2026-01-23 | Added GATE6 v2 documentation (proactive cross-SD detection) |
