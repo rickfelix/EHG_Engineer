@@ -3,11 +3,11 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: LEO Protocol Team
-- **Last Updated**: 2026-01-25
-- **Tags**: protocol, gates, session, enforcement, infrastructure
-- **SD**: SD-LEO-INFRA-SESSION-START-GATE-001
+- **Last Updated**: 2026-01-30
+- **Tags**: protocol, gates, session, enforcement, infrastructure, sub-agent-triggers
+- **SD**: SD-LEO-INFRA-SESSION-START-GATE-001, SD-LEO-INFRA-HARDENING-001
 
 ## Overview
 
@@ -127,9 +127,17 @@ The protocol file enforcement system now supports three trigger points:
 
 | Trigger | When | Required Files | Implementation |
 |---------|------|----------------|----------------|
-| **SESSION_START** | LEO session initialization | CLAUDE_CORE.md | `validateSessionStartGate()` |
-| **SD_START** | Before any SD work begins | CLAUDE_CORE.md | `validateSdStartGate()` |
-| **POST_COMPACTION** | After context compaction | CLAUDE_CORE.md + phase file | `validatePostCompactionGate()` |
+| **SESSION_START** | LEO session initialization | CLAUDE.md, CLAUDE_CORE.md | `validateSessionStartGate()` |
+| **SD_START** | Before any SD work begins | CLAUDE.md, CLAUDE_CORE.md | `validateSdStartGate()` |
+| **POST_COMPACTION** | After context compaction | CLAUDE.md, CLAUDE_CORE.md + phase file | `validatePostCompactionGate()` |
+
+**Why CLAUDE.md is Required** (Added 2026-01-30):
+CLAUDE.md contains the sub-agent trigger keywords table that enables proactive sub-agent invocation. Without it, agents miss actionable triggers like:
+- "created migration" → invoke DATABASE sub-agent
+- "pending migration" → invoke DATABASE sub-agent
+- "apply migration" → invoke DATABASE sub-agent
+
+This was identified during RCA investigation (SD-LEO-INFRA-HARDENING-001) when AUTO-PROCEED stopped due to empty success_metrics, and the agent didn't proactively invoke the database-agent despite creating a migration file.
 
 ## Implementation Files
 
@@ -312,6 +320,11 @@ mv scripts/hooks/protocol-file-tracker.js scripts/hooks/protocol-file-tracker.cj
 - [CORE_PROTOCOL_REQUIREMENTS](../../scripts/modules/handoff/gates/core-protocol-gate.js) - Source code
 
 ## Version History
+
+- **v1.1.0** (2026-01-30): Added CLAUDE.md requirement
+  - Updated all trigger points to require both CLAUDE.md and CLAUDE_CORE.md
+  - Documented rationale: sub-agent trigger keywords in CLAUDE.md
+  - RCA reference: SD-LEO-INFRA-HARDENING-001 (AUTO-PROCEED empty success_metrics)
 
 - **v1.0.0** (2026-01-25): Initial documentation
   - Documented state structure mismatch bug fix

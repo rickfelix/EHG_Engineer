@@ -121,6 +121,10 @@ export function inferSDType(title, scope = '', description = '') {
  * Inherit strategic fields from parent SD
  * Transforms parent fields to be child-appropriate
  *
+ * IMPORTANT: Some fields should NOT inherit from parent:
+ * - success_metrics: Each child has unique deliverables
+ * - success_criteria: Each child has unique acceptance criteria
+ *
  * @param {Object} parentSD - Parent Strategic Directive
  * @param {Object} childContext - Child-specific context
  * @returns {Object} Inherited strategic fields
@@ -131,22 +135,15 @@ export function inheritStrategicFields(parentSD, childContext = {}) {
   // Start with parent's strategic fields
   const inherited = {};
 
-  // Inherit success_metrics - add phase-specific context
-  if (parentSD.success_metrics?.length > 0) {
-    inherited.success_metrics = parentSD.success_metrics.map(metric => ({
-      metric: metric.metric,
-      target: metric.target,
-      unit: metric.unit || 'percent',
-      phase_relevance: `P${phaseNumber}: ${phaseTitle}`
-    }));
-  } else {
-    // Generate minimal metrics if parent has none
-    inherited.success_metrics = [
-      { metric: `P${phaseNumber} completion`, target: 100, unit: 'percent' },
-      { metric: 'Quality gate pass rate', target: 85, unit: 'percent' },
-      { metric: 'Regressions introduced', target: 0, unit: 'count' }
-    ];
-  }
+  // DO NOT inherit success_metrics from parent - always generate child-specific metrics
+  // Reason: Parent metrics like "all children complete" don't apply to individual children
+  // Each child has unique deliverables that require specific, measurable targets
+  inherited.success_metrics = [
+    { metric: `${phaseTitle} implementation complete`, target: '100%', measurement: 'Deliverables checklist' },
+    { metric: 'Quality gate pass rate', target: '≥85%', measurement: 'Handoff validation score' },
+    { metric: 'Test coverage for new code', target: '≥80%', measurement: 'Jest/Playwright coverage' },
+    { metric: 'Regressions introduced', target: '0', measurement: 'CI test results' }
+  ];
 
   // Inherit key_principles - contextualize for phase
   if (parentSD.key_principles?.length > 0) {
@@ -166,52 +163,40 @@ export function inheritStrategicFields(parentSD, childContext = {}) {
     ];
   }
 
-  // Inherit strategic_objectives - scope to phase
+  // Strategic objectives - child-specific objective FIRST, then 1-2 contextualized parent objectives
+  // Reason: Child's primary goal should be its own objective, not parent's high-level goals
+  inherited.strategic_objectives = [];
+
+  // 1. Child-specific objective is PRIMARY (always first)
+  inherited.strategic_objectives.push({
+    objective: phaseObjective || `Complete ${phaseTitle}`,
+    metric: `P${phaseNumber} deliverables verified complete`
+  });
+
+  // 2. Add quality objective (always relevant)
+  inherited.strategic_objectives.push({
+    objective: 'Maintain code quality and test coverage',
+    metric: 'All quality gates passed'
+  });
+
+  // 3. Optionally add 1 contextualized parent objective (if parent has them)
   if (parentSD.strategic_objectives?.length > 0) {
-    inherited.strategic_objectives = parentSD.strategic_objectives
-      .slice(0, 3) // Take top 3 from parent
-      .map(obj => {
-        if (typeof obj === 'string') {
-          return { objective: obj, metric: 'Completion verified' };
-        }
-        return {
-          objective: `${obj.objective} (P${phaseNumber} contribution)`,
-          metric: obj.metric || 'Phase deliverables complete'
-        };
-      });
-
-    // Add phase-specific objective
-    if (phaseObjective) {
-      inherited.strategic_objectives.push({
-        objective: phaseObjective,
-        metric: `P${phaseNumber} deliverables complete`
-      });
-    }
-  } else {
-    inherited.strategic_objectives = [
-      { objective: phaseObjective || `Complete P${phaseNumber}`, metric: 'Phase gate passed' },
-      { objective: 'Maintain code quality', metric: 'No linting errors' }
-    ];
-  }
-
-  // Inherit success_criteria - make phase-specific
-  if (parentSD.success_criteria?.length > 0) {
-    inherited.success_criteria = parentSD.success_criteria.map(c => {
-      if (typeof c === 'string') {
-        return { criterion: c, measure: 'Verified complete' };
-      }
-      return {
-        criterion: c.criterion,
-        measure: c.measure || 'Verified complete'
-      };
+    const parentObj = parentSD.strategic_objectives[0];
+    const objText = typeof parentObj === 'string' ? parentObj : parentObj.objective;
+    inherited.strategic_objectives.push({
+      objective: `Contribute to: ${objText}`,
+      metric: 'Phase contribution verified'
     });
-  } else {
-    inherited.success_criteria = [
-      { criterion: 'All phase tasks completed', measure: 'Checklist 100%' },
-      { criterion: 'Tests passing', measure: 'CI green' },
-      { criterion: 'Code reviewed', measure: 'PR approved' }
-    ];
   }
+
+  // DO NOT inherit success_criteria from parent - always generate child-specific criteria
+  // Reason: Each child has unique acceptance criteria based on its specific deliverables
+  inherited.success_criteria = [
+    { criterion: `${phaseTitle} deliverables complete`, measure: 'All items checked off' },
+    { criterion: 'All tests passing', measure: 'CI pipeline green' },
+    { criterion: 'Code review approved', measure: 'PR merged' },
+    { criterion: 'Documentation updated', measure: 'DOCMON validation passed' }
+  ];
 
   // Inherit risks - filter/adjust for phase scope
   if (parentSD.risks?.length > 0) {

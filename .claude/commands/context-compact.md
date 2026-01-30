@@ -106,7 +106,8 @@ node scripts/hooks/protocol-compaction-hook.cjs record
 ```
 
 This ensures:
-- Protocol files (CLAUDE_CORE.md, CLAUDE_LEAD.md, etc.) are re-read before continuing
+- Protocol files (CLAUDE.md, CLAUDE_CORE.md, and phase files) are re-read before continuing
+- Sub-agent trigger keywords from CLAUDE.md are reloaded
 - SD Start Gate and Post-Compaction Gate will enforce re-reading
 - Context drift in long-running sessions is prevented
 
