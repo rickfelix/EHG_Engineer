@@ -19,7 +19,8 @@ import {
   createRCAGate,
   createHumanVerificationGate,
   createSubAgentEnforcementValidationGate,
-  createLOCThresholdValidationGate
+  createLOCThresholdValidationGate,
+  createPerformanceCriticalGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -127,6 +128,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // LOC threshold validation (LEO v4.4.3 - advisory for infrastructure/refactor)
     gates.push(createLOCThresholdValidationGate(this.supabase));
+
+    // Performance critical gate (SD-LEO-INFRA-INTEGRATE-VERCEL-REACT-001)
+    // Blocks feature/performance/enhancement SDs with new barrel imports
+    gates.push(createPerformanceCriticalGate(this.supabase));
 
     return gates;
   }
