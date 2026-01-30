@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-01-29
+
+### Bugfix
+- **Post-Completion Validator False Positive** - PR #685
+  - **Issue**: Stop hook post-completion validator blocking AUTO-PROCEED with "Missing SHIP" even when PR merged
+  - **Root Cause**: SD query missing `completion_date` field, causing validator to incorrectly check git diff after branch deletion
+  - **Fix**:
+    - Added `completion_date` to SD select query (`scripts/hooks/stop-subagent-enforcement/index.js:178`)
+    - Changed catch block to log info instead of blocking when `git diff` fails
+  - **Impact**: Resolved AUTO-PROCEED blocking after SD completion, enabling continuous workflow execution
+  - **Files Modified**:
+    - `scripts/hooks/stop-subagent-enforcement/index.js` - Added completion_date to query
+    - `scripts/hooks/stop-subagent-enforcement/post-completion-validator.js` - Fixed git diff catch block
+  - **Documentation**: Updated `docs/06_deployment/stop-hook-operations.md` with troubleshooting entry
+  - **Related**: SD-LEO-INFRA-HARDENING-001 (orchestrator parent)
+
 ## 2026-01-26
 
 ### Infrastructure
