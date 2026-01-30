@@ -6,10 +6,10 @@
  * before a handoff can proceed. This gate converts the "Protocol Familiarization"
  * directive from text guidance into an enforced validation gate.
  *
- * Mapping:
- *   LEAD-TO-PLAN → requires CLAUDE_LEAD.md
- *   PLAN-TO-EXEC → requires CLAUDE_PLAN.md
- *   EXEC-TO-PLAN → requires CLAUDE_EXEC.md
+ * Mapping (read file for phase you're ENTERING):
+ *   LEAD-TO-PLAN → requires CLAUDE_PLAN.md (prepare for PLAN phase)
+ *   PLAN-TO-EXEC → requires CLAUDE_EXEC.md (prepare for EXEC phase)
+ *   EXEC-TO-PLAN → requires CLAUDE_PLAN.md (return to PLAN phase)
  */
 
 import fs from 'fs';
@@ -23,9 +23,9 @@ const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-st
  * Handoff type to required protocol file mapping
  */
 const HANDOFF_FILE_REQUIREMENTS = {
-  'LEAD-TO-PLAN': 'CLAUDE_LEAD.md',
-  'PLAN-TO-EXEC': 'CLAUDE_PLAN.md',
-  'EXEC-TO-PLAN': 'CLAUDE_EXEC.md'
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN.md'
 };
 
 /**
@@ -226,7 +226,7 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Check for partial reads
     const partialReadDetails = getPartialReadDetails(requiredFile);
     const warnings = [];
-    let score = 100;
+    let _score = 100; // Reserved for future scoring adjustments
 
     if (partialReadDetails) {
       console.log(`   ⚠️  PARTIAL READ DETECTED for ${requiredFile}`);

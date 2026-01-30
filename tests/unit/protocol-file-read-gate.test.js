@@ -39,48 +39,52 @@ describe('Protocol File Read Gate', () => {
   });
 
   describe('HANDOFF_FILE_REQUIREMENTS mapping', () => {
-    it('should map LEAD-TO-PLAN to CLAUDE_LEAD.md', () => {
-      expect(HANDOFF_FILE_REQUIREMENTS['LEAD-TO-PLAN']).toBe('CLAUDE_LEAD.md');
+    // Design: Read file for phase you're ENTERING, not leaving
+    it('should map LEAD-TO-PLAN to CLAUDE_PLAN.md (prepare for PLAN phase)', () => {
+      expect(HANDOFF_FILE_REQUIREMENTS['LEAD-TO-PLAN']).toBe('CLAUDE_PLAN.md');
     });
 
-    it('should map PLAN-TO-EXEC to CLAUDE_PLAN.md', () => {
-      expect(HANDOFF_FILE_REQUIREMENTS['PLAN-TO-EXEC']).toBe('CLAUDE_PLAN.md');
+    it('should map PLAN-TO-EXEC to CLAUDE_EXEC.md (prepare for EXEC phase)', () => {
+      expect(HANDOFF_FILE_REQUIREMENTS['PLAN-TO-EXEC']).toBe('CLAUDE_EXEC.md');
     });
 
-    it('should map EXEC-TO-PLAN to CLAUDE_EXEC.md', () => {
-      expect(HANDOFF_FILE_REQUIREMENTS['EXEC-TO-PLAN']).toBe('CLAUDE_EXEC.md');
+    it('should map EXEC-TO-PLAN to CLAUDE_PLAN.md (return to PLAN phase)', () => {
+      expect(HANDOFF_FILE_REQUIREMENTS['EXEC-TO-PLAN']).toBe('CLAUDE_PLAN.md');
     });
   });
 
   describe('validateProtocolFileRead', () => {
-    it('should BLOCK when required file has not been read (LEAD-TO-PLAN)', async () => {
+    // Note: These tests use FALLBACK behavior because the CLAUDE_*.md files exist on disk.
+    // The gate has a fallback that passes (with score 90) when the file exists but wasn't tracked in session state.
+    // This fallback was added by SD-LEO-FIX-COMPLETION-WORKFLOW-001.
+    it('should use FALLBACK when file exists on disk but not tracked (LEAD-TO-PLAN)', async () => {
       const result = await validateProtocolFileRead('LEAD-TO-PLAN', {});
 
-      expect(result.pass).toBe(false);
-      expect(result.score).toBe(0);
-      expect(result.issues).toContain('Protocol file not read: CLAUDE_LEAD.md');
-      expect(result.issues.some(i => i.includes('LEAD-TO-PLAN'))).toBe(true);
+      // Fallback passes because CLAUDE_PLAN.md exists on disk
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(90); // Fallback score
+      expect(result.warnings.some(w => w.includes('fallback'))).toBe(true);
     });
 
-    it('should BLOCK when required file has not been read (PLAN-TO-EXEC)', async () => {
+    it('should use FALLBACK when file exists on disk but not tracked (PLAN-TO-EXEC)', async () => {
       const result = await validateProtocolFileRead('PLAN-TO-EXEC', {});
 
-      expect(result.pass).toBe(false);
-      expect(result.score).toBe(0);
-      expect(result.issues).toContain('Protocol file not read: CLAUDE_PLAN.md');
+      // Fallback passes because CLAUDE_EXEC.md exists on disk
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(90); // Fallback score
     });
 
-    it('should BLOCK when required file has not been read (EXEC-TO-PLAN)', async () => {
+    it('should use FALLBACK when file exists on disk but not tracked (EXEC-TO-PLAN)', async () => {
       const result = await validateProtocolFileRead('EXEC-TO-PLAN', {});
 
-      expect(result.pass).toBe(false);
-      expect(result.score).toBe(0);
-      expect(result.issues).toContain('Protocol file not read: CLAUDE_EXEC.md');
+      // Fallback passes because CLAUDE_PLAN.md exists on disk
+      expect(result.pass).toBe(true);
+      expect(result.score).toBe(90); // Fallback score
     });
 
     it('should PASS when required file has been marked as read', async () => {
-      // Mark the file as read
-      markProtocolFileRead('CLAUDE_LEAD.md');
+      // Mark the file as read (CLAUDE_PLAN.md for LEAD-TO-PLAN)
+      markProtocolFileRead('CLAUDE_PLAN.md');
 
       const result = await validateProtocolFileRead('LEAD-TO-PLAN', {});
 
@@ -156,24 +160,24 @@ describe('Protocol File Read Gate', () => {
       const planGate = createProtocolFileReadGate('PLAN-TO-EXEC');
       const execGate = createProtocolFileReadGate('EXEC-TO-PLAN');
 
-      expect(leadGate.remediation).toContain('CLAUDE_LEAD.md');
-      expect(planGate.remediation).toContain('CLAUDE_PLAN.md');
-      expect(execGate.remediation).toContain('CLAUDE_EXEC.md');
+      // Remediation tells you which file to read for the phase you're ENTERING
+      expect(leadGate.remediation).toContain('CLAUDE_PLAN.md');
+      expect(planGate.remediation).toContain('CLAUDE_EXEC.md');
+      expect(execGate.remediation).toContain('CLAUDE_PLAN.md');
     });
 
     it('should have working validator function', async () => {
       const gate = createProtocolFileReadGate('LEAD-TO-PLAN');
 
-      // Test blocking
-      const blockResult = await gate.validator({});
-      expect(blockResult.pass).toBe(false);
+      // First call uses fallback (file exists on disk)
+      const fallbackResult = await gate.validator({});
+      expect(fallbackResult.pass).toBe(true);
+      expect(fallbackResult.score).toBe(90); // Fallback score
 
-      // Mark as read
-      markProtocolFileRead('CLAUDE_LEAD.md');
-
-      // Test passing
+      // Subsequent calls see file marked as read and return full score
       const passResult = await gate.validator({});
       expect(passResult.pass).toBe(true);
+      expect(passResult.score).toBe(100); // Full score after being tracked
     });
   });
 
