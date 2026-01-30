@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-30T14:44:38.214Z
-**Rows**: 5,868
+**Generated**: 2026-01-30T14:54:46.837Z
+**Rows**: 5,871
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -78,6 +78,10 @@
   ```sql
   CREATE INDEX idx_claude_sessions_tty_pid ON public.claude_sessions USING btree (tty, pid)
   ```
+- `idx_claude_sessions_unique_active_claim`
+  ```sql
+  CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim ON public.claude_sessions USING btree (sd_id) WHERE ((sd_id IS NOT NULL) AND (status = 'active'::text))
+  ```
 
 ## RLS Policies
 
@@ -102,6 +106,13 @@
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+## Triggers
+
+### sync_is_working_on_trigger
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION sync_is_working_on_with_session()`
 
 ---
 
