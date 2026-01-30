@@ -74,8 +74,38 @@ function isProtocolFile(filePath) {
 }
 
 /**
+ * Normalize file path to repo-root-relative format
+ * TR-1: Prevents mismatches between hook and gate
+ * @param {string} filePath - Raw file path
+ * @returns {string} Normalized path (just the filename for protocol files)
+ */
+function normalizeProtocolPath(filePath) {
+  if (!filePath) return '';
+
+  // Get basename for protocol files (they're at root)
+  const basename = path.basename(filePath);
+
+  // Return just the filename for CLAUDE_*.md files
+  if (/^CLAUDE_.*\.md$/.test(basename) || basename === 'CLAUDE.md') {
+    return basename;
+  }
+
+  return filePath.replace(/\\/g, '/');
+}
+
+/**
  * Process hook input and track protocol file reads
  * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Enhanced to detect partial reads
+ *
+ * Session state schema per FR-2:
+ * protocolFileReadStatus: {
+ *   [normalizedPath]: {
+ *     readCount: number,
+ *     lastReadAt: ISO-8601,
+ *     lastReadWasPartial: boolean,
+ *     lastPartialRead: { limit: number|null, offset: number|null, readAt: ISO-8601 } | null
+ *   }
+ * }
  */
 function processHookInput(hookInput) {
   const toolName = hookInput.tool_name || '';
@@ -96,51 +126,85 @@ function processHookInput(hookInput) {
     return;
   }
 
+  // Normalize path for consistent tracking (TR-1)
+  const normalizedPath = normalizeProtocolPath(protocolFile);
+
   // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Detect partial read parameters
-  const hasLimit = toolInputData.limit !== undefined;
-  const hasOffset = toolInputData.offset !== undefined;
+  // TR-3: Only flag when limit/offset explicitly used (including 0)
+  const hasLimit = toolInputData.limit !== undefined && toolInputData.limit !== null;
+  const hasOffset = toolInputData.offset !== undefined && toolInputData.offset !== null;
   const isPartialRead = hasLimit || hasOffset;
+
+  const now = new Date().toISOString();
 
   // Mark protocol file as read in session state
   const state = readSessionState();
 
+  // Legacy array for backward compatibility (TR-2)
   if (!state.protocolFilesRead) {
     state.protocolFilesRead = [];
   }
 
-  // Initialize partial read tracking
+  // Initialize new schema-compliant tracking (FR-2)
+  if (!state.protocolFileReadStatus) {
+    state.protocolFileReadStatus = {};
+  }
+
+  // Get or create file status entry
+  const fileStatus = state.protocolFileReadStatus[normalizedPath] || {
+    readCount: 0,
+    lastReadAt: null,
+    lastReadWasPartial: false,
+    lastPartialRead: null
+  };
+
+  // Update read count and timestamp
+  fileStatus.readCount = (fileStatus.readCount || 0) + 1;
+  fileStatus.lastReadAt = now;
+
+  // Track partial reads with details (FR-1)
+  if (isPartialRead) {
+    fileStatus.lastReadWasPartial = true;
+    fileStatus.lastPartialRead = {
+      limit: hasLimit ? toolInputData.limit : null,
+      offset: hasOffset ? toolInputData.offset : null,
+      readAt: now
+    };
+    console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${normalizedPath} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset})`);
+  } else {
+    // Full read clears partial read flag but preserves historical metadata
+    fileStatus.lastReadWasPartial = false;
+    // Note: lastPartialRead preserved for audit (FR-2)
+    console.log(`[protocol-file-tracker] ✅ Full read of ${normalizedPath}${fileStatus.lastPartialRead ? ' (clears partial read flag)' : ''}`);
+  }
+
+  // Save updated status
+  state.protocolFileReadStatus[normalizedPath] = fileStatus;
+
+  // Maintain legacy array for backward compatibility (TR-2)
+  if (!state.protocolFilesRead.includes(normalizedPath)) {
+    state.protocolFilesRead.push(normalizedPath);
+  }
+  state.protocolFilesReadAt = state.protocolFilesReadAt || {};
+  state.protocolFilesReadAt[normalizedPath] = now;
+
+  // Legacy partial read tracking for backward compatibility
   if (!state.protocolFilesPartiallyRead) {
     state.protocolFilesPartiallyRead = {};
   }
-
-  // Track partial reads with details
   if (isPartialRead) {
-    state.protocolFilesPartiallyRead[protocolFile] = {
+    state.protocolFilesPartiallyRead[normalizedPath] = {
       limit: toolInputData.limit,
       offset: toolInputData.offset,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       wasPartial: true
     };
-    console.log(`[protocol-file-tracker] ⚠️ Partial read detected for ${protocolFile} (limit: ${toolInputData.limit}, offset: ${toolInputData.offset})`);
-  } else {
-    // Full read clears any previous partial read flag
-    if (state.protocolFilesPartiallyRead[protocolFile]) {
-      delete state.protocolFilesPartiallyRead[protocolFile];
-      console.log(`[protocol-file-tracker] ✅ Full read of ${protocolFile} clears partial read flag`);
-    }
+  } else if (state.protocolFilesPartiallyRead[normalizedPath]) {
+    delete state.protocolFilesPartiallyRead[normalizedPath];
   }
 
-  if (!state.protocolFilesRead.includes(protocolFile)) {
-    state.protocolFilesRead.push(protocolFile);
-    state.protocolFilesReadAt = state.protocolFilesReadAt || {};
-    state.protocolFilesReadAt[protocolFile] = new Date().toISOString();
-
-    if (writeSessionState(state)) {
-      console.log(`[protocol-file-tracker] Marked ${protocolFile} as read`);
-    }
-  } else {
-    // File was already read, just update the state for partial read tracking
-    writeSessionState(state);
+  if (writeSessionState(state)) {
+    console.log(`[protocol-file-tracker] Updated ${normalizedPath} (read #${fileStatus.readCount})`);
   }
 }
 

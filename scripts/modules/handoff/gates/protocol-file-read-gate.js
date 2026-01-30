@@ -98,13 +98,67 @@ export function isProtocolFileRead(filename) {
 
 /**
  * Check if a protocol file was only partially read (with limit/offset)
- * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001
+ * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Enhanced to use new schema
  * @param {string} filename - The protocol file to check
  * @returns {Object|null} Partial read details or null if not partial
  */
 export function getPartialReadDetails(filename) {
   const state = readSessionState();
+
+  // Check new schema first (FR-2)
+  const fileStatus = state.protocolFileReadStatus?.[filename];
+  if (fileStatus?.lastReadWasPartial && fileStatus.lastPartialRead) {
+    return {
+      limit: fileStatus.lastPartialRead.limit,
+      offset: fileStatus.lastPartialRead.offset,
+      timestamp: fileStatus.lastPartialRead.readAt,
+      wasPartial: true,
+      readCount: fileStatus.readCount
+    };
+  }
+
+  // Fall back to legacy schema (TR-2: backward compatibility)
   return state.protocolFilesPartiallyRead?.[filename] || null;
+}
+
+/**
+ * Record a confirmation event for partial read acknowledgment (FR-4, FR-5)
+ * @param {string[]} files - List of files acknowledged
+ * @param {string} confirmedBy - Who confirmed (agent/session ID)
+ * @returns {boolean} Success status
+ */
+export function recordPartialReadConfirmation(files, confirmedBy = 'agent') {
+  const state = readSessionState();
+
+  // Initialize append-only confirmation array (FR-5)
+  if (!state.protocolReadConfirmations) {
+    state.protocolReadConfirmations = [];
+  }
+
+  const confirmationEvent = {
+    confirmedAt: new Date().toISOString(),
+    confirmedBy: confirmedBy,
+    files: files
+  };
+
+  state.protocolReadConfirmations.push(confirmationEvent);
+  writeSessionState(state);
+
+  console.log(`   ✅ Partial read confirmation recorded for: ${files.join(', ')}`);
+  return true;
+}
+
+/**
+ * Check if a file has been confirmed via partial read acknowledgment
+ * @param {string} filename - The protocol file to check
+ * @returns {boolean} True if file was confirmed
+ */
+export function hasPartialReadConfirmation(filename) {
+  const state = readSessionState();
+  const confirmations = state.protocolReadConfirmations || [];
+
+  // Check if any confirmation includes this file
+  return confirmations.some(conf => conf.files.includes(filename));
 }
 
 /**
@@ -140,15 +194,13 @@ function protocolFileExistsOnDisk(filename) {
  * Validate that the required protocol file has been read
  *
  * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Added fallback validation.
- * If session state doesn't track the file but the file exists on disk,
- * we pass with a warning instead of blocking. This prevents false negatives
- * when session state gets corrupted or reset.
+ * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Added partial read detection with confirmation.
  *
  * @param {string} handoffType - The handoff type (e.g., 'LEAD-TO-PLAN')
- * @param {Object} _ctx - Validation context (unused but matches gate interface)
+ * @param {Object} ctx - Validation context with optional confirmFullRead flag
  * @returns {Object} Validation result {pass, score, issues, warnings}
  */
-export async function validateProtocolFileRead(handoffType, _ctx) {
+export async function validateProtocolFileRead(handoffType, ctx = {}) {
   const requiredFile = HANDOFF_FILE_REQUIREMENTS[handoffType];
 
   if (!requiredFile) {
@@ -180,36 +232,88 @@ export async function validateProtocolFileRead(handoffType, _ctx) {
       console.log(`   ⚠️  PARTIAL READ DETECTED for ${requiredFile}`);
       console.log(`      Limit: ${partialReadDetails.limit}, Offset: ${partialReadDetails.offset}`);
       console.log(`      Timestamp: ${partialReadDetails.timestamp}`);
+
+      // FR-4: Check for confirmation to proceed
+      const hasConfirmation = hasPartialReadConfirmation(requiredFile);
+      const confirmFullRead = ctx.confirmFullRead === true;
+
+      if (confirmFullRead && !hasConfirmation) {
+        // Record the confirmation (FR-5: audit trail)
+        recordPartialReadConfirmation([requiredFile], ctx.confirmedBy || state.sessionId || 'agent');
+
+        console.log('');
+        console.log('   ✅ Confirmation received - proceeding with partial read acknowledgment');
+
+        // Emit structured log for PASS_CONFIRMED
+        emitStructuredLog({
+          event: 'PROTOCOL_FILE_READ_GATE',
+          status: 'PASS_PARTIAL_READ_CONFIRMED',
+          handoff_type: handoffType,
+          required_file: requiredFile,
+          partial_read_details: partialReadDetails,
+          session_id: state.sessionId || 'unknown',
+          timestamp: new Date().toISOString()
+        });
+
+        return {
+          pass: true,
+          score: 85,
+          max_score: 100,
+          issues: [],
+          warnings: [`Partial read confirmed for ${requiredFile} - proceeding with user acknowledgment`]
+        };
+      }
+
+      if (hasConfirmation) {
+        console.log('');
+        console.log('   ✅ Previous confirmation found - allowing handoff');
+
+        return {
+          pass: true,
+          score: 85,
+          max_score: 100,
+          issues: [],
+          warnings: [`Partial read for ${requiredFile} was previously confirmed`]
+        };
+      }
+
+      // FR-4: No confirmation - require explicit acknowledgment
       console.log('');
-      console.log('   📚 PARTIAL READ WARNING:');
+      console.log('   📚 PARTIAL READ WARNING (Confirmation Required):');
       console.log('   The protocol file was read with limit/offset parameters.');
       console.log('   This means NOT the entire file was read, which may cause');
       console.log('   critical requirements in later sections to be missed.');
       console.log('');
-      console.log('   RECOMMENDATION: Re-read the file WITHOUT limit/offset');
-      console.log('   to ensure all instructions are captured.');
+      console.log('   REMEDIATION OPTIONS:');
+      console.log(`   1. Re-read ${requiredFile} WITHOUT limit/offset (RECOMMENDED)`);
+      console.log('   2. Confirm by re-running with --confirm-full-read flag');
+      console.log('');
 
-      warnings.push(`Partial read detected for ${requiredFile}: limit=${partialReadDetails.limit}, offset=${partialReadDetails.offset}`);
-      warnings.push('Protocol files MUST be read in full. Re-read without limit/offset to clear this warning.');
-      score = 80; // Reduced score but still passing
+      warnings.push(`PARTIAL READ: ${requiredFile} (limit=${partialReadDetails.limit}, offset=${partialReadDetails.offset})`);
+      warnings.push('ACTION: Re-read without limit/offset OR provide confirmFullRead=true to proceed');
 
-      // Emit structured log for PASS_WITH_WARNING
+      // Emit structured log for WARN_REQUIRES_CONFIRMATION
       emitStructuredLog({
         event: 'PROTOCOL_FILE_READ_GATE',
-        status: 'PASS_PARTIAL_READ_WARNING',
+        status: 'WARN_REQUIRES_CONFIRMATION',
         handoff_type: handoffType,
         required_file: requiredFile,
         partial_read_details: partialReadDetails,
+        requires_confirmation: true,
         session_id: state.sessionId || 'unknown',
         timestamp: new Date().toISOString()
       });
 
+      // FR-4: Return result indicating confirmation required
       return {
-        pass: true,
-        score: score,
+        pass: false,
+        score: 0,
         max_score: 100,
         issues: [],
-        warnings: warnings
+        warnings: warnings,
+        requiresConfirmation: true,
+        confirmationPrompt: `Partial read detected for ${requiredFile}. Provide confirmFullRead=true to acknowledge and proceed, or re-read the file without limit/offset.`,
+        partialReadDetails: partialReadDetails
       };
     }
 
@@ -382,6 +486,8 @@ export default {
   markProtocolFileRead,
   isProtocolFileRead,
   getPartialReadDetails,
+  recordPartialReadConfirmation,
+  hasPartialReadConfirmation,
   clearProtocolFileReadState,
   bypassProtocolFileReadGate,
   HANDOFF_FILE_REQUIREMENTS
