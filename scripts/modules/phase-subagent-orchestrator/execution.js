@@ -5,6 +5,64 @@
 
 import { executeSubAgent as realExecuteSubAgent } from '../../../lib/sub-agent-executor.js';
 import { safeInsert, generateUUID } from '../safe-insert.js';
+import { createHash } from 'crypto';
+
+/**
+ * Generate deterministic idempotency key for sub-agent execution
+ * SD-LEO-INFRA-HARDENING-001: Prevents duplicate execution records
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {string} subAgentCode - Sub-agent code
+ * @param {string} sessionId - Optional session ID
+ * @param {string} phase - Optional phase name
+ * @returns {string} Deterministic idempotency key
+ */
+function generateIdempotencyKey(sdId, subAgentCode, sessionId = null, phase = null) {
+  // Create deterministic key from execution context
+  // Time window: Round to nearest hour to allow re-runs after 1 hour
+  const timeWindow = Math.floor(Date.now() / (60 * 60 * 1000));
+
+  const components = [
+    sdId,
+    subAgentCode,
+    sessionId || 'no-session',
+    phase || 'orchestrated',
+    timeWindow.toString()
+  ];
+
+  const hash = createHash('sha256')
+    .update(components.join('::'))
+    .digest('hex')
+    .substring(0, 32);
+
+  return `idmp_${subAgentCode}_${hash}`;
+}
+
+/**
+ * Check if an idempotent execution already exists
+ * @param {Object} supabase - Supabase client
+ * @param {string} idempotencyKey - The idempotency key to check
+ * @returns {Promise<Object|null>} Existing record or null
+ */
+async function checkIdempotentExecution(supabase, idempotencyKey) {
+  try {
+    const { data, error } = await supabase
+      .from('sub_agent_execution_results')
+      .select('id, sub_agent_code, verdict, confidence, created_at')
+      .contains('metadata', { idempotency_key: idempotencyKey })
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.warn(`   Idempotency check warning: ${error.message}`);
+      return null;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.warn(`   Idempotency check exception: ${err.message}`);
+    return null;
+  }
+}
 
 /**
  * Ensure detailed_analysis is always a string (TEXT column requirement)
@@ -112,14 +170,33 @@ async function verifyExecutionRecorded(supabase, recordId) {
 }
 
 /**
- * Store sub-agent result in database
+ * Store sub-agent result in database with idempotency protection
+ * SD-LEO-INFRA-HARDENING-001: Idempotency keys prevent duplicate records
+ *
  * @param {Object} supabase - Supabase client
  * @param {string} sdId - SD ID
  * @param {Object} result - Execution result
+ * @param {Object} options - Additional options
+ * @param {string} options.sessionId - Session ID for idempotency
+ * @param {boolean} options.skipIdempotency - Force new record (default: false)
  * @returns {Promise<string>} Record ID
  */
-async function storeSubAgentResult(supabase, sdId, result) {
-  console.log(`   Recording ${result.sub_agent_code} execution...`);
+async function storeSubAgentResult(supabase, sdId, result, options = {}) {
+  const sessionId = options.sessionId || process.env.CLAUDE_SESSION_ID || null;
+  const phase = result.phase || 'orchestrated';
+
+  // Generate idempotency key
+  const idempotencyKey = generateIdempotencyKey(sdId, result.sub_agent_code, sessionId, phase);
+  console.log(`   Recording ${result.sub_agent_code} execution (ikey: ${idempotencyKey.substring(0, 20)}...)...`);
+
+  // Check for existing idempotent execution (unless skipped)
+  if (!options.skipIdempotency) {
+    const existing = await checkIdempotentExecution(supabase, idempotencyKey);
+    if (existing) {
+      console.log(`   Idempotent hit: Returning existing record ${existing.id} (created ${existing.created_at})`);
+      return existing.id;
+    }
+  }
 
   const insertData = {
     id: generateUUID(),
@@ -133,7 +210,12 @@ async function storeSubAgentResult(supabase, sdId, result) {
     recommendations: result.recommendations || [],
     detailed_analysis: normalizeDetailedAnalysis(result.detailed_analysis),
     execution_time: result.execution_time || 0,
-    metadata: { phase: result.phase, orchestrated: true },
+    metadata: {
+      phase,
+      orchestrated: true,
+      idempotency_key: idempotencyKey,
+      session_id: sessionId
+    },
     created_at: new Date().toISOString(),
     validation_mode: result.validation_mode || null,
     justification: result.justification || null,
@@ -234,5 +316,8 @@ export {
   executeSubAgent,
   verifyExecutionRecorded,
   storeSubAgentResult,
-  updatePRDMetadataFromSubAgents
+  updatePRDMetadataFromSubAgents,
+  // SD-LEO-INFRA-HARDENING-001: Idempotency utilities
+  generateIdempotencyKey,
+  checkIdempotentExecution
 };

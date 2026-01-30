@@ -488,11 +488,169 @@ export function logPolicySummary(sdType) {
   console.log(`   Optional validators: ${summary.optional.join(', ') || 'none'}`);
 }
 
+// ============================================================================
+// SD-LEO-INFRA-HARDENING-001: Centralized Skip Condition Checker
+// Single entry point for all handoff types to check skip conditions
+// ============================================================================
+
+/**
+ * Centralized skip condition checker
+ * SD-LEO-INFRA-HARDENING-001: Single source of truth for skip decisions
+ *
+ * @param {string} validatorName - Validator/gate name (e.g., 'TESTING', 'DESIGN')
+ * @param {Object} context - Context containing SD information
+ * @param {Object} context.sd - Strategic Directive object
+ * @param {string} context.sd.sd_type - SD type
+ * @param {Object} options - Additional options
+ * @param {boolean} options.logDecision - Log the skip decision (default: false)
+ * @returns {Object} Skip decision { shouldSkip: boolean, result: Object|null, reason: string|null }
+ */
+export function checkSkipCondition(validatorName, context, options = {}) {
+  const { sd } = context || {};
+  const sdType = sd?.sd_type || context?.sdType || 'unknown';
+  const { logDecision = false } = options;
+
+  // Default: don't skip
+  const decision = {
+    shouldSkip: false,
+    result: null,
+    reason: null,
+    sdType,
+    validatorName,
+    policyVersion: POLICY_VERSION
+  };
+
+  // Check 1: Is this validator non-applicable for this SD type?
+  if (isValidatorNonApplicable(sdType, validatorName)) {
+    decision.shouldSkip = true;
+    decision.reason = SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+    decision.result = createSkippedResult(validatorName, sdType, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+
+    if (logDecision) {
+      console.log(`   ⏭️  SKIP ${validatorName}: Non-applicable for SD type '${sdType}'`);
+    }
+    return decision;
+  }
+
+  // Check 2: Is this a lightweight SD type that skips detailed PRD validation?
+  if (isLightweightSDType(sdType)) {
+    const lightweightSkipValidators = [
+      'FILE_SCOPE',
+      'EXPLORATION_AUDIT',
+      'EXECUTION_PLAN',
+      'DELIVERABLES_PLANNING'
+    ];
+
+    if (lightweightSkipValidators.includes(validatorName.toUpperCase())) {
+      decision.shouldSkip = true;
+      decision.reason = SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+      decision.result = createSkippedResult(validatorName, sdType, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+
+      if (logDecision) {
+        console.log(`   ⏭️  SKIP ${validatorName}: Lightweight SD type '${sdType}' skips detailed PRD validation`);
+      }
+      return decision;
+    }
+  }
+
+  // Check 3: Documentation-only SDs skip code validation
+  const docOnlyTypes = ['documentation', 'docs', 'process', 'orchestrator'];
+  const codeValidators = ['TESTING', 'GITHUB', 'REGRESSION', 'DATABASE'];
+
+  if (docOnlyTypes.includes(sdType.toLowerCase()) && codeValidators.includes(validatorName.toUpperCase())) {
+    decision.shouldSkip = true;
+    decision.reason = SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+    decision.result = createSkippedResult(validatorName, sdType, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+
+    if (logDecision) {
+      console.log(`   ⏭️  SKIP ${validatorName}: Documentation-only SD type '${sdType}'`);
+    }
+    return decision;
+  }
+
+  // Check 4: Already completed (if context provides completion info)
+  if (context?.completedValidators?.includes(validatorName)) {
+    decision.shouldSkip = true;
+    decision.reason = SkipReasonCode.ALREADY_COMPLETED;
+    decision.result = createSkippedResult(validatorName, sdType, SkipReasonCode.ALREADY_COMPLETED);
+
+    if (logDecision) {
+      console.log(`   ⏭️  SKIP ${validatorName}: Already completed in this session`);
+    }
+    return decision;
+  }
+
+  // No skip condition met
+  if (logDecision) {
+    console.log(`   ✓  RUN ${validatorName}: Required for SD type '${sdType}'`);
+  }
+
+  return decision;
+}
+
+/**
+ * Batch check skip conditions for multiple validators
+ * SD-LEO-INFRA-HARDENING-001: Efficient batch processing
+ *
+ * @param {string[]} validatorNames - Array of validator names
+ * @param {Object} context - Context containing SD information
+ * @returns {Object} Map of validator name to skip decision
+ */
+export function checkSkipConditionsBatch(validatorNames, context) {
+  const decisions = {};
+
+  for (const validatorName of validatorNames) {
+    decisions[validatorName] = checkSkipCondition(validatorName, context, { logDecision: false });
+  }
+
+  // Log summary
+  const skipped = Object.values(decisions).filter(d => d.shouldSkip);
+  const required = Object.values(decisions).filter(d => !d.shouldSkip);
+
+  console.log(`\n📋 Skip Condition Summary (${context?.sd?.sd_type || 'unknown'} SD):`);
+  console.log(`   Required: ${required.length} validators`);
+  console.log(`   Skipped: ${skipped.length} validators`);
+  if (skipped.length > 0) {
+    console.log(`   Skipped list: ${skipped.map(d => d.validatorName).join(', ')}`);
+  }
+
+  return decisions;
+}
+
+/**
+ * Get all skip conditions for an SD type (for documentation/debugging)
+ *
+ * @param {string} sdType - SD type
+ * @returns {Object} Full skip condition analysis
+ */
+export function getSkipConditionsForType(sdType) {
+  const allValidators = ['TESTING', 'DESIGN', 'GITHUB', 'DATABASE', 'REGRESSION', 'DOCMON', 'STORIES'];
+  const mockContext = { sd: { sd_type: sdType } };
+
+  const conditions = {};
+  for (const validator of allValidators) {
+    conditions[validator] = checkSkipCondition(validator, mockContext);
+  }
+
+  return {
+    sdType,
+    policyVersion: POLICY_VERSION,
+    isLightweight: isLightweightSDType(sdType),
+    conditions,
+    summary: {
+      required: Object.entries(conditions).filter(([_, v]) => !v.shouldSkip).map(([k]) => k),
+      skipped: Object.entries(conditions).filter(([_, v]) => v.shouldSkip).map(([k]) => k)
+    }
+  };
+}
+
 export default {
   POLICY_VERSION,
   RequirementLevel,
   ValidatorStatus,
   SkipReasonCode,
+  LIGHTWEIGHT_SD_TYPES,
+  isLightweightSDType,
   getValidatorRequirement,
   isValidatorRequired,
   isValidatorNonApplicable,
@@ -502,5 +660,9 @@ export default {
   createSkippedResult,
   isSkippedResult,
   getPolicySummary,
-  logPolicySummary
+  logPolicySummary,
+  // SD-LEO-INFRA-HARDENING-001: Centralized skip checking
+  checkSkipCondition,
+  checkSkipConditionsBatch,
+  getSkipConditionsForType
 };

@@ -25,6 +25,12 @@ import {
   POLICY_VERSION
 } from './sd-type-applicability-policy.js';
 
+// SD-LEO-INFRA-HARDENING-001: Import threshold profiles for gate enforcement
+import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
+
+// SD-LEO-INFRA-HARDENING-001: Gate result schema validation
+import { validateGateResult, validateGateResultsBatch } from './gate-result-schema.js';
+
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
     if (!supabase) {
@@ -62,32 +68,32 @@ export class ValidationOrchestrator {
     try {
       const result = await validator(context);
 
-      // Normalize result structure
-      // FIX: Accept both 'pass' and 'passed' field names for compatibility
-      // ROOT CAUSE: Some validators return { pass: true } while others return { passed: true }
-      // This caused gates to fail even when validators returned pass: true (SD-VISION-V2-005 fix)
-      const normalizedResult = {
-        passed: result.passed ?? result.pass ?? (result.score >= (result.max_score || result.maxScore || 100)),
-        score: result.score ?? 0,
-        maxScore: result.max_score || result.maxScore || 100,
-        issues: result.issues || [],
-        warnings: result.warnings || [],
-        details: result.details || result
-      };
+      // SD-LEO-INFRA-HARDENING-001: Use schema validation for consistent normalization
+      // This replaces the manual normalization with validated, auto-fixing schema validation
+      const normalizedResult = validateGateResult(result, gateName, {
+        strict: false, // Don't throw, auto-fix instead
+        autoFix: true  // Fill missing fields with defaults
+      });
+
+      // Preserve details from original result if not already set
+      if (!normalizedResult.details && result !== normalizedResult) {
+        normalizedResult.details = result;
+      }
 
       ResultBuilder.logGateResult(gateName, normalizedResult, !normalizedResult.passed);
 
       return normalizedResult;
     } catch (error) {
       console.error(`\n❌ ${gateName} validation error: ${error.message}`);
-      return {
+      // Return a schema-validated error result
+      return validateGateResult({
         passed: false,
         score: 0,
         maxScore: 100,
         issues: [`Validation error: ${error.message}`],
         warnings: [],
         error: error.message
-      };
+      }, gateName, { strict: false, autoFix: true });
     }
   }
 
@@ -181,6 +187,28 @@ export class ValidationOrchestrator {
     results.normalizedScore = totalWeight > 0
       ? Math.round(weightedScoreSum / totalWeight)
       : 0;
+
+    // SD-LEO-INFRA-HARDENING-001: Enforce SD-type-specific thresholds
+    // This ensures security SDs require 90%, features require 85%, etc.
+    if (results.passed && context.sd?.sd_type) {
+      const sdType = context.sd.sd_type;
+      const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
+      const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
+
+      if (results.normalizedScore < threshold) {
+        results.passed = false;
+        results.failedGate = 'SD_TYPE_THRESHOLD';
+        results.thresholdViolation = {
+          sdType,
+          required: threshold,
+          actual: results.normalizedScore
+        };
+        results.issues.push(
+          `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
+        );
+        console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+      }
+    }
 
     return results;
   }
