@@ -1,0 +1,27 @@
+#!/bin/sh
+# ============================================================================
+# Commit-Msg Hook: EXEC Gate (Strunkian Writing Rules)
+# ============================================================================
+#
+# Validates commit messages against Strunkian blacklist:
+#   - leverage
+#   - robust
+#   - seamless
+#   - pivotal
+#   - crucial
+#
+# Skip: SKIP_STRUNKIAN=1 git commit -m "message"
+# ============================================================================
+
+# Check for skip flag
+if [ "$SKIP_STRUNKIAN" = "1" ]; then
+  echo ""
+  echo "⚠️  Strunkian validation skipped (SKIP_STRUNKIAN=1)"
+  echo ""
+  exit 0
+fi
+
+# Run EXEC commit gate
+node scripts/exec-commit-gate.js "$1"
+
+exit $?
