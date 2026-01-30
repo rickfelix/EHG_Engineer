@@ -1,0 +1,79 @@
+name: Strunkian Writing Rules Gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '*.md'
+      - 'CLAUDE*.md'
+
+jobs:
+  docmon:
+    name: DOCMON Documentation Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run DOCMON
+        run: node scripts/docmon.js --json > docmon-results.json || true
+
+      - name: Check DOCMON results
+        run: |
+          if [ -f docmon-results.json ]; then
+            BLACKLIST_COUNT=$(jq '.summary.blacklistViolations' docmon-results.json)
+            if [ "$BLACKLIST_COUNT" -gt 0 ]; then
+              echo "❌ DOCMON found $BLACKLIST_COUNT blacklist violation(s)"
+              jq '.results[] | select(.violations | length > 0) | {file: .filePath, violations: .violations}' docmon-results.json
+              exit 1
+            fi
+            echo "✅ DOCMON passed - no blacklist violations"
+          fi
+
+      - name: Upload DOCMON results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docmon-results
+          path: docmon-results.json
+
+  exec-commit-gate:
+    name: EXEC Commit Message Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate commit messages
+        run: |
+          echo "Validating commit messages in PR..."
+          node scripts/exec-commit-gate.js --pr-range origin/main
+
+      - name: Report success
+        if: success()
+        run: echo "✅ All commit messages pass Strunkian validation"

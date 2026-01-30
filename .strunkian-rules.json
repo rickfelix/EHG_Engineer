@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Strunkian Writing Rules - Shared configuration for DOCMON and EXEC gates",
+
+  "blacklist": {
+    "description": "Words that are banned from new/modified documentation and commit messages",
+    "words": [
+      "leverage",
+      "robust",
+      "seamless",
+      "pivotal",
+      "crucial"
+    ],
+    "caseSensitive": false,
+    "wordBoundaryRequired": true,
+    "suggestions": {
+      "leverage": ["use", "apply", "employ", "take advantage of"],
+      "robust": ["strong", "reliable", "solid", "well-tested"],
+      "seamless": ["smooth", "integrated", "unified", "consistent"],
+      "pivotal": ["key", "central", "critical", "essential"],
+      "crucial": ["critical", "essential", "important", "key"]
+    }
+  },
+
+  "passiveVoice": {
+    "description": "Heuristics for detecting passive voice patterns",
+    "enabled": true,
+    "beVerbs": ["is", "are", "was", "were", "be", "been", "being"],
+    "pastParticiplePattern": "\\b(\\w+ed|\\w+en)\\b",
+    "agentPatterns": ["by the", "by a", "by an"],
+    "allowlistDirective": "<!-- docmon:ignore passive -->"
+  },
+
+  "verbosity": {
+    "description": "Filler phrases that indicate wordy writing",
+    "enabled": true,
+    "minPhrasesToFlag": 2,
+    "fillerPhrases": [
+      "in order to",
+      "it is important to",
+      "as a matter of fact",
+      "for the purpose of",
+      "due to the fact that",
+      "in the event that",
+      "at this point in time",
+      "on a regular basis",
+      "in terms of",
+      "with regard to",
+      "in light of the fact that",
+      "it should be noted that",
+      "it goes without saying that",
+      "needless to say",
+      "basically",
+      "essentially",
+      "fundamentally",
+      "generally speaking"
+    ],
+    "suggestions": {
+      "in order to": "to",
+      "it is important to": "[state why directly]",
+      "as a matter of fact": "[omit or use 'actually']",
+      "for the purpose of": "for",
+      "due to the fact that": "because",
+      "in the event that": "if",
+      "at this point in time": "now",
+      "on a regular basis": "regularly",
+      "in terms of": "[be specific]",
+      "with regard to": "about",
+      "in light of the fact that": "because",
+      "it should be noted that": "[omit, state directly]",
+      "it goes without saying that": "[omit, just say it]",
+      "needless to say": "[omit]",
+      "basically": "[omit or be specific]",
+      "essentially": "[omit or be specific]",
+      "fundamentally": "[omit or be specific]",
+      "generally speaking": "[omit or be specific]"
+    }
+  },
+
+  "noRetrofitRule": {
+    "description": "Legacy documentation is exempt from Strunkian rules",
+    "enabled": true,
+    "enforcementScope": "changed_lines_only",
+    "ignoreDirective": "<!-- docmon:legacy -->"
+  },
+
+  "filePatterns": {
+    "documentation": {
+      "include": ["docs/**/*.md", "docs/**/*.txt", "**/LEO*.md", "**/CLAUDE*.md", "README.md"],
+      "exclude": ["docs/archive/**", "node_modules/**", ".git/**"]
+    },
+    "commitMessages": {
+      "enabled": true
+    }
+  },
+
+  "efficiencyScore": {
+    "description": "Calculate before/after word counts for changed files",
+    "enabled": true,
+    "excludeFromCount": {
+      "codeBlocks": true,
+      "inlineCode": true,
+      "htmlComments": true
+    },
+    "percentChangeFormula": "(before - after) / before * 100"
+  },
+
+  "ci": {
+    "exitCodes": {
+      "success": 0,
+      "blacklistViolation": 1,
+      "passiveVoiceViolation": 2,
+      "verbosityViolation": 3
+    },
+    "outputFormat": "json",
+    "summaryRequired": true
+  }
+}
