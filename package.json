@@ -275,7 +275,11 @@
     "docmon:metadata": "node scripts/validate-doc-metadata.js",
     "docmon:naming": "node scripts/validate-doc-naming.js",
     "docmon:generate-metadata": "node scripts/generate-doc-metadata.js",
-    "install-doc-hooks": "node scripts/install-doc-validation-hooks.js"
+    "install-doc-hooks": "node scripts/install-doc-validation-hooks.js",
+    "docmon": "node scripts/docmon.js",
+    "docmon:all": "node scripts/docmon.js --all",
+    "exec:commit-gate": "node scripts/exec-commit-gate.js",
+    "exec:commit-gate:pr": "node scripts/exec-commit-gate.js --pr-range origin/main"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
