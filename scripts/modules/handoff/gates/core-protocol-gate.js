@@ -22,6 +22,12 @@ import crypto from 'crypto';
 // Configuration
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
 const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
+// Sync marker file for race condition prevention (PAT-ASYNC-RACE-001)
+const SYNC_MARKER_FILE = path.join(PROJECT_DIR, '.claude', '.protocol-sync');
+// Maximum time to wait for sync marker (ms)
+const SYNC_MARKER_TIMEOUT = 500;
+// Polling interval when waiting for marker (ms)
+const SYNC_MARKER_POLL_INTERVAL = 50;
 
 /**
  * Required protocol files by trigger type
@@ -135,6 +141,62 @@ function writeSessionState(state) {
 }
 
 /**
+ * Wait for sync marker file with timeout and polling
+ * Part of PAT-ASYNC-RACE-001 fix
+ *
+ * This function polls for the sync marker file that the PostToolUse hook
+ * writes after updating the session state. This prevents race conditions
+ * where the gate reads state before the hook finishes writing.
+ *
+ * @returns {Promise<{found: boolean, marker: object|null, elapsed: number}>}
+ */
+async function waitForSyncMarker() {
+  const startTime = Date.now();
+  let elapsed = 0;
+
+  while (elapsed < SYNC_MARKER_TIMEOUT) {
+    try {
+      if (fs.existsSync(SYNC_MARKER_FILE)) {
+        const content = fs.readFileSync(SYNC_MARKER_FILE, 'utf8');
+        const marker = JSON.parse(content);
+
+        // Check if marker is fresh (written within the last 5 seconds)
+        const markerTime = new Date(marker.timestamp).getTime();
+        const markerAge = Date.now() - markerTime;
+
+        if (markerAge < 5000) {
+          console.log(`   ✅ Sync marker found (age: ${markerAge}ms)`);
+          return { found: true, marker, elapsed };
+        }
+      }
+    } catch (_error) {
+      // Marker doesn't exist or is invalid, keep polling
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, SYNC_MARKER_POLL_INTERVAL));
+    elapsed = Date.now() - startTime;
+  }
+
+  console.log(`   ⚠️  Sync marker timeout after ${elapsed}ms (proceeding with validation)`);
+  return { found: false, marker: null, elapsed };
+}
+
+/**
+ * Clear the sync marker file after successful validation
+ * Part of PAT-ASYNC-RACE-001 fix
+ */
+function clearSyncMarker() {
+  try {
+    if (fs.existsSync(SYNC_MARKER_FILE)) {
+      fs.unlinkSync(SYNC_MARKER_FILE);
+    }
+  } catch (_error) {
+    // Ignore errors - marker cleanup is best-effort
+  }
+}
+
+/**
  * Generate a unique SD run ID
  * @param {string} sdId - Strategic Directive ID
  * @returns {string} Unique run ID
@@ -241,7 +303,7 @@ export function recordCompactionEvent(sessionId) {
   writeSessionState(state);
 
   console.log(`   📦 Compaction event recorded (#${state.protocolGate.compactionCount})`);
-  console.log(`   ⚠️  Protocol file reads cleared - re-read required`);
+  console.log('   ⚠️  Protocol file reads cleared - re-read required');
 
   emitStructuredLog({
     event: 'COMPACTION_EVENT',
@@ -362,9 +424,17 @@ export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
     console.log(`   Phase file required: ${phaseFile}`);
   }
 
+  // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
+  // This prevents race condition where gate reads before hook writes
+  const markerResult = await waitForSyncMarker();
   const sdRunId = generateSdRunId(sdId);
   const issues = [];
   const warnings = [];
+
+  // Add warning if marker wasn't found (may indicate stale state)
+  if (!markerResult.found) {
+    warnings.push(`Sync marker not found within ${SYNC_MARKER_TIMEOUT}ms - state may be stale`);
+  }
 
   for (const filename of requiredFiles) {
     const check = checkFileNeedsRead(filename, 'SD_START', sdRunId);
@@ -411,6 +481,9 @@ export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
   state.protocolGate.sdRunId = sdRunId;
   writeSessionState(state);
 
+  // PAT-ASYNC-RACE-001: Clear sync marker after successful validation
+  clearSyncMarker();
+
   emitStructuredLog({
     event: 'SD_START_GATE',
     status: 'PASS',
@@ -440,6 +513,9 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
   console.log('\n📚 GATE: Post-Compaction Protocol Enforcement');
   console.log('-'.repeat(50));
   console.log(`   Current Phase: ${currentPhase || 'unknown'}`);
+
+  // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
+  await waitForSyncMarker();
 
   const state = readSessionState();
   const lastCompaction = state.protocolGate?.lastCompactionAt;
@@ -504,6 +580,9 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
       warnings
     };
   }
+
+  // PAT-ASYNC-RACE-001: Clear sync marker after successful validation
+  clearSyncMarker();
 
   emitStructuredLog({
     event: 'POST_COMPACTION_GATE',
@@ -578,7 +657,7 @@ export function createPostCompactionGate(currentPhase) {
     },
     required: true,
     blocking: true,
-    remediation: `Re-read CLAUDE.md, CLAUDE_CORE.md, and phase file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"`
+    remediation: 'Re-read CLAUDE.md, CLAUDE_CORE.md, and phase file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
   };
 }
 
@@ -595,9 +674,17 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
   console.log('-'.repeat(50));
   console.log(`   Session: ${sessionId || 'unknown'}`);
 
+  // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
+  const markerResult = await waitForSyncMarker();
+
   const requiredFiles = CORE_PROTOCOL_REQUIREMENTS.SESSION_START;
   const issues = [];
   const warnings = [];
+
+  // Add warning if marker wasn't found
+  if (!markerResult.found) {
+    warnings.push(`Sync marker not found within ${SYNC_MARKER_TIMEOUT}ms - state may be stale`);
+  }
 
   for (const filename of requiredFiles) {
     const check = checkFileNeedsRead(filename, 'SESSION_START');
@@ -659,6 +746,9 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
   state.protocolGate.sessionStartValidatedAt = new Date().toISOString();
   writeSessionState(state);
 
+  // PAT-ASYNC-RACE-001: Clear sync marker after successful validation
+  clearSyncMarker();
+
   emitStructuredLog({
     event: 'SESSION_START_GATE',
     status: 'PASS',
@@ -691,7 +781,7 @@ export function createSessionStartGate(sessionId) {
     },
     required: true,
     blocking: true,
-    remediation: `Read CLAUDE.md and CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"`
+    remediation: 'Read CLAUDE.md and CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
   };
 }
 
