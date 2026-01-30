@@ -45,7 +45,7 @@ BEGIN
     SET is_working_on = true,
         active_session_id = NEW.session_id,
         updated_at = NOW()
-    WHERE legacy_id = NEW.sd_id OR sd_key = NEW.sd_id;
+    WHERE sd_key = NEW.sd_id;
     RETURN NEW;
   END IF;
 
@@ -59,7 +59,7 @@ BEGIN
     SET is_working_on = false,
         active_session_id = NULL,
         updated_at = NOW()
-    WHERE (legacy_id = OLD.sd_id OR sd_key = OLD.sd_id)
+    WHERE sd_key = OLD.sd_id
       AND active_session_id = OLD.session_id;
     RETURN NEW;
   END IF;
@@ -125,7 +125,7 @@ SELECT
       (EXTRACT(EPOCH FROM (NOW() - cs.heartbeat_at)) / 3600)::int || 'h ago'
   END as heartbeat_age_human
 FROM claude_sessions cs
-LEFT JOIN strategic_directives_v2 sd ON cs.sd_id = sd.legacy_id OR cs.sd_id = sd.sd_key
+LEFT JOIN strategic_directives_v2 sd ON cs.sd_id = sd.sd_key
 WHERE cs.status NOT IN ('released')
 ORDER BY cs.track NULLS LAST, cs.claimed_at DESC;
 
@@ -228,7 +228,7 @@ BEGIN
   UPDATE strategic_directives_v2
   SET active_session_id = p_session_id,
       is_working_on = true
-  WHERE legacy_id = p_sd_id OR sd_key = p_sd_id;
+  WHERE sd_key = p_sd_id;
 
   RETURN jsonb_build_object(
     'success', true,
@@ -302,7 +302,7 @@ BEGIN
   UPDATE strategic_directives_v2
   SET active_session_id = NULL,
       is_working_on = false
-  WHERE (legacy_id = v_sd_id OR sd_key = v_sd_id)
+  WHERE sd_key = v_sd_id
     AND active_session_id = p_session_id;
 
   RETURN jsonb_build_object(
