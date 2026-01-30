@@ -53,6 +53,47 @@ Database documentation includes:
 - `leo_protocol_versions` - Protocol version tracking
 - `leo_protocol_sections` - CLAUDE.md content sections
 
+**Session Management**:
+- `claude_sessions` - Active Claude Code sessions
+- `v_active_sessions` - Enhanced session view with heartbeat monitoring
+
+### Enhanced Views
+
+#### v_active_sessions
+
+Provides real-time session monitoring with heartbeat-based staleness detection (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001).
+
+**New Computed Fields**:
+- `heartbeat_age_seconds`: Seconds since last heartbeat
+- `heartbeat_age_minutes`: Minutes since last heartbeat
+- `heartbeat_age_human`: Human-readable age ("30s ago", "2m ago", "1h ago")
+- `seconds_until_stale`: Countdown to 5-minute stale threshold
+- `computed_status`: Session status based on heartbeat:
+  - `active`: Has SD claim and heartbeat <300s
+  - `stale`: Heartbeat >300s (5 minutes)
+  - `idle`: No SD claim
+  - `released`: Session released
+- `claim_duration_minutes`: How long SD has been claimed
+
+**Stale Detection**:
+Sessions with no heartbeat for >300 seconds (5 minutes) are automatically marked as `stale`.
+
+**Usage**:
+```sql
+-- Find stale sessions
+SELECT session_id, sd_id, heartbeat_age_human, seconds_until_stale
+FROM v_active_sessions
+WHERE computed_status = 'stale';
+
+-- Monitor session health
+SELECT session_id, sd_id, heartbeat_age_seconds, computed_status
+FROM v_active_sessions
+WHERE computed_status != 'released'
+ORDER BY heartbeat_age_seconds DESC;
+```
+
+See: [Heartbeat Manager Reference](../reference/heartbeat-manager.md)
+
 ## Common Queries
 
 ### Check RLS Policies
@@ -99,6 +140,11 @@ const { data } = await supabase.rpc('function_with_security_definer');
 Database schema changes are managed via migrations in `/database/migrations/`.
 
 See `/database/migrations/README.md` for migration guidelines.
+
+### Recent Migrations
+
+- **2026-01-30**: [Multi-Session Pessimistic Locking](migrations/multi-session-pessimistic-locking.md) - Database-level single active claim constraint, heartbeat monitoring, and automatic is_working_on synchronization (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001)
+- **2026-01-30**: [Baseline Constraint Fixes](migrations/baseline-constraint-fixes-2026-01-30.md) - Fixed sub-agent verdict constraints, risk assessment phase constraints, and added metadata column to retrospectives (BL-INF-2337A-D)
 
 ### Manual Migrations
 

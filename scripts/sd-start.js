@@ -109,10 +109,31 @@ async function main() {
   const claimStatus = await isSDClaimed(effectiveId, session.session_id);
 
   if (claimStatus.claimed && claimStatus.claimedBy !== session.session_id) {
-    console.log(`\n${colors.yellow}⚠️  SD is already claimed by another session${colors.reset}`);
-    console.log(`   Session: ${claimStatus.claimedBy}`);
-    console.log(`   Active: ${claimStatus.activeMinutes} minutes`);
-    console.log(`\n${colors.dim}Use 'npm run sd:release' in the other session first${colors.reset}`);
+    // FR-2: Enhanced output showing owner session details and heartbeat age
+    console.log(`\n${colors.red}❌ SD is already claimed by another session${colors.reset}`);
+    console.log(`\n${colors.bold}Owner Session Details:${colors.reset}`);
+    console.log(`   Session ID: ${colors.cyan}${claimStatus.claimedBy}${colors.reset}`);
+    console.log(`   Hostname:   ${claimStatus.hostname || 'unknown'}`);
+    console.log(`   TTY/Term:   ${claimStatus.tty || 'unknown'}`);
+    console.log(`   Codebase:   ${claimStatus.codebase || 'unknown'}`);
+    console.log(`   Track:      ${claimStatus.track || 'STANDALONE'}`);
+    console.log(`\n${colors.bold}Heartbeat Status:${colors.reset}`);
+    console.log(`   Last seen:  ${colors.yellow}${claimStatus.heartbeatAgeHuman || claimStatus.activeMinutes + 'm ago'}${colors.reset}`);
+    console.log(`   Age:        ${claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60} seconds`);
+
+    // Show stale warning if close to 5-minute threshold
+    const secondsUntilStale = 300 - (claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60);
+    if (secondsUntilStale > 0 && secondsUntilStale < 60) {
+      console.log(`\n${colors.yellow}⏳ Session will become stale in ${secondsUntilStale}s (auto-released)${colors.reset}`);
+    } else if (secondsUntilStale <= 0) {
+      console.log(`\n${colors.yellow}⚠️  Session appears stale - it may auto-release soon${colors.reset}`);
+    }
+
+    console.log(`\n${colors.bold}Options:${colors.reset}`);
+    console.log(`   1. Wait for the session to release (or become stale after 5min)`);
+    console.log(`   2. Run ${colors.cyan}npm run sd:release${colors.reset} in the other session`);
+    console.log(`   3. If session is abandoned, run ${colors.cyan}npm run session:cleanup${colors.reset}`);
+    console.log('═'.repeat(50));
     process.exit(1);
   }
 
