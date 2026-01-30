@@ -18,6 +18,8 @@ const path = require('path');
 // Session state file path
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
 const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
+// Sync marker file for race condition prevention (PAT-ASYNC-RACE-001)
+const SYNC_MARKER_FILE = path.join(PROJECT_DIR, '.claude', '.protocol-sync');
 
 // Protocol files to track
 const PROTOCOL_FILES = [
@@ -60,6 +62,34 @@ function writeSessionState(state) {
     fs.renameSync(tempFile, SESSION_STATE_FILE);
     return true;
   } catch (_error) {
+    return false;
+  }
+}
+
+/**
+ * Write sync marker file to signal state update completion
+ * Part of PAT-ASYNC-RACE-001 fix
+ *
+ * The marker file contains a timestamp that gates can use to verify
+ * the state file was written after their validation started.
+ */
+function writeSyncMarker() {
+  try {
+    const dir = path.dirname(SYNC_MARKER_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const markerContent = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      pid: process.pid,
+      stateFile: SESSION_STATE_FILE
+    });
+
+    fs.writeFileSync(SYNC_MARKER_FILE, markerContent, 'utf8');
+    return true;
+  } catch (_error) {
+    console.error('[protocol-file-tracker] Failed to write sync marker');
     return false;
   }
 }
@@ -204,6 +234,9 @@ function processHookInput(hookInput) {
   }
 
   if (writeSessionState(state)) {
+    // Write sync marker AFTER state file is written (PAT-ASYNC-RACE-001)
+    // This signals to the gate that state is ready to be read
+    writeSyncMarker();
     console.log(`[protocol-file-tracker] Updated ${normalizedPath} (read #${fileStatus.readCount})`);
   }
 }
