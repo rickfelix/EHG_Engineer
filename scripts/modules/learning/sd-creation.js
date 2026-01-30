@@ -12,6 +12,7 @@ import {
   buildSDDescription,
   buildSDTitle,
   buildSuccessMetrics,
+  buildSuccessCriteria,
   buildSmokeTestSteps,
   buildStrategicObjectives,
   buildKeyPrinciples
@@ -41,6 +42,7 @@ export async function createSDFromLearning(items, type) {
   const sdKey = await generateSDId(type, title);
   const description = buildSDDescription(items);
   const successMetrics = buildSuccessMetrics(items);
+  const successCriteria = buildSuccessCriteria(items);
   const smokeTestSteps = buildSmokeTestSteps(items);
   const strategicObjectives = buildStrategicObjectives(items);
   const keyPrinciples = buildKeyPrinciples(items);
@@ -61,6 +63,7 @@ export async function createSDFromLearning(items, type) {
     created_by: 'LEARN-Agent',
     created_at: new Date().toISOString(),
     success_metrics: successMetrics,
+    success_criteria: successCriteria,
     smoke_test_steps: smokeTestSteps,
     strategic_objectives: strategicObjectives,
     key_principles: keyPrinciples,

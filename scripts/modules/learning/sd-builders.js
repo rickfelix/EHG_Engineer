@@ -142,6 +142,40 @@ export function buildStrategicObjectives(items) {
 }
 
 /**
+ * Build success_criteria from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {Array} success_criteria array
+ */
+export function buildSuccessCriteria(items) {
+  const criteria = [];
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      criteria.push({
+        criterion: `${item.pattern_id} eliminated from codebase`,
+        measure: 'Zero occurrences after implementation'
+      });
+    } else {
+      const desc = (item.description || 'improvement').slice(0, 60);
+      criteria.push({
+        criterion: `${desc}... implemented`,
+        measure: 'Feature fully functional and tested'
+      });
+    }
+  }
+
+  // Ensure at least one criterion (constraint requires non-empty array)
+  if (criteria.length === 0) {
+    criteria.push({
+      criterion: 'All learning items addressed',
+      measure: '100% completion with validation'
+    });
+  }
+
+  return criteria;
+}
+
+/**
  * Build key_principles from selected items
  * @param {Array} items - Selected patterns and improvements
  * @returns {Array} key_principles array
