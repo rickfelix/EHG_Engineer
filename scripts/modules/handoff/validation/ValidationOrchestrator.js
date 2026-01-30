@@ -171,14 +171,20 @@ export class ValidationOrchestrator {
       weightedScoreSum += gatePercentage * gateWeight;
       totalWeight += gateWeight;
 
-      results.warnings.push(...gateResult.warnings);
+      // Defensive check for optional warnings array (PAT-SCHEMA-VALIDATION-001)
+      if (gateResult.warnings && Array.isArray(gateResult.warnings)) {
+        results.warnings.push(...gateResult.warnings);
+      }
 
       // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: SKIPPED counts as satisfied (not a failure)
       // Only FAIL (not SKIPPED) should block handoff for required gates
       if (!gateResult.passed && gate.required !== false && !isSkipped) {
         results.passed = false;
         results.failedGate = gate.name;
-        results.issues.push(...gateResult.issues);
+        // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
+        if (gateResult.issues && Array.isArray(gateResult.issues)) {
+          results.issues.push(...gateResult.issues);
+        }
         break; // Stop on first required failure
       }
     }
@@ -672,21 +678,27 @@ export class ValidationOrchestrator {
       weightedScoreSum += gatePercentage * gateWeight;
       totalWeight += gateWeight;
 
-      results.warnings.push(...gateResult.warnings);
+      // Defensive check for optional warnings array (PAT-SCHEMA-VALIDATION-001)
+      if (gateResult.warnings && Array.isArray(gateResult.warnings)) {
+        results.warnings.push(...gateResult.warnings);
+      }
 
       // Collect issues but DON'T stop - this is the key difference
       if (!gateResult.passed && gate.required !== false) {
         results.passed = false;
         results.failedGates.push({
           name: gate.name,
-          issues: gateResult.issues,
+          issues: gateResult.issues || [],
           score: gateResult.score,
           maxScore: gateResult.maxScore
         });
-        results.issues.push(...gateResult.issues.map(issue => ({
-          gate: gate.name,
-          issue
-        })));
+        // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
+        if (gateResult.issues && Array.isArray(gateResult.issues)) {
+          results.issues.push(...gateResult.issues.map(issue => ({
+            gate: gate.name,
+            issue
+          })));
+        }
       } else {
         results.passedGates.push(gate.name);
       }

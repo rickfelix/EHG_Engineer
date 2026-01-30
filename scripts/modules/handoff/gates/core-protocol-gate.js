@@ -27,9 +27,12 @@ const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-st
  * Required protocol files by trigger type
  */
 const CORE_PROTOCOL_REQUIREMENTS = {
-  SD_START: ['CLAUDE_CORE.md'],
-  POST_COMPACTION: ['CLAUDE_CORE.md'],  // Phase file added dynamically based on current phase
-  SESSION_START: ['CLAUDE_CORE.md']
+  // CLAUDE.md contains sub-agent trigger keywords that MUST be loaded alongside CLAUDE_CORE.md
+  // Without CLAUDE.md, agents miss actionable triggers like "created migration" → invoke DATABASE sub-agent
+  // Root cause fix: SD-LEO-INFRA-HARDENING-001 RCA investigation
+  SD_START: ['CLAUDE.md', 'CLAUDE_CORE.md'],
+  POST_COMPACTION: ['CLAUDE.md', 'CLAUDE_CORE.md'],  // Phase file added dynamically based on current phase
+  SESSION_START: ['CLAUDE.md', 'CLAUDE_CORE.md']
 };
 
 /**
@@ -350,7 +353,7 @@ export async function validateSdStartGate(sdId, ctx = {}) {
   if (issues.length > 0) {
     console.log('');
     console.log('   📚 REMEDIATION:');
-    console.log('   The LEO Protocol requires reading CLAUDE_CORE.md before starting SD work.');
+    console.log('   The LEO Protocol requires reading CLAUDE.md and CLAUDE_CORE.md before starting SD work.');
     console.log('');
     console.log('   ACTION REQUIRED:');
     requiredFiles.forEach(f => console.log(`   1. Read the file: ${f}`));
@@ -522,7 +525,7 @@ export function createSdStartGate(sdId) {
     },
     required: true,
     blocking: true,
-    remediation: `Read CLAUDE_CORE.md before starting work on ${sdId}. Use: Read tool with file_path="CLAUDE_CORE.md"`
+    remediation: `Read CLAUDE.md and CLAUDE_CORE.md before starting work on ${sdId}. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"`
   };
 }
 
@@ -539,7 +542,7 @@ export function createPostCompactionGate(currentPhase) {
     },
     required: true,
     blocking: true,
-    remediation: `Re-read CLAUDE_CORE.md and phase file after context compaction. Use: Read tool with file_path="CLAUDE_CORE.md"`
+    remediation: `Re-read CLAUDE.md, CLAUDE_CORE.md, and phase file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"`
   };
 }
 
@@ -601,7 +604,7 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
       errorCode: 'PROTOCOL_GATE_BLOCKED',
       gateName: 'SESSION_START',
       requiredArtifacts: requiredFiles,
-      remediation: 'Read CLAUDE_CORE.md using the Read tool before proceeding with LEO session initialization.'
+      remediation: 'Read CLAUDE.md and CLAUDE_CORE.md using the Read tool before proceeding with LEO session initialization.'
     };
   }
 
@@ -652,7 +655,7 @@ export function createSessionStartGate(sessionId) {
     },
     required: true,
     blocking: true,
-    remediation: `Read CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE_CORE.md"`
+    remediation: `Read CLAUDE.md and CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"`
   };
 }
 
