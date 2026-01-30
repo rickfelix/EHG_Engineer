@@ -223,6 +223,123 @@ INSERT INTO leo_integration_contracts (
 ON CONFLICT (contract_key) DO NOTHING;
 
 -- ============================================================================
+-- Synergy Remediation Contracts (SD-LEO-ORCH-SYNERGY-REMEDIATION-001)
+-- Added: 2026-01-30
+-- Purpose: Verify fixed integrations from synergy remediation are protected
+-- ============================================================================
+
+-- Phase 0 Integration Gate (fixed in SD-LEO-FIX-PHASE0-INTEGRATION-001)
+-- Verifies checkGate is imported and callable in leo-create-sd.js
+INSERT INTO leo_integration_contracts (
+  contract_key,
+  description,
+  trigger_type,
+  trigger_id,
+  entry_point_file,
+  entry_point_function,
+  export_type,
+  import_chain,
+  checkpoint_level,
+  verification_mode,
+  sd_type_scope,
+  gate_name,
+  weight,
+  created_by
+) VALUES (
+  'synergy-phase0-gate-integration',
+  'Verifies Phase 0 checkGate() is imported and called by leo-create-sd.js for feature/enhancement SDs.',
+  'workflow',
+  'leo-create-sd',
+  'scripts/modules/phase-0/leo-integration.js',
+  'checkGate',
+  'named',
+  '[
+    {"from": "scripts/leo-create-sd.js", "importPath": "./modules/phase-0/leo-integration.js"},
+    {"from": "scripts/modules/phase-0/leo-integration.js", "exports": ["checkGate", "getArtifacts", "getStatus"]}
+  ]'::jsonb,
+  'L3_EXPORT_EXISTS',
+  'static',
+  ARRAY['feature', 'enhancement']::TEXT[],
+  'LEAD-TO-PLAN',
+  0.100,
+  'SD-LEO-FIX-OIV-CONTRACTS-001'
+)
+ON CONFLICT (contract_key) DO UPDATE SET
+  description = EXCLUDED.description,
+  import_chain = EXCLUDED.import_chain,
+  updated_at = NOW();
+
+-- Performance Agent Phases 6-8 (fixed in SD-LEO-FIX-PERFORMANCE-PHASES-001)
+-- Verifies Phases 6, 7, 8 are documented in performance-agent.md
+INSERT INTO leo_integration_contracts (
+  contract_key,
+  description,
+  trigger_type,
+  trigger_id,
+  entry_point_file,
+  entry_point_function,
+  export_type,
+  checkpoint_level,
+  verification_mode,
+  sd_type_scope,
+  gate_name,
+  weight,
+  created_by
+) VALUES (
+  'synergy-performance-phases-6-8',
+  'Verifies Performance Agent has Phases 6-8 (Waterfall Detection, Barrel Import Audit, Server Cache Check) documented.',
+  'sub_agent',
+  'PERFORMANCE',
+  '.claude/agents/performance-agent.md',
+  'Phase 6',
+  'content',
+  'L1_FILE_EXISTS',
+  'static',
+  ARRAY['feature', 'performance', 'enhancement']::TEXT[],
+  'EXEC-TO-PLAN',
+  0.050,
+  'SD-LEO-FIX-OIV-CONTRACTS-001'
+)
+ON CONFLICT (contract_key) DO UPDATE SET
+  description = EXCLUDED.description,
+  updated_at = NOW();
+
+-- Design Tokens Configuration (fixed in SD-LEO-FIX-DESIGN-TOKENS-001)
+-- Verifies three-tier design tokens config exists
+INSERT INTO leo_integration_contracts (
+  contract_key,
+  description,
+  trigger_type,
+  trigger_id,
+  entry_point_file,
+  entry_point_function,
+  export_type,
+  checkpoint_level,
+  verification_mode,
+  sd_type_scope,
+  gate_name,
+  weight,
+  created_by
+) VALUES (
+  'synergy-design-tokens-config',
+  'Verifies ehg-design-tokens.json exists with three-tier hierarchy (brand, semantic, component).',
+  'config',
+  'design-system',
+  'config/ehg-design-tokens.json',
+  'brand',
+  'json_key',
+  'L1_FILE_EXISTS',
+  'static',
+  ARRAY['feature', 'enhancement', 'infrastructure']::TEXT[],
+  'PLAN-TO-EXEC',
+  0.050,
+  'SD-LEO-FIX-OIV-CONTRACTS-001'
+)
+ON CONFLICT (contract_key) DO UPDATE SET
+  description = EXCLUDED.description,
+  updated_at = NOW();
+
+-- ============================================================================
 -- Validation Query
 -- ============================================================================
 

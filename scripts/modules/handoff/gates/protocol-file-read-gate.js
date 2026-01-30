@@ -21,11 +21,13 @@ const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-st
 
 /**
  * Handoff type to required protocol file mapping
+ * Maps to the DESTINATION phase's protocol file (the phase you're going TO)
  */
 const HANDOFF_FILE_REQUIREMENTS = {
-  'LEAD-TO-PLAN': 'CLAUDE_LEAD.md',
-  'PLAN-TO-EXEC': 'CLAUDE_PLAN.md',
-  'EXEC-TO-PLAN': 'CLAUDE_EXEC.md'
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',   // Going TO Plan phase
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',   // Going TO Exec phase
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN.md',   // Going back TO Plan phase
+  'PLAN-TO-LEAD': 'CLAUDE_LEAD.md'    // Going TO Lead phase (final approval)
 };
 
 /**
