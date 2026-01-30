@@ -59,8 +59,10 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
         missingRequired.push('SHIP');
       }
     } catch {
-      // If diff fails, assume ship is needed
-      missingRequired.push('SHIP');
+      // If diff fails (branch deleted after merge, or on main), don't assume ship is needed
+      // The completion_date check above should handle completed/shipped SDs
+      // Only log for debugging - don't block
+      console.error(`   ℹ️  Git diff failed for ${sdKey} - branch may already be merged`);
     }
   }
 

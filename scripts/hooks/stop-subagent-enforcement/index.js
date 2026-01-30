@@ -175,7 +175,7 @@ export async function main() {
   const sdResult = await safeAsync(async () => {
     return supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, sd_key, title, sd_type, category, current_phase, status')
+      .select('id, sd_key, sd_key, title, sd_type, category, current_phase, status, completion_date')
       .or(`sd_key.eq.${sdKey},sd_key.eq.${sdKey},id.eq.${sdKey}`)
       .single();
   }, 'getSDDetails');
