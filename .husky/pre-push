@@ -24,6 +24,30 @@
 remote="$1"
 url="$2"
 
+# ============================================================================
+# DOCMON: Strunkian Writing Rules for Documentation
+# ============================================================================
+if [ "$SKIP_DOCMON" != "1" ]; then
+  echo ""
+  echo "📝 Running DOCMON (Strunkian documentation validation)..."
+  echo ""
+
+  node scripts/docmon.js
+  DOCMON_EXIT=$?
+
+  if [ $DOCMON_EXIT -eq 1 ]; then
+    echo ""
+    echo "❌ Push blocked: Documentation contains blacklisted words"
+    echo ""
+    echo "Fix the violations above, then try again."
+    echo "Skip with: SKIP_DOCMON=1 git push"
+    echo ""
+    exit 1
+  fi
+
+  echo ""
+fi
+
 # Check for emergency bypass (with required reason)
 if [ -n "$EMERGENCY_PUSH" ]; then
   echo ""
