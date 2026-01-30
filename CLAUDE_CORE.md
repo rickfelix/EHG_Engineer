@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-26 7:17:01 AM
+**Generated**: 2026-01-30 10:00:59 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -31,27 +31,6 @@
 ```bash
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
-
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
 
 ## 🔍 Session Start Verification (MANDATORY)
 
@@ -87,6 +66,46 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### ⚠️ MANDATORY: Read Entire Files (No Partial Reads)
+
+**When reading any file that contains instructions, requirements, or critical context, you MUST read the ENTIRE file from start to finish.**
+
+**General Rule**: If a file is important enough to read, read it completely. Partial reads lead to missed requirements.
+
+**Files that MUST be read in full (no `limit` parameter):**
+- CLAUDE.md, CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md
+- PRD content from database
+- Any file containing protocol instructions, requirements, or acceptance criteria
+- Configuration files (.json, .yaml, .env.example)
+- Test files when debugging failures
+- Migration files when working on database changes
+
+**When `limit` parameter IS acceptable:**
+- Log files (reading recent entries)
+- Large data files where you only need a sample
+- Files explicitly marked as "preview only"
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -139,6 +158,49 @@ npm run handoff:compliance SD-ID
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## Claude Code Plan Mode Integration
+
+**Status**: ACTIVE | **Version**: 1.0.0
+
+### Overview
+Claude Code's Plan Mode integrates with LEO Protocol to provide:
+- **Automatic Permission Bundling** - Reduces prompts by 70-80%
+- **Intelligent Plan Generation** - SD-type aware action plans
+- **Phase Transition Automation** - Activates at phase boundaries
+
+### SD Type Profiles
+| SD Type | Workflow | Sub-Agents | PR Size Target |
+|---------|----------|------------|----------------|
+| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
+| `enhancement` | standard | VALIDATION | 75 (max 200) |
+| `bug` | fast | RCA | 50 (max 100) |
+| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
+| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
+| `security` | careful | SECURITY, RISK | 50 (max 150) |
+| `documentation` | light | DOCMON | no limit |
+
+### Permission Bundling by Phase
+| Phase | Pre-approved Actions |
+|-------|---------------------|
+| LEAD | SD queue commands, handoff scripts, git status |
+| PLAN | PRD generation, sub-agent orchestration, git branches |
+| EXEC | Tests, builds, git commit/push, handoff scripts |
+| VERIFY | Verification scripts, handoff scripts |
+| FINAL | Merge operations, archive commands |
+
+### Automatic Activation
+- **Session start**: If SD detected on current branch
+- **Phase boundaries**: Before each handoff execution
+
+### Configuration
+```json
+// .claude/leo-plan-mode-config.json
+{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
+```
+
+### Module Location
+`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
 ## Mandatory Agent Invocation Rules
 
@@ -213,49 +275,6 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
-## Claude Code Plan Mode Integration
-
-**Status**: ACTIVE | **Version**: 1.0.0
-
-### Overview
-Claude Code's Plan Mode integrates with LEO Protocol to provide:
-- **Automatic Permission Bundling** - Reduces prompts by 70-80%
-- **Intelligent Plan Generation** - SD-type aware action plans
-- **Phase Transition Automation** - Activates at phase boundaries
-
-### SD Type Profiles
-| SD Type | Workflow | Sub-Agents | PR Size Target |
-|---------|----------|------------|----------------|
-| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
-| `enhancement` | standard | VALIDATION | 75 (max 200) |
-| `bug` | fast | RCA | 50 (max 100) |
-| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
-| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
-| `security` | careful | SECURITY, RISK | 50 (max 150) |
-| `documentation` | light | DOCMON | no limit |
-
-### Permission Bundling by Phase
-| Phase | Pre-approved Actions |
-|-------|---------------------|
-| LEAD | SD queue commands, handoff scripts, git status |
-| PLAN | PRD generation, sub-agent orchestration, git branches |
-| EXEC | Tests, builds, git commit/push, handoff scripts |
-| VERIFY | Verification scripts, handoff scripts |
-| FINAL | Merge operations, archive commands |
-
-### Automatic Activation
-- **Session start**: If SD detected on current branch
-- **Phase boundaries**: Before each handoff execution
-
-### Configuration
-```json
-// .claude/leo-plan-mode-config.json
-{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
-```
-
-### Module Location
-`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
-
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -315,6 +334,39 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -351,39 +403,6 @@ The pre-push hook automatically:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sustainable Issue Resolution Philosophy
 
@@ -514,6 +533,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -546,38 +597,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -973,6 +992,83 @@ All invocation decisions logged to `db_agent_invocations` table with:
 - decision outcome
 
 
+## Strunkian Writing Standards
+
+**MANDATORY for all new/modified documentation and commit messages.**
+
+### Word Blacklist
+
+The following words are **banned** from new documentation and commit messages (case-insensitive, word-boundary aware):
+
+| Banned Word | Use Instead |
+|-------------|-------------|
+| leverage | use, apply, employ |
+| robust | strong, reliable, solid, well-tested |
+| seamless | smooth, integrated, unified |
+| pivotal | key, central, critical |
+| crucial | critical, essential, important |
+
+### Active Voice & Brevity
+
+**Do** (Active Voice):
+- "The system validates input" ✅
+- "Users submit forms" ✅
+- "Claude executes the handoff" ✅
+- "The gate blocks invalid commits" ✅
+- "We implemented the feature" ✅
+
+**Don't** (Passive Voice):
+- "Input is validated by the system" ❌
+- "Forms are submitted by users" ❌
+- "The handoff is executed" ❌
+- "Invalid commits are blocked" ❌
+- "The feature was implemented" ❌
+
+**Brevity Examples**:
+- "in order to" → "to"
+- "due to the fact that" → "because"
+- "at this point in time" → "now"
+- "on a regular basis" → "regularly"
+- "it should be noted that" → [omit, state directly]
+
+### No-Retrofit Rule
+
+**Legacy documentation is EXEMPT.** Strunkian rules apply ONLY to:
+- Newly created documentation
+- Lines modified in PRs/commits
+- New commit messages
+
+Do NOT modify existing docs solely to satisfy Strunkian rules. This prevents unnecessary churn.
+
+### Enforcement Gates
+
+| Gate | Scope | Trigger |
+|------|-------|---------|
+| **DOCMON** | Changed doc files | Pre-push hook, CI |
+| **EXEC** | Commit messages | commit-msg hook, CI |
+
+### Ignore Directives
+
+To suppress a specific rule for the next paragraph:
+```markdown
+<!-- docmon:ignore passive -->
+This paragraph uses passive voice intentionally for stylistic reasons.
+```
+
+### Configuration
+
+Rules defined in: `.strunkian-rules.json`
+Shared by DOCMON and EXEC gates for consistency.
+
+### Efficiency Score
+
+For each changed doc file, DOCMON reports:
+```
+<path>: <before_words> words → <after_words> words (<percent>% change)
+```
+
+Word counts exclude code blocks and inline code.
+
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -1263,18 +1359,29 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
+### 1. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
+**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
 
 **Key Improvements**:
-- Initial PLAN-TO-EXEC handoff blocked due to missing exploration_summary
-- Documentation commit was on wrong branch causing false positive in stub detection
+- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
+- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
 
 **Action Items**:
-- [ ] Owner: LEO Protocol Maintainer | Deadline: 2025-01-15 | Action: Auto-populate ex...
-- [ ] Owner: CI/CD Team | Deadline: 2025-01-10 | Action: Modify stubbed code detection...
+- [ ] Create reusable SD lookup utility
+- [ ] Add E2E test CI job for risk-recalibration
 
-### 2. Implement Adaptive Design & Architecture Streams for PLAN Phase - Retrospective [QUALITY]
+### 2. PLAN_TO_EXEC Handoff Retrospective: Refactor design.js (sub-agent) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/20/2026 | **Score**: 100
+
+**Key Improvements**:
+- Continue monitoring PLAN→EXEC handoff for improvement opportunities
+- Continue monitoring PLAN→EXEC handoff for improvement opportunities
+
+**Action Items**:
+- [ ] Owner: Eng Lead | By 2026-02-01: Add eslint rule to flag files >500 LOC with war...
+- [ ] Owner: DevOps | Next SD: Add CI check for import cycle detection using madge or ...
+
+### 3. Implement Adaptive Design & Architecture Streams for PLAN Phase - Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 1/10/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1285,29 +1392,7 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - [ ] Create schema field reference document mapping validation field names to actual ...
 - [ ] Add pre-handoff checklist to PLAN phase that validates exploration_summary, PRD ...
 
-### 3. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
-
-**Key Improvements**:
-- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
-- Handoff chain documentation should accompany development from the start
-
-**Action Items**:
-- [ ] Create orchestrator SD template with built-in child tracking
-- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
-
-### 4. Mock Infrastructure: Config, Registry, and Utilities - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
-
-**Key Improvements**:
-- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
-- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
-
-**Action Items**:
-- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
-- [ ] Complete missing handoff documentation
-
-### 5. LEO-001 Comprehensive Retrospective [QUALITY]
+### 4. LEO-001 Comprehensive Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 1/17/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1317,6 +1402,17 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 **Action Items**:
 - [ ] Document plugin discovery protocol - add 'Check for official Claude Code plugins...
 - [ ] Create systematic quality gate gap analysis tool to audit all handoff validators...
+
+### 5. LEAD_TO_PLAN Handoff Retrospective: LEO Protocol Validation Hardening - Comprehensive Gap Fix [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/21/2026 | **Score**: 100
+
+**Key Improvements**:
+- Migration 20260123_retrospective_auto_archive_trigger.sql needs manual execution in Supabase SQL Edi...
+- SD had 0% progress despite 5/6 deliverables being verified as complete - need better progress tracki...
+
+**Action Items**:
+- [ ] Execute migration: Run database/migrations/20260123_retrospective_auto_archive_t...
+- [ ] Verify migration: SELECT run_retrospective_maintenance() should return archived_...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1508,7 +1604,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-26*
+*Generated from database: 2026-01-30*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

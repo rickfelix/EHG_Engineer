@@ -55,6 +55,67 @@ AUTO-PROCEED runs continuously EXCEPT at these boundaries:
 4. **Merge conflicts** - Require human resolution
 5. **All children blocked** - Shows blockers and waits for decision
 
+### Multi-Session Coordination Infrastructure
+
+**SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001** provides database-level protection ensuring only ONE Claude session can claim a given SD at any time.
+
+#### Database Constraint
+
+A **partial unique index** enforces single active claim at the database level:
+
+```sql
+-- Only one session can have status='active' for a given sd_id
+CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim
+ON claude_sessions (sd_id)
+WHERE sd_id IS NOT NULL AND status = 'active';
+```
+
+**Impact on AUTO-PROCEED**: When a session attempts to claim an SD already held by another active session, the claim is rejected with detailed owner information (session ID, heartbeat age, hostname).
+
+#### Heartbeat Manager
+
+The heartbeat manager (`lib/heartbeat-manager.mjs`) maintains session liveness:
+
+- **Interval**: 30 seconds (automatic updates)
+- **Stale threshold**: 5 minutes (300 seconds)
+- **Max failures**: 3 consecutive before stopping
+
+**AUTO-PROCEED uses heartbeat to**:
+- Detect if previous session crashed (stale heartbeat)
+- Allow claim takeover for abandoned SDs
+- Maintain claim ownership during long operations
+
+#### Enhanced Session View
+
+The `v_active_sessions` view provides real-time session monitoring:
+
+| Field | Description |
+|-------|-------------|
+| `heartbeat_age_seconds` | Seconds since last heartbeat |
+| `heartbeat_age_human` | Human-readable age ("30s ago", "2m ago") |
+| `seconds_until_stale` | Countdown to 5-minute threshold |
+| `computed_status` | active, stale, idle, or released |
+
+**Query stale sessions**:
+```sql
+SELECT session_id, sd_id, heartbeat_age_human
+FROM v_active_sessions WHERE computed_status = 'stale';
+```
+
+#### Claim Conflict Resolution
+
+When AUTO-PROCEED encounters a claim conflict:
+
+1. **Check existing claim** - Query `v_active_sessions` for owner details
+2. **Evaluate staleness** - If heartbeat > 5 minutes, session is stale
+3. **Auto-release stale** - Use `release_sd()` RPC for abandoned claims
+4. **Retry claim** - Attempt to claim after releasing stale session
+
+**Related documentation**:
+- Migration: `database/migrations/20260130_multi_session_pessimistic_locking.sql`
+- Heartbeat API: `docs/reference/heartbeat-manager.md`
+- Ops runbook: `docs/06_deployment/multi-session-coordination-ops.md`
+
 ### Error Resolution with RCA Sub-Agent
 
 **CRITICAL**: When AUTO-PROCEED encounters issues that cannot be immediately resolved, leverage the **RCA (Root Cause Analysis) sub-agent** to systematically diagnose and prevent recurrence.
@@ -138,6 +199,7 @@ Perform 5-whys analysis and recommend systematic fix."
 | D29 | Resume reminder | Show what was happening before resuming |
 
 *Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
+
 
 ## Session Initialization - SD Selection
 
@@ -313,7 +375,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-26 7:17:01 AM
+**Last Generated**: 2026-01-30 10:00:59 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -337,6 +399,43 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 - **Child SDs of orchestrators** (each child requires fresh context loading)
 
 Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresholds, skipped sub-agents.
+
+### ⚠️ MANDATORY: Read Entire Files (No Partial Reads)
+
+**When reading any file that contains instructions, requirements, or critical context, you MUST read the ENTIRE file from start to finish.**
+
+**General Rule**: If a file is important enough to read, read it completely. Partial reads lead to missed requirements.
+
+**Files that MUST be read in full (no `limit` parameter):**
+- CLAUDE.md, CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md
+- PRD content from database
+- Any file containing protocol instructions, requirements, or acceptance criteria
+- Configuration files (.json, .yaml, .env.example)
+- Test files when debugging failures
+- Migration files when working on database changes
+
+**When `limit` parameter IS acceptable:**
+- Log files (reading recent entries)
+- Large data files where you only need a sample
+- Files explicitly marked as "preview only"
+
+**Correct usage:**
+```
+Read tool: CLAUDE_EXEC.md (no limit parameter)
+Read tool: docs/reference/database-agent-patterns.md (no limit parameter)
+```
+
+**Incorrect usage:**
+```
+Read tool: CLAUDE_EXEC.md with limit: 200  ← VIOLATION
+Read tool: PRD file with limit: 100  ← VIOLATION
+```
+
+**Why this matters:** Critical instructions are often in later sections of files. Partial reads cause:
+- Missed validation requirements
+- Skipped sub-agent invocations
+- Incomplete understanding of acceptance criteria
+- Protocol violations
 
 ### Phase Keywords → File
 | Keywords | Load |
@@ -396,6 +495,6 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 
 ---
 
-*Router generated from database: 2026-01-26*
+*Router generated from database: 2026-01-30*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
