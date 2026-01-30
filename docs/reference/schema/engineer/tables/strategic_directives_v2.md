@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-30T10:09:52.201Z
+**Generated**: 2026-01-30T10:43:20.618Z
 **Rows**: 673
 **RLS**: Enabled (4 policies)
 
@@ -119,6 +119,9 @@ Use the id column instead - it is the canonical identifier. |
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
+- `key_changes_is_array`: CHECK (((key_changes IS NULL) OR (jsonb_typeof(key_changes) = 'array'::text))) NOT VALID
+- `key_principles_is_array`: CHECK (((key_principles IS NULL) OR (jsonb_typeof(key_principles) = 'array'::text))) NOT VALID
+- `key_principles_not_empty`: CHECK (((key_principles IS NULL) OR (jsonb_array_length(key_principles) >= 1))) NOT VALID
 - `sd_type_check`: CHECK (((sd_type IS NULL) OR ((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'infrastructure'::character varying, 'database'::character varying, 'security'::character varying, 'bugfix'::character varying, 'refactor'::character varying, 'performance'::character varying, 'documentation'::character varying, 'docs'::character varying, 'orchestrator'::character varying, 'testing'::character varying, 'qa'::character varying, 'enhancement'::character varying, 'frontend'::character varying, 'ux_debt'::character varying, 'api'::character varying, 'backend'::character varying, 'process'::character varying, 'implementation'::character varying, 'discovery_spike'::character varying])::text[]))))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
@@ -130,6 +133,10 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
 - `strategic_directives_v2_sd_type_check`: CHECK (((sd_type IS NULL) OR ((sd_type)::text = ANY ((ARRAY['bugfix'::character varying, 'database'::character varying, 'discovery_spike'::character varying, 'docs'::character varying, 'documentation'::character varying, 'feature'::character varying, 'frontend'::character varying, 'implementation'::character varying, 'infrastructure'::character varying, 'orchestrator'::character varying, 'qa'::character varying, 'refactor'::character varying, 'security'::character varying, 'ux_debt'::character varying])::text[]))))
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'in_progress'::character varying, 'planning'::character varying, 'review'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
+- `success_criteria_is_array`: CHECK (((success_criteria IS NULL) OR (jsonb_typeof(success_criteria) = 'array'::text))) NOT VALID
+- `success_criteria_not_empty`: CHECK (((success_criteria IS NULL) OR (jsonb_array_length(success_criteria) >= 1))) NOT VALID
+- `success_metrics_is_array`: CHECK (((success_metrics IS NULL) OR (jsonb_typeof(success_metrics) = 'array'::text))) NOT VALID
+- `success_metrics_not_empty`: CHECK (((success_metrics IS NULL) OR (jsonb_array_length(success_metrics) >= 1))) NOT VALID
 - `valid_human_verification_status`: CHECK ((human_verification_status = ANY (ARRAY['not_required'::text, 'pending'::text, 'in_progress'::text, 'passed'::text, 'failed'::text])))
 
 ## Indexes
