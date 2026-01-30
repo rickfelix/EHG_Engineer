@@ -6,7 +6,7 @@
 - **Status**: Draft
 - **Version**: 1.0.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-29
+- **Last Updated**: 2026-01-30
 - **Tags**: database, api, testing, schema
 
 **Document Type**: Operational Runbook
@@ -14,8 +14,8 @@
 **Component**: `scripts/hooks/stop-subagent-enforcement.js`
 **Owner**: LEO Infrastructure Team
 **Last Updated**: 2026-01-21
-**Version**: 2.2
-**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001, SD-LEO-REFAC-TESTING-INFRA-001, SD-QF-POST-COMPLETION-VALIDATOR-001
+**Version**: 2.3
+**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001, SD-LEO-REFAC-TESTING-INFRA-001, SD-QF-POST-COMPLETION-VALIDATOR-001, SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001
 
 ## Overview
 
@@ -569,6 +569,7 @@ LEO_SKIP_HOOKS=1 claude-code
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.3 | 2026-01-30 | Added cross-session AUTO-PROCEED continuation (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001, PR #694) - Exit code 3 signaling, continuation state, external loop runner |
 | 2.2 | 2026-01-29 | Added troubleshooting for post-completion validator false positive (PR #685) |
 | 1.0 | 2026-01-21 | Initial operational runbook for SD-LEO-INFRA-STOP-HOOK-SUB-001 |
 
