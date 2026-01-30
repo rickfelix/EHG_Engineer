@@ -168,10 +168,12 @@ async function createSDs() {
   console.log('Creating Security Remediation SDs...\n');
 
   for (const sd of sds) {
+    // FIXED: Don't JSON.stringify JSONB fields - Supabase handles serialization
+    // Root cause fix: PAT-JSONB-STRING-TYPE (RCA 2026-01-30)
     const record = {
       ...sd,
-      key_changes: JSON.stringify(sd.key_changes),
-      success_criteria: JSON.stringify(sd.success_criteria)
+      key_changes: sd.key_changes,        // Pass array directly, not stringified
+      success_criteria: sd.success_criteria // Pass array directly, not stringified
     };
 
     const { error } = await supabase
