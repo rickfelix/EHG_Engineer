@@ -13,6 +13,9 @@ import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
+// Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
+
 // Gate creators
 import {
   createPrerequisiteCheckGate,
@@ -62,8 +65,12 @@ export class PlanToLeadExecutor extends BaseExecutor {
     const appPath = options._appPath;
 
     // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
-    // Ensures CLAUDE_CORE.md is read before any SD work
-    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown'));
+    // Ensures CLAUDE_CORE.md AND CLAUDE_LEAD.md (destination phase) are read before handoff
+    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown', 'PLAN-TO-LEAD'));
+
+    // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+    // Validates CLAUDE_LEAD.md was read (destination phase file)
+    gates.push(createProtocolFileReadGate('PLAN-TO-LEAD'));
 
     // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));

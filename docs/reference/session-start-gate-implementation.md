@@ -3,11 +3,11 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Author**: LEO Protocol Team
 - **Last Updated**: 2026-01-30
-- **Tags**: protocol, gates, session, enforcement, infrastructure, sub-agent-triggers
-- **SD**: SD-LEO-INFRA-SESSION-START-GATE-001, SD-LEO-INFRA-HARDENING-001
+- **Tags**: protocol, gates, session, enforcement, infrastructure, sub-agent-triggers, handoff-validation
+- **SD**: SD-LEO-INFRA-SESSION-START-GATE-001, SD-LEO-INFRA-HARDENING-001, SD-LEO-FIX-PHASE0-INTEGRATION-001
 
 ## Overview
 
@@ -128,8 +128,17 @@ The protocol file enforcement system now supports three trigger points:
 | Trigger | When | Required Files | Implementation |
 |---------|------|----------------|----------------|
 | **SESSION_START** | LEO session initialization | CLAUDE.md, CLAUDE_CORE.md | `validateSessionStartGate()` |
-| **SD_START** | Before any SD work begins | CLAUDE.md, CLAUDE_CORE.md | `validateSdStartGate()` |
+| **SD_START** | Before any SD work begins | CLAUDE.md, CLAUDE_CORE.md + destination phase file | `validateSdStartGate(sdId, ctx, handoffType)` |
 | **POST_COMPACTION** | After context compaction | CLAUDE.md, CLAUDE_CORE.md + phase file | `validatePostCompactionGate()` |
+
+**Enhancement (v1.2.0)**: The SD_START gate now accepts an optional `handoffType` parameter that enforces reading the **destination** phase's protocol file:
+
+| Handoff Type | Destination Phase File |
+|--------------|------------------------|
+| LEAD-TO-PLAN | CLAUDE_PLAN.md |
+| PLAN-TO-EXEC | CLAUDE_EXEC.md |
+| EXEC-TO-PLAN | CLAUDE_PLAN.md |
+| PLAN-TO-LEAD | CLAUDE_LEAD.md |
 
 **Why CLAUDE.md is Required** (Added 2026-01-30):
 CLAUDE.md contains the sub-agent trigger keywords table that enables proactive sub-agent invocation. Without it, agents miss actionable triggers like:
@@ -138,6 +147,59 @@ CLAUDE.md contains the sub-agent trigger keywords table that enables proactive s
 - "apply migration" → invoke DATABASE sub-agent
 
 This was identified during RCA investigation (SD-LEO-INFRA-HARDENING-001) when AUTO-PROCEED stopped due to empty success_metrics, and the agent didn't proactively invoke the database-agent despite creating a migration file.
+
+### Handoff-Specific Phase File Validation (v1.2.0)
+
+The SD_START gate was enhanced to validate **destination phase protocol files** at handoff boundaries. This ensures agents load the correct phase-specific instructions before transitioning.
+
+**Problem**: Agents were only checking CLAUDE.md and CLAUDE_CORE.md at handoffs, but not the destination phase's protocol file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md).
+
+**Solution**: Added optional `handoffType` parameter to `validateSdStartGate()` and `createSdStartGate()`:
+
+```javascript
+// Enhanced function signature
+export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
+  // Start with core requirements
+  const requiredFiles = [...CORE_PROTOCOL_REQUIREMENTS.SD_START];
+
+  // Add phase-specific file if handoff type is specified
+  if (handoffType && HANDOFF_PHASE_FILES[handoffType]) {
+    const phaseFile = HANDOFF_PHASE_FILES[handoffType];
+    if (!requiredFiles.includes(phaseFile)) {
+      requiredFiles.push(phaseFile);
+    }
+  }
+
+  // Validate all required files...
+}
+```
+
+**Mapping Logic** (`HANDOFF_PHASE_FILES` constant):
+- Maps to the **destination** phase's protocol file (where you're going TO)
+- `LEAD-TO-PLAN` → `CLAUDE_PLAN.md` (going TO Plan)
+- `PLAN-TO-EXEC` → `CLAUDE_EXEC.md` (going TO Exec)
+- `EXEC-TO-PLAN` → `CLAUDE_PLAN.md` (going back TO Plan)
+- `PLAN-TO-LEAD` → `CLAUDE_LEAD.md` (going TO Lead for final approval)
+
+**Integration**: All handoff executors updated to pass handoff type:
+
+```javascript
+// Example: lead-to-plan/index.js
+gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown', 'LEAD-TO-PLAN'));
+```
+
+**Validation Output**:
+```
+📚 GATE: SD Start Protocol Enforcement
+--------------------------------------------------
+   SD: SD-XXX-001
+   Handoff Type: LEAD-TO-PLAN
+   Phase file required: CLAUDE_PLAN.md
+
+   ✅ CLAUDE.md already read (hash: 3f2a1b5c...)
+   ✅ CLAUDE_CORE.md already read (hash: 8d4e9f12...)
+   ✅ CLAUDE_PLAN.md already read (hash: 7c5b2a91...)
+```
 
 ## Implementation Files
 
@@ -243,6 +305,29 @@ const handoff = {
 };
 ```
 
+### Invoking SD_START Gate with Handoff Type (v1.2.0)
+
+```javascript
+import { validateSdStartGate, createSdStartGate } from './core-protocol-gate.js';
+
+// Direct validation with handoff type
+const result = await validateSdStartGate('SD-XXX-001', {}, 'LEAD-TO-PLAN');
+// Now validates: CLAUDE.md, CLAUDE_CORE.md, AND CLAUDE_PLAN.md
+
+// In handoff executor
+class LeadToPlanExecutor extends BaseExecutor {
+  getRequiredGates(sd, _options) {
+    const gates = [];
+
+    // Pass handoff type to include destination phase file
+    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown', 'LEAD-TO-PLAN'));
+
+    // ...other gates
+    return gates;
+  }
+}
+```
+
 ### Integration with LEO Session Init
 
 The SESSION_START gate should be invoked at the earliest point of `/leo` skill session initialization:
@@ -320,6 +405,15 @@ mv scripts/hooks/protocol-file-tracker.js scripts/hooks/protocol-file-tracker.cj
 - [CORE_PROTOCOL_REQUIREMENTS](../../scripts/modules/handoff/gates/core-protocol-gate.js) - Source code
 
 ## Version History
+
+- **v1.2.0** (2026-01-30): Enhanced SD_START gate with handoff-specific validation
+  - Added optional `handoffType` parameter to `validateSdStartGate()`
+  - Introduced `HANDOFF_PHASE_FILES` mapping for destination phase files
+  - SD_START gate now validates destination phase protocol file at handoffs
+  - Example: LEAD-TO-PLAN now requires CLAUDE.md, CLAUDE_CORE.md, AND CLAUDE_PLAN.md
+  - Updated all handoff executors to pass handoff type to gate
+  - Fixed protocol-file-read-gate.js mappings to use destination files (not source)
+  - SD reference: SD-LEO-FIX-PHASE0-INTEGRATION-001
 
 - **v1.1.0** (2026-01-30): Added CLAUDE.md requirement
   - Updated all trigger points to require both CLAUDE.md and CLAUDE_CORE.md
