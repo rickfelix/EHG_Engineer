@@ -140,6 +140,81 @@ Display each scenario in this format:
 
 Then ask for brief description and estimated LOC.
 
+#### Step 7.1: DOM Capture for Visual Failures (SD-LEO-ENH-UAT-DOM-CAPTURE-001)
+
+**If failure_type is "Visual bug"**, prompt for DOM capture:
+
+```javascript
+import { shouldCaptureDom, captureVisualDefect, verifySelector } from '../lib/uat/dom-capture.js';
+
+if (shouldCaptureDom(failureType)) {
+  // Prompt user for DOM capture
+  {
+    "question": "Visual failure detected. Capture DOM element?",
+    "header": "DOM Capture",
+    "multiSelect": false,
+    "options": [
+      {"label": "Yes, capture element", "description": "Capture selector and position for EXEC targeting"},
+      {"label": "No, skip capture", "description": "Continue without DOM capture"}
+    ]
+  }
+
+  // Record the offering
+  const domCaptureOffered = true;
+  let domCaptureAccepted = false;
+  let domCapture = null;
+
+  if (userAccepted) {
+    domCaptureAccepted = true;
+
+    // Use Playwright MCP to capture element
+    // page is the Playwright page instance from browser_snapshot
+    domCapture = await captureVisualDefect(page, elementSelector, {
+      defectId: `defect-${Date.now()}`,
+      outputDir: './visual-polish-reports/screenshots'
+    });
+
+    if (domCapture.success) {
+      console.log(`DOM captured: ${domCapture.primary_selector}`);
+    }
+  } else {
+    console.log('Skipping DOM capture');
+  }
+}
+```
+
+**DOM Capture Output** (shown to user):
+```
+Visual failure detected. Capture DOM element? [Y/n]
+> Y
+DOM captured: button[data-testid="submit-btn"]
+  - Primary selector: button[data-testid="submit-btn"]
+  - Alternatives: #submit, .btn-primary
+  - Bounding box: (100, 200, 80, 32)
+  - Screenshot saved: screenshots/defect-123-annotated.png
+```
+
+**EXEC Agent Integration**: When EXEC picks up a defect with `dom_capture` metadata:
+```javascript
+import { verifySelector } from '../lib/uat/dom-capture.js';
+import { recoverFromDrift } from '../lib/uat/selector-drift-recovery.js';
+
+// First action: verify selector exists
+const verification = await verifySelector(page, defect.metadata.dom_capture);
+
+if (verification.verified) {
+  console.log(`Selector verified: ${verification.matchedSelector} found`);
+  const element = page.locator(verification.matchedSelector).first();
+  // Proceed with fix
+} else {
+  console.log('Selector not found: attempting drift recovery');
+  const recovery = await recoverFromDrift(page, defect.metadata.dom_capture);
+  if (recovery.recovered) {
+    console.log(`Fallback selector matched: ${recovery.new_selector}`);
+  }
+}
+```
+
 ### Step 8: Record to Database
 
 ```javascript
