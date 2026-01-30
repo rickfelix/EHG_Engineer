@@ -266,16 +266,27 @@ export function checkGate(sdType) {
   // Check for existing session
   const existingSession = loadSession();
 
-  if (existingSession && !isComplete(existingSession)) {
-    // Resume existing session
-    return {
-      action: 'resume',
-      session: existingSession,
-      message: 'Resuming existing Phase 0 session.'
-    };
+  if (existingSession) {
+    if (isComplete(existingSession)) {
+      // Phase 0 complete - allow SD creation with artifacts
+      return {
+        action: 'proceed',
+        required: true,
+        complete: true,
+        session: existingSession,
+        message: 'Phase 0 complete. Proceeding with SD creation.'
+      };
+    } else {
+      // Resume incomplete session
+      return {
+        action: 'resume',
+        session: existingSession,
+        message: 'Resuming existing Phase 0 session.'
+      };
+    }
   }
 
-  // Check if Phase 0 required
+  // No existing session - check if Phase 0 required
   if (!requiresPhase0(sdType)) {
     return {
       action: 'proceed',
@@ -441,6 +452,10 @@ const artifacts = getArtifacts(session);
 `;
 }
 
+// Named re-export of getArtifacts for direct import
+// SD-LEO-FIX-PHASE0-INTEGRATION-001: Needed by leo-create-sd.js
+export { getArtifacts };
+
 export default {
   startPhase0,
   continuePhase0,
@@ -451,6 +466,7 @@ export default {
   reset,
   formatForAskUserQuestion,
   getIntegrationInstructions,
+  getArtifacts,
 
   // Re-export key constants
   CRYSTALLIZATION_THRESHOLD,
