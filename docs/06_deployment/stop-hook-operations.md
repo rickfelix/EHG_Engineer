@@ -6,7 +6,7 @@
 - **Status**: Draft
 - **Version**: 1.0.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-22
+- **Last Updated**: 2026-01-29
 - **Tags**: database, api, testing, schema
 
 **Document Type**: Operational Runbook
@@ -14,8 +14,8 @@
 **Component**: `scripts/hooks/stop-subagent-enforcement.js`
 **Owner**: LEO Infrastructure Team
 **Last Updated**: 2026-01-21
-**Version**: 2.1
-**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001, SD-LEO-REFAC-TESTING-INFRA-001
+**Version**: 2.2
+**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001, SD-LEO-REFAC-TESTING-INFRA-001, SD-QF-POST-COMPLETION-VALIDATOR-001
 
 ## Overview
 
@@ -455,6 +455,68 @@ supabase.from('sd_phase_handoffs')
 "
 ```
 
+### Post-Completion Validator False Positive (AUTO-PROCEED Blocking)
+
+**Symptom**: Completed SD blocks AUTO-PROCEED with "Missing SHIP" even though PR was merged
+
+**Error Message**:
+```
+⚠️  Post-Completion Validation for SD-XXX-001
+   ❌ BLOCKING: Missing required post-completion commands: SHIP
+```
+
+**Root Cause** (fixed in PR #685):
+1. SD query in `index.js` did not include `completion_date` field
+2. Validator received `sd.completion_date` as `undefined`
+3. `git diff main...HEAD` failed after branch merge (branch deleted)
+4. Catch block incorrectly assumed SHIP was needed when diff failed
+
+**Diagnosis**:
+```bash
+# Check if completion_date is set but SD still blocks
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('strategic_directives_v2')
+  .select('id, sd_key, status, completion_date, current_phase')
+  .eq('sd_key', 'SD-XXX-001')
+  .single()
+  .then(({data}) => {
+    console.log('SD Status:', data.status);
+    console.log('Completion Date:', data.completion_date);
+    console.log('Current Phase:', data.current_phase);
+    console.log('Expected: completion_date should be set if status is completed');
+  });
+"
+
+# Check if branch still exists (may cause false positive if deleted)
+git branch -a | grep SD-XXX-001
+```
+
+**Resolution** (fixed in commit `025855807`):
+1. Added `completion_date` to SD select query (`index.js:178`)
+2. Changed catch block to log info instead of blocking when `git diff` fails
+3. Validator now correctly identifies completed SDs even after branch deletion
+
+**Verification**:
+```bash
+# Verify fix is in place
+grep "completion_date" scripts/hooks/stop-subagent-enforcement/index.js
+
+# Expected output:
+# .select('id, sd_key, sd_key, title, sd_type, category, current_phase, status, completion_date')
+```
+
+**Workaround** (if running older version):
+- Ensure branch exists when session ends
+- Or manually set bypass file with retrospective committed
+
+**Related**:
+- **PR**: #685 - fix(stop-hook): resolve post-completion validator false positive blocking AUTO-PROCEED
+- **Commit**: `025855807`
+- **Files Modified**: `scripts/hooks/stop-subagent-enforcement/index.js`, `scripts/hooks/stop-subagent-enforcement/post-completion-validator.js`
+
 ## Maintenance
 
 ### Updating Requirements Matrix
@@ -507,6 +569,7 @@ LEO_SKIP_HOOKS=1 claude-code
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2 | 2026-01-29 | Added troubleshooting for post-completion validator false positive (PR #685) |
 | 1.0 | 2026-01-21 | Initial operational runbook for SD-LEO-INFRA-STOP-HOOK-SUB-001 |
 
 ---
