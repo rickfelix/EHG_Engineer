@@ -56,6 +56,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/task-subagent-recorder.cjs",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
