@@ -4,9 +4,9 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Draft
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-13
+- **Last Updated**: 2026-01-30
 - **Tags**: database, testing, e2e, unit
 
 **Status**: ACTIVE
@@ -536,12 +536,45 @@ Bash('cat Component.tsx | head -20');  // Verify content
 
 ---
 
+## Automated Cross-Session Continuation (v4.3.3.3+)
+
+**NEW**: LEO Protocol now supports automated cross-session continuation via exit code 3 signaling.
+
+When AUTO-PROCEED is enabled, the stop hook can detect incomplete work and write continuation state to `.claude/continuation-state.json`. An external loop runner (`leo-continuous-loop.ps1`) can then restart Claude Code sessions automatically.
+
+See: `docs/leo/protocol/v4.3.3-auto-proceed-enhancement.md` for full details.
+
+### Quick Start
+
+```powershell
+# Start the external loop runner
+.\scripts\leo-continuous-loop.ps1
+
+# The loop will:
+# 1. Start Claude Code sessions
+# 2. Detect exit code 3 (incomplete)
+# 3. Generate continuation prompts
+# 4. Restart with context
+# 5. Continue until complete or max retries
+```
+
+### Safety Mechanisms
+
+| Mechanism | Default | Purpose |
+|-----------|---------|---------|
+| MaxRetries | 10 | Prevents infinite loops |
+| CooldownSeconds | 60 | Rate limiting |
+| CircuitBreaker | 3 failures | Stops on repeated errors |
+| Lockfile | `.claude/loop.lock` | Single instance |
+
 ## Related Documentation
 
 - `CLAUDE.md` - LEO Protocol overview
 - `docs/reference/context-monitoring.md` - Context management strategies
 - `docs/reference/checkpoint-pattern.md` - Checkpoint implementation
 - `docs/reference/unified-handoff-system.md` - Handoff creation
+- `docs/leo/protocol/v4.3.3-auto-proceed-enhancement.md` - AUTO-PROCEED and cross-session continuation
+- `docs/06_deployment/stop-hook-operations.md` - Stop hook operational runbook
 
 ---
 
@@ -549,6 +582,7 @@ Bash('cat Component.tsx | head -20');  // Verify content
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-30 | Added automated cross-session continuation section (v4.3.3.3) |
 | 1.0.0 | 2025-10-12 | Initial version from SD-SETTINGS-2025-10-12 success pattern |
 
 ---
