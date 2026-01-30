@@ -34,6 +34,12 @@ import {
   transitionPrdToVerification,
   transitionSDToExecComplete
 } from './state-transitions.js';
+
+// Atomic transitions (SD-LEO-INFRA-HARDENING-001)
+import {
+  executeAtomicExecToPlanTransition,
+  isAtomicTransitionAvailable
+} from './atomic-transitions.js';
 import {
   validateTestEvidence,
   autoValidateStories,
@@ -154,19 +160,40 @@ export class ExecToPlanExecutor extends BaseExecutor {
     const orchestrationResult = gateResults.gateResults.SUB_AGENT_ORCHESTRATION?.details || {};
     const bmadResult = gateResults.gateResults.BMAD_EXEC_TO_PLAN || {};
 
-    // STATE TRANSITIONS
+    // STATE TRANSITIONS (SD-LEO-INFRA-HARDENING-001: Atomic mode)
     console.log('\n📊 Step 6: STATE TRANSITIONS');
     console.log('-'.repeat(50));
 
-    // 6a. Update user stories to validated/completed status
-    await transitionUserStoriesToValidated(this.supabase, sdId);
-
-    // 6b. Update PRD status to verification
+    // Get PRD for transition
     const prdForTransition = await this.prdRepo?.getBySdId(sd.id);
-    await transitionPrdToVerification(this.supabase, prdForTransition);
 
-    // 6c. Update SD phase to EXEC_COMPLETE
-    await transitionSDToExecComplete(this.supabase, sdId);
+    // Try atomic transition first (advisory lock + single transaction)
+    const atomicAvailable = await isAtomicTransitionAvailable(this.supabase);
+
+    if (atomicAvailable) {
+      const atomicResult = await executeAtomicExecToPlanTransition(
+        this.supabase,
+        sdId,
+        prdForTransition?.prd_id || prdForTransition?.uuid_id,
+        { sessionId: process.env.CLAUDE_SESSION_ID }
+      );
+
+      if (!atomicResult.success) {
+        throw new Error(`Atomic transition failed: ${atomicResult.error}`);
+      }
+    } else {
+      // Fallback to legacy sequential transitions (non-atomic)
+      console.log('   ⚠️  Atomic RPC not available, using legacy mode');
+
+      // 6a. Update user stories to validated/completed status
+      await transitionUserStoriesToValidated(this.supabase, sdId);
+
+      // 6b. Update PRD status to verification
+      await transitionPrdToVerification(this.supabase, prdForTransition);
+
+      // 6c. Update SD phase to EXEC_COMPLETE
+      await transitionSDToExecComplete(this.supabase, sdId);
+    }
 
     // Automated shipping: PR Creation (LEO v4.3.5)
     const shippingResult = await runAutomatedShippingForSD(sdId, sd, this.determineTargetRepository.bind(this));

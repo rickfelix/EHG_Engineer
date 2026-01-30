@@ -164,12 +164,69 @@ async function orchestrate(supabase, phase, sdId, options = {}) {
     }
 
     // Step 4: Execute required sub-agents
+    // SD-LEO-INFRA-HARDENING-001: Parallel execution for independent agents
     console.log(`\nStep 4: Executing ${requiredSubAgents.length} required sub-agent(s)...`);
-    console.log('   (Parallel execution where independent)');
+    console.log('   (Parallel execution enabled - SD-LEO-INFRA-HARDENING-001)');
+
+    // Separate agents with dependencies from independent ones
+    const independentAgents = requiredSubAgents.filter(a => !a.depends_on || a.depends_on.length === 0);
+    const dependentAgents = requiredSubAgents.filter(a => a.depends_on && a.depends_on.length > 0);
+
+    console.log(`   Independent agents: ${independentAgents.length}`);
+    console.log(`   Dependent agents: ${dependentAgents.length}`);
 
     const executionResults = [];
 
-    for (const subAgent of requiredSubAgents) {
+    // Execute independent agents in parallel
+    if (independentAgents.length > 0) {
+      const startTime = Date.now();
+      console.log(`\n   🚀 Executing ${independentAgents.length} independent agents in parallel...`);
+
+      const parallelResults = await Promise.all(
+        independentAgents.map(async (subAgent) => {
+          try {
+            const result = await executeSubAgent(subAgent, sdId, options);
+            result.phase = phase;
+            result.priority = subAgent.priority >= 90 ? 'CRITICAL' : subAgent.priority >= 70 ? 'HIGH' : 'MEDIUM';
+            return { success: true, result, subAgent };
+          } catch (error) {
+            return {
+              success: false,
+              error,
+              subAgent,
+              result: {
+                sub_agent_code: subAgent.code,
+                sub_agent_name: subAgent.name,
+                verdict: 'FAIL',
+                confidence: 0,
+                critical_issues: [error.message],
+                warnings: [],
+                recommendations: ['Review sub-agent execution script'],
+                detailed_analysis: `Execution failed: ${error.message}`,
+                execution_time: 0,
+                phase,
+                priority: subAgent.priority >= 90 ? 'CRITICAL' : 'MEDIUM'
+              }
+            };
+          }
+        })
+      );
+
+      const parallelDuration = Date.now() - startTime;
+      console.log(`   ✅ Parallel execution completed in ${parallelDuration}ms`);
+
+      // Process and store results
+      for (const { success, result, error, subAgent } of parallelResults) {
+        if (!success) {
+          console.error(`   Failed to execute ${subAgent.code}: ${error.message}`);
+        }
+        executionResults.push(result);
+        await storeSubAgentResult(supabase, sdId, result);
+      }
+    }
+
+    // Execute dependent agents sequentially (respecting dependencies)
+    for (const subAgent of dependentAgents) {
       try {
         const result = await executeSubAgent(subAgent, sdId, options);
         result.phase = phase;

@@ -79,35 +79,36 @@ export const SCORING_WEIGHTS = {
 
 // Threshold profiles by SD type
 // SD-LEO-PROTOCOL-V435-001 US-002: Added prdQuality thresholds per type
+// SD-LEO-INFRA-HARDENING-001: Added gateThreshold for ValidationOrchestrator enforcement
 export const THRESHOLD_PROFILES = {
   // Infrastructure SDs have lower quality thresholds (simpler by design)
-  infrastructure: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },
-  documentation: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50 },
-  docs: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50 }, // Alias for documentation
-  process: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },
-  qa: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },  // SD-E2E-WEBSOCKET-AUTH-006
+  infrastructure: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 80 },
+  documentation: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50, gateThreshold: 60 },
+  docs: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50, gateThreshold: 60 }, // Alias for documentation
+  process: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 70 },
+  qa: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 70 },  // SD-E2E-WEBSOCKET-AUTH-006
 
   // PAT-SD-API-CATEGORY-003: API/backend SDs have slightly lower thresholds (no E2E required)
-  api: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65 },
-  backend: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65 },
+  api: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65, gateThreshold: 75 },
+  backend: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65, gateThreshold: 75 },
 
   // Feature SDs - Retrospective threshold lowered from 65 to 55 (2026-01-05)
   // ROOT CAUSE FIX: AI Russian Judge variance blocks valid retrospectives (57% vs 65%)
   // Retrospective quality is advisory; core validation is via sub-agents and handoffs
-  feature: { retrospectiveQuality: 55, sdCompletion: 65, prdQuality: 65 },
+  feature: { retrospectiveQuality: 55, sdCompletion: 65, prdQuality: 65, gateThreshold: 85 },
   // LEO Protocol v4.4.1: Enhancement - lighter thresholds (improvements to existing features)
-  enhancement: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 60 },
-  bugfix: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 70 },
-  refactor: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 75 },
-  database: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 70 },
-  security: { retrospectiveQuality: 70, sdCompletion: 70, prdQuality: 90 },
-  performance: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 85 },
+  enhancement: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 60, gateThreshold: 75 },
+  bugfix: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 70, gateThreshold: 85 },
+  refactor: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 75, gateThreshold: 75 },
+  database: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 70, gateThreshold: 80 },
+  security: { retrospectiveQuality: 70, sdCompletion: 70, prdQuality: 90, gateThreshold: 90 },
+  performance: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 85, gateThreshold: 80 },
 
   // Orchestrator: Parent SDs - thresholds based on child completion
-  orchestrator: { retrospectiveQuality: 55, sdCompletion: 100, prdQuality: 50 },  // Must have all children complete
+  orchestrator: { retrospectiveQuality: 55, sdCompletion: 100, prdQuality: 50, gateThreshold: 70 },  // Must have all children complete
 
   // Default
-  default: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 70 }
+  default: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 70, gateThreshold: 85 }
 };
 
 /**

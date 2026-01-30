@@ -87,15 +87,16 @@ export class BaseExecutor {
         prd = await this.prdRepo.getBySdId(sd.id);
       }
 
-      // Merge hardcoded gates with database rules
+      // SD-LEO-INFRA-HARDENING-001: Deep-copy context objects to prevent mutation
+      // This ensures chained skills and validators don't accidentally modify original data
       const validationContext = {
         sdId,
         sd_id: sd?.id || sdId,  // Use UUID when available for database queries
-        sd,
-        prd,          // SD-LEO-001: Include PRD in context for validators
+        sd: sd ? structuredClone(sd) : null,  // Deep copy to prevent mutation
+        prd: prd ? structuredClone(prd) : null,  // SD-LEO-001: Include PRD in context for validators
         prdId: prd?.id,  // Also provide prdId for convenience
-        options,
-        supabase: this.supabase
+        options: options ? structuredClone(options) : {},  // Deep copy options
+        supabase: this.supabase  // Supabase client cannot be cloned (has methods)
       };
 
       // Use database-driven gates when available, fall back to hardcoded
