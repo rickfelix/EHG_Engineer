@@ -15,3 +15,4 @@ export { createRCAGate } from './rca-gate.js';
 export { createHumanVerificationGate } from './human-verification-gate.js';
 export { createSubAgentEnforcementValidationGate } from './subagent-enforcement-validation.js';
 export { createLOCThresholdValidationGate } from './loc-threshold-validation.js';
+export { createPerformanceCriticalGate } from './performance-critical-gate.js';
