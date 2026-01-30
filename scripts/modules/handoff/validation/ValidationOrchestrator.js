@@ -31,6 +31,9 @@ import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
 // SD-LEO-INFRA-HARDENING-001: Gate result schema validation
 import { validateGateResult, validateGateResultsBatch } from './gate-result-schema.js';
 
+// SD-LEO-INFRA-OIV-001: Operational Integration Verification
+import { OIVGate, OIV_GATE_WEIGHT } from './oiv/index.js';
+
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
     if (!supabase) {
@@ -52,6 +55,13 @@ export class ValidationOrchestrator {
 
     // Validator registry
     this.validatorRegistry = options.validatorRegistry || validatorRegistry;
+
+    // SD-LEO-INFRA-OIV-001: OIV Gate instance
+    this.oivGate = options.oivGate || new OIVGate(supabase, {
+      basePath: options.basePath || process.cwd(),
+      verbose: options.verbose || false
+    });
+    this.oivEnabled = options.oivEnabled !== false; // Default: enabled
   }
 
   /**
@@ -217,6 +227,119 @@ export class ValidationOrchestrator {
     }
 
     return results;
+  }
+
+  // ============================================
+  // OIV Integration (SD-LEO-INFRA-OIV-001)
+  // ============================================
+
+  /**
+   * Validate gates with OIV as an additional gate
+   * OIV runs AFTER standard gates pass and contributes 15% weight to overall score
+   *
+   * @param {Array} gates - Array of gate definitions
+   * @param {Object} context - Shared context (must include sd object)
+   * @param {Object} options - Options
+   * @param {boolean} options.includeOIV - Whether to include OIV gate (default: true if oivEnabled)
+   * @returns {Promise<Object>} Combined result with OIV contribution
+   */
+  async validateGatesWithOIV(gates, context = {}, options = {}) {
+    const includeOIV = options.includeOIV !== false && this.oivEnabled;
+
+    // First, run standard gates
+    const standardResults = await this.validateGates(gates, context);
+
+    // If standard gates fail or OIV is disabled, return standard results
+    if (!standardResults.passed || !includeOIV) {
+      return standardResults;
+    }
+
+    // Check if SD type should skip code validation entirely
+    if (context.sd && shouldSkipCodeValidation(context.sd)) {
+      console.log(`   ⏭️  OIV skipped: SD type '${context.sd.sd_type}' skips code validation`);
+      standardResults.oivResult = {
+        skipped: true,
+        reason: 'SD type skips code validation'
+      };
+      return standardResults;
+    }
+
+    // Run OIV gate
+    console.log('\n📦 Running OIV Gate (15% weight)...');
+    const oivResult = await this.oivGate.validateHandoff(context);
+
+    // Store OIV result for reference
+    standardResults.oivResult = oivResult;
+
+    // Calculate combined score with OIV weight
+    // Standard gates: 85%, OIV: 15%
+    const standardWeight = 1 - OIV_GATE_WEIGHT;
+    const combinedScore = Math.round(
+      (standardResults.normalizedScore * standardWeight) +
+      (oivResult.score * OIV_GATE_WEIGHT)
+    );
+
+    // Update results with OIV contribution
+    standardResults.oivScore = oivResult.score;
+    standardResults.oivWeight = OIV_GATE_WEIGHT;
+    standardResults.combinedScore = combinedScore;
+
+    // OIV failure blocks handoff
+    if (!oivResult.passed) {
+      standardResults.passed = false;
+      standardResults.failedGate = 'OIV';
+      standardResults.issues.push(...oivResult.issues);
+      console.log(`   ❌ OIV Gate BLOCKED handoff (score: ${oivResult.score}%)`);
+    }
+
+    // Re-check SD-type threshold with combined score
+    if (standardResults.passed && context.sd?.sd_type) {
+      const sdType = context.sd.sd_type;
+      const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
+      const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
+
+      if (combinedScore < threshold) {
+        standardResults.passed = false;
+        standardResults.failedGate = 'SD_TYPE_THRESHOLD_WITH_OIV';
+        standardResults.thresholdViolation = {
+          sdType,
+          required: threshold,
+          actual: combinedScore,
+          standardScore: standardResults.normalizedScore,
+          oivScore: oivResult.score
+        };
+        standardResults.issues.push(
+          `Combined score (${combinedScore}%) below threshold (${threshold}%) for SD type '${sdType}'`
+        );
+        console.log(`   ❌ Combined Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${combinedScore}%`);
+      }
+    }
+
+    // Log summary
+    console.log('\n📊 Gate Scoring Summary:');
+    console.log(`   Standard gates: ${standardResults.normalizedScore}% (weight: ${(standardWeight * 100).toFixed(0)}%)`);
+    console.log(`   OIV gate: ${oivResult.score}% (weight: ${(OIV_GATE_WEIGHT * 100).toFixed(0)}%)`);
+    console.log(`   Combined: ${combinedScore}%`);
+    console.log(`   Status: ${standardResults.passed ? '✓ PASS' : '✗ FAIL'}`);
+
+    return standardResults;
+  }
+
+  /**
+   * Get OIV gate instance for direct access
+   * @returns {OIVGate} The OIV gate instance
+   */
+  getOIVGate() {
+    return this.oivGate;
+  }
+
+  /**
+   * Enable or disable OIV validation
+   * @param {boolean} enabled - Whether OIV is enabled
+   */
+  setOIVEnabled(enabled) {
+    this.oivEnabled = enabled;
+    console.log(`   OIV validation ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**

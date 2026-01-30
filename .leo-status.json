@@ -2,7 +2,7 @@
   "project": "EHG_Engineer",
   "leoVersion": "3.1.5.9",
   "activeRole": "EXEC",
-  "currentSD": "SD-LEO-INFRA-DOCMON-SUB-AGENT-001",
+  "currentSD": "LEO-INFRA-OIV-001",
   "currentTask": null,
   "phase": "LEAD",
   "lastHandoff": {
@@ -17,8 +17,8 @@
     "updateInterval": 5000
   },
   "autoProceed": {
-    "isActive": true,
-    "sdKey": "SD-LEO-INFRA-DOCMON-SUB-AGENT-001",
+    "isActive": false,
+    "sdKey": "LEO-INFRA-OIV-001",
     "phase": "LEAD",
     "progress": 0,
     "childProgress": {
