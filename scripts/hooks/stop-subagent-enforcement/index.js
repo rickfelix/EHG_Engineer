@@ -37,6 +37,14 @@ import { detectBiasesForType } from './bias-detector.js';
 import { validateSubAgents, handleValidationResults } from './sub-agent-validator.js';
 import { REQUIREMENTS } from './config.js';
 
+// Import continuation state management (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
+import {
+  checkContinuationNeeded,
+  writeState as writeContinuationState,
+  markIncomplete
+} from '../../modules/handoff/continuation-state.js';
+import { writeContinuationPrompt } from '../../modules/handoff/continuation-prompt-generator.js';
+
 dotenv.config();
 
 // ============================================================================
@@ -284,7 +292,52 @@ export async function main() {
     throw err;
   }
 
-  // 8. All required validations passed
+  // 8. AUTO-PROCEED Cross-Session Continuation (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
+  // Check if AUTO-PROCEED is enabled and continuation is needed
+  const autoProceedResult = await safeAsync(async () => {
+    // Check if AUTO-PROCEED is enabled in session
+    const { data: sessionData } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('status', 'active')
+      .order('heartbeat_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const autoProceed = sessionData?.metadata?.auto_proceed ?? true;
+
+    if (autoProceed) {
+      // Check if continuation is needed
+      const continuationCheck = await checkContinuationNeeded(supabase, sd, sdKey);
+
+      if (continuationCheck.needed) {
+        // Write continuation state
+        const stateResult = writeContinuationState(continuationCheck.state);
+        if (stateResult.success) {
+          // Generate continuation prompt
+          writeContinuationPrompt();
+
+          console.log('\n🔄 AUTO-PROCEED: Session incomplete - continuation state saved');
+          console.log(`   SD: ${sdKey}`);
+          console.log(`   Phase: ${sd.current_phase}`);
+          console.log(`   Reason: ${continuationCheck.reason}`);
+          console.log('   Exit code 3 signals external loop to continue\n');
+
+          return { exitCode3: true };
+        }
+      }
+    }
+
+    return { exitCode3: false };
+  }, 'checkAutoProceedContinuation');
+
+  // Exit with code 3 if continuation needed (signals external loop)
+  if (autoProceedResult?.exitCode3) {
+    gracefulExit(3);
+    return;
+  }
+
+  // 9. All required validations passed
   gracefulExit(0);
 }
 

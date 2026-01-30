@@ -41,6 +41,18 @@ import {
   displayPostCompletionSummary
 } from '../lib/utils/post-completion-requirements.js';
 
+// Import continuation state management (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
+import {
+  readState as readContinuationState,
+  writeState as writeContinuationState,
+  markComplete,
+  addPendingCommands,
+  removePendingCommand
+} from './modules/handoff/continuation-state.js';
+
+// Import child_process for command execution
+import { spawn } from 'child_process';
+
 const { mapHierarchy, getDepthFirstOrder, getNextIncomplete, isHierarchyComplete, getHierarchyStats } = hierarchyMapper;
 const { checkpoint, reloadProtocol, validatePhase } = checkpointSystem;
 const { analyzeFailure, attemptFix, skipAndLog } = rootCauseResolver;
@@ -106,8 +118,73 @@ async function loadOrchestrationTemplate(sdId) {
 }
 
 /**
+ * Execute a post-completion command
+ * SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001
+ *
+ * @param {string} command - Command to execute (without leading /)
+ * @returns {Promise<{ success: boolean, output?: string, error?: string }>}
+ */
+async function executePostCompletionCommand(command) {
+  return new Promise((resolve) => {
+    console.log(`${colors.cyan}  Executing: /${command}${colors.reset}`);
+
+    // Map commands to their script equivalents
+    const commandMap = {
+      'document': ['node', ['scripts/execute-skill.js', 'document']],
+      'ship': ['node', ['scripts/execute-skill.js', 'ship']],
+      'learn': ['node', ['scripts/modules/learning/index.js', 'process']],
+      'restart': ['node', ['scripts/cross-platform-run.js', 'leo-stack', 'restart']]
+    };
+
+    const [cmd, args] = commandMap[command] || ['node', ['scripts/execute-skill.js', command]];
+
+    try {
+      const proc = spawn(cmd, args, {
+        cwd: EHG_ENGINEER_ROOT,
+        stdio: ['inherit', 'pipe', 'pipe'],
+        shell: true
+      });
+
+      let output = '';
+      let errorOutput = '';
+
+      proc.stdout?.on('data', (data) => {
+        output += data.toString();
+        process.stdout.write(data);
+      });
+
+      proc.stderr?.on('data', (data) => {
+        errorOutput += data.toString();
+        process.stderr.write(data);
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, output });
+        } else {
+          resolve({ success: false, error: errorOutput || `Exit code ${code}` });
+        }
+      });
+
+      proc.on('error', (err) => {
+        resolve({ success: false, error: err.message });
+      });
+
+      // Timeout after 5 minutes per command
+      setTimeout(() => {
+        proc.kill();
+        resolve({ success: false, error: 'Command timed out after 5 minutes' });
+      }, 5 * 60 * 1000);
+    } catch (err) {
+      resolve({ success: false, error: err.message });
+    }
+  });
+}
+
+/**
  * Trigger post-completion sequence based on SD type.
  * SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-N
+ * SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001: Now executes commands sequentially
  *
  * @param {Object} sd - The completed Strategic Directive
  * @returns {Promise<Object>} Post-completion result
@@ -132,6 +209,7 @@ async function triggerPostCompletionSequence(sd) {
     sdType,
     sequenceType: requirements.sequenceType,
     commands: sequence,
+    commandResults: [],
     requirements: {
       restart: requirements.restart,
       ship: requirements.ship,
@@ -140,11 +218,14 @@ async function triggerPostCompletionSequence(sd) {
     }
   };
 
-  // Log the command sequence for autonomous execution
+  // Log the command sequence
   console.log(`\n${colors.yellow}Commands to execute:${colors.reset}`);
   sequence.forEach((cmd, i) => {
     console.log(`   ${i + 1}. /${cmd}`);
   });
+
+  // SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001: Store pending commands in continuation state
+  addPendingCommands(sequence);
 
   // Record post-completion trigger in database
   try {
@@ -160,6 +241,78 @@ async function triggerPostCompletionSequence(sd) {
       });
   } catch (_err) {
     // Ignore logging errors
+  }
+
+  // SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001: Execute commands sequentially
+  console.log(`\n${colors.cyan}Executing post-completion commands:${colors.reset}`);
+
+  for (const command of sequence) {
+    if (!isRunning) {
+      console.log(`${colors.yellow}  Execution paused by user${colors.reset}`);
+      break;
+    }
+
+    const cmdResult = await executePostCompletionCommand(command);
+    result.commandResults.push({ command, ...cmdResult });
+
+    if (cmdResult.success) {
+      console.log(`${colors.green}  ✓ /${command} completed${colors.reset}`);
+      // Remove from pending commands
+      removePendingCommand(command);
+
+      // Record success
+      try {
+        await supabase
+          .from('continuous_execution_log')
+          .insert({
+            session_id: sessionId,
+            parent_sd_id: sd.parent_sd_id,
+            child_sd_id: sd.id,
+            phase: 'POST-COMPLETION',
+            status: 'command_completed',
+            metadata: { command, success: true }
+          });
+      } catch (_err) {
+        // Ignore logging errors
+      }
+    } else {
+      console.log(`${colors.red}  ✗ /${command} failed: ${cmdResult.error}${colors.reset}`);
+
+      // Record failure
+      try {
+        await supabase
+          .from('continuous_execution_log')
+          .insert({
+            session_id: sessionId,
+            parent_sd_id: sd.parent_sd_id,
+            child_sd_id: sd.id,
+            phase: 'POST-COMPLETION',
+            status: 'command_failed',
+            error_message: cmdResult.error,
+            metadata: { command, success: false }
+          });
+      } catch (_err) {
+        // Ignore logging errors
+      }
+
+      // Continue with next command even if one fails
+      console.log(`${colors.yellow}  Continuing with remaining commands...${colors.reset}`);
+    }
+  }
+
+  // Check if all commands completed
+  const allSucceeded = result.commandResults.every(r => r.success);
+  const successCount = result.commandResults.filter(r => r.success).length;
+
+  console.log(`\n${colors.cyan}Post-completion summary:${colors.reset}`);
+  console.log(`  Commands: ${successCount}/${result.commandResults.length} succeeded`);
+
+  if (allSucceeded) {
+    console.log(`${colors.green}  ✓ All post-completion commands executed successfully${colors.reset}`);
+    // Mark continuation state as complete
+    markComplete();
+  } else {
+    console.log(`${colors.yellow}  ⚠ Some commands failed - continuation state preserved${colors.reset}`);
   }
 
   return result;
