@@ -403,6 +403,8 @@ export class BaseExecutor {
       // Dynamic imports to avoid circular dependencies
       const sessionManager = await import('../../../../lib/session-manager.mjs');
       const conflictChecker = await import('../../../../lib/session-conflict-checker.mjs');
+      // SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001 (FR-5): Import heartbeat manager
+      const heartbeatManager = await import('../../../../lib/heartbeat-manager.mjs');
 
       // Get or create session for this terminal
       const session = await sessionManager.getOrCreateSession();
@@ -437,6 +439,13 @@ export class BaseExecutor {
             console.log(`   [Claim] ⚠️ Could not claim SD: ${result.error || 'Unknown error'}`);
             console.log('   [Claim] Proceeding with handoff - claim failure will not block');
           }
+        }
+
+        // FR-5: Start automatic heartbeat updates (every 30s, well under 60s requirement)
+        // This keeps the session alive during long-running operations
+        const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+        if (!heartbeatStatus.active || heartbeatStatus.sessionId !== session.session_id) {
+          heartbeatManager.startHeartbeat(session.session_id);
         }
       }
 

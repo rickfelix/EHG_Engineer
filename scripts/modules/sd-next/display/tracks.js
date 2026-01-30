@@ -94,12 +94,30 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
 
   console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}... ${statusIcon}`);
 
-  // Show who claimed it
+  // Show who claimed it with enhanced details (FR-6)
   if (isClaimedByOther) {
     const claimingSession = activeSessions.find(s => s.session_id === claimedBySession);
     const shortId = claimedBySession.substring(0, 12) + '...';
     const ageMin = claimingSession ? Math.round(claimingSession.claim_duration_minutes || 0) : '?';
-    console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${colors.reset}`);
+
+    // FR-6: Show heartbeat age to indicate session freshness
+    let heartbeatInfo = '';
+    if (claimingSession) {
+      const heartbeatAge = claimingSession.heartbeat_age_human ||
+        formatHeartbeatAge(claimingSession.heartbeat_age_seconds);
+      const heartbeatSeconds = Math.round(claimingSession.heartbeat_age_seconds || 0);
+
+      // Color code heartbeat status
+      if (heartbeatSeconds >= 180) {
+        heartbeatInfo = ` ${colors.red}(heartbeat: ${heartbeatAge} - may be stale)${colors.reset}`;
+      } else if (heartbeatSeconds >= 60) {
+        heartbeatInfo = ` ${colors.yellow}(heartbeat: ${heartbeatAge})${colors.reset}`;
+      } else {
+        heartbeatInfo = ` ${colors.green}(heartbeat: ${heartbeatAge})${colors.reset}`;
+      }
+    }
+
+    console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${heartbeatInfo}${colors.reset}`);
   }
 
   // Show blockers if not resolved and not claimed
@@ -163,6 +181,18 @@ function displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
 
     displaySDItemSimple(child, childPrefix, childNextIndent, childItems, allItems);
   }
+}
+
+/**
+ * Format heartbeat age for display (helper for claim ownership display)
+ * @param {number} seconds - Heartbeat age in seconds
+ * @returns {string} - Human-readable age
+ */
+function formatHeartbeatAge(seconds) {
+  if (!seconds || seconds < 0) return 'just now';
+  if (seconds < 60) return `${Math.round(seconds)}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  return `${Math.round(seconds / 3600)}h ago`;
 }
 
 /**

@@ -198,8 +198,9 @@ function displayBeginWorkInstructions() {
 
 /**
  * Display active sessions
+ * SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001 (FR-6): Enhanced to show owner details and heartbeat
  *
- * @param {Array} activeSessions - Active sessions
+ * @param {Array} activeSessions - Active sessions (from v_active_sessions view)
  * @param {Object|null} currentSession - Current session
  */
 export function displayActiveSessions(activeSessions, currentSession) {
@@ -211,20 +212,58 @@ export function displayActiveSessions(activeSessions, currentSession) {
   if (sessionsWithClaims.length > 0) {
     console.log(`${colors.bold}ACTIVE SESSIONS (${sessionsWithClaims.length}):${colors.reset}\n`);
 
+    // Header row
+    console.log(`${colors.dim}   Session           │ Claimed SD                │ Track │ Duration │ Heartbeat${colors.reset}`);
+    console.log(`${colors.dim}${'─'.repeat(100)}${colors.reset}`);
+
     for (const s of sessionsWithClaims) {
       const isCurrent = currentSession && s.session_id === currentSession.session_id;
       const marker = isCurrent ? `${colors.green}→${colors.reset}` : ' ';
       const shortId = s.session_id.substring(0, 16) + '...';
       const ageMin = Math.round(s.claim_duration_minutes || 0);
 
-      console.log(`${marker} ${shortId} │ ${colors.bold}${s.sd_id}${colors.reset} (Track ${s.track}) │ ${ageMin}m active`);
+      // FR-6: Show heartbeat age with color coding
+      const heartbeatAgeSeconds = Math.round(s.heartbeat_age_seconds || 0);
+      const heartbeatAge = s.heartbeat_age_human || formatHeartbeatAgeDisplay(heartbeatAgeSeconds);
+
+      // Color code heartbeat: green <60s, yellow <180s, red >=180s (approaching 5min stale)
+      let heartbeatColor = colors.green;
+      if (heartbeatAgeSeconds >= 180) {
+        heartbeatColor = colors.red;
+      } else if (heartbeatAgeSeconds >= 60) {
+        heartbeatColor = colors.yellow;
+      }
+
+      const sdDisplay = (s.sd_id || 'None').padEnd(25);
+      const trackDisplay = (s.track || 'N/A').padEnd(5);
+      const durationDisplay = `${ageMin}m`.padEnd(8);
+
+      console.log(`${marker} ${shortId} │ ${colors.bold}${sdDisplay}${colors.reset} │ ${trackDisplay} │ ${durationDisplay} │ ${heartbeatColor}${heartbeatAge}${colors.reset}`);
+
+      // Show hostname/codebase for non-current sessions (helps identify which terminal)
+      if (!isCurrent && (s.hostname || s.codebase)) {
+        const hostInfo = [s.hostname, s.codebase].filter(Boolean).join(' / ');
+        console.log(`${colors.dim}                       └ ${hostInfo}${colors.reset}`);
+      }
     }
     console.log();
   }
 
-  if (idleSessions.length > 0 && sessionsWithClaims.length === 0) {
-    console.log(`${colors.dim}(${idleSessions.length} idle session(s) detected)${colors.reset}\n`);
+  if (idleSessions.length > 0) {
+    console.log(`${colors.dim}(${idleSessions.length} idle session(s) - no SD claimed)${colors.reset}\n`);
   }
+}
+
+/**
+ * Format heartbeat age for display (fallback if view column unavailable)
+ * @param {number} seconds - Heartbeat age in seconds
+ * @returns {string} - Human-readable age
+ */
+function formatHeartbeatAgeDisplay(seconds) {
+  if (!seconds || seconds < 0) return 'just now';
+  if (seconds < 60) return `${Math.round(seconds)}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  return `${Math.round(seconds / 3600)}h ago`;
 }
 
 /**

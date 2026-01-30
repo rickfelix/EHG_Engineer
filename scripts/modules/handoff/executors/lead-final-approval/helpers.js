@@ -269,12 +269,15 @@ export async function resolveLearningItems(sd, supabase) {
 
 /**
  * Release the session claim when SD is completed
+ * SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001: Also stops heartbeat interval
  * @param {Object} sd - SD record
  * @param {Object} supabase - Supabase client
  */
 export async function releaseSessionClaim(sd, supabase) {
   try {
     const sessionManager = await import('../../../../../lib/session-manager.mjs');
+    // FR-5: Import heartbeat manager to stop heartbeat on release
+    const heartbeatManager = await import('../../../../../lib/heartbeat-manager.mjs');
 
     const session = await sessionManager.getOrCreateSession();
 
@@ -295,6 +298,13 @@ export async function releaseSessionClaim(sd, supabase) {
         console.log(`   [Release] Warning: Could not release claim: ${error.message}`);
       } else {
         console.log('   [Release] ✅ Session claim released');
+      }
+
+      // FR-5: Stop heartbeat interval on SD completion
+      const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+      if (heartbeatStatus.active && heartbeatStatus.sessionId === session.session_id) {
+        heartbeatManager.stopHeartbeat();
+        console.log('   [Release] Heartbeat stopped');
       }
     }
   } catch (error) {
