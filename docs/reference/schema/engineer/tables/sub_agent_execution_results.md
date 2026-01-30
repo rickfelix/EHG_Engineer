@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-30T13:00:06.703Z
-**Rows**: 12,343
+**Generated**: 2026-01-30T13:36:19.189Z
+**Rows**: 12,391
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,10 @@
 | justification | `text` | YES | - | Required for CONDITIONAL_PASS verdicts: explanation of conditions and follow-up actions (min 50 chars) |
 | conditions | `jsonb` | YES | - | Required for CONDITIONAL_PASS verdicts: array of follow-up action strings (non-empty array) |
 | retro_contribution | `jsonb` | YES | `'{}'::jsonb` | - |
+| invocation_id | `text` | YES | - | Deterministic SHA-256 hash of (tool_name, subagent_type, tool_call_id, inputs) for idempotency |
+| summary | `text` | YES | - | Extracted summary from Task tool output (first 500 chars if from text) |
+| raw_output | `jsonb` | YES | - | Full Task result payload (truncated to 256KB with truncated flag if larger) |
+| source | `text` | YES | `'manual'::text` | Where this record came from: manual, task_hook, sub_agent_executor |
 
 ## Constraints
 
@@ -46,6 +50,9 @@
 ### Foreign Keys
 - `sub_agent_execution_results_risk_assessment_id_fkey`: risk_assessment_id → risk_assessments(id)
 - `sub_agent_execution_results_sd_id_fkey`: sd_id → strategic_directives_v2(id)
+
+### Unique Constraints
+- `sub_agent_execution_results_invocation_id_key`: UNIQUE (invocation_id)
 
 ### Check Constraints
 - `check_conditional_pass_retrospective`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR (validation_mode = 'retrospective'::text)))
@@ -65,6 +72,14 @@
 - `idx_audit_trail`
   ```sql
   CREATE INDEX idx_audit_trail ON public.sub_agent_execution_results USING btree (created_at DESC) WHERE (verdict = 'CONDITIONAL_PASS'::text)
+  ```
+- `idx_sub_agent_execution_results_code_created`
+  ```sql
+  CREATE INDEX idx_sub_agent_execution_results_code_created ON public.sub_agent_execution_results USING btree (sub_agent_code, created_at DESC)
+  ```
+- `idx_sub_agent_execution_results_invocation_id`
+  ```sql
+  CREATE INDEX idx_sub_agent_execution_results_invocation_id ON public.sub_agent_execution_results USING btree (invocation_id)
   ```
 - `idx_sub_agent_results_created_at`
   ```sql
@@ -101,6 +116,10 @@
 - `idx_verdict_validation_mode`
   ```sql
   CREATE INDEX idx_verdict_validation_mode ON public.sub_agent_execution_results USING btree (verdict, validation_mode)
+  ```
+- `sub_agent_execution_results_invocation_id_key`
+  ```sql
+  CREATE UNIQUE INDEX sub_agent_execution_results_invocation_id_key ON public.sub_agent_execution_results USING btree (invocation_id)
   ```
 - `sub_agent_execution_results_pkey`
   ```sql
