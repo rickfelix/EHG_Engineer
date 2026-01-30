@@ -334,6 +334,40 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     return { success: false };
   }
 
+  // Validate handoff type is not a task ID (common AI confusion)
+  const normalizedHandoffType = handoffType.toUpperCase();
+  const validHandoffTypes = ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'];
+
+  // Check if it looks like a task ID (contains phase-task patterns)
+  const taskPatterns = [
+    /^(VERIFY|EXEC|PLAN|LEAD|FINAL)-(FIDELITY|VALIDATION|REGRESSION|SYNTHESIS|RETRO|IMPL|READY|STORIES|PR|APPROVE|DOCUMENT|LEARN|WALL)/i,
+    /^SD-[A-Z]+-/i,  // Starts with SD prefix
+    /-GATE-/i,       // Contains gate marker
+    /-WALL$/i        // Ends with wall marker
+  ];
+
+  const looksLikeTask = taskPatterns.some(pattern => pattern.test(normalizedHandoffType));
+
+  if (looksLikeTask && !validHandoffTypes.includes(normalizedHandoffType)) {
+    console.error('');
+    console.error('❌ ERROR: Invalid handoff type - this appears to be a TASK ID');
+    console.error(`   You entered: "${handoffType}"`);
+    console.error('');
+    console.error('   Tasks (like VERIFY-FIDELITY, EXEC-IMPL) are work items.');
+    console.error('   They should be created with the TaskCreate tool, NOT handoff.js');
+    console.error('');
+    console.error('   Valid HANDOFF types for handoff.js:');
+    console.error('      • LEAD-TO-PLAN        - Strategic to Planning');
+    console.error('      • PLAN-TO-EXEC        - Planning to Execution');
+    console.error('      • EXEC-TO-PLAN        - Execution to Verification');
+    console.error('      • PLAN-TO-LEAD        - Verification to Final Approval');
+    console.error('      • LEAD-FINAL-APPROVAL - Mark SD as completed');
+    console.error('');
+    console.error('   💡 TIP: Run "node scripts/handoff.js workflow ' + sdId + '" to see next steps');
+    console.error('');
+    return { success: false };
+  }
+
   // Validate bypass flags
   if (bypassValidation && !bypassReason) {
     console.error('');

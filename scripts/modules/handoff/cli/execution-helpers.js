@@ -145,6 +145,14 @@ async function hydrateAndOutputTasks(sdId, currentHandoff, supabase) {
     console.log('   INSTRUCTION: Claude MUST call TaskCreate for each task below.');
     console.log('   Use TaskUpdate to set blockedBy dependencies after creation.');
     console.log('');
+    console.log('   ⚠️  IMPORTANT: These are TASKS, not handoffs!');
+    console.log('      • DO NOT execute these with handoff.js');
+    console.log('      • Use TaskCreate tool to create these tasks');
+    console.log('');
+    console.log('   Valid HANDOFF types (for handoff.js execute):');
+    console.log('      LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN,');
+    console.log('      PLAN-TO-LEAD, LEAD-FINAL-APPROVAL');
+    console.log('');
     console.log('───────────────────────────────────────────────────────────');
 
     for (const task of result.tasks) {
