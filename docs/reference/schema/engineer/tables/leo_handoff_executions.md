@@ -1,20 +1,11 @@
 # leo_handoff_executions Table
 
-
-## Metadata
-- **Category**: Reference
-- **Status**: Draft
-- **Version**: 1.0.0
-- **Author**: DOCMON
-- **Last Updated**: 2026-01-26
-- **Tags**: database, schema, rls, protocol
-
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-26T04:26:11.529Z
-**Rows**: 2,071
+**Generated**: 2026-01-30T00:55:02.600Z
+**Rows**: 2,155
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
