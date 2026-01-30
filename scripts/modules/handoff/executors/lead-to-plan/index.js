@@ -60,11 +60,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     const gates = [];
 
     // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
-    // Ensures CLAUDE_CORE.md is read before any SD work
-    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown'));
+    // Ensures CLAUDE_CORE.md AND CLAUDE_PLAN.md (destination phase) are read before handoff
+    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown', 'LEAD-TO-PLAN'));
 
     // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
-    // Ensures agent has read CLAUDE_LEAD.md before proceeding
+    // Validates CLAUDE_PLAN.md was read (destination phase file)
     gates.push(createProtocolFileReadGate('LEAD-TO-PLAN'));
 
     // SD Transition Readiness Gate

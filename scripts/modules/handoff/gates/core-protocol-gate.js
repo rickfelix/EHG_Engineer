@@ -45,6 +45,18 @@ const PHASE_PROTOCOL_FILES = {
 };
 
 /**
+ * Handoff type to required phase file mapping
+ * Maps to the DESTINATION phase's protocol file (the phase you're going TO)
+ * Used by validateSdStartGate when handoffType is specified
+ */
+const HANDOFF_PHASE_FILES = {
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',   // Going TO Plan phase
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',   // Going TO Exec phase
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN.md',   // Going back TO Plan phase
+  'PLAN-TO-LEAD': 'CLAUDE_LEAD.md'    // Going TO Lead phase (final approval)
+};
+
+/**
  * Calculate SHA-256 hash of a file
  * @param {string} filePath - Path to file
  * @returns {string|null} Hash or null if file doesn't exist
@@ -327,14 +339,29 @@ export function checkFileNeedsRead(filename, trigger, sdRunId = null) {
  * Validate SD Start Gate - enforces CLAUDE_CORE.md before SD work
  * @param {string} sdId - Strategic Directive ID
  * @param {Object} ctx - Validation context
+ * @param {string} [handoffType] - Optional handoff type to include phase-specific file
  * @returns {Object} Validation result
  */
-export async function validateSdStartGate(sdId, ctx = {}) {
+export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
   console.log('\n📚 GATE: SD Start Protocol Enforcement');
   console.log('-'.repeat(50));
   console.log(`   SD: ${sdId}`);
+  if (handoffType) {
+    console.log(`   Handoff Type: ${handoffType}`);
+  }
 
-  const requiredFiles = CORE_PROTOCOL_REQUIREMENTS.SD_START;
+  // Start with core requirements
+  const requiredFiles = [...CORE_PROTOCOL_REQUIREMENTS.SD_START];
+
+  // Add phase-specific file if handoff type is specified
+  if (handoffType && HANDOFF_PHASE_FILES[handoffType]) {
+    const phaseFile = HANDOFF_PHASE_FILES[handoffType];
+    if (!requiredFiles.includes(phaseFile)) {
+      requiredFiles.push(phaseFile);
+    }
+    console.log(`   Phase file required: ${phaseFile}`);
+  }
+
   const sdRunId = generateSdRunId(sdId);
   const issues = [];
   const warnings = [];
@@ -515,17 +542,26 @@ export function getProtocolGateState() {
 /**
  * Create SD Start Gate for handoff integration
  * @param {string} sdId - SD ID
+ * @param {string} [handoffType] - Optional handoff type to include phase-specific file validation
  * @returns {Object} Gate configuration
  */
-export function createSdStartGate(sdId) {
+export function createSdStartGate(sdId, handoffType = null) {
+  // Build remediation message based on required files
+  const requiredFiles = ['CLAUDE.md', 'CLAUDE_CORE.md'];
+  if (handoffType && HANDOFF_PHASE_FILES[handoffType]) {
+    requiredFiles.push(HANDOFF_PHASE_FILES[handoffType]);
+  }
+
+  const fileList = requiredFiles.join(', ');
+
   return {
     name: 'GATE_SD_START_PROTOCOL',
     validator: async (ctx) => {
-      return validateSdStartGate(sdId, ctx);
+      return validateSdStartGate(sdId, ctx, handoffType);
     },
     required: true,
     blocking: true,
-    remediation: `Read CLAUDE.md and CLAUDE_CORE.md before starting work on ${sdId}. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"`
+    remediation: `Read ${fileList} before starting work on ${sdId}. Use: Read tool with file_path for each file.`
   };
 }
 
@@ -679,5 +715,6 @@ export default {
   createPostCompactionGate,
   createSessionStartGate,
   CORE_PROTOCOL_REQUIREMENTS,
-  PHASE_PROTOCOL_FILES
+  PHASE_PROTOCOL_FILES,
+  HANDOFF_PHASE_FILES
 };
