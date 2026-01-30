@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-30T10:43:20.618Z
-**Rows**: 12,305
+**Generated**: 2026-01-30T13:00:06.703Z
+**Rows**: 12,343
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -57,7 +57,7 @@
 - `recommendations_max_50`: CHECK (((recommendations IS NULL) OR (jsonb_typeof(recommendations) <> 'array'::text) OR (jsonb_array_length(recommendations) <= 50)))
 - `valid_confidence`: CHECK (((confidence >= 0) AND (confidence <= 100)))
 - `valid_execution_time`: CHECK ((execution_time >= 0))
-- `valid_verdict`: CHECK ((verdict = ANY (ARRAY['PASS'::text, 'FAIL'::text, 'BLOCKED'::text, 'CONDITIONAL_PASS'::text, 'WARNING'::text])))
+- `valid_verdict`: CHECK ((verdict = ANY (ARRAY['PASS'::text, 'FAIL'::text, 'BLOCKED'::text, 'CONDITIONAL_PASS'::text, 'WARNING'::text, 'MANUAL_REQUIRED'::text, 'PENDING'::text, 'ERROR'::text])))
 - `warnings_max_100`: CHECK (((warnings IS NULL) OR (jsonb_typeof(warnings) <> 'array'::text) OR (jsonb_array_length(warnings) <= 100)))
 
 ## Indexes

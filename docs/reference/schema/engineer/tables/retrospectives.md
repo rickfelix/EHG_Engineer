@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-30T10:43:20.618Z
-**Rows**: 686
+**Generated**: 2026-01-30T13:00:06.703Z
+**Rows**: 690
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (79 total)
+## Columns (80 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -98,6 +98,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | coverage_pre_percent | `numeric(5,2)` | YES | - | Test coverage percentage before SD implementation |
 | coverage_post_percent | `numeric(5,2)` | YES | - | Test coverage percentage after SD implementation |
 | coverage_delta_percent | `numeric(5,2)` | YES | - | Coverage change (post - pre), can be negative |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | Flexible JSONB storage for retrospective metadata. Added 2026-01-30 per RCA BL-INF-2337C for consistency with other core tables. |
 
 ## Constraints
 
@@ -159,6 +160,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `idx_retrospectives_learning_category`
   ```sql
   CREATE INDEX idx_retrospectives_learning_category ON public.retrospectives USING btree (learning_category)
+  ```
+- `idx_retrospectives_metadata`
+  ```sql
+  CREATE INDEX idx_retrospectives_metadata ON public.retrospectives USING gin (metadata)
   ```
 - `idx_retrospectives_protocol_improvements_gin`
   ```sql
