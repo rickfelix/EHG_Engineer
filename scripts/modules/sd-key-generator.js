@@ -16,9 +16,148 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// ============================================================================
+// Protocol File Read Enforcement (SD-LEO-SDKEY-ENFORCE-LEAD-READ-001)
+// ============================================================================
+
+const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
+const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
+
+/**
+ * Read the unified session state to check protocol file read status
+ * @returns {Object} Session state or default structure
+ */
+function readSessionState() {
+  try {
+    if (fs.existsSync(SESSION_STATE_FILE)) {
+      const content = fs.readFileSync(SESSION_STATE_FILE, 'utf8');
+      const cleanContent = content.replace(/^\uFEFF/, ''); // Handle BOM
+      return JSON.parse(cleanContent);
+    }
+  } catch (error) {
+    // Silent fail - will return default
+  }
+  return { protocolFilesRead: [] };
+}
+
+/**
+ * Check if CLAUDE_LEAD.md has been read in the current session
+ * @returns {boolean} True if file has been read
+ */
+function isLeadFileRead() {
+  const state = readSessionState();
+  return state.protocolFilesRead?.includes('CLAUDE_LEAD.md') || false;
+}
+
+/**
+ * Check if CLAUDE_LEAD.md was only partially read (with limit/offset parameters)
+ * @returns {Object|null} Partial read details or null if not partial
+ */
+function getLeadFilePartialReadDetails() {
+  const state = readSessionState();
+
+  // Check new schema first (SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001)
+  const fileStatus = state.protocolFileReadStatus?.['CLAUDE_LEAD.md'];
+  if (fileStatus?.lastReadWasPartial && fileStatus.lastPartialRead) {
+    return {
+      limit: fileStatus.lastPartialRead.limit,
+      offset: fileStatus.lastPartialRead.offset,
+      timestamp: fileStatus.lastPartialRead.readAt,
+      wasPartial: true
+    };
+  }
+
+  // Fall back to legacy schema
+  return state.protocolFilesPartiallyRead?.['CLAUDE_LEAD.md'] || null;
+}
+
+/**
+ * Validate that CLAUDE_LEAD.md has been fully read before SD key generation
+ *
+ * This ensures Claude is familiar with:
+ * - Required SD fields (sd_key, title, description, rationale, etc.)
+ * - Success criteria/metrics requirements
+ * - SD type-specific requirements
+ * - Handoff validation gates
+ *
+ * @returns {Object} Validation result {valid, error, remediation}
+ */
+export function validateLeadFileRead() {
+  const isRead = isLeadFileRead();
+  const partialDetails = getLeadFilePartialReadDetails();
+
+  // Case 1: Not read at all
+  if (!isRead) {
+    return {
+      valid: false,
+      error: 'CLAUDE_LEAD.md has not been read in this session',
+      remediation: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  SD KEY GENERATION BLOCKED - Protocol File Not Read                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ CLAUDE_LEAD.md must be read COMPLETELY before creating Strategic           │
+│ Directives. This file contains critical information about:                 │
+│                                                                             │
+│   • Required SD fields (sd_key, title, description, rationale, etc.)       │
+│   • Success criteria/metrics requirements                                  │
+│   • SD type-specific validation requirements                               │
+│   • Strategic validation questions (9-question gate)                       │
+│   • Handoff chain requirements                                             │
+│                                                                             │
+│ ACTION REQUIRED:                                                           │
+│   1. Read CLAUDE_LEAD.md completely (no limit parameter)                   │
+│   2. Then retry SD key generation                                          │
+│                                                                             │
+│ HINT: Use Read tool with file_path="CLAUDE_LEAD.md" (no limit)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+`
+    };
+  }
+
+  // Case 2: Read but only partially (with limit/offset)
+  if (partialDetails?.wasPartial) {
+    return {
+      valid: false,
+      error: `CLAUDE_LEAD.md was only partially read (limit=${partialDetails.limit}, offset=${partialDetails.offset})`,
+      remediation: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  SD KEY GENERATION BLOCKED - Partial Read Detected                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ CLAUDE_LEAD.md was read with limit/offset parameters:                      │
+│   • Limit: ${String(partialDetails.limit).padEnd(10)} Offset: ${String(partialDetails.offset || 0).padEnd(10)}                          │
+│   • Read at: ${partialDetails.timestamp || 'unknown'}                          │
+│                                                                             │
+│ Critical requirements may be MISSING from later sections:                  │
+│   • Lines 370-476: Strategic Directive Creation Process                    │
+│   • Lines 552-674: Common SD Creation Errors and Solutions                 │
+│   • Lines 677-823: SDKeyGenerator Errors section                           │
+│   • Lines 825-1030: PRD Enrichment and Evaluation Checklist                │
+│                                                                             │
+│ ACTION REQUIRED:                                                           │
+│   1. Re-read CLAUDE_LEAD.md completely (WITHOUT limit parameter)           │
+│   2. Then retry SD key generation                                          │
+│                                                                             │
+│ HINT: Use Read tool with file_path="CLAUDE_LEAD.md" (no limit)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+`
+    };
+  }
+
+  // Case 3: Fully read - proceed
+  return {
+    valid: true,
+    error: null,
+    remediation: null
+  };
+}
 
 // ============================================================================
 // Configuration
@@ -219,7 +358,9 @@ export async function getNextSequentialNumber(prefix) {
  * @param {string} [options.parentKey] - Parent SD key (for child SDs)
  * @param {number} [options.hierarchyDepth] - Depth in hierarchy (0=root, 1=child, etc.)
  * @param {number} [options.siblingIndex] - Index among siblings (for hierarchy suffix)
+ * @param {boolean} [options.skipLeadValidation] - Skip CLAUDE_LEAD.md read validation (for internal use only)
  * @returns {Promise<string>} Generated SD key
+ * @throws {Error} If CLAUDE_LEAD.md has not been fully read
  */
 export async function generateSDKey(options) {
   const {
@@ -228,8 +369,18 @@ export async function generateSDKey(options) {
     title,
     parentKey = null,
     hierarchyDepth = 0,
-    siblingIndex = 0
+    siblingIndex = 0,
+    skipLeadValidation = false
   } = options;
+
+  // SD-LEO-SDKEY-ENFORCE-LEAD-READ-001: Validate CLAUDE_LEAD.md has been fully read
+  if (!skipLeadValidation) {
+    const leadValidation = validateLeadFileRead();
+    if (!leadValidation.valid) {
+      console.error(leadValidation.remediation);
+      throw new Error(`[SDKeyGenerator] ${leadValidation.error}`);
+    }
+  }
 
   // Validate source
   const sourceAbbrev = SD_SOURCES[source?.toUpperCase()] || SD_SOURCES.MANUAL;
@@ -373,15 +524,25 @@ Usage:
   node scripts/modules/sd-key-generator.js <source> <type> "<title>"
   node scripts/modules/sd-key-generator.js --child <parentKey> <index>
   node scripts/modules/sd-key-generator.js --parse <sdKey>
+  node scripts/modules/sd-key-generator.js --check-lead
+  node scripts/modules/sd-key-generator.js --skip-validation <source> <type> "<title>"
 
 Sources: ${Object.keys(SD_SOURCES).join(', ')}
 Types: ${Object.keys(SD_TYPES).join(', ')}
+
+Protocol Enforcement (SD-LEO-SDKEY-ENFORCE-LEAD-READ-001):
+  Before generating an SD key, CLAUDE_LEAD.md must be read completely.
+  This ensures familiarity with required fields and validation requirements.
+
+  --check-lead       Check if CLAUDE_LEAD.md has been fully read
+  --skip-validation  Skip LEAD file validation (emergency use only)
 
 Examples:
   node scripts/modules/sd-key-generator.js UAT fix "Navigation route not working"
   node scripts/modules/sd-key-generator.js LEO feature "Add dark mode toggle"
   node scripts/modules/sd-key-generator.js --child SD-UAT-FIX-NAV-001 0
   node scripts/modules/sd-key-generator.js --parse SD-UAT-FIX-NAV-001-A
+  node scripts/modules/sd-key-generator.js --check-lead
 `);
     process.exit(0);
   }
@@ -397,6 +558,22 @@ Examples:
         const sdKey = args[1];
         const parsed = parseSDKey(sdKey);
         console.log('Parsed SD key:', JSON.stringify(parsed, null, 2));
+      } else if (args[0] === '--check-lead') {
+        // Check if CLAUDE_LEAD.md has been fully read
+        const validation = validateLeadFileRead();
+        if (validation.valid) {
+          console.log('✅ CLAUDE_LEAD.md has been fully read - ready for SD creation');
+        } else {
+          console.log(validation.remediation);
+          process.exit(1);
+        }
+      } else if (args[0] === '--skip-validation') {
+        // Skip validation (for testing/emergencies only)
+        const [, source, type, ...titleParts] = args;
+        const title = titleParts.join(' ');
+        console.log('⚠️  Skipping CLAUDE_LEAD.md validation (emergency mode)');
+        const key = await generateSDKey({ source, type, title, skipLeadValidation: true });
+        console.log('Generated SD key:', key);
       } else {
         const [source, type, ...titleParts] = args;
         const title = titleParts.join(' ');
@@ -423,6 +600,7 @@ export default {
   getHierarchySuffix,
   keyExists,
   getNextSequentialNumber,
+  validateLeadFileRead,
   SD_SOURCES,
   SD_TYPES
 };
