@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [inbox|<SD-ID>|create|next|continue|complete|restart|settings]
+argument-hint: [assist|inbox|<SD-ID>|create|next|continue|complete|restart|settings]
 ---
 
 # LEO Stack Control
@@ -272,6 +272,37 @@ Run the LEO stack restart command:
 node scripts/cross-platform-run.js leo-stack restart
 ```
 
+### If argument is "assist" or "a":
+Run intelligent autonomous inbox processing. This is the primary way to process feedback items.
+
+**Invoke the assist skill:**
+Use the Skill tool to invoke the `assist` skill.
+
+```javascript
+// Check for --dry-run flag
+const dryRun = "$ARGUMENTS".includes("--dry-run");
+```
+
+**Modes:**
+- `/leo assist` - Full autonomous processing
+- `/leo assist --dry-run` - Preview mode (no changes made)
+
+**What it does:**
+1. **Phase 1 (Autonomous)**: Processes all issues without user interaction
+   - Prioritizes by P0 → related to recent work → P1 → P2/P3
+   - Quick-fixes (<50 LOC) implemented directly with intelligent retry
+   - Larger issues create SDs
+
+2. **Phase 2 (Interactive)**: Schedules enhancements one-by-one
+   - Shows AI recommendations for each enhancement
+   - User decides: Now / This week / Next week / Backlog / Won't do
+
+3. **Summary**: Reports what was processed, fixed, scheduled
+
+**Related:**
+- `/leo inbox` - Just view inbox (no processing)
+- `/leo assist --dry-run` - Preview what would happen
+
 ### If argument is "inbox" or "inb":
 Show feedback inbox with options to manage items or create SDs from them.
 
@@ -287,6 +318,9 @@ Show feedback inbox with options to manage items or create SDs from them.
    ```
    💡 To create an SD from a feedback item:
       /leo create --from-feedback <id>
+
+   💡 To process inbox autonomously:
+      /leo assist
    ```
 
 ### If argument is "next" or "n":
@@ -742,13 +776,19 @@ Display the available commands:
 ```
 LEO Commands:
   /leo                   - Show this help menu
+  /leo assist    (a)     - Autonomous inbox processing (issues + enhancements)
   /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
   /leo restart   (r)     - Restart all LEO servers
-  /leo inbox     (inb)   - Show feedback inbox (/inbox shortcut)
+  /leo inbox     (inb)   - Show feedback inbox (view only)
   /leo next      (n)     - Show SD queue (what to work on)
   /leo create    (c)     - Create new SD (interactive wizard)
   /leo continue  (cont)  - Resume current working SD
   /leo complete  (comp)  - Run full sequence: document → ship → learn → next
+
+Inbox Processing:
+  /leo assist            - Process inbox autonomously (recommended)
+  /leo assist --dry-run  - Preview what would be processed
+  /leo inbox             - View inbox without processing
 
 Direct ID Access:
   /leo SD-XXX-001        - Start/continue work on a Strategic Directive
