@@ -2,10 +2,11 @@
  * AUTO-PROCEED Resolver for LEO Protocol Handoff System
  *
  * Resolves AUTO-PROCEED mode using deterministic precedence:
- * 1. CLI flags (--auto-proceed, --no-auto-proceed)
+ * 1. CLI flags (--auto-proceed, --no-auto-proceed) - highest
  * 2. Environment variable (AUTO_PROCEED=true|false|1|0|yes|no)
  * 3. Session store (claude_sessions.metadata.auto_proceed)
- * 4. Database default (false)
+ * 4. Global defaults (leo_settings table)
+ * 5. Hard-coded default (true)
  *
  * Part of SD-LEO-ENH-AUTO-PROCEED-001-02
  *
@@ -21,14 +22,20 @@ export const RESOLUTION_SOURCES = {
   CLI: 'cli',
   ENV: 'env',
   SESSION: 'session',
-  DATABASE: 'database',
+  GLOBAL: 'global',
   DEFAULT: 'default'
 };
 
 /**
  * Default AUTO-PROCEED value when no source provides it
+ * CRITICAL: This MUST be true to match documentation ("ON by default")
  */
-export const DEFAULT_AUTO_PROCEED = false;
+export const DEFAULT_AUTO_PROCEED = true;
+
+/**
+ * Default CHAIN_ORCHESTRATORS value when no source provides it
+ */
+export const DEFAULT_CHAIN_ORCHESTRATORS = false;
 
 /**
  * Parse CLI arguments for AUTO-PROCEED flags
@@ -151,6 +158,75 @@ export async function writeToSession(supabase, autoProceed, sessionId = null) {
 }
 
 /**
+ * Read global defaults from leo_settings table
+ * @param {object} supabase - Supabase client
+ * @returns {Promise<{ autoProceed: boolean | null, chainOrchestrators: boolean | null, source: string | null }>}
+ */
+export async function readFromGlobal(supabase) {
+  try {
+    const { data, error } = await supabase
+      .rpc('get_leo_global_defaults');
+
+    if (error) {
+      console.warn(`⚠️  GLOBAL: Read error: ${error.message}`);
+      return { autoProceed: null, chainOrchestrators: null, source: null };
+    }
+
+    if (data && data.length > 0) {
+      const row = data[0];
+      return {
+        autoProceed: row.auto_proceed,
+        chainOrchestrators: row.chain_orchestrators,
+        source: RESOLUTION_SOURCES.GLOBAL
+      };
+    }
+
+    return { autoProceed: null, chainOrchestrators: null, source: null };
+  } catch (err) {
+    console.warn(`⚠️  GLOBAL: Read exception: ${err.message}`);
+    return { autoProceed: null, chainOrchestrators: null, source: null };
+  }
+}
+
+/**
+ * Write global defaults to leo_settings table
+ * @param {object} supabase - Supabase client
+ * @param {boolean} autoProceed - AUTO-PROCEED default value (optional)
+ * @param {boolean} chainOrchestrators - Chain orchestrators default value (optional)
+ * @param {string} updatedBy - Identifier for who made the update (optional)
+ * @returns {Promise<{ success: boolean, autoProceed: boolean, chainOrchestrators: boolean }>}
+ */
+export async function writeToGlobal(supabase, autoProceed = null, chainOrchestrators = null, updatedBy = null) {
+  try {
+    const { data, error } = await supabase
+      .rpc('set_leo_global_defaults', {
+        p_auto_proceed: autoProceed,
+        p_chain_orchestrators: chainOrchestrators,
+        p_updated_by: updatedBy
+      });
+
+    if (error) {
+      console.warn(`⚠️  GLOBAL: Write error: ${error.message}`);
+      return { success: false, autoProceed: null, chainOrchestrators: null };
+    }
+
+    if (data && data.length > 0) {
+      const row = data[0];
+      return {
+        success: row.success,
+        autoProceed: row.auto_proceed,
+        chainOrchestrators: row.chain_orchestrators
+      };
+    }
+
+    return { success: false, autoProceed: null, chainOrchestrators: null };
+  } catch (err) {
+    console.warn(`⚠️  GLOBAL: Write exception: ${err.message}`);
+    return { success: false, autoProceed: null, chainOrchestrators: null };
+  }
+}
+
+/**
  * Main resolver: Determine AUTO-PROCEED state using precedence order
  * @param {object} options - Resolution options
  * @param {string[]} options.args - CLI arguments (defaults to process.argv)
@@ -236,9 +312,23 @@ export async function resolveAutoProceed(options = {}) {
     };
   }
 
-  // Step 4: Use default value
+  // Step 4: Check global defaults (leo_settings table)
+  const globalResult = await readFromGlobal(supabase);
+  if (globalResult.autoProceed !== null) {
+    if (verbose) {
+      console.log('   ✅ Source: Global defaults');
+      console.log(`   📌 Value: ${globalResult.autoProceed ? 'ENABLED' : 'DISABLED'}`);
+    }
+    return {
+      autoProceed: globalResult.autoProceed,
+      source: globalResult.source,
+      sessionId: sessionResult.sessionId
+    };
+  }
+
+  // Step 5: Use hard-coded default value
   if (verbose) {
-    console.log('   ℹ️  Source: Default');
+    console.log('   ℹ️  Source: Default (hard-coded)');
     console.log(`   📌 Value: ${DEFAULT_AUTO_PROCEED ? 'ENABLED' : 'DISABLED'}`);
   }
 
@@ -365,9 +455,12 @@ export default {
   parseEnvVar,
   readFromSession,
   writeToSession,
+  readFromGlobal,
+  writeToGlobal,
   createHandoffMetadata,
   getChainOrchestrators,
   setChainOrchestrators,
   RESOLUTION_SOURCES,
-  DEFAULT_AUTO_PROCEED
+  DEFAULT_AUTO_PROCEED,
+  DEFAULT_CHAIN_ORCHESTRATORS
 };
