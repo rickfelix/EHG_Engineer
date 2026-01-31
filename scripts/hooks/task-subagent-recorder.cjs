@@ -223,6 +223,40 @@ async function insertRecord(record) {
     }
   });
 
+  // SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Normalize sd_id to UUID before insert
+  // PAT-FK-SDKEY-001: sub_agent_execution_results.sd_id FK expects UUID, not sd_key
+  if (record.sd_id) {
+    try {
+      // Dynamic import for ESM module from CommonJS
+      const { normalizeSDId } = await import('../../scripts/modules/sd-id-normalizer.js');
+      const resolvedId = await normalizeSDId(supabase, record.sd_id);
+      if (resolvedId) {
+        if (resolvedId !== record.sd_id) {
+          log('info', 'sd_id_normalized', {
+            original: record.sd_id,
+            normalized: resolvedId
+          });
+        }
+        record.sd_id = resolvedId;
+      } else {
+        // If normalization fails, set to null rather than failing FK constraint
+        log('warn', 'sd_id_normalization_failed', {
+          sd_id: record.sd_id,
+          action: 'set_to_null'
+        });
+        record.sd_id = null;
+      }
+    } catch (normErr) {
+      // If normalizer fails, set sd_id to null to avoid FK constraint violation
+      log('warn', 'sd_id_normalizer_error', {
+        error: normErr.message,
+        sd_id: record.sd_id,
+        action: 'set_to_null'
+      });
+      record.sd_id = null;
+    }
+  }
+
   // Check if record already exists (idempotency check)
   const { data: existing } = await supabase
     .from('sub_agent_execution_results')
