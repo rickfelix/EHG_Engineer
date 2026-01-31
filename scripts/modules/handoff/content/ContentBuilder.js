@@ -105,7 +105,9 @@ export class ContentBuilder {
       '- [ ] PLAN agent: Create comprehensive PRD',
       '- [ ] PLAN agent: Generate user stories from requirements',
       '- [ ] PLAN agent: Validate PRD completeness before EXEC handoff',
-      '- [ ] Address any sub-agent warnings before implementation'
+      '- [ ] Address any sub-agent warnings before implementation',
+      '',
+      '**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly.'
     ].join('\n');
 
     content.completeness_report = `**LEAD Phase**: 100% complete\n**SD Completeness**: ${qualityScore}%\n**Sub-Agent Coverage**: ${subAgentResults?.length || 0} agents\n**Status**: APPROVED for PLAN phase`;
@@ -141,7 +143,9 @@ export class ContentBuilder {
       '- [ ] EXEC agent: Write unit tests for all components',
       '- [ ] EXEC agent: Write E2E tests for user journeys',
       '- [ ] EXEC agent: Generate documentation',
-      '- [ ] EXEC agent: Create EXEC→PLAN handoff when complete'
+      '- [ ] EXEC agent: Create EXEC→PLAN handoff when complete',
+      '',
+      '**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly.'
     ].join('\n');
 
     content.completeness_report = `**PLAN Phase**: 100% complete\n**PRD Status**: Validated\n**BMAD Score**: ${result.bmad_validation?.score || 'Passed'}\n**Status**: APPROVED for EXEC phase`;
@@ -179,7 +183,9 @@ export class ContentBuilder {
       '- [ ] PLAN agent: Validate test coverage',
       '- [ ] PLAN agent: Review documentation quality',
       '- [ ] PLAN agent: Check E2E test mapping',
-      '- [ ] PLAN agent: Create PLAN→LEAD handoff when verified'
+      '- [ ] PLAN agent: Create PLAN→LEAD handoff when verified',
+      '',
+      '**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly.'
     ].join('\n');
 
     content.completeness_report = `**EXEC Phase**: 100% complete\n**Deliverables**: ${result.checkedItems}/${result.totalItems} validated\n**Tests**: Passing\n**Documentation**: Generated\n**Status**: READY for PLAN verification`;
@@ -218,7 +224,9 @@ export class ContentBuilder {
       '- [ ] LEAD agent: Validate strategic objectives met',
       '- [ ] LEAD agent: Create retrospective',
       '- [ ] LEAD agent: Mark SD as complete',
-      '- [ ] LEAD agent: Close feature branch'
+      '- [ ] LEAD agent: Close feature branch',
+      '',
+      '**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly.'
     ].join('\n');
 
     content.completeness_report = `**PLAN Verification**: 100% complete\n**Quality Score**: ${qualityScore}%\n**All Phases**: Complete\n**Status**: APPROVED for SD completion`;
@@ -234,7 +242,7 @@ export class ContentBuilder {
     content.key_decisions = `Handoff decision: ${fromPhase} → ${toPhase}`;
     content.known_issues = result.warnings?.join('\n') || 'No issues identified';
     content.resource_utilization = 'See validation details';
-    content.action_items = `- [ ] ${toPhase} agent: Continue workflow`;
+    content.action_items = `- [ ] ${toPhase} agent: Continue workflow\n\n**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly.`;
     content.completeness_report = `**${fromPhase} Phase**: Complete\n**Status**: Handoff to ${toPhase}`;
 
     return content;

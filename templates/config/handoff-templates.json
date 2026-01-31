@@ -26,7 +26,8 @@
         "Specify acceptance criteria",
         "Plan implementation approach",
         "Activate required sub-agents",
-        "Create PLAN→EXEC handoff"
+        "Create PLAN→EXEC handoff",
+        "**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly."
       ]
     }
   },
@@ -63,7 +64,8 @@
         "Implement based on priority order",
         "Create unit tests for each component",
         "Document API endpoints",
-        "Create EXEC→VERIFICATION handoff"
+        "Create EXEC→VERIFICATION handoff",
+        "**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly."
       ]
     }
   },
@@ -99,7 +101,8 @@
         "Run performance validation",
         "Execute security scan",
         "Confirm user acceptance",
-        "Create VERIFICATION→APPROVAL handoff"
+        "Create VERIFICATION→APPROVAL handoff",
+        "**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly."
       ]
     }
   },
@@ -129,7 +132,8 @@
         "Obtain stakeholder approval",
         "Authorize deployment",
         "Generate retrospective",
-        "Mark SD as completed"
+        "Mark SD as completed",
+        "**QUALITY DIRECTIVE**: Follow LEO Protocol diligently. Quality over speed - do not cut corners. Taking the correct approach is more important than completing quickly."
       ]
     }
   }
