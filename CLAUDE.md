@@ -318,6 +318,34 @@ This command provides:
 | `npm run sd:baseline view` | Current execution plan |
 
 
+## Work Item Creation Routing
+
+**Before creating any work item, determine the appropriate workflow:**
+
+| Criteria | Use Quick-Fix | Use Strategic Directive |
+|----------|---------------|-------------------------|
+| LOC estimate | ≤50 LOC | >50 LOC |
+| Scope | 1-2 files | Multiple components |
+| DB changes | Data only | Schema changes |
+| Root cause | Clear & obvious | Needs investigation |
+| Planning | Minimal | Full LEAD approval |
+
+### Commands
+
+| Workflow | Command | When to Use |
+|----------|---------|-------------|
+| Quick-Fix | `node scripts/create-quick-fix.js --title "<title>" --type bug` | Small bugs, polish, ≤50 LOC |
+| Strategic Directive | `node scripts/leo-create-sd.js LEO bugfix "<title>"` | Features, refactors, complex work |
+
+### Prefix Enforcement
+
+- **QF-*** prefix → Indicates Quick-Fix workflow. `leo-create-sd.js` will warn and redirect.
+- **SD-*** prefix → Strategic Directive workflow (full LEAD→PLAN→EXEC).
+- Use `--force` flag to override QF- prefix warning if intentional.
+
+### Pattern Reference
+PAT-WORKFLOW-ROUTING-001: Quick-Fix and SD systems are separate. Route correctly at creation time.
+
 ## Skill Intent Detection (Proactive Invocation)
 
 **CRITICAL**: When user query or response matches these patterns, IMMEDIATELY invoke the corresponding skill using the Skill tool. Do not just acknowledge - execute.
@@ -457,7 +485,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-31 12:30:39 PM
+**Last Generated**: 2026-01-31 6:25:48 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

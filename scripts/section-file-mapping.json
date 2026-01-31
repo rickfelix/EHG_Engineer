@@ -8,6 +8,7 @@
       "auto_proceed_mode",
       "orchestrator_chaining",
       "session_init",
+      "work_item_routing",
       "skill_intent_detection",
       "common_commands"
     ]

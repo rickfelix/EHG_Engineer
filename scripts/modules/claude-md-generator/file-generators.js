@@ -64,6 +64,7 @@ function generateRouter(data, _fileMapping) {
   const autoProceedMode = sections.find(s => s.section_type === 'auto_proceed_mode');
   const orchestratorChaining = sections.find(s => s.section_type === 'orchestrator_chaining');
   const sessionInit = sections.find(s => s.section_type === 'session_init');
+  const workItemRouting = sections.find(s => s.section_type === 'work_item_routing');
   const skillIntentDetection = sections.find(s => s.section_type === 'skill_intent_detection');
   const commonCommands = sections.find(s => s.section_type === 'common_commands');
 
@@ -86,6 +87,8 @@ ${autoProceedMode ? formatSection(autoProceedMode) : ''}
 ${orchestratorChaining ? formatSection(orchestratorChaining) : ''}
 
 ${sessionInit ? formatSection(sessionInit) : ''}
+
+${workItemRouting ? formatSection(workItemRouting) : ''}
 
 ${skillIntentDetection ? formatSection(skillIntentDetection) : ''}
 

@@ -582,8 +582,34 @@ async function createSD(options) {
     success_metrics = null,
     success_criteria = null,
     strategic_objectives = null,
-    key_principles = null
+    key_principles = null,
+    // QF-CLAIM-CONFLICT-UX-001: Allow forcing SD creation despite QF- prefix
+    forceCreate = false
   } = options;
+
+  // QF-CLAIM-CONFLICT-UX-001: Detect Quick-Fix prefix and redirect to proper workflow
+  // This prevents QF-* named items from going through full SD workflow accidentally
+  if (sdKey && sdKey.startsWith('QF-') && !forceCreate) {
+    console.log('\n' + '═'.repeat(60));
+    console.log('⚠️  QUICK-FIX PREFIX DETECTED');
+    console.log('═'.repeat(60));
+    console.log(`   SD Key: ${sdKey}`);
+    console.log('');
+    console.log('   This SD key has a QF- prefix, indicating a Quick-Fix.');
+    console.log('   Quick-Fixes should use the streamlined workflow:');
+    console.log('');
+    console.log('   node scripts/create-quick-fix.js --title "' + title + '" --type ' + (type || 'bug'));
+    console.log('');
+    console.log('   Quick-Fix benefits:');
+    console.log('   • No LEAD approval required');
+    console.log('   • No PRD creation');
+    console.log('   • Streamlined implementation path');
+    console.log('   • Ideal for changes ≤50 LOC');
+    console.log('');
+    console.log('   To proceed as Strategic Directive anyway, add --force flag.');
+    console.log('═'.repeat(60));
+    process.exit(0);
+  }
 
   // Map user-friendly type to valid database sd_type
   const dbType = mapToDbType(type);
@@ -709,6 +735,11 @@ Usage:
 Sources: ${Object.keys(SD_SOURCES).join(', ')}
 Types: ${Object.keys(SD_TYPES).join(', ')}
 
+Flags:
+  --force, -f    Force SD creation even if key has QF- prefix (normally redirects to quick-fix)
+  --yes, -y      Skip confirmation for auto-detected plans
+  --help         Show this help message
+
 Examples:
   node scripts/leo-create-sd.js --from-uat abc123
   node scripts/leo-create-sd.js --from-feedback def456
@@ -717,6 +748,10 @@ Examples:
   node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md   # Use specific plan
   node scripts/leo-create-sd.js --child SD-LEO-FEAT-001 0
   node scripts/leo-create-sd.js LEO fix "Login button not working"
+  node scripts/leo-create-sd.js QF bugfix "Quick fix" --force            # Force QF- prefix as full SD
+
+Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
+      Use --force to override and create as full Strategic Directive.
 `);
     process.exit(0);
   }
@@ -809,12 +844,17 @@ Examples:
       }
 
       const sdKey = await generateSDKey({ source, type, title });
+
+      // QF-CLAIM-CONFLICT-UX-001: Check for --force flag to bypass QF- prefix warning
+      const forceCreate = args.includes('--force') || args.includes('-f');
+
       await createSD({
         sdKey,
         title,
         description: title,
         type,
         rationale: 'Created via /leo create',
+        forceCreate,
         metadata: {
           source: source.toLowerCase(),
           ...phase0Metadata
