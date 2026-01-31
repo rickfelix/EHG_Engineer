@@ -725,15 +725,12 @@ Display the available commands:
 ```
 LEO Commands:
   /leo                   - Show this help menu
-  /leo init      (i)     - Initialize session (set auto-proceed preference)
   /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
   /leo restart   (r)     - Restart all LEO servers
   /leo next      (n)     - Show SD queue (what to work on)
   /leo create    (c)     - Create new SD (interactive wizard)
   /leo continue  (cont)  - Resume current working SD
   /leo complete  (comp)  - Run full sequence: document → ship → learn → next
-  /leo resume    (res)   - Restore session from saved state (crash recovery)
-  /leo run               - Run LEO protocol workflow (npm run leo)
 
 Direct ID Access:
   /leo SD-XXX-001        - Start/continue work on a Strategic Directive
