@@ -121,6 +121,9 @@ src/client/dist/
 
 # Claude session state (modified during protocol operations, local only)
 .claude/unified-session-state.json
+.claude-code-config.json
+.claude-status-line
+.leo-status.json
 
 # LEO stack server logs (regenerated on restart)
 .logs/
