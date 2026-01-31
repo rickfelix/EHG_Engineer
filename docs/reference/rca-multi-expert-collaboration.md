@@ -1,8 +1,8 @@
 # RCA Multi-Expert Collaboration Protocol
 
-**Version**: 1.0
+**Version**: 1.1
 **Pattern ID**: PAT-RCA-MULTI-001
-**Last Updated**: 2026-01-31
+**Last Updated**: 2026-01-31 (v1.1: Added independent analysis protocol)
 
 ## Overview
 
@@ -124,25 +124,114 @@ RCA automatically invokes multiple experts when:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Example: Invoking Multiple Experts
+## Critical: Independent Analysis (Not Confirmation)
 
-When RCA detects a multi-domain issue, it uses the Task tool to invoke experts in parallel:
+**ANTI-PATTERN (v1.0 - Confirmation Bias)**:
+```javascript
+// ❌ Wrong: Asking expert to confirm RCA's hypothesis
+Task tool with subagent_type="database-agent":
+  "The database migration failed because password is missing.
+   Can you confirm this connection pattern?"
+```
+
+**Why this fails**: Expert becomes a fact-checker instead of providing independent analysis. Misses alternative solutions.
+
+**CORRECT PATTERN (v1.1 - Independent Analysis)**:
+```javascript
+// ✅ Right: Asking expert for independent investigation
+Task tool with subagent_type="database-agent":
+  "Analyze this database migration failure independently:
+
+   Problem: Migration execution failed with 'password not found' error
+   Context: [relevant details]
+
+   Your task:
+   1. Investigate independently - don't assume any particular solution
+   2. What are ALL the options available? (not just the obvious one)
+   3. What are the tradeoffs of each approach?
+   4. What would YOU recommend as a database expert?
+   5. Think deeply - challenge the surface-level answer
+
+   Provide your expert analysis, not confirmation of existing hypotheses."
+```
+
+**Evidence from real session (2026-01-31)**:
+
+| Approach | Result |
+|----------|--------|
+| **RCA + DATABASE (confirmation)** | "Add password to .env" (1 solution) |
+| **DATABASE alone (independent)** | Found 4 alternative solutions including zero-config option via Supabase Dashboard |
+
+### Independent Analysis Template
+
+When invoking domain experts, RCA must use this structure:
+
+```
+Task tool with subagent_type="<domain>-agent":
+
+"Analyze this issue from your expert perspective:
+
+**Problem**: [Exact error/symptom]
+**Context**: [Relevant background]
+
+Your task:
+1. Investigate independently - don't assume any particular solution
+2. What are ALL the options available? (not just the obvious one)
+3. What are the tradeoffs of each approach?
+4. What would YOU recommend and why?
+5. Think deeply - challenge the surface-level answer
+
+Provide your expert analysis, not just confirmation of existing hypotheses."
+```
+
+**Key Principle**: The expert's answer may be completely different from RCA's initial hypothesis. **That's the point.**
+
+## Example: Invoking Multiple Experts (Updated v1.1)
+
+When RCA detects a multi-domain issue, it uses the Task tool to invoke experts in parallel with **independent analysis** requests:
 
 ```javascript
 // RCA invokes DATABASE expert
 Task tool with subagent_type="database-agent":
-  "Analyze database aspect of: Migration script failed with
-   'CHECK constraint cannot be used with ADD COLUMN IF NOT EXISTS'"
+  "Analyze this migration failure independently.
+
+   Problem: Migration script failed with 'CHECK constraint cannot be used with ADD COLUMN IF NOT EXISTS'
+   Context: [details]
+
+   Your task:
+   1. What are ALL options for executing this migration?
+   2. Is the error message accurate - what's really happening?
+   3. What would YOU recommend as a database expert?
+
+   Don't just confirm the obvious - provide your independent analysis."
 
 // RCA invokes VALIDATION expert (in parallel)
 Task tool with subagent_type="validation-agent":
-  "Analyze validation aspect of: Migration script failed -
-   was there an existing pattern that should have been checked?"
+  "Analyze this migration failure from validation perspective.
+
+   Problem: [same as above]
+   Context: [details]
+
+   Your task:
+   1. Are there existing patterns that should have prevented this?
+   2. What validation gaps exist?
+   3. What would YOU recommend for prevention?
+
+   Provide independent analysis, not confirmation."
 
 // RCA invokes GITHUB expert (in parallel)
 Task tool with subagent_type="github-agent":
-  "Analyze CI/CD aspect of: Migration script failed -
-   should there be a pipeline gate to prevent this?"
+  "Analyze this migration failure from CI/CD perspective.
+
+   Problem: [same as above]
+   Context: [details]
+
+   Your task:
+   1. What CI/CD gates could have caught this?
+   2. What automation gaps exist?
+   3. What would YOU recommend for pipeline improvements?
+
+   Independent investigation - challenge assumptions."
 ```
 
 ## What Each Agent Contributes
@@ -172,6 +261,63 @@ RCA produces a unified analysis containing:
 3. **Better prevention** - Cross-domain patterns prevent entire classes of failures
 4. **Institutional learning** - Patterns captured with all contributing experts tagged
 5. **Faster resolution** - Parallel expert invocation saves time
+6. **Independent alternatives** (v1.1) - Experts provide options RCA wouldn't discover alone
+
+## Implementation Changes (v1.1 - 2026-01-31)
+
+### What Changed
+
+| Component | Before (v1.0) | After (v1.1) |
+|-----------|---------------|--------------|
+| **RCA Agent** | Router role only | Added Multi-Expert Collaboration Protocol section |
+| **Task Tool Access** | Not documented | Explicitly added to rca-agent.md frontmatter |
+| **Invocation Pattern** | Narrow confirmation questions | Independent analysis template |
+| **Expert Autonomy** | Fact-checking role | Full investigation authority |
+
+### Files Modified
+
+1. **`.claude/agents/rca-agent.md`**:
+   - Added `tools: Bash, Read, Write, Task` (line 4)
+   - Added "Multi-Expert Collaboration Protocol (CRITICAL)" section (lines 207-289)
+   - Includes anti-pattern examples (confirmation bias)
+   - Includes correct pattern (independent analysis template)
+   - Domain expert routing table
+   - Key principle: "You are the TRIAGE SPECIALIST, not the domain expert"
+
+2. **`docs/reference/rca-multi-expert-collaboration.md`** (this file):
+   - Added v1.1 updates documenting independent analysis pattern
+   - Added real-world evidence from 2026-01-31 session
+   - Added anti-pattern vs correct pattern examples
+   - Added implementation changes section
+
+### Evidence of Improvement
+
+**Test Case**: Database migration password issue (2026-01-31)
+
+| Metric | Before (Confirmation) | After (Independent) |
+|--------|----------------------|---------------------|
+| Solutions Found | 1 ("add password") | 4 (including zero-config option) |
+| Expert Value-Add | Low (just confirmed) | High (provided alternatives) |
+| Time to Solution | Blocked (manual step) | Unblocked (expert executed) |
+| User Satisfaction | Required manual intervention | Fully autonomous |
+
+### Verification
+
+To verify v1.1 improvements are active:
+
+```bash
+# Check RCA agent has Task tool access
+grep "tools:" .claude/agents/rca-agent.md
+# Expected: tools: Bash, Read, Write, Task
+
+# Check for Multi-Expert Collaboration section
+grep "Multi-Expert Collaboration Protocol" .claude/agents/rca-agent.md
+# Expected: Match found
+
+# Verify independent analysis template exists
+grep "Independent Analysis Template" docs/reference/rca-multi-expert-collaboration.md
+# Expected: Match found
+```
 
 ## Related Patterns
 
