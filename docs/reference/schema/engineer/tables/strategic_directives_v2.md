@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T20:56:09.379Z
+**Generated**: 2026-01-31T21:38:14.951Z
 **Rows**: 698
 **RLS**: Enabled (4 policies)
 
@@ -125,6 +125,7 @@ Use the id column instead - it is the canonical identifier. |
 - `sd_type_check`: CHECK (((sd_type IS NULL) OR ((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'infrastructure'::character varying, 'database'::character varying, 'security'::character varying, 'bugfix'::character varying, 'refactor'::character varying, 'performance'::character varying, 'documentation'::character varying, 'docs'::character varying, 'orchestrator'::character varying, 'testing'::character varying, 'qa'::character varying, 'enhancement'::character varying, 'frontend'::character varying, 'ux_debt'::character varying, 'api'::character varying, 'backend'::character varying, 'process'::character varying, 'implementation'::character varying, 'discovery_spike'::character varying])::text[]))))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
+- `strategic_directives_v2_current_phase_check`: CHECK ((current_phase = ANY (ARRAY['LEAD'::text, 'LEAD_APPROVAL'::text, 'LEAD_COMPLETE'::text, 'LEAD_FINAL'::text, 'LEAD_FINAL_APPROVAL'::text, 'PLAN_PRD'::text, 'PLAN_VERIFICATION'::text, 'EXEC'::text, 'EXEC_COMPLETE'::text, 'COMPLETED'::text, 'CANCELLED'::text])))
 - `strategic_directives_v2_intensity_level_check`: CHECK (((intensity_level)::text = ANY ((ARRAY['cosmetic'::character varying, 'structural'::character varying, 'architectural'::character varying])::text[])))
 - `strategic_directives_v2_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `strategic_directives_v2_progress_check`: CHECK (((progress >= 0) AND (progress <= 100)))
