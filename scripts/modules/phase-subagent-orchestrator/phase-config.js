@@ -1,9 +1,18 @@
 /**
  * Phase Configuration for Sub-Agent Orchestrator
  * Contains phase-to-sub-agent mappings and mandatory agent definitions
+ *
+ * SD-LEO-INFRA-SUBAGENT-ORCHESTRATION-001: These are FALLBACK configurations.
+ * The primary source of truth is now sd_type_validation_profiles.required_sub_agents
+ * in the database. See sd-queries.js:getRequiredSubAgentsFromProfile()
+ *
+ * Fallback is used when:
+ * - SD type has no validation profile in database
+ * - required_sub_agents column is empty for the SD type
+ * - Database query fails (graceful degradation)
  */
 
-// Phase to sub-agent mapping (loaded from database, this is fallback)
+// Phase to sub-agent mapping (FALLBACK - database takes precedence)
 const PHASE_SUBAGENT_MAP = {
   LEAD_PRE_APPROVAL: ['VALIDATION', 'DATABASE', 'SECURITY', 'DESIGN', 'RISK'],
   PLAN_PRD: ['DATABASE', 'STORIES', 'RISK', 'TESTING'],
