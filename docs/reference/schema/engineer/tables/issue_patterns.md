@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T13:20:04.534Z
-**Rows**: 36
+**Generated**: 2026-01-31T17:23:48.219Z
+**Rows**: 39
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,8 @@
 | resolution_notes | `text` | YES | - | Notes explaining how the root cause was resolved |
 | assigned_sd_id | `character varying(50)` | YES | - | SD that will address this pattern. Set by /learn command when user approves. |
 | assignment_date | `timestamp with time zone` | YES | - | When pattern was assigned to an SD via /learn. |
+| source | `character varying(50)` | YES | `'retrospective'::character varying` | Origin of pattern: retrospective (default), feedback_cluster, or manual |
+| source_feedback_ids | `jsonb` | YES | `'[]'::jsonb` | Array of feedback UUIDs that contributed to this pattern (for feedback_cluster source) |
 
 ## Constraints
 
@@ -54,6 +56,7 @@
 - `issue_patterns_pattern_id_key`: UNIQUE (pattern_id)
 
 ### Check Constraints
+- `issue_patterns_source_check`: CHECK (((source)::text = ANY ((ARRAY['retrospective'::character varying, 'feedback_cluster'::character varying, 'manual'::character varying])::text[])))
 - `issue_patterns_status_check`: CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'assigned'::character varying, 'resolved'::character varying, 'obsolete'::character varying])::text[])))
 
 ## Indexes
@@ -89,6 +92,10 @@
 - `idx_issue_patterns_solutions`
   ```sql
   CREATE INDEX idx_issue_patterns_solutions ON public.issue_patterns USING gin (proven_solutions)
+  ```
+- `idx_issue_patterns_source`
+  ```sql
+  CREATE INDEX idx_issue_patterns_source ON public.issue_patterns USING btree (source) WHERE ((source)::text = 'feedback_cluster'::text)
   ```
 - `idx_issue_patterns_status`
   ```sql

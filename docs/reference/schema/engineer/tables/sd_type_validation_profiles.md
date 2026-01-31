@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T13:20:04.534Z
+**Generated**: 2026-01-31T17:23:48.219Z
 **Rows**: 15
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (28 total)
+## Columns (29 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -46,6 +46,7 @@
 | llm_ux_required_lenses | `ARRAY` | YES | `ARRAY['first-time-user'::text]` | Which LLM UX Oracle lenses must pass: first-time-user, accessibility, mobile-user, error-recovery, cognitive-load |
 | requires_uat_execution | `boolean` | YES | `false` | If true, UAT Agent must execute smoke test steps via Playwright MCP and capture evidence. |
 | gate2_exempt_sections | `ARRAY` | YES | `'{}'::text[]` | Array of Gate 2 section codes that are exempt for this SD type. Exempt sections award full points without validation. Valid codes: B1_migrations, B2_rls, B3_complexity, C1_queries, D2_migration_tests |
+| required_sub_agents | `jsonb` | YES | `'{}'::jsonb` | Phase-keyed sub-agent requirements. Format: {"PLAN": ["STORIES", "DESIGN"], "EXEC": ["TESTING"]} |
 
 ## Constraints
 

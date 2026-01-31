@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T13:20:04.534Z
-**Rows**: 16
+**Generated**: 2026-01-31T17:23:48.219Z
+**Rows**: 19
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (42 total)
+## Columns (43 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -60,6 +60,7 @@
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | resolved_at | `timestamp with time zone` | YES | - | - |
+| cluster_processed_at | `timestamp with time zone` | YES | - | Timestamp when feedback was processed by clustering job. NULL = not yet processed. |
 
 ## Constraints
 
@@ -79,6 +80,10 @@
 - `feedback_pkey`
   ```sql
   CREATE UNIQUE INDEX feedback_pkey ON public.feedback USING btree (id)
+  ```
+- `idx_feedback_clustering`
+  ```sql
+  CREATE INDEX idx_feedback_clustering ON public.feedback USING btree (error_hash, created_at DESC) WHERE (((status)::text = ANY ((ARRAY['new'::character varying, 'triaged'::character varying])::text[])) AND (cluster_processed_at IS NULL))
   ```
 - `idx_feedback_created_at`
   ```sql
