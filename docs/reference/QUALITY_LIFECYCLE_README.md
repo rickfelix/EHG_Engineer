@@ -3,11 +3,11 @@
 
 ## Metadata
 - **Category**: Reference
-- **Status**: Draft
-- **Version**: 1.0.0
+- **Status**: Approved
+- **Version**: 1.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-22
-- **Tags**: database, api, rls, feature
+- **Last Updated**: 2026-01-31
+- **Tags**: database, api, rls, feature, feedback, uat
 
 **Orchestrator**: SD-QUALITY-LIFECYCLE-001
 **Status**: Completed (100%)
@@ -37,10 +37,11 @@ The Quality Lifecycle System is EHG's unified approach to quality and feedback m
 Each of the 6 child SDs has detailed documentation embedded in the User Guide:
 
 1. **SD-QUALITY-DB-001**: Database Foundation
-   - Unified `feedback` table (issues + enhancements)
+   - Unified `feedback` table (issues + enhancements + **UAT failures**)
    - `releases` table for versioned releases
    - `feedback_sd_map` junction table
    - RLS policies and indexes
+   - **Note**: As of v1.1.0 (SD-LEO-INFRA-DEPRECATE-UAT-DEFECTS-001), all UAT failures write to `feedback` table with `source_type='uat_failure'`. The legacy `uat_defects` table is deprecated.
 
 2. **SD-QUALITY-CLI-001**: /inbox CLI Command
    - `/inbox` command with all subcommands
