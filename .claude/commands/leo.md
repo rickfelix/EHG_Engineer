@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [init|restart|next|create|continue|complete|resume]
+argument-hint: [init|restart|next|create|continue|complete|resume|<SD-ID>|<QF-ID>]
 ---
 
 # LEO Stack Control
@@ -461,6 +461,101 @@ Restore session state after a crash, compaction, or interruption using the Unifi
    - Automatically loads appropriate CLAUDE_*.md context
    - Target: <100ms state load, 95% restoration success
 
+### If argument starts with "QF-" (Quick-Fix Detection)
+
+**CRITICAL**: When the argument starts with `QF-`, this is a Quick-Fix ID, NOT a regular SD. Route to the quick-fix workflow.
+
+1. **Detect Quick-Fix pattern:**
+   - Pattern: `QF-` prefix (e.g., `QF-CLAIM-CONFLICT-UX-001`, `QF-20260130-001`)
+   - Quick-fixes use a simplified workflow (no LEAD→PLAN→EXEC)
+   - Quick-fixes are stored in `quick_fixes` table, NOT `strategic_directives_v2`
+
+2. **Check quick_fixes table:**
+   ```bash
+   node -e "
+   const { createClient } = require('@supabase/supabase-js');
+   require('dotenv').config();
+   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   const qfId = '<QF-ID>';
+   supabase.from('quick_fixes')
+     .select('*')
+     .eq('id', qfId)
+     .then(function(result) {
+       if (result.data && result.data.length > 0) {
+         var qf = result.data[0];
+         console.log('QF_FOUND=true');
+         console.log('QF_STATUS=' + qf.status);
+         console.log('QF_TITLE=' + qf.title);
+         console.log('QF_COMPLIANCE_SCORE=' + (qf.compliance_score || 'pending'));
+       } else {
+         console.log('QF_FOUND=false');
+       }
+     });
+   "
+   ```
+
+3. **If QF_FOUND=true:**
+   Display status and route accordingly:
+   ```
+   🔧 Quick-Fix: <QF-ID>
+      Title: <title>
+      Status: <status>
+      Compliance: <score>/100
+
+   [If status=open or in_progress]
+   📋 Continue with /quick-fix workflow
+
+   [If status=completed]
+   ✅ This quick-fix is already completed.
+
+   [If status=escalated]
+   ⚠️ This quick-fix was escalated to SD: <escalated_to_sd_id>
+      Run: /leo <escalated_to_sd_id>
+   ```
+
+4. **If QF_FOUND=false:**
+   Check git history to see if already merged:
+   ```bash
+   git log --oneline -10 --grep="<QF-ID>"
+   ```
+
+   **If commits found with QF-ID:**
+   ```
+   ✅ Quick-Fix Already Completed: <QF-ID>
+
+   📜 Git History:
+   <commit hash> <commit message>
+
+   This quick-fix was completed and merged. No further action needed.
+
+   💡 Run `/leo next` to see the SD queue.
+   ```
+
+   **If no commits found:**
+   ```
+   🔧 New Quick-Fix: <QF-ID>
+
+   This quick-fix doesn't exist yet. Would you like to create it?
+
+   📋 Run `/quick-fix` to start the quick-fix workflow.
+   ```
+
+5. **Key differences from SD workflow:**
+   - NO LEAD approval phase
+   - NO PRD required
+   - Scope limit: ≤50 LOC
+   - Simplified compliance rubric (100-point scale)
+   - Auto-escalates to full SD if complexity exceeds threshold
+
+### If argument looks like an SD ID (SD-* pattern)
+
+When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
+1. Run `npm run sd:start <SD-ID>` to claim and show info
+2. Check if orchestrator (has children) → run preflight
+3. Check if child SD (has parent) → run child preflight
+4. Load appropriate CLAUDE_*.md context based on phase
+5. Proceed with LEAD→PLAN→EXEC workflow
+
 ### If no argument provided:
 Run the LEO protocol workflow:
 ```bash
@@ -481,12 +576,20 @@ LEO Commands:
   /leo complete  (comp) - Run full sequence: document → ship → learn → next
   /leo resume    (res)  - Restore session from saved state (crash recovery)
 
+Direct ID Access:
+  /leo SD-XXX-001        - Start/continue work on a Strategic Directive
+  /leo QF-XXX-001        - Start/continue work on a Quick-Fix
+
 SD Creation Flags:
   /leo create                    - Interactive wizard
   /leo create --from-uat <id>    - Create from UAT finding
   /leo create --from-learn <id>  - Create from /learn pattern
   /leo create --from-feedback <id> - Create from /inbox item
   /leo create --child <parent>   - Create child SD
+
+Quick-Fix vs SD:
+  QF-* prefix → Quick-fix workflow (≤50 LOC, no LEAD phase)
+  SD-* prefix → Full SD workflow (LEAD→PLAN→EXEC)
 
 Session Settings:
   Auto-proceed is ON by default. Run /leo init to change.

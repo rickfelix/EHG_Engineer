@@ -3,10 +3,10 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.2.0
+- **Version**: 1.3.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-01-23
-- **Tags**: commands, workflow, ecosystem, slash-commands
+- **Last Updated**: 2026-01-30
+- **Tags**: commands, workflow, ecosystem, slash-commands, quick-fix, routing
 
 ## Table of Contents
 
@@ -117,12 +117,20 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /document → /ship → /learn →
 - **Primary**: Run LEO protocol workflow, manage SD queue
 - **Suggests**: Full post-completion sequence based on SD type
 - **Receives from**: `/learn` (after SD created), `/ship` (after merge)
+- **Intelligent Routing**: Detects QF- vs SD- prefixes and routes to appropriate workflow
+  - `QF-*` prefix → Quick-fix workflow (≤50 LOC, no LEAD phase)
+  - `SD-*` prefix → Strategic Directive workflow (LEAD→PLAN→EXEC)
 - **Subcommands**:
   - `/leo restart` (r) - Restart LEO servers
   - `/leo next` (n) - Show SD queue
-  - `/leo create` (c) - Create new SD
+  - `/leo create` (c) - Create new SD (interactive wizard)
   - `/leo continue` (cont) - Resume current working SD
   - `/leo complete` (comp) - Run full post-completion sequence
+  - `/leo init` (i) - Initialize session (set auto-proceed preference)
+  - `/leo resume` (res) - Restore session from saved state (crash recovery)
+- **Direct ID Access**:
+  - `/leo SD-XXX-001` - Start/continue work on a Strategic Directive
+  - `/leo QF-XXX-001` - Start/continue work on a Quick-Fix
 
 ### `/restart` - Environment Reset
 - **Primary**: Restart all LEO stack servers
@@ -237,6 +245,51 @@ Issue Reported
            Create SD ─── "Full LEO Protocol"
 ```
 
+## Quick-Fix Detection & Routing (v1.3.0)
+
+As of v1.3.0, the `/leo` command intelligently detects Quick-Fix IDs (QF- prefix) and routes to the appropriate workflow.
+
+### QF- Prefix Detection
+
+**Pattern**: `QF-*` (e.g., `QF-CLAIM-CONFLICT-UX-001`, `QF-20260130-001`)
+
+When `/leo QF-XXX-001` is invoked:
+1. **Detect QF- prefix** - Identifies this as a Quick-Fix, not a Strategic Directive
+2. **Check quick_fixes table** - Query database for existing Quick-Fix record
+3. **Check git history** - If not in database, search for merged commits
+4. **Route accordingly**:
+   - **Found & open** → Continue with `/quick-fix` workflow
+   - **Found & completed** → Display "Already completed" message
+   - **Found & escalated** → Redirect to escalated SD
+   - **Not found, in git** → Display "Already merged" message with commit history
+   - **Not found anywhere** → Prompt to create new Quick-Fix
+
+### QF- vs SD- Routing
+
+| ID Pattern | Workflow | Approval Phase | PRD Required | Scope |
+|-----------|----------|----------------|--------------|-------|
+| `QF-*` | Quick-Fix | None | Auto-generated | ≤50 LOC |
+| `SD-*` | Strategic Directive | LEAD approval | Yes (varies by type) | >50 LOC |
+
+### Benefits
+
+- **Reduces cognitive load** - No need to remember different commands for QF vs SD
+- **Smart defaults** - Auto-routes based on ID prefix
+- **Unified interface** - Single `/leo` command handles both workflows
+- **Error prevention** - Can't accidentally start SD workflow for Quick-Fix
+
+### Example Usage
+
+```bash
+# Start/continue Strategic Directive
+/leo SD-FEATURE-001
+
+# Start/continue Quick-Fix
+/leo QF-CLAIM-CONFLICT-UX-001
+
+# Both route to appropriate workflow automatically
+```
+
 ## LEO Command Menu Streamlining (v1.2.0)
 
 As of v1.2.0, the `/leo` command menu has been streamlined for clarity:
@@ -316,10 +369,18 @@ Every suggestion set includes a "Done for now" option allowing users to:
 5. **Not circular** - Commands don't suggest themselves
 6. **Progressive** - Flow moves forward (completion → shipping → learning → new work)
 
+## Related Documentation
+
+- [Quick-Fix Protocol](../../03_protocols_and_standards/quick-fix-protocol.md) - Complete quick-fix workflow documentation
+- [LEO Protocol](../../03_protocols_and_standards/) - Strategic Directive workflow protocols
+- [Ship Command Guide](../../reference/ship-command-guide.md) - Shipping and PR creation
+- [UAT Command Platform](../../reference/uat-command-platform.md) - User acceptance testing
+
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-01-30 | Added QF- prefix detection and intelligent routing to quick-fix workflow |
 | 1.2.0 | 2026-01-23 | Added /leo continue and /leo complete subcommands |
 | 1.1.0 | 2026-01-11 | Added AskUserQuestion pattern with auto-invoke behavior |
 | 1.0.0 | 2026-01-11 | Initial command ecosystem implementation |
