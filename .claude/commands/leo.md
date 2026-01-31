@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [init|restart|next|create|continue|complete|resume|<SD-ID>|<QF-ID>]
+argument-hint: [settings|restart|next|create|continue|complete|<SD-ID>]
 ---
 
 # LEO Stack Control
