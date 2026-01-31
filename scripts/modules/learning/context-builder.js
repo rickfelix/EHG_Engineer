@@ -231,7 +231,7 @@ async function findSimilarPatterns(patterns) {
 async function getResolvedFeedbackLearnings(limit = TOP_N) {
   const { data, error } = await supabase
     .from('feedback')
-    .select('id, title, description, type, error_type, priority, occurrence_count, resolution_notes, resolution_sd_id, created_at, updated_at')
+    .select('id, title, description, type, category, priority, occurrence_count, resolution_notes, resolution_sd_id, created_at, updated_at')
     .in('status', ['resolved', 'shipped'])
     .not('resolution_notes', 'is', null)
     .order('occurrence_count', { ascending: false })
@@ -262,7 +262,7 @@ async function getResolvedFeedbackLearnings(limit = TOP_N) {
       source_type: 'feedback',
       source_id: feedback.id,
       type: feedback.type,
-      error_type: feedback.error_type,
+      category: feedback.category,
       title: feedback.title,
       content: `${feedback.title}: ${feedback.resolution_notes}`,
       occurrence_count: feedback.occurrence_count || 1,
@@ -284,7 +284,7 @@ async function getResolvedFeedbackLearnings(limit = TOP_N) {
 async function getRecurringFeedbackPatterns(limit = TOP_N) {
   const { data, error } = await supabase
     .from('feedback')
-    .select('id, title, error_type, priority, occurrence_count, status, created_at')
+    .select('id, title, category, priority, occurrence_count, status, created_at')
     .eq('type', 'issue')
     .gt('occurrence_count', 2) // Only patterns with multiple occurrences
     .order('occurrence_count', { ascending: false })
@@ -295,30 +295,30 @@ async function getRecurringFeedbackPatterns(limit = TOP_N) {
     return [];
   }
 
-  // Group by error type if available
-  const byErrorType = {};
+  // Group by category if available
+  const byCategory = {};
   for (const fb of (data || [])) {
-    const key = fb.error_type || 'unknown';
-    if (!byErrorType[key]) {
-      byErrorType[key] = {
-        error_type: key,
+    const key = fb.category || 'unknown';
+    if (!byCategory[key]) {
+      byCategory[key] = {
+        category: key,
         items: [],
         total_occurrences: 0
       };
     }
-    byErrorType[key].items.push(fb);
-    byErrorType[key].total_occurrences += fb.occurrence_count || 1;
+    byCategory[key].items.push(fb);
+    byCategory[key].total_occurrences += fb.occurrence_count || 1;
   }
 
   // Convert to array and sort by total occurrences
-  return Object.values(byErrorType)
+  return Object.values(byCategory)
     .sort((a, b) => b.total_occurrences - a.total_occurrences)
     .slice(0, limit)
     .map(group => ({
-      id: `FBP-${group.error_type.substring(0, 10)}`,
+      id: `FBP-${group.category.substring(0, 10)}`,
       source_type: 'feedback_pattern',
-      error_type: group.error_type,
-      content: `Recurring ${group.error_type} errors (${group.total_occurrences} total occurrences across ${group.items.length} issues)`,
+      category: group.category,
+      content: `Recurring ${group.category} issues (${group.total_occurrences} total occurrences across ${group.items.length} items)`,
       total_occurrences: group.total_occurrences,
       item_count: group.items.length,
       items: group.items.map(i => ({
@@ -535,7 +535,7 @@ export function formatContextForDisplay(context) {
     lines.push('Solutions extracted from resolved issues:\n');
     for (const fb of context.feedback_learnings) {
       lines.push(`**[${fb.id}]** ${fb.title}`);
-      lines.push(`  - Type: ${fb.error_type || fb.type} | Priority: ${fb.priority} | Occurrences: ${fb.occurrence_count}`);
+      lines.push(`  - Type: ${fb.category || fb.type} | Priority: ${fb.priority} | Occurrences: ${fb.occurrence_count}`);
       lines.push(`  - Resolution: ${fb.content.substring(fb.title.length + 2)}`);
       if (fb.resolution_sd_id) {
         lines.push(`  - Resolved via: ${fb.resolution_sd_id}`);
