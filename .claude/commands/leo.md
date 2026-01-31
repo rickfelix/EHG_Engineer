@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [<SD-ID>|create|next|continue|complete|restart|settings]
+argument-hint: [inbox|<SD-ID>|create|next|continue|complete|restart|settings]
 ---
 
 # LEO Stack Control
@@ -271,6 +271,23 @@ Run the LEO stack restart command:
 ```bash
 node scripts/cross-platform-run.js leo-stack restart
 ```
+
+### If argument is "inbox" or "inb":
+Show feedback inbox with options to manage items or create SDs from them.
+
+1. **Invoke the inbox skill:**
+   Use the Skill tool to invoke the `inbox` skill with any additional arguments passed.
+
+   Example: `/leo inbox` → Invoke `inbox` skill (shows list)
+   Example: `/leo inbox focus` → Invoke `inbox` skill with args: `focus`
+   Example: `/leo inbox new` → Invoke `inbox` skill with args: `new`
+
+2. **Display integration hint:**
+   After showing inbox, remind user of SD creation option:
+   ```
+   💡 To create an SD from a feedback item:
+      /leo create --from-feedback <id>
+   ```
 
 ### If argument is "next" or "n":
 Show the SD queue to determine what to work on next:
@@ -727,6 +744,7 @@ LEO Commands:
   /leo                   - Show this help menu
   /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
   /leo restart   (r)     - Restart all LEO servers
+  /leo inbox     (inb)   - Show feedback inbox (/inbox shortcut)
   /leo next      (n)     - Show SD queue (what to work on)
   /leo create    (c)     - Create new SD (interactive wizard)
   /leo continue  (cont)  - Resume current working SD
