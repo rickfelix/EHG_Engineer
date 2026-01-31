@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-01-31 12:20:49 PM
+**Generated**: 2026-01-31 12:30:39 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -1329,6 +1329,33 @@ Parent completes automatically after last child, but LEAD should verify:
 Sequential LEAD approval allows learning from earlier children to inform later decisions.
 
 
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
+
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1370,33 +1397,6 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
-
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 

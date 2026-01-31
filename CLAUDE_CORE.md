@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-01-31 12:20:49 PM
+**Generated**: 2026-01-31 12:30:39 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1334,6 +1334,78 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - Rubrics: `/scripts/modules/rubrics/*.js`
 - Base: `/scripts/modules/ai-quality-evaluator.js`
 - Full documentation: `docs/reference/ai-quality-rubrics.md`
+
+## RCA Multi-Expert Collaboration Protocol
+
+## RCA Multi-Expert Collaboration Protocol (v1.0)
+
+**Pattern ID**: PAT-RCA-MULTI-001
+
+### Overview
+
+The RCA (Root Cause Analysis) agent functions as a **triage specialist** that collaborates with domain experts rather than attempting to solve technical issues alone. For complex, cross-domain issues, RCA invokes multiple experts IN PARALLEL.
+
+### When to Invoke Multiple Experts
+
+RCA automatically invokes 2+ experts when:
+1. Issue matches known multi-domain patterns
+2. Issue keywords span multiple categories in routing map
+3. Explicit triggers: "spans multiple domains", "cross-domain issue", "multi-expert analysis"
+
+### Domain Expert Routing Map
+
+| Category | Primary | Secondary | Keywords |
+|----------|---------|-----------|----------|
+| Database | DATABASE | SECURITY, PERFORMANCE | migration, schema, sql, query, rls |
+| API | API | SECURITY, PERFORMANCE | endpoint, rest, graphql, route |
+| Security | SECURITY | DATABASE, API | auth, vulnerability, cve, injection |
+| Performance | PERFORMANCE | DATABASE, API | slow, latency, optimization, cache |
+| Testing | TESTING | REGRESSION, UAT | test, e2e, playwright, coverage |
+| UI | DESIGN | UAT, TESTING | component, ui, ux, accessibility |
+| CI/CD | GITHUB | TESTING, DEPENDENCY | pipeline, workflow, action, deploy |
+| Dependencies | DEPENDENCY | SECURITY, GITHUB | npm, package, version, cve |
+| Refactoring | REGRESSION | VALIDATION, TESTING | refactor, backward, compatibility |
+
+### Multi-Domain Issue Patterns
+
+| Pattern | Experts to Invoke |
+|---------|-------------------|
+| `security_breach` | SECURITY + API + DATABASE |
+| `migration_failure` | DATABASE + VALIDATION + GITHUB |
+| `performance_degradation` | PERFORMANCE + DATABASE + API |
+| `test_infrastructure` | TESTING + GITHUB + DATABASE |
+| `deployment_failure` | GITHUB + DEPENDENCY + SECURITY |
+
+### Collaboration Flow
+
+```
+1. TRIAGE: Identify issue category via keywords
+2. DETECT: Check if issue spans multiple domains
+3. INVOKE: Launch relevant experts IN PARALLEL via Task tool
+4. GATHER: Collect domain-specific findings from each expert
+5. SYNTHESIZE: Unify findings into cross-domain 5-whys
+6. CAPA: Create multi-domain Corrective/Preventive Actions
+7. CAPTURE: Add to issue_patterns with related_sub_agents[]
+```
+
+### Example Invocation
+
+```javascript
+// RCA invokes DATABASE expert (parallel)
+Task tool with subagent_type="database-agent":
+  "Analyze database aspect of: {issue_description}"
+
+// RCA invokes VALIDATION expert (parallel)
+Task tool with subagent_type="validation-agent":
+  "Analyze validation aspect of: {issue_description}"
+```
+
+### Key Principle
+
+**RCA provides the ANALYTICAL FRAMEWORK. Domain experts provide TECHNICAL SOLUTIONS. Together they produce complete root cause analysis with effective prevention.**
+
+*Full documentation: docs/reference/rca-multi-expert-collaboration.md*
+
 
 
 
