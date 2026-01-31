@@ -42,9 +42,48 @@ node -e "require('dotenv').config(); const {createClient}=require('@supabase/sup
 | When AUTO-PROCEED is ON | When OFF |
 |-------------------------|----------|
 | Phase transitions execute automatically | Pause and ask before each transition |
-| Post-completion runs /document → /ship → /learn | Ask before each step |
+| Post-completion runs SD-type-aware sequence (see below) | Ask before each step |
 | Shows next SD after completion | Ask before showing queue |
 | No confirmation prompts | AskUserQuestion at each decision |
+
+### Post-Completion Sequence (SD-Type-Aware)
+
+Post-completion sequence varies by SD type. This is implemented in `lib/utils/post-completion-requirements.js`.
+
+**Full Sequence SD Types** (restart → document → ship → learn):
+| SD Type | restart | document | ship | learn |
+|---------|---------|----------|------|-------|
+| `feature` | YES | YES | YES | YES |
+| `bugfix` | conditional* | NO | YES | YES |
+| `security` | conditional* | YES | YES | YES |
+| `refactor` | conditional* | NO | YES | YES |
+| `enhancement` | conditional* | YES | YES | YES |
+| `performance` | conditional* | NO | YES | YES |
+
+*restart runs if SD has UI changes OR is a feature type
+
+**Minimal Sequence SD Types** (ship only):
+| SD Type | restart | document | ship | learn |
+|---------|---------|----------|------|-------|
+| `documentation` | NO | NO | YES | NO |
+| `infrastructure` | NO | NO | YES | NO |
+| `database` | NO | NO | YES | NO |
+| `orchestrator` | NO | NO | YES | NO |
+| `process` | NO | NO | YES | NO |
+| `qa` | NO | NO | YES | NO |
+| `api` | NO | NO | YES | NO |
+| `backend` | NO | NO | YES | NO |
+
+**Source-Based /learn Skip** (prevents infinite recursion):
+SDs from these sources skip /learn even if they would otherwise run it:
+- `learn` - Created by /learn command
+- `quick-fix` - Created by /quick-fix command
+- `rca` - Created by /rca command
+- `escalation` - Created by old /escalate command
+- `auto-generated` - Auto-generated SDs
+- `pattern-derived` - SDs derived from patterns
+
+**Reference**: `lib/utils/post-completion-requirements.js`
 
 ### Pause Points (When ON)
 
