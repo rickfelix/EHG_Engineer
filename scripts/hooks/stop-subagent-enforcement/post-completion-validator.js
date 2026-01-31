@@ -54,9 +54,17 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     // Check if there were any commits on the branch
     // Only block if there's actual code to ship
     try {
-      const diffOutput = execSync('git diff main...HEAD --name-only', { encoding: 'utf-8' }).trim();
-      if (diffOutput) {
-        missingRequired.push('SHIP');
+      // QF-POST-COMPLETION-VALIDATOR-001: Check if we're on main branch
+      // If on main, the branch was already merged - don't run git diff that would false-positive
+      const currentBranch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim();
+      if (currentBranch === 'main' || currentBranch === 'master') {
+        // Branch already merged and cleaned up - ship was successful
+        console.error(`   ✅ On ${currentBranch} branch - ship already completed (branch merged)`);
+      } else {
+        const diffOutput = execSync('git diff main...HEAD --name-only', { encoding: 'utf-8' }).trim();
+        if (diffOutput) {
+          missingRequired.push('SHIP');
+        }
       }
     } catch {
       // If diff fails (branch deleted after merge, or on main), don't assume ship is needed
