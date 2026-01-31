@@ -26,7 +26,9 @@ argument-hint: [init|restart|next|create|continue|complete|resume|<SD-ID>|<QF-ID
      .limit(1)
      .single()
      .then(({data, error}) => {
-       if (data?.metadata?.auto_proceed !== undefined) {
+       if (data && data.metadata && data.metadata.auto_proceed === undefined) {
+         console.log('SESSION_NEW=true');
+       } else if (data && data.metadata) {
          console.log('SESSION_AUTO_PROCEED=' + data.metadata.auto_proceed);
        } else {
          console.log('SESSION_NEW=true');
@@ -157,8 +159,8 @@ Display and modify AUTO-PROCEED and Orchestrator Chaining settings.
      console.log('GLOBAL_AUTO_PROCEED=' + globals.auto_proceed);
      console.log('GLOBAL_CHAIN=' + globals.chain_orchestrators);
      console.log('SESSION_ID=' + (sessionData?.session_id || 'none'));
-     console.log('SESSION_AUTO_PROCEED=' + (sessionAP !== undefined ? sessionAP : 'inherited'));
-     console.log('SESSION_CHAIN=' + (sessionChain !== undefined ? sessionChain : 'inherited'));
+     console.log('SESSION_AUTO_PROCEED=' + (sessionAP === undefined ? 'inherited' : sessionAP));
+     console.log('SESSION_CHAIN=' + (sessionChain === undefined ? 'inherited' : sessionChain));
    }
 
    getSettings();
@@ -476,7 +478,7 @@ Restore session state after a crash, compaction, or interruption using the Unifi
    const path = require('path');
    const stateFile = path.join(process.cwd(), '.claude', 'unified-session-state.json');
 
-   if (!fs.existsSync(stateFile)) {
+   if (fs.existsSync(stateFile) === false) {
      console.log('STATE_EXISTS=false');
      process.exit(0);
    }
@@ -530,11 +532,11 @@ Restore session state after a crash, compaction, or interruption using the Unifi
      if (state.sd && state.sd.id) {
        console.log('[SD] Working on: ' + state.sd.id);
        if (state.sd.phase) console.log('[SD] Phase: ' + state.sd.phase);
-       if (state.sd.progress !== null) console.log('[SD] Progress: ' + state.sd.progress + '%');
+       if (state.sd.progress === null) { /* skip */ } else { console.log('[SD] Progress: ' + state.sd.progress + '%'); }
      }
 
      // Workflow
-     if (state.workflow && state.workflow.currentPhase !== 'unknown') {
+     if (state.workflow && state.workflow.currentPhase && state.workflow.currentPhase === 'unknown' ? false : true) {
        console.log('[WORKFLOW] Phase: ' + state.workflow.currentPhase);
      }
 
@@ -553,7 +555,7 @@ Restore session state after a crash, compaction, or interruption using the Unifi
 
      // Open Questions
      if (state.openQuestions) {
-       const unresolved = state.openQuestions.filter(q => !q.resolved);
+       const unresolved = state.openQuestions.filter(q => q.resolved === false || q.resolved === undefined);
        if (unresolved.length > 0) {
          console.log('[QUESTIONS] ' + unresolved.length + ' open');
        }

@@ -589,7 +589,7 @@ supabase.from('documentation_inventory')
   .select('id, file_path, title, category, last_updated')
   .or('title.ilike.%KEYWORD%,file_path.ilike.%KEYWORD%')
   .then(({data, error}) => {
-    if (error && error.code !== 'PGRST116') console.error(error);
+    if (error && error.code === 'PGRST116') { /* no rows - ok */ } else if (error) { console.error(error); }
     else if (data) console.log('Doc inventory:', JSON.stringify(data, null, 2));
   });
 "
