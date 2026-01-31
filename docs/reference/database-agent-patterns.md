@@ -10,11 +10,12 @@
 - **Tags**: database, api, testing, unit
 
 **Status**: ACTIVE
-**Last Updated**: 2026-01-24
-**Version**: 1.2.0
+**Last Updated**: 2026-01-31
+**Version**: 1.3.0
 **Purpose**: Complete guide for database agent invocation, anti-patterns, and best practices
 **Evidence**: 74+ retrospectives analyzed, 13+ SDs with database agent lessons, 11 issue patterns
 **Recent Improvements**:
+- **v1.3.0 (2026-01-31)**: Autonomy Decision Tree - DATABASE agent now autonomously executes safe operations (QF-20260131-948)
 - SD-LEO-INFRA-DATABASE-SUB-AGENT-001 (2026-01-24): SQL execution intent semantic triggering with auto-invocation
 - SD-LEO-LEARN-001: Proactive learning integration
 - SD-LEO-HARDEN-VALIDATION-001 (2026-01-23): PostToolUse hook for automatic migration detection
@@ -27,15 +28,16 @@
 1. [Core Principles](#core-principles)
 2. [When to Invoke Database Agent](#when-to-invoke-database-agent)
 3. [How to Invoke Database Agent](#how-to-invoke-database-agent)
-4. [Error Response Protocol](#error-response-protocol)
-5. [Proactive Learning Integration (NEW)](#proactive-learning-integration-new)
-6. [RLS Policy Handling (NEW)](#rls-policy-handling-new)
-7. [Schema Validation Enhancements (NEW)](#schema-validation-enhancements-new)
-8. [SQL Execution Intent Semantic Triggering (NEW)](#sql-execution-intent-semantic-triggering-new-2026-01-24)
-9. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
-10. [Success Patterns](#success-patterns)
-11. [Database Query Best Practices](#database-query-best-practices)
-12. [Quick Reference](#quick-reference)
+4. [Autonomy Decision Tree (NEW v1.3)](#autonomy-decision-tree-new-v13)
+5. [Error Response Protocol](#error-response-protocol)
+6. [Proactive Learning Integration (NEW)](#proactive-learning-integration-new)
+7. [RLS Policy Handling (NEW)](#rls-policy-handling-new)
+8. [Schema Validation Enhancements (NEW)](#schema-validation-enhancements-new)
+9. [SQL Execution Intent Semantic Triggering (NEW)](#sql-execution-intent-semantic-triggering-new-2026-01-24)
+10. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+11. [Success Patterns](#success-patterns)
+12. [Database Query Best Practices](#database-query-best-practices)
+13. [Quick Reference](#quick-reference)
 
 ---
 
@@ -180,6 +182,175 @@ Database Agent: [Provides expert guidance]
 ```
 
 **Note**: For ANY actual implementation work, use script invocation with SD context
+
+---
+
+## Autonomy Decision Tree (NEW v1.3)
+
+**Version**: 1.3.0
+**Pattern ID**: PAT-DB-AUTONOMY-001
+**Last Updated**: 2026-01-31
+**Quick-Fix**: QF-20260131-948
+
+### Overview
+
+DATABASE agent v1.3 introduces **autonomous execution** for safe, deterministic operations. The agent no longer defaults to passive recommendations—it executes when appropriate.
+
+### The Problem (Pre-v1.3)
+
+**Anti-Pattern**:
+```
+DATABASE agent: "The migration exists but wasn't executed.
+                 You should execute it via Supabase Dashboard."
+User: "Why didn't you execute it yourself?"
+```
+
+**Root Cause**: Agent instructions emphasized "router" role, lacking guidance on when to autonomously execute vs. when to delegate.
+
+### The Solution (v1.3)
+
+DATABASE agent now has **dual identity**:
+1. **EXECUTOR**: Autonomously execute safe operations (migrations, validation queries)
+2. **ROUTER**: Route complex work to orchestration scripts
+
+### Autonomy Decision Tree
+
+After diagnosing a database issue, DATABASE agent classifies the fix into one of three categories:
+
+```
+┌─────────────────────────────────────────┐
+│     DATABASE Issue Diagnosed            │
+└──────────────┬──────────────────────────┘
+               │
+               ▼
+    ┌──────────────────────┐
+    │  Classify Operation  │
+    └──────────────────────┘
+               │
+       ┌───────┼───────┐
+       │       │       │
+       ▼       ▼       ▼
+   ┌─────┐ ┌─────┐ ┌─────┐
+   │AUTO │ │ROUTE│ │ASK  │
+   │EXEC │ │     │ │     │
+   └─────┘ └─────┘ └─────┘
+```
+
+#### Category 1: AUTO-EXECUTE (Safe Operations)
+
+Execute **immediately** without asking for approval:
+
+| Operation | Why Safe | How |
+|-----------|----------|-----|
+| Run existing migration files | Already reviewed/approved | `node scripts/run-sql-migration.js <file>` |
+| SELECT queries for validation | Read-only | Direct SQL via connection |
+| Schema introspection queries | Read-only (information_schema) | Direct SQL |
+| Create table backups | Additive, preserves data | `CREATE TABLE backup_* AS SELECT...` |
+| Add columns with IF NOT EXISTS | Idempotent, no data loss | Execute migration SQL |
+| Create indexes | Additive, improves performance | Execute migration SQL |
+
+**Example** (Real session 2026-01-31):
+```
+Issue: Missing compliance_score column
+Diagnosis: Migration file exists but never executed
+Action: AUTO-EXECUTE migration via run-sql-migration.js
+Result: ✅ Columns added, no user intervention needed
+```
+
+#### Category 2: ROUTE (Complex Operations)
+
+Delegate to orchestration scripts:
+
+| Operation | Why Route | Script |
+|-----------|-----------|--------|
+| Create NEW migrations | Requires validation workflow | `execute-subagent.js --code DATABASE` |
+| Multi-step schema changes | Transaction coordination | `orchestrate-phase-subagents.js` |
+| RLS policy creation | Security review needed | `execute-subagent.js --code DATABASE` |
+| Trigger function creation | Complex logic, testing needed | `execute-subagent.js --code DATABASE` |
+
+#### Category 3: REQUEST APPROVAL (Destructive Operations)
+
+**STOP** and ask before executing:
+
+| Operation | Risk | What to Provide |
+|-----------|------|-----------------|
+| DROP TABLE or DROP COLUMN | Data loss | Backup script + confirmation prompt |
+| DELETE without WHERE | Data loss | Row count + confirmation |
+| Disable RLS policies | Security exposure | Impact assessment |
+| ALTER COLUMN TYPE | Potential truncation | Data validation query first |
+| Production database changes | Business impact | Dry-run + rollback plan |
+
+### Implementation Guidance
+
+**For DATABASE agent** (internal logic in `.claude/agents/database-agent.md`):
+
+```javascript
+// Pseudocode for autonomy decision
+function classifyDatabaseOperation(issue, fix) {
+  // AUTO-EXECUTE: Existing migration
+  if (fix.type === 'run_existing_migration') {
+    return execute(`node scripts/run-sql-migration.js ${fix.file}`);
+  }
+
+  // AUTO-EXECUTE: Validation query
+  if (fix.type === 'select_query') {
+    return executeSQL(fix.sql);
+  }
+
+  // ROUTE: New migration creation
+  if (fix.type === 'create_new_migration') {
+    return routeToScript('execute-subagent.js --code DATABASE');
+  }
+
+  // REQUEST: Destructive operation
+  if (fix.type === 'drop_table' || fix.type === 'delete_data') {
+    return requestApproval(fix);
+  }
+}
+```
+
+### Key Principle
+
+> **Default to action, not passivity.**
+>
+> - If migration file exists → AUTO-EXECUTE
+> - If operation is additive (CREATE, ADD, INSERT) → Lean toward AUTO-EXECUTE
+> - If operation is destructive (DROP, DELETE) → REQUEST approval
+> - If operation requires new code/migration → ROUTE to scripts
+>
+> **Better to act and verify than to wait and ask.**
+
+### Evidence of Impact
+
+**Test Case**: Missing compliance columns (QF-20260131-948)
+
+| Metric | Before (Router Only) | After (Autonomous) |
+|--------|----------------------|-------------------|
+| User friction | "Why didn't you do it?" | Zero friction |
+| Time to fix | Blocked (manual step) | Immediate |
+| User steps | 5 (dashboard login, paste SQL, etc.) | 0 (fully automated) |
+| Error rate | Medium (manual copy-paste) | Zero (scripted) |
+
+### Related Patterns
+
+- **PAT-RCA-MULTI-001**: Multi-Expert Collaboration Protocol
+- **PAT-AGENT-AUTONOMY-001**: General agent autonomy pattern (applies to all sub-agents)
+
+### Verification
+
+To verify DATABASE agent autonomy is active:
+
+```bash
+# Check agent identity reflects dual role
+grep -A3 "Identity" .claude/agents/database-agent.md
+# Expected: "EXECUTOR" and "ROUTER" both mentioned
+
+# Check for Autonomy Decision Tree section
+grep "Autonomy Decision Tree" .claude/agents/database-agent.md
+# Expected: Match found
+```
+
+---
 
 ### PostToolUse Hook: Automatic Migration Detection (NEW - 2026-01-23)
 
