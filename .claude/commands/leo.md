@@ -356,6 +356,24 @@ node scripts/modules/sd-key-generator.js LEO <type> "<title>"
   node scripts/modules/sd-key-generator.js --child <parent-key> <index>
   ```
 
+- `create --from-plan [path]`: Create from Claude Code plan file
+  ```bash
+  # Auto-detect most recent plan in ~/.claude/plans/
+  node scripts/leo-create-sd.js --from-plan
+
+  # Use specific plan file
+  node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
+  ```
+
+  This extracts from the plan:
+  - **Title** from `# Plan: Title` or first `# Heading`
+  - **Summary/Description** from `## Goal` or `## Summary` section
+  - **Success Criteria** from `- [ ]` checklist items (max 10)
+  - **Scope** from file modification tables
+  - **SD Type** inferred from content keywords (security, bug, refactor, infrastructure, documentation → appropriate type)
+
+  The original plan is archived to `docs/plans/archived/{sd-key}-plan.md` for reference.
+
 After generating the key, create the SD in database with initial fields:
 - status: 'draft'
 - current_phase: 'LEAD'
@@ -723,6 +741,7 @@ SD Creation Flags:
   /leo create --from-uat <id>    - Create from UAT finding
   /leo create --from-learn <id>  - Create from /learn pattern
   /leo create --from-feedback <id> - Create from /inbox item
+  /leo create --from-plan [path] - Create from Claude Code plan file
   /leo create --child <parent>   - Create child SD
 
 Quick-Fix vs SD:

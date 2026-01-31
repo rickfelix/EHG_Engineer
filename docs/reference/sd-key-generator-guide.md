@@ -258,10 +258,46 @@ The `/leo create` command uses SDKeyGenerator through `leo-create-sd.js`:
 /leo create --from-uat <test-id>
 /leo create --from-learn <pattern-id>
 /leo create --from-feedback <feedback-id>
+/leo create --from-plan [path]      # NEW: Create from Claude Code plan
 /leo create --child <parent-key> [index]
 ```
 
 See `.claude/commands/leo.md` for full command documentation.
+
+#### Plan-Aware SD Creation (NEW)
+
+Create SDs directly from Claude Code plan files:
+
+```bash
+# Auto-detect most recent plan
+/leo create --from-plan
+
+# Auto-detect without confirmation
+/leo create --from-plan --yes
+
+# Use specific plan file
+/leo create --from-plan ~/.claude/plans/my-plan.md
+```
+
+**What It Does**:
+- Parses plan file to extract title, goal, steps, and file modifications
+- Infers SD type from plan content keywords
+- Archives original plan to `docs/plans/archived/{sd-key}-plan.md`
+- Populates SD fields: title, description, scope, success_criteria, key_changes, strategic_objectives, risks
+- Stores full plan content in `metadata.plan_content` for reference
+
+**Plan Parsing**:
+- **Title**: Extracted from `# Plan: Title` or first `# Heading`
+- **Summary**: From `## Goal` or `## Summary` section
+- **Success Criteria**: From `- [ ]` checklist items (max 10)
+- **Scope**: From file modification tables (`| path | ACTION |`)
+- **Key Changes**: From implementation sections and file tables
+- **Risks**: From `## Risks` or `## Concerns` sections
+- **SD Type**: Inferred from keywords (security, bug, refactor, infrastructure, documentation)
+
+**Modules Used**:
+- `scripts/modules/plan-parser.js` - Parses plan file structure
+- `scripts/modules/plan-archiver.js` - Archives plans and finds recent ones
 
 ---
 
@@ -341,6 +377,29 @@ const sdKey = await generateSDKey({
 });
 
 // Returns: SD-FDBK-FEAT-ADD-DARK-MODE-001
+```
+
+### Create SD from Plan File (NEW)
+
+```javascript
+import { generateSDKey } from './modules/sd-key-generator.js';
+import { parsePlanFile } from './modules/plan-parser.js';
+import { readPlanFile } from './modules/plan-archiver.js';
+
+// Read and parse plan
+const content = readPlanFile('~/.claude/plans/my-plan.md');
+const parsed = parsePlanFile(content);
+
+// Generate SD key
+const sdKey = await generateSDKey({
+  source: 'LEO',
+  type: parsed.type,  // Inferred from plan content
+  title: parsed.title,
+  skipLeadValidation: true  // Plans are pre-validated by plan mode
+});
+
+// Returns: SD-LEO-[TYPE]-[SEMANTIC]-001
+// Example: SD-LEO-FIX-ENHANCE-LEO-CREATE-001
 ```
 
 ### Parse Existing Key
@@ -465,6 +524,13 @@ WHERE sd_key ILIKE 'SD-UAT-FIX-NAV%' OR id ILIKE 'SD-UAT-FIX-NAV%';
 
 ---
 
-**Last Updated**: 2026-01-20
+**Last Updated**: 2026-01-31
 **Maintainer**: Claude (LEO Protocol)
-**SD**: SD-LEO-SDKEY-001
+**SD**: SD-LEO-SDKEY-001, SD-LEO-INFRA-PLAN-AWARE-SD-CREATION-001
+
+**Changelog**:
+- **2026-01-31**: Added `--from-plan` documentation (plan-aware SD creation)
+  - New modules: `plan-parser.js`, `plan-archiver.js`
+  - Plan parsing: extracts title, summary, steps, files, key changes, risks
+  - Plan archiving: preserves original plan to `docs/plans/archived/`
+  - Type inference: determines SD type from plan content keywords

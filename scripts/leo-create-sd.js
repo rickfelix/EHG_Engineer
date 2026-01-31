@@ -26,6 +26,17 @@ import {
   getArtifacts,
   getStatus as getPhase0Status
 } from './modules/phase-0/leo-integration.js';
+import {
+  parsePlanFile,
+  formatFilesAsScope,
+  formatStepsAsCriteria
+} from './modules/plan-parser.js';
+import {
+  findMostRecentPlan,
+  archivePlanFile,
+  readPlanFile,
+  getDisplayPath
+} from './modules/plan-archiver.js';
 
 dotenv.config();
 
@@ -235,6 +246,180 @@ async function createChild(parentKey, index = 0) {
       inherited_from_parent: Object.keys(inheritedFields)
     }
   });
+
+  return sd;
+}
+
+/**
+ * Create SD from Claude Code plan file
+ *
+ * When called without a path, auto-detects the most recent plan and shows
+ * confirmation prompt. For automated/non-interactive use, pass explicit path.
+ *
+ * @param {string|null} planPath - Optional explicit path to plan file
+ * @param {boolean} skipConfirmation - Skip confirmation for auto-detected plans (CLI flag: --yes)
+ */
+async function createFromPlan(planPath = null, skipConfirmation = false) {
+  console.log('\n📋 Creating SD from Claude Code plan file');
+
+  // Step 1: Find plan file (auto-detect if no path provided)
+  let targetPath = planPath;
+  let originalPath = planPath;
+  let wasAutoDetected = false;
+
+  if (!targetPath) {
+    console.log('   Auto-detecting most recent plan...');
+    const recentPlan = await findMostRecentPlan();
+
+    if (!recentPlan) {
+      console.error('\n❌ No plan file found');
+      console.error('   Expected location: ~/.claude/plans/');
+      console.error('   Make sure you have an active plan in Claude Code plan mode.');
+      process.exit(1);
+    }
+
+    targetPath = recentPlan.path;
+    originalPath = recentPlan.path;
+    wasAutoDetected = true;
+
+    // Show what was found
+    console.log(`\n   📄 Found plan: ${recentPlan.name}`);
+    console.log(`   📍 Path: ${getDisplayPath(targetPath)}`);
+    console.log(`   🕐 Modified: ${recentPlan.mtime.toLocaleString()}`);
+  }
+
+  // Step 2: Read and parse plan file
+  const content = readPlanFile(targetPath);
+  if (!content) {
+    console.error(`\n❌ Failed to read plan file: ${targetPath}`);
+    process.exit(1);
+  }
+
+  const parsed = parsePlanFile(content);
+
+  // Show parsed summary
+  console.log('\n   ═══════════════════════════════════════════');
+  console.log('   PLAN SUMMARY');
+  console.log('   ═══════════════════════════════════════════');
+  console.log(`   Title: ${parsed.title || '(untitled)'}`);
+  console.log(`   Type (inferred): ${parsed.type}`);
+  console.log(`   Goal: ${parsed.summary ? parsed.summary.substring(0, 80) + '...' : '(none found)'}`);
+  console.log(`   Checklist items: ${parsed.steps.length}`);
+  console.log(`   Files to modify: ${parsed.files.length}`);
+  console.log(`   Key changes: ${parsed.keyChanges?.length || 0}`);
+  console.log(`   Risks identified: ${parsed.risks?.length || 0}`);
+  console.log('   ═══════════════════════════════════════════');
+
+  // Step 3: Confirmation for auto-detected plans
+  // NOTE: In CLI context, we output a message. Claude (the AI) should use
+  // AskUserQuestion to confirm before running --from-plan without explicit path.
+  if (wasAutoDetected && !skipConfirmation) {
+    console.log('\n   ⚠️  AUTO-DETECTED PLAN');
+    console.log('   This script found the most recent plan file automatically.');
+    console.log('   If this is NOT the correct plan, re-run with explicit path:');
+    console.log('   node scripts/leo-create-sd.js --from-plan <path-to-plan.md>');
+    console.log('\n   To proceed without confirmation, add --yes flag:');
+    console.log('   node scripts/leo-create-sd.js --from-plan --yes');
+    console.log('\n   Proceeding with auto-detected plan...\n');
+  }
+
+  // Step 4: Validate we have enough content
+  if (!parsed.title) {
+    console.error('\n❌ Plan file must have a title (# Plan: Title or # Title)');
+    console.error('   The parser looks for:');
+    console.error('   - "# Plan: Your Title Here"');
+    console.error('   - "# Your Title Here" (first H1 heading)');
+    process.exit(1);
+  }
+
+  // Step 5: Generate SD key
+  const sdKey = await generateSDKey({
+    source: 'LEO',
+    type: parsed.type,
+    title: parsed.title,
+    skipLeadValidation: true  // Plans are pre-validated by plan mode
+  });
+
+  console.log(`   Generated SD Key: ${sdKey}`);
+
+  // Step 6: Archive plan file
+  const archiveResult = await archivePlanFile(targetPath, sdKey);
+  if (!archiveResult.success) {
+    console.warn(`   ⚠️  Could not archive plan: ${archiveResult.error}`);
+  } else {
+    console.log(`   Archived to: ${getDisplayPath(archiveResult.archivedPath)}`);
+  }
+
+  // Step 7: Build scope from files
+  const scope = formatFilesAsScope(parsed.files) || parsed.summary || parsed.title;
+
+  // Step 8: Build success criteria from steps
+  const successCriteria = formatStepsAsCriteria(parsed.steps, 10);
+  if (successCriteria.length === 0) {
+    // Use default if no steps found
+    successCriteria.push('All implementation items from plan are complete');
+    successCriteria.push('Code passes lint and type checks');
+    successCriteria.push('PR reviewed and approved');
+  }
+
+  // Step 9: Build key_changes from parsed data
+  const keyChanges = (parsed.keyChanges || []).map(kc => ({
+    change: kc.change,
+    impact: kc.impact
+  }));
+
+  // Step 10: Build strategic_objectives from parsed data
+  const strategicObjectives = (parsed.strategicObjectives || []).map(obj => ({
+    objective: obj.objective,
+    metric: obj.metric
+  }));
+
+  // Step 11: Build risks from parsed data
+  const risks = (parsed.risks || []).map(r => ({
+    risk: r.risk,
+    severity: r.severity || 'medium',
+    mitigation: r.mitigation || 'Address during implementation'
+  }));
+
+  // Step 12: Create SD with all extracted fields
+  const sd = await createSD({
+    sdKey,
+    title: parsed.title,
+    description: parsed.summary || parsed.title,
+    type: parsed.type,
+    rationale: 'Created from Claude Code plan file',
+    success_criteria: successCriteria,
+    strategic_objectives: strategicObjectives.length > 0 ? strategicObjectives : null,
+    metadata: {
+      source: 'plan',
+      plan_content: parsed.fullContent,
+      plan_file_path: archiveResult.archivedPath || null,
+      original_plan_path: originalPath,
+      files_to_modify: parsed.files,
+      steps_count: parsed.steps.length,
+      files_count: parsed.files.length,
+      auto_detected: wasAutoDetected
+    }
+  });
+
+  // Step 13: Update additional fields that aren't in createSD signature
+  const additionalUpdates = {};
+  if (scope) additionalUpdates.scope = scope;
+  if (keyChanges.length > 0) additionalUpdates.key_changes = keyChanges;
+  if (risks.length > 0) additionalUpdates.risks = risks;
+
+  if (Object.keys(additionalUpdates).length > 0) {
+    const { error: updateError } = await supabase
+      .from('strategic_directives_v2')
+      .update(additionalUpdates)
+      .eq('id', sd.id);
+
+    if (updateError) {
+      console.warn(`   ⚠️  Could not update additional fields: ${updateError.message}`);
+    } else {
+      console.log(`   ✅ Updated: scope, ${keyChanges.length > 0 ? 'key_changes, ' : ''}${risks.length > 0 ? 'risks' : ''}`);
+    }
+  }
 
   return sd;
 }
@@ -517,6 +702,7 @@ Usage:
   node scripts/leo-create-sd.js --from-uat <test-id>
   node scripts/leo-create-sd.js --from-learn <pattern-id>
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
+  node scripts/leo-create-sd.js --from-plan [path]
   node scripts/leo-create-sd.js --child <parent-key> [index]
   node scripts/leo-create-sd.js <source> <type> "<title>"
 
@@ -526,6 +712,9 @@ Types: ${Object.keys(SD_TYPES).join(', ')}
 Examples:
   node scripts/leo-create-sd.js --from-uat abc123
   node scripts/leo-create-sd.js --from-feedback def456
+  node scripts/leo-create-sd.js --from-plan                              # Auto-detect most recent plan
+  node scripts/leo-create-sd.js --from-plan --yes                        # Auto-detect without confirmation
+  node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md   # Use specific plan
   node scripts/leo-create-sd.js --child SD-LEO-FEAT-001 0
   node scripts/leo-create-sd.js LEO fix "Login button not working"
 `);
@@ -539,6 +728,12 @@ Examples:
       await createFromLearn(args[1]);
     } else if (args[0] === '--from-feedback') {
       await createFromFeedback(args[1]);
+    } else if (args[0] === '--from-plan') {
+      // Check for --yes flag (skip confirmation for auto-detect)
+      const hasYesFlag = args.includes('--yes') || args.includes('-y');
+      // Path is any arg that isn't a flag
+      const planPath = args.slice(1).find(arg => !arg.startsWith('-')) || null;
+      await createFromPlan(planPath, hasYesFlag);
     } else if (args[0] === '--child') {
       await createChild(args[1], parseInt(args[2] || '0', 10));
     } else {

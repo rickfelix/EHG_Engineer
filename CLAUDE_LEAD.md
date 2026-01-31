@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-31 8:13:13 AM
+**Generated**: 2026-01-31 8:34:04 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -377,10 +377,43 @@ Strategic Directives (SDs) are the primary unit of work in the LEO Protocol. Thi
 
 **MANDATORY**: Use process scripts - never create SDs manually in the database.
 
+#### Option A: Direct SD Creation
 ```bash
 # Create a new Strategic Directive
 node scripts/add-sd-to-database.js --sd-id SD-XXX-001 --title "Your SD Title"
 ```
+
+#### Option B: Create from Claude Code Plan (NEW)
+
+When working in Claude Code plan mode, create SDs directly from plan files:
+
+```bash
+# Auto-detect most recent plan (prompts for confirmation)
+node scripts/leo-create-sd.js --from-plan
+
+# Auto-detect without confirmation
+node scripts/leo-create-sd.js --from-plan --yes
+
+# Use specific plan file
+node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
+```
+
+**What --from-plan does:**
+- Parses plan file to extract title, goal, steps, and file modifications
+- Infers SD type from plan content keywords (security, bug, refactor, etc.)
+- Archives original plan to `docs/plans/archived/{sd-key}-plan.md`
+- Populates SD fields: title, description, scope, success_criteria, key_changes, strategic_objectives, risks
+- Stores full plan content in `metadata.plan_content` for reference
+
+**Plan Parsing:**
+- **Title**: Extracted from `# Plan: Title` or first `# Heading`
+- **Summary**: From `## Goal` or `## Summary` section
+- **Success Criteria**: From `- [ ]` checklist items (max 10)
+- **Scope**: From file modification tables (`| path | ACTION |`)
+- **Key Changes**: From implementation sections and file tables
+- **Risks**: From `## Risks` or `## Concerns` sections
+
+**Related Modules**: `scripts/modules/plan-parser.js`, `scripts/modules/plan-archiver.js`
 
 ### Required Fields (ALL SDs)
 
@@ -472,7 +505,8 @@ node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 - **Field Reference**: `docs/database/strategic_directives_v2_field_reference.md`
 - **Handoff System**: `docs/reference/handoff-system-guide.md`
 - **Schema Mapping**: `docs/reference/strategic-directives-v2-schema.md`
-- **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`
+- **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`, `scripts/leo-create-sd.js`
+- **Plan-Aware Creation**: `docs/reference/sd-key-generator-guide.md` (--from-plan section)
 
 ## Common SD Creation Errors and Solutions
 
