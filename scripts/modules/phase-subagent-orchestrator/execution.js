@@ -6,6 +6,8 @@
 import { executeSubAgent as realExecuteSubAgent } from '../../../lib/sub-agent-executor.js';
 import { safeInsert, generateUUID } from '../safe-insert.js';
 import { createHash } from 'crypto';
+// SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Import normalizeSDId to fix FK constraint violation (PAT-FK-SDKEY-001)
+import { normalizeSDId } from '../sd-id-normalizer.js';
 
 /**
  * Generate deterministic idempotency key for sub-agent execution
@@ -185,6 +187,23 @@ async function storeSubAgentResult(supabase, sdId, result, options = {}) {
   const sessionId = options.sessionId || process.env.CLAUDE_SESSION_ID || null;
   const phase = result.phase || 'orchestrated';
 
+  // SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Normalize sd_id to UUID before insert
+  // PAT-FK-SDKEY-001: sub_agent_execution_results.sd_id FK expects UUID, not sd_key
+  let normalizedSdId = sdId;
+  if (sdId) {
+    const resolvedId = await normalizeSDId(supabase, sdId);
+    if (resolvedId) {
+      if (resolvedId !== sdId) {
+        console.log(`   [SD-ID] Normalized: "${sdId}" -> "${resolvedId}"`);
+      }
+      normalizedSdId = resolvedId;
+    } else {
+      // If normalization fails, set to null to avoid FK violation
+      console.warn(`   [SD-ID] Warning: Could not normalize "${sdId}" - setting to null`);
+      normalizedSdId = null;
+    }
+  }
+
   // Generate idempotency key
   const idempotencyKey = generateIdempotencyKey(sdId, result.sub_agent_code, sessionId, phase);
   console.log(`   Recording ${result.sub_agent_code} execution (ikey: ${idempotencyKey.substring(0, 20)}...)...`);
@@ -200,7 +219,7 @@ async function storeSubAgentResult(supabase, sdId, result, options = {}) {
 
   const insertData = {
     id: generateUUID(),
-    sd_id: sdId,
+    sd_id: normalizedSdId,  // SD-LEO-FIX-NORMALIZE-UUID-SUB-001: Use normalized UUID
     sub_agent_code: result.sub_agent_code,
     sub_agent_name: result.sub_agent_name,
     verdict: result.verdict,
