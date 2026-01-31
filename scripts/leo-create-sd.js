@@ -333,11 +333,11 @@ async function createFromPlan(planPath = null, skipConfirmation = false) {
   }
 
   // Step 5: Generate SD key
+  // Protocol files (CLAUDE_CORE.md, CLAUDE_LEAD.md) must be read before SD creation
   const sdKey = await generateSDKey({
     source: 'LEO',
     type: parsed.type,
-    title: parsed.title,
-    skipLeadValidation: true  // Plans are pre-validated by plan mode
+    title: parsed.title
   });
 
   console.log(`   Generated SD Key: ${sdKey}`);
@@ -511,7 +511,7 @@ function mapToDbType(userType) {
  * Build default success_metrics based on SD type and title
  * Ensures validator requirements (3+ items with {metric, target}) are met
  */
-function buildDefaultSuccessMetrics(type, title) {
+function buildDefaultSuccessMetrics(type, _title) {
   const baseMetrics = [
     {
       metric: 'Implementation completeness',
@@ -547,7 +547,7 @@ function buildDefaultSuccessMetrics(type, title) {
  * Build default success_criteria based on SD type
  * Returns array of strings (qualitative acceptance criteria)
  */
-function buildDefaultSuccessCriteria(type, title) {
+function buildDefaultSuccessCriteria(type, _title) {
   const baseCriteria = [
     'All implementation items from scope are complete',
     'Code passes lint and type checks',

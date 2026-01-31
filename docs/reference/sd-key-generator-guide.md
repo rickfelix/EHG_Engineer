@@ -47,6 +47,209 @@ The module supports 4-level hierarchies:
 
 ---
 
+## Protocol File Validation (MANDATORY)
+
+**CRITICAL**: Before generating any SD key, the SDKeyGenerator enforces that **both CLAUDE_CORE.md and CLAUDE_LEAD.md** have been fully read in the current session.
+
+### Why This Matters
+
+These protocol files contain essential information for SD creation:
+
+| File | Contains |
+|------|----------|
+| **CLAUDE_CORE.md** | • Sub-agent trigger keywords and invocation patterns<br>• SD type definitions and validation requirements<br>• Protocol phase structure (LEAD → PLAN → EXEC)<br>• Required validation patterns |
+| **CLAUDE_LEAD.md** | • Required SD fields (sd_key, title, description, rationale)<br>• Success criteria/metrics requirements<br>• SD type-specific validation requirements<br>• Strategic validation questions (9-question gate)<br>• Handoff chain requirements |
+
+### Validation Functions
+
+#### `validateCoreFileRead()`
+
+Checks if CLAUDE_CORE.md has been fully read (no limit/offset parameters).
+
+**Returns**: `{valid: boolean, error: string|null, remediation: string|null}`
+
+**Example**:
+```javascript
+import { validateCoreFileRead } from './modules/sd-key-generator.js';
+
+const result = validateCoreFileRead();
+if (!result.valid) {
+  console.error(result.remediation);
+  // Outputs formatted error message with action required
+}
+```
+
+#### `validateLeadFileRead()`
+
+Checks if CLAUDE_LEAD.md has been fully read (no limit/offset parameters).
+
+**Returns**: `{valid: boolean, error: string|null, remediation: string|null}`
+
+**Example**:
+```javascript
+import { validateLeadFileRead } from './modules/sd-key-generator.js';
+
+const result = validateLeadFileRead();
+if (!result.valid) {
+  console.error(result.remediation);
+  // Outputs formatted error message with action required
+}
+```
+
+#### `validateProtocolFilesRead()`
+
+Checks both CLAUDE_CORE.md and CLAUDE_LEAD.md in sequence. Used internally by `generateSDKey()`.
+
+**Returns**: `{valid: boolean, error: string|null, remediation: string|null}`
+
+**Example**:
+```javascript
+import { validateProtocolFilesRead } from './modules/sd-key-generator.js';
+
+const result = validateProtocolFilesRead();
+if (!result.valid) {
+  // First violation encountered (CORE or LEAD)
+  console.error(result.error);
+}
+```
+
+### Validation Errors
+
+When validation fails, you'll see a formatted error message:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  SD KEY GENERATION BLOCKED - Protocol Core File Not Read                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ CLAUDE_CORE.md must be read COMPLETELY before creating Strategic           │
+│ Directives. This file contains critical information about:                 │
+│                                                                             │
+│   • Sub-agent invocation requirements and triggers                         │
+│   • SD type definitions and validation requirements                        │
+│   • Protocol phase structure (LEAD → PLAN → EXEC)                          │
+│   • Required validation patterns                                           │
+│                                                                             │
+│ ACTION REQUIRED:                                                           │
+│   1. Read CLAUDE_CORE.md completely (no limit parameter)                   │
+│   2. Then retry SD key generation                                          │
+│                                                                             │
+│ HINT: Use Read tool with file_path="CLAUDE_CORE.md" (no limit)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Partial Read Detection
+
+The module detects **partial reads** (when files are read with `limit` or `offset` parameters):
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  SD KEY GENERATION BLOCKED - Partial Read Detected                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ CLAUDE_LEAD.md was read with limit/offset parameters:                      │
+│   • Limit: 200        Offset: 0                                            │
+│   • Read at: 2026-01-31T12:34:56.789Z                                      │
+│                                                                             │
+│ Critical requirements may be MISSING from later sections:                  │
+│   • Lines 370-476: Strategic Directive Creation Process                    │
+│   • Lines 552-674: Common SD Creation Errors and Solutions                 │
+│   • Lines 677-823: SDKeyGenerator Errors section                           │
+│   • Lines 825-1030: PRD Enrichment and Evaluation Checklist                │
+│                                                                             │
+│ ACTION REQUIRED:                                                           │
+│   1. Re-read CLAUDE_LEAD.md completely (WITHOUT limit parameter)           │
+│   2. Then retry SD key generation                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Bypassing Validation (Emergency Use Only)
+
+For testing or emergency scenarios, validation can be bypassed:
+
+**JavaScript API**:
+```javascript
+const sdKey = await generateSDKey({
+  source: 'LEO',
+  type: 'feature',
+  title: 'Test SD',
+  skipLeadValidation: true  // ⚠️ EMERGENCY USE ONLY
+});
+```
+
+**CLI**:
+```bash
+# Skip validation (NOT RECOMMENDED)
+node scripts/modules/sd-key-generator.js --skip-validation LEO feature "Test SD"
+```
+
+**WARNING**: Bypassing validation should only be used for:
+- Automated testing
+- Emergency hotfixes when protocol files are unavailable
+- Internal tooling where validation is handled elsewhere
+
+**Production SD creation should NEVER skip validation.**
+
+### CLI Validation Commands
+
+Check validation status from command line:
+
+```bash
+# Check both protocol files
+node scripts/modules/sd-key-generator.js --check-protocol
+
+# Check CLAUDE_CORE.md only
+node scripts/modules/sd-key-generator.js --check-core
+
+# Check CLAUDE_LEAD.md only
+node scripts/modules/sd-key-generator.js --check-lead
+```
+
+**Output**:
+```
+✅ CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read - ready for SD creation
+```
+
+or
+
+```
+❌ Validation failed (displays remediation message)
+```
+
+### Session State Integration
+
+The validation system uses the unified session state file:
+
+**Location**: `.claude/unified-session-state.json`
+
+**Tracked Data**:
+```json
+{
+  "protocolFilesRead": ["CLAUDE_CORE.md", "CLAUDE_LEAD.md"],
+  "protocolFileReadStatus": {
+    "CLAUDE_CORE.md": {
+      "lastReadWasPartial": false,
+      "lastFullRead": {
+        "readAt": "2026-01-31T12:00:00.000Z"
+      }
+    },
+    "CLAUDE_LEAD.md": {
+      "lastReadWasPartial": false,
+      "lastFullRead": {
+        "readAt": "2026-01-31T12:00:05.000Z"
+      }
+    }
+  }
+}
+```
+
+**How It Works**:
+1. When Claude reads a protocol file, the Read tool updates this session state
+2. SDKeyGenerator queries the session state before generating keys
+3. If files haven't been read or were only partially read, generation is blocked
+
+---
+
 ## API Reference
 
 ### Core Functions
@@ -58,12 +261,13 @@ Generates a new SD key with collision detection.
 **Parameters**:
 ```javascript
 {
-  source: string,        // 'UAT', 'LEARN', 'FEEDBACK', 'PATTERN', 'MANUAL', 'LEO'
-  type: string,          // 'fix', 'feature', 'refactor', 'infrastructure', etc.
-  title: string,         // SD title for semantic extraction
-  parentKey?: string,    // Parent SD key (for hierarchies)
-  hierarchyDepth?: number, // 0=root, 1=child, 2=grandchild, 3+=great-grandchild
-  siblingIndex?: number  // Index among siblings (for suffix)
+  source: string,              // 'UAT', 'LEARN', 'FEEDBACK', 'PATTERN', 'MANUAL', 'LEO'
+  type: string,                // 'fix', 'feature', 'refactor', 'infrastructure', etc.
+  title: string,               // SD title for semantic extraction
+  parentKey?: string,          // Parent SD key (for hierarchies)
+  hierarchyDepth?: number,     // 0=root, 1=child, 2=grandchild, 3+=great-grandchild
+  siblingIndex?: number,       // Index among siblings (for suffix)
+  skipLeadValidation?: boolean // Skip protocol file validation (EMERGENCY USE ONLY)
 }
 ```
 
@@ -386,16 +590,19 @@ import { generateSDKey } from './modules/sd-key-generator.js';
 import { parsePlanFile } from './modules/plan-parser.js';
 import { readPlanFile } from './modules/plan-archiver.js';
 
+// MANDATORY: Read protocol files first (enforced by validation)
+// Read tool: CLAUDE_CORE.md
+// Read tool: CLAUDE_LEAD.md
+
 // Read and parse plan
 const content = readPlanFile('~/.claude/plans/my-plan.md');
 const parsed = parsePlanFile(content);
 
-// Generate SD key
+// Generate SD key (validation will check protocol files were read)
 const sdKey = await generateSDKey({
   source: 'LEO',
   type: parsed.type,  // Inferred from plan content
-  title: parsed.title,
-  skipLeadValidation: true  // Plans are pre-validated by plan mode
+  title: parsed.title
 });
 
 // Returns: SD-LEO-[TYPE]-[SEMANTIC]-001
@@ -515,9 +722,34 @@ WHERE sd_key ILIKE 'SD-UAT-FIX-NAV%' OR id ILIKE 'SD-UAT-FIX-NAV%';
 
 ---
 
+## Module Exports
+
+The SDKeyGenerator module exports the following:
+
+### Functions
+- `generateSDKey(options)` - Generate SD key with validation
+- `generateChildKey(parentKey, childIndex)` - Generate child SD key
+- `generateGrandchildKey(parentKey, grandchildIndex)` - Generate grandchild SD key
+- `parseSDKey(sdKey)` - Parse SD key into components
+- `extractSemanticWords(title, maxWords)` - Extract semantic words from title
+- `getHierarchySuffix(depth, index)` - Get hierarchy suffix for depth/index
+- `keyExists(proposedKey)` - Check if SD key exists in database
+- `getNextSequentialNumber(prefix)` - Find next available sequential number
+- `validateCoreFileRead()` - Validate CLAUDE_CORE.md has been read *(NEW)*
+- `validateLeadFileRead()` - Validate CLAUDE_LEAD.md has been read *(NEW)*
+- `validateProtocolFilesRead()` - Validate both protocol files have been read *(NEW)*
+
+### Constants
+- `SD_SOURCES` - Valid SD source mappings
+- `SD_TYPES` - Valid SD type mappings
+
+---
+
 ## Related Documentation
 
 - **Command Documentation**: `.claude/commands/leo.md` - /leo create command
+- **Protocol Files**: `CLAUDE_CORE.md`, `CLAUDE_LEAD.md` - Required reading before SD creation
+- **Session State**: `.claude/unified-session-state.json` - Tracks protocol file read status
 - **Hierarchy Guide**: `docs/reference/sd-hierarchy-schema-guide.md` - Parent-child relationships
 - **Schema Reference**: `docs/database/strategic_directives_v2_field_reference.md` - Database fields
 - **npm Scripts**: `docs/reference/npm-scripts-guide.md` - CLI commands
@@ -529,7 +761,14 @@ WHERE sd_key ILIKE 'SD-UAT-FIX-NAV%' OR id ILIKE 'SD-UAT-FIX-NAV%';
 **SD**: SD-LEO-SDKEY-001, SD-LEO-INFRA-PLAN-AWARE-SD-CREATION-001
 
 **Changelog**:
-- **2026-01-31**: Added `--from-plan` documentation (plan-aware SD creation)
+- **2026-01-31** (evening): Added protocol file validation enforcement
+  - New validation functions: `validateCoreFileRead()`, `validateLeadFileRead()`, `validateProtocolFilesRead()`
+  - Mandatory validation: CLAUDE_CORE.md and CLAUDE_LEAD.md must be read before SD creation
+  - Partial read detection: Blocks SD creation if files read with limit/offset parameters
+  - CLI validation commands: `--check-protocol`, `--check-core`, `--check-lead`
+  - Emergency bypass: `skipLeadValidation` parameter (testing/emergency use only)
+  - Session state integration: Tracks protocol file read status in `.claude/unified-session-state.json`
+- **2026-01-31** (morning): Added `--from-plan` documentation (plan-aware SD creation)
   - New modules: `plan-parser.js`, `plan-archiver.js`
   - Plan parsing: extracts title, summary, steps, files, key changes, risks
   - Plan archiving: preserves original plan to `docs/plans/archived/`

@@ -178,6 +178,54 @@ function generateImprovementDA(improvement) {
 }
 
 /**
+ * Generate Devil's Advocate counter-argument for a sub-agent learning
+ */
+function generateSubAgentLearningDA(learning) {
+  const challenges = [];
+  const suggestions = [];
+
+  // Challenge based on sample size
+  if (learning.metrics?.execution_count < 10) {
+    challenges.push(`Only ${learning.metrics.execution_count} executions analyzed - may need more data for reliable pattern.`);
+  }
+
+  // Challenge performance learnings
+  if (learning.source_type === 'sub_agent_performance') {
+    challenges.push('Low pass rate may reflect legitimate validation failures, not sub-agent issues.');
+    suggestions.push('Review SD complexity distribution before adjusting sub-agent configuration.');
+  }
+
+  // Challenge recommendation patterns
+  if (learning.source_type === 'sub_agent_recommendation') {
+    challenges.push('Recurring recommendations may indicate SD-level issues, not protocol gaps.');
+    suggestions.push('Consider whether these recommendations should become automated checks.');
+  }
+
+  // Challenge issue patterns
+  if (learning.source_type === 'sub_agent_issue') {
+    challenges.push('Recurring issues may be codebase problems, not sub-agent configuration issues.');
+    suggestions.push('Consider creating an issue_pattern if this is a codebase-level concern.');
+  }
+
+  // Challenge based on confidence
+  if (learning.confidence < 60) {
+    challenges.push(`Low confidence (${learning.confidence}%) - pattern may not be reliable.`);
+  }
+
+  // Default challenge if none triggered
+  if (challenges.length === 0) {
+    challenges.push('Consider: Is this a sub-agent issue or a codebase pattern?');
+  }
+
+  return {
+    ...learning,
+    da_counter_argument: challenges[0],
+    da_all_challenges: challenges,
+    da_suggestions: suggestions.length > 0 ? suggestions : null
+  };
+}
+
+/**
  * Review all context items and add DA counter-arguments
  */
 export function reviewContext(context) {
@@ -187,6 +235,7 @@ export function reviewContext(context) {
     patterns: context.patterns.map(p => generatePatternDA(p, intelligence)),
     lessons: context.lessons.map(generateLessonDA),
     improvements: context.improvements.map(generateImprovementDA),
+    sub_agent_learnings: (context.sub_agent_learnings || []).map(generateSubAgentLearningDA),
     intelligence: intelligence, // Pass through for display
     summary: {
       ...context.summary,
@@ -253,6 +302,25 @@ export function formatReviewedContextForDisplay(reviewed) {
     lines.push(`  - Type: ${i.improvement_type} | Evidence: ${i.evidence_count}`);
     lines.push(`  - ${i.content}`);
     lines.push(`  - **🔴 DA:** ${i.da_counter_argument}`);
+  }
+
+  // Sub-agent learnings with Devil's Advocate
+  if (reviewed.sub_agent_learnings?.length > 0) {
+    lines.push('\n## Sub-Agent Learnings (with Devil\'s Advocate)');
+    lines.push('Patterns extracted from sub-agent execution history:\n');
+    for (const sal of reviewed.sub_agent_learnings) {
+      const badge = sal.source_type === 'sub_agent_performance' ? '⚠️ PERF' :
+                    sal.source_type === 'sub_agent_recommendation' ? '💡 REC' : '🔍 ISS';
+      lines.push(`\n**[${sal.id}]** ${badge} ${sal.content}`);
+      lines.push(`  - Sub-agent: ${sal.sub_agent_code} | Occurrences: ${sal.occurrence_count}`);
+      if (sal.metrics) {
+        lines.push(`  - Metrics: ${Math.round(sal.metrics.pass_rate * 100)}% pass rate, ${sal.metrics.execution_count} executions`);
+      }
+      lines.push(`  - **🔴 DA:** ${sal.da_counter_argument}`);
+      if (sal.da_suggestions?.length > 0) {
+        lines.push(`  - **💡 Suggestion:** ${sal.da_suggestions[0]}`);
+      }
+    }
   }
 
   return lines.join('\n');
