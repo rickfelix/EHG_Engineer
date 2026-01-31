@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T13:20:04.534Z
-**Rows**: 707
+**Generated**: 2026-01-31T17:23:48.219Z
+**Rows**: 708
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (80 total)
+## Columns (81 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -99,6 +99,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | coverage_post_percent | `numeric(5,2)` | YES | - | Test coverage percentage after SD implementation |
 | coverage_delta_percent | `numeric(5,2)` | YES | - | Coverage change (post - pre), can be negative |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | Flexible JSONB storage for retrospective metadata. Added 2026-01-30 per RCA BL-INF-2337C for consistency with other core tables. |
+| learning_extracted_at | `timestamp with time zone` | YES | - | Timestamp when patterns were extracted. NULL = not yet processed. |
 
 ## Constraints
 
@@ -216,6 +217,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `idx_retrospectives_test_run_id`
   ```sql
   CREATE INDEX idx_retrospectives_test_run_id ON public.retrospectives USING btree (test_run_id) WHERE (test_run_id IS NOT NULL)
+  ```
+- `idx_retrospectives_unextracted`
+  ```sql
+  CREATE INDEX idx_retrospectives_unextracted ON public.retrospectives USING btree (created_at DESC) WHERE ((learning_extracted_at IS NULL) AND (quality_score >= 60))
   ```
 - `retrospectives_pkey`
   ```sql
