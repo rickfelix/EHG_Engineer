@@ -144,8 +144,9 @@ Check data integrity using JavaScript client (always works)
 echo $SUPABASE_DB_PASSWORD
 
 # URL-encode the password
-node -e "console.log(encodeURIComponent('YourPassword!'))"
-# Output: YourPassword%21
+node -e "console.log(encodeURIComponent('YourP@ssword#123'))"
+# Output: YourP%40ssword%23123
+# Note: Avoid ! in examples as it triggers bash history expansion
 
 # Use single quotes to prevent shell interpretation
 psql 'postgresql://...'  # Good
