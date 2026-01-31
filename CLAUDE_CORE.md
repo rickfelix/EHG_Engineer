@@ -1,6 +1,28 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-31 8:34:04 AM
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
+
+**Generated**: 2026-01-31 12:20:49 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -31,41 +53,6 @@
 ```bash
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
@@ -106,6 +93,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -159,37 +181,6 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -231,6 +222,37 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
+
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## Claude Code Plan Mode Integration
 
@@ -1324,8 +1346,8 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 | PAT-003 | security | [HIGH] high | 3 | [DOWN] | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | [HIGH] high | 2 | [STABLE] | Check GitHub Actions secrets and package |
 | PAT-MD-001 | database | [CRIT] critical | 1 | [STABLE] | Key Insight: PostgreSQL direct connectio |
+| PAT-DB-SD-E2E-001 | testing | [HIGH] high | 1 | [STABLE] | Update TESTING sub-agent to check SD cat |
 | PAT-EXEC-IMPL-001 | workflow | [HIGH] high | 1 | [STABLE] | Query database for existing tables/funct |
-| PAT-PARENT-DET | workflow | [HIGH] high | 1 | [STABLE] | Add parent/child detection check in phas |
 
 ### Prevention Checklists
 
@@ -1343,6 +1365,11 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - [ ] Check SUPABASE_POOLER_URL availability in .env
 - [ ] Verify migration file exists before execution
 - [ ] Use SSL with rejectUnauthorized: false
+
+**testing**:
+- [ ] Check SD category before requiring E2E tests
+- [ ] For database SDs: validate tables exist via SQL
+- [ ] For infrastructure SDs: validate config/setup
 
 **workflow**:
 - [ ] Query DB for existing tables FIRST
@@ -1447,6 +1474,11 @@ Lightweight triage and resolution for small UAT-discovered issues (≤50 LOC). A
 
 **Trigger Keywords**: `easy fix`, `hotfix`, `minor fix`, `one liner`, `quick fix`, `quickfix`, `simple fix`, `small fix`, `trivial fix`, `adjust`, `fast fix`, `fix`, `minor change`, `patch`, `quick change`, `small change`, `tweak`
 
+#### Root Cause Analysis Agent (`RCA`)
+MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triage, root cause determ
+
+**Trigger Keywords**: `5 whys`, `causal analysis`, `ci_pipeline_failure`, `fault tree`, `fishbone`, `five whys`, `get to the bottom`, `handoff_rejection`, `ishikawa`, `keeps happening`, `pattern detected`, `pattern_recurrence`, `performance_regression`, `quality_degradation`, `quality_gate_critical`, `recurring issue`, `root cause`, `root-cause`, `source of the issue`, `source of the problem`, `sub_agent_blocked`, `sub_agent_fail`, `test_regression`, `what caused this`, `why is this happening`, `debug`, `debugging`, `diagnose`, `diagnose defect`, `diagnostic`, `dig deeper`, `dig into`, `figure out why`, `find out why`, `find the cause`, `investigate`, `investigation`, `rca`, `trace`, `tracing`, `track down`, `understand why`, `what went wrong`
+
 #### Information Architecture Lead (`DOCMON`)
 ## Information Architecture Lead v3.0.0 - Database-First Enforcement Edition
 
@@ -1459,10 +1491,10 @@ Validates that refactoring changes maintain backward compatibility. Captures bas
 
 **Trigger Keywords**: `api signature`, `backward compatible`, `backwards compatible`, `before and after`, `breaking change`, `no behavior change`, `refactor safely`, `regression test`, `DRY violation`, `backward`, `backward compatibility`, `backwards`, `breaking`, `code smell`, `consolidate`, `extract component`, `extract function`, `extract method`, `interface`, `interface change`, `maintain`, `migration`, `move file`, `no functional change`, `preserve`, `public api`, `refactor`, `refactoring`, `regression`, `rename`, `reorganize`, `restructure`, `split file`, `technical debt`
 
-#### Root Cause Analysis Agent (`RCA`)
-MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triage, root cause determ
+#### Chief Security Architect (`SECURITY`)
+Former NSA security architect with 25 years experience securing systems from startup to enterprise s
 
-**Trigger Keywords**: `5 whys`, `causal analysis`, `ci_pipeline_failure`, `fault tree`, `fishbone`, `five whys`, `get to the bottom`, `handoff_rejection`, `ishikawa`, `keeps happening`, `pattern detected`, `pattern_recurrence`, `performance_regression`, `quality_degradation`, `quality_gate_critical`, `recurring issue`, `root cause`, `root-cause`, `source of the issue`, `source of the problem`, `sub_agent_blocked`, `sub_agent_fail`, `test_regression`, `what caused this`, `why is this happening`, `debug`, `debugging`, `diagnose`, `diagnose defect`, `diagnostic`, `dig deeper`, `dig into`, `figure out why`, `find out why`, `find the cause`, `investigate`, `investigation`, `rca`, `trace`, `tracing`, `track down`, `understand why`, `what went wrong`
+**Trigger Keywords**: `api key exposed`, `authentication bypass`, `csrf vulnerability`, `cve`, `exposed credential`, `hardcoded secret`, `owasp`, `penetration test`, `security audit`, `security vulnerability`, `sql injection`, `xss attack`, `access control`, `auth`, `authentication`, `authorization`, `credential`, `encrypt`, `encryption`, `hash`, `jwt`, `login`, `oauth`, `password`, `permission`, `role`, `secret`, `security`, `security auth pattern`, `token`, `vulnerability`
 
 #### DevOps Platform Architect (`GITHUB`)
 # DevOps Platform Architect Sub-Agent
@@ -1471,11 +1503,6 @@ MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triag
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `LEAD_APPROVAL_COMPLETE`, `PLAN_VERIFICATION_PASS`, `ci pipeline`, `code review`, `create pr`, `git merge`, `git rebase`, `github actions`, `github workflow`, `merge pr`, `pull request`, `actions`, `branch`, `cd`, `ci`, `commit`, `create pull request`, `create release`, `deploy`, `deployment ci pattern`, `gh pr create`, `git`, `github`, `github deploy`, `github status`, `merge`, `pipeline`, `pr`, `pull`, `push`, `release`, `workflow`
 
-#### Chief Security Architect (`SECURITY`)
-Former NSA security architect with 25 years experience securing systems from startup to enterprise s
-
-**Trigger Keywords**: `api key exposed`, `authentication bypass`, `csrf vulnerability`, `cve`, `exposed credential`, `hardcoded secret`, `owasp`, `penetration test`, `security audit`, `security vulnerability`, `sql injection`, `xss attack`, `access control`, `auth`, `authentication`, `authorization`, `credential`, `encrypt`, `encryption`, `hash`, `jwt`, `login`, `oauth`, `password`, `permission`, `role`, `secret`, `security`, `security auth pattern`, `token`, `vulnerability`
-
 #### UAT Test Executor (`UAT`)
 Interactive UAT test execution guide for manual testing workflows.
 
@@ -1483,19 +1510,10 @@ Interactive UAT test execution guide for manual testing workflows.
 
 **Trigger Keywords**: `acceptance criteria`, `click through`, `happy path`, `human test`, `manual test`, `test scenario`, `uat test`, `user acceptance test`, `user journey`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`, `acceptance`, `check`, `confirm`, `demo`, `execute test`, `manual`, `run uat`, `scenario`, `start testing`, `test execution`, `uat`, `uat testing`, `use case`, `user flow`, `validate`, `verify`, `workflow`
 
-#### Performance Engineering Lead (`PERFORMANCE`)
-Performance engineering lead with 20+ years optimizing high-scale systems.
+#### Launch Orchestration Sub-Agent (`LAUNCH`)
+Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
 
-**Mission**: Identify pe
-
-**Trigger Keywords**: `bottleneck`, `cpu usage`, `load time`, `memory leak`, `n+1 query`, `performance issue`, `performance optimization`, `response time`, `slow query`, `speed optimization`, `takes forever`, `too slow`, `cache`, `caching`, `fast`, `faster`, `latency`, `memoize`, `optimization`, `optimize`, `performance`, `profile`, `redis`, `slow`, `speed`, `throughput`
-
-#### Continuous Improvement Coach (`RETRO`)
-## Continuous Improvement Coach v4.0.0 - Quality-First Edition
-
-**🆕 NEW in v4.0.0**: Proactive lear
-
-**Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `action items`, `continuous improvement`, `learn from this`, `lessons learned`, `post-mortem`, `postmortem`, `retrospective`, `sprint retrospective`, `what did we learn`, `what went well`, `what went wrong`, `EXEC_QUALITY_ISSUE`, `EXEC_SPRINT_COMPLETE`, `HANDOFF_DELAY`, `HANDOFF_REJECTED`, `LEAD_PRE_APPROVAL_REVIEW`, `PATTERN_DETECTED`, `PHASE_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `SD_STATUS_BLOCKED`, `SD_STATUS_COMPLETED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `anti-pattern`, `capture this insight`, `capture this lesson`, `feedback`, `improve`, `improvement`, `insight`, `intelligent plan`, `learning`, `lesson`, `lesson learned`, `pattern`, `permission bundling`, `phase transition`, `plan file generation`, `plan mode`, `plan mode integration`, `reflect`, `remember this`, `retro`, `review`, `sd type profile`, `takeaway`, `workflow intensity`
+**Trigger Keywords**: `deploy to production`, `go live checklist`, `launch checklist`, `production deployment`, `ready to launch`, `release to production`, `ship to prod`, `GA release`, `beta release`, `cutover`, `deploy`, `deployment`, `go live`, `go-live`, `golive`, `launch`, `prod`, `production`, `production launch`, `release`, `rollback`, `rollout`, `ship`
 
 #### QA Engineering Director (`TESTING`)
 ## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
@@ -1504,6 +1522,13 @@ Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add tests`, `create tests`, `e2e test`, `end to end test`, `integration test`, `jest test`, `playwright test`, `spec file`, `test coverage`, `test file`, `test suite`, `unit test`, `vitest`, `write tests`, `assertion`, `build error`, `coverage`, `cypress`, `describe`, `dev server`, `expect`, `fixture`, `it`, `jest`, `mock`, `npm run test:unit`, `playwright`, `playwright build`, `protected route`, `redirect to login`, `spy`, `stub`, `test`, `test infrastructure`, `test results`, `testing`, `testing evidence`, `testing test pattern`, `tests`, `unit tests`
 
+#### Continuous Improvement Coach (`RETRO`)
+## Continuous Improvement Coach v4.0.0 - Quality-First Edition
+
+**🆕 NEW in v4.0.0**: Proactive lear
+
+**Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `action items`, `continuous improvement`, `learn from this`, `lessons learned`, `post-mortem`, `postmortem`, `retrospective`, `sprint retrospective`, `what did we learn`, `what went well`, `what went wrong`, `EXEC_QUALITY_ISSUE`, `EXEC_SPRINT_COMPLETE`, `HANDOFF_DELAY`, `HANDOFF_REJECTED`, `LEAD_PRE_APPROVAL_REVIEW`, `PATTERN_DETECTED`, `PHASE_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `SD_STATUS_BLOCKED`, `SD_STATUS_COMPLETED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `anti-pattern`, `capture this insight`, `capture this lesson`, `feedback`, `improve`, `improvement`, `insight`, `intelligent plan`, `learning`, `lesson`, `lesson learned`, `pattern`, `permission bundling`, `phase transition`, `plan file generation`, `plan mode`, `plan mode integration`, `reflect`, `remember this`, `retro`, `review`, `sd type profile`, `takeaway`, `workflow intensity`
+
 #### Principal Database Architect (`DATABASE`)
 ## Principal Database Architect v2.0.0 - Lessons Learned Edition
 
@@ -1511,10 +1536,12 @@ Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add column`, `alter table`, `create table`, `data model`, `database migration`, `database schema`, `db migration`, `erd`, `foreign key`, `postgres schema`, `primary key`, `rls policy`, `row level security`, `supabase migration`, `add this column`, `add this to the database`, `alter the table`, `apply the migration`, `apply this migration`, `can you execute`, `can you run`, `column`, `constraint`, `create the table`, `database`, `database agent should run`, `database query`, `delete from the table`, `drop the table`, `embedding`, `execute it`, `execute the following`, `execute the migration`, `execute the query`, `execute this sql`, `fetch from database`, `fix this in the database`, `go ahead and run`, `have the database agent`, `index`, `insert into`, `insert this into`, `make this change in the database`, `migrate`, `migration`, `modify the schema`, `pgvector`, `please execute`, `please run`, `postgres`, `postgresql`, `query`, `rls`, `run it`, `run that migration`, `run the following`, `run the query`, `run this migration`, `run this sql`, `schema`, `seed`, `seeding`, `select from`, `sql`, `supabase`, `table`, `update the database`, `update the table`, `update this in supabase`, `use database sub-agent`, `use the database sub-agent`, `vector`, `yes, execute`, `yes, run it`
 
-#### Launch Orchestration Sub-Agent (`LAUNCH`)
-Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
+#### Performance Engineering Lead (`PERFORMANCE`)
+Performance engineering lead with 20+ years optimizing high-scale systems.
 
-**Trigger Keywords**: `deploy to production`, `go live checklist`, `launch checklist`, `production deployment`, `ready to launch`, `release to production`, `ship to prod`, `GA release`, `beta release`, `cutover`, `deploy`, `deployment`, `go live`, `go-live`, `golive`, `launch`, `prod`, `production`, `production launch`, `release`, `rollback`, `rollout`, `ship`
+**Mission**: Identify pe
+
+**Trigger Keywords**: `bottleneck`, `cpu usage`, `load time`, `memory leak`, `n+1 query`, `performance issue`, `performance optimization`, `response time`, `slow query`, `speed optimization`, `takes forever`, `too slow`, `cache`, `caching`, `fast`, `faster`, `latency`, `memoize`, `optimization`, `optimize`, `performance`, `profile`, `redis`, `slow`, `speed`, `throughput`
 
 #### Monitoring Sub-Agent (`MONITORING`)
 Handles monitoring setup, alerting, SLA definition, health checks, and incident response.
@@ -1608,3 +1635,25 @@ Handles customer relationship management, lead tracking, customer success metric
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
+
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**

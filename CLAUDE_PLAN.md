@@ -1,6 +1,28 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-01-31 8:34:04 AM
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
+
+**Generated**: 2026-01-31 12:20:49 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -266,6 +288,30 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
+
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -303,30 +349,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
-
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -436,6 +458,23 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -506,23 +545,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -788,21 +810,6 @@ node scripts/add-prd-to-database.js {SD-ID}
 - ⚠️ Never create PRDs as markdown files
 - ⚠️ Never skip validation gates
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -854,6 +861,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -2461,3 +2483,25 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 *Generated from database: 2026-01-31*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
+
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**

@@ -1,5 +1,27 @@
 # CLAUDE.md - LEO Protocol Context Router
 
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
+
 **This file is AUTO-GENERATED from the database.**
 
 ## To Make Changes:
@@ -435,7 +457,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-31 8:34:04 AM
+**Last Generated**: 2026-01-31 12:20:49 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -558,3 +580,25 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 *Router generated from database: 2026-01-31*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
+
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**

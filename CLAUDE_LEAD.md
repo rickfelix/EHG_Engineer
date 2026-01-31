@@ -1,6 +1,28 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-31 8:34:04 AM
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
+
+**Generated**: 2026-01-31 12:20:49 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -27,52 +49,6 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## Baseline Issues Management
-
-## Baseline Issues System
-
-Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
-
-### LEAD Gate: BASELINE_DEBT_CHECK
-- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
-- **WARNS** if: Total open issues > 10 or stale non-critical > 5
-
-### Lifecycle
-| Status | Meaning |
-|--------|---------|
-| open | Issue identified, no owner assigned |
-| acknowledged | Issue reviewed, owner assigned |
-| in_progress | Remediation SD actively working |
-| resolved | Fixed and verified |
-| wont_fix | Accepted risk (requires LEAD approval + justification) |
-
-### Commands
-```bash
-npm run baseline:list          # Show all open issues
-npm run baseline:assign <key> <SD-ID>  # Assign ownership
-npm run baseline:resolve <key> # Mark resolved
-npm run baseline:summary       # Category summary
-```
-
-### Categories
-security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
-
-### Issue Key Format
-`BL-{CATEGORY}-{NNN}` where:
-- BL-SEC-001: Security baseline issue #1
-- BL-TST-001: Testing baseline issue #1
-- BL-PRF-001: Performance baseline issue #1
-- BL-DB-001: Database baseline issue #1
-- BL-DOC-001: Documentation baseline issue #1
-- BL-A11Y-001: Accessibility baseline issue #1
-- BL-CQ-001: Code quality baseline issue #1
-- BL-DEP-001: Dependency baseline issue #1
-- BL-INF-001: Infrastructure baseline issue #1
-
-### Functions
-- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
-- `generate_baseline_issue_key(p_category)`: Generates unique issue key
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -161,6 +137,52 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## Baseline Issues Management
+
+## Baseline Issues System
+
+Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
+
+### LEAD Gate: BASELINE_DEBT_CHECK
+- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
+- **WARNS** if: Total open issues > 10 or stale non-critical > 5
+
+### Lifecycle
+| Status | Meaning |
+|--------|---------|
+| open | Issue identified, no owner assigned |
+| acknowledged | Issue reviewed, owner assigned |
+| in_progress | Remediation SD actively working |
+| resolved | Fixed and verified |
+| wont_fix | Accepted risk (requires LEAD approval + justification) |
+
+### Commands
+```bash
+npm run baseline:list          # Show all open issues
+npm run baseline:assign <key> <SD-ID>  # Assign ownership
+npm run baseline:resolve <key> # Mark resolved
+npm run baseline:summary       # Category summary
+```
+
+### Categories
+security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
+
+### Issue Key Format
+`BL-{CATEGORY}-{NNN}` where:
+- BL-SEC-001: Security baseline issue #1
+- BL-TST-001: Testing baseline issue #1
+- BL-PRF-001: Performance baseline issue #1
+- BL-DB-001: Database baseline issue #1
+- BL-DOC-001: Documentation baseline issue #1
+- BL-A11Y-001: Accessibility baseline issue #1
+- BL-CQ-001: Code quality baseline issue #1
+- BL-DEP-001: Dependency baseline issue #1
+- BL-INF-001: Infrastructure baseline issue #1
+
+### Functions
+- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
+- `generate_baseline_issue_key(p_category)`: Generates unique issue key
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -1507,3 +1529,25 @@ npm run sd:status    # Overall progress by track
 *Generated from database: 2026-01-31*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
+
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
