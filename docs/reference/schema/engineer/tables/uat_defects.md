@@ -1,5 +1,9 @@
 # uat_defects Table
 
+> ⚠️ **DEPRECATED**: This table is deprecated as of SD-LEO-INFRA-DEPRECATE-UAT-DEFECTS-001.
+> All UAT defects now write to the unified `feedback` table with `source_type='uat_failure'`.
+> See [Quality Lifecycle Workflow](../../workflow/quality-lifecycle-workflow.md) for the unified feedback approach.
+
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
@@ -11,6 +15,17 @@
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
 ⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
+
+⚠️ **MIGRATION NOTE**: Use `feedback` table with the following field mappings:
+| uat_defects field | feedback field |
+|-------------------|----------------|
+| run_id | metadata.test_run_id |
+| case_id | metadata.case_id |
+| severity (critical/major/minor) | severity (high/medium/low) |
+| summary | title |
+| description | description |
+| status (open) | status (new) |
+| source | source_type='uat_failure' |
 
 ---
 

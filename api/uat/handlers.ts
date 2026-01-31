@@ -254,8 +254,6 @@ export async function closeUATRun(run_id: string): Promise<{
  * Infer suspected files based on test case ID
  */
 function inferSuspectedFiles(case_id: string): SuspectedFile[] {
-  const files: SuspectedFile[] = [];
-
   // Parse test ID to determine likely files
   const [, section] = case_id.split('-');
 
@@ -361,10 +359,17 @@ function inferSuspectedFiles(case_id: string): SuspectedFile[] {
   ];
 }
 
+interface TestCase {
+  id: string;
+  section: string;
+  title: string;
+  priority: string;
+}
+
 /**
  * Get test cases by section
  */
-export async function getTestCasesBySection(section?: string): Promise<any[]> {
+export async function getTestCasesBySection(section?: string): Promise<TestCase[]> {
   try {
     let query = supabase.from('uat_cases').select('*').order('id');
     if (section) {
@@ -379,20 +384,44 @@ export async function getTestCasesBySection(section?: string): Promise<any[]> {
   }
 }
 
+interface MappedDefect {
+  id: string;
+  run_id: string;
+  case_id: string | undefined;
+  severity: 'critical' | 'major' | 'minor';
+  summary: string;
+  description: string;
+  status: string;
+  created_at: string;
+}
+
 /**
  * Get open defects for a run
+ * SD-LEO-INFRA-DEPRECATE-UAT-DEFECTS-001: Query unified feedback table
  */
-export async function getOpenDefects(run_id: string): Promise<any[]> {
+export async function getOpenDefects(run_id: string): Promise<MappedDefect[]> {
   try {
     const { data, error } = await supabase
-      .from('uat_defects')
+      .from('feedback')
       .select('*')
-      .eq('run_id', run_id)
-      .eq('status', 'open')
+      .eq('source_type', 'uat_failure')
+      .contains('metadata', { test_run_id: run_id })
+      .in('status', ['new', 'open', 'triaged'])
       .order('severity');
 
     if (error) throw error;
-    return data || [];
+
+    // Map feedback fields to expected defect format for backward compatibility
+    return (data || []).map(item => ({
+      id: item.id,
+      run_id: item.metadata?.test_run_id || run_id,
+      case_id: item.metadata?.case_id || item.metadata?.scenario_id,
+      severity: item.severity === 'high' ? 'critical' : item.severity === 'medium' ? 'major' : 'minor',
+      summary: item.title,
+      description: item.description,
+      status: item.status === 'new' ? 'open' : item.status,
+      created_at: item.created_at
+    }));
   } catch (err) {
     console.error('Error getting open defects:', err);
     return [];
