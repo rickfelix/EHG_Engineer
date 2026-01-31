@@ -29,7 +29,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 ### Activation
 
 AUTO-PROCEED is **ON by default** for new sessions. To change:
-- Run `/leo init` to set session preference
+- Run `/leo init` or `/leo settings` to set session preference
 - Preference stored in `claude_sessions.metadata.auto_proceed`
 
 Check status:
@@ -42,48 +42,9 @@ node -e "require('dotenv').config(); const {createClient}=require('@supabase/sup
 | When AUTO-PROCEED is ON | When OFF |
 |-------------------------|----------|
 | Phase transitions execute automatically | Pause and ask before each transition |
-| Post-completion runs SD-type-aware sequence (see below) | Ask before each step |
+| Post-completion runs /document → /ship → /learn | Ask before each step |
 | Shows next SD after completion | Ask before showing queue |
 | No confirmation prompts | AskUserQuestion at each decision |
-
-### Post-Completion Sequence (SD-Type-Aware)
-
-Post-completion sequence varies by SD type. This is implemented in `lib/utils/post-completion-requirements.js`.
-
-**Full Sequence SD Types** (restart → document → ship → learn):
-| SD Type | restart | document | ship | learn |
-|---------|---------|----------|------|-------|
-| `feature` | YES | YES | YES | YES |
-| `bugfix` | conditional* | NO | YES | YES |
-| `security` | conditional* | YES | YES | YES |
-| `refactor` | conditional* | NO | YES | YES |
-| `enhancement` | conditional* | YES | YES | YES |
-| `performance` | conditional* | NO | YES | YES |
-
-*restart runs if SD has UI changes OR is a feature type
-
-**Minimal Sequence SD Types** (ship only):
-| SD Type | restart | document | ship | learn |
-|---------|---------|----------|------|-------|
-| `documentation` | NO | NO | YES | NO |
-| `infrastructure` | NO | NO | YES | NO |
-| `database` | NO | NO | YES | NO |
-| `orchestrator` | NO | NO | YES | NO |
-| `process` | NO | NO | YES | NO |
-| `qa` | NO | NO | YES | NO |
-| `api` | NO | NO | YES | NO |
-| `backend` | NO | NO | YES | NO |
-
-**Source-Based /learn Skip** (prevents infinite recursion):
-SDs from these sources skip /learn even if they would otherwise run it:
-- `learn` - Created by /learn command
-- `quick-fix` - Created by /quick-fix command
-- `rca` - Created by /rca command
-- `escalation` - Created by old /escalate command
-- `auto-generated` - Auto-generated SDs
-- `pattern-derived` - SDs derived from patterns
-
-**Reference**: `lib/utils/post-completion-requirements.js`
 
 ### Pause Points (When ON)
 
@@ -239,6 +200,66 @@ Perform 5-whys analysis and recommend systematic fix."
 
 *Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
 
+
+## Orchestrator Chaining Mode
+
+**Orchestrator Chaining** controls behavior when an orchestrator SD completes.
+
+### Default: OFF (pause at orchestrator boundary)
+
+**When Chaining is OFF (default):**
+- After completing an orchestrator, PAUSE for review
+- Run /learn to capture learnings from all children
+- Show SD queue and wait for user selection
+- Provides time for human review of major work
+
+**When Chaining is ON (power user mode):**
+- After completing an orchestrator, auto-continue to next
+- Still runs /learn but continues without pausing
+- Useful for batch processing multiple orchestrators
+- For experienced users comfortable with continuous operation
+
+### Configuration
+
+| Level | How to Set | Scope |
+|-------|------------|-------|
+| Session | `/leo settings` or `/leo init` | This session only |
+| Global | `/leo settings` → Global defaults | All future sessions |
+| CLI | `--chain` / `--no-chain` | This invocation only |
+
+### Settings Command
+
+Use `/leo settings` (or `/leo s`) to view and modify:
+- **Global defaults** - Apply to all new sessions
+- **Session settings** - Override global for current session
+
+### Precedence (Highest to Lowest)
+
+1. **CLI flags**: `--chain` / `--no-chain`
+2. **Session metadata**: `claude_sessions.metadata.chain_orchestrators`
+3. **Global default**: `leo_settings.chain_orchestrators`
+4. **Hard-coded fallback**: `false` (OFF)
+
+### When to Enable Chaining
+
+Consider enabling chaining when:
+- Working through a queue of related orchestrators
+- High confidence in workflow stability
+- Minimal need for inter-orchestrator review
+- Running overnight or during dedicated sessions
+
+Keep chaining disabled when:
+- New to the codebase or protocol
+- Working on high-risk or complex orchestrators
+- Need time to review /learn outputs
+- Debugging or investigating issues
+
+### Related Settings
+
+- **AUTO-PROCEED**: Controls phase transitions within an SD
+- **Chaining**: Controls transitions between orchestrator SDs
+
+Both can be configured via `/leo settings`.
 
 ## Session Initialization - SD Selection
 
@@ -414,7 +435,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-30 10:00:59 AM
+**Last Generated**: 2026-01-31 8:13:13 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -534,6 +555,6 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-01-30*
+*Router generated from database: 2026-01-31*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

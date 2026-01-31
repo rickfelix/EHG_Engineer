@@ -6,6 +6,7 @@
       "smart_router",
       "session_prologue",
       "auto_proceed_mode",
+      "orchestrator_chaining",
       "session_init",
       "skill_intent_detection",
       "common_commands"
