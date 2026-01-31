@@ -713,26 +713,27 @@ When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
 4. Load appropriate CLAUDE_*.md context based on phase
 5. Proceed with LEAD→PLAN→EXEC workflow
 
-### If no argument provided:
+### If argument is "run":
 Run the LEO protocol workflow:
 ```bash
 npm run leo
 ```
 
-### If argument not recognized:
+### If no argument provided OR argument not recognized:
 Display the available commands:
 
 ```
 LEO Commands:
-  /leo           - Run LEO protocol workflow (npm run leo)
-  /leo init      (i)    - Initialize session (set auto-proceed preference)
-  /leo settings  (s)    - View/modify AUTO-PROCEED and Chaining settings
-  /leo restart   (r)    - Restart all LEO servers
-  /leo next      (n)    - Show SD queue (what to work on)
-  /leo create    (c)    - Create new SD (interactive wizard)
-  /leo continue  (cont) - Resume current working SD
-  /leo complete  (comp) - Run full sequence: document → ship → learn → next
-  /leo resume    (res)  - Restore session from saved state (crash recovery)
+  /leo                   - Show this help menu
+  /leo init      (i)     - Initialize session (set auto-proceed preference)
+  /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
+  /leo restart   (r)     - Restart all LEO servers
+  /leo next      (n)     - Show SD queue (what to work on)
+  /leo create    (c)     - Create new SD (interactive wizard)
+  /leo continue  (cont)  - Resume current working SD
+  /leo complete  (comp)  - Run full sequence: document → ship → learn → next
+  /leo resume    (res)   - Restore session from saved state (crash recovery)
+  /leo run               - Run LEO protocol workflow (npm run leo)
 
 Direct ID Access:
   /leo SD-XXX-001        - Start/continue work on a Strategic Directive
