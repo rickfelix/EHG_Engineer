@@ -6,6 +6,28 @@ description: Intelligent autonomous inbox processing with context-aware prioriti
 
 **Command:** /leo assist [--dry-run]
 
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior during /leo assist processing:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [describe the issue] is occurring.
+Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
+
 ## Overview
 
 `/leo assist` processes the feedback inbox autonomously with intelligent prioritization and self-healing retry logic. It operates in two phases:
