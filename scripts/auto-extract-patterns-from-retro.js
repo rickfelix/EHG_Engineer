@@ -249,6 +249,18 @@ async function extractPatternsFromRetrospective(retroId) {
     throw new Error(`Retrospective not found: ${retroId}`);
   }
 
+  // SD-LEO-INFRA-LEARNING-ARCHITECTURE-001: Idempotency check
+  if (retro.learning_extracted_at) {
+    console.log(`  ⏭️  Already extracted at ${retro.learning_extracted_at}`);
+    return {
+      success: true,
+      skipped: true,
+      retrospective_id: retroId,
+      extracted_at: retro.learning_extracted_at,
+      message: 'Pattern extraction already completed for this retrospective'
+    };
+  }
+
   console.log(`Title: ${retro.title}`);
   console.log(`SD: ${retro.sd_id}`);
   console.log(`Type: ${retro.retro_type}`);
@@ -289,11 +301,12 @@ async function extractPatternsFromRetrospective(retroId) {
   console.log(`   Prevention items: ${preventions}`);
   console.log(`   Total processed: ${created + updated + preventions}`);
 
-  // Update retrospective metadata
+  // Update retrospective metadata + SD-LEO-INFRA-LEARNING-ARCHITECTURE-001: Idempotency stamp
   await supabase
     .from('retrospectives')
     .update({
       status: 'PUBLISHED',
+      learning_extracted_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
     .eq('id', retroId);

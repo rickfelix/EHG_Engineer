@@ -49,7 +49,8 @@
       "sd_type_workflow_paths",
       "work_tracking_policy",
       "genesis_codebase",
-      "strunkian_writing_standards"
+      "strunkian_writing_standards",
+      "rca_multi_expert_protocol"
     ]
   },
   "CLAUDE_LEAD.md": {
@@ -136,7 +137,8 @@
       "parent_child_exec",
       "vision_v2_exec",
       "negative_constraints_exec",
-      "workflow"
+      "workflow",
+      "migration_script_pattern"
     ]
   },
   "SHARED": {
