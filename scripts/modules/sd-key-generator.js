@@ -40,7 +40,7 @@ function readSessionState() {
       const cleanContent = content.replace(/^\uFEFF/, ''); // Handle BOM
       return JSON.parse(cleanContent);
     }
-  } catch (error) {
+  } catch (_error) {
     // Silent fail - will return default
   }
   return { protocolFilesRead: [] };
@@ -53,6 +53,15 @@ function readSessionState() {
 function isLeadFileRead() {
   const state = readSessionState();
   return state.protocolFilesRead?.includes('CLAUDE_LEAD.md') || false;
+}
+
+/**
+ * Check if CLAUDE_CORE.md has been read in the current session
+ * @returns {boolean} True if file has been read
+ */
+function isCoreFileRead() {
+  const state = readSessionState();
+  return state.protocolFilesRead?.includes('CLAUDE_CORE.md') || false;
 }
 
 /**
@@ -75,6 +84,108 @@ function getLeadFilePartialReadDetails() {
 
   // Fall back to legacy schema
   return state.protocolFilesPartiallyRead?.['CLAUDE_LEAD.md'] || null;
+}
+
+/**
+ * Check if CLAUDE_CORE.md was only partially read (with limit/offset parameters)
+ * @returns {Object|null} Partial read details or null if not partial
+ */
+function getCoreFilePartialReadDetails() {
+  const state = readSessionState();
+
+  // Check new schema first (SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001)
+  const fileStatus = state.protocolFileReadStatus?.['CLAUDE_CORE.md'];
+  if (fileStatus?.lastReadWasPartial && fileStatus.lastPartialRead) {
+    return {
+      limit: fileStatus.lastPartialRead.limit,
+      offset: fileStatus.lastPartialRead.offset,
+      timestamp: fileStatus.lastPartialRead.readAt,
+      wasPartial: true
+    };
+  }
+
+  // Fall back to legacy schema
+  return state.protocolFilesPartiallyRead?.['CLAUDE_CORE.md'] || null;
+}
+
+/**
+ * Validate that CLAUDE_CORE.md has been fully read before SD key generation
+ *
+ * This ensures Claude is familiar with:
+ * - Sub-agent invocation requirements and triggers
+ * - SD type definitions and requirements
+ * - Protocol phase structure
+ * - Validation patterns
+ *
+ * @returns {Object} Validation result {valid, error, remediation}
+ */
+export function validateCoreFileRead() {
+  const isRead = isCoreFileRead();
+  const partialDetails = getCoreFilePartialReadDetails();
+
+  // Case 1: Not read at all
+  if (!isRead) {
+    return {
+      valid: false,
+      error: 'CLAUDE_CORE.md has not been read in this session',
+      remediation: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  SD KEY GENERATION BLOCKED - Protocol Core File Not Read                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ CLAUDE_CORE.md must be read COMPLETELY before creating Strategic           │
+│ Directives. This file contains critical information about:                 │
+│                                                                             │
+│   • Sub-agent invocation requirements and triggers                         │
+│   • SD type definitions and validation requirements                        │
+│   • Protocol phase structure (LEAD → PLAN → EXEC)                          │
+│   • Required validation patterns                                           │
+│                                                                             │
+│ ACTION REQUIRED:                                                           │
+│   1. Read CLAUDE_CORE.md completely (no limit parameter)                   │
+│   2. Then retry SD key generation                                          │
+│                                                                             │
+│ HINT: Use Read tool with file_path="CLAUDE_CORE.md" (no limit)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+`
+    };
+  }
+
+  // Case 2: Read but only partially (with limit/offset)
+  if (partialDetails?.wasPartial) {
+    return {
+      valid: false,
+      error: `CLAUDE_CORE.md was only partially read (limit=${partialDetails.limit}, offset=${partialDetails.offset})`,
+      remediation: `
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  SD KEY GENERATION BLOCKED - Partial Read Detected                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ CLAUDE_CORE.md was read with limit/offset parameters:                      │
+│   • Limit: ${String(partialDetails.limit).padEnd(10)} Offset: ${String(partialDetails.offset || 0).padEnd(10)}                          │
+│   • Read at: ${partialDetails.timestamp || 'unknown'}                          │
+│                                                                             │
+│ Critical requirements may be MISSING from later sections:                  │
+│   • Sub-agent trigger keywords and invocation patterns                     │
+│   • SD type-specific requirements                                          │
+│   • Protocol phase validation rules                                        │
+│                                                                             │
+│ ACTION REQUIRED:                                                           │
+│   1. Re-read CLAUDE_CORE.md completely (WITHOUT limit parameter)           │
+│   2. Then retry SD key generation                                          │
+│                                                                             │
+│ HINT: Use Read tool with file_path="CLAUDE_CORE.md" (no limit)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+`
+    };
+  }
+
+  // Case 3: Fully read - proceed
+  return {
+    valid: true,
+    error: null,
+    remediation: null
+  };
 }
 
 /**
@@ -152,6 +263,31 @@ export function validateLeadFileRead() {
   }
 
   // Case 3: Fully read - proceed
+  return {
+    valid: true,
+    error: null,
+    remediation: null
+  };
+}
+
+/**
+ * Validate that both CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read
+ *
+ * @returns {Object} Validation result {valid, error, remediation}
+ */
+export function validateProtocolFilesRead() {
+  // Check CLAUDE_CORE.md first
+  const coreValidation = validateCoreFileRead();
+  if (!coreValidation.valid) {
+    return coreValidation;
+  }
+
+  // Then check CLAUDE_LEAD.md
+  const leadValidation = validateLeadFileRead();
+  if (!leadValidation.valid) {
+    return leadValidation;
+  }
+
   return {
     valid: true,
     error: null,
@@ -373,12 +509,12 @@ export async function generateSDKey(options) {
     skipLeadValidation = false
   } = options;
 
-  // SD-LEO-SDKEY-ENFORCE-LEAD-READ-001: Validate CLAUDE_LEAD.md has been fully read
+  // SD-LEO-SDKEY-ENFORCE-LEAD-READ-001: Validate CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read
   if (!skipLeadValidation) {
-    const leadValidation = validateLeadFileRead();
-    if (!leadValidation.valid) {
-      console.error(leadValidation.remediation);
-      throw new Error(`[SDKeyGenerator] ${leadValidation.error}`);
+    const protocolValidation = validateProtocolFilesRead();
+    if (!protocolValidation.valid) {
+      console.error(protocolValidation.remediation);
+      throw new Error(`[SDKeyGenerator] ${protocolValidation.error}`);
     }
   }
 
@@ -524,6 +660,8 @@ Usage:
   node scripts/modules/sd-key-generator.js <source> <type> "<title>"
   node scripts/modules/sd-key-generator.js --child <parentKey> <index>
   node scripts/modules/sd-key-generator.js --parse <sdKey>
+  node scripts/modules/sd-key-generator.js --check-protocol
+  node scripts/modules/sd-key-generator.js --check-core
   node scripts/modules/sd-key-generator.js --check-lead
   node scripts/modules/sd-key-generator.js --skip-validation <source> <type> "<title>"
 
@@ -531,18 +669,20 @@ Sources: ${Object.keys(SD_SOURCES).join(', ')}
 Types: ${Object.keys(SD_TYPES).join(', ')}
 
 Protocol Enforcement (SD-LEO-SDKEY-ENFORCE-LEAD-READ-001):
-  Before generating an SD key, CLAUDE_LEAD.md must be read completely.
+  Before generating an SD key, CLAUDE_CORE.md and CLAUDE_LEAD.md must be read completely.
   This ensures familiarity with required fields and validation requirements.
 
+  --check-protocol   Check if both CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read
+  --check-core       Check if CLAUDE_CORE.md has been fully read
   --check-lead       Check if CLAUDE_LEAD.md has been fully read
-  --skip-validation  Skip LEAD file validation (emergency use only)
+  --skip-validation  Skip protocol file validation (emergency use only)
 
 Examples:
   node scripts/modules/sd-key-generator.js UAT fix "Navigation route not working"
   node scripts/modules/sd-key-generator.js LEO feature "Add dark mode toggle"
   node scripts/modules/sd-key-generator.js --child SD-UAT-FIX-NAV-001 0
   node scripts/modules/sd-key-generator.js --parse SD-UAT-FIX-NAV-001-A
-  node scripts/modules/sd-key-generator.js --check-lead
+  node scripts/modules/sd-key-generator.js --check-protocol
 `);
     process.exit(0);
   }
@@ -558,6 +698,24 @@ Examples:
         const sdKey = args[1];
         const parsed = parseSDKey(sdKey);
         console.log('Parsed SD key:', JSON.stringify(parsed, null, 2));
+      } else if (args[0] === '--check-protocol') {
+        // Check if both CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read
+        const validation = validateProtocolFilesRead();
+        if (validation.valid) {
+          console.log('✅ CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read - ready for SD creation');
+        } else {
+          console.log(validation.remediation);
+          process.exit(1);
+        }
+      } else if (args[0] === '--check-core') {
+        // Check if CLAUDE_CORE.md has been fully read
+        const validation = validateCoreFileRead();
+        if (validation.valid) {
+          console.log('✅ CLAUDE_CORE.md has been fully read');
+        } else {
+          console.log(validation.remediation);
+          process.exit(1);
+        }
       } else if (args[0] === '--check-lead') {
         // Check if CLAUDE_LEAD.md has been fully read
         const validation = validateLeadFileRead();
@@ -571,7 +729,7 @@ Examples:
         // Skip validation (for testing/emergencies only)
         const [, source, type, ...titleParts] = args;
         const title = titleParts.join(' ');
-        console.log('⚠️  Skipping CLAUDE_LEAD.md validation (emergency mode)');
+        console.log('⚠️  Skipping protocol file validation (emergency mode)');
         const key = await generateSDKey({ source, type, title, skipLeadValidation: true });
         console.log('Generated SD key:', key);
       } else {
@@ -600,7 +758,9 @@ export default {
   getHierarchySuffix,
   keyExists,
   getNextSequentialNumber,
+  validateCoreFileRead,
   validateLeadFileRead,
+  validateProtocolFilesRead,
   SD_SOURCES,
   SD_TYPES
 };

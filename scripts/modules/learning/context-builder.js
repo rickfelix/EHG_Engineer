@@ -21,6 +21,22 @@ const supabase = createClient(
 
 const TOP_N = 5;
 
+/**
+ * Helper: Count occurrences of items in an array
+ * Used for identifying recurring patterns in sub-agent outputs
+ */
+function countOccurrences(arr) {
+  const counts = {};
+  for (const item of arr) {
+    // Handle both string items and object items with text/description
+    const key = typeof item === 'string' ? item : (item?.text || item?.description || JSON.stringify(item));
+    if (key) {
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
 // Intelligent filtering thresholds
 const FILTER_CONFIG = {
   MIN_OCCURRENCE_FOR_PATTERN: 3,    // Minimum occurrences to be considered a pattern (not incident)
@@ -29,6 +45,98 @@ const FILTER_CONFIG = {
   ACTIONABILITY_BONUS: 15,           // Bonus confidence for items with proven solutions
   SESSION_RECENCY_DAYS: 7,           // Prioritize learnings from last 7 days
 };
+
+/**
+ * Query sub-agent execution results to extract learnable patterns
+ * Groups by sub-agent code and identifies:
+ * - Recurring recommendations
+ * - Recurring critical issues
+ * - Underperforming sub-agents (low pass rate)
+ */
+async function getSubAgentLearnings(limit = TOP_N) {
+  // Query recent sub-agent execution results
+  const { data, error } = await supabase
+    .from('sub_agent_execution_results')
+    .select('sub_agent_code, verdict, confidence, recommendations, critical_issues, warnings, execution_time, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('Error querying sub_agent_execution_results:', error.message);
+    return [];
+  }
+
+  // Group by sub-agent code
+  const byAgent = {};
+  for (const exec of (data || [])) {
+    if (!byAgent[exec.sub_agent_code]) {
+      byAgent[exec.sub_agent_code] = [];
+    }
+    byAgent[exec.sub_agent_code].push(exec);
+  }
+
+  const learnings = [];
+
+  for (const [code, executions] of Object.entries(byAgent)) {
+    // Calculate effectiveness metrics
+    const passCount = executions.filter(e => e.verdict === 'PASS' || e.verdict === 'CONDITIONAL_PASS').length;
+    const passRate = passCount / executions.length;
+    const avgConfidence = Math.round(executions.reduce((sum, e) => sum + (e.confidence || 0), 0) / executions.length);
+
+    // Extract recurring recommendations
+    const allRecs = executions.flatMap(e => e.recommendations || []);
+    const recCounts = countOccurrences(allRecs);
+    const topRecs = Object.entries(recCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+    // Extract recurring critical issues
+    const allIssues = executions.flatMap(e => e.critical_issues || []);
+    const issueCounts = countOccurrences(allIssues);
+    const topIssues = Object.entries(issueCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+    // Generate learning for recurring recommendations (3+ occurrences)
+    if (topRecs.length > 0 && topRecs[0][1] >= 3) {
+      learnings.push({
+        id: `SAL-${code}-REC`,
+        source_type: 'sub_agent_recommendation',
+        sub_agent_code: code,
+        content: `${code} frequently recommends: ${topRecs.map(r => r[0]).join(', ')}`,
+        occurrence_count: topRecs.reduce((sum, r) => sum + r[1], 0),
+        confidence: avgConfidence,
+        metrics: { pass_rate: passRate, avg_confidence: avgConfidence, execution_count: executions.length },
+        items: topRecs.map(r => ({ recommendation: r[0], count: r[1] }))
+      });
+    }
+
+    // Generate learning for recurring issues (2+ occurrences)
+    if (topIssues.length > 0 && topIssues[0][1] >= 2) {
+      learnings.push({
+        id: `SAL-${code}-ISS`,
+        source_type: 'sub_agent_issue',
+        sub_agent_code: code,
+        content: `${code} frequently detects: ${topIssues.map(i => i[0]).join(', ')}`,
+        occurrence_count: topIssues.reduce((sum, i) => sum + i[1], 0),
+        confidence: Math.min(100, 50 + topIssues[0][1] * 10),
+        metrics: { pass_rate: passRate, execution_count: executions.length },
+        items: topIssues.map(i => ({ issue: i[0], count: i[1] }))
+      });
+    }
+
+    // Flag underperforming sub-agents (5+ executions, <60% pass rate)
+    if (executions.length >= 5 && passRate < 0.6) {
+      learnings.push({
+        id: `SAL-${code}-PERF`,
+        source_type: 'sub_agent_performance',
+        sub_agent_code: code,
+        content: `${code} has low pass rate (${Math.round(passRate * 100)}%). Review triggers/prompts.`,
+        occurrence_count: executions.length,
+        confidence: 80,
+        metrics: { pass_rate: passRate, fail_count: executions.filter(e => e.verdict === 'FAIL').length }
+      });
+    }
+  }
+
+  return learnings.slice(0, limit);
+}
 
 /**
  * Query recent retrospectives for lessons learned
@@ -376,12 +484,13 @@ export async function buildLearningContext(sdId = null) {
   console.log('Building learning context with intelligent filtering...');
   console.log(`  Thresholds: min ${FILTER_CONFIG.MIN_OCCURRENCE_FOR_PATTERN} occurrences, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
-  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns] = await Promise.all([
+  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
     getIssuePatterns(TOP_N),
     getPendingImprovements(TOP_N),
     getResolvedFeedbackLearnings(TOP_N),
-    getRecurringFeedbackPatterns(TOP_N)
+    getRecurringFeedbackPatterns(TOP_N),
+    getSubAgentLearnings(TOP_N)
   ]);
 
   // Extract patterns and filtered stats
@@ -412,6 +521,8 @@ export async function buildLearningContext(sdId = null) {
     // SD-QUALITY-INT-001: Feedback-derived learnings
     feedback_learnings: feedbackLearnings,
     feedback_patterns: feedbackPatterns,
+    // Sub-agent execution learnings
+    sub_agent_learnings: subAgentLearnings,
     // Intelligence metadata
     intelligence: {
       similar_patterns: similarPatterns,
@@ -421,6 +532,9 @@ export async function buildLearningContext(sdId = null) {
       // Feedback intelligence
       feedback_learning_count: feedbackLearnings.length,
       recurring_error_types: feedbackPatterns.length,
+      // Sub-agent intelligence
+      sub_agent_learning_count: subAgentLearnings.length,
+      sub_agent_perf_issues: subAgentLearnings.filter(s => s.source_type === 'sub_agent_performance').length,
       // Filtering transparency (v2)
       filtering: {
         patterns_scanned: patternFiltered.total,
@@ -443,6 +557,7 @@ export async function buildLearningContext(sdId = null) {
       total_improvements: improvements.length,
       total_feedback_learnings: feedbackLearnings.length,
       total_feedback_patterns: feedbackPatterns.length,
+      total_sub_agent_learnings: subAgentLearnings.length,
       // Filtering summary (v2)
       patterns_filtered_out: totalFiltered,
       generated_at: new Date().toISOString()
@@ -459,6 +574,10 @@ export async function buildLearningContext(sdId = null) {
   console.log(`   Improvements: ${improvements.length}`);
   console.log(`   Feedback learnings: ${feedbackLearnings.length}`);
   console.log(`   Recurring error types: ${feedbackPatterns.length}`);
+  console.log(`   Sub-agent learnings: ${subAgentLearnings.length}`);
+  if (subAgentLearnings.filter(s => s.source_type === 'sub_agent_performance').length > 0) {
+    console.log(`      └─ ${subAgentLearnings.filter(s => s.source_type === 'sub_agent_performance').length} sub-agent(s) flagged for performance review`);
+  }
 
   if (resolutionCandidates.length > 0) {
     console.log(`\n   → ${resolutionCandidates.length} pattern(s) may be ready for resolution`);
@@ -551,6 +670,22 @@ export function formatContextForDisplay(context) {
     for (const fp of context.feedback_patterns) {
       lines.push(`**[${fp.id}]** ${fp.content}`);
       lines.push(`  - Total occurrences: ${fp.total_occurrences} across ${fp.item_count} issues | Confidence: ${fp.confidence}%`);
+      lines.push('');
+    }
+  }
+
+  // Sub-agent execution learnings
+  if (context.sub_agent_learnings?.length > 0) {
+    lines.push('\n## Sub-Agent Learnings (from execution history)');
+    lines.push('Patterns extracted from sub-agent execution results:\n');
+    for (const sal of context.sub_agent_learnings) {
+      const badge = sal.source_type === 'sub_agent_performance' ? '⚠️ PERF' :
+                    sal.source_type === 'sub_agent_recommendation' ? '💡 REC' : '🔍 ISS';
+      lines.push(`**[${sal.id}]** ${badge} ${sal.content}`);
+      lines.push(`  - Sub-agent: ${sal.sub_agent_code} | Occurrences: ${sal.occurrence_count} | Confidence: ${sal.confidence}%`);
+      if (sal.metrics) {
+        lines.push(`  - Metrics: ${Math.round(sal.metrics.pass_rate * 100)}% pass rate, ${sal.metrics.execution_count} executions`);
+      }
       lines.push('');
     }
   }

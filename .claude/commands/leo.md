@@ -410,6 +410,14 @@ node scripts/modules/sd-key-generator.js LEO <type> "<title>"
   ```
 
 - `create --from-plan [path]`: Create from Claude Code plan file
+
+  **MANDATORY**: Before running `--from-plan`, you MUST read protocol files:
+  ```
+  Read tool: CLAUDE_CORE.md    (SD types, validation requirements, sub-agent triggers)
+  Read tool: CLAUDE_LEAD.md    (SD creation process, field requirements, handoff gates)
+  ```
+
+  Then run the creation script:
   ```bash
   # Auto-detect most recent plan in ~/.claude/plans/
   node scripts/leo-create-sd.js --from-plan
