@@ -676,6 +676,31 @@ node scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001
 
 ### SDKeyGenerator Errors (SD-LEO-SDKEY-001)
 
+#### Error: `CLAUDE_LEAD.md has not been read in this session` (SD-LEO-SDKEY-ENFORCE-LEAD-READ-001)
+
+**Cause**: Attempting to generate an SD key without first reading CLAUDE_LEAD.md completely
+**Solution**: Read CLAUDE_LEAD.md in full (without limit parameter) before generating SD keys
+
+```bash
+# Check if CLAUDE_LEAD.md has been read
+node scripts/modules/sd-key-generator.js --check-lead
+
+# The Read tool must be used WITHOUT limit parameter:
+# CORRECT: Read tool with file_path="CLAUDE_LEAD.md"
+# WRONG: Read tool with file_path="CLAUDE_LEAD.md" and limit=200
+```
+
+**Why This Enforcement Exists**:
+- CLAUDE_LEAD.md contains critical SD field requirements (lines 370-476)
+- Success criteria/metrics structure is documented (lines 399-415)
+- SD type-specific requirements are explained (lines 417-430)
+- Partial reads miss late-document content like error handling (lines 552-823)
+
+**Emergency Bypass** (not recommended):
+```bash
+node scripts/modules/sd-key-generator.js --skip-validation LEO feature "Title"
+```
+
 #### Error: `Invalid SD type` or `new value for domain sd_type violates check constraint`
 
 **Cause**: Using user-friendly type names that don't match database constraint
