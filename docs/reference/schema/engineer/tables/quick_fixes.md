@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T20:08:03.260Z
-**Rows**: 27
+**Generated**: 2026-01-31T20:43:36.015Z
+**Rows**: 28
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (28 total)
+## Columns (31 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -46,6 +46,9 @@
 | completed_at | `timestamp without time zone` | YES | - | - |
 | created_by | `text` | YES | `'UAT_AGENT'::text` | - |
 | target_application | `text` | YES | - | Target repository: EHG (main app) or EHG_Engineer (infrastructure). Used by complete-quick-fix.js to run tests in correct directory. |
+| compliance_score | `integer(32)` | YES | - | Self-scoring rubric result (0-100 scale). PASS: ≥90, WARN: 70-89, FAIL: <70 |
+| compliance_verdict | `text` | YES | - | Rubric verdict: PASS (can complete), WARN (user review), FAIL (must refine/escalate) |
+| compliance_details | `jsonb` | YES | - | Full rubric results including category scores, criteria results, and evidence |
 
 ## Constraints
 
@@ -60,6 +63,8 @@
 - `completed_requires_verification`: CHECK ((((status = 'completed'::text) AND (tests_passing = true) AND (uat_verified = true)) OR (status <> 'completed'::text)))
 - `escalated_requires_reason`: CHECK ((((status = 'escalated'::text) AND (escalation_reason IS NOT NULL)) OR (status <> 'escalated'::text)))
 - `loc_reasonable`: CHECK (((estimated_loc IS NULL) OR (estimated_loc <= 200)))
+- `quick_fixes_compliance_score_check`: CHECK (((compliance_score >= 0) AND (compliance_score <= 100)))
+- `quick_fixes_compliance_verdict_check`: CHECK ((compliance_verdict = ANY (ARRAY['PASS'::text, 'WARN'::text, 'FAIL'::text])))
 - `quick_fixes_found_during_check`: CHECK ((found_during = ANY (ARRAY['uat'::text, 'manual-testing'::text, 'code-review'::text])))
 - `quick_fixes_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
 - `quick_fixes_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'completed'::text, 'escalated'::text])))
@@ -68,6 +73,14 @@
 
 ## Indexes
 
+- `idx_quick_fixes_compliance_score`
+  ```sql
+  CREATE INDEX idx_quick_fixes_compliance_score ON public.quick_fixes USING btree (compliance_score) WHERE (compliance_score IS NOT NULL)
+  ```
+- `idx_quick_fixes_compliance_verdict`
+  ```sql
+  CREATE INDEX idx_quick_fixes_compliance_verdict ON public.quick_fixes USING btree (compliance_verdict) WHERE (compliance_verdict IS NOT NULL)
+  ```
 - `idx_quick_fixes_created`
   ```sql
   CREATE INDEX idx_quick_fixes_created ON public.quick_fixes USING btree (created_at DESC)

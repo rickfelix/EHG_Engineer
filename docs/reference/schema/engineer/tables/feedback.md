@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-31T17:35:44.400Z
-**Rows**: 19
+**Generated**: 2026-01-31T20:43:36.015Z
+**Rows**: 20
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (43 total)
+## Columns (46 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -61,17 +61,28 @@
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | resolved_at | `timestamp with time zone` | YES | - | - |
 | cluster_processed_at | `timestamp with time zone` | YES | - | Timestamp when feedback was processed by clustering job. NULL = not yet processed. |
+| quick_fix_id | `text` | YES | - | Foreign key to quick_fixes.id. When feedback is resolved via a quick fix, this references the QF-YYYYMMDD-NNN identifier. Required when status=resolved (unless strategic_directive_id is set). |
+| strategic_directive_id | `character varying(50)` | YES | - | Foreign key to strategic_directives_v2.id. When feedback is resolved via a full Strategic Directive, this references the SD-XXX-NNN identifier. Required when status=resolved (unless quick_fix_id is set). |
+| duplicate_of_id | `uuid` | YES | - | Foreign key to feedback.id (self-reference). When status=duplicate, this references the original feedback item that this one duplicates. Cannot reference itself (enforced by CHECK constraint). |
 
 ## Constraints
 
 ### Primary Key
 - `feedback_pkey`: PRIMARY KEY (id)
 
+### Foreign Keys
+- `fk_feedback_duplicate_of`: duplicate_of_id → feedback(id)
+- `fk_feedback_quick_fix`: quick_fix_id → quick_fixes(id)
+- `fk_feedback_strategic_directive`: strategic_directive_id → strategic_directives_v2(id)
+
 ### Check Constraints
+- `chk_duplicate_requires_reference`: CHECK ((((status)::text <> 'duplicate'::text) OR ((duplicate_of_id IS NOT NULL) AND (duplicate_of_id <> id))))
+- `chk_resolved_requires_reference`: CHECK ((((status)::text <> 'resolved'::text) OR ((quick_fix_id IS NOT NULL) OR (strategic_directive_id IS NOT NULL) OR (resolution_sd_id IS NOT NULL) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0)))))
+- `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying])::text[])))
-- `feedback_status_check`: CHECK (((status)::text = ANY ((ARRAY['new'::character varying, 'triaged'::character varying, 'in_progress'::character varying, 'resolved'::character varying, 'wont_fix'::character varying, 'backlog'::character varying, 'shipped'::character varying])::text[])))
+- `feedback_status_check`: CHECK (((status)::text = ANY (ARRAY[('new'::character varying)::text, ('triaged'::character varying)::text, ('in_progress'::character varying)::text, ('resolved'::character varying)::text, ('wont_fix'::character varying)::text, ('duplicate'::character varying)::text, ('invalid'::character varying)::text, ('backlog'::character varying)::text, ('shipped'::character varying)::text])))
 - `feedback_type_check`: CHECK (((type)::text = ANY ((ARRAY['issue'::character varying, 'enhancement'::character varying])::text[])))
 - `feedback_value_estimate_check`: CHECK (((value_estimate)::text = ANY ((ARRAY['high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 
@@ -89,6 +100,10 @@
   ```sql
   CREATE INDEX idx_feedback_created_at ON public.feedback USING btree (created_at DESC)
   ```
+- `idx_feedback_duplicate_of_id`
+  ```sql
+  CREATE INDEX idx_feedback_duplicate_of_id ON public.feedback USING btree (duplicate_of_id) WHERE (duplicate_of_id IS NOT NULL)
+  ```
 - `idx_feedback_enhancements`
   ```sql
   CREATE INDEX idx_feedback_enhancements ON public.feedback USING btree (created_at DESC) WHERE ((type)::text = 'enhancement'::text)
@@ -104,6 +119,10 @@
 - `idx_feedback_priority`
   ```sql
   CREATE INDEX idx_feedback_priority ON public.feedback USING btree (priority)
+  ```
+- `idx_feedback_quick_fix_id`
+  ```sql
+  CREATE INDEX idx_feedback_quick_fix_id ON public.feedback USING btree (quick_fix_id) WHERE (quick_fix_id IS NOT NULL)
   ```
 - `idx_feedback_sd_id`
   ```sql
@@ -128,6 +147,10 @@
 - `idx_feedback_status`
   ```sql
   CREATE INDEX idx_feedback_status ON public.feedback USING btree (status)
+  ```
+- `idx_feedback_strategic_directive_id`
+  ```sql
+  CREATE INDEX idx_feedback_strategic_directive_id ON public.feedback USING btree (strategic_directive_id) WHERE (strategic_directive_id IS NOT NULL)
   ```
 - `idx_feedback_value`
   ```sql
@@ -157,6 +180,16 @@
 - **Using**: `true`
 
 ## Triggers
+
+### trg_log_feedback_resolution_violation
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION log_feedback_resolution_violation()`
+
+### trg_log_feedback_resolution_violation
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION log_feedback_resolution_violation()`
 
 ### trigger_update_feedback_updated_at
 
