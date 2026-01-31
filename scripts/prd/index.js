@@ -161,8 +161,8 @@ export async function addPRDToDatabase(sdId, prdTitle) {
  */
 async function fetchSDData(supabase, sdId) {
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-  // Query by uuid_id for UUIDs, otherwise by sd_key or id (text SD keys)
-  const queryField = isUUID ? 'uuid_id' : 'id';
+  // Quick-fix QF-20260131-116: Query by 'id' for UUIDs (primary key), 'sd_key' for text keys
+  const queryField = isUUID ? 'id' : 'sd_key';
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
