@@ -423,8 +423,21 @@ export class BaseExecutor {
           await sessionManager.updateHeartbeat(session.session_id);
           console.log('   [Claim] SD already claimed by this session');
         } else if (claimStatus.claimed) {
-          // Claimed by another session - warn but don't block
-          console.log(`   [Claim] ⚠️ SD claimed by another session (${claimStatus.claimedBy})`);
+          // QF-CLAIM-CONFLICT-UX-001: Enhanced claim conflict display
+          console.log('\n   ┌─────────────────────────────────────────────────────────────┐');
+          console.log('   │  ⚠️  SD CLAIMED BY ANOTHER SESSION                          │');
+          console.log('   ├─────────────────────────────────────────────────────────────┤');
+          console.log(`   │  Session:   ${claimStatus.claimedBy?.substring(0, 45) || 'unknown'}`);
+          console.log(`   │  Hostname:  ${claimStatus.hostname || 'unknown'}`);
+          console.log(`   │  TTY:       ${claimStatus.tty || 'unknown'}`);
+          console.log(`   │  Heartbeat: ${claimStatus.heartbeatAgeHuman || 'unknown'}`);
+          console.log(`   │  Codebase:  ${claimStatus.codebase || 'unknown'}`);
+          console.log('   ├─────────────────────────────────────────────────────────────┤');
+          console.log('   │  🤔 Do you have another Claude Code instance running?       │');
+          console.log('   │                                                             │');
+          console.log('   │  If YES: Pick a different SD to avoid conflicts             │');
+          console.log('   │  If NO:  The other session may be stale (>5min = auto-release)│');
+          console.log('   └─────────────────────────────────────────────────────────────┘\n');
           console.log('   [Claim] Proceeding with handoff - claim conflict will not block');
         } else {
           // Attempt to claim the SD

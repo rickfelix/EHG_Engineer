@@ -129,10 +129,14 @@ async function main() {
       console.log(`\n${colors.yellow}⚠️  Session appears stale - it may auto-release soon${colors.reset}`);
     }
 
+    // QF-CLAIM-CONFLICT-UX-001: Add clear question about parallel instances
+    console.log(`\n${colors.yellow}🤔 Do you have another Claude Code instance running?${colors.reset}`);
     console.log(`\n${colors.bold}Options:${colors.reset}`);
-    console.log(`   1. Wait for the session to release (or become stale after 5min)`);
-    console.log(`   2. Run ${colors.cyan}npm run sd:release${colors.reset} in the other session`);
-    console.log(`   3. If session is abandoned, run ${colors.cyan}npm run session:cleanup${colors.reset}`);
+    console.log(`   ${colors.green}If YES${colors.reset}: Pick a different SD to avoid conflicts`);
+    console.log(`   ${colors.green}If NO${colors.reset}:  The session may be stale. Try these:`);
+    console.log('      1. Wait for auto-release (stale after 5min)');
+    console.log(`      2. Run ${colors.cyan}npm run sd:release${colors.reset} in the other terminal`);
+    console.log(`      3. If abandoned, run ${colors.cyan}npm run session:cleanup${colors.reset}`);
     console.log('═'.repeat(50));
     process.exit(1);
   }
