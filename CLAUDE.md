@@ -69,6 +69,24 @@ node -e "require('dotenv').config(); const {createClient}=require('@supabase/sup
 | Shows next SD after completion | Ask before showing queue |
 | No confirmation prompts | AskUserQuestion at each decision |
 
+### CRITICAL: No Background Tasks
+
+**When AUTO-PROCEED is active, NEVER use `run_in_background: true` on any Bash tool calls.**
+
+All commands must run inline/foreground to maintain workflow continuity. Background task completion notifications interrupt the autonomous flow, causing unexpected pauses.
+
+| Tool Parameter | AUTO-PROCEED ON | AUTO-PROCEED OFF |
+|----------------|-----------------|------------------|
+| `run_in_background: true` | FORBIDDEN | Allowed |
+| `run_in_background: false` or omitted | Required | Allowed |
+
+**Why this matters:**
+- Background tasks return control immediately, breaking the sequential workflow
+- Completion notifications arrive asynchronously, interrupting current work
+- The workflow stops unexpectedly waiting for user acknowledgment
+
+**This is a hard behavioral constraint, not a suggestion.**
+
 ### Pause Points (When ON)
 
 AUTO-PROCEED runs continuously EXCEPT at these boundaries:
@@ -494,7 +512,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-01 9:57:35 PM
+**Last Generated**: 2026-02-01 11:01:12 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
