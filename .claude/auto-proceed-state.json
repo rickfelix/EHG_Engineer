@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-LEO-SELF-IMPROVE-001B",
+  "currentSd": "SD-LEO-ENH-AUTO-PROCEED-001-14",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing Phase 0.5: Data Contracts",
+  "currentTask": "Implementing Enhance Status Line with AUTO-PROCEED Info",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 2,
   "version": "1.0.0",
-  "clearedAt": "2026-01-30T20:15:12.776Z",
-  "lastUpdatedAt": "2026-02-01T03:32:05.497Z"
+  "clearedAt": "2026-01-26T03:30:47.349Z",
+  "lastUpdatedAt": "2026-01-26T03:35:04.026Z"
 }

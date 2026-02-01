@@ -26,8 +26,9 @@ class LEOStatusLine {
     // SD-LEO-ENH-AUTO-PROCEED-001-14: Throttling for AUTO-PROCEED updates
     this.apUpdateThrottle = 100; // 100ms minimum interval (max 10 updates/sec)
     this.lastApUpdate = 0;
-    this.telemetryPath = path.join(process.cwd(), '.claude', 'status-line-telemetry.json');
 
+    // Telemetry for status line updates
+    this.telemetryPath = path.join(process.cwd(), '.claude', 'status-line-telemetry.json');
     // Status line templates (enhanced with project and branch info)
     this.templates = {
       default: '🏗️ {project} | {branch} | LEO v3.1.5.9',
@@ -91,6 +92,17 @@ class LEOStatusLine {
       performance: {
         enabled: true,
         updateInterval: 5000
+      },
+      // SD-LEO-ENH-AUTO-PROCEED-001-14: AUTO-PROCEED state with child progress
+      autoProceed: {
+        isActive: false,
+        sdKey: null,
+        phase: null,
+        progress: 0,
+        childProgress: {
+          current: null,
+          total: null
+        }
       }
     };
   }
@@ -328,7 +340,6 @@ class LEOStatusLine {
     if (!childProgress && sdKey) {
       resolvedChildProgress = await this.fetchChildProgressFromDatabase(sdKey);
     }
-
     this.statusCache.autoProceed = {
       isActive: isActive ?? true,
       sdKey: sdKey || null,
