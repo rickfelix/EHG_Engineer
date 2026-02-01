@@ -263,6 +263,36 @@ After completion, the fix MUST be merged to main:
 
 **Note:** The `complete-quick-fix.js` script now prompts for merge at the end.
 
+### Step 11: Pattern Promotion (Automatic)
+
+**NEW (SD-LEO-ENH-QUICK-FIX-PATTERN-001)**: Quick-fixes are automatically analyzed for pattern promotion.
+
+**How It Works**:
+- `lib/learning/feedback-clusterer.js` runs during `/learn` process
+- Groups quick-fixes by normalized title similarity
+- When 3+ quick-fixes share the same normalized title → Promotes to pattern
+- Pattern created with `source: 'quick_fix_cluster'`
+- Pattern becomes available in future sessions via `/learn`
+
+**Threshold**: 3+ occurrences (lower than other sources due to small scope)
+
+**Example**:
+```
+QF-20260201-001: "Fix button onClick undefined"
+QF-20260203-004: "Fix button onclick undefined"
+QF-20260205-008: "Fix button onClick undefined"
+        ↓ (Feedback clusterer detects 3 occurrences)
+PAT-QF-001: "Recurring onClick handler issue"
+        ↓
+Future /learn surfacesSuggestion: "Check for onClick handler definitions (recurring pattern from 3+ quick-fixes)"
+```
+
+**Benefits**:
+- Converts recurring quick-fixes into reusable knowledge
+- Prevents duplicate small bugs
+- Proactive detection in code reviews
+- Lower cognitive load (pattern surfaced automatically)
+
 ---
 
 ## Quality Standards (Non-Negotiable)
