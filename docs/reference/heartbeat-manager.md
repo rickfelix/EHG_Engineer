@@ -4,22 +4,28 @@
 **Status**: Approved
 **Version**: 1.0.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-01-30
-**Tags**: session-management, heartbeat, liveness, monitoring
-**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001
+**Last Updated**: 2026-02-01
+**Tags**: session-management, heartbeat, liveness, monitoring, lifecycle
+**SD**: SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001 (v2.0.0)
 
 ## Overview
 
-The Heartbeat Manager (`lib/heartbeat-manager.mjs`) provides automatic heartbeat updates for Claude Code sessions. It ensures the database accurately reflects session liveness by updating the `heartbeat_at` timestamp every 30 seconds.
+The Heartbeat Manager (`lib/heartbeat-manager.mjs`) provides intelligent session lifecycle management for Claude Code sessions. It ensures the database accurately reflects session liveness and handles graceful cleanup when sessions end.
 
 ## Purpose
 
-**Problem**: Without heartbeat updates, the system cannot distinguish between:
+**Problem**: Without session lifecycle management, the system cannot distinguish between:
 - Active sessions (Claude is working)
 - Stale sessions (Claude crashed or user closed terminal)
+- Orphaned sessions (process terminated but session not released)
 - Zombie sessions (session exists but no activity)
 
-**Solution**: Automatic heartbeat pings every 30 seconds indicate the session is still alive. Sessions with no heartbeat for >5 minutes are considered stale.
+**Solution**:
+- **Automatic heartbeat pings** every 30 seconds indicate the session is still alive
+- **Terminal identity tracking** (machine_id + terminal_id) enables atomic auto-release
+- **Graceful exit handling** with retry ensures proper cleanup on shutdown
+- **PID validation** detects orphaned sessions from crashed processes
+- **Status line cleanup** prevents multi-session file collisions
 
 ## API Reference
 
@@ -118,22 +124,102 @@ const stats = heartbeatManager.getHeartbeatStats();
 console.log(`Healthy: ${stats.healthy}, Failures: ${stats.consecutiveFailures}`);
 ```
 
-#### `forceHeartbeat(sessionId)`
+#### `forceHeartbeat()`
 
-Manually triggers a single heartbeat update (does not start interval).
+Manually triggers a single heartbeat update for the current session (does not start interval).
 
-**Parameters**:
-- `sessionId` (string): The session ID to heartbeat
+**Parameters**: None (uses current session ID from module state)
 
-**Returns**: `{ success: boolean, timestamp?: string, error?: string }`
+**Returns**: `{ success: boolean, sessionId?: string, lastSuccessfulHeartbeat?: Date, error?: string }`
 
 **Use Case**: Manual heartbeat ping without starting the automatic interval.
 
 **Example**:
 ```javascript
-const result = await heartbeatManager.forceHeartbeat('session_abc123');
+const result = await heartbeatManager.forceHeartbeat();
 if (result.success) {
-  console.log(`Manual heartbeat: ${result.timestamp}`);
+  console.log(`Manual heartbeat for ${result.sessionId}: ${result.lastSuccessfulHeartbeat}`);
+}
+```
+
+#### `isProcessRunning(pid)`
+
+Validates if a process ID is still running using OS-level checks.
+
+**Parameters**:
+- `pid` (number): Process ID to validate
+
+**Returns**: `boolean` - true if process exists, false otherwise
+
+**Implementation**: Uses `process.kill(pid, 0)` which checks process existence without sending a signal.
+
+**Use Case**: Detect orphaned sessions where the process has terminated but the session wasn't properly released.
+
+**Example**:
+```javascript
+const isRunning = heartbeatManager.isProcessRunning(12345);
+if (!isRunning) {
+  console.log('Process 12345 is not running - session may be orphaned');
+}
+```
+
+**Error Codes**:
+- `ESRCH`: Process doesn't exist (returns false)
+- `EPERM`: Process exists but insufficient permissions (returns true)
+
+#### `validateAndReportPid(sessionId, pid, machineId, supabase)`
+
+Validates a PID and reports validation failure to the database if the process is not running.
+
+**Parameters**:
+- `sessionId` (string): Session ID to validate
+- `pid` (number): Process ID to check
+- `machineId` (string): Machine ID for cross-machine safety
+- `supabase` (object): Supabase client
+
+**Returns**: `Promise<{ valid: boolean, reported?: boolean, result?: any, error?: string }>`
+
+**Use Case**: Used by cleanup workers to detect and mark orphaned sessions.
+
+**Example**:
+```javascript
+const result = await heartbeatManager.validateAndReportPid(
+  'session_abc123_tty1_1234',
+  12345,
+  'machine_xyz',
+  supabase
+);
+
+if (!result.valid && result.reported) {
+  console.log('Orphaned session detected and reported');
+}
+```
+
+**Database RPC**: Calls `report_pid_validation_failure(p_session_id, p_machine_id)`
+
+#### `releaseSessionWithRetry(reason)`
+
+Releases the current session with retry logic and timeout protection.
+
+**Parameters**:
+- `reason` (string): Release reason (e.g., 'graceful_exit', 'sigint_exit', 'timeout')
+
+**Returns**: `Promise<{ success: boolean, latency_ms?: number, skipped?: boolean, error?: string }>`
+
+**Behavior**:
+- **Timeout**: 5 seconds per attempt (FR-3/US-002 requirement)
+- **Retries**: 3 attempts with exponential backoff (100ms, 200ms, 400ms)
+- **Idempotency**: Prevents duplicate release attempts
+- **Status file cleanup**: Removes session-specific status line file
+
+**Use Case**: Graceful session cleanup on exit, shutdown, or timeout.
+
+**Example**:
+```javascript
+// Called automatically by exit handlers
+const result = await heartbeatManager.releaseSessionWithRetry('graceful_exit');
+if (result.success) {
+  console.log(`Session released in ${result.latency_ms}ms`);
 }
 ```
 
@@ -165,27 +251,43 @@ if (heartbeatStatus.active && heartbeatStatus.sessionId === session.session_id) 
 }
 ```
 
-### Database RPC Function
+### Database RPC Functions
 
-The heartbeat manager calls the `update_session_heartbeat` RPC function:
+The heartbeat manager calls several database RPC functions:
+
+#### `updateHeartbeat(sessionId)` (via session-manager.mjs)
+
+Updates the `heartbeat_at` timestamp for the active session:
+
+```javascript
+// Called automatically every 30 seconds
+await updateHeartbeat(sessionId);
+```
+
+#### `endSession(reason)` (via session-manager.mjs)
+
+Releases the session claim and updates status:
+
+```javascript
+// Called on graceful exit
+await endSession('graceful_exit');
+```
+
+**Parameters**:
+- `reason` (string): Release reason for auditing
+
+**Returns**: `{ success: boolean, error?: string }`
+
+#### `report_pid_validation_failure(p_session_id, p_machine_id)`
+
+Reports that a session's PID validation failed (process not running):
 
 ```sql
--- Expected signature (to be implemented)
-CREATE OR REPLACE FUNCTION update_session_heartbeat(p_session_id TEXT)
-RETURNS JSONB AS $$
-BEGIN
-  UPDATE claude_sessions
-  SET heartbeat_at = NOW()
-  WHERE session_id = p_session_id;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'session_id', p_session_id,
-    'heartbeat_at', NOW()
-  );
-END;
-$$ LANGUAGE plpgsql;
+-- Called by cleanup workers to detect orphaned sessions
+SELECT report_pid_validation_failure('session_abc123_tty1_1234', 'machine_xyz');
 ```
+
+**Purpose**: Marks sessions as candidates for automatic cleanup when their process has terminated.
 
 ## Configuration
 
@@ -195,9 +297,17 @@ $$ LANGUAGE plpgsql;
 |----------|-------|---------|
 | `HEARTBEAT_INTERVAL_MS` | 30000 | Heartbeat interval (30 seconds) |
 | `MAX_CONSECUTIVE_FAILURES` | 3 | Stop after 3 failed heartbeats |
+| `GRACEFUL_EXIT_TIMEOUT_MS` | 5000 | Timeout for graceful release (5 seconds) |
+| `GRACEFUL_EXIT_RETRIES` | 3 | Number of retry attempts for release |
 
-**Stale Threshold** (not in heartbeat manager, defined in view):
+**Stale Threshold** (not in heartbeat manager, defined in database view):
 - **5 minutes** (300 seconds) - Sessions with no heartbeat for >5 min are marked stale
+
+**Exit Handlers** (registered once per session):
+- **SIGINT** (Ctrl+C): Graceful release → exit(0)
+- **SIGTERM**: Graceful release → exit(0)
+- **beforeExit**: Async-safe release attempt
+- **exit**: Sync cleanup (clears interval, logs exit)
 
 ### Rationale
 
@@ -252,9 +362,13 @@ ORDER BY heartbeat_age_seconds DESC;
 
 ### Heartbeat Not Starting
 
-**Symptom**: `startHeartbeat()` returns `{ success: false, error: 'already running' }`
+**Symptom**: `startHeartbeat()` returns `{ success: true, message: 'Heartbeat already active for this session' }`
 
-**Solution**: Stop existing heartbeat first:
+**Cause**: Heartbeat is already running for the same session (not an error - idempotent behavior)
+
+**Solution**: No action needed - heartbeat is already active
+
+**If you need to restart**:
 ```javascript
 heartbeatManager.stopHeartbeat();
 heartbeatManager.startHeartbeat(sessionId);
@@ -284,6 +398,34 @@ console.log('Consecutive failures:', stats.consecutiveFailures);
 - Restart heartbeat if stopped: `startHeartbeat(sessionId)`
 - Verify `heartbeat_at` is updating in database
 
+### Orphaned Session Detection
+
+**Symptom**: Session exists in database but process is not running
+
+**Diagnosis**:
+```javascript
+const pid = 12345; // Get from claude_sessions.pid column
+const isRunning = heartbeatManager.isProcessRunning(pid);
+if (!isRunning) {
+  console.log('Orphaned session detected');
+}
+```
+
+**Automatic Cleanup**: Cleanup workers will detect and mark these sessions using `report_pid_validation_failure()`
+
+### Graceful Exit Failures
+
+**Symptom**: Session not released on Ctrl+C or normal exit
+
+**Possible Causes**:
+1. **Exit timeout**: Release took >5 seconds (falls back to heartbeat cleanup)
+2. **Multiple SIGINT**: User hit Ctrl+C multiple times rapidly
+3. **Database unavailable**: Connection lost during exit
+
+**Diagnosis**: Check logs for "Release attempt X/3 failed" messages
+
+**Fallback**: Stale session cleanup will handle it within 5 minutes
+
 ## Performance Impact
 
 - **CPU**: ~0.1% (one RPC call every 30s)
@@ -296,14 +438,62 @@ console.log('Consecutive failures:', stats.consecutiveFailures);
 - **No external exposure**: Heartbeat RPC is internal only (no public endpoint)
 - **Rate limiting**: 30-second interval prevents abuse
 
+## Session-Specific Status Line Files (US-006)
+
+The Heartbeat Manager coordinates with the status line system to prevent multi-session file collisions.
+
+### Problem Solved
+
+**Before**: Single shared status line file (`.claude/status-line/leo-status.json`)
+- Multiple sessions overwrote each other's status
+- Caused display flicker and state corruption
+- No isolation between concurrent sessions
+
+**After**: Session-specific status line files (`.claude/status-line/session_{id}.json`)
+- Each session writes to its own file
+- No cross-session interference
+- Automatic cleanup on session release
+
+### Integration
+
+**Status Line Cleanup Flow**:
+
+1. **Session Start**: `leo-status-line.js` creates `.claude/status-line/session_{id}.json`
+2. **Session Active**: Status updates write to session-specific file
+3. **Session End**: `releaseSessionWithRetry()` calls `statusLine.cleanup()`
+4. **Cleanup**: Session-specific file is deleted
+
+### Example
+
+```javascript
+// Status line now session-aware
+const statusLine = new StatusLine(sessionId);  // Uses session_{id}.json
+
+// On exit, heartbeat manager cleans up
+await releaseSessionWithRetry('graceful_exit');  // Calls statusLine.cleanup()
+```
+
+### Stale File Cleanup
+
+Stale status line files (>5 min old, no matching active session) are automatically cleaned up:
+
+```javascript
+// Called periodically by cleanup workers
+StatusLine.cleanupStaleFiles();  // Static method
+```
+
 ## Related Documentation
 
-- Migration: ../database/migrations/multi-session-pessimistic-locking.md
-- Session Management: ../../lib/session-manager.mjs
-- View Documentation: ../database/README.md (v_active_sessions section)
+- Migration: [20260201_intelligent_session_lifecycle.sql](../database/migrations/20260201_intelligent_session_lifecycle.sql)
+- Session Management: [session-manager.mjs](../../lib/session-manager.mjs)
+- Status Line Integration: [leo-status-line.js](../../scripts/leo-status-line.js)
+- Operations: [Multi-Session Coordination Ops](../06_deployment/multi-session-coordination-ops.md)
+- Database View: [v_session_metrics](../database/README.md#v_session_metrics)
 
 ## References
 
-- **SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001
+- **SD**: SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001
+- **User Stories**: US-001 (Terminal Identity), US-002 (Graceful Release), US-003 (PID Validation), US-004 (Stale Cleanup), US-005 (Observability), US-006 (Status Line Files)
+- **FR-3**: Graceful exit with 5s timeout and exponential backoff
+- **FR-4**: PID validation for orphaned session detection
 - **FR-5**: Heartbeat auto-update mechanism (30s interval, 5min stale threshold)
-- **Integration**: BaseExecutor (start on claim), helpers.js (stop on release)
