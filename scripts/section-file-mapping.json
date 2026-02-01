@@ -139,6 +139,7 @@
       "vision_v2_exec",
       "negative_constraints_exec",
       "workflow",
+      "migration_execution_delegation",
       "migration_script_pattern"
     ]
   },
