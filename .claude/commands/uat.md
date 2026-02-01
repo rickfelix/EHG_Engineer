@@ -2,11 +2,45 @@
 
 **Purpose**: Execute interactive User Acceptance Testing after `/restart` and before `/ship`
 
+**SD**: SD-MAN-GEN-INTELLIGENT-ROUTE-AWARE-001 (Route-Aware Enhancements)
+
 ## When to Use
 
 - After completing implementation and running `/restart`
 - Before shipping features, bugfixes, or security changes
 - When SD type requires human verification (feature, bugfix, security, refactor, enhancement)
+
+## Route-Aware Features (SD-MAN-GEN-INTELLIGENT-ROUTE-AWARE-001)
+
+The UAT command now includes intelligent route awareness:
+
+### Route Context Integration
+- **FR-1**: Displays route development status from `nav_routes` table
+- **FR-2**: Respects user preferences from `nav_preferences` for route filtering
+- Scenarios are annotated with route maturity (Draft/Development/Complete)
+- Testing focus recommended based on route maturity
+
+### Issue Pattern Matching
+- **FR-3**: Failures are matched against `issue_patterns` before creating new issues
+- Suggests proven solutions from matched patterns
+- Prevents duplicate issue creation
+
+### RCA Auto-Triggering
+- **FR-4**: Automatically recommends RCA sub-agent for HIGH/CRITICAL severity failures
+- Builds structured RCA prompts with failure context and pattern history
+
+### Enhanced Reporting
+- **FR-5**: Route-aware session summary with coverage by maturity
+- Pattern statistics displayed in header
+- Actionable recommendations based on route coverage
+
+### Severity Classification
+- **FR-6**: Deterministic severity classification based on failure type
+- `functional-blocking` → CRITICAL
+- `security-*` → CRITICAL
+- `functional` → HIGH
+- `visual` → MEDIUM
+- `visual-minor` → LOW
 
 ## SD Type Requirements
 
