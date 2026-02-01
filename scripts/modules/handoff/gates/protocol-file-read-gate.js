@@ -1,15 +1,26 @@
 /**
  * Protocol File Read Gate
  * Part of SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001
+ * Enhanced for SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001
  *
  * Enforces that the agent has read the phase-specific CLAUDE_*.md file
  * before a handoff can proceed. This gate converts the "Protocol Familiarization"
  * directive from text guidance into an enforced validation gate.
  *
- * Mapping:
- *   LEAD-TO-PLAN → requires CLAUDE_LEAD.md
- *   PLAN-TO-EXEC → requires CLAUDE_PLAN.md
- *   EXEC-TO-PLAN → requires CLAUDE_EXEC.md
+ * DUAL GENERATION (v2.0):
+ *   - Defaults to DIGEST files (e.g., CLAUDE_PLAN_DIGEST.md)
+ *   - Use CLAUDE_PROTOCOL_MODE=full to use FULL files instead
+ *   - Fails fast with actionable error if DIGEST files are missing
+ *
+ * Mapping (DIGEST mode - default):
+ *   LEAD-TO-PLAN → requires CLAUDE_PLAN_DIGEST.md
+ *   PLAN-TO-EXEC → requires CLAUDE_EXEC_DIGEST.md
+ *   EXEC-TO-PLAN → requires CLAUDE_PLAN_DIGEST.md
+ *
+ * Mapping (FULL mode - env override):
+ *   LEAD-TO-PLAN → requires CLAUDE_PLAN.md
+ *   PLAN-TO-EXEC → requires CLAUDE_EXEC.md
+ *   EXEC-TO-PLAN → requires CLAUDE_PLAN.md
  */
 
 import fs from 'fs';
@@ -20,15 +31,48 @@ const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Project
 const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-state.json');
 
 /**
- * Handoff type to required protocol file mapping
+ * Get the protocol mode from environment
+ * @returns {'digest'|'full'} Protocol mode
+ */
+function getProtocolMode() {
+  const mode = process.env.CLAUDE_PROTOCOL_MODE?.toLowerCase();
+  return mode === 'full' ? 'full' : 'digest';
+}
+
+/**
+ * Handoff type to required protocol file mapping (FULL files)
  * Maps to the DESTINATION phase's protocol file (the phase you're going TO)
  */
-const HANDOFF_FILE_REQUIREMENTS = {
+const HANDOFF_FILE_REQUIREMENTS_FULL = {
   'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',   // Going TO Plan phase
   'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',   // Going TO Exec phase
   'EXEC-TO-PLAN': 'CLAUDE_PLAN.md',   // Going back TO Plan phase
   'PLAN-TO-LEAD': 'CLAUDE_LEAD.md'    // Going TO Lead phase (final approval)
 };
+
+/**
+ * Handoff type to required protocol file mapping (DIGEST files - default)
+ * Maps to the DESTINATION phase's protocol file (the phase you're going TO)
+ */
+const HANDOFF_FILE_REQUIREMENTS_DIGEST = {
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN_DIGEST.md',   // Going TO Plan phase
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC_DIGEST.md',   // Going TO Exec phase
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN_DIGEST.md',   // Going back TO Plan phase
+  'PLAN-TO-LEAD': 'CLAUDE_LEAD_DIGEST.md'    // Going TO Lead phase (final approval)
+};
+
+/**
+ * Get the requirements map based on protocol mode
+ * @returns {Object} Requirements map
+ */
+function getHandoffFileRequirements() {
+  return getProtocolMode() === 'full'
+    ? HANDOFF_FILE_REQUIREMENTS_FULL
+    : HANDOFF_FILE_REQUIREMENTS_DIGEST;
+}
+
+// Legacy export for backward compatibility
+const HANDOFF_FILE_REQUIREMENTS = HANDOFF_FILE_REQUIREMENTS_FULL;
 
 /**
  * Read current session state
@@ -197,13 +241,19 @@ function protocolFileExistsOnDisk(filename) {
  *
  * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Added fallback validation.
  * SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Added partial read detection with confirmation.
+ * SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Added DIGEST mode support.
  *
  * @param {string} handoffType - The handoff type (e.g., 'LEAD-TO-PLAN')
  * @param {Object} ctx - Validation context with optional confirmFullRead flag
  * @returns {Object} Validation result {pass, score, issues, warnings}
  */
 export async function validateProtocolFileRead(handoffType, ctx = {}) {
-  const requiredFile = HANDOFF_FILE_REQUIREMENTS[handoffType];
+  const protocolMode = getProtocolMode();
+  const requirements = getHandoffFileRequirements();
+  const requiredFile = requirements[handoffType];
+
+  console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
+  console.log(`   Mode Override: Set CLAUDE_PROTOCOL_MODE=full to use FULL files`);
 
   if (!requiredFile) {
     // No requirement for this handoff type
@@ -375,15 +425,37 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
   // File not in session state AND doesn't exist on disk - BLOCK
   console.log(`   ❌ Protocol file NOT read: ${requiredFile}`);
   console.log('');
-  console.log('   📚 REMEDIATION:');
-  console.log('   The LEO Protocol requires reading the phase-specific protocol file');
-  console.log('   before proceeding with this handoff.');
-  console.log('');
-  console.log('   ACTION REQUIRED:');
-  console.log(`   1. Read the file: ${requiredFile}`);
-  console.log('   2. Re-run the handoff after reading');
-  console.log('');
-  console.log(`   HINT: Use the Read tool to read ${requiredFile}`);
+
+  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Check if DIGEST file is missing
+  const isDigestMode = getProtocolMode() === 'digest';
+  const digestFilePath = path.join(PROJECT_DIR, requiredFile);
+  const digestFileExists = fs.existsSync(digestFilePath);
+
+  if (isDigestMode && !digestFileExists) {
+    console.log('   🚨 DIGEST FILE MISSING');
+    console.log('');
+    console.log('   The required DIGEST protocol file does not exist.');
+    console.log('   This typically means the generator has not been run recently.');
+    console.log('');
+    console.log('   REGENERATE FILES:');
+    console.log('   node scripts/generate-claude-md-from-db.js');
+    console.log('');
+    console.log(`   Missing file: ${requiredFile}`);
+    console.log('');
+    console.log('   ALTERNATIVE: Use FULL mode (more tokens):');
+    console.log('   CLAUDE_PROTOCOL_MODE=full node scripts/handoff.js ...');
+    console.log('');
+  } else {
+    console.log('   📚 REMEDIATION:');
+    console.log('   The LEO Protocol requires reading the phase-specific protocol file');
+    console.log('   before proceeding with this handoff.');
+    console.log('');
+    console.log('   ACTION REQUIRED:');
+    console.log(`   1. Read the file: ${requiredFile}`);
+    console.log('   2. Re-run the handoff after reading');
+    console.log('');
+    console.log(`   HINT: Use the Read tool to read ${requiredFile}`);
+  }
 
   // Emit structured log for BLOCK
   const state = readSessionState();
@@ -396,15 +468,26 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     timestamp: new Date().toISOString()
   });
 
+  // Build issues list based on mode and file existence
+  const issues = [
+    `Protocol file not read: ${requiredFile}`,
+    `LEO Protocol requires reading ${requiredFile} before ${handoffType} handoff`
+  ];
+
+  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Add regeneration hint for missing DIGEST files
+  if (isDigestMode && !digestFileExists) {
+    issues.push(`DIGEST file missing: ${requiredFile}`);
+    issues.push('Run: node scripts/generate-claude-md-from-db.js');
+  }
+
   return {
     pass: false,
     score: 0,
     max_score: 100,
-    issues: [
-      `Protocol file not read: ${requiredFile}`,
-      `LEO Protocol requires reading ${requiredFile} before ${handoffType} handoff`
-    ],
-    warnings: []
+    issues,
+    warnings: [],
+    protocolMode: getProtocolMode(),
+    digestFileMissing: isDigestMode && !digestFileExists
   };
 }
 
@@ -420,11 +503,15 @@ function emitStructuredLog(logEntry) {
 /**
  * Create the Protocol File Read Gate
  *
+ * SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Updated for DIGEST mode support
+ *
  * @param {string} handoffType - The handoff type this gate is for
  * @returns {Object} Gate configuration
  */
 export function createProtocolFileReadGate(handoffType) {
-  const requiredFile = HANDOFF_FILE_REQUIREMENTS[handoffType];
+  const requirements = getHandoffFileRequirements();
+  const requiredFile = requirements[handoffType];
+  const protocolMode = getProtocolMode();
 
   return {
     name: 'GATE_PROTOCOL_FILE_READ',
@@ -436,8 +523,9 @@ export function createProtocolFileReadGate(handoffType) {
     },
     required: true,
     blocking: true,
+    protocolMode,
     remediation: requiredFile
-      ? `Read ${requiredFile} before proceeding with ${handoffType} handoff. Use: Read tool with file_path="${requiredFile}"`
+      ? `Read ${requiredFile} before proceeding with ${handoffType} handoff. Use: Read tool with file_path="${requiredFile}". Mode: ${protocolMode.toUpperCase()}`
       : 'No protocol file requirement for this handoff type.'
   };
 }
@@ -492,5 +580,9 @@ export default {
   hasPartialReadConfirmation,
   clearProtocolFileReadState,
   bypassProtocolFileReadGate,
-  HANDOFF_FILE_REQUIREMENTS
+  getProtocolMode,
+  getHandoffFileRequirements,
+  HANDOFF_FILE_REQUIREMENTS,
+  HANDOFF_FILE_REQUIREMENTS_FULL,
+  HANDOFF_FILE_REQUIREMENTS_DIGEST
 };

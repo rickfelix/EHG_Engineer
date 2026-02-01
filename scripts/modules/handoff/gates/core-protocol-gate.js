@@ -1,5 +1,6 @@
 /**
  * Core Protocol Gate - SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001
+ * Enhanced for SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001
  *
  * Enhanced protocol file enforcement for long-running AUTO-PROCEED sessions.
  *
@@ -8,6 +9,13 @@
  * 2. Post-Compaction Gate - Re-reads protocol files after context compaction
  * 3. File hashing for idempotent enforcement
  * 4. Queryable gate state for auditing
+ * 5. DIGEST mode support with on-demand FULL loading (v2.0)
+ *
+ * DUAL GENERATION (v2.0):
+ *   - Defaults to DIGEST files (e.g., CLAUDE_CORE_DIGEST.md)
+ *   - Use CLAUDE_PROTOCOL_MODE=full to use FULL files instead
+ *   - On-demand FULL loading when needs_full_protocol=true flag is set
+ *   - Output includes full_loaded: boolean and full_files_loaded: string[]
  *
  * Trigger Points:
  *   - SD_START: Before any SD work begins
@@ -30,37 +38,131 @@ const SYNC_MARKER_TIMEOUT = 500;
 const SYNC_MARKER_POLL_INTERVAL = 50;
 
 /**
- * Required protocol files by trigger type
+ * Get the protocol mode from environment
+ * @returns {'digest'|'full'} Protocol mode
  */
-const CORE_PROTOCOL_REQUIREMENTS = {
-  // CLAUDE.md contains sub-agent trigger keywords that MUST be loaded alongside CLAUDE_CORE.md
-  // Without CLAUDE.md, agents miss actionable triggers like "created migration" → invoke DATABASE sub-agent
-  // Root cause fix: SD-LEO-INFRA-HARDENING-001 RCA investigation
+function getProtocolMode() {
+  const mode = process.env.CLAUDE_PROTOCOL_MODE?.toLowerCase();
+  return mode === 'full' ? 'full' : 'digest';
+}
+
+/**
+ * Get file name with or without DIGEST suffix based on mode
+ * @param {string} filename - Base filename (e.g., 'CLAUDE_CORE.md')
+ * @returns {string} Filename with or without _DIGEST suffix
+ */
+function getProtocolFilename(filename) {
+  const mode = getProtocolMode();
+  if (mode === 'digest') {
+    // Convert CLAUDE_CORE.md -> CLAUDE_CORE_DIGEST.md
+    return filename.replace('.md', '_DIGEST.md');
+  }
+  return filename;
+}
+
+/**
+ * Get the FULL version of a DIGEST filename
+ * @param {string} digestFilename - DIGEST filename (e.g., 'CLAUDE_CORE_DIGEST.md')
+ * @returns {string} FULL filename
+ */
+function getFullFilename(digestFilename) {
+  return digestFilename.replace('_DIGEST.md', '.md');
+}
+
+/**
+ * Required protocol files by trigger type (FULL - base names)
+ */
+const CORE_PROTOCOL_REQUIREMENTS_FULL = {
   SD_START: ['CLAUDE.md', 'CLAUDE_CORE.md'],
-  POST_COMPACTION: ['CLAUDE.md', 'CLAUDE_CORE.md'],  // Phase file added dynamically based on current phase
+  POST_COMPACTION: ['CLAUDE.md', 'CLAUDE_CORE.md'],
   SESSION_START: ['CLAUDE.md', 'CLAUDE_CORE.md']
 };
 
 /**
- * Phase-specific files to re-read after compaction
+ * Required protocol files by trigger type (DIGEST)
  */
-const PHASE_PROTOCOL_FILES = {
+const CORE_PROTOCOL_REQUIREMENTS_DIGEST = {
+  SD_START: ['CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md'],
+  POST_COMPACTION: ['CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md'],
+  SESSION_START: ['CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md']
+};
+
+/**
+ * Get core protocol requirements based on mode
+ * @returns {Object} Requirements by trigger type
+ */
+function getCoreProtocolRequirements() {
+  return getProtocolMode() === 'full'
+    ? CORE_PROTOCOL_REQUIREMENTS_FULL
+    : CORE_PROTOCOL_REQUIREMENTS_DIGEST;
+}
+
+// Legacy export for backward compatibility
+const CORE_PROTOCOL_REQUIREMENTS = CORE_PROTOCOL_REQUIREMENTS_FULL;
+
+/**
+ * Phase-specific files to re-read after compaction (FULL)
+ */
+const PHASE_PROTOCOL_FILES_FULL = {
   LEAD: 'CLAUDE_LEAD.md',
   PLAN: 'CLAUDE_PLAN.md',
   EXEC: 'CLAUDE_EXEC.md'
 };
 
 /**
- * Handoff type to required phase file mapping
- * Maps to the DESTINATION phase's protocol file (the phase you're going TO)
- * Used by validateSdStartGate when handoffType is specified
+ * Phase-specific files to re-read after compaction (DIGEST)
  */
-const HANDOFF_PHASE_FILES = {
-  'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',   // Going TO Plan phase
-  'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',   // Going TO Exec phase
-  'EXEC-TO-PLAN': 'CLAUDE_PLAN.md',   // Going back TO Plan phase
-  'PLAN-TO-LEAD': 'CLAUDE_LEAD.md'    // Going TO Lead phase (final approval)
+const PHASE_PROTOCOL_FILES_DIGEST = {
+  LEAD: 'CLAUDE_LEAD_DIGEST.md',
+  PLAN: 'CLAUDE_PLAN_DIGEST.md',
+  EXEC: 'CLAUDE_EXEC_DIGEST.md'
 };
+
+/**
+ * Get phase protocol files based on mode
+ * @returns {Object} Phase to file mapping
+ */
+function getPhaseProtocolFiles() {
+  return getProtocolMode() === 'full'
+    ? PHASE_PROTOCOL_FILES_FULL
+    : PHASE_PROTOCOL_FILES_DIGEST;
+}
+
+// Legacy export
+const PHASE_PROTOCOL_FILES = PHASE_PROTOCOL_FILES_FULL;
+
+/**
+ * Handoff type to required phase file mapping (FULL)
+ */
+const HANDOFF_PHASE_FILES_FULL = {
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN.md',
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC.md',
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN.md',
+  'PLAN-TO-LEAD': 'CLAUDE_LEAD.md'
+};
+
+/**
+ * Handoff type to required phase file mapping (DIGEST)
+ */
+const HANDOFF_PHASE_FILES_DIGEST = {
+  'LEAD-TO-PLAN': 'CLAUDE_PLAN_DIGEST.md',
+  'PLAN-TO-EXEC': 'CLAUDE_EXEC_DIGEST.md',
+  'EXEC-TO-PLAN': 'CLAUDE_PLAN_DIGEST.md',
+  'PLAN-TO-LEAD': 'CLAUDE_LEAD_DIGEST.md'
+};
+
+/**
+ * Get handoff phase files based on mode
+ * @returns {Object} Handoff to file mapping
+ */
+function getHandoffPhaseFiles() {
+  return getProtocolMode() === 'full'
+    ? HANDOFF_PHASE_FILES_FULL
+    : HANDOFF_PHASE_FILES_DIGEST;
+}
+
+// Legacy export
+const HANDOFF_PHASE_FILES = HANDOFF_PHASE_FILES_FULL;
 
 /**
  * Calculate SHA-256 hash of a file
@@ -399,29 +501,58 @@ export function checkFileNeedsRead(filename, trigger, sdRunId = null) {
 
 /**
  * Validate SD Start Gate - enforces CLAUDE_CORE.md before SD work
+ *
+ * SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Added DIGEST mode support
+ *
  * @param {string} sdId - Strategic Directive ID
  * @param {Object} ctx - Validation context
+ * @param {Object} ctx.needs_full_protocol - If true, load FULL files even in digest mode
  * @param {string} [handoffType] - Optional handoff type to include phase-specific file
- * @returns {Object} Validation result
+ * @returns {Object} Validation result with full_loaded and full_files_loaded fields
  */
 export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
+  const protocolMode = getProtocolMode();
+  const coreRequirements = getCoreProtocolRequirements();
+  const handoffPhaseFiles = getHandoffPhaseFiles();
+
   console.log('\n📚 GATE: SD Start Protocol Enforcement');
   console.log('-'.repeat(50));
   console.log(`   SD: ${sdId}`);
+  console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
   if (handoffType) {
     console.log(`   Handoff Type: ${handoffType}`);
   }
 
-  // Start with core requirements
-  const requiredFiles = [...CORE_PROTOCOL_REQUIREMENTS.SD_START];
+  // Track if FULL files were loaded on-demand
+  let fullLoaded = false;
+  const fullFilesLoaded = [];
+
+  // Start with core requirements for current mode
+  const requiredFiles = [...coreRequirements.SD_START];
 
   // Add phase-specific file if handoff type is specified
-  if (handoffType && HANDOFF_PHASE_FILES[handoffType]) {
-    const phaseFile = HANDOFF_PHASE_FILES[handoffType];
+  if (handoffType && handoffPhaseFiles[handoffType]) {
+    const phaseFile = handoffPhaseFiles[handoffType];
     if (!requiredFiles.includes(phaseFile)) {
       requiredFiles.push(phaseFile);
     }
     console.log(`   Phase file required: ${phaseFile}`);
+  }
+
+  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: On-demand FULL loading
+  if (ctx.needs_full_protocol && protocolMode === 'digest') {
+    console.log('   ⚡ On-demand FULL loading triggered');
+
+    // Load corresponding FULL files
+    for (const digestFile of requiredFiles) {
+      const fullFile = getFullFilename(digestFile);
+      if (!requiredFiles.includes(fullFile)) {
+        requiredFiles.push(fullFile);
+        fullFilesLoaded.push(fullFile);
+        fullLoaded = true;
+        console.log(`   + Adding FULL file: ${fullFile}`);
+      }
+    }
   }
 
   // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
@@ -472,7 +603,10 @@ export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
       max_score: 100,
       issues,
       warnings,
-      sdRunId
+      sdRunId,
+      protocolMode,
+      full_loaded: fullLoaded,
+      full_files_loaded: fullFilesLoaded
     };
   }
 
@@ -490,6 +624,9 @@ export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
     sdId,
     sdRunId,
     requiredFiles,
+    protocolMode,
+    fullLoaded,
+    fullFilesLoaded,
     timestamp: new Date().toISOString()
   });
 
@@ -499,20 +636,36 @@ export async function validateSdStartGate(sdId, ctx = {}, handoffType = null) {
     max_score: 100,
     issues: [],
     warnings,
-    sdRunId
+    sdRunId,
+    protocolMode,
+    full_loaded: fullLoaded,
+    full_files_loaded: fullFilesLoaded
   };
 }
 
 /**
  * Validate Post-Compaction Gate - enforces re-read after compaction
+ *
+ * SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Added DIGEST mode support
+ *
  * @param {string} currentPhase - Current SD phase (LEAD, PLAN, EXEC)
  * @param {Object} ctx - Validation context
- * @returns {Object} Validation result
+ * @param {boolean} ctx.needs_full_protocol - If true, load FULL files even in digest mode
+ * @returns {Object} Validation result with protocolMode, full_loaded, full_files_loaded
  */
 export async function validatePostCompactionGate(currentPhase, ctx = {}) {
+  const protocolMode = getProtocolMode();
+  const coreRequirements = getCoreProtocolRequirements();
+  const phaseFiles = getPhaseProtocolFiles();
+
   console.log('\n📚 GATE: Post-Compaction Protocol Enforcement');
   console.log('-'.repeat(50));
   console.log(`   Current Phase: ${currentPhase || 'unknown'}`);
+  console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
+
+  // Track if FULL files were loaded on-demand
+  let fullLoaded = false;
+  const fullFilesLoaded = [];
 
   // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
   await waitForSyncMarker();
@@ -527,17 +680,35 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
       score: 100,
       max_score: 100,
       issues: [],
-      warnings: ['No compaction events in session - post-compaction gate not enforced']
+      warnings: ['No compaction events in session - post-compaction gate not enforced'],
+      protocolMode,
+      full_loaded: false,
+      full_files_loaded: []
     };
   }
 
   console.log(`   Last compaction: ${lastCompaction}`);
   console.log(`   Compaction count: ${state.protocolGate?.compactionCount || 0}`);
 
-  // Determine required files
-  const requiredFiles = [...CORE_PROTOCOL_REQUIREMENTS.POST_COMPACTION];
-  if (currentPhase && PHASE_PROTOCOL_FILES[currentPhase]) {
-    requiredFiles.push(PHASE_PROTOCOL_FILES[currentPhase]);
+  // Determine required files based on protocol mode
+  const requiredFiles = [...coreRequirements.POST_COMPACTION];
+  if (currentPhase && phaseFiles[currentPhase]) {
+    requiredFiles.push(phaseFiles[currentPhase]);
+  }
+
+  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: On-demand FULL loading
+  if (ctx.needs_full_protocol && protocolMode === 'digest') {
+    console.log('   ⚡ On-demand FULL loading triggered');
+
+    for (const digestFile of [...requiredFiles]) {
+      const fullFile = getFullFilename(digestFile);
+      if (!requiredFiles.includes(fullFile)) {
+        requiredFiles.push(fullFile);
+        fullFilesLoaded.push(fullFile);
+        fullLoaded = true;
+        console.log(`   + Adding FULL file: ${fullFile}`);
+      }
+    }
   }
 
   const issues = [];
@@ -569,6 +740,7 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
       lastCompaction,
       requiredFiles,
       issues,
+      protocolMode,
       timestamp: new Date().toISOString()
     });
 
@@ -577,7 +749,10 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
       score: 0,
       max_score: 100,
       issues,
-      warnings
+      warnings,
+      protocolMode,
+      full_loaded: fullLoaded,
+      full_files_loaded: fullFilesLoaded
     };
   }
 
@@ -590,6 +765,9 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
     currentPhase,
     lastCompaction,
     requiredFiles,
+    protocolMode,
+    fullLoaded,
+    fullFilesLoaded,
     timestamp: new Date().toISOString()
   });
 
@@ -598,7 +776,10 @@ export async function validatePostCompactionGate(currentPhase, ctx = {}) {
     score: 100,
     max_score: 100,
     issues: [],
-    warnings
+    warnings,
+    protocolMode,
+    full_loaded: fullLoaded,
+    full_files_loaded: fullFilesLoaded
   };
 }
 
@@ -665,19 +846,47 @@ export function createPostCompactionGate(currentPhase) {
  * Validate Session Start Gate - enforces CLAUDE_CORE.md at session initialization
  * This gate runs BEFORE any SD work, at the earliest point of LEO session initialization.
  *
+ * SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Added DIGEST mode support
+ *
  * @param {string} sessionId - Session identifier
  * @param {Object} ctx - Validation context
- * @returns {Object} Validation result
+ * @param {boolean} ctx.needs_full_protocol - If true, load FULL files even in digest mode
+ * @returns {Object} Validation result with protocolMode, full_loaded, full_files_loaded
  */
 export async function validateSessionStartGate(sessionId, ctx = {}) {
+  const protocolMode = getProtocolMode();
+  const coreRequirements = getCoreProtocolRequirements();
+
   console.log('\n📚 GATE: Session Start Protocol Enforcement');
   console.log('-'.repeat(50));
   console.log(`   Session: ${sessionId || 'unknown'}`);
+  console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
+
+  // Track if FULL files were loaded on-demand
+  let fullLoaded = false;
+  const fullFilesLoaded = [];
 
   // PAT-ASYNC-RACE-001: Wait for sync marker before reading state
   const markerResult = await waitForSyncMarker();
 
-  const requiredFiles = CORE_PROTOCOL_REQUIREMENTS.SESSION_START;
+  // Start with core requirements for current mode
+  const requiredFiles = [...coreRequirements.SESSION_START];
+
+  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: On-demand FULL loading
+  if (ctx.needs_full_protocol && protocolMode === 'digest') {
+    console.log('   ⚡ On-demand FULL loading triggered');
+
+    for (const digestFile of [...requiredFiles]) {
+      const fullFile = getFullFilename(digestFile);
+      if (!requiredFiles.includes(fullFile)) {
+        requiredFiles.push(fullFile);
+        fullFilesLoaded.push(fullFile);
+        fullLoaded = true;
+        console.log(`   + Adding FULL file: ${fullFile}`);
+      }
+    }
+  }
+
   const issues = [];
   const warnings = [];
 
@@ -703,7 +912,7 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
   if (issues.length > 0) {
     console.log('');
     console.log('   📚 REMEDIATION:');
-    console.log('   The LEO Protocol requires reading CLAUDE_CORE.md at session start.');
+    console.log('   The LEO Protocol requires reading protocol files at session start.');
     console.log('');
     console.log('   ACTION REQUIRED:');
     requiredFiles.forEach(f => console.log(`   1. Read the file: ${f}`));
@@ -715,6 +924,7 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
       sessionId,
       requiredFiles,
       issues,
+      protocolMode,
       timestamp: new Date().toISOString()
     });
 
@@ -727,7 +937,10 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
       errorCode: 'PROTOCOL_GATE_BLOCKED',
       gateName: 'SESSION_START',
       requiredArtifacts: requiredFiles,
-      remediation: 'Read CLAUDE.md and CLAUDE_CORE.md using the Read tool before proceeding with LEO session initialization.'
+      remediation: `Read ${requiredFiles.join(' and ')} using the Read tool before proceeding with LEO session initialization.`,
+      protocolMode,
+      full_loaded: fullLoaded,
+      full_files_loaded: fullFilesLoaded
     };
   }
 
@@ -744,6 +957,7 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
   }
   state.protocolGate.sessionId = sessionId;
   state.protocolGate.sessionStartValidatedAt = new Date().toISOString();
+  state.protocolGate.protocolMode = protocolMode;
   writeSessionState(state);
 
   // PAT-ASYNC-RACE-001: Clear sync marker after successful validation
@@ -754,6 +968,9 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
     status: 'PASS',
     sessionId,
     requiredFiles,
+    protocolMode,
+    fullLoaded,
+    fullFilesLoaded,
     timestamp: new Date().toISOString()
   });
 
@@ -764,7 +981,10 @@ export async function validateSessionStartGate(sessionId, ctx = {}) {
     score: 100,
     max_score: 100,
     issues: [],
-    warnings
+    warnings,
+    protocolMode,
+    full_loaded: fullLoaded,
+    full_files_loaded: fullFilesLoaded
   };
 }
 
@@ -794,17 +1014,40 @@ function emitStructuredLog(logEntry) {
 }
 
 export default {
+  // Recording functions
   recordProtocolFileRead,
   recordCompactionEvent,
   checkFileNeedsRead,
+
+  // Validation gates
   validateSdStartGate,
   validatePostCompactionGate,
   validateSessionStartGate,
   getProtocolGateState,
+
+  // Gate factories
   createSdStartGate,
   createPostCompactionGate,
   createSessionStartGate,
+
+  // Mode helpers (SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001)
+  getProtocolMode,
+  getProtocolFilename,
+  getFullFilename,
+  getCoreProtocolRequirements,
+  getPhaseProtocolFiles,
+  getHandoffPhaseFiles,
+
+  // Legacy exports (backward compatibility)
   CORE_PROTOCOL_REQUIREMENTS,
   PHASE_PROTOCOL_FILES,
-  HANDOFF_PHASE_FILES
+  HANDOFF_PHASE_FILES,
+
+  // Mode-specific constants
+  CORE_PROTOCOL_REQUIREMENTS_FULL,
+  CORE_PROTOCOL_REQUIREMENTS_DIGEST,
+  PHASE_PROTOCOL_FILES_FULL,
+  PHASE_PROTOCOL_FILES_DIGEST,
+  HANDOFF_PHASE_FILES_FULL,
+  HANDOFF_PHASE_FILES_DIGEST
 };

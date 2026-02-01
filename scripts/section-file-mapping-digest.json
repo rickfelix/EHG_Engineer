@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "description": "DIGEST version mapping - includes only essential enforcement sections",
+    "purpose": "Rules, boundaries, gates, anti-patterns, sub-agent triggers",
+    "excludes": "Deep reference material, verbose examples, detailed procedures",
+    "token_budget": "All DIGEST files combined must be <25k tokens",
+    "version": "1.0.0"
+  },
+  "CLAUDE_DIGEST.md": {
+    "description": "Minimal router file (~2-3k chars) - loading strategy and essential triggers",
+    "sections": [
+      "smart_router",
+      "session_prologue"
+    ]
+  },
+  "CLAUDE_CORE_DIGEST.md": {
+    "description": "Essential workflow context (~8-10k chars) - non-negotiable rules and constraints",
+    "sections": [
+      "mandatory_phase_transitions",
+      "negative_constraints_global",
+      "execution_philosophy",
+      "critical_term_definitions",
+      "sd_type_workflow_paths",
+      "sub_agent_config",
+      "mandatory_agent_invocation"
+    ]
+  },
+  "CLAUDE_LEAD_DIGEST.md": {
+    "description": "LEAD phase essentials (~3-4k chars) - approval gates and validation requirements",
+    "sections": [
+      "mandatory_phase_transitions_lead",
+      "simplicity_first_enforcement",
+      "lead_pre_approval_simplicity_gate",
+      "sd_evaluation"
+    ]
+  },
+  "CLAUDE_PLAN_DIGEST.md": {
+    "description": "PLAN phase essentials (~4-5k chars) - PRD requirements and validation gates",
+    "sections": [
+      "mandatory_phase_transitions_plan",
+      "prd_creation_anti_pattern",
+      "plan_pre_exec_checklist",
+      "handoff_quality_gates",
+      "negative_constraints_plan"
+    ]
+  },
+  "CLAUDE_EXEC_DIGEST.md": {
+    "description": "EXEC phase essentials (~4-5k chars) - implementation requirements and constraints",
+    "sections": [
+      "mandatory_phase_transitions_exec",
+      "exec_implementation_requirements",
+      "exec_dual_test_requirement",
+      "branch_hygiene_gate",
+      "negative_constraints_exec",
+      "migration_execution_delegation"
+    ]
+  }
+}
