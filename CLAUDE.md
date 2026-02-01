@@ -512,7 +512,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-01 11:01:12 PM
+**Last Generated**: 2026-02-01 6:54:42 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -585,6 +585,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 | Issue | Load |
 |-------|------|
 | Database/schema/RLS errors | docs/reference/database-agent-patterns.md |
+| Migration execution | docs/reference/database-agent-patterns.md |
 | Validation failures | docs/reference/validation-enforcement.md |
 | Test/E2E issues | docs/reference/qa-director-guide.md |
 | Context >70% | docs/reference/context-monitoring.md |
@@ -603,7 +604,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 | `ANALYTICS` | analytics tracking, conversion tracking, funnel analysis, google analytics, kpi dashboard, metrics dashboard, mixpanel, user analytics, AARRR, KPI (+24 more) |
 | `API` | add endpoint, api design, api endpoint, api route, backend route, create endpoint, graphql api, openapi, rest api, swagger (+37 more) |
 | `CRM` | contact management, crm system, customer relationship, hubspot setup, lead tracking, salesforce integration, CRM, HubSpot, Salesforce, account (+14 more) |
-| `DATABASE` | EXEC_IMPLEMENTATION_COMPLETE, add column, alter table, create table, data model, database migration, database schema, db migration, erd, foreign key (+79 more) |
+| `DATABASE` | EXEC_IMPLEMENTATION_COMPLETE, add column, alter table, apply migration, apply schema changes, apply the migration, create table, data model, database migration, database schema (+84 more) |
 | `DEPENDENCY` | dependency update, dependency vulnerability, npm audit, npm install, outdated packages, package update, pnpm add, security advisory, yarn add, CVE (+29 more) |
 | `DESIGN` | a11y, accessibility, component design, dark mode, design system, mobile layout, responsive design, shadcn, ui design, ux design (+67 more) |
 | `DOCMON` | DAILY_DOCMON_CHECK, EXEC_COMPLETION, EXEC_IMPLEMENTATION, FILE_CREATED, HANDOFF_ACCEPTED, HANDOFF_CREATED, LEAD_APPROVAL, LEAD_HANDOFF_CREATION, LEAD_SD_CREATION, PHASE_TRANSITION (+30 more) |

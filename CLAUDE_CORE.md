@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-01 11:01:12 PM
+**Generated**: 2026-02-01 6:54:42 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -181,6 +181,49 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## Claude Code Plan Mode Integration
+
+**Status**: ACTIVE | **Version**: 1.0.0
+
+### Overview
+Claude Code's Plan Mode integrates with LEO Protocol to provide:
+- **Automatic Permission Bundling** - Reduces prompts by 70-80%
+- **Intelligent Plan Generation** - SD-type aware action plans
+- **Phase Transition Automation** - Activates at phase boundaries
+
+### SD Type Profiles
+| SD Type | Workflow | Sub-Agents | PR Size Target |
+|---------|----------|------------|----------------|
+| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
+| `enhancement` | standard | VALIDATION | 75 (max 200) |
+| `bug` | fast | RCA | 50 (max 100) |
+| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
+| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
+| `security` | careful | SECURITY, RISK | 50 (max 150) |
+| `documentation` | light | DOCMON | no limit |
+
+### Permission Bundling by Phase
+| Phase | Pre-approved Actions |
+|-------|---------------------|
+| LEAD | SD queue commands, handoff scripts, git status |
+| PLAN | PRD generation, sub-agent orchestration, git branches |
+| EXEC | Tests, builds, git commit/push, handoff scripts |
+| VERIFY | Verification scripts, handoff scripts |
+| FINAL | Merge operations, archive commands |
+
+### Automatic Activation
+- **Session start**: If SD detected on current branch
+- **Phase boundaries**: Before each handoff execution
+
+### Configuration
+```json
+// .claude/leo-plan-mode-config.json
+{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
+```
+
+### Module Location
+`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
+
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -253,49 +296,6 @@ This is faster than sequential exploration and provides comprehensive coverage.
 2. Invoke required agent(s) BEFORE making changes
 3. Agent findings inform implementation
 4. Re-run agent AFTER changes to verify fixes
-
-## Claude Code Plan Mode Integration
-
-**Status**: ACTIVE | **Version**: 1.0.0
-
-### Overview
-Claude Code's Plan Mode integrates with LEO Protocol to provide:
-- **Automatic Permission Bundling** - Reduces prompts by 70-80%
-- **Intelligent Plan Generation** - SD-type aware action plans
-- **Phase Transition Automation** - Activates at phase boundaries
-
-### SD Type Profiles
-| SD Type | Workflow | Sub-Agents | PR Size Target |
-|---------|----------|------------|----------------|
-| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
-| `enhancement` | standard | VALIDATION | 75 (max 200) |
-| `bug` | fast | RCA | 50 (max 100) |
-| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
-| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
-| `security` | careful | SECURITY, RISK | 50 (max 150) |
-| `documentation` | light | DOCMON | no limit |
-
-### Permission Bundling by Phase
-| Phase | Pre-approved Actions |
-|-------|---------------------|
-| LEAD | SD queue commands, handoff scripts, git status |
-| PLAN | PRD generation, sub-agent orchestration, git branches |
-| EXEC | Tests, builds, git commit/push, handoff scripts |
-| VERIFY | Verification scripts, handoff scripts |
-| FINAL | Merge operations, archive commands |
-
-### Automatic Activation
-- **Session start**: If SD detected on current branch
-- **Phase boundaries**: Before each handoff execution
-
-### Configuration
-```json
-// .claude/leo-plan-mode-config.json
-{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
-```
-
-### Module Location
-`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
 ## Work Tracking Policy
 
@@ -555,6 +555,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -587,38 +619,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1551,6 +1551,11 @@ MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triag
 
 **Trigger Keywords**: `5 whys`, `causal analysis`, `ci_pipeline_failure`, `fault tree`, `fishbone`, `five whys`, `get to the bottom`, `handoff_rejection`, `ishikawa`, `keeps happening`, `pattern detected`, `pattern_recurrence`, `performance_regression`, `quality_degradation`, `quality_gate_critical`, `recurring issue`, `root cause`, `root-cause`, `source of the issue`, `source of the problem`, `sub_agent_blocked`, `sub_agent_fail`, `test_regression`, `what caused this`, `why is this happening`, `debug`, `debugging`, `diagnose`, `diagnose defect`, `diagnostic`, `dig deeper`, `dig into`, `figure out why`, `find out why`, `find the cause`, `investigate`, `investigation`, `rca`, `trace`, `tracing`, `track down`, `understand why`, `what went wrong`
 
+#### Regression Validator Sub-Agent (`REGRESSION`)
+Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
+
+**Trigger Keywords**: `api signature`, `backward compatible`, `backwards compatible`, `before and after`, `breaking change`, `no behavior change`, `refactor safely`, `regression test`, `DRY violation`, `backward`, `backward compatibility`, `backwards`, `breaking`, `code smell`, `consolidate`, `extract component`, `extract function`, `extract method`, `interface`, `interface change`, `maintain`, `migration`, `move file`, `no functional change`, `preserve`, `public api`, `refactor`, `refactoring`, `regression`, `rename`, `reorganize`, `restructure`, `split file`, `technical debt`
+
 #### Information Architecture Lead (`DOCMON`)
 ## Information Architecture Lead v3.0.0 - Database-First Enforcement Edition
 
@@ -1558,10 +1563,12 @@ MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triag
 
 **Trigger Keywords**: `DAILY_DOCMON_CHECK`, `EXEC_COMPLETION`, `EXEC_IMPLEMENTATION`, `FILE_CREATED`, `HANDOFF_ACCEPTED`, `HANDOFF_CREATED`, `LEAD_APPROVAL`, `LEAD_HANDOFF_CREATION`, `LEAD_SD_CREATION`, `PHASE_TRANSITION`, `PLAN_PRD_GENERATION`, `PLAN_VERIFICATION`, `RETRO_GENERATED`, `VIOLATION_DETECTED`, `add documentation`, `api documentation`, `document this`, `jsdoc`, `missing docs`, `readme update`, `tsdoc`, `update documentation`, `comment`, `comments`, `describe`, `docs`, `document`, `documentation`, `explain`, `guide`, `howto`, `readme`, `tutorial`
 
-#### Regression Validator Sub-Agent (`REGRESSION`)
-Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
+#### UAT Test Executor (`UAT`)
+Interactive UAT test execution guide for manual testing workflows.
 
-**Trigger Keywords**: `api signature`, `backward compatible`, `backwards compatible`, `before and after`, `breaking change`, `no behavior change`, `refactor safely`, `regression test`, `DRY violation`, `backward`, `backward compatibility`, `backwards`, `breaking`, `code smell`, `consolidate`, `extract component`, `extract function`, `extract method`, `interface`, `interface change`, `maintain`, `migration`, `move file`, `no functional change`, `preserve`, `public api`, `refactor`, `refactoring`, `regression`, `rename`, `reorganize`, `restructure`, `split file`, `technical debt`
+**Mission**: Guide human testers
+
+**Trigger Keywords**: `acceptance criteria`, `click through`, `happy path`, `human test`, `manual test`, `test scenario`, `uat test`, `user acceptance test`, `user journey`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`, `acceptance`, `check`, `confirm`, `demo`, `execute test`, `manual`, `run uat`, `scenario`, `start testing`, `test execution`, `uat`, `uat testing`, `use case`, `user flow`, `validate`, `verify`, `workflow`
 
 #### Chief Security Architect (`SECURITY`)
 Former NSA security architect with 25 years experience securing systems from startup to enterprise s
@@ -1575,12 +1582,19 @@ Former NSA security architect with 25 years experience securing systems from sta
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `LEAD_APPROVAL_COMPLETE`, `PLAN_VERIFICATION_PASS`, `ci pipeline`, `code review`, `create pr`, `git merge`, `git rebase`, `github actions`, `github workflow`, `merge pr`, `pull request`, `actions`, `branch`, `cd`, `ci`, `commit`, `create pull request`, `create release`, `deploy`, `deployment ci pattern`, `gh pr create`, `git`, `github`, `github deploy`, `github status`, `merge`, `pipeline`, `pr`, `pull`, `push`, `release`, `workflow`
 
-#### UAT Test Executor (`UAT`)
-Interactive UAT test execution guide for manual testing workflows.
+#### Principal Database Architect (`DATABASE`)
+## Principal Database Architect v2.0.0 - Lessons Learned Edition
 
-**Mission**: Guide human testers
+**🆕 NEW in v2.0.0**: Proactive le
 
-**Trigger Keywords**: `acceptance criteria`, `click through`, `happy path`, `human test`, `manual test`, `test scenario`, `uat test`, `user acceptance test`, `user journey`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`, `acceptance`, `check`, `confirm`, `demo`, `execute test`, `manual`, `run uat`, `scenario`, `start testing`, `test execution`, `uat`, `uat testing`, `use case`, `user flow`, `validate`, `verify`, `workflow`
+**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add column`, `alter table`, `apply migration`, `apply schema changes`, `apply the migration`, `create table`, `data model`, `database migration`, `database schema`, `db migration`, `erd`, `execute migration`, `execute the migration`, `foreign key`, `postgres schema`, `primary key`, `rls policy`, `row level security`, `run migration`, `run the migration`, `supabase migration`, `add this column`, `add this to the database`, `alter the table`, `apply this migration`, `can you execute`, `can you run`, `column`, `constraint`, `create the table`, `database`, `database agent should run`, `database query`, `delete from the table`, `drop the table`, `embedding`, `execute it`, `execute the following`, `execute the query`, `execute this sql`, `fetch from database`, `fix this in the database`, `go ahead and run`, `have the database agent`, `index`, `insert into`, `insert this into`, `make this change in the database`, `migrate`, `migration`, `modify the schema`, `pgvector`, `please execute`, `please run`, `postgres`, `postgresql`, `query`, `rls`, `run it`, `run that migration`, `run the following`, `run the query`, `run this migration`, `run this sql`, `schema`, `seed`, `seeding`, `select from`, `sql`, `supabase`, `table`, `update the database`, `update the table`, `update this in supabase`, `use database sub-agent`, `use the database sub-agent`, `vector`, `yes, execute`, `yes, run it`
+
+#### Performance Engineering Lead (`PERFORMANCE`)
+Performance engineering lead with 20+ years optimizing high-scale systems.
+
+**Mission**: Identify pe
+
+**Trigger Keywords**: `bottleneck`, `cpu usage`, `load time`, `memory leak`, `n+1 query`, `performance issue`, `performance optimization`, `response time`, `slow query`, `speed optimization`, `takes forever`, `too slow`, `cache`, `caching`, `fast`, `faster`, `latency`, `memoize`, `optimization`, `optimize`, `performance`, `profile`, `redis`, `slow`, `speed`, `throughput`
 
 #### Launch Orchestration Sub-Agent (`LAUNCH`)
 Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
@@ -1601,20 +1615,6 @@ Handles production launch orchestration, go-live checklists, launch readiness, a
 
 **Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `action items`, `continuous improvement`, `learn from this`, `lessons learned`, `post-mortem`, `postmortem`, `retrospective`, `sprint retrospective`, `what did we learn`, `what went well`, `what went wrong`, `EXEC_QUALITY_ISSUE`, `EXEC_SPRINT_COMPLETE`, `HANDOFF_DELAY`, `HANDOFF_REJECTED`, `LEAD_PRE_APPROVAL_REVIEW`, `PATTERN_DETECTED`, `PHASE_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `SD_STATUS_BLOCKED`, `SD_STATUS_COMPLETED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `anti-pattern`, `capture this insight`, `capture this lesson`, `feedback`, `improve`, `improvement`, `insight`, `intelligent plan`, `learning`, `lesson`, `lesson learned`, `pattern`, `permission bundling`, `phase transition`, `plan file generation`, `plan mode`, `plan mode integration`, `reflect`, `remember this`, `retro`, `review`, `sd type profile`, `takeaway`, `workflow intensity`
 
-#### Principal Database Architect (`DATABASE`)
-## Principal Database Architect v2.0.0 - Lessons Learned Edition
-
-**🆕 NEW in v2.0.0**: Proactive le
-
-**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add column`, `alter table`, `create table`, `data model`, `database migration`, `database schema`, `db migration`, `erd`, `foreign key`, `postgres schema`, `primary key`, `rls policy`, `row level security`, `supabase migration`, `add this column`, `add this to the database`, `alter the table`, `apply the migration`, `apply this migration`, `can you execute`, `can you run`, `column`, `constraint`, `create the table`, `database`, `database agent should run`, `database query`, `delete from the table`, `drop the table`, `embedding`, `execute it`, `execute the following`, `execute the migration`, `execute the query`, `execute this sql`, `fetch from database`, `fix this in the database`, `go ahead and run`, `have the database agent`, `index`, `insert into`, `insert this into`, `make this change in the database`, `migrate`, `migration`, `modify the schema`, `pgvector`, `please execute`, `please run`, `postgres`, `postgresql`, `query`, `rls`, `run it`, `run that migration`, `run the following`, `run the query`, `run this migration`, `run this sql`, `schema`, `seed`, `seeding`, `select from`, `sql`, `supabase`, `table`, `update the database`, `update the table`, `update this in supabase`, `use database sub-agent`, `use the database sub-agent`, `vector`, `yes, execute`, `yes, run it`
-
-#### Performance Engineering Lead (`PERFORMANCE`)
-Performance engineering lead with 20+ years optimizing high-scale systems.
-
-**Mission**: Identify pe
-
-**Trigger Keywords**: `bottleneck`, `cpu usage`, `load time`, `memory leak`, `n+1 query`, `performance issue`, `performance optimization`, `response time`, `slow query`, `speed optimization`, `takes forever`, `too slow`, `cache`, `caching`, `fast`, `faster`, `latency`, `memoize`, `optimization`, `optimize`, `performance`, `profile`, `redis`, `slow`, `speed`, `throughput`
-
 #### Monitoring Sub-Agent (`MONITORING`)
 Handles monitoring setup, alerting, SLA definition, health checks, and incident response.
 
@@ -1625,19 +1625,19 @@ Handles financial projections, P&L modeling, cash flow analysis, business model 
 
 **Trigger Keywords**: `burn rate`, `cash flow analysis`, `financial model`, `p&l statement`, `profit and loss`, `revenue projection`, `runway calculation`, `EBITDA`, `P&L`, `break even`, `budget`, `burn`, `cash flow`, `cost`, `ebitda`, `finance`, `financial`, `forecast`, `gross margin`, `margin`, `profit`, `projection`, `revenue`, `runway`
 
-#### Risk Assessment Sub-Agent (`RISK`)
-## Risk Assessment Sub-Agent v1.0.0
-
-**BMAD Enhancement**: Multi-domain risk assessment for Strategi
-
-**Trigger Keywords**: `architecture decision`, `high risk`, `pros and cons`, `risk analysis`, `risk assessment`, `risk mitigation`, `security risk`, `system design`, `tradeoff analysis`, `LEAD_PRE_APPROVAL`, `PLAN_PRD`, `a11y`, `access control`, `accessibility`, `advanced`, `alter`, `api`, `architecture`, `authentication`, `authorization`, `aws`, `bulk`, `cache`, `complex`, `complexity`, `component`, `constraint`, `contingency`, `create table`, `credential`, `dangerous`, `dashboard`, `database`, `decision`, `decrypt`, `design`, `encrypt`, `external`, `foreign key`, `integration`, `interface`, `large dataset`, `latency`, `microservice`, `migration`, `mitigation`, `mobile`, `openai`, `optimization`, `overhaul`, `performance`, `permission`, `postgres`, `real-time`, `redesign`, `refactor`, `responsive`, `restructure`, `risk`, `risky`, `rls`, `scalability`, `schema`, `security`, `sensitive`, `slow`, `sophisticated`, `sql`, `stripe`, `table`, `third-party`, `threat`, `tradeoff`, `twilio`, `ui`, `ux`, `webhook`, `websocket`
-
 #### Principal Systems Analyst (`VALIDATION`)
 ## Principal Systems Analyst v3.0.0 - Retrospective-Informed Edition
 
 **🆕 NEW in v3.0.0**: 6 critic
 
 **Trigger Keywords**: `already exists`, `already implemented`, `before i build`, `check if exists`, `codebase search`, `duplicate check`, `existing implementation`, `codebase`, `codebase check`, `conflict`, `duplicate`, `exist`, `existing`, `overlap`, `redundant`, `search`, `validate`, `validation`, `verify`
+
+#### Risk Assessment Sub-Agent (`RISK`)
+## Risk Assessment Sub-Agent v1.0.0
+
+**BMAD Enhancement**: Multi-domain risk assessment for Strategi
+
+**Trigger Keywords**: `architecture decision`, `high risk`, `pros and cons`, `risk analysis`, `risk assessment`, `risk mitigation`, `security risk`, `system design`, `tradeoff analysis`, `LEAD_PRE_APPROVAL`, `PLAN_PRD`, `a11y`, `access control`, `accessibility`, `advanced`, `alter`, `api`, `architecture`, `authentication`, `authorization`, `aws`, `bulk`, `cache`, `complex`, `complexity`, `component`, `constraint`, `contingency`, `create table`, `credential`, `dangerous`, `dashboard`, `database`, `decision`, `decrypt`, `design`, `encrypt`, `external`, `foreign key`, `integration`, `interface`, `large dataset`, `latency`, `microservice`, `migration`, `mitigation`, `mobile`, `openai`, `optimization`, `overhaul`, `performance`, `permission`, `postgres`, `real-time`, `redesign`, `refactor`, `responsive`, `restructure`, `risk`, `risky`, `rls`, `scalability`, `schema`, `security`, `sensitive`, `slow`, `sophisticated`, `sql`, `stripe`, `table`, `third-party`, `threat`, `tradeoff`, `twilio`, `ui`, `ux`, `webhook`, `websocket`
 
 #### API Architecture Sub-Agent (`API`)
 ## API Sub-Agent v1.0.0
