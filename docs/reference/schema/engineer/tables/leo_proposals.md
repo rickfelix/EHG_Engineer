@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T23:29:30.049Z
+**Generated**: 2026-02-01T23:52:12.478Z
 **Rows**: 1
 **RLS**: Enabled (4 policies)
 
@@ -107,6 +107,11 @@
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_log_proposal_transition()`
+
+### trg_record_mtti_on_proposal
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION record_mtti_on_proposal_creation()`
 
 ### trg_update_proposal_timestamp
 
