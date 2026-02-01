@@ -3,11 +3,11 @@
 
 ## Metadata
 - **Category**: Guide
-- **Status**: Draft
-- **Version**: 1.0.0
+- **Status**: Approved
+- **Version**: 3.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-24
-- **Tags**: database, testing, migration, schema
+- **Last Updated**: 2026-02-01
+- **Tags**: database, testing, migration, schema, retrospective, future-enhancements
 
 **SD-REFACTOR-RETRO-001: Retrospective Sub-Agent Modularization**
 **Updated: SD-LEO-INFRA-ENHANCE-RETRO-SUB-001 (2026-01-24): Enhanced quality and specificity**
@@ -753,11 +753,205 @@ const RETRO_CONFIG = {
 
 ---
 
+## 8. Future Enhancements Capture (QF-20260201-963/371)
+
+### Problem Statement
+
+During SD implementation, teams often identify future enhancement opportunities that could improve the system but are out of scope for the current SD. Previously, these valuable insights were:
+- Lost because `/learn` only captures "what happened" (retrospective), not "what could be better" (future work)
+- Mentioned in conversation but not tracked in any database
+- Not visible in `/inbox` for triage and prioritization
+
+### Solution: Dual-Storage Approach
+
+**QF-20260201-963** and **QF-20260201-371** implement a dual-storage system for future enhancements:
+
+1. **Historical Record** (`retrospectives.future_enhancements` JSONB field)
+   - Captures enhancements discovered during SD completion
+   - Preserves context: what SD discovered them, when, why
+   - Used for retrospective analysis and pattern detection
+
+2. **Actionable Inbox** (`feedback` table)
+   - Inserts each future enhancement as a feedback item
+   - Appears in `/inbox` command for triage
+   - Can be converted to backlog items or future SDs
+   - Status progression: `new` → `backlog` → `resolved`
+
+### Implementation Details
+
+#### Database Schema (Migration 20260201_add_future_enhancements_to_retrospectives.sql)
+
+```sql
+-- Add future_enhancements column to retrospectives table
+ALTER TABLE retrospectives
+ADD COLUMN IF NOT EXISTS future_enhancements JSONB DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN retrospectives.future_enhancements IS
+'Array of future enhancement opportunities identified during SD implementation.
+Each entry: {
+  enhancement: string (what could be improved),
+  current_approach: string (how it works now),
+  proposed_approach: string (how it could work better),
+  impact: string (expected improvement),
+  effort: string (low/medium/high),
+  component: string (affected file/module),
+  source_sd_id: string (SD where this was discovered)
+}';
+
+-- Create index for searching enhancements
+CREATE INDEX IF NOT EXISTS idx_retrospectives_future_enhancements
+ON retrospectives USING gin (future_enhancements);
+```
+
+#### Extraction Logic (lib/sub-agents/retro/generators.js)
+
+```javascript
+/**
+ * Quick-fix QF-20260201-963: Extract future enhancement opportunities
+ * Captures improvement ideas from SD metadata that would otherwise be lost.
+ */
+function extractFutureEnhancements(sdData, prdData, subAgentResults) {
+  const enhancements = [];
+  const sdKey = sdData.sd_key || sdData.id?.substring(0, 8);
+
+  // Primary source: SD metadata.future_enhancements (set during implementation)
+  if (sdData.metadata?.future_enhancements) {
+    const noted = sdData.metadata.future_enhancements;
+    if (Array.isArray(noted)) {
+      enhancements.push(...noted.map(e => ({ ...e, source_sd_id: sdKey })));
+    }
+  }
+
+  // Secondary: PRD items marked as future/nice-to-have
+  if (prdData.found && prdData.prd?.non_functional_requirements) {
+    const nfrs = prdData.prd.non_functional_requirements;
+    for (const nfr of nfrs) {
+      const text = typeof nfr === 'string' ? nfr : (nfr.description || '');
+      if (text.toLowerCase().includes('future') || nfr.priority === 'future') {
+        enhancements.push({ enhancement: text, source_sd_id: sdKey, captured_from: 'prd_nfr' });
+      }
+    }
+  }
+
+  return enhancements;
+}
+```
+
+**Called from** `generateRetrospective()` at line 107:
+```javascript
+future_enhancements: extractFutureEnhancements(sdData, prdData, subAgentResults),
+```
+
+#### Feedback Insertion (QF-20260201-371: lib/sub-agents/retro/db-operations.js)
+
+```javascript
+/**
+ * Quick-fix QF-20260201-371: Insert future enhancements into feedback table
+ * Makes them visible in /inbox for triage and actionable follow-up.
+ */
+export async function insertFeedbackForFutureEnhancements(supabase, enhancements, sdId, retroId) {
+  if (!enhancements || enhancements.length === 0) return { inserted: 0 };
+
+  const records = enhancements.map(e => ({
+    type: 'enhancement',
+    source_application: 'engineer',
+    source_type: 'retrospective',
+    source_id: retroId,
+    title: e.enhancement?.substring(0, 200) || 'Future enhancement opportunity',
+    description: JSON.stringify({ ...e, captured_from_retro: retroId }),
+    status: 'new',
+    priority: e.effort === 'low' ? 'high' : 'medium',
+    sd_id: sdId
+  }));
+
+  const { error } = await supabase.from('feedback').insert(records);
+  if (error) {
+    console.log(`   ⚠️ Failed to insert feedback: ${error.message}`);
+    return { inserted: 0, error: error.message };
+  }
+  console.log(`   ✅ Inserted ${records.length} future enhancement(s) into feedback inbox`);
+  return { inserted: records.length };
+}
+```
+
+**Called from** `index.js:execute()` after retrospective storage:
+```javascript
+// Quick-fix QF-20260201-371: Insert future enhancements into feedback inbox
+if (retrospective.future_enhancements?.length > 0) {
+  await insertFeedbackForFutureEnhancements(supabase, retrospective.future_enhancements, sdId, stored.id);
+}
+```
+
+### Usage Example
+
+**During SD Implementation**:
+```javascript
+// In SD metadata, note future enhancement
+await supabase
+  .from('strategic_directives_v2')
+  .update({
+    metadata: {
+      ...existingMetadata,
+      future_enhancements: [
+        {
+          enhancement: "Add semantic embeddings for conflict detection",
+          current_approach: "String-based pattern matching for debate topics",
+          proposed_approach: "Use OpenAI embeddings to detect conceptual conflicts",
+          impact: "Reduce false positives in JUDGE sub-agent conflict detection",
+          effort: "medium",
+          component: "lib/sub-agents/judge/index.js",
+          source_sd_id: "SD-LEO-SELF-IMPROVE-001K-JUDGE-IMPL"
+        }
+      ]
+    }
+  })
+  .eq('id', sdId);
+```
+
+**After /learn Command**:
+1. RETRO sub-agent generates retrospective
+2. Extracts future enhancements from SD metadata
+3. Stores in `retrospectives.future_enhancements` (historical)
+4. Inserts into `feedback` table (actionable)
+5. Appears in `/inbox` for user review
+
+### Workflow Integration
+
+```
+SD Implementation
+      ↓
+Discover Enhancement Opportunity
+      ↓
+Note in SD metadata.future_enhancements
+      ↓
+Run /learn (RETRO sub-agent)
+      ↓
+Extract & Store in retrospectives.future_enhancements
+      ↓
+Insert into feedback table (type: 'enhancement', status: 'new')
+      ↓
+Run /inbox → See enhancement for triage
+      ↓
+Convert to backlog item or future SD
+```
+
+### Benefits
+
+1. **No Lost Insights**: Future enhancements discovered in-flight are captured
+2. **Actionable**: Appears in `/inbox` alongside other feedback items
+3. **Contextual**: Links back to source SD and retrospective
+4. **Searchable**: GIN index on JSONB field enables semantic search
+5. **Triageable**: Status progression from `new` to `backlog` to `resolved`
+
+---
+
 ## Related Documentation
 
 - [Sub-Agent Patterns Guide](../../reference/agent-patterns-guide.md) - Base patterns
 - [Governance Library Guide](../../reference/governance-library-guide.md) - Exception handling
 - [Design Sub-Agent Guide](./design-sub-agent-guide.md) - DESIGN patterns
+- [Feedback Table Schema](../../reference/schema/engineer/tables/feedback.md) - Feedback structure
+- [Retrospectives Table Schema](../../reference/schema/engineer/tables/retrospectives.md) - Retrospective structure
 
 ---
 
@@ -765,10 +959,11 @@ const RETRO_CONFIG = {
 
 | Version | SD | Date | Changes |
 |---------|-----|------|---------|
+| 3.1.0 | QF-20260201-963/371 | 2026-02-01 | Future enhancements capture (Section 8: dual-storage approach, feedback table insertion) |
 | 3.0.0 | SD-LEO-INFRA-ENHANCE-RETRO-SUB-001 | 2026-01-24 | Enhanced quality and specificity (FR-1: 37 boilerplate patterns, FR-2: 5-Whys validation, FR-3: success_metrics integration) |
 | 2.0.0 | SD-LEO-REFAC-TESTING-INFRA-001 | 2026-01-23 | Quality improvements (SMART action items, SD-specific insights) |
 | 1.0.0 | SD-REFACTOR-RETRO-001 | 2025-XX-XX | Initial modularization |
 
 ---
 
-*Last Updated: 2026-01-24 | LEO Protocol v4.3.3*
+*Last Updated: 2026-02-01 | LEO Protocol v4.3.3*
