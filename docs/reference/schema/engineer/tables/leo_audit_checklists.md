@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T20:29:31.154Z
+**Generated**: 2026-02-01T23:29:30.049Z
 **Rows**: 10
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -48,6 +48,19 @@
   ```sql
   CREATE UNIQUE INDEX leo_audit_checklists_unique_artifact ON public.leo_audit_checklists USING btree (sd_type, checklist_version, artifact_key)
   ```
+
+## RLS Policies
+
+### 1. leo_audit_checklists_authenticated_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. leo_audit_checklists_service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

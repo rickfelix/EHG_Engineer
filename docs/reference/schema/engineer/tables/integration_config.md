@@ -1,12 +1,12 @@
-# leo_prioritization_config Table
+# integration_config Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-01T23:29:30.049Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Rows**: 2
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,53 +14,55 @@
 
 ---
 
-## Columns (8 total)
+## Columns (7 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
-| created_by | `uuid` | **NO** | - | - |
-| version | `integer(32)` | **NO** | - | - |
-| status | `text` | **NO** | `'draft'::text` | - |
-| weights | `jsonb` | **NO** | - | - |
-| constraints | `jsonb` | **NO** | - | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| config_key | `text` | **NO** | - | - |
+| config_value | `jsonb` | **NO** | `'{}'::jsonb` | - |
 | description | `text` | YES | - | - |
+| is_active | `boolean` | **NO** | `true` | - |
 
 ## Constraints
 
 ### Primary Key
-- `leo_prioritization_config_pkey`: PRIMARY KEY (id)
+- `integration_config_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `uq_leo_prioritization_config_version`: UNIQUE (version)
-
-### Check Constraints
-- `leo_prioritization_config_status_check`: CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text])))
+- `uq_integration_config_key`: UNIQUE (config_key)
 
 ## Indexes
 
-- `leo_prioritization_config_pkey`
+- `idx_integration_config_active`
   ```sql
-  CREATE UNIQUE INDEX leo_prioritization_config_pkey ON public.leo_prioritization_config USING btree (id)
+  CREATE INDEX idx_integration_config_active ON public.integration_config USING btree (is_active, config_key)
   ```
-- `uq_leo_prioritization_config_version`
+- `integration_config_pkey`
   ```sql
-  CREATE UNIQUE INDEX uq_leo_prioritization_config_version ON public.leo_prioritization_config USING btree (version)
+  CREATE UNIQUE INDEX integration_config_pkey ON public.integration_config USING btree (id)
+  ```
+- `uq_integration_config_key`
+  ```sql
+  CREATE UNIQUE INDEX uq_integration_config_key ON public.integration_config USING btree (config_key)
   ```
 
 ## RLS Policies
 
-### 1. Anon can read active configs (SELECT)
-
-- **Roles**: {public}
-- **Using**: `(status = 'active'::text)`
-
-### 2. Service role full access to leo_prioritization_config (ALL)
+### 1. Service role full access to integration_config (ALL)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'service_role'::text)`
 - **With Check**: `(auth.role() = 'service_role'::text)`
+
+## Triggers
+
+### trg_integration_config_update_timestamp
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION integration_config_update_timestamp()`
 
 ---
 

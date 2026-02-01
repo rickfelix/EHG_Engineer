@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T20:29:31.154Z
-**Tables**: 404
+**Generated**: 2026-02-01T23:29:30.049Z
+**Tables**: 406
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (404)
+## All Tables (406)
 
 ### LEO Protocol
 
@@ -34,6 +34,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_effort_policies](tables/leo_effort_policies.md)
 - [leo_error_log](tables/leo_error_log.md)
 - [leo_events](tables/leo_events.md)
+- [leo_execution_jobs](tables/leo_execution_jobs.md)
 - [leo_feature_flag_approvals](tables/leo_feature_flag_approvals.md)
 - [leo_feature_flag_audit](tables/leo_feature_flag_audit.md)
 - [leo_feature_flag_audit_log](tables/leo_feature_flag_audit_log.md)
@@ -288,6 +289,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [import_audit](tables/import_audit.md)
 - [improvement_quality_assessments](tables/improvement_quality_assessments.md)
 - [intake_submissions](tables/intake_submissions.md)
+- [integration_config](tables/integration_config.md)
 - [integrity_metrics](tables/integrity_metrics.md)
 - [intelligence_analysis](tables/intelligence_analysis.md)
 - [intelligence_patterns](tables/intelligence_patterns.md)

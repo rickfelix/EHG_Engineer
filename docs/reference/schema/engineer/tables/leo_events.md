@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T20:29:31.154Z
-**Rows**: 1
+**Generated**: 2026-02-01T23:29:30.049Z
+**Rows**: 19
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (12 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -30,6 +30,8 @@
 | severity | `text` | **NO** | `'info'::text` | - |
 | payload | `jsonb` | **NO** | `'{}'::jsonb` | - |
 | pii_level | `text` | **NO** | `'none'::text` | - |
+| processed_at | `timestamp with time zone` | YES | - | Timestamp when event was processed by data-plane pipeline. NULL = unprocessed. SD: SD-LEO-SELF-IMPROVE-001L |
+| idempotency_key | `text` | YES | - | Optional unique key for idempotent event processing. SD: SD-LEO-SELF-IMPROVE-001L |
 
 ## Constraints
 
@@ -38,7 +40,7 @@
 
 ### Check Constraints
 - `leo_events_actor_type_check`: CHECK ((actor_type = ANY (ARRAY['human'::text, 'agent'::text, 'system'::text])))
-- `leo_events_entity_type_check`: CHECK ((entity_type = ANY (ARRAY['proposal'::text, 'rubric'::text, 'prioritization_config'::text, 'audit_config'::text, 'feature_flag'::text, 'prompt'::text])))
+- `leo_events_entity_type_check`: CHECK ((entity_type = ANY (ARRAY['proposal'::text, 'rubric'::text, 'prioritization_config'::text, 'audit_config'::text, 'feature_flag'::text, 'prompt'::text, 'feedback_intake'::text, 'proposal_creation'::text, 'prioritization'::text, 'execution_enqueue'::text])))
 - `leo_events_pii_level_check`: CHECK ((pii_level = ANY (ARRAY['none'::text, 'low'::text, 'high'::text])))
 - `leo_events_severity_check`: CHECK ((severity = ANY (ARRAY['debug'::text, 'info'::text, 'warn'::text, 'error'::text])))
 
@@ -56,9 +58,21 @@
   ```sql
   CREATE INDEX idx_leo_events_entity ON public.leo_events USING btree (entity_type, entity_id, created_at DESC)
   ```
+- `idx_leo_events_idempotency_key`
+  ```sql
+  CREATE UNIQUE INDEX idx_leo_events_idempotency_key ON public.leo_events USING btree (idempotency_key) WHERE (idempotency_key IS NOT NULL)
+  ```
 - `idx_leo_events_payload`
   ```sql
   CREATE INDEX idx_leo_events_payload ON public.leo_events USING gin (payload)
+  ```
+- `idx_leo_events_processed_at`
+  ```sql
+  CREATE INDEX idx_leo_events_processed_at ON public.leo_events USING btree (processed_at DESC NULLS LAST)
+  ```
+- `idx_leo_events_unprocessed`
+  ```sql
+  CREATE INDEX idx_leo_events_unprocessed ON public.leo_events USING btree (entity_type, created_at DESC) WHERE (processed_at IS NULL)
   ```
 - `leo_events_pkey`
   ```sql
