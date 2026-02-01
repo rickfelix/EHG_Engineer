@@ -8,17 +8,32 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
+import { execSync  } from 'child_process';
 
 class LEOStatusLine {
-  constructor() {
-    this.configPath = path.join(process.cwd(), '.leo-status.json');
+  /**
+   * Create a session-specific status line manager
+   * SD-LEO-INFRA-ISL-001:US-006: Session-Specific Status Line Files
+   *
+   * @param {string|null} sessionId - Session ID from database or null for PID fallback
+   */
+  constructor(sessionId = null) {
+    // US-006: Session ID from database, env var, or PID fallback
+    this.sessionId = sessionId || process.env.CLAUDE_SESSION_ID || `pid_${process.pid}`;
+
+    // US-006: Session-specific paths in .claude/status-line/ directory
+    this.statusDir = path.join(process.cwd(), '.claude', 'status-line');
+    this.ensureStatusDir();
+
+    // Session-specific file paths (prevents multi-session collisions)
+    this.configPath = path.join(this.statusDir, `session_${this.sessionId}.json`);
+    this.statusLinePath = path.join(this.statusDir, `session_${this.sessionId}.txt`);
+    this.telemetryPath = path.join(this.statusDir, `telemetry_${this.sessionId}.json`);
+
+    // Legacy paths for backwards compatibility (read-only)
+    this.legacyConfigPath = path.join(process.cwd(), '.leo-status.json');
     this.claudeConfigPath = path.join(process.cwd(), '.claude-code-config.json');
+
     this.statusCache = null;
     this.cacheTimeout = 5000; // 5 seconds cache
     this.lastUpdate = 0;
@@ -27,8 +42,6 @@ class LEOStatusLine {
     this.apUpdateThrottle = 100; // 100ms minimum interval (max 10 updates/sec)
     this.lastApUpdate = 0;
 
-    // Telemetry for status line updates
-    this.telemetryPath = path.join(process.cwd(), '.claude', 'status-line-telemetry.json');
     // Status line templates (enhanced with project and branch info)
     this.templates = {
       default: '🏗️ {project} | {branch} | LEO v3.1.5.9',
@@ -50,13 +63,83 @@ class LEOStatusLine {
   }
 
   /**
+   * US-006: Ensure the status line directory exists
+   */
+  ensureStatusDir() {
+    try {
+      if (!fs.existsSync(this.statusDir)) {
+        fs.mkdirSync(this.statusDir, { recursive: true });
+      }
+    } catch (_error) {
+      // Silent fail - status directory creation is best-effort
+    }
+  }
+
+  /**
+   * US-006: Clean up session-specific status files
+   * Called on session release to prevent stale file accumulation
+   */
+  cleanup() {
+    try {
+      if (fs.existsSync(this.configPath)) fs.unlinkSync(this.configPath);
+      if (fs.existsSync(this.statusLinePath)) fs.unlinkSync(this.statusLinePath);
+      if (fs.existsSync(this.telemetryPath)) fs.unlinkSync(this.telemetryPath);
+    } catch (_error) {
+      // Silent fail - cleanup is best-effort
+    }
+  }
+
+  /**
+   * US-006: Static method to clean up stale status files for released sessions
+   * Called by the stale session cleanup worker
+   *
+   * @param {Set<string>} activeSessionIds - Set of currently active session IDs
+   * @param {string} projectDir - Project directory (defaults to cwd)
+   * @returns {number} Number of files cleaned up
+   */
+  static cleanupStaleFiles(activeSessionIds, projectDir = process.cwd()) {
+    const statusDir = path.join(projectDir, '.claude', 'status-line');
+    if (!fs.existsSync(statusDir)) return 0;
+
+    let cleanedCount = 0;
+    try {
+      const files = fs.readdirSync(statusDir);
+      for (const file of files) {
+        // Match session_*.json, session_*.txt, telemetry_*.json
+        const sessionMatch = file.match(/^(session|telemetry)_(.+)\.(json|txt)$/);
+        if (sessionMatch) {
+          const fileSessionId = sessionMatch[2];
+          // Skip PID-based fallback sessions (they clean up on process exit)
+          if (fileSessionId.startsWith('pid_')) continue;
+          // Remove if session is no longer active
+          if (!activeSessionIds.has(fileSessionId)) {
+            fs.unlinkSync(path.join(statusDir, file));
+            cleanedCount++;
+          }
+        }
+      }
+    } catch (_error) {
+      // Silent fail
+    }
+    return cleanedCount;
+  }
+
+  /**
    * Load current status from cache
+   * US-006: Loads from session-specific file, falls back to legacy
    */
   loadStatus() {
     try {
+      // Try session-specific file first
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf8');
         this.statusCache = JSON.parse(data);
+      } else if (fs.existsSync(this.legacyConfigPath)) {
+        // Migrate from legacy file on first load
+        const data = fs.readFileSync(this.legacyConfigPath, 'utf8');
+        this.statusCache = JSON.parse(data);
+        // Save to session-specific location
+        this.saveStatus();
       } else {
         this.statusCache = this.getDefaultStatus();
       }
@@ -78,9 +161,11 @@ class LEOStatusLine {
 
   /**
    * Get default status
+   * US-006: Includes session ID for tracking
    */
   getDefaultStatus() {
     return {
+      sessionId: this.sessionId, // US-006: Track session ID in status
       project: 'EHG_Engineer',
       leoVersion: '3.1.5.9',
       activeRole: null,
@@ -268,86 +353,29 @@ class LEOStatusLine {
   }
 
   /**
-   * Get Supabase client (lazy initialization)
-   * SD-LEO-ENH-AUTO-PROCEED-001-14: For auto-detecting child progress
-   */
-  getSupabaseClient() {
-    if (!this._supabase) {
-      const url = process.env.SUPABASE_URL;
-      const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (url && key) {
-        this._supabase = createClient(url, key);
-      }
-    }
-    return this._supabase;
-  }
-
-  /**
-   * Fetch child progress from database for an SD
-   * SD-LEO-ENH-AUTO-PROCEED-001-14: Auto-detect if SD is a child of an orchestrator
-   *
-   * @param {string} sdKey - The SD key to check
-   * @returns {Promise<{current: number, total: number}|null>} Child progress or null
-   */
-  async fetchChildProgressFromDatabase(sdKey) {
-    const supabase = this.getSupabaseClient();
-    if (!supabase || !sdKey) return null;
-
-    try {
-      // Check if this SD has a parent (is a child of an orchestrator)
-      const { data: sd, error: sdError } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, parent_sd_id')
-        .eq('id', sdKey)
-        .single();
-
-      if (sdError || !sd?.parent_sd_id) {
-        return null; // Not a child SD
-      }
-
-      // Get sibling completion count
-      const { data: siblings, error: sibError } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, status')
-        .eq('parent_sd_id', sd.parent_sd_id);
-
-      if (sibError || !siblings) return null;
-
-      const total = siblings.length;
-      const completed = siblings.filter(s => s.status === 'completed').length;
-
-      return { current: completed, total };
-    } catch (_e) {
-      return null;
-    }
-  }
-
-  /**
    * Update for AUTO-PROCEED mode when starting SD work
-   * SD-LEO-ENH-AUTO-PROCEED-001-13/14 implementation
+   * SD-LEO-ENH-AUTO-PROCEED-001-13 implementation (enhanced by SD-LEO-ENH-AUTO-PROCEED-001-14)
    *
    * @param {Object} options - AUTO-PROCEED state options
    * @param {boolean} options.isActive - Whether AUTO-PROCEED is ON
    * @param {string} options.sdKey - Current SD key (e.g., "SD-XXX-001")
    * @param {string} options.phase - Current phase (LEAD/PLAN/EXEC)
    * @param {number} options.progress - Progress percentage (0-100)
-   * @param {Object} options.childProgress - Child progress (auto-detected if not provided)
-   * @returns {Promise<string>} Formatted status line
+   * @param {Object} options.childProgress - Child progress for orchestrator SDs
+   * @param {number} options.childProgress.current - Completed child count
+   * @param {number} options.childProgress.total - Total child count
+   * @returns {string} Formatted status line
    */
-  async updateForAutoProceed({ isActive, sdKey, phase, progress, childProgress }) {
-    // SD-LEO-ENH-AUTO-PROCEED-001-14: Auto-detect child progress from database
-    let resolvedChildProgress = childProgress;
-    if (!childProgress && sdKey) {
-      resolvedChildProgress = await this.fetchChildProgressFromDatabase(sdKey);
-    }
+  updateForAutoProceed({ isActive, sdKey, phase, progress, childProgress }) {
     this.statusCache.autoProceed = {
       isActive: isActive ?? true,
       sdKey: sdKey || null,
       phase: phase || 'LEAD',
       progress: progress ?? 0,
+      // SD-LEO-ENH-AUTO-PROCEED-001-14: Add child progress tracking
       childProgress: {
-        current: resolvedChildProgress?.current ?? null,
-        total: resolvedChildProgress?.total ?? null
+        current: childProgress?.current ?? null,
+        total: childProgress?.total ?? null
       }
     };
     this.statusCache.currentSD = sdKey;
@@ -358,26 +386,6 @@ class LEOStatusLine {
     this.setStatusLine(statusLine);
 
     return statusLine;
-  }
-
-  /**
-   * Clear AUTO-PROCEED state (for session start or when not working on an SD)
-   * SD-LEO-ENH-AUTO-PROCEED-001-14: Prevent stale child progress from showing
-   */
-  clearAutoProceed() {
-    this.statusCache.autoProceed = {
-      isActive: false,
-      sdKey: null,
-      phase: null,
-      progress: 0,
-      childProgress: {
-        current: null,
-        total: null
-      }
-    };
-    this.statusCache.currentSD = null;
-    this.saveStatus();
-    this.refreshStatusLine();
   }
 
   /**
@@ -393,7 +401,7 @@ class LEOStatusLine {
 
     // Throttle updates to prevent UI jank (max 10 updates/sec)
     if (now - this.lastApUpdate < this.apUpdateThrottle) {
-      return false;
+      return false; // Throttled
     }
 
     this.lastApUpdate = now;
@@ -402,6 +410,7 @@ class LEOStatusLine {
     let safeCurrent = current;
     if (current !== null && total !== null && current > total) {
       safeCurrent = total;
+      // Log inconsistency for telemetry (FR-3)
       this.recordTelemetry({
         timestamp: new Date().toISOString(),
         operation: 'child_progress_clamped',
@@ -412,33 +421,52 @@ class LEOStatusLine {
       });
     }
 
+    // Update autoProceed state
     if (!this.statusCache.autoProceed) {
-      this.statusCache.autoProceed = { isActive: false, childProgress: {} };
+      this.statusCache.autoProceed = this.getDefaultStatus().autoProceed;
     }
-    this.statusCache.autoProceed.childProgress = { current: safeCurrent, total };
+    this.statusCache.autoProceed.childProgress = {
+      current: safeCurrent,
+      total
+    };
 
     this.saveStatus();
     this.refreshStatusLine();
+
     return true;
   }
 
   /**
    * Build child progress segment for status line
    * SD-LEO-ENH-AUTO-PROCEED-001-14: Format: "Child X/Y" or "Child X/?"
+   *
+   * @param {Object} childProgress - Child progress object
+   * @returns {string} Formatted child progress segment (empty if not applicable)
    */
   buildChildProgressSegment(childProgress) {
     const { current, total } = childProgress || {};
-    if (current === null || current === undefined) return '';
-    if (total === null || total === undefined) return `Child ${current}/?`;
-    return `Child ${Math.min(current, total)}/${total}`;
+
+    if (current === null || current === undefined) {
+      return '';
+    }
+
+    if (total === null || total === undefined) {
+      return `Child ${current}/?`;
+    }
+
+    // Clamp current to total (defensive)
+    const safeCurrent = Math.min(current, total);
+    return `Child ${safeCurrent}/${total}`;
   }
 
   /**
    * Refresh the status line based on current state
-   * SD-LEO-ENH-AUTO-PROCEED-001-14
+   * SD-LEO-ENH-AUTO-PROCEED-001-14: Refresh without full context reload
    */
   refreshStatusLine() {
     const startTime = Date.now();
+
+    // Determine which format to use
     let statusLine;
     if (this.statusCache.autoProceed?.isActive) {
       statusLine = this.formatAutoProceedStatus();
@@ -447,8 +475,10 @@ class LEOStatusLine {
     } else {
       statusLine = this.formatStatusLine();
     }
+
     this.setStatusLine(statusLine);
 
+    // Record telemetry for latency tracking (TR-4)
     const latency = Date.now() - startTime;
     if (latency > 100) {
       this.recordTelemetry({
@@ -463,13 +493,17 @@ class LEOStatusLine {
   /**
    * Record telemetry event
    * SD-LEO-ENH-AUTO-PROCEED-001-14: Client-side telemetry for status line updates
+   *
+   * @param {Object} event - Telemetry event to record
    */
   recordTelemetry(event) {
     try {
+      // Ensure .claude directory exists
       const claudeDir = path.dirname(this.telemetryPath);
       if (!fs.existsSync(claudeDir)) {
         fs.mkdirSync(claudeDir, { recursive: true });
       }
+
       let telemetry = [];
       if (fs.existsSync(this.telemetryPath)) {
         try {
@@ -478,11 +512,17 @@ class LEOStatusLine {
           telemetry = [];
         }
       }
+
       telemetry.push(event);
-      if (telemetry.length > 100) telemetry = telemetry.slice(-100);
+
+      // Keep last 100 events
+      if (telemetry.length > 100) {
+        telemetry = telemetry.slice(-100);
+      }
+
       fs.writeFileSync(this.telemetryPath, JSON.stringify(telemetry, null, 2));
     } catch (_error) {
-      // Silent fail
+      // Silent fail - telemetry should not break status line
     }
   }
 
@@ -500,8 +540,11 @@ class LEOStatusLine {
     const status = ap.isActive ? 'ON' : 'OFF';
     const phase = ap.phase || 'LEAD';
     const progress = ap.progress ?? 0;
+
+    // SD-LEO-ENH-AUTO-PROCEED-001-14: Build child progress segment
     const childSegment = this.buildChildProgressSegment(ap.childProgress);
 
+    // Use full template if SD key is available
     const template = ap.sdKey ? this.templates.autoProceedFull : this.templates.autoProceed;
 
     let statusLine = template
@@ -522,19 +565,18 @@ class LEOStatusLine {
 
   /**
    * Format status line based on current state
-   * SD-LEO-ENH-AUTO-PROCEED-001-14: Enhanced to append AUTO segment when active
    */
   formatStatusLine(role = null) {
     const activeRole = role || this.statusCache.activeRole;
-
+    
     if (!activeRole) {
       return this.templates.default;
     }
-
+    
     let template = this.templates[activeRole.toLowerCase()] || this.templates.minimal;
-
+    
     // Replace placeholders
-    let statusLine = template
+    template = template
       .replace('{sd}', this.statusCache.currentSD || 'No SD')
       .replace('{task}', this.statusCache.currentTask || 'No Task')
       .replace('{phase}', this.statusCache.phase || 'Discovery')
@@ -543,38 +585,8 @@ class LEOStatusLine {
       .replace('{project}', this.getCurrentProject())
       .replace('{branch}', this.getCurrentBranch())
       .replace('{context}', this.getContextSummary());
-
-    // SD-LEO-ENH-AUTO-PROCEED-001-14: Append AUTO-PROCEED segment if active (FR-1)
-    const ap = this.statusCache.autoProceed;
-    if (ap?.isActive) {
-      const apSegment = this.buildAutoSegment(ap);
-      if (apSegment) {
-        statusLine += ` | ${apSegment}`;
-      }
-    }
-
-    return statusLine;
-  }
-
-  /**
-   * Build compact AUTO-PROCEED segment for appending to existing status lines
-   * SD-LEO-ENH-AUTO-PROCEED-001-14: Format: "AUTO | EXEC | Child X/Y"
-   */
-  buildAutoSegment(ap) {
-    if (!ap?.isActive) return '';
-
-    const parts = ['🤖 AUTO'];
-
-    if (ap.phase) {
-      parts.push(ap.phase);
-    }
-
-    const childSegment = this.buildChildProgressSegment(ap.childProgress);
-    if (childSegment) {
-      parts.push(childSegment);
-    }
-
-    return parts.join(' | ');
+    
+    return template;
   }
 
   /**
@@ -644,27 +656,30 @@ class LEOStatusLine {
 
   /**
    * Set the actual status line (platform-specific)
+   * US-006: Writes to session-specific file to prevent multi-session collisions
    */
   setStatusLine(text) {
-    // For now, we'll just output to a file that can be read
-    // In the future, this could integrate with Claude's actual status line API
-    
-    const statusFile = path.join(process.cwd(), '.claude-status-line');
     try {
-      fs.writeFileSync(statusFile, text);
-      
+      // US-006: Write to session-specific status line file
+      this.ensureStatusDir();
+      fs.writeFileSync(this.statusLinePath, text);
+
+      // Also write to legacy location for backwards compatibility
+      const legacyStatusFile = path.join(process.cwd(), '.claude-status-line');
+      fs.writeFileSync(legacyStatusFile, text);
+
       // Also update the Claude config if possible
       if (fs.existsSync(this.claudeConfigPath)) {
         const config = JSON.parse(fs.readFileSync(this.claudeConfigPath, 'utf8'));
         config.statusLine = text;
         fs.writeFileSync(this.claudeConfigPath, JSON.stringify(config, null, 2));
       }
-      
+
       // Output for debugging
       if (process.env.DEBUG) {
-        console.log(`📊 Status: ${text}`);
+        console.log(`📊 Status [${this.sessionId}]: ${text}`);
       }
-      
+
     } catch (_error) {
       // Silent fail
     }
