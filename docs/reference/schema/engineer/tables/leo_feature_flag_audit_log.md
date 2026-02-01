@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T20:29:31.154Z
+**Generated**: 2026-02-01T23:29:30.049Z
 **Rows**: 6
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -46,6 +46,19 @@
   ```sql
   CREATE UNIQUE INDEX leo_feature_flag_audit_log_pkey ON public.leo_feature_flag_audit_log USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. leo_feature_flag_audit_log_authenticated_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. leo_feature_flag_audit_log_service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

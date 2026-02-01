@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T20:29:31.154Z
-**Rows**: 0
+**Generated**: 2026-02-01T23:29:30.049Z
+**Rows**: 1
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,11 @@
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | submitted_at | `timestamp with time zone` | YES | - | - |
 | vetted_at | `timestamp with time zone` | YES | - | - |
+| source_type | `text` | YES | - | Source type (feedback, manual, etc.). SD: SD-LEO-SELF-IMPROVE-001L |
+| source_id | `uuid` | YES | - | Reference to source entity ID. SD: SD-LEO-SELF-IMPROVE-001L |
+| priority_score | `integer(32)` | YES | - | Computed priority score (0-100). SD: SD-LEO-SELF-IMPROVE-001L |
+| priority_queue | `text` | YES | - | Queue assignment based on score. SD: SD-LEO-SELF-IMPROVE-001L |
+| execution_job_id | `uuid` | YES | - | Reference to execution job. SD: SD-LEO-SELF-IMPROVE-001L |
 
 ## Constraints
 
@@ -49,13 +54,25 @@
   ```sql
   CREATE INDEX idx_leo_proposals_created ON public.leo_proposals USING btree (created_at DESC)
   ```
+- `idx_leo_proposals_priority_queue`
+  ```sql
+  CREATE INDEX idx_leo_proposals_priority_queue ON public.leo_proposals USING btree (priority_queue, priority_score DESC) WHERE (priority_queue IS NOT NULL)
+  ```
 - `idx_leo_proposals_proposer`
   ```sql
   CREATE INDEX idx_leo_proposals_proposer ON public.leo_proposals USING btree (proposer_id)
   ```
+- `idx_leo_proposals_source_id`
+  ```sql
+  CREATE INDEX idx_leo_proposals_source_id ON public.leo_proposals USING btree (source_id) WHERE (source_id IS NOT NULL)
+  ```
 - `idx_leo_proposals_status`
   ```sql
   CREATE INDEX idx_leo_proposals_status ON public.leo_proposals USING btree (status)
+  ```
+- `idx_leo_proposals_status_priority`
+  ```sql
+  CREATE INDEX idx_leo_proposals_status_priority ON public.leo_proposals USING btree (status, priority_score DESC NULLS LAST)
   ```
 - `leo_proposals_pkey`
   ```sql

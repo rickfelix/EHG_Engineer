@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T20:29:31.154Z
+**Generated**: 2026-02-01T23:29:30.049Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -59,6 +59,24 @@
   ```sql
   CREATE UNIQUE INDEX learning_inbox_pkey ON public.learning_inbox USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. learning_inbox_authenticated_insert (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. learning_inbox_authenticated_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 3. learning_inbox_service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
