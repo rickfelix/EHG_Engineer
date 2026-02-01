@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ehg.io/schemas/prioritization_planner_output.schema.json",
+  "title": "Prioritization Planner Output",
+  "description": "JSON Schema for Central Planner output - the prioritized and deduplicated queue of proposals",
+  "type": "object",
+  "required": ["version", "generated_at", "queue", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for compatibility checks"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this output was generated"
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Unique ID for tracing this planning run"
+    },
+    "queue": {
+      "type": "array",
+      "description": "Ordered list of proposals (highest priority first)",
+      "items": {
+        "$ref": "#/$defs/rankedProposal"
+      }
+    },
+    "clusters": {
+      "type": "array",
+      "description": "Theme clusters that group related proposals",
+      "items": {
+        "$ref": "#/$defs/themeCluster"
+      }
+    },
+    "deduplication": {
+      "type": "object",
+      "description": "Summary of deduplication actions taken",
+      "properties": {
+        "total_input": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of proposals before deduplication"
+        },
+        "total_output": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of proposals after deduplication"
+        },
+        "merged_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mergeGroup"
+          }
+        },
+        "reduction_percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage reduction from deduplication"
+        }
+      },
+      "required": ["total_input", "total_output", "reduction_percentage"]
+    },
+    "stability": {
+      "type": "object",
+      "description": "Ranking stability metrics",
+      "properties": {
+        "consistency_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage consistency with previous ranking (85%+ target)"
+        },
+        "top_5_unchanged": {
+          "type": "boolean",
+          "description": "Whether top 5 positions remained stable"
+        },
+        "positions_changed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of position changes from previous run"
+        },
+        "churn_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of items that moved positions"
+        }
+      },
+      "required": ["consistency_score", "top_5_unchanged"]
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Processing metadata",
+      "properties": {
+        "processing_time_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Time taken to generate this output"
+        },
+        "model_version": {
+          "type": "string",
+          "description": "Version of the scoring model used"
+        },
+        "source_counts": {
+          "type": "object",
+          "description": "Count of proposals by source",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "human_overrides_pending": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of proposals awaiting human approval"
+        }
+      },
+      "required": ["processing_time_ms", "model_version"]
+    }
+  },
+  "$defs": {
+    "rankedProposal": {
+      "type": "object",
+      "required": ["id", "rank", "title", "score", "source", "reasoning"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique proposal ID (e.g., SD-XXX, QF-XXX, PAT-XXX)"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Position in the prioritized queue"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Brief title of the proposal"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Composite priority score (0-100)"
+        },
+        "urgency_band": {
+          "type": "string",
+          "enum": ["P0", "P1", "P2", "P3"],
+          "description": "Priority band for categorization"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["feedback", "retrospective", "issue_pattern", "manual", "learning", "quick_fix_cluster"],
+          "description": "Origin of this proposal"
+        },
+        "source_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of source items (for merged proposals)"
+        },
+        "cluster_id": {
+          "type": "string",
+          "description": "ID of the theme cluster this belongs to (if any)"
+        },
+        "reasoning": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Explanation for why this item has its current rank"
+        },
+        "score_breakdown": {
+          "type": "object",
+          "description": "Component scores that make up the total",
+          "properties": {
+            "severity": { "type": "number", "minimum": 0, "maximum": 100 },
+            "impact": { "type": "number", "minimum": 0, "maximum": 100 },
+            "effort": { "type": "number", "minimum": 0, "maximum": 100 },
+            "recency": { "type": "number", "minimum": 0, "maximum": 100 },
+            "recurrence": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "estimated_effort": {
+          "type": "string",
+          "enum": ["trivial", "small", "medium", "large", "xl"],
+          "description": "T-shirt size effort estimate"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of proposals this depends on"
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of proposals this blocks"
+        },
+        "awaiting_human_approval": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this requires human sign-off before execution"
+        },
+        "previous_rank": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Rank in previous planning run (for stability tracking)"
+        },
+        "rank_delta": {
+          "type": "integer",
+          "description": "Change from previous rank (positive = moved up)"
+        }
+      }
+    },
+    "themeCluster": {
+      "type": "object",
+      "required": ["id", "theme", "proposal_ids"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique cluster ID"
+        },
+        "theme": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Theme name (e.g., 'Database Performance', 'Auth Security')"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Brief description of what unifies these proposals"
+        },
+        "proposal_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "IDs of proposals in this cluster"
+        },
+        "aggregate_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Combined priority score for the cluster"
+        },
+        "suggested_orchestrator": {
+          "type": "string",
+          "description": "Suggested parent SD if these should be grouped"
+        }
+      }
+    },
+    "mergeGroup": {
+      "type": "object",
+      "required": ["canonical_id", "merged_ids", "merge_reason"],
+      "properties": {
+        "canonical_id": {
+          "type": "string",
+          "description": "ID of the proposal kept as canonical"
+        },
+        "merged_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "IDs of proposals merged into the canonical"
+        },
+        "merge_reason": {
+          "type": "string",
+          "enum": ["duplicate", "subset", "similar_title", "same_error_hash"],
+          "description": "Reason these were merged"
+        },
+        "similarity_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Similarity threshold that triggered the merge"
+        }
+      }
+    }
+  }
+}
