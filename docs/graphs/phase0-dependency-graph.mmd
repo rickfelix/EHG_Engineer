@@ -1,0 +1,143 @@
+%% Phase 0: LEO Protocol Dependency Graph
+%% SD: SD-LEO-SELF-IMPROVE-001A
+%% Generated: 2026-01-31
+
+flowchart TB
+    subgraph Database["SUPABASE DATABASE (Source of Truth)"]
+        direction TB
+        subgraph LEOTables["LEO Protocol Tables"]
+            leo_protocols["leo_protocols<br/>(Active Protocol)"]
+            leo_protocol_sections["leo_protocol_sections<br/>(Modular Content)"]
+            leo_agents["leo_agents<br/>(LEAD/PLAN/EXEC)"]
+            leo_sub_agents["leo_sub_agents<br/>(Sub-agent Specs)"]
+            leo_sub_agent_triggers["leo_sub_agent_triggers<br/>(Keywords)"]
+            leo_handoff_templates["leo_handoff_templates<br/>(Handoff Specs)"]
+            leo_validation_rules["leo_validation_rules<br/>(Gate Checks)"]
+            leo_autonomous_directives["leo_autonomous_directives<br/>(Auto Directives)"]
+        end
+
+        subgraph AEGISTables["AEGIS Governance Tables"]
+            aegis_constitutions["aegis_constitutions<br/>(7 Constitutions)"]
+            aegis_rules["aegis_rules<br/>(44 Rules)"]
+        end
+
+        subgraph SDTables["Strategic Directive Tables"]
+            strategic_directives["strategic_directives_v2<br/>(SDs)"]
+            product_requirements["product_requirements_v2<br/>(PRDs)"]
+            user_stories["user_stories<br/>(Acceptance Criteria)"]
+        end
+
+        subgraph FeedbackTables["Feedback & Learning Tables"]
+            feedback_events["feedback_events<br/>(User Feedback)"]
+            issue_patterns["issue_patterns<br/>(Recurring Issues)"]
+            retrospectives["retrospectives<br/>(Learnings)"]
+            protocol_improvement_queue["protocol_improvement_queue<br/>(Proposals)"]
+        end
+
+        subgraph SessionTables["Session Tables"]
+            claude_sessions["claude_sessions<br/>(Session State)"]
+            leo_settings["leo_settings<br/>(Global Defaults)"]
+        end
+    end
+
+    subgraph Generator["GENERATOR SCRIPTS"]
+        direction TB
+        main_generator["generate-claude-md-from-db.js<br/>(Main Entry)"]
+        db_queries["db-queries.js<br/>(Database Queries)"]
+        section_mapping["section-file-mapping.json<br/>(Section Routing)"]
+        file_generators["file-generators.js<br/>(Content Formatting)"]
+        keyword_extractor["keyword-extractor.js<br/>(Trigger Keywords)"]
+    end
+
+    subgraph CLAUDEFiles["CLAUDE FILES (Generated Output)"]
+        direction TB
+        claude_md["CLAUDE.md<br/>(Router, 9 sections)"]
+        claude_core["CLAUDE_CORE.md<br/>(Context, 34 sections)"]
+        claude_lead["CLAUDE_LEAD.md<br/>(Approval, 20 sections)"]
+        claude_plan["CLAUDE_PLAN.md<br/>(Design, 30 sections)"]
+        claude_exec["CLAUDE_EXEC.md<br/>(Implementation, 23 sections)"]
+    end
+
+    subgraph Commands["LEO COMMANDS (Skills)"]
+        direction TB
+        leo_next["/leo next<br/>(SD Queue)"]
+        leo_assist["/leo assist<br/>(Autonomous)"]
+        leo_create["/leo create<br/>(SD Creation)"]
+        leo_settings_cmd["/leo settings<br/>(Preferences)"]
+        ship["/ship<br/>(Commit/PR)"]
+        learn["/learn<br/>(Capture Patterns)"]
+    end
+
+    subgraph SubAgents["SUB-AGENTS (Task Tool)"]
+        direction TB
+        database_agent["database-agent<br/>(Schema/Migration)"]
+        security_agent["security-agent<br/>(Auth/RLS)"]
+        testing_agent["testing-agent<br/>(E2E/Unit)"]
+        rca_agent["rca-agent<br/>(Root Cause)"]
+        design_agent["design-agent<br/>(UI/UX)"]
+    end
+
+    %% Database to Generator flow
+    LEOTables --> db_queries
+    AEGISTables --> db_queries
+    db_queries --> main_generator
+    main_generator --> section_mapping
+    section_mapping --> file_generators
+    main_generator --> keyword_extractor
+    keyword_extractor --> file_generators
+
+    %% Generator to CLAUDE files
+    file_generators --> claude_md
+    file_generators --> claude_core
+    file_generators --> claude_lead
+    file_generators --> claude_plan
+    file_generators --> claude_exec
+
+    %% CLAUDE files to Commands
+    claude_md --> Commands
+    claude_core --> Commands
+    claude_lead --> leo_create
+    claude_plan --> leo_create
+    claude_exec --> leo_assist
+
+    %% Commands to Database (mutations)
+    leo_next --> claude_sessions
+    leo_assist --> issue_patterns
+    leo_assist --> strategic_directives
+    leo_create --> strategic_directives
+    leo_create --> product_requirements
+    leo_settings_cmd --> claude_sessions
+    leo_settings_cmd --> leo_settings
+    ship --> strategic_directives
+    learn --> issue_patterns
+    learn --> retrospectives
+
+    %% Commands to Sub-agents
+    leo_assist --> rca_agent
+    leo_create --> database_agent
+    leo_create --> security_agent
+    leo_create --> design_agent
+
+    %% Sub-agents to Database
+    rca_agent --> issue_patterns
+    database_agent --> strategic_directives
+    testing_agent --> user_stories
+
+    %% Cross-references
+    strategic_directives --> product_requirements
+    product_requirements --> user_stories
+    aegis_rules --> protocol_improvement_queue
+    leo_sub_agents --> leo_sub_agent_triggers
+
+    %% Styling
+    classDef database fill:#e1f5fe,stroke:#01579b
+    classDef generator fill:#fff3e0,stroke:#e65100
+    classDef claudeFile fill:#e8f5e9,stroke:#2e7d32
+    classDef command fill:#fce4ec,stroke:#880e4f
+    classDef subagent fill:#f3e5f5,stroke:#7b1fa2
+
+    class leo_protocols,leo_protocol_sections,leo_agents,leo_sub_agents,leo_sub_agent_triggers,leo_handoff_templates,leo_validation_rules,leo_autonomous_directives,aegis_constitutions,aegis_rules,strategic_directives,product_requirements,user_stories,feedback_events,issue_patterns,retrospectives,protocol_improvement_queue,claude_sessions,leo_settings database
+    class main_generator,db_queries,section_mapping,file_generators,keyword_extractor generator
+    class claude_md,claude_core,claude_lead,claude_plan,claude_exec claudeFile
+    class leo_next,leo_assist,leo_create,leo_settings_cmd,ship,learn command
+    class database_agent,security_agent,testing_agent,rca_agent,design_agent subagent

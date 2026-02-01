@@ -41,6 +41,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
 5. **Small PRs** - Target ≤100 lines, max 400 with justification
 6. **Priority-first** - Use `npm run prio:top3` to justify work
+7. **Version check** - If stale protocol detected, run `node scripts/generate-claude-md-from-db.js`
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
@@ -359,6 +360,13 @@ PAT-WORKFLOW-ROUTING-001: Quick-Fix and SD systems are separate. Route correctly
 - "create another SD", "another strategic directive"
 - "add this to the queue", "queue this up", "track this as an SD"
 
+**Plan-based triggers** (user has a plan and wants to create SD from it):
+- "create SD from the plan", "create from plan", "from the plan"
+- "SD from the plan we discussed", "make this plan an SD"
+- "use the plan to create", "turn the plan into an SD"
+- "create the strategic directive from the plan"
+
+**Action for plan-based**: Run 
 **Contextual triggers** (user describes work that should become an SD):
 - "this should be tracked", "we should track this", "this needs tracking"
 - "turn this into a directive", "make this a directive"
@@ -375,6 +383,8 @@ PAT-WORKFLOW-ROUTING-001: Quick-Fix and SD systems are separate. Route correctly
 - Tracking in the database
 
 ...then SUGGEST creating an SD if one doesn't exist for this work.
+
+**Plan file auto-detection**: If a plan file exists in ~/.claude/plans/ modified within the last hour AND user asks to create an SD, prompt to use --from-plan workflow.
 
 **Action**: Use Skill tool with  and 
 ### Quick-Fix Triggers → - "quick fix", "small fix", "just fix this quickly"
@@ -442,7 +452,6 @@ PAT-WORKFLOW-ROUTING-001: Quick-Fix and SD systems are separate. Route correctly
 
 ### Command Ecosystem Flow (Quick Reference)
 
-\
 ### Auto-Invoke Behavior
 
 **CRITICAL**: When user agrees to a suggested command (e.g., "yes, let's ship", "sure, create an SD"), IMMEDIATELY invoke the skill. Do not:
@@ -485,7 +494,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-31 6:25:48 PM
+**Last Generated**: 2026-02-01 9:57:35 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -605,7 +614,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-01-31*
+*Router generated from database: 2026-02-01*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 
