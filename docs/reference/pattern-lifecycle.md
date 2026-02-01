@@ -121,6 +121,26 @@ GitHub Action: `.github/workflows/pattern-maintenance-weekly.yml`
   3. Regenerate CLAUDE.md files
   4. Create GitHub issues if stale patterns detected
 
+## Pattern Sources
+
+**NEW (SD-LEO-ENH-QUICK-FIX-PATTERN-001)**: Patterns can now originate from multiple sources, tracked in the `source` field.
+
+| Source | Description | Threshold | Created By |
+|--------|-------------|-----------|------------|
+| `retrospective` | Extracted from SD/QF retrospectives | Varies | Retro analysis |
+| `auto_hook` | Non-SD work captured by learning hooks | 1+ | Auto-learning hook |
+| `quick_fix_cluster` | Recurring quick-fixes grouped by title similarity | 3+ | Feedback clusterer |
+| `manual` | Manually created by users | N/A | User |
+
+**Quick-Fix Cluster Source**:
+- Tracks recurring small bugs (<50 LOC)
+- Groups by normalized title (case-insensitive, trimmed)
+- Lower threshold (3+) appropriate for quick-fix scope
+- Source metadata includes `source_feedback_ids` with original QF IDs
+- Enables pattern promotion from tactical fixes to strategic knowledge
+
+**Integration**: `lib/learning/feedback-clusterer.js` (lines 109-207)
+
 ## Pattern Categories
 
 | Category | Description | Related Sub-Agents |
