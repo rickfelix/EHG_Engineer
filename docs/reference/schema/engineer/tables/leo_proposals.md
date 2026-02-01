@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T13:43:51.883Z
+**Generated**: 2026-02-01T14:48:33.761Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,58 +14,48 @@
 
 ---
 
-## Columns (22 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| title | `text` | **NO** | - | - |
+| body | `text` | **NO** | - | - |
+| proposer_id | `uuid` | **NO** | - | - |
+| status | `USER-DEFINED` | **NO** | `'draft'::leo_proposal_status` | - |
+| vetting_status | `USER-DEFINED` | **NO** | `'not_started'::leo_vetting_status` | - |
+| rejection_reason | `USER-DEFINED` | YES | - | - |
+| category | `text` | YES | - | - |
+| tags | `ARRAY` | YES | - | - |
+| priority | `text` | YES | `'medium'::text` | - |
+| estimated_impact | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
-| created_by | `uuid` | **NO** | - | - |
-| owner_team | `text` | **NO** | `'ehg_engineer'::text` | - |
-| title | `text` | **NO** | - | - |
-| summary | `text` | **NO** | - | - |
-| motivation | `text` | **NO** | - | - |
-| scope | `jsonb` | **NO** | `'[]'::jsonb` | - |
-| affected_components | `jsonb` | **NO** | `'[]'::jsonb` | - |
-| risk_level | `text` | **NO** | - | - |
-| status | `text` | **NO** | `'draft'::text` | - |
-| constitution_tags | `jsonb` | **NO** | `'[]'::jsonb` | - |
-| aegis_compliance_notes | `text` | YES | - | - |
-| rubric_version_id | `uuid` | YES | - | - |
-| rubric_snapshot | `jsonb` | YES | - | - |
-| prioritization_snapshot | `jsonb` | YES | - | - |
-| audit_snapshot | `jsonb` | YES | - | - |
-| feature_flag_key | `text` | YES | - | - |
-| decision_reason | `text` | YES | - | - |
-| decision_by | `uuid` | YES | - | - |
-| decision_at | `timestamp with time zone` | YES | - | - |
+| submitted_at | `timestamp with time zone` | YES | - | - |
+| vetted_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
 ### Primary Key
 - `leo_proposals_pkey`: PRIMARY KEY (id)
 
-### Foreign Keys
-- `fk_leo_proposals_rubric`: rubric_version_id → leo_vetting_rubrics(id)
-
 ### Check Constraints
-- `leo_proposals_risk_level_check`: CHECK ((risk_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])))
-- `leo_proposals_status_check`: CHECK ((status = ANY (ARRAY['draft'::text, 'submitted'::text, 'triaged'::text, 'vetting'::text, 'approved'::text, 'rejected'::text, 'scheduled'::text, 'in_progress'::text, 'completed'::text, 'rolled_back'::text, 'archived'::text])))
+- `chk_priority_values`: CHECK ((priority = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
+- `chk_rejection_reason_required`: CHECK ((((status = 'rejected'::leo_proposal_status) AND (rejection_reason IS NOT NULL)) OR ((status <> 'rejected'::leo_proposal_status) AND (rejection_reason IS NULL))))
 
 ## Indexes
 
-- `idx_leo_proposals_constitution_tags`
+- `idx_leo_proposals_created`
   ```sql
-  CREATE INDEX idx_leo_proposals_constitution_tags ON public.leo_proposals USING gin (constitution_tags)
+  CREATE INDEX idx_leo_proposals_created ON public.leo_proposals USING btree (created_at DESC)
   ```
-- `idx_leo_proposals_created_by`
+- `idx_leo_proposals_proposer`
   ```sql
-  CREATE INDEX idx_leo_proposals_created_by ON public.leo_proposals USING btree (created_by, created_at DESC)
+  CREATE INDEX idx_leo_proposals_proposer ON public.leo_proposals USING btree (proposer_id)
   ```
-- `idx_leo_proposals_status_created`
+- `idx_leo_proposals_status`
   ```sql
-  CREATE INDEX idx_leo_proposals_status_created ON public.leo_proposals USING btree (status, created_at DESC)
+  CREATE INDEX idx_leo_proposals_status ON public.leo_proposals USING btree (status)
   ```
 - `leo_proposals_pkey`
   ```sql
@@ -74,28 +64,42 @@
 
 ## RLS Policies
 
-### 1. Service role full access to leo_proposals (ALL)
+### 1. proposals_insert_own (INSERT)
 
 - **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
-- **With Check**: `(auth.role() = 'service_role'::text)`
+- **With Check**: `((proposer_id)::text = COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, true), ''::text), '00000000-0000-0000-0000-000000000000'::text))`
+
+### 2. proposals_select_own (SELECT)
+
+- **Roles**: {public}
+- **Using**: `(((proposer_id)::text = COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, true), ''::text), '00000000-0000-0000-0000-000000000000'::text)) OR (status <> 'draft'::leo_proposal_status))`
+
+### 3. proposals_service_role (ALL)
+
+- **Roles**: {public}
+- **Using**: `(((current_setting('request.jwt.claims'::text, true))::jsonb ->> 'role'::text) = 'service_role'::text)`
+
+### 4. proposals_update_own_draft (UPDATE)
+
+- **Roles**: {public}
+- **Using**: `(((proposer_id)::text = COALESCE(NULLIF(current_setting('request.jwt.claim.sub'::text, true), ''::text), '00000000-0000-0000-0000-000000000000'::text)) AND (status = 'draft'::leo_proposal_status))`
 
 ## Triggers
 
-### trg_leo_proposals_update_timestamp
+### trg_log_proposal_transition
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_log_proposal_transition()`
+
+### trg_update_proposal_timestamp
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION leo_proposals_update_timestamp()`
+- **Action**: `EXECUTE FUNCTION fn_update_proposal_timestamp()`
 
-### trg_leo_proposals_validate_transition
-
-- **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION leo_proposals_validate_transition()`
-
-### trg_leo_proposals_validate_transition
+### trg_validate_proposal_transition
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION leo_proposals_validate_transition()`
+- **Action**: `EXECUTE FUNCTION fn_validate_proposal_transition()`
 
 ---
 

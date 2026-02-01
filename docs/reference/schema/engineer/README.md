@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T13:43:51.883Z
-**Tables**: 391
+**Generated**: 2026-02-01T14:48:33.761Z
+**Tables**: 393
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (391)
+## All Tables (393)
 
 ### LEO Protocol
 
@@ -36,6 +36,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_feature_flag_audit_log](tables/leo_feature_flag_audit_log.md)
 - [leo_feature_flag_policies](tables/leo_feature_flag_policies.md)
 - [leo_feature_flags](tables/leo_feature_flags.md)
+- [leo_feedback](tables/leo_feedback.md)
 - [leo_gate_reviews](tables/leo_gate_reviews.md)
 - [leo_handoff_executions](tables/leo_handoff_executions.md)
 - [leo_handoff_rejections](tables/leo_handoff_rejections.md)
@@ -64,6 +65,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_simplification_rules](tables/leo_simplification_rules.md)
 - [leo_subagent_handoffs](tables/leo_subagent_handoffs.md)
 - [leo_test_plans](tables/leo_test_plans.md)
+- [leo_vetting_outcomes](tables/leo_vetting_outcomes.md)
 - [leo_vetting_rubrics](tables/leo_vetting_rubrics.md)
 - [leo_workflow_phases](tables/leo_workflow_phases.md)
 
