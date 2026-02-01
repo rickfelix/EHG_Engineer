@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T15:28:12.179Z
-**Rows**: 6,266
+**Generated**: 2026-02-01T16:12:10.838Z
+**Rows**: 6,299
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,14 @@
 | is_continuous_mode | `boolean` | YES | `false` | - |
 | continuous_started_at | `timestamp with time zone` | YES | - | - |
 | continuous_sds_completed | `integer(32)` | YES | `0` | - |
+| machine_id | `text` | YES | - | - |
+| terminal_id | `text` | YES | - | - |
+| released_reason | `text` | YES | - | - |
+| released_at | `timestamp with time zone` | YES | - | - |
+| stale_at | `timestamp with time zone` | YES | - | - |
+| stale_reason | `text` | YES | - | - |
+| pid_validated_at | `timestamp with time zone` | YES | - | - |
+| terminal_identity | `text` | YES | - | Computed identity from machine_id:terminal_id for uniqueness. Part of FR-1. |
 
 ## Constraints
 
@@ -81,6 +89,10 @@
 - `idx_claude_sessions_unique_active_claim`
   ```sql
   CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim ON public.claude_sessions USING btree (sd_id) WHERE ((sd_id IS NOT NULL) AND (status = 'active'::text))
+  ```
+- `idx_claude_sessions_unique_terminal_active`
+  ```sql
+  CREATE UNIQUE INDEX idx_claude_sessions_unique_terminal_active ON public.claude_sessions USING btree (terminal_identity) WHERE ((terminal_identity IS NOT NULL) AND (terminal_identity <> ':'::text) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
   ```
 
 ## RLS Policies
