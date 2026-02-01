@@ -113,6 +113,76 @@ I'm performing 5-Whys analysis to identify the true root cause:
 [Wait for complete diagnosis before proposing fix]
 ```
 
+## Evidence-First Investigation Protocol (CRITICAL)
+
+**BEFORE making ANY claims about timelines, causes, or origins, you MUST gather concrete evidence.**
+
+### Temporal Claims Require Timestamps
+
+**NEVER** say things like "3+ days ago" or "from a previous session" without verifying:
+
+```bash
+# For files - check actual creation/modification times
+stat "<file_path>"
+
+# For git commits - check actual dates
+git log --format="%H %ci %s" <commit_hash>
+
+# For database records - query actual timestamps
+node -e "... WHERE created_at > '2026-01-30' ..."
+
+# For tasks - check task output file timestamps
+stat "C:\Users\rickf\AppData\Local\Temp\claude\...\tasks\<task_id>.output"
+```
+
+### Evidence Gathering Sequence
+
+1. **FIRST**: Gather all timestamps and concrete data
+2. **SECOND**: Analyze the data to form hypotheses
+3. **THIRD**: Verify hypotheses against the evidence
+4. **FOURTH**: Present findings WITH the evidence
+
+### Anti-Pattern: Assumption-Based Analysis
+
+**WRONG** (what happened):
+```
+"The rule was added Jan 31, so these tasks must be from before that date"
+→ ASSUMPTION without checking actual task creation timestamps
+```
+
+**RIGHT** (evidence-first):
+```bash
+# Check when tasks were actually created
+stat "tasks/b4d962e.output"
+# Result: Birth: 2026-02-01 08:37:55 ← ACTUAL EVIDENCE
+
+# Now we know: Tasks created TODAY, AFTER the rule was added
+# Conclusion must match evidence, not assumptions
+```
+
+### Required Evidence for Common Claims
+
+| Claim Type | Required Evidence |
+|------------|-------------------|
+| "Task was created on X date" | `stat` output showing Birth/Modify time |
+| "Rule was added on X date" | `git log --format="%ci"` for the commit |
+| "This happened before/after X" | Both timestamps compared |
+| "This is from a previous session" | Session ID comparison + timestamps |
+| "This pattern has occurred N times" | Database query with COUNT |
+
+### Verification Checkpoint
+
+Before presenting 5-Whys analysis, ask yourself:
+- [ ] Have I checked actual timestamps (not assumed them)?
+- [ ] Have I verified file creation dates with `stat`?
+- [ ] Have I confirmed git commit dates with `git log`?
+- [ ] Does my timeline claim match the actual evidence?
+- [ ] Would my conclusion change if the timestamps were different?
+
+**If you cannot verify a temporal claim, say "timestamp not verified" instead of guessing.**
+
+---
+
 ## 5-Whys Methodology
 
 For each issue, apply the 5-Whys technique:
@@ -311,9 +381,13 @@ If the user asks a general debugging question without an SD context (e.g., "Why 
 ## Output Requirements
 
 1. **Evidence-based**: Every conclusion must cite specific files, logs, or data
+   - **Temporal claims MUST include actual timestamps** (use `stat`, `git log --format="%ci"`)
+   - **NEVER assume dates** - verify with actual file/commit timestamps
+   - Example: "Task created at 08:37:55 (verified via `stat`)" NOT "Task from 3 days ago"
 2. **Actionable**: Root cause must be fixable (not "human error")
 3. **Preventable**: Include control to prevent recurrence
 4. **Tracked**: If systemic, create pattern in `issue_patterns` table
+5. **Verified**: Before finalizing, re-check that evidence supports conclusions
 
 ## Example Analysis
 
@@ -359,6 +433,11 @@ From retrospectives:
 - **Suppressing errors**: Hid root causes, led to larger failures later
 - **Skipping 5-Whys**: Stopped at first-level cause, missed systemic issues
 - **No pattern tracking**: Same issues recurred across different SDs
+- **Assuming timestamps without verification**: (2026-02-01 incident)
+  - RCA claimed tasks were "from 3+ days ago" without checking `stat` on task files
+  - Actual evidence: Tasks created TODAY (08:37:55), AFTER the rule was added
+  - Root cause was missed because timeline assumption was wrong
+  - **FIX**: Always run `stat` on files before making temporal claims
 
 **Lesson**: ALL recurring issues could have been prevented by invoking RCA agent on FIRST occurrence, not after multiple failures.
 

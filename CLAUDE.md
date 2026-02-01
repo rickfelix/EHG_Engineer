@@ -71,21 +71,29 @@ node -e "require('dotenv').config(); const {createClient}=require('@supabase/sup
 
 ### CRITICAL: No Background Tasks
 
-**When AUTO-PROCEED is active, NEVER use `run_in_background: true` on any Bash tool calls.**
+**When AUTO-PROCEED is active, NEVER use `run_in_background: true` on ANY tool that supports it.**
 
-All commands must run inline/foreground to maintain workflow continuity. Background task completion notifications interrupt the autonomous flow, causing unexpected pauses.
+This applies to:
+- **Bash tool**: `run_in_background: true` is FORBIDDEN
+- **Task tool**: `run_in_background: true` is FORBIDDEN
 
-| Tool Parameter | AUTO-PROCEED ON | AUTO-PROCEED OFF |
-|----------------|-----------------|------------------|
-| `run_in_background: true` | FORBIDDEN | Allowed |
-| `run_in_background: false` or omitted | Required | Allowed |
+All commands and sub-agents must run inline/foreground to maintain workflow continuity. Background task completion notifications interrupt the autonomous flow, causing unexpected pauses.
+
+| Tool | Parameter | AUTO-PROCEED ON | AUTO-PROCEED OFF |
+|------|-----------|-----------------|------------------|
+| Bash | `run_in_background: true` | FORBIDDEN | Allowed |
+| Task | `run_in_background: true` | FORBIDDEN | Allowed |
+| Both | `run_in_background: false` or omitted | Required | Allowed |
 
 **Why this matters:**
 - Background tasks return control immediately, breaking the sequential workflow
 - Completion notifications arrive asynchronously, interrupting current work
 - The workflow stops unexpectedly waiting for user acknowledgment
+- If session goes stale, orphaned background tasks complete later and pollute new sessions
 
 **This is a hard behavioral constraint, not a suggestion.**
+
+**2026-02-01 Incident**: Background Task tool invocations were spawned during AUTO-PROCEED, creating orphaned tasks that completed in later sessions. Root cause: Rule only mentioned Bash, not Task tool.
 
 ### Pause Points (When ON)
 
@@ -240,7 +248,6 @@ Perform 5-whys analysis and recommend systematic fix."
 | D29 | Resume reminder | Show what was happening before resuming |
 
 *Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
-
 
 ## Orchestrator Chaining Mode
 
@@ -512,7 +519,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-01 6:54:42 AM
+**Last Generated**: 2026-02-01 9:46:32 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -627,6 +634,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 | `UAT` | acceptance criteria, click through, happy path, human test, manual test, test scenario, uat test, user acceptance test, user journey, TEST-AUTH (+31 more) |
 | `VALIDATION` | already exists, already implemented, before i build, check if exists, codebase search, duplicate check, existing implementation, codebase, codebase check, conflict (+18 more) |
 | `VALUATION` | acquisition target, company valuation, dcf analysis, exit strategy, fundraising round, series a, startup valuation, DCF, IPO, Series A (+20 more) |
+| `VETTING` | vet, vetting, proposal, rubric, constitutional, aegis, governance check, compliance check, validate proposal, assess feedback (+14 more) |
 
 *Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
 
