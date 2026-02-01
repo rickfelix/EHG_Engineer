@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T11:57:53.424Z
+**Generated**: 2026-02-01T13:25:27.350Z
 **Rows**: 39
 **RLS**: Enabled (4 policies)
 
@@ -56,7 +56,7 @@
 - `issue_patterns_pattern_id_key`: UNIQUE (pattern_id)
 
 ### Check Constraints
-- `issue_patterns_source_check`: CHECK (((source)::text = ANY ((ARRAY['retrospective'::character varying, 'feedback_cluster'::character varying, 'manual'::character varying])::text[])))
+- `issue_patterns_source_check`: CHECK (((source)::text = ANY ((ARRAY['retrospective'::character varying, 'feedback_cluster'::character varying, 'manual'::character varying, 'quick_fix_cluster'::character varying])::text[])))
 - `issue_patterns_status_check`: CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'assigned'::character varying, 'resolved'::character varying, 'obsolete'::character varying])::text[])))
 
 ## Indexes
