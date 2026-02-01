@@ -108,3 +108,25 @@ export type {
   ActivePromptResult,
   ComputePromptChecksum,
 } from './prompts';
+
+// Vetting types (SD-LEO-SELF-IMPROVE-001F)
+export type {
+  VettingOutcome,
+  HumanDecision,
+  AegisResult,
+  AegisViolation,
+  AegisWarning,
+  VettingOutcomeRow,
+  VettingOutcomeInsert,
+  VettingOutcomeUpdate,
+  FeedbackSourceType,
+  FeedbackStatus,
+  FeedbackRow,
+  FeedbackInsert,
+  FeedbackUpdate,
+  Rubric,
+  RubricAssessment,
+  VettingOptions,
+  VettingResult,
+  CoverageMetrics,
+} from './vetting';
