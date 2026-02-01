@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T17:46:55.871Z
-**Rows**: 725
+**Generated**: 2026-02-01T19:26:07.334Z
+**Rows**: 728
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (81 total)
+## Columns (82 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -100,6 +100,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | coverage_delta_percent | `numeric(5,2)` | YES | - | Coverage change (post - pre), can be negative |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | Flexible JSONB storage for retrospective metadata. Added 2026-01-30 per RCA BL-INF-2337C for consistency with other core tables. |
 | learning_extracted_at | `timestamp with time zone` | YES | - | Timestamp when patterns were extracted. NULL = not yet processed. |
+| future_enhancements | `jsonb` | YES | `'[]'::jsonb` | Array of future enhancement opportunities identified during SD implementation. |
 
 ## Constraints
 
@@ -157,6 +158,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `idx_retrospectives_failure_patterns`
   ```sql
   CREATE INDEX idx_retrospectives_failure_patterns ON public.retrospectives USING gin (failure_patterns)
+  ```
+- `idx_retrospectives_future_enhancements`
+  ```sql
+  CREATE INDEX idx_retrospectives_future_enhancements ON public.retrospectives USING gin (future_enhancements)
   ```
 - `idx_retrospectives_learning_category`
   ```sql
