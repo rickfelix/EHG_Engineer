@@ -350,6 +350,66 @@ Options:
 2. Run `git checkout main && git pull` to sync local
 3. Confirm: "✅ PR #X merged and branch deleted. You're on main with latest changes."
 
+### Step 6.5: Auto-Learning Capture (AUTOMATED)
+
+**After successful merge, the system automatically captures learnings for non-SD work.**
+
+This step runs automatically via PostToolUse hook - no manual action required.
+
+**How it works:**
+1. **Detects merge success**: Hook monitors `gh pr merge` commands
+2. **Checks SD/QF status**: Queries database to determine if this is SD/QF work
+   - Checks `v_active_sessions` for active SD claim
+   - Checks `sd_claims` for recently completed SDs
+   - Checks `quick_fixes` for in-progress QFs
+   - Checks `is_working_on` flag
+   - Greps commit messages for SD-*/QF-* patterns
+3. **Skips if SD/QF work**: Existing retrospective flow handles SD/QF learning capture
+4. **Captures for non-SD work**: Creates retrospective and issue pattern automatically
+
+**What gets created:**
+- **Retrospective**: With `generated_by: 'AUTO_HOOK'` and `trigger_event: 'NON_SD_MERGE'`
+- **Issue Pattern**: If corrective action detected (fix, correction, docs update)
+
+**Output you'll see:**
+```
+========================================
+  AUTO-LEARNING CAPTURE TRIGGERED
+========================================
+   PR: #123
+   Status: Non-SD work detected
+   Action: Capturing learning automatically
+========================================
+
+========================================
+  AUTO-LEARNING CAPTURE ENGINE
+========================================
+  PR: #123
+
+  Files changed: 3
+  Commits: 1
+  Work type: documentation_correction
+  Learning-worthy: protocol
+
+  Creating retrospective...
+    Created: retrospective abc-123
+
+  Creating issue pattern...
+    Created: PAT-AUTO-0001
+
+========================================
+  CAPTURE SUMMARY
+========================================
+  Retrospective: abc-123
+  Pattern: PAT-AUTO-0001
+  Learnings: 1 captured
+========================================
+```
+
+**No action required**: The hook handles this automatically. Run `/learn` later to see captured patterns.
+
+**Why this matters**: Previously, learnings from documentation fixes, ad-hoc improvements, and polish sessions were lost because they didn't go through the full SD workflow. Now all valuable work contributes to the learning system.
+
 ### Step 7: Post-Merge Command Ecosystem (NEW)
 
 **After a successful merge, present contextual suggestions using AskUserQuestion:**
