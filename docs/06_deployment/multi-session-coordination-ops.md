@@ -363,13 +363,130 @@ Heartbeat activity logged to:
 2. **Performance issues**: Run EXPLAIN ANALYZE on slow queries
 3. **Trigger issues**: Review function source in database
 
+## Lifecycle Event Monitoring (SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001)
+
+### Session Lifecycle Events Table
+
+All session lifecycle transitions are logged to `session_lifecycle_events` for auditing and debugging.
+
+**Event Types**:
+- `created` - New session created
+- `claimed` - SD claimed by session
+- `released` - Session released (graceful exit)
+- `heartbeat` - Heartbeat update (not logged by default)
+- `stale_detected` - Session marked as stale
+- `stale_cleanup` - Stale session cleaned up
+- `terminal_replaced` - Session replaced by same-terminal new session
+
+### Lifecycle Event Queries
+
+**Query Recent Events**:
+```sql
+SELECT
+  session_id,
+  event_type,
+  event_data,
+  occurred_at
+FROM session_lifecycle_events
+WHERE occurred_at > NOW() - INTERVAL '24 hours'
+ORDER BY occurred_at DESC
+LIMIT 50;
+```
+
+**Query Events by Session**:
+```sql
+SELECT
+  event_type,
+  event_data,
+  occurred_at
+FROM session_lifecycle_events
+WHERE session_id = 'session_abc123'
+ORDER BY occurred_at ASC;
+```
+
+**Session Lifecycle Summary (Last 24h)**:
+```sql
+SELECT
+  event_type,
+  COUNT(*) as event_count,
+  MIN(occurred_at) as first_occurrence,
+  MAX(occurred_at) as last_occurrence
+FROM session_lifecycle_events
+WHERE occurred_at > NOW() - INTERVAL '24 hours'
+GROUP BY event_type
+ORDER BY event_count DESC;
+```
+
+### Terminal Identity Management
+
+**Issue: Session Auto-Released Unexpectedly**
+
+**Symptom**: New session starts and previous session on same terminal is auto-released
+
+**Diagnosis**:
+```sql
+SELECT
+  session_id,
+  terminal_identity,
+  status,
+  created_at,
+  released_at,
+  released_reason
+FROM claude_sessions
+WHERE terminal_identity LIKE '%your_terminal%'
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+**Resolution**: This is expected behavior (US-001: Terminal Identity Auto-Release).
+- Same terminal starting new session → old session auto-released
+- To run multiple concurrent sessions, use different terminals
+
+### Batch Cleanup Operations
+
+**Manual Batch Cleanup**:
+```sql
+SELECT cleanup_stale_sessions(
+  NOW() - INTERVAL '5 minutes',  -- stale threshold
+  'your_machine_id'              -- machine_id for PID validation
+);
+```
+
+**Monitor Cleanup Performance**:
+```sql
+SELECT
+  released_reason,
+  COUNT(*) as cleanup_count
+FROM claude_sessions
+WHERE released_at > NOW() - INTERVAL '24 hours'
+  AND released_reason IN ('stale_cleanup', 'new_session_same_terminal')
+GROUP BY released_reason;
+```
+
+### Session Metrics View
+
+**Query Overall Session Health**:
+```sql
+SELECT * FROM v_session_metrics;
+```
+
+**Expected Fields**:
+- `total_sessions` - Sessions in last 24 hours
+- `active_sessions` - Currently active
+- `stale_sessions` - Sessions past stale threshold
+- `avg_heartbeat_age` - Average heartbeat age (active sessions)
+- `graceful_exits` - Count of graceful exits
+- `stale_cleanups` - Count of stale cleanups
+- `terminal_replacements` - Count of same-terminal replacements
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.0.0 | 2026-02-01 | Added lifecycle event monitoring (SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001) |
 | 1.0.0 | 2026-01-30 | Initial release (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001) |
 
 ---
 
-*Part of LEO Protocol v4.3.3 - Multi-Session Coordination*
-*SD: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001*
+*Part of LEO Protocol v4.3.3 - Multi-Session Coordination & Lifecycle Management*
+*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001*
