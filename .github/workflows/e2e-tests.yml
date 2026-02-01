@@ -1,11 +1,17 @@
 name: E2E Tests
 
+# QF-20260201-RCA: Disabled auto-trigger - EHG_Engineer is backend infrastructure,
+# not a Next.js frontend app. This workflow expects `npm run dev` which doesn't exist.
+# Keep workflow_dispatch for manual testing if E2E tests are added in future.
+# Root cause: Architecture mismatch - workflow copied from frontend repo template.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_app_startup:
+        description: 'Skip app startup (for testing workflow only)'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   BASE_URL: http://localhost:8080
