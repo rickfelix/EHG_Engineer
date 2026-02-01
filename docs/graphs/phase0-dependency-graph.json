@@ -1,0 +1,358 @@
+{
+  "meta": {
+    "sd": "SD-LEO-SELF-IMPROVE-001A",
+    "generated": "2026-01-31",
+    "purpose": "LEO Protocol Dependency Graph - Commands ↔ Tables ↔ Generators"
+  },
+  "layers": {
+    "database": {
+      "description": "Supabase Database - Source of Truth",
+      "groups": {
+        "leo_protocol": {
+          "description": "LEO Protocol Core Tables",
+          "tables": [
+            {
+              "name": "leo_protocols",
+              "purpose": "Active protocol versions",
+              "key_columns": ["id", "version", "status"],
+              "consumers": ["generate-claude-md-from-db.js"]
+            },
+            {
+              "name": "leo_protocol_sections",
+              "purpose": "Modular content sections",
+              "key_columns": ["protocol_id", "section_type", "content"],
+              "consumers": ["generate-claude-md-from-db.js"]
+            },
+            {
+              "name": "leo_agents",
+              "purpose": "LEAD/PLAN/EXEC agent definitions",
+              "key_columns": ["code", "name", "responsibilities"],
+              "consumers": ["CLAUDE_CORE.md generation"]
+            },
+            {
+              "name": "leo_sub_agents",
+              "purpose": "Sub-agent specifications",
+              "key_columns": ["code", "name", "model", "triggers"],
+              "consumers": ["keyword-extractor.js", "CLAUDE_CORE.md"]
+            },
+            {
+              "name": "leo_sub_agent_triggers",
+              "purpose": "Trigger keywords for sub-agents",
+              "key_columns": ["sub_agent_id", "trigger_phrase", "priority"],
+              "consumers": ["keyword-extractor.js"]
+            },
+            {
+              "name": "leo_handoff_templates",
+              "purpose": "Inter-agent handoff specifications",
+              "key_columns": ["from_phase", "to_phase", "gates"],
+              "consumers": ["CLAUDE_PLAN.md generation", "handoff.js"]
+            },
+            {
+              "name": "leo_validation_rules",
+              "purpose": "Gate validation requirements",
+              "key_columns": ["gate_name", "validation_type", "threshold"],
+              "consumers": ["CLAUDE_PLAN.md", "CLAUDE_EXEC.md"]
+            },
+            {
+              "name": "leo_autonomous_directives",
+              "purpose": "Autonomous behavior directives",
+              "key_columns": ["directive_type", "condition", "action"],
+              "consumers": ["CLAUDE_EXEC.md"]
+            }
+          ]
+        },
+        "aegis": {
+          "description": "AEGIS Governance Tables",
+          "tables": [
+            {
+              "name": "aegis_constitutions",
+              "purpose": "7 constitutions (PROTOCOL, FOUR_OATHS, etc.)",
+              "key_columns": ["code", "name", "enforcement_mode"],
+              "consumers": ["AegisRuleLoader.js"]
+            },
+            {
+              "name": "aegis_rules",
+              "purpose": "44 active rules across constitutions",
+              "key_columns": ["rule_code", "validation_type", "enforcement_action"],
+              "consumers": ["AegisEnforcer.js", "validators/*"]
+            }
+          ]
+        },
+        "strategic_directives": {
+          "description": "Strategic Directive Tables",
+          "tables": [
+            {
+              "name": "strategic_directives_v2",
+              "purpose": "SD records",
+              "key_columns": ["id", "sd_key", "status", "current_phase"],
+              "consumers": ["/leo next", "/leo create", "/ship"],
+              "producers": ["/leo create", "handoff.js"]
+            },
+            {
+              "name": "product_requirements_v2",
+              "purpose": "PRDs linked to SDs",
+              "key_columns": ["id", "sd_id", "status"],
+              "consumers": ["PLAN phase", "handoff.js"],
+              "producers": ["add-prd-to-database.js"]
+            },
+            {
+              "name": "user_stories",
+              "purpose": "Acceptance criteria for PRDs",
+              "key_columns": ["id", "prd_id", "validation_status"],
+              "consumers": ["EXEC phase", "testing-agent"],
+              "producers": ["PRD creation"]
+            }
+          ]
+        },
+        "feedback_learning": {
+          "description": "Feedback & Learning Tables",
+          "tables": [
+            {
+              "name": "feedback_events",
+              "purpose": "User feedback during execution",
+              "key_columns": ["id", "feedback_type", "content"],
+              "consumers": ["/leo assist"]
+            },
+            {
+              "name": "issue_patterns",
+              "purpose": "Recurring issues for prevention",
+              "key_columns": ["pattern_code", "occurrence_count", "status"],
+              "consumers": ["/learn", "RCA sub-agent"],
+              "producers": ["/leo assist", "rca-agent"]
+            },
+            {
+              "name": "retrospectives",
+              "purpose": "Learnings from completed work",
+              "key_columns": ["id", "sd_id", "retro_type"],
+              "consumers": ["/learn", "CLAUDE_CORE.md"],
+              "producers": ["generate-retrospective.js"]
+            },
+            {
+              "name": "protocol_improvement_queue",
+              "purpose": "Self-improvement proposals",
+              "key_columns": ["id", "risk_tier", "status"],
+              "consumers": ["CONST-007 rate limiting"],
+              "producers": ["/learn"]
+            }
+          ]
+        },
+        "session": {
+          "description": "Session Management Tables",
+          "tables": [
+            {
+              "name": "claude_sessions",
+              "purpose": "Session state and SD claims",
+              "key_columns": ["session_id", "sd_id", "status", "metadata"],
+              "consumers": ["/leo resume", "heartbeat-manager"],
+              "producers": ["/leo next", "/leo init"]
+            },
+            {
+              "name": "leo_settings",
+              "purpose": "Global default settings",
+              "key_columns": ["key", "value"],
+              "consumers": ["/leo settings"],
+              "producers": ["/leo settings"]
+            }
+          ]
+        }
+      }
+    },
+    "generators": {
+      "description": "Scripts that generate CLAUDE files from database",
+      "scripts": [
+        {
+          "name": "generate-claude-md-from-db.js",
+          "path": "scripts/generate-claude-md-from-db.js",
+          "purpose": "Main entry point for CLAUDE file generation",
+          "inputs": ["All LEO protocol tables"],
+          "outputs": ["CLAUDE.md", "CLAUDE_CORE.md", "CLAUDE_LEAD.md", "CLAUDE_PLAN.md", "CLAUDE_EXEC.md"]
+        },
+        {
+          "name": "db-queries.js",
+          "path": "scripts/modules/claude-md-generator/db-queries.js",
+          "purpose": "Database query functions",
+          "functions": [
+            "getActiveProtocol()",
+            "getAgents()",
+            "getSubAgents()",
+            "getHandoffTemplates()",
+            "getValidationRules()",
+            "getSchemaConstraints()",
+            "getProcessScripts()",
+            "getHotPatterns()",
+            "getRecentRetrospectives()",
+            "getGateHealth()",
+            "getPendingProposals()",
+            "getAutonomousDirectives()"
+          ]
+        },
+        {
+          "name": "section-file-mapping.json",
+          "path": "scripts/section-file-mapping.json",
+          "purpose": "Routes section_type to target CLAUDE file"
+        },
+        {
+          "name": "file-generators.js",
+          "path": "scripts/modules/claude-md-generator/file-generators.js",
+          "purpose": "Content formatting for each CLAUDE file",
+          "functions": [
+            "generateRouter() → CLAUDE.md",
+            "generateCore() → CLAUDE_CORE.md",
+            "generateLead() → CLAUDE_LEAD.md",
+            "generatePlan() → CLAUDE_PLAN.md",
+            "generateExec() → CLAUDE_EXEC.md"
+          ]
+        },
+        {
+          "name": "keyword-extractor.js",
+          "path": "scripts/modules/claude-md-generator/keyword-extractor.js",
+          "purpose": "Extract trigger keywords for sub-agent quick reference"
+        }
+      ]
+    },
+    "claude_files": {
+      "description": "Generated CLAUDE files (text/markdown)",
+      "files": [
+        {
+          "name": "CLAUDE.md",
+          "sections": 9,
+          "purpose": "Router - directs to appropriate phase file",
+          "key_sections": ["session_prologue", "smart_router", "skill_intent_detection", "sub_agent_triggers"]
+        },
+        {
+          "name": "CLAUDE_CORE.md",
+          "sections": 34,
+          "purpose": "Core context - SD types, sub-agents, handoff overview",
+          "key_sections": ["sd_type_requirements", "sub_agent_config", "handoff_chain", "validation_gates"]
+        },
+        {
+          "name": "CLAUDE_LEAD.md",
+          "sections": 20,
+          "purpose": "LEAD phase - approval workflow",
+          "key_sections": ["sd_approval", "scope_validation", "risk_assessment"]
+        },
+        {
+          "name": "CLAUDE_PLAN.md",
+          "sections": 30,
+          "purpose": "PLAN phase - PRD creation and validation",
+          "key_sections": ["prd_creation", "handoff_templates", "gate_requirements"]
+        },
+        {
+          "name": "CLAUDE_EXEC.md",
+          "sections": 23,
+          "purpose": "EXEC phase - implementation and testing",
+          "key_sections": ["implementation_checklist", "test_requirements", "branch_hygiene", "merge_workflow"]
+        }
+      ]
+    },
+    "commands": {
+      "description": "LEO Commands (Skills)",
+      "commands": [
+        {
+          "name": "/leo next",
+          "reads": ["strategic_directives_v2", "claude_sessions"],
+          "writes": ["claude_sessions"],
+          "purpose": "Show SD queue and claim next work"
+        },
+        {
+          "name": "/leo assist",
+          "reads": ["feedback_events", "strategic_directives_v2"],
+          "writes": ["issue_patterns", "strategic_directives_v2"],
+          "invokes": ["rca-agent"],
+          "purpose": "Autonomous inbox processing"
+        },
+        {
+          "name": "/leo create",
+          "reads": ["CLAUDE_LEAD.md", "CLAUDE_CORE.md"],
+          "writes": ["strategic_directives_v2", "product_requirements_v2"],
+          "invokes": ["database-agent", "security-agent", "design-agent"],
+          "purpose": "Create new Strategic Directive"
+        },
+        {
+          "name": "/leo settings",
+          "reads": ["claude_sessions", "leo_settings"],
+          "writes": ["claude_sessions", "leo_settings"],
+          "purpose": "View/modify session preferences"
+        },
+        {
+          "name": "/ship",
+          "reads": ["strategic_directives_v2"],
+          "writes": ["strategic_directives_v2"],
+          "purpose": "Commit, create PR, merge"
+        },
+        {
+          "name": "/learn",
+          "reads": ["issue_patterns", "retrospectives"],
+          "writes": ["issue_patterns", "retrospectives", "protocol_improvement_queue"],
+          "purpose": "Capture patterns and learnings"
+        }
+      ]
+    },
+    "sub_agents": {
+      "description": "Sub-agents invoked via Task tool",
+      "agents": [
+        {
+          "code": "database-agent",
+          "triggers": ["schema", "migration", "alter table", "foreign key", "RLS"],
+          "purpose": "Schema design and migrations"
+        },
+        {
+          "code": "security-agent",
+          "triggers": ["authentication", "api key", "OWASP", "CVE", "RLS"],
+          "purpose": "Security validation and auth patterns"
+        },
+        {
+          "code": "testing-agent",
+          "triggers": ["coverage", "e2e test", "jest", "playwright"],
+          "purpose": "Test creation and validation"
+        },
+        {
+          "code": "rca-agent",
+          "triggers": ["5 whys", "root cause", "keeps happening", "stuck"],
+          "purpose": "Root cause analysis"
+        },
+        {
+          "code": "design-agent",
+          "triggers": ["accessibility", "responsive", "UI/UX", "component"],
+          "purpose": "UI/UX design validation"
+        }
+      ]
+    }
+  },
+  "flows": {
+    "generation_flow": {
+      "description": "Database → Generator → CLAUDE files",
+      "steps": [
+        "1. npm run generate:claude",
+        "2. generate-claude-md-from-db.js loads",
+        "3. db-queries.js fetches all LEO tables",
+        "4. section-file-mapping.json routes sections",
+        "5. file-generators.js formats content",
+        "6. 5 CLAUDE*.md files written"
+      ]
+    },
+    "session_flow": {
+      "description": "Session start → SD work → Completion",
+      "steps": [
+        "1. /leo start → Load CLAUDE.md (router)",
+        "2. Read CLAUDE_CORE.md (context)",
+        "3. npm run sd:next → Query strategic_directives",
+        "4. Load phase file (LEAD/PLAN/EXEC)",
+        "5. Sub-agents triggered by keywords",
+        "6. Work completed → /ship → /learn"
+      ]
+    },
+    "feedback_loop": {
+      "description": "Feedback → Processing → Learning",
+      "steps": [
+        "1. feedback_events recorded during work",
+        "2. /leo assist processes inbox",
+        "3. Issues invoke rca-agent",
+        "4. Patterns stored in issue_patterns",
+        "5. /learn captures retrospectives",
+        "6. protocol_improvement_queue updated",
+        "7. CONST-007 rate limits AUTO changes"
+      ]
+    }
+  }
+}
