@@ -174,22 +174,26 @@ jobs:
 
       - name: Validate Orchestrator Recording
         run: |
-          echo "Checking orchestrator uses safeInsert..."
-          grep -n "import.*safeInsert" scripts/orchestrate-phase-subagents.js || {
-            echo "❌ Orchestrator does not import safeInsert!"
+          # QF-20260201-334: Check the module files, not the thin wrapper
+          # safeInsert is used in the modular orchestrator components
+          ORCHESTRATOR_MODULE="scripts/modules/phase-subagent-orchestrator/execution.js"
+
+          echo "Checking orchestrator module uses safeInsert..."
+          grep -n "import.*safeInsert" "$ORCHESTRATOR_MODULE" || {
+            echo "❌ Orchestrator module does not import safeInsert!"
             exit 1
           }
-          echo "✅ safeInsert import found"
+          echo "✅ safeInsert import found in $ORCHESTRATOR_MODULE"
 
           echo "Checking verifyExecutionRecorded function exists..."
-          grep -n "function verifyExecutionRecorded" scripts/orchestrate-phase-subagents.js || {
+          grep -rn "function verifyExecutionRecorded" scripts/modules/phase-subagent-orchestrator/ || {
             echo "❌ verifyExecutionRecorded function missing!"
             exit 1
           }
           echo "✅ Verification function exists"
 
           echo "Checking for MANDATORY RECORDING enforcement..."
-          grep -n "MANDATORY RECORDING FAILED" scripts/orchestrate-phase-subagents.js || {
+          grep -rn "MANDATORY RECORDING" scripts/modules/phase-subagent-orchestrator/ || {
             echo "❌ Mandatory recording enforcement missing!"
             exit 1
           }
