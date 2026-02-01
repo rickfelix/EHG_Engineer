@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T15:28:12.179Z
-**Tables**: 395
+**Generated**: 2026-02-01T16:12:10.838Z
+**Tables**: 397
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (395)
+## All Tables (397)
 
 ### LEO Protocol
 
@@ -47,6 +47,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_kb_generation_log](tables/leo_kb_generation_log.md)
 - [leo_kill_switches](tables/leo_kill_switches.md)
 - [leo_nfr_requirements](tables/leo_nfr_requirements.md)
+- [leo_planner_rankings](tables/leo_planner_rankings.md)
 - [leo_prioritization_config](tables/leo_prioritization_config.md)
 - [leo_process_scripts](tables/leo_process_scripts.md)
 - [leo_prompts](tables/leo_prompts.md)
@@ -353,6 +354,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)
 - [sdip_groups](tables/sdip_groups.md)
 - [sdip_submissions](tables/sdip_submissions.md)
+- [session_lifecycle_events](tables/session_lifecycle_events.md)
 - [shipping_decisions](tables/shipping_decisions.md)
 - [simulation_sessions](tables/simulation_sessions.md)
 - [soul_extractions](tables/soul_extractions.md)
