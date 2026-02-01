@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T16:44:51.224Z
-**Tables**: 398
+**Generated**: 2026-02-01T17:46:55.871Z
+**Tables**: 402
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (398)
+## All Tables (402)
 
 ### LEO Protocol
 
@@ -235,6 +235,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [cultural_design_styles](tables/cultural_design_styles.md)
 - [db_agent_config](tables/db_agent_config.md)
 - [db_agent_invocations](tables/db_agent_invocations.md)
+- [debate_arguments](tables/debate_arguments.md)
+- [debate_circuit_breaker](tables/debate_circuit_breaker.md)
+- [debate_sessions](tables/debate_sessions.md)
 - [defect_taxonomy](tables/defect_taxonomy.md)
 - [directive_submissions](tables/directive_submissions.md)
 - [distribution_channels](tables/distribution_channels.md)
@@ -287,6 +290,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [intelligence_analysis](tables/intelligence_analysis.md)
 - [intelligence_patterns](tables/intelligence_patterns.md)
 - [interaction_history](tables/interaction_history.md)
+- [judge_verdicts](tables/judge_verdicts.md)
 - [key_results](tables/key_results.md)
 - [kr_progress_snapshots](tables/kr_progress_snapshots.md)
 - [lead_evaluations](tables/lead_evaluations.md)
