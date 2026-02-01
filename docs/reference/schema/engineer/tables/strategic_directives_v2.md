@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T23:29:30.049Z
+**Generated**: 2026-02-01T23:52:12.478Z
 **Rows**: 723
 **RLS**: Enabled (4 policies)
 
@@ -486,6 +486,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION prevent_child_exec_before_parent_approval()`
+
+### trg_record_mttr_on_sd_completion
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION record_mttr_on_sd_completion()`
 
 ### trg_sync_sd_code_user_facing
 
