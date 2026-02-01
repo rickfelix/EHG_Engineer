@@ -88,8 +88,10 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ steps.check.outputs.pr_number }}
           CONFIG: ${{ steps.config.outputs.config }}
+          OUTPUT_FILE: review-output.json
         run: |
-          node lib/agents/github-review-coordinator.js > review-output.json 2>&1 || echo "Coordinator failed"
+          # Coordinator writes JSON to OUTPUT_FILE, debug output to stderr
+          node lib/agents/github-review-coordinator.js 2>&1 || echo "Coordinator failed"
 
           # Ensure valid JSON output even on failure
           if [ ! -f review-output.json ] || ! jq empty review-output.json 2>/dev/null; then

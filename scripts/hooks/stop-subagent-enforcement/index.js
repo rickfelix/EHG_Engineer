@@ -321,19 +321,20 @@ export async function main() {
           console.log(`   SD: ${sdKey}`);
           console.log(`   Phase: ${sd.current_phase}`);
           console.log(`   Reason: ${continuationCheck.reason}`);
-          console.log('   Exit code 3 signals external loop to continue\n');
+          console.log('   Continuation state written to .claude/continuation-state.json\n');
 
-          return { exitCode3: true };
+          return { continuationNeeded: true };
         }
       }
     }
 
-    return { exitCode3: false };
+    return { continuationNeeded: false };
   }, 'checkAutoProceedContinuation');
 
-  // Exit with code 3 if continuation needed (signals external loop)
-  if (autoProceedResult?.exitCode3) {
-    gracefulExit(3);
+  // Exit cleanly - PowerShell loop checks continuation-state.json for next action
+  // (Previously used exit code 3, but Claude Code displayed that as an error)
+  if (autoProceedResult?.continuationNeeded) {
+    gracefulExit(0);
     return;
   }
 

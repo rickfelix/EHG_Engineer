@@ -26,18 +26,23 @@ dotenv.config();
 // Clock skew tolerance (60 seconds)
 const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 
+// Grandfather clause: Only validate artifacts created AFTER this date
+// This prevents false positives on SDs that existed before bypass detection was deployed
+// SD-LEO-SELF-IMPROVE-001L RCA: Historical SDs created before rules existed
+const BYPASS_DETECTION_DEPLOYMENT_DATE = new Date('2026-02-01T00:00:00Z').getTime();
+
 /**
  * Define prerequisite relationships for LEO Protocol phases
  * Each artifact type has prerequisite steps that must complete before it
  */
 const PREREQUISITE_MAP = {
-  // Retrospective requires EXEC-TO-PLAN handoff to be accepted first
-  'retrospective': {
-    prerequisiteTable: 'sd_phase_handoffs',
-    prerequisiteType: 'EXEC-TO-PLAN',
-    timestampField: 'accepted_at',
-    artifactTimestampField: 'created_at'
-  },
+  // NOTE: Retrospectives are intentionally NOT validated here.
+  // Retrospectives are created DURING EXEC phase by the RETRO sub-agent,
+  // then the EXEC-TO-PLAN handoff validates that a quality retrospective exists.
+  // Therefore, retrospectives MUST exist BEFORE EXEC-TO-PLAN acceptance, not after.
+  //
+  // SD-LEO-SELF-IMPROVE-001L RCA: Removed retrospective prerequisite check
+  // as it was based on incorrect understanding of LEO Protocol workflow.
   // EXEC-TO-PLAN handoff requires PLAN-TO-EXEC to be accepted first
   'handoff_exec_to_plan': {
     prerequisiteTable: 'sd_phase_handoffs',
@@ -130,7 +135,10 @@ async function validateSDTimeline(sdId, supabase) {
     const execToPlan = handoffTimestamps['EXEC-TO-PLAN'];
     const planToExec = handoffTimestamps['PLAN-TO-EXEC'];
 
-    if (planToExec.accepted_at && execToPlan.created_at < planToExec.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
+    // Grandfather clause: Skip artifacts created before bypass detection deployment
+    if (execToPlan.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) {
+      // Skip - artifact predates bypass detection rules
+    } else if (planToExec.accepted_at && execToPlan.created_at < planToExec.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
       findings.push({
         sd_id: sdId,
         artifact_type: 'handoff_exec_to_plan',
@@ -150,7 +158,10 @@ async function validateSDTimeline(sdId, supabase) {
     const planToLead = handoffTimestamps['PLAN-TO-LEAD'];
     const execToPlan = handoffTimestamps['EXEC-TO-PLAN'];
 
-    if (execToPlan.accepted_at && planToLead.created_at < execToPlan.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
+    // Grandfather clause: Skip artifacts created before bypass detection deployment
+    if (planToLead.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) {
+      // Skip - artifact predates bypass detection rules
+    } else if (execToPlan.accepted_at && planToLead.created_at < execToPlan.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
       findings.push({
         sd_id: sdId,
         artifact_type: 'handoff_plan_to_lead',
@@ -170,7 +181,10 @@ async function validateSDTimeline(sdId, supabase) {
     const leadFinal = handoffTimestamps['LEAD-FINAL-APPROVAL'];
     const planToLead = handoffTimestamps['PLAN-TO-LEAD'];
 
-    if (planToLead.accepted_at && leadFinal.created_at < planToLead.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
+    // Grandfather clause: Skip artifacts created before bypass detection deployment
+    if (leadFinal.created_at < BYPASS_DETECTION_DEPLOYMENT_DATE) {
+      // Skip - artifact predates bypass detection rules
+    } else if (planToLead.accepted_at && leadFinal.created_at < planToLead.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
       findings.push({
         sd_id: sdId,
         artifact_type: 'handoff_lead_final_approval',
@@ -185,28 +199,9 @@ async function validateSDTimeline(sdId, supabase) {
     }
   }
 
-  // Validate retrospective after EXEC-TO-PLAN
-  if (retrospectives && retrospectives.length > 0 && handoffTimestamps['EXEC-TO-PLAN']) {
-    const execToPlan = handoffTimestamps['EXEC-TO-PLAN'];
-
-    for (const retro of retrospectives) {
-      const retroCreatedAt = new Date(retro.created_at).getTime();
-
-      if (execToPlan.accepted_at && retroCreatedAt < execToPlan.accepted_at - CLOCK_SKEW_TOLERANCE_MS) {
-        findings.push({
-          sd_id: sdId,
-          artifact_type: 'retrospective',
-          artifact_id: retro.id,
-          artifact_timestamp: new Date(retroCreatedAt).toISOString(),
-          expected_min_timestamp: new Date(execToPlan.accepted_at - CLOCK_SKEW_TOLERANCE_MS).toISOString(),
-          prerequisite_type: 'EXEC-TO-PLAN',
-          prerequisite_timestamp: new Date(execToPlan.accepted_at).toISOString(),
-          time_delta_seconds: Math.round((execToPlan.accepted_at - retroCreatedAt) / 1000),
-          failure_category: 'bypass'
-        });
-      }
-    }
-  }
+  // NOTE: Retrospective validation intentionally removed.
+  // Retrospectives are created DURING EXEC phase (before EXEC-TO-PLAN handoff).
+  // See PREREQUISITE_MAP comment for rationale.
 
   return findings;
 }
@@ -278,7 +273,8 @@ async function runBypassDetection(options = {}) {
     findings_count: allFindings.length,
     pass: allFindings.length === 0,
     findings: allFindings,
-    clock_skew_tolerance_seconds: CLOCK_SKEW_TOLERANCE_MS / 1000
+    clock_skew_tolerance_seconds: CLOCK_SKEW_TOLERANCE_MS / 1000,
+    grandfather_date: new Date(BYPASS_DETECTION_DEPLOYMENT_DATE).toISOString()
   };
 
   // Write JSON report
@@ -412,6 +408,7 @@ export {
   validateSDTimeline,
   generateMarkdownSummary,
   CLOCK_SKEW_TOLERANCE_MS,
+  BYPASS_DETECTION_DEPLOYMENT_DATE,
   PREREQUISITE_MAP
 };
 

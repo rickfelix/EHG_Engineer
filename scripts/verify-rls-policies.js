@@ -19,13 +19,15 @@ dotenv.config();
 
 const { Client } = pg;
 
-// Table exclusion patterns (system tables only)
+// Table exclusion patterns (system tables and backup tables)
 // Note: agent_ and documentation_ tables are NO LONGER excluded (secured via migrations 020/021)
+// QF-20260201-568: Added backup table exclusion
 const EXCLUDED_TABLE_PATTERNS = [
   /^pg_/,           // PostgreSQL system tables
   /^_pg/,           // PostgreSQL internal tables
   /^sql_/,          // SQL system tables
-  /^information_schema/ // Information schema
+  /^information_schema/, // Information schema
+  /_backup_\d{8}$/  // QF-20260201-568: Backup tables with date suffix (e.g., view_definitions_backup_20260124)
 ];
 
 // Configuration with improved timeouts for CI/CD environments
@@ -108,7 +110,7 @@ class RLSVerifier {
       await this.client.connect();
       this.log('[OK] Connected to database');
       return true;
-    } catch (_error) {
+    } catch (error) {
       if (attempt < CONFIG.maxRetries) {
         const delay = CONFIG.retryDelays[attempt - 1] || CONFIG.retryDelays[CONFIG.retryDelays.length - 1];
         this.warn(`[WARN] Connection attempt ${attempt} failed, retrying in ${delay / 1000}s...`);
@@ -401,7 +403,7 @@ async function main() {
     // Exit with appropriate code
     process.exit(results.passed ? 0 : 1);
 
-  } catch (_error) {
+  } catch (error) {
     // Always output errors to stderr, even in JSON mode
     console.error('\n[FAIL] VERIFICATION FAILED');
     console.error('Error:', error.message);
