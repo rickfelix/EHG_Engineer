@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T16:12:10.838Z
-**Tables**: 397
+**Generated**: 2026-02-01T16:44:51.224Z
+**Tables**: 398
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,13 +20,14 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (397)
+## All Tables (398)
 
 ### LEO Protocol
 
 - [leo_adrs](tables/leo_adrs.md)
 - [leo_agents](tables/leo_agents.md)
 - [leo_artifacts](tables/leo_artifacts.md)
+- [leo_audit_checklists](tables/leo_audit_checklists.md)
 - [leo_audit_config](tables/leo_audit_config.md)
 - [leo_autonomous_directives](tables/leo_autonomous_directives.md)
 - [leo_complexity_thresholds](tables/leo_complexity_thresholds.md)

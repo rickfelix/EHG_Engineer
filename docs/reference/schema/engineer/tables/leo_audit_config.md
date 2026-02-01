@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T16:12:10.838Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2026-02-01T16:44:51.224Z
+**Rows**: 1
+**RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -19,26 +19,19 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| enabled | `boolean` | **NO** | `true` | Master switch for audit execution |
+| schedule_cron | `text` | **NO** | - | Cron expression for audit schedule (e.g., "0 2 * * 1" for Mondays at 2 AM) |
+| timezone | `text` | **NO** | `'UTC'::text` | Timezone for cron schedule interpretation |
+| stale_after_days | `integer(32)` | **NO** | `14` | Days before SD marked as stale/abandoned |
+| warn_after_days | `integer(32)` | **NO** | `7` | Days before warning about stale SD |
+| max_findings_per_sd | `integer(32)` | **NO** | `25` | Maximum findings to report per SD |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
-| created_by | `uuid` | **NO** | - | - |
-| version | `integer(32)` | **NO** | - | - |
-| status | `text` | **NO** | `'draft'::text` | - |
-| event_retention_days | `integer(32)` | **NO** | - | - |
-| pii_redaction_rules | `jsonb` | **NO** | - | - |
-| required_event_types | `jsonb` | **NO** | - | - |
-| description | `text` | YES | - | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
 - `leo_audit_config_pkey`: PRIMARY KEY (id)
-
-### Unique Constraints
-- `uq_leo_audit_config_version`: UNIQUE (version)
-
-### Check Constraints
-- `leo_audit_config_event_retention_days_check`: CHECK (((event_retention_days >= 7) AND (event_retention_days <= 3650)))
-- `leo_audit_config_status_check`: CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text])))
 
 ## Indexes
 
@@ -46,23 +39,13 @@
   ```sql
   CREATE UNIQUE INDEX leo_audit_config_pkey ON public.leo_audit_config USING btree (id)
   ```
-- `uq_leo_audit_config_version`
-  ```sql
-  CREATE UNIQUE INDEX uq_leo_audit_config_version ON public.leo_audit_config USING btree (version)
-  ```
 
-## RLS Policies
+## Triggers
 
-### 1. Anon can read active audit config (SELECT)
+### trigger_leo_audit_config_updated_at
 
-- **Roles**: {public}
-- **Using**: `(status = 'active'::text)`
-
-### 2. Service role full access to leo_audit_config (ALL)
-
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
-- **With Check**: `(auth.role() = 'service_role'::text)`
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION update_leo_audit_config_updated_at()`
 
 ---
 
