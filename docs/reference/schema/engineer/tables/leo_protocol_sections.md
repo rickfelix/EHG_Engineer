@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T14:48:33.761Z
+**Generated**: 2026-02-01T15:28:12.179Z
 **Rows**: 179
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (17 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,13 @@
 | context_tier | `text` | YES | - | - |
 | target_file | `text` | YES | - | - |
 | priority | `character varying(20)` | YES | `'STANDARD'::character varying` | Section priority: CORE (always loaded, never removed), STANDARD (normal rules), SITUATIONAL (context-dependent) |
+| scoring_rubric_id | `uuid` | YES | - | - |
+| scoring_input | `jsonb` | YES | - | - |
+| scoring_output | `jsonb` | YES | - | - |
+| scoring_total | `numeric(6,2)` | YES | - | - |
+| scoring_normalized_total | `numeric(6,2)` | YES | - | - |
+| scoring_computed_at | `timestamp with time zone` | YES | - | - |
+| scoring_computed_by | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -35,12 +42,14 @@
 - `leo_protocol_sections_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `fk_leo_protocol_sections_scoring_rubric`: scoring_rubric_id → leo_scoring_rubrics(id)
 - `leo_protocol_sections_protocol_id_fkey`: protocol_id → leo_protocols(id)
 
 ### Unique Constraints
 - `leo_protocol_sections_protocol_id_section_type_order_index_key`: UNIQUE (protocol_id, section_type, order_index)
 
 ### Check Constraints
+- `chk_scoring_provenance`: CHECK (((scoring_rubric_id IS NULL) OR (scoring_computed_at IS NOT NULL)))
 - `leo_protocol_sections_context_tier_check`: CHECK ((context_tier = ANY (ARRAY['ROUTER'::text, 'CORE'::text, 'PHASE_LEAD'::text, 'PHASE_PLAN'::text, 'PHASE_EXEC'::text, 'REFERENCE'::text])))
 - `leo_protocol_sections_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['CORE'::character varying, 'STANDARD'::character varying, 'SITUATIONAL'::character varying])::text[])))
 
