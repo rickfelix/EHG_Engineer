@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T13:43:51.883Z
-**Rows**: 0
+**Generated**: 2026-02-01T14:48:33.761Z
+**Rows**: 1
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,22 +14,19 @@
 
 ---
 
-## Columns (12 total)
+## Columns (9 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| created_at | `timestamp with time zone` | **NO** | `now()` | - |
-| created_by | `uuid` | **NO** | - | - |
-| name | `text` | **NO** | - | - |
 | version | `integer(32)` | **NO** | - | - |
-| status | `text` | **NO** | `'draft'::text` | - |
-| weights | `jsonb` | **NO** | - | - |
-| criteria | `jsonb` | **NO** | - | - |
-| scoring_scale | `jsonb` | **NO** | - | - |
-| description | `text` | YES | - | - |
-| effective_from | `timestamp with time zone` | **NO** | `now()` | - |
-| effective_to | `timestamp with time zone` | YES | - | - |
+| name | `text` | **NO** | - | - |
+| description | `text` | **NO** | - | - |
+| rules | `jsonb` | **NO** | - | - |
+| status | `USER-DEFINED` | **NO** | `'draft'::leo_rubric_status` | - |
+| created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| published_at | `timestamp with time zone` | YES | - | - |
+| deprecated_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -37,46 +34,42 @@
 - `leo_vetting_rubrics_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `uq_leo_vetting_rubrics_name_version`: UNIQUE (name, version)
+- `uq_leo_vetting_rubrics_version`: UNIQUE (version)
 
 ### Check Constraints
-- `leo_vetting_rubrics_status_check`: CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'deprecated'::text])))
+- `chk_published_has_date`: CHECK ((((status = 'published'::leo_rubric_status) AND (published_at IS NOT NULL)) OR (status <> 'published'::leo_rubric_status)))
+- `chk_rubric_rules_schema`: CHECK (((jsonb_typeof(rules) = 'object'::text) AND (rules ? 'rubric_version'::text) AND (rules ? 'rules'::text) AND (rules ? 'pass_threshold'::text) AND (rules ? 'hard_fail_conditions'::text) AND (jsonb_typeof((rules -> 'rules'::text)) = 'array'::text) AND (jsonb_typeof((rules -> 'hard_fail_conditions'::text)) = 'array'::text) AND (((rules ->> 'pass_threshold'::text))::numeric >= (0)::numeric) AND (((rules ->> 'pass_threshold'::text))::numeric <= (1)::numeric)))
 
 ## Indexes
 
+- `idx_leo_vetting_rubrics_status`
+  ```sql
+  CREATE INDEX idx_leo_vetting_rubrics_status ON public.leo_vetting_rubrics USING btree (status)
+  ```
+- `idx_leo_vetting_rubrics_version`
+  ```sql
+  CREATE INDEX idx_leo_vetting_rubrics_version ON public.leo_vetting_rubrics USING btree (version)
+  ```
 - `leo_vetting_rubrics_pkey`
   ```sql
   CREATE UNIQUE INDEX leo_vetting_rubrics_pkey ON public.leo_vetting_rubrics USING btree (id)
   ```
-- `uq_leo_vetting_rubrics_name_version`
+- `uq_leo_vetting_rubrics_version`
   ```sql
-  CREATE UNIQUE INDEX uq_leo_vetting_rubrics_name_version ON public.leo_vetting_rubrics USING btree (name, version)
+  CREATE UNIQUE INDEX uq_leo_vetting_rubrics_version ON public.leo_vetting_rubrics USING btree (version)
   ```
 
 ## RLS Policies
 
-### 1. Anon can read published rubrics (SELECT)
+### 1. rubrics_select_all (SELECT)
 
 - **Roles**: {public}
-- **Using**: `(status = 'published'::text)`
+- **Using**: `true`
 
-### 2. Service role full access to leo_vetting_rubrics (ALL)
+### 2. rubrics_service_role (ALL)
 
 - **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
-- **With Check**: `(auth.role() = 'service_role'::text)`
-
-## Triggers
-
-### trg_leo_vetting_rubrics_validate
-
-- **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION leo_vetting_rubrics_validate()`
-
-### trg_leo_vetting_rubrics_validate
-
-- **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION leo_vetting_rubrics_validate()`
+- **Using**: `(((current_setting('request.jwt.claims'::text, true))::jsonb ->> 'role'::text) = 'service_role'::text)`
 
 ---
 
