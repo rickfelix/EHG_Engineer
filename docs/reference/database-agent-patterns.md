@@ -10,11 +10,12 @@
 - **Tags**: database, api, testing, unit
 
 **Status**: ACTIVE
-**Last Updated**: 2026-01-31
-**Version**: 1.3.0
+**Last Updated**: 2026-02-01
+**Version**: 1.3.1
 **Purpose**: Complete guide for database agent invocation, anti-patterns, and best practices
 **Evidence**: 74+ retrospectives analyzed, 13+ SDs with database agent lessons, 11 issue patterns
 **Recent Improvements**:
+- **v1.3.1 (2026-02-01)**: Fixed AUTO-EXECUTE to use `execute-database-sql.js` (uses pooler URL, no password required)
 - **v1.3.0 (2026-01-31)**: Autonomy Decision Tree - DATABASE agent now autonomously executes safe operations (QF-20260131-948)
 - SD-LEO-INFRA-DATABASE-SUB-AGENT-001 (2026-01-24): SQL execution intent semantic triggering with auto-invocation
 - SD-LEO-LEARN-001: Proactive learning integration
@@ -242,19 +243,52 @@ Execute **immediately** without asking for approval:
 
 | Operation | Why Safe | How |
 |-----------|----------|-----|
-| Run existing migration files | Already reviewed/approved | `node scripts/run-sql-migration.js <file>` |
+| Run existing migration files | Already reviewed/approved | `node scripts/execute-database-sql.js <file>` |
 | SELECT queries for validation | Read-only | Direct SQL via connection |
 | Schema introspection queries | Read-only (information_schema) | Direct SQL |
 | Create table backups | Additive, preserves data | `CREATE TABLE backup_* AS SELECT...` |
 | Add columns with IF NOT EXISTS | Idempotent, no data loss | Execute migration SQL |
 | Create indexes | Additive, improves performance | Execute migration SQL |
 
+**IMPORTANT: Preferred Migration Execution Method**
+
+Use `scripts/execute-database-sql.js` (NOT `run-sql-migration.js`) because:
+- Uses `SUPABASE_POOLER_URL` which is already configured in `.env`
+- Does NOT require `SUPABASE_DB_PASSWORD` (which may not be set)
+- Works across all environments (dev, staging, prod)
+- Handles connection pooling automatically
+
+```bash
+# ✅ CORRECT: Uses pooler URL, no password needed
+node scripts/execute-database-sql.js database/migrations/XXXXX.sql
+
+# ❌ WRONG: Requires SUPABASE_DB_PASSWORD which may not exist
+node scripts/run-sql-migration.js database/migrations/XXXXX.sql
+```
+
+**If migration execution fails**, do NOT give up. Try alternative approaches:
+1. Check if `execute-database-sql.js` exists and use it
+2. Look for existing migration execution scripts in `scripts/` folder
+3. Verify which env vars ARE available vs which are missing
+4. **Never ask for manual execution** when scriptable solutions exist
+
 **Example** (Real session 2026-01-31):
 ```
 Issue: Missing compliance_score column
 Diagnosis: Migration file exists but never executed
-Action: AUTO-EXECUTE migration via run-sql-migration.js
+Action: AUTO-EXECUTE migration via execute-database-sql.js
 Result: ✅ Columns added, no user intervention needed
+```
+
+**Example** (Real session 2026-02-01):
+```
+Issue: feedback_quality_config table not created
+Diagnosis: Migration file exists, SUPABASE_DB_PASSWORD not set
+WRONG: Give up and ask for manual execution in Supabase Dashboard
+RIGHT: Use execute-database-sql.js which uses SUPABASE_POOLER_URL
+Action: node scripts/execute-database-sql.js database/migrations/20260131_feedback_quality_config.sql
+Result: ✅ Table, triggers, functions, RLS policies, feature flags all created
+Lesson: Default to action - find working tools instead of giving up
 ```
 
 #### Category 2: ROUTE (Complex Operations)
@@ -2128,6 +2162,9 @@ const result = await shouldAutoInvokeAndExecute(message, {
 | 1.2.0 | 2026-01-24 | Added auto-invocation integration, configuration, and audit trail |
 | 1.2.1 | 2026-01-25 | Added Supabase API Key Resilience pattern (PAT-SUPABASE-KEY-001) |
 | 1.2.1 | 2026-01-25 | Updated tests/helpers/database-helpers.js with resilient client creation |
+| 1.3.1 | 2026-02-01 | Fixed AUTO-EXECUTE script reference: use execute-database-sql.js (not run-sql-migration.js) |
+| 1.3.1 | 2026-02-01 | Added resilience guidance: try alternative execution methods instead of giving up |
+| 1.3.1 | 2026-02-01 | Documented SUPABASE_POOLER_URL as preferred connection method (no password required) |
 
 ---
 
