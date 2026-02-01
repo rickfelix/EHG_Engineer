@@ -3,14 +3,14 @@
 
 ## Metadata
 - **Category**: Reference
-- **Status**: Draft
-- **Version**: 1.0.0
+- **Status**: Approved
+- **Version**: 1.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-13
-- **Tags**: database, testing, e2e, migration
+- **Last Updated**: 2026-02-01
+- **Tags**: database, testing, e2e, migration, infrastructure-consumer-check, plan-to-exec
 
 **Status**: ACTIVE
-**Last Updated**: 2025-10-12
+**Last Updated**: 2026-02-01
 **Purpose**: Quick reference for mandatory validation gates and enforcement
 
 ---
@@ -98,6 +98,109 @@ node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 
 **Failure Pattern**:
 > "Discovered existing infrastructure mid-implementation → wasted effort on custom solution"
+
+---
+
+### GATE 2.5: Infrastructure Consumer Check (WARNING)
+
+**When**: During PLAN→EXEC handoff validation
+**Who**: PLAN agent
+**Purpose**: Detect infrastructure-without-consumer gaps to prevent incomplete implementations
+
+**Mandatory Checks**:
+- [ ] **Database Schema Consumer**: All table/migration PRD items have corresponding usage in codebase or user stories
+- [ ] **Sub-Agent Consumer**: All sub-agent PRD items have corresponding logic implementation planned
+- [ ] **API Consumer**: All API endpoint PRD items have corresponding client/consumer code planned
+- [ ] **User Story Completeness**: User stories show both existence (creation) AND usage (consumption) patterns
+
+**Infrastructure Detection Patterns**:
+| Infrastructure Type | Detection Keywords | Consumer Hint |
+|---------------------|-------------------|---------------|
+| Database Schema | table, migration, column, RLS, schema, database | INSERT, UPDATE, SELECT, query, supabase.from |
+| Sub-Agent | sub-agent, subagent, agent, orchestrator | script_path, scripts/execute-subagent.js |
+| API/RPC | API, endpoint, RPC, function, route | fetch, axios, supabase.rpc |
+
+**Reason Codes**:
+| Code | Meaning | Auto-Generate Follow-Up SD? |
+|------|---------|------------------------------|
+| `SCHEMA_WITHOUT_CONSUMER` | Database schema created but no usage code | ✅ YES |
+| `SUBAGENT_WITHOUT_LOGIC` | Sub-agent definition but no script_path or logic | ✅ YES |
+| `API_WITHOUT_CONSUMER` | API endpoint defined but no client code | ✅ YES |
+| `MISSING_USAGE_STORIES` | User stories show creation but not usage | ⚠️ WARNING ONLY |
+| `PASS_WITH_OVERRIDE` | Opt-out annotation used | ❌ NO (user override) |
+
+**Opt-Out System**:
+```markdown
+# In PRD content, use global or per-item annotations:
+
+<!-- INFRA_CONSUMER_CHECK:SKIP -->
+[Entire PRD skipped]
+
+<!-- INFRA_CONSUMER_CHECK:SKIP:database_schema -->
+[Specific infrastructure item skipped]
+```
+
+**Invocation**:
+```bash
+# Automated (part of PLAN-TO-EXEC handoff)
+node scripts/handoff.js execute PLAN-TO-EXEC SD-ID
+
+# Manual testing
+node -e "
+const { createInfrastructureConsumerCheckGate } = require('./scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js');
+const { PrdRepository } = require('./scripts/modules/prd/prd-repository.js');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const prdRepo = new PrdRepository(supabase);
+const gate = createInfrastructureConsumerCheckGate(prdRepo, supabase);
+
+gate.validator({ sdId: 'SD-ID' }).then(result => {
+  console.log('Gate result:', JSON.stringify(result, null, 2));
+});
+"
+```
+
+**Warns When**:
+- Infrastructure items lack evidence of consumer code in PRD
+- User stories show only creation patterns (not usage patterns)
+- Missing codebase references for planned infrastructure
+
+**Blocks When**:
+- N/A (WARNING gate only - does not block handoff)
+
+**Auto-Remediation**:
+When gaps detected, the gate automatically:
+1. **Generates follow-up SD** with idempotent key: `SD-{CATEGORY}-{ORIGINAL_SD_KEY}-CONSUMER-{INDEX}`
+2. **Links parent-child relationship**: Sets `parent_sd_id` to original SD
+3. **Inherits metadata**: Copies categories, risk_level, priority from parent
+4. **Creates with reason code**: Documents which infrastructure type needs consumer
+
+**Success Pattern** (SD-LEO-INFRA-PLAN-PHASE-COMPLETENESS-001):
+> "Infrastructure Consumer Check detected JUDGE agent database schema (11 tables) created without implementation SD → auto-generated follow-up SD with consumer requirements → prevented incomplete work"
+
+**Failure Pattern** (SD-LEO-SELF-IMPROVE-001J):
+> "JUDGE agent database schema created (11 tables) but no implementation SD existed → PLAN-TO-EXEC handoff accepted incomplete work → schema orphaned without usage code"
+
+**Implementation Reference**:
+- **Gate Creator**: `scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js`
+- **Exports**: `createInfrastructureConsumerCheckGate()`, `generateFollowUpSD()`, `REASON_CODES`
+- **Registration**: `scripts/modules/handoff/executors/plan-to-exec/index.js` (lines 114-116)
+
+**Audit Logging**:
+All opt-out overrides are logged to `validation_audit_log` table with:
+- SD ID and PRD ID
+- Reason code and override type (global or per-item)
+- Timestamp and session context
+
+**Why This Gate Exists**:
+Prevents the "infrastructure-without-consumer" anti-pattern where:
+- Database schemas are created but never queried
+- Sub-agents are defined but never invoked
+- APIs are built but never called
+
+This gate ensures PLAN phase verifies not just infrastructure creation, but also its intended usage, preventing incomplete implementations from reaching EXEC phase.
 
 ---
 
@@ -344,6 +447,26 @@ node scripts/orchestrate-phase-subagents.js PLAN_PRD <SD-ID>
 **Blocks**: PRD creation if GATE 2 checks fail (critical schema gaps, route conflicts)
 
 **Documents**: Schema validation, component reuse, test infrastructure in PLAN→EXEC handoff
+
+---
+
+### PLAN to EXEC Handoff (includes Infrastructure Consumer Check)
+
+**When**:
+- Transitioning from PLAN to EXEC phase
+- PRD approved and ready for implementation
+
+**Action**:
+```bash
+node scripts/handoff.js execute PLAN-TO-EXEC <SD-ID>
+```
+
+**Includes**: Infrastructure Consumer Check (GATE 2.5)
+- Validates that infrastructure items have corresponding consumer code planned
+- Auto-generates follow-up SDs for detected gaps (idempotent)
+- WARNING gate only - does not block handoff, provides guidance
+
+**Documents**: Infrastructure gaps, follow-up SD references, opt-out overrides in PLAN→EXEC handoff metadata
 
 ---
 
@@ -594,6 +717,7 @@ Need to validate SD/PRD/implementation? → node scripts/systems-analyst-codebas
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-02-01 | Added GATE 2.5: Infrastructure Consumer Check (SD-LEO-INFRA-PLAN-PHASE-COMPLETENESS-001) - WARNING gate for detecting infrastructure-without-consumer gaps during PLAN-TO-EXEC handoff |
 | 1.0.0 | 2025-10-12 | Initial quick reference from 74 retrospectives analysis |
 
 ---
