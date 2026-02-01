@@ -1,12 +1,13 @@
 {
-  "isActive": false,
+  "isActive": true,
   "wasInterrupted": false,
-  "currentSd": null,
-  "currentPhase": null,
-  "currentTask": null,
+  "currentSd": "SD-LEO-SELF-IMPROVE-001B",
+  "currentPhase": "EXEC",
+  "currentTask": "Implementing Phase 0.5: Data Contracts",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 2,
   "version": "1.0.0",
-  "clearedAt": "2026-01-30T20:15:12.776Z"
+  "clearedAt": "2026-01-30T20:15:12.776Z",
+  "lastUpdatedAt": "2026-02-01T03:32:05.497Z"
 }
