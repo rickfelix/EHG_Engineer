@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T13:25:27.350Z
-**Tables**: 388
+**Generated**: 2026-02-01T13:43:51.883Z
+**Tables**: 391
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (388)
+## All Tables (391)
 
 ### LEO Protocol
 
@@ -33,6 +33,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_effort_policies](tables/leo_effort_policies.md)
 - [leo_error_log](tables/leo_error_log.md)
 - [leo_events](tables/leo_events.md)
+- [leo_feature_flag_audit_log](tables/leo_feature_flag_audit_log.md)
+- [leo_feature_flag_policies](tables/leo_feature_flag_policies.md)
 - [leo_feature_flags](tables/leo_feature_flags.md)
 - [leo_gate_reviews](tables/leo_gate_reviews.md)
 - [leo_handoff_executions](tables/leo_handoff_executions.md)
@@ -42,6 +44,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_integration_verification_results](tables/leo_integration_verification_results.md)
 - [leo_interfaces](tables/leo_interfaces.md)
 - [leo_kb_generation_log](tables/leo_kb_generation_log.md)
+- [leo_kill_switches](tables/leo_kill_switches.md)
 - [leo_nfr_requirements](tables/leo_nfr_requirements.md)
 - [leo_prioritization_config](tables/leo_prioritization_config.md)
 - [leo_process_scripts](tables/leo_process_scripts.md)
