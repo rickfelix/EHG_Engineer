@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T03:08:38.305Z
-**Tables**: 379
+**Generated**: 2026-02-01T03:50:45.752Z
+**Tables**: 387
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,17 +20,20 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (379)
+## All Tables (387)
 
 ### LEO Protocol
 
 - [leo_adrs](tables/leo_adrs.md)
 - [leo_agents](tables/leo_agents.md)
 - [leo_artifacts](tables/leo_artifacts.md)
+- [leo_audit_config](tables/leo_audit_config.md)
 - [leo_autonomous_directives](tables/leo_autonomous_directives.md)
 - [leo_complexity_thresholds](tables/leo_complexity_thresholds.md)
 - [leo_effort_policies](tables/leo_effort_policies.md)
 - [leo_error_log](tables/leo_error_log.md)
+- [leo_events](tables/leo_events.md)
+- [leo_feature_flags](tables/leo_feature_flags.md)
 - [leo_gate_reviews](tables/leo_gate_reviews.md)
 - [leo_handoff_executions](tables/leo_handoff_executions.md)
 - [leo_handoff_rejections](tables/leo_handoff_rejections.md)
@@ -40,7 +43,11 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_interfaces](tables/leo_interfaces.md)
 - [leo_kb_generation_log](tables/leo_kb_generation_log.md)
 - [leo_nfr_requirements](tables/leo_nfr_requirements.md)
+- [leo_prioritization_config](tables/leo_prioritization_config.md)
 - [leo_process_scripts](tables/leo_process_scripts.md)
+- [leo_prompts](tables/leo_prompts.md)
+- [leo_proposal_transitions](tables/leo_proposal_transitions.md)
+- [leo_proposals](tables/leo_proposals.md)
 - [leo_protocol_changes](tables/leo_protocol_changes.md)
 - [leo_protocol_file_audit](tables/leo_protocol_file_audit.md)
 - [leo_protocol_references](tables/leo_protocol_references.md)
@@ -54,6 +61,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_simplification_rules](tables/leo_simplification_rules.md)
 - [leo_subagent_handoffs](tables/leo_subagent_handoffs.md)
 - [leo_test_plans](tables/leo_test_plans.md)
+- [leo_vetting_rubrics](tables/leo_vetting_rubrics.md)
 - [leo_workflow_phases](tables/leo_workflow_phases.md)
 
 ### Strategic Directives
