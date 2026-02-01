@@ -281,7 +281,8 @@
     "docmon:all": "node scripts/docmon.js --all",
     "exec:commit-gate": "node scripts/exec-commit-gate.js",
     "exec:commit-gate:pr": "node scripts/exec-commit-gate.js --pr-range origin/main",
-    "test:pipeline:smoke": "node scripts/test-pipeline-smoke.js"
+    "test:pipeline:smoke": "node scripts/test-pipeline-smoke.js",
+    "pipeline:status": "node scripts/pipeline-status.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
