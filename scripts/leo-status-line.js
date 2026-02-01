@@ -11,9 +11,29 @@ import path from 'path';
 import { execSync  } from 'child_process';
 
 class LEOStatusLine {
-  constructor() {
-    this.configPath = path.join(process.cwd(), '.leo-status.json');
+  /**
+   * Create a session-specific status line manager
+   * SD-LEO-INFRA-ISL-001:US-006: Session-Specific Status Line Files
+   *
+   * @param {string|null} sessionId - Session ID from database or null for PID fallback
+   */
+  constructor(sessionId = null) {
+    // US-006: Session ID from database, env var, or PID fallback
+    this.sessionId = sessionId || process.env.CLAUDE_SESSION_ID || `pid_${process.pid}`;
+
+    // US-006: Session-specific paths in .claude/status-line/ directory
+    this.statusDir = path.join(process.cwd(), '.claude', 'status-line');
+    this.ensureStatusDir();
+
+    // Session-specific file paths (prevents multi-session collisions)
+    this.configPath = path.join(this.statusDir, `session_${this.sessionId}.json`);
+    this.statusLinePath = path.join(this.statusDir, `session_${this.sessionId}.txt`);
+    this.telemetryPath = path.join(this.statusDir, `telemetry_${this.sessionId}.json`);
+
+    // Legacy paths for backwards compatibility (read-only)
+    this.legacyConfigPath = path.join(process.cwd(), '.leo-status.json');
     this.claudeConfigPath = path.join(process.cwd(), '.claude-code-config.json');
+
     this.statusCache = null;
     this.cacheTimeout = 5000; // 5 seconds cache
     this.lastUpdate = 0;
@@ -22,9 +42,6 @@ class LEOStatusLine {
     this.apUpdateThrottle = 100; // 100ms minimum interval (max 10 updates/sec)
     this.lastApUpdate = 0;
 
-    // Telemetry for status line updates
-    this.telemetryPath = path.join(process.cwd(), '.claude', 'status-line-telemetry.json');
-    
     // Status line templates (enhanced with project and branch info)
     this.templates = {
       default: '🏗️ {project} | {branch} | LEO v3.1.5.9',
@@ -46,13 +63,83 @@ class LEOStatusLine {
   }
 
   /**
+   * US-006: Ensure the status line directory exists
+   */
+  ensureStatusDir() {
+    try {
+      if (!fs.existsSync(this.statusDir)) {
+        fs.mkdirSync(this.statusDir, { recursive: true });
+      }
+    } catch (_error) {
+      // Silent fail - status directory creation is best-effort
+    }
+  }
+
+  /**
+   * US-006: Clean up session-specific status files
+   * Called on session release to prevent stale file accumulation
+   */
+  cleanup() {
+    try {
+      if (fs.existsSync(this.configPath)) fs.unlinkSync(this.configPath);
+      if (fs.existsSync(this.statusLinePath)) fs.unlinkSync(this.statusLinePath);
+      if (fs.existsSync(this.telemetryPath)) fs.unlinkSync(this.telemetryPath);
+    } catch (_error) {
+      // Silent fail - cleanup is best-effort
+    }
+  }
+
+  /**
+   * US-006: Static method to clean up stale status files for released sessions
+   * Called by the stale session cleanup worker
+   *
+   * @param {Set<string>} activeSessionIds - Set of currently active session IDs
+   * @param {string} projectDir - Project directory (defaults to cwd)
+   * @returns {number} Number of files cleaned up
+   */
+  static cleanupStaleFiles(activeSessionIds, projectDir = process.cwd()) {
+    const statusDir = path.join(projectDir, '.claude', 'status-line');
+    if (!fs.existsSync(statusDir)) return 0;
+
+    let cleanedCount = 0;
+    try {
+      const files = fs.readdirSync(statusDir);
+      for (const file of files) {
+        // Match session_*.json, session_*.txt, telemetry_*.json
+        const sessionMatch = file.match(/^(session|telemetry)_(.+)\.(json|txt)$/);
+        if (sessionMatch) {
+          const fileSessionId = sessionMatch[2];
+          // Skip PID-based fallback sessions (they clean up on process exit)
+          if (fileSessionId.startsWith('pid_')) continue;
+          // Remove if session is no longer active
+          if (!activeSessionIds.has(fileSessionId)) {
+            fs.unlinkSync(path.join(statusDir, file));
+            cleanedCount++;
+          }
+        }
+      }
+    } catch (_error) {
+      // Silent fail
+    }
+    return cleanedCount;
+  }
+
+  /**
    * Load current status from cache
+   * US-006: Loads from session-specific file, falls back to legacy
    */
   loadStatus() {
     try {
+      // Try session-specific file first
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf8');
         this.statusCache = JSON.parse(data);
+      } else if (fs.existsSync(this.legacyConfigPath)) {
+        // Migrate from legacy file on first load
+        const data = fs.readFileSync(this.legacyConfigPath, 'utf8');
+        this.statusCache = JSON.parse(data);
+        // Save to session-specific location
+        this.saveStatus();
       } else {
         this.statusCache = this.getDefaultStatus();
       }
@@ -74,9 +161,11 @@ class LEOStatusLine {
 
   /**
    * Get default status
+   * US-006: Includes session ID for tracking
    */
   getDefaultStatus() {
     return {
+      sessionId: this.sessionId, // US-006: Track session ID in status
       project: 'EHG_Engineer',
       leoVersion: '3.1.5.9',
       activeRole: null,
@@ -465,6 +554,13 @@ class LEOStatusLine {
       .replace('{sd}', ap.sdKey || '')
       .replace('{project}', this.getCurrentProject())
       .replace('{branch}', this.getCurrentBranch());
+
+    // Append child progress segment if available
+    if (childSegment) {
+      statusLine += ` | ${childSegment}`;
+    }
+
+    return statusLine;
   }
 
   /**
@@ -560,27 +656,30 @@ class LEOStatusLine {
 
   /**
    * Set the actual status line (platform-specific)
+   * US-006: Writes to session-specific file to prevent multi-session collisions
    */
   setStatusLine(text) {
-    // For now, we'll just output to a file that can be read
-    // In the future, this could integrate with Claude's actual status line API
-    
-    const statusFile = path.join(process.cwd(), '.claude-status-line');
     try {
-      fs.writeFileSync(statusFile, text);
-      
+      // US-006: Write to session-specific status line file
+      this.ensureStatusDir();
+      fs.writeFileSync(this.statusLinePath, text);
+
+      // Also write to legacy location for backwards compatibility
+      const legacyStatusFile = path.join(process.cwd(), '.claude-status-line');
+      fs.writeFileSync(legacyStatusFile, text);
+
       // Also update the Claude config if possible
       if (fs.existsSync(this.claudeConfigPath)) {
         const config = JSON.parse(fs.readFileSync(this.claudeConfigPath, 'utf8'));
         config.statusLine = text;
         fs.writeFileSync(this.claudeConfigPath, JSON.stringify(config, null, 2));
       }
-      
+
       // Output for debugging
       if (process.env.DEBUG) {
-        console.log(`📊 Status: ${text}`);
+        console.log(`📊 Status [${this.sessionId}]: ${text}`);
       }
-      
+
     } catch (_error) {
       // Silent fail
     }
