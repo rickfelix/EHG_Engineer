@@ -12,3 +12,4 @@ export { createDesignDatabaseGate, shouldValidateDesignDatabase } from './design
 export { createExplorationAuditGate, validateExplorationAudit, MINIMUM_FILES, ADEQUATE_FILES, COMPREHENSIVE_FILES } from './exploration-audit.js';
 export { createDeliverablesPlanningGate, validateDeliverablesPlanning } from './deliverables-planning.js';
 export { createBranchEnforcementGate } from './branch-enforcement.js';
+export { createInfrastructureConsumerCheckGate, generateFollowUpSD, REASON_CODES } from './infrastructure-consumer-check.js';
