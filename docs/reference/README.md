@@ -31,11 +31,11 @@ See **[/docs/leo/README.md](../leo/README.md)** for:
 | [Sub-Agents](#sub-agents) | 14 | Sub-agent patterns and guides |
 | [Validation & Testing](#validation-testing) | 9 | Validation patterns, testing reference |
 | [LEO Protocol](#leo-protocol) | 14 | Protocol reference, context management, hooks |
-| [Patterns & Best Practices](#patterns-best-practices) | 12 | Development patterns |
+| [Patterns & Best Practices](#patterns-best-practices) | 13 | Development patterns |
 | [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
-**Total References**: 80
+**Total References**: 81
 
 ---
 
@@ -132,6 +132,7 @@ See **[/docs/leo/README.md](../leo/README.md)** for:
 | [trigger-disable-pattern.md](trigger-disable-pattern.md) | Trigger disable patterns |
 | [prd-prevention-implementation.md](prd-prevention-implementation.md) | PRD prevention |
 | [progressive-learning-format.md](progressive-learning-format.md) | Progressive learning |
+| [severity-weighted-pattern-prioritization.md](severity-weighted-pattern-prioritization.md) | **NEW**: Severity-weighted pattern scoring in `/learn` |
 
 ---
 
@@ -205,5 +206,5 @@ See **[/docs/leo/README.md](../leo/README.md)** for:
 ---
 
 *Part of LEO Protocol v4.3.3 - Reference Index*
-*Updated: 2026-01-25*
-*Comprehensive index of 80 reference documents*
+*Updated: 2026-02-02*
+*Comprehensive index of 81 reference documents*
