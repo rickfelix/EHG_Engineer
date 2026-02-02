@@ -120,7 +120,7 @@ const CLASSIFICATION_RULES = [
 const IMMUTABLE_TABLES = [
   'protocol_constitution',
   'audit_log',
-  'system_flags'
+  'system_settings'  // Unified settings table (SD-LEO-SELF-IMPROVE-002A)
 ];
 
 /**

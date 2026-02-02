@@ -319,26 +319,29 @@ export class ConstitutionValidator {
       return violations;
     }
 
-    // Check if FREEZE flag is set
+    // Check if FREEZE flag is set in unified system_settings table
     const { data, error } = await this.supabase
-      .from(TABLES.SYSTEM_FLAGS)
-      .select('value')
+      .from('system_settings')
+      .select('value_json')
       .eq('key', 'AUTO_FREEZE')
-      .single();
+      .maybeSingle();
 
     // If table doesn't exist or no flag, assume not frozen
-    if (error && !error.message.includes('0 rows')) {
+    if (error) {
       // Table might not exist yet - pass for now
+      console.warn('[ConstitutionValidator] CONST-009 check skipped:', error.message);
       return violations;
     }
 
-    if (data?.value === true || data?.value === 'true') {
+    if (data?.value_json?.enabled === true) {
       violations.push({
         rule_code: 'CONST-009',
         message: 'AUTO changes are frozen by human FREEZE command',
         severity: 'CRITICAL',
         details: {
-          freeze_active: true
+          freeze_active: true,
+          reason: data.value_json.reason,
+          since: data.value_json.since
         }
       });
     }

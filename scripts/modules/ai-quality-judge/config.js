@@ -135,7 +135,7 @@ export const TABLES = {
   CONSTITUTION: 'protocol_constitution',
   ASSESSMENTS: 'improvement_quality_assessments',
   QUEUE: 'protocol_improvement_queue',
-  SYSTEM_FLAGS: 'system_flags'
+  SYSTEM_SETTINGS: 'system_settings'  // Unified settings table (SD-LEO-SELF-IMPROVE-002A)
 };
 
 export default {
