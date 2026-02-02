@@ -293,10 +293,85 @@ Instead:
 
 ---
 
+## Architecture: Generate-First Pattern (NEW v2.2)
+
+### Previous Architecture: Create-Then-Enhance (DEPRECATED)
+
+**Problem**: The old PRD creation flow created placeholder PRDs in the database BEFORE LLM generation:
+
+```
+1. Create PRD with placeholder content ("To be defined...")
+2. Run sub-agent analyses
+3. Generate LLM content
+4. Update PRD with LLM content
+```
+
+**Issue**: If LLM generation failed or timed out (step 3), an orphaned placeholder PRD remained in the database with "To be defined..." content, which would fail quality gates later.
+
+### New Architecture: Generate-First-Then-Insert (v2.2+)
+
+**Solution**: Generate and validate content BEFORE creating any database record:
+
+```
+1. Run sub-agent analyses (DESIGN, DATABASE, SECURITY, RISK)
+2. Generate LLM content (functional requirements, tests, risks)
+3. Run grounding validation (quality gate - HARD)
+4. Only if validation passes → Create PRD with validated content
+```
+
+**Benefits**:
+- ✅ **No orphaned placeholder PRDs**: Database only gets validated content
+- ✅ **Early failure detection**: LLM issues caught before DB insertion
+- ✅ **Quality enforcement**: Grounding validation is now a HARD gate (blocks on failure)
+- ✅ **Clean rollback**: If validation fails, nothing is created
+
+### Implementation Details
+
+**Files Modified** (SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C):
+- `scripts/prd/index.js`: Refactored main flow to generate-first pattern
+- `scripts/prd/prd-creator.js`: Added `createPRDWithValidatedContent()` function
+- `scripts/prd/llm-generator.js`: LLM generation runs before DB operations
+
+**Quality Gates** (HARD):
+1. **LLM Generation Gate**: If `generatePRDContentWithLLM()` returns null → EXIT (no PRD created)
+2. **Grounding Validation Gate**: If `validatePRDGrounding()` has issues → EXIT (no PRD created)
+3. **Error Handling Gate**: If LLM throws error → EXIT (no PRD created)
+
+**Error Messages**:
+```
+❌ QUALITY GATE FAILED: LLM PRD generation failed
+   No PRD will be created (avoiding placeholder content).
+   Check OPENAI_API_KEY and retry PRD creation.
+```
+
+**Metadata Tracking**:
+PRDs created with the new pattern include metadata:
+```json
+{
+  "generation_pattern": "generate_first_then_insert",
+  "grounding_validation": { /* validation results */ },
+  "validated_at": "2026-02-02T..."
+}
+```
+
+### Migration Path
+
+**Existing PRDs** (created before v2.2): No change needed - already in database.
+
+**New PRDs** (v2.2+): Automatically use generate-first pattern when running:
+```bash
+node scripts/prd/index.js SD-XXX-001
+```
+
+**Manual PRD creation CLI**: Still supported, but generate-first only applies to LLM-enhanced PRD creation.
+
+---
+
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2 | 2026-02-02 | **Architecture change**: Generate-first-then-insert pattern to prevent placeholder PRDs (SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C) |
 | 2.1 | 2026-02-02 | Added Integration & Operationalization section (SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001) |
 | 2.0 | 2026-01-23 | LEO 5.0 update: Standard CLI enforcement, one-off scripts prohibited |
 | 1.0 | 2025-XX-XX | Initial PRD process documentation |
@@ -305,3 +380,4 @@ Instead:
 
 *Part of LEO Protocol v4.3.3 - Database-First Governance*
 *This process prevents the SDIP issue from recurring and ensures all PRDs meet professional standards before implementation begins.*
+*v2.2 update prevents placeholder PRD creation through architectural refactoring.*

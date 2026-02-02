@@ -4,6 +4,10 @@
  *
  * Extracted from add-prd-to-database.js for modularity
  * SD-LEO-REFACTOR-PRD-DB-002
+ *
+ * Refactored SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C:
+ * - Added createPRDWithValidatedContent() for "generate first, then insert" pattern
+ * - No more placeholder PRDs - only validated LLM content gets inserted
  */
 
 import { formatPRDContent } from './formatters.js';
@@ -89,7 +93,108 @@ export async function createPRDEntry(supabase, prdId, sdId, sdIdValue, prdTitle,
 }
 
 /**
+ * Create PRD with validated LLM content (no placeholders)
+ * SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: "Generate first, then insert" pattern
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} prdId - PRD ID
+ * @param {string} sdId - Strategic Directive ID
+ * @param {string} sdIdValue - SD primary key value
+ * @param {string} prdTitle - PRD title
+ * @param {Object} sdData - SD data for content formatting
+ * @param {Object} llmContent - Validated LLM-generated content
+ * @param {Array} stakeholderPersonas - Stakeholder personas array
+ * @returns {Promise<Object>} Created PRD data
+ */
+export async function createPRDWithValidatedContent(
+  supabase,
+  prdId,
+  sdId,
+  sdIdValue,
+  prdTitle,
+  sdData,
+  llmContent,
+  stakeholderPersonas = []
+) {
+  // Build plan checklist based on what LLM generated
+  const planChecklist = [
+    { text: 'PRD created and saved', checked: true },
+    { text: 'SD requirements mapped to technical specs', checked: true },
+    { text: 'Technical architecture defined', checked: !!llmContent.system_architecture },
+    { text: 'Implementation approach documented', checked: !!llmContent.implementation_approach },
+    { text: 'Test scenarios defined', checked: llmContent.test_scenarios?.length > 0 },
+    { text: 'Acceptance criteria established', checked: llmContent.acceptance_criteria?.length > 0 },
+    { text: 'Resource requirements estimated', checked: false },
+    { text: 'Timeline and milestones set', checked: false },
+    { text: 'Risk assessment completed', checked: llmContent.risks?.length > 0 }
+  ];
+
+  // Calculate progress
+  const checkedCount = planChecklist.filter(item => item.checked).length;
+  const progress = Math.round((checkedCount / planChecklist.length) * 100);
+
+  const { data, error } = await supabase
+    .from('product_requirements_v2')
+    .insert({
+      id: prdId,
+      directive_id: sdId,
+      sd_id: sdIdValue,
+      title: prdTitle || `Product Requirements for ${sdId}`,
+      status: 'planning',
+      category: 'technical',
+      priority: 'high',
+      executive_summary: llmContent.executive_summary || `Product requirements document for Strategic Directive ${sdId}`,
+      phase: 'planning',
+      created_by: 'PLAN',
+      plan_checklist: planChecklist,
+      exec_checklist: [
+        { text: 'Development environment setup', checked: false },
+        { text: 'Core functionality implemented', checked: false },
+        { text: 'Unit tests written', checked: false },
+        { text: 'Integration tests completed', checked: false },
+        { text: 'Code review completed', checked: false },
+        { text: 'Documentation updated', checked: false }
+      ],
+      validation_checklist: [
+        { text: 'All acceptance criteria met', checked: false },
+        { text: 'Performance requirements validated', checked: false },
+        { text: 'Security review completed', checked: false },
+        { text: 'User acceptance testing passed', checked: false },
+        { text: 'Deployment readiness confirmed', checked: false }
+      ],
+      // Use LLM-generated content instead of placeholders
+      acceptance_criteria: llmContent.acceptance_criteria || [
+        'All functional requirements implemented',
+        'All tests passing (unit + E2E)',
+        'No regressions introduced'
+      ],
+      functional_requirements: llmContent.functional_requirements || [],
+      technical_requirements: llmContent.technical_requirements || [],
+      system_architecture: llmContent.system_architecture || null,
+      implementation_approach: llmContent.implementation_approach || null,
+      test_scenarios: llmContent.test_scenarios || [],
+      risks: llmContent.risks || [],
+      progress: progress,
+      stakeholders: stakeholderPersonas,
+      content: formatPRDContent(sdId, sdData, llmContent),
+      metadata: llmContent.metadata || {}
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error(`PRD ${prdId} already exists in database`);
+    }
+    throw error;
+  }
+
+  return data;
+}
+
+/**
  * Build initial PRD content (template)
+ * @deprecated Use createPRDWithValidatedContent instead - this creates placeholder content
  */
 function buildInitialPRDContent(sdId) {
   return `# Product Requirements Document
