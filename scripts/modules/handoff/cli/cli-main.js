@@ -472,14 +472,45 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   let iterationCount = 0;
   const maxIterations = 50; // Safety limit
 
+  // D32: SD Workflow Sequence - defines the standard handoff progression
+  // Each SD follows: LEAD-TO-PLAN → LEAD-FINAL-APPROVAL → PLAN-TO-EXEC
+  // LEAD-FINAL-APPROVAL is the terminal handoff (SD done) which triggers child continuation
+  const WORKFLOW_SEQUENCE = {
+    'LEAD-TO-PLAN': 'LEAD-FINAL-APPROVAL',
+    'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation
+    'PLAN-TO-EXEC': null, // Also terminal for now (EXEC is outside handoff system)
+  };
+
   // Continue loop only if AUTO-PROCEED is enabled
+  // D32: Child-to-child continuation - continue through full workflow, then find next child
   while (autoProceedEnabled && currentResult.success && iterationCount < maxIterations) {
     iterationCount++;
 
-    // Only continue after LEAD-FINAL-APPROVAL
-    if (currentHandoffType.toUpperCase() !== 'LEAD-FINAL-APPROVAL') {
+    // D32 FIX: Continue through the FULL workflow for each SD
+    // Previous bug: Only continued after LEAD-FINAL-APPROVAL, breaking after LEAD-TO-PLAN
+    // for new children, causing unexpected pauses between siblings.
+    //
+    // New behavior: Use WORKFLOW_SEQUENCE to determine next handoff type.
+    // When at terminal handoff (LEAD-FINAL-APPROVAL), find next child.
+    const normalizedType = currentHandoffType.toUpperCase();
+    const nextInWorkflow = WORKFLOW_SEQUENCE[normalizedType];
+
+    if (nextInWorkflow) {
+      // Non-terminal handoff - continue to next step in workflow
+      console.log(`\n🔄 AUTO-PROCEED: Continuing workflow (${currentHandoffType} → ${nextInWorkflow})`);
+      currentHandoffType = nextInWorkflow;
+      currentResult = await handleExecuteCommand(nextInWorkflow, currentSdId, args);
+      continue;
+    }
+
+    // Terminal handoff (null in WORKFLOW_SEQUENCE) - check if it's LEAD-FINAL-APPROVAL
+    if (normalizedType !== 'LEAD-FINAL-APPROVAL') {
+      // Other terminal handoff (like PLAN-TO-EXEC) - workflow continues outside this loop
+      console.log(`\n✅ AUTO-PROCEED: Handoff ${currentHandoffType} complete - workflow continues in EXEC phase`);
       break;
     }
+
+    // LEAD-FINAL-APPROVAL - SD is done, find next child
 
     // Get the completed SD to check if it's a child
     const { data: completedSD, error: sdError } = await system.supabase
@@ -554,10 +585,9 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
     // Execute LEAD-TO-PLAN for next child
     currentResult = await handleExecuteCommand('LEAD-TO-PLAN', nextChild.id, args);
 
-    // If LEAD-TO-PLAN succeeded, we need to continue through the full workflow
-    // The next handleExecuteCommand calls will be for subsequent handoffs
-    // This is handled by the caller running multiple handoffs, or we could
-    // recursively call ourselves here
+    // D32 FIX: Loop continues - WORKFLOW_SEQUENCE will advance to LEAD-FINAL-APPROVAL
+    // then back to finding the next child when this child completes.
+    // This enables full child-to-child continuation within orchestrators.
   }
 
   if (iterationCount >= maxIterations) {
