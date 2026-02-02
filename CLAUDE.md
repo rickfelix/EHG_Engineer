@@ -95,6 +95,30 @@ All commands and sub-agents must run inline/foreground to maintain workflow cont
 
 **2026-02-01 Incident**: Background Task tool invocations were spawned during AUTO-PROCEED, creating orphaned tasks that completed in later sessions. Root cause: Rule only mentioned Bash, not Task tool.
 
+### Platform-Level Enforcement
+
+**RECOMMENDED**: Set the `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` environment variable to enforce this constraint at the platform level:
+
+```bash
+# Add to .env file
+CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1
+```
+
+**What this disables (when set to 1):**
+- `run_in_background: true` parameter on Bash and Task tools
+- Auto-backgrounding behavior
+- Ctrl+B keyboard shortcut
+
+**Benefits:**
+- Platform-native enforcement (maintained by Claude Code team)
+- Zero maintenance burden vs custom validators
+- Takes effect at process startup
+- Simpler than documentation-only rules
+
+**Available since**: Claude Code v2.1.4
+
+**Pattern Reference**: See `docs/patterns/PAT-AUTO-PROCEED-001.md` for full analysis of the background task enforcement gap.
+
 ### Pause Points (When ON)
 
 AUTO-PROCEED runs continuously EXCEPT at these boundaries:
@@ -519,7 +543,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-01 12:11:37 PM
+**Last Generated**: 2026-02-02 7:12:21 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -641,7 +665,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-02-01*
+*Router generated from database: 2026-02-02*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 

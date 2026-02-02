@@ -303,6 +303,51 @@ Current state of AUTO-PROCEED documentation:
 | 27 | Compaction notice | Brief inline notice |
 | 28 | Error retries | Log inline |
 | 29 | Resume reminder | Yes, show what was happening |
+| 30 | Background task prevention | Use CLAUDE_CODE_DISABLE_BACKGROUND_TASKS env var |
+
+---
+
+## Round 3: Background Task Prevention (Added 2026-02-01)
+
+### 30. Background Task Prevention
+- **Q**: How to prevent orphaned background tasks that complete asynchronously during AUTO-PROCEED?
+- **A**: **Use `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` environment variable**
+
+**Context:**
+- Background tasks spawned before context compaction or in previous sessions can complete hours later
+- These late completions interrupt current work with stale "task completed" notifications
+- Issue occurred during SD-LEO-SELF-IMPROVE-001M completion (task bd89e05 completed 8h 43m after rule was added to docs)
+
+**Issue Pattern:** PAT-AUTO-PROCEED-001 - Background task enforcement gap
+- Documentation-only enforcement in CLAUDE.md failed (Claude still invoked `run_in_background: true`)
+- No code-level validator existed in handoff system or PreToolUse hooks
+- Reactive cleanup scripts exist but prevention is superior
+
+**Solution Discovery:**
+Claude Code v2.1.4+ provides `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` environment variable that disables:
+- `run_in_background: true` parameter on Bash and Task tools
+- Auto-backgrounding behavior
+- Ctrl+B shortcut to push commands to background
+
+**Implementation:**
+```bash
+# Add to .env file
+CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1
+```
+
+**Why This Works:**
+- **Real-Time (default)**: Task blocks until complete → workflow continues smoothly → ✅
+- **Background mode**: Task returns immediately → completes later → notification at unpredictable time → ❌
+
+**Alternative Approaches Considered:**
+1. ❌ Custom PreToolUse validator hook - More complex, requires maintenance
+2. ❌ Documentation-only - Already proven ineffective
+3. ✅ Platform-level env var - Simple, maintained by Claude Code team
+
+**Existing Cleanup Infrastructure:**
+- `scripts/cleanup-orphaned-tasks.js` - Manual cleanup of stale task files
+- `scripts/hooks/session-cleanup.js` - Auto-cleanup at session start
+- These remain useful for edge cases but prevention is primary strategy
 
 ---
 

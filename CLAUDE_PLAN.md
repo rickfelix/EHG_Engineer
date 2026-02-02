@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-01 12:11:37 PM
+**Generated**: 2026-02-02 7:12:21 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -2124,12 +2124,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 ## Validation Rules
 
 
-- **hasTestEvidence** (Gate Q)
-  - Weight: 0.35
-  - Required: Yes
-  - Criteria: 4 criteria defined (command, description, successCriteria...)
-
-
 - **hasDiffMinimality** (Gate Q)
   - Weight: 0.25
   - Required: No
@@ -2188,6 +2182,12 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
   - Weight: 0.15
   - Required: Yes
   - Criteria: 4 criteria defined (uses_ai, min_score, description...)
+
+
+- **hasTestEvidence** (Gate Q)
+  - Weight: 0.25
+  - Required: Yes
+  - Criteria: 4 criteria defined (command, description, successCriteria...)
 
 
 - **designSubAgentExecution** (Gate 1)
@@ -2466,21 +2466,21 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
   - Criteria: checks: ["pr_exists","pr_merged"]; description: "PR merged to main branch"
 
 
-- **sdTypeValidation** (Gate 0)
-  - Weight: 0.1
-  - Required: No
-  - Criteria: category: "sd_quality"; description: "SD-LEO-001: Validate SD type matches content-based detection"; handoff_type: "LEAD-TO-PLAN"
-
-
 - **hasAcceptableComplexity** (Gate Q)
   - Weight: 0.1
   - Required: No
   - Criteria: 5 criteria defined (metrics, advisory, thresholds...)
 
 
+- **sdTypeValidation** (Gate 0)
+  - Weight: 1
+  - Required: No
+  - Criteria: category: "sd_quality"; description: "SD-LEO-001: Validate SD type matches content-based detection"; handoff_type: "LEAD-TO-PLAN"
+
+
 ---
 
-*Generated from database: 2026-02-01*
+*Generated from database: 2026-02-02*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
 
