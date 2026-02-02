@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T23:52:12.478Z
-**Tables**: 407
+**Generated**: 2026-02-02T01:36:06.852Z
+**Tables**: 410
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (407)
+## All Tables (410)
 
 ### LEO Protocol
 
@@ -193,6 +193,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
 - [assumption_sets](tables/assumption_sets.md)
 - [audit_triangulation_log](tables/audit_triangulation_log.md)
+- [auto_apply_allowlist](tables/auto_apply_allowlist.md)
+- [auto_apply_denylist](tables/auto_apply_denylist.md)
 - [backlog_item_completion](tables/backlog_item_completion.md)
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md)
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
@@ -391,6 +393,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [system_alerts](tables/system_alerts.md)
 - [system_events](tables/system_events.md)
 - [system_health](tables/system_health.md)
+- [system_settings](tables/system_settings.md)
 - [task_hydration_log](tables/task_hydration_log.md)
 - [tech_stack_references](tables/tech_stack_references.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
