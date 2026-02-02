@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [assist|inbox|<SD-ID>|create|next|continue|complete|restart|settings]
+argument-hint: [start <SD-ID>|assist|inbox|create|next|continue|complete|restart|settings]
 ---
 
 # LEO Stack Control
@@ -763,6 +763,59 @@ Restore session state after a crash, compaction, or interruption using the Unifi
    - Simplified compliance rubric (100-point scale)
    - Auto-escalates to full SD if complexity exceeds threshold
 
+### If argument is "start" followed by SD-ID (e.g., `/leo start SD-XXX-001`)
+
+**Unified SD initialization with automatic protocol file loading.**
+
+This is the RECOMMENDED way to begin work on an SD. It combines claiming + context loading.
+
+1. **Parse the SD-ID** from the argument (e.g., `start SD-LEO-SELF-IMPROVE-002C` → `SD-LEO-SELF-IMPROVE-002C`)
+
+2. **Claim the SD:**
+   ```bash
+   npm run sd:start <SD-ID>
+   ```
+
+3. **Get the current phase from output** (look for `Phase: LEAD` or similar)
+
+4. **MANDATORY: Read protocol files based on phase:**
+
+   | Phase | Files to Read (use Read tool) |
+   |-------|-------------------------------|
+   | LEAD | `CLAUDE_LEAD.md` |
+   | PLAN | `CLAUDE_PLAN.md` |
+   | EXEC | `CLAUDE_EXEC.md` |
+
+   **Execute the file read immediately** - do not just mention it, actually use the Read tool:
+   ```
+   Read tool: CLAUDE_LEAD.md   (if phase is LEAD)
+   Read tool: CLAUDE_PLAN.md   (if phase is PLAN)
+   Read tool: CLAUDE_EXEC.md   (if phase is EXEC)
+   ```
+
+5. **Check for orchestrator/child status:**
+   - If SD has children (orchestrator) → run `node scripts/orchestrator-preflight.js <SD-ID>`
+   - If SD has parent (child) → run `node scripts/child-sd-preflight.js <SD-ID>`
+
+6. **Display unified output:**
+   ```
+   ✅ SD Started: <SD-ID>
+      Title: <title>
+      Phase: <phase>
+      Type: <sd_type>
+      Progress: <progress>%
+
+   📚 Protocol Context Loaded: CLAUDE_<PHASE>.md
+      (File has been read and context is active)
+
+   📋 Next Action: <recommended handoff command>
+   ```
+
+**Why use `/leo start` instead of just `/leo SD-XXX`:**
+- Explicit about protocol file loading (not buried in requirements)
+- Shows confirmation that context was loaded
+- Reduces "forgot to read CLAUDE_LEAD.md" failures
+
 ### If argument looks like an SD ID (SD-* pattern)
 
 When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
@@ -771,6 +824,8 @@ When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
 3. Check if child SD (has parent) → run child preflight
 4. Load appropriate CLAUDE_*.md context based on phase
 5. Proceed with LEAD→PLAN→EXEC workflow
+
+**NOTE**: Consider using `/leo start <SD-ID>` instead for explicit protocol file loading with confirmation.
 
 ### If argument is "run":
 Run the LEO protocol workflow:
@@ -784,6 +839,7 @@ Display the available commands:
 ```
 LEO Commands:
   /leo                   - Show this help menu
+  /leo start <SD-ID>     - Start SD with auto protocol file loading (RECOMMENDED)
   /leo assist    (a)     - Autonomous inbox processing (issues + enhancements)
   /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
   /leo restart   (r)     - Restart all LEO servers
