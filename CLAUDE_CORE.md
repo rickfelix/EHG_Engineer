@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-02 10:23:50 AM
+**Generated**: 2026-02-02 3:48:09 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -242,37 +242,6 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -316,6 +285,64 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -347,33 +374,6 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
-
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -445,47 +445,6 @@ Before marking any stage/feature as complete:
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
 
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
-
 ## 🎯 Skill Integration (Claude Code Skills)
 
 ## Skill Integration (Claude Code Skills)
@@ -528,6 +487,47 @@ If immediate resolution is truly impossible:
 - **Project**: .claude/skills/ (project-specific)
 - **Index**: ~/.claude/skills/SKILL-INDEX.md
 - **Total**: 54 skills covering all 14 sub-agents
+
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
