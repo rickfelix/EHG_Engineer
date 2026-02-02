@@ -72,11 +72,26 @@ Your PRD must be IMPLEMENTATION-READY. The development team will use this docume
 
 ${PRD_QUALITY_RUBRIC_CRITERIA}
 
+## FIELD CONSTRAINTS (MANDATORY - Validation will FAIL if violated)
+
+These constraints are enforced by validation gates. Violating them blocks handoffs.
+
+| Field | Min | Max | Notes |
+|-------|-----|-----|-------|
+| executive_summary | 100 chars | 300 chars | Used as goal_summary - MUST be concise |
+| functional_requirements | 5 items | - | Each with id, requirement, acceptance_criteria |
+| technical_requirements | 3 items | - | Each with id, requirement, rationale |
+| test_scenarios | 5 items | - | Cover happy path, edge cases, error conditions |
+| risks | 3 items | - | Each with mitigation and rollback_plan |
+| acceptance_criteria | 3 items | - | Specific, measurable, verifiable |
+
+**CRITICAL**: executive_summary MUST be ≤300 characters. This is a hard limit.
+
 ## OUTPUT REQUIREMENTS
 
 Return a JSON object with exactly these fields:
 {
-  "executive_summary": "string - 200-500 chars describing WHAT, WHY, and IMPACT",
+  "executive_summary": "string - EXACTLY 100-300 chars (HARD LIMIT) describing WHAT, WHY, and IMPACT concisely",
   "functional_requirements": [
     {
       "id": "FR-1",
@@ -137,6 +152,49 @@ Return a JSON object with exactly these fields:
       }
     ],
     "technical_decisions": ["Key decision 1 with rationale", "Key decision 2"]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "Consumer name (user role, system, or service)",
+        "interaction": "How they consume this functionality",
+        "frequency": "How often they interact"
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "Upstream or downstream system name",
+        "type": "upstream|downstream",
+        "contract": "How the dependency is managed",
+        "failure_handling": "What happens if this dependency fails"
+      }
+    ],
+    "data_contracts": [
+      {
+        "contract_name": "Name of the data contract",
+        "schema": "Brief schema description or reference",
+        "validation": "How data is validated",
+        "versioning": "How contract changes are managed"
+      }
+    ],
+    "runtime_config": {
+      "environment_variables": ["ENV_VAR_1", "ENV_VAR_2"],
+      "feature_flags": ["Flag name and purpose"],
+      "deployment_considerations": "Deployment-specific notes"
+    },
+    "observability_rollout": {
+      "monitoring": ["What metrics/logs to monitor"],
+      "alerts": ["Alert conditions to set up"],
+      "rollout_strategy": "Phased rollout, feature flag, etc.",
+      "rollback_trigger": "When to trigger rollback",
+      "rollback_procedure": "How to rollback safely"
+    }
+  },
+  "exploration_summary": {
+    "files_read": ["List of files that were analyzed to understand the codebase"],
+    "patterns_identified": ["Key patterns and conventions discovered"],
+    "key_decisions": ["Important design decisions based on exploration"],
+    "exploration_date": "ISO date string of when exploration was done"
   }
 }
 
@@ -153,5 +211,18 @@ ${sdType === 'database' ? '- Focus heavily on schema design, migration safety, R
 ${sdType === 'infrastructure' ? '- Focus on deployment, CI/CD, monitoring, rollback procedures' : ''}
 ${sdType === 'security' ? '- Focus on threat modeling, auth flows, permission boundaries, audit logging' : ''}
 ${sdType === 'documentation' ? '- Focus on content completeness, accuracy verification, maintenance plan' : ''}
-${sdType === 'feature' || !sdType ? '- Balance functional requirements, UX, and technical implementation' : ''}`;
+${sdType === 'feature' || !sdType ? '- Balance functional requirements, UX, and technical implementation' : ''}
+
+## INTEGRATION & OPERATIONALIZATION SECTION (REQUIRED for feature/bugfix SDs)
+
+${['feature', 'bugfix'].includes(sdType) || !sdType ? `The integration_operationalization section is REQUIRED and BLOCKING for this SD type.
+Generate complete, specific content for all 5 subsections:
+1. consumers - Who/what uses this functionality (users, services, systems)
+2. dependencies - All upstream and downstream systems with failure handling
+3. data_contracts - Schema definitions and API contracts with validation
+4. runtime_config - Environment variables, feature flags, deployment notes
+5. observability_rollout - Monitoring, alerting, rollout strategy, rollback plan
+
+DO NOT leave any subsection empty or use placeholder text.` :
+'The integration_operationalization section is optional for this SD type but recommended.'}`;
 }

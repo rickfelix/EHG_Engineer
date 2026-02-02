@@ -177,10 +177,11 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
   try {
     // Fetch PRD metadata
+    // SD-LEO-FIX-PRD-FETCH-001: Use sd_id column (UUID) instead of directive_id (SD key string)
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
-      .select('metadata, directive_id, title')
-      .eq('directive_id', resolvedSdUuid)
+      .select('metadata, directive_id, sd_id, title')
+      .eq('sd_id', resolvedSdUuid)
       .single();
 
     if (prdError) {

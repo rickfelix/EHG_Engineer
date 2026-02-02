@@ -170,8 +170,13 @@ export async function validateSdType(sd, supabase) {
     };
   }
 
+  // Separate thresholds: warn at 65%, auto-correct at 85%
+  // Fix: Previously 85% gated BOTH warning and correction, causing silent misclassifications
+  const WARN_THRESHOLD = 0.65;
+  const AUTO_CORRECT_THRESHOLD = 0.85;
+
   if (classification.recommendedType !== currentType.toLowerCase() &&
-      classification.confidence >= 0.85) {
+      classification.confidence >= WARN_THRESHOLD) {
     console.log('\n   ⚠️  POTENTIAL MISMATCH DETECTED');
     console.log(`   Current: ${currentType}`);
     console.log(`   Detected: ${classification.recommendedType} (${Math.round(classification.confidence * 100)}% confidence)`);
@@ -179,7 +184,7 @@ export async function validateSdType(sd, supabase) {
     console.log(`   Reasoning: ${classification.reasoning}`);
 
     // Only auto-correct if confidence is very high (85%+) and from GPT
-    if (classification.source === 'gpt' && classification.confidence >= 0.85) {
+    if (classification.source === 'gpt' && classification.confidence >= AUTO_CORRECT_THRESHOLD) {
       console.log(`\n   ⚙️  Auto-correcting sd_type to: ${classification.recommendedType}`);
 
       const { error } = await supabase
@@ -200,9 +205,9 @@ export async function validateSdType(sd, supabase) {
         };
       }
     } else {
-      // Keyword-based detection - only warn, don't auto-correct
-      warnings.push(`Potential type mismatch: current '${currentType}', detected '${classification.recommendedType}' (${Math.round(classification.confidence * 100)}% via ${classification.source})`);
-      console.log(`   ℹ️  Mismatch detected but not auto-correcting (source: ${classification.source})`);
+      // Below auto-correct threshold - warn but don't auto-correct
+      warnings.push(`Potential type mismatch: current '${currentType}', detected '${classification.recommendedType}' (${Math.round(classification.confidence * 100)}% via ${classification.source}). Review and correct if needed.`);
+      console.log(`   ℹ️  Mismatch detected but not auto-correcting (confidence ${Math.round(classification.confidence * 100)}% < ${AUTO_CORRECT_THRESHOLD * 100}% threshold)`);
     }
   }
 

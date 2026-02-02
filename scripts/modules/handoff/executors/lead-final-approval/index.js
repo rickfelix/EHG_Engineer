@@ -20,6 +20,7 @@ import {
 } from './helpers.js';
 import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
+import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
 
 export class LeadFinalApprovalExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
@@ -97,6 +98,18 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log('   ✅ Progress set to 100%');
     console.log('   ✅ is_working_on released (set to false)');
     console.log('   ✅ Completion timestamp recorded');
+
+    try {
+      const outcomeResult = await recordSdCompleted({
+        supabase: this.supabase,
+        sdId: sd.id,
+        actor: options.actor || options.executedBy || 'LeadFinalApprovalExecutor',
+        completionTime: new Date().toISOString()
+      });
+      console.log(`   ✅ Outcome loop closure recorded (${outcomeResult.resolvedCount} resolved, ${outcomeResult.backfilledCount} backfilled)`);
+    } catch (outcomeError) {
+      console.warn(`   ⚠️  Outcome loop closure failed: ${outcomeError.message}`);
+    }
 
     // Resolve patterns/improvements if this SD was created from /learn
     await resolveLearningItems(sd, this.supabase);
