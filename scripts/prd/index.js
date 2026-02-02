@@ -25,14 +25,16 @@ import {
   executeRiskAnalysis
 } from './sub-agent-orchestrator.js';
 import {
-  createPRDEntry,
+  createPRDWithValidatedContent,
   updatePRDWithAnalyses,
-  updatePRDWithLLMContent,
   updatePRDWithComponentRecommendations,
   checkPRDTableExists,
   printTableCreationSQL,
   fetchExistingUserStories
 } from './prd-creator.js';
+
+// Note: createPRDEntry and updatePRDWithLLMContent are deprecated
+// We now use createPRDWithValidatedContent (generate-first pattern)
 
 // Import external dependencies
 import { autoTriggerStories } from '../modules/auto-trigger-stories.mjs';
@@ -103,11 +105,41 @@ export async function addPRDToDatabase(sdId, prdTitle) {
     const { stakeholderPersonas, personaSource: _personaSource, personaContextBlock } =
       await handlePersonaIngestion(sdData, sdId);
 
-    // Create initial PRD entry
+    // Execute sub-agent analyses FIRST (before PRD creation)
+    // These don't need PRD ID - they analyze the SD
+    const designAnalysis = await executeDesignAnalysis(sdId, sdData, personaContextBlock);
+    const databaseAnalysis = await executeDatabaseAnalysis(sdId, sdData, designAnalysis, personaContextBlock);
+    const securityAnalysis = await executeSecurityAnalysis(sdId, sdData);
+    const riskAnalysis = await executeRiskAnalysis(sdId, sdData);
+
+    // Generate and validate LLM content BEFORE creating PRD
+    // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: "Generate first, then insert" pattern
+    const llmContent = await generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, {
+      designAnalysis,
+      databaseAnalysis,
+      securityAnalysis,
+      riskAnalysis,
+      stakeholderPersonas
+    });
+
+    // Only create PRD AFTER LLM content is validated (no placeholders)
     let data;
     try {
-      data = await createPRDEntry(supabase, prdId, sdId, sdIdValue, prdTitle, stakeholderPersonas);
-      console.log(`PRD ${prdId} added to database successfully!`);
+      data = await createPRDWithValidatedContent(
+        supabase,
+        prdId,
+        sdId,
+        sdIdValue,
+        prdTitle,
+        sdData,
+        llmContent,
+        stakeholderPersonas
+      );
+      console.log(`\n✅ PRD ${prdId} created with validated LLM content!`);
+      console.log(`   Progress: ${data.progress}%`);
+      console.log(`   Functional Requirements: ${llmContent.functional_requirements?.length || 0}`);
+      console.log(`   Test Scenarios: ${llmContent.test_scenarios?.length || 0}`);
+      console.log(`   Risks Identified: ${llmContent.risks?.length || 0}`);
     } catch (error) {
       if (error.message.includes('already exists')) {
         console.log(`PRD ${prdId} already exists in database`);
@@ -117,26 +149,11 @@ export async function addPRDToDatabase(sdId, prdTitle) {
       process.exit(1);
     }
 
-    // Execute sub-agent analyses
-    const designAnalysis = await executeDesignAnalysis(sdId, sdData, personaContextBlock);
-    const databaseAnalysis = await executeDatabaseAnalysis(sdId, sdData, designAnalysis, personaContextBlock);
-    const securityAnalysis = await executeSecurityAnalysis(sdId, sdData);
-    const riskAnalysis = await executeRiskAnalysis(sdId, sdData);
-
-    // Update PRD with analyses
+    // Update PRD with sub-agent analyses metadata
     await updatePRDWithAnalyses(supabase, prdId, sdId, data.metadata, {
       designAnalysis,
       databaseAnalysis
     }, sdData);
-
-    // LLM-based PRD generation
-    await handleLLMPRDGeneration(supabase, prdId, sdId, sdIdValue, sdData, {
-      designAnalysis,
-      databaseAnalysis,
-      securityAnalysis,
-      riskAnalysis,
-      stakeholderPersonas
-    });
 
     // Component recommendations
     await handleComponentRecommendations(supabase, prdId, sdData, sdId);
@@ -320,12 +337,23 @@ async function handlePersonaIngestion(sdData, sdId) {
 }
 
 /**
- * Handle LLM-based PRD content generation
+ * Generate and validate PRD content BEFORE database insertion
+ * SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: "Generate first, then insert" pattern
+ *
+ * This function:
+ * 1. Generates LLM content
+ * 2. Validates with grounding validation
+ * 3. Returns validated content OR exits on failure
+ *
+ * NO PRD is created in the database if this fails - no orphaned placeholder PRDs.
+ *
+ * @returns {Object} Validated LLM content ready for PRD insertion
  */
-async function handleLLMPRDGeneration(supabase, prdId, sdId, sdIdValue, sdData, analyses) {
+async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, analyses) {
   console.log('\n='.repeat(55));
   console.log('PHASE 3: LLM-BASED PRD CONTENT GENERATION');
   console.log('='.repeat(55));
+  console.log('   Pattern: Generate first, then insert (no placeholder PRDs)');
 
   try {
     const existingStories = await fetchExistingUserStories(supabase, sdIdValue);
@@ -339,45 +367,50 @@ async function handleLLMPRDGeneration(supabase, prdId, sdId, sdIdValue, sdData, 
       existingStories
     });
 
-    if (llmPrdContent) {
-      await updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llmPrdContent);
-
-      // Run grounding validation (SD-LEO-INFRA-PRD-GROUNDING-VALIDATION-001)
-      console.log('\n   🔍 Running grounding validation...');
-      const groundingResults = validatePRDGrounding(llmPrdContent, sdData, {
-        implementationContext: sdData.implementation_context,
-        explorationSummary: sdData.exploration_summary || sdData.metadata?.exploration_summary
-      });
-
-      if (groundingResults.has_issues) {
-        console.log('\n' + formatValidationResults(groundingResults));
-
-        // Store validation results in PRD metadata
-        const { error: updateError } = await supabase
-          .from('product_requirements_v2')
-          .update({
-            metadata: {
-              ...llmPrdContent.metadata,
-              grounding_validation: groundingResults
-            }
-          })
-          .eq('id', prdId);
-
-        if (updateError) {
-          console.warn('   Failed to store grounding validation results:', updateError.message);
-        } else {
-          console.log('   Grounding validation results stored in PRD metadata');
-        }
-      } else {
-        console.log(`   ✅ Grounding validation passed (${(groundingResults.average_confidence * 100).toFixed(0)}% average confidence)`);
-      }
-    } else {
-      console.log('   LLM generation skipped or failed, PRD has template content');
-      console.log('   PRD content will need manual updates to pass quality validation');
+    if (!llmPrdContent) {
+      // HARD GATE: Exit when LLM generation fails
+      console.error('\n   ❌ QUALITY GATE FAILED: LLM PRD generation failed');
+      console.error('   No PRD will be created (avoiding placeholder content).');
+      console.error('   Check OPENAI_API_KEY and retry PRD creation.');
+      process.exit(1);
     }
+
+    // Run grounding validation BEFORE any database insertion
+    console.log('\n   🔍 Running grounding validation...');
+    const groundingResults = validatePRDGrounding(llmPrdContent, sdData, {
+      implementationContext: sdData.implementation_context,
+      explorationSummary: sdData.exploration_summary || sdData.metadata?.exploration_summary
+    });
+
+    if (groundingResults.has_issues) {
+      console.log('\n' + formatValidationResults(groundingResults));
+
+      // HARD GATE: Exit on grounding validation failure
+      console.error('\n   ❌ QUALITY GATE FAILED: PRD grounding validation has issues');
+      console.error('   No PRD will be created (content does not meet quality standards).');
+      console.error('   Address the issues above and re-run PRD creation.');
+      process.exit(1);
+    }
+
+    console.log(`   ✅ Grounding validation passed (${(groundingResults.average_confidence * 100).toFixed(0)}% average confidence)`);
+
+    // Attach grounding validation results to metadata for the PRD record
+    llmPrdContent.metadata = {
+      ...(llmPrdContent.metadata || {}),
+      grounding_validation: groundingResults,
+      generation_pattern: 'generate_first_then_insert',
+      validated_at: new Date().toISOString()
+    };
+
+    return llmPrdContent;
+
   } catch (error) {
-    console.warn('LLM PRD generation failed:', error.message);
-    console.log('   Continuing with template PRD content...');
+    // HARD GATE: Exit when LLM generation throws an error
+    console.error('\n   ❌ QUALITY GATE FAILED: LLM PRD generation error');
+    console.error(`   Error: ${error.message}`);
+    console.error('   No PRD will be created (avoiding placeholder content).');
+    console.error('   Check OPENAI_API_KEY and retry PRD creation.');
+    process.exit(1);
   }
 }
 
