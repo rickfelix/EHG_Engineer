@@ -94,6 +94,7 @@
       "plan_multi_perspective",
       "prd_research_lookup",
       "plan_pre_exec_checklist",
+      "plan_to_exec_checklist",
       "plan_test_infrastructure_gate",
       "testing_tier_strategy",
       "testing_tier_strategy_updated",

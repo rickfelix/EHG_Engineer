@@ -225,6 +225,75 @@ function generateTemplate(outputPath) {
 - Target: All users
 - Success Criteria: [Metrics]
 
+## Integration & Operationalization
+
+> **Completeness Hints**: All 5 subsections below are **REQUIRED for feature/bugfix SDs**.
+> For infrastructure SDs, incomplete sections generate warnings. Documentation SDs may skip this section.
+> Reference: CLAUDE_PLAN.md "Integration & Operationalization Rubric"
+
+### 1. Consumers & User Journeys
+**Who/what will consume this functionality?**
+- List the primary consumers (users, systems, other features)
+- Describe user journeys that depend on this feature
+- Example: "Dashboard component fetches venture list via useVentures hook"
+
+| Consumer | Type | Journey/Use Case |
+|----------|------|------------------|
+| [Consumer name] | User/System/Feature | [How they use it] |
+| [Consumer name] | User/System/Feature | [How they use it] |
+
+### 2. Upstream/Downstream Dependencies
+**What systems does this depend on? What depends on this?**
+- List external systems, APIs, or services
+- Specify direction (upstream = we call them, downstream = they call us)
+- Document failure modes and fallbacks
+- Example: "Upstream: Supabase Auth (fails → show login redirect)"
+
+| Dependency | Direction | Failure Mode | Fallback |
+|------------|-----------|--------------|----------|
+| [System name] | Upstream/Downstream | [What happens if it fails] | [How we handle it] |
+
+### 3. Data Contracts & Schema
+**What data structures are created or modified?**
+- List new tables, columns, or schema changes
+- Document API contracts (request/response shapes)
+- Reference existing schema if extending
+- Example: "New column: ventures.risk_score (integer, nullable)"
+
+| Contract | Type | Schema Reference |
+|----------|------|------------------|
+| [Table/API name] | Database/API/Event | [Link to schema or inline definition] |
+
+### 4. Runtime Configuration & Environments
+**What configuration is needed at runtime?**
+- List environment variables, feature flags, or config values
+- Specify defaults and per-environment overrides
+- Document deployment sequence dependencies
+- Example: "FEATURE_NEW_DASHBOARD=true (default: false in prod)"
+
+| Config Key | Environment | Default | Description |
+|------------|-------------|---------|-------------|
+| [ENV_VAR_NAME] | dev/staging/prod | [default value] | [What it controls] |
+
+### 5. Observability, Rollout & Rollback
+**How will we monitor and safely deploy this?**
+- Define key metrics and alerts
+- Describe rollout strategy (canary, blue-green, feature flag)
+- Document rollback procedure
+- Example: "Alert if error rate > 1% within 5 minutes of deploy"
+
+**Metrics to Monitor:**
+- [Metric name]: [Expected range/threshold]
+
+**Rollout Strategy:**
+- [Phase 1]: [Target audience and success criteria]
+- [Phase 2]: [Expansion criteria]
+
+**Rollback Plan:**
+- Trigger: [What condition triggers rollback]
+- Steps: [How to rollback]
+- Verification: [How to confirm rollback succeeded]
+
 ## Appendices
 
 ### A. Mockups/Wireframes
