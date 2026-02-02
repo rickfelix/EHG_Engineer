@@ -218,14 +218,19 @@ export class HumanVerificationValidator {
    *   1. Smoke test steps defined
    *   2. UAT Agent execution completed
    *   3. LLM UX Oracle score meets threshold (if required)
+   *
+   * SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: For UAT-exempt SDs, accepts automated test evidence
    */
   async validateUISmokeTest(sd, requirements) {
     const issues = [];
     const warnings = [];
 
-    // Check 1: Smoke test steps defined
+    // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Check if this SD is UAT-exempt
+    const isUatExempt = requirements.uatExempt === true;
+
+    // Check 1: Smoke test steps defined (skip for UAT-exempt SDs)
     const smokeTestSteps = sd.smoke_test_steps || [];
-    if (smokeTestSteps.length === 0) {
+    if (!isUatExempt && smokeTestSteps.length === 0) {
       issues.push({
         type: 'missing_smoke_test_steps',
         message: 'No smoke test steps defined for this feature SD',
@@ -233,8 +238,77 @@ export class HumanVerificationValidator {
       });
     }
 
-    // Check 2: UAT execution evidence (if required)
-    if (requirements.requiresUATExecution) {
+    // Check 2: Verification evidence
+    // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Branch logic based on UAT exemption
+    if (isUatExempt) {
+      // For UAT-exempt SDs, check for automated test evidence instead
+      if (requirements.acceptsAutomatedEvidence) {
+        const automatedEvidence = await this.checkAutomatedTestEvidence(sd.id);
+
+        // Log the decision as structured JSON (FR-4)
+        const verificationDecision = {
+          timestamp: new Date().toISOString(),
+          sdId: sd.id,
+          sdType: sd.sd_type,
+          uatExempt: true,
+          uatExemptReason: requirements.uatExemptReason,
+          verificationMethod: 'automated_e2e_integration_tests',
+          evidenceFound: automatedEvidence.found,
+          evidenceType: 'automated_test'
+        };
+
+        if (this.DEBUG) {
+          console.log('   📋 UAT Exemption Decision:', JSON.stringify(verificationDecision, null, 2));
+        }
+
+        if (!automatedEvidence.found) {
+          issues.push({
+            type: 'missing_automated_test_evidence',
+            message: `UAT-exempt SD requires automated test evidence: ${automatedEvidence.reason || 'No passing test runs found'}`,
+            errorCode: 'ERR_UAT_EXEMPT_NO_EVIDENCE',
+            actionRequired: 'Run E2E or integration tests and ensure they pass',
+            uatExempt: true,
+            verificationDecision
+          });
+        } else if (!automatedEvidence.passed) {
+          issues.push({
+            type: 'automated_tests_failed',
+            message: `Automated test evidence exists but tests failed (pass rate: ${automatedEvidence.passRate}%)`,
+            errorCode: 'ERR_UAT_EXEMPT_TESTS_FAILED',
+            evidence: automatedEvidence,
+            verificationDecision
+          });
+        } else {
+          // Success - log the evidence (FR-3)
+          console.log('   ✅ UAT-exempt SD verified via automated tests');
+          console.log(`      Test Run ID: ${automatedEvidence.testRunId}`);
+          console.log(`      Pass Rate: ${automatedEvidence.passRate}%`);
+          console.log(`      Commit SHA: ${automatedEvidence.commitSha || 'N/A'}`);
+          console.log(`      CI URL: ${automatedEvidence.ciUrl || 'N/A'}`);
+
+          // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Store evidence for handoff recording (FR-3)
+          // This will be captured in createResult and flow to the handoff metadata
+          warnings.push({
+            type: 'uat_exempt_verified',
+            message: `UAT-exempt SD verified via automated tests (pass rate: ${automatedEvidence.passRate}%)`,
+            automatedTestEvidence: {
+              testRunId: automatedEvidence.testRunId,
+              verdict: automatedEvidence.verdict,
+              passRate: automatedEvidence.passRate,
+              totalTests: automatedEvidence.totalTests,
+              passedTests: automatedEvidence.passedTests,
+              failedTests: automatedEvidence.failedTests,
+              testFramework: automatedEvidence.testFramework,
+              commitSha: automatedEvidence.commitSha,
+              ciUrl: automatedEvidence.ciUrl,
+              storiesCovered: automatedEvidence.storiesCovered
+            },
+            verificationDecision
+          });
+        }
+      }
+    } else if (requirements.requiresUATExecution) {
+      // Standard UAT requirement for non-exempt SDs
       const uatEvidence = await this.checkUATEvidence(sd.id);
       if (!uatEvidence.found) {
         issues.push({
@@ -274,13 +348,21 @@ export class HumanVerificationValidator {
     // Determine pass/fail
     const passed = issues.length === 0;
     const reason = passed
-      ? 'UI smoke test validation passed'
+      ? (isUatExempt ? 'UAT-exempt SD verification passed (automated tests)' : 'UI smoke test validation passed')
       : `UI smoke test failed with ${issues.length} issue(s)`;
+
+    // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Extract automated test evidence from warnings for handoff recording (FR-3)
+    const uatExemptWarning = warnings.find(w => w.type === 'uat_exempt_verified');
+    const automatedTestEvidence = uatExemptWarning?.automatedTestEvidence || null;
 
     return this.createResult(passed, reason, {
       sdId: sd.id,
       sdType: sd.sd_type,
-      verificationType: 'ui_smoke_test',
+      verificationType: isUatExempt ? 'automated_e2e_integration' : 'ui_smoke_test',
+      uatExempt: isUatExempt,
+      uatExemptReason: isUatExempt ? requirements.uatExemptReason : null,
+      // Include evidence for handoff metadata recording
+      automatedTestEvidence: automatedTestEvidence,
       smokeTestStepsCount: smokeTestSteps.length,
       llmUxScore: sd.llm_ux_score,
       llmUxMinScore: requirements.llmUxMinScore,
@@ -326,15 +408,104 @@ export class HumanVerificationValidator {
 
   /**
    * Validate CLI verification (for infrastructure SDs)
+   * SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Accept automated E2E/integration test evidence
    */
   async validateCLI(sd, requirements) {
-    // Infrastructure SDs don't require human verification by default
-    // But if explicitly required, check for script execution evidence
-    return this.createResult(true, 'CLI verification not enforced for infrastructure SDs', {
-      sdId: sd.id,
-      verificationType: 'cli_verification',
-      skipped: true
-    });
+    const issues = [];
+    const warnings = [];
+
+    // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Infrastructure SDs are verified via automated tests
+    if (requirements.acceptsAutomatedEvidence) {
+      const automatedEvidence = await this.checkAutomatedTestEvidence(sd.id);
+
+      // Log the decision as structured JSON (FR-4)
+      const verificationDecision = {
+        timestamp: new Date().toISOString(),
+        sdId: sd.id,
+        sdType: sd.sd_type,
+        uatExempt: true,
+        uatExemptReason: requirements.uatExemptReason || 'Infrastructure SDs have no user-facing UI',
+        verificationMethod: 'automated_e2e_integration_tests',
+        evidenceFound: automatedEvidence.found,
+        evidenceType: 'automated_test'
+      };
+
+      if (this.DEBUG) {
+        console.log('   📋 Infrastructure Verification Decision:', JSON.stringify(verificationDecision, null, 2));
+      }
+
+      if (automatedEvidence.found && automatedEvidence.passed) {
+        // Success - log the evidence (FR-3)
+        console.log('   ✅ Infrastructure SD verified via automated tests');
+        console.log(`      Test Run ID: ${automatedEvidence.testRunId}`);
+        console.log(`      Pass Rate: ${automatedEvidence.passRate}%`);
+        console.log(`      Framework: ${automatedEvidence.testFramework || 'N/A'}`);
+        console.log(`      Commit SHA: ${automatedEvidence.commitSha || 'N/A'}`);
+        console.log(`      CI URL: ${automatedEvidence.ciUrl || 'N/A'}`);
+
+        // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Include evidence in result for handoff recording (FR-3)
+        return this.createResult(true, 'Infrastructure SD verified via automated tests', {
+          sdId: sd.id,
+          sdType: sd.sd_type,
+          verificationType: 'cli_verification_automated',
+          uatExempt: true,
+          uatExemptReason: requirements.uatExemptReason,
+          // Evidence for handoff metadata recording
+          automatedTestEvidence: {
+            testRunId: automatedEvidence.testRunId,
+            verdict: automatedEvidence.verdict,
+            passRate: automatedEvidence.passRate,
+            totalTests: automatedEvidence.totalTests,
+            passedTests: automatedEvidence.passedTests,
+            failedTests: automatedEvidence.failedTests,
+            testFramework: automatedEvidence.testFramework,
+            commitSha: automatedEvidence.commitSha,
+            ciUrl: automatedEvidence.ciUrl,
+            storiesCovered: automatedEvidence.storiesCovered
+          },
+          verificationDecision
+        });
+      }
+
+      if (automatedEvidence.found && !automatedEvidence.passed) {
+        // Tests exist but failed
+        issues.push({
+          type: 'automated_tests_failed',
+          message: `Infrastructure SD has failing automated tests (pass rate: ${automatedEvidence.passRate}%)`,
+          errorCode: 'ERR_INFRA_TESTS_FAILED',
+          evidence: automatedEvidence,
+          actionRequired: 'Fix failing tests before handoff',
+          verificationDecision
+        });
+      }
+
+      // No evidence found - advisory warning only for infrastructure SDs
+      if (!automatedEvidence.found) {
+        warnings.push({
+          type: 'no_automated_test_evidence',
+          message: 'No automated test evidence found for infrastructure SD',
+          suggestion: 'Consider adding E2E or integration tests for verification',
+          verificationDecision
+        });
+      }
+    }
+
+    // Infrastructure SDs pass by default (advisory mode) but with warning if no evidence
+    const passed = issues.length === 0;
+    return this.createResult(passed,
+      passed
+        ? 'Infrastructure SD verification passed (automated tests optional)'
+        : `Infrastructure SD verification failed: ${issues.length} issue(s)`,
+      {
+        sdId: sd.id,
+        sdType: sd.sd_type,
+        verificationType: 'cli_verification',
+        uatExempt: true,
+        uatExemptReason: requirements.uatExemptReason,
+        issues,
+        warnings
+      }
+    );
   }
 
   /**
@@ -370,6 +541,80 @@ export class HumanVerificationValidator {
         : null,
       testsRun: smokTests.length,
       lastUpdated: testPlans[0].updated_at
+    };
+  }
+
+  /**
+   * SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Check for automated E2E/integration test evidence
+   * Used as UAT verification for infrastructure and other UAT-exempt SDs
+   *
+   * @param {string} sdId - Strategic Directive ID
+   * @returns {Promise<Object>} Automated test evidence result
+   */
+  async checkAutomatedTestEvidence(sdId) {
+    // Query test_runs table for passing E2E or integration tests
+    const { data: testRuns, error } = await supabase
+      .from('test_runs')
+      .select(`
+        id, sd_id, verdict, pass_rate, total_tests, passed_tests, failed_tests,
+        test_framework, commit_sha, ci_url, created_at, metadata
+      `)
+      .eq('sd_id', sdId)
+      .in('verdict', ['PASS', 'CONDITIONAL_PASS'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.log(`   ⚠️  Error checking automated test evidence: ${error.message}`);
+      return {
+        found: false,
+        error: error.message,
+        evidenceType: 'automated_test'
+      };
+    }
+
+    if (!testRuns || testRuns.length === 0) {
+      return {
+        found: false,
+        reason: 'No passing automated test runs found',
+        evidenceType: 'automated_test'
+      };
+    }
+
+    // Get the most recent passing test run
+    const latestRun = testRuns[0];
+    const hasCommitSha = !!latestRun.commit_sha;
+    const hasCiUrl = !!latestRun.ci_url;
+
+    // Also check story_test_mappings for test coverage evidence
+    const { data: testMappings, error: mappingError } = await supabase
+      .from('story_test_mappings')
+      .select('story_id, test_status, tested_at')
+      .eq('sd_id', sdId)
+      .eq('test_status', 'passed')
+      .order('tested_at', { ascending: false })
+      .limit(10);
+
+    const storiesCovered = testMappings?.length || 0;
+
+    return {
+      found: true,
+      passed: latestRun.verdict === 'PASS' || latestRun.verdict === 'CONDITIONAL_PASS',
+      evidenceType: 'automated_test',
+      testRunId: latestRun.id,
+      verdict: latestRun.verdict,
+      passRate: latestRun.pass_rate,
+      totalTests: latestRun.total_tests,
+      passedTests: latestRun.passed_tests,
+      failedTests: latestRun.failed_tests,
+      testFramework: latestRun.test_framework,
+      commitSha: latestRun.commit_sha,
+      ciUrl: latestRun.ci_url,
+      hasCommitSha,
+      hasCiUrl,
+      storiesCovered,
+      lastUpdated: latestRun.created_at,
+      metadata: latestRun.metadata
     };
   }
 
