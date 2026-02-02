@@ -134,7 +134,7 @@ export class HumanVerificationValidator {
     }
 
     // Load validation profile for this SD type
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: _profileError } = await supabase
       .from('sd_type_validation_profiles')
       .select(`
         requires_human_verifiable_outcome,
@@ -374,7 +374,7 @@ export class HumanVerificationValidator {
   /**
    * Validate API test (for database/security/performance SDs)
    */
-  async validateAPITest(sd, requirements) {
+  async validateAPITest(sd, _requirements) {
     const issues = [];
 
     // Check smoke test steps for API verification
@@ -587,7 +587,7 @@ export class HumanVerificationValidator {
     const hasCiUrl = !!latestRun.ci_url;
 
     // Also check story_test_mappings for test coverage evidence
-    const { data: testMappings, error: mappingError } = await supabase
+    const { data: testMappings, error: _mappingError } = await supabase
       .from('story_test_mappings')
       .select('story_id, test_status, tested_at')
       .eq('sd_id', sdId)
