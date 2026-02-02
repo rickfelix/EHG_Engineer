@@ -19,7 +19,8 @@ import {
   createExplorationAuditGate,
   createDeliverablesPlanningGate,
   createBranchEnforcementGate,
-  createInfrastructureConsumerCheckGate
+  createInfrastructureConsumerCheckGate,
+  createIntegrationSectionValidationGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -114,6 +115,10 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Infrastructure Consumer Check (SD-LEO-INFRA-PLAN-PHASE-COMPLETENESS-001)
     // Validates infrastructure components have corresponding consumer code planned
     gates.push(createInfrastructureConsumerCheckGate(this.prdRepo, this.supabase));
+
+    // Integration Section Validation (SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001)
+    // Validates PRD has complete Integration & Operationalization section
+    gates.push(createIntegrationSectionValidationGate(this.prdRepo, this.supabase));
 
     // Parent orchestrators get simplified gates
     if (parentOrchestrator) {

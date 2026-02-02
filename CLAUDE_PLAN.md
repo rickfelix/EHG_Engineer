@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-02 9:15:21 PM
+**Generated**: 2026-02-02 10:23:50 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -59,25 +59,6 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -166,6 +147,25 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## Migration Execution Protocol
+
+## ⚠️ CRITICAL: Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## 🎯 Multi-Perspective Planning
 
@@ -477,6 +477,83 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
+## PLAN-TO-EXEC Checklist (MANDATORY)
+
+## 🚪 PLAN-TO-EXEC Checklist (MANDATORY)
+
+Before running `node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX`, verify ALL items:
+
+### 1. PRD Complete ✅
+- [ ] PRD created via `node scripts/add-prd-to-database.js` or generated script
+- [ ] No placeholder text ("TBD", "to be defined")
+- [ ] Functional requirements have acceptance criteria
+- [ ] Technical architecture documented
+
+### 2. Integration & Operationalization Complete ✅
+- [ ] PRD has `integration_operationalization` section with 5 subsections:
+  - [ ] **Consumers & User Journeys**: Who/what uses this feature
+  - [ ] **Upstream/Downstream Dependencies**: External systems, failure modes
+  - [ ] **Data Contracts & Schema**: Tables, columns, API contracts
+  - [ ] **Runtime Configuration**: Env vars, feature flags, deployment sequence
+  - [ ] **Observability, Rollout & Rollback**: Metrics, rollout plan, rollback procedure
+- [ ] For infrastructure SDs: Consumers identified OR justification provided (≥30 chars)
+- [ ] Dependencies have `name`, `direction`, `failure_mode` fields
+
+**Why this matters**: Integration planning prevents orphaned infrastructure, unclear dependencies, and missing observability during rollout.
+
+**Validation**: `GATE_INTEGRATION_SECTION_VALIDATION` runs at PLAN-TO-EXEC handoff (blocking for feature/bugfix, warning for infrastructure).
+
+### 3. User Stories Generated ✅
+- [ ] User stories generated from PRD (auto-trigger or manual)
+- [ ] **≥80% of stories have implementation_context** (BMAD requirement)
+- [ ] Each story has: technical_approach, files_to_create/modify, dependencies, estimated_effort
+
+```bash
+# Generate user stories from PRD
+node scripts/modules/auto-trigger-stories.mjs <SD-ID> <PRD-ID>
+# Or use the Task tool with stories-agent
+Task(subagent_type="stories-agent", prompt="Generate user stories for SD-XXX...")
+```
+
+### 3. Sub-Agents Executed ✅ (GATE 1 Requirement)
+- [ ] **DESIGN sub-agent** executed and results stored
+- [ ] **DATABASE sub-agent** executed and results stored
+
+```
+# CORRECT - Use Task tool (NOT sub-agent-executor.js)
+Task(subagent_type="design-agent", prompt="Execute DESIGN analysis for SD-XXX...")
+Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XXX...")
+```
+
+### 4. Validation Gates Pass ✅
+- **BMAD Validation**: User story context ≥80%
+- **GATE 1**: DESIGN + DATABASE sub-agents executed
+
+### Common Failures and Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "User story context engineering requires ≥80%" | Stories missing implementation_context | Add implementation_context to all stories |
+| "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
+| "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -547,23 +624,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -704,6 +764,33 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -801,33 +888,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
-
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
 
 ## CI/CD Pipeline Verification
 
@@ -1764,34 +1824,6 @@ for (const childId of childIds) {
 > **NOTE**: A database trigger (trg_inherit_parent_metadata) also enforces this automatically as a safety net.
 
 
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
-
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1832,6 +1864,34 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
+
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
 
 ## Visual Documentation Best Practices
 

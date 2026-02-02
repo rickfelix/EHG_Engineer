@@ -13,3 +13,4 @@ export { createExplorationAuditGate, validateExplorationAudit, MINIMUM_FILES, AD
 export { createDeliverablesPlanningGate, validateDeliverablesPlanning } from './deliverables-planning.js';
 export { createBranchEnforcementGate } from './branch-enforcement.js';
 export { createInfrastructureConsumerCheckGate, generateFollowUpSD, REASON_CODES } from './infrastructure-consumer-check.js';
+export { createIntegrationSectionValidationGate, REQUIRED_SUBSECTIONS, SUBSECTION_NAMES, BLOCKING_SD_TYPES, WARNING_SD_TYPES, SKIP_SD_TYPES, ERROR_CODE_PREFIX } from './integration-section-validation.js';

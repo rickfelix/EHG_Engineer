@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-02T02:15:21.025Z -->
-<!-- git_commit: bea2f901 -->
-<!-- db_snapshot_hash: 2a3705730b4729e1 -->
+<!-- generated_at: 2026-02-02T15:23:50.175Z -->
+<!-- git_commit: 697df06d -->
+<!-- db_snapshot_hash: 63bf50962a343d27 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
@@ -88,6 +88,18 @@ Before writing ANY code, EXEC MUST:
   - Tier 2: Query user_stories table → Found implementation_context with validation spec
   - Resolution: "Email validation will use regex pattern from US-002 context"
 ```
+
+0.5. **PRD INTEGRATION SECTION CHECK** 📋 CRITICAL
+   - Read PRD `integration_operationalization` section BEFORE coding
+   - Extract and document:
+     - **Consumers**: Who/what uses this feature? What breaks if it fails?
+     - **Dependencies**: Upstream systems to call, downstream systems that call us
+     - **Failure modes**: How to handle when each dependency fails (error handling)
+     - **Data contracts**: Schema changes, API shapes to implement
+     - **Runtime config**: Env vars to add, feature flags to configure
+     - **Observability**: Metrics to track, rollout/rollback plan
+   - If section is missing: Flag to PLAN for remediation before EXEC proceeds
+   - Document: "Integration context reviewed: [X consumers, Y dependencies, Z metrics]"
 
 1. **APPLICATION CHECK** ⚠️ CRITICAL
    - **ALL UI changes** (user AND admin) go to `/mnt/c/_EHG/EHG/`
@@ -352,5 +364,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-02-02 9:15:21 PM*
+*DIGEST generated: 2026-02-02 10:23:50 AM*
 *Protocol: 4.3.3*
