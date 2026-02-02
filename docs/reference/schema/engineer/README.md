@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T04:52:34.874Z
-**Tables**: 411
+**Generated**: 2026-02-02T05:32:45.383Z
+**Tables**: 414
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (411)
+## All Tables (414)
 
 ### LEO Protocol
 
@@ -166,6 +166,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ### Other
 
+- [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md)
 - [advisory_checkpoints](tables/advisory_checkpoints.md)
 - [aegis_constitutions](tables/aegis_constitutions.md)
@@ -257,6 +258,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [ehg_feature_areas](tables/ehg_feature_areas.md)
 - [ehg_page_routes](tables/ehg_page_routes.md)
 - [ehg_user_workflows](tables/ehg_user_workflows.md)
+- [enhancement_proposal_audit](tables/enhancement_proposal_audit.md)
+- [enhancement_proposals](tables/enhancement_proposals.md)
 - [eva_actions](tables/eva_actions.md)
 - [eva_agent_communications](tables/eva_agent_communications.md)
 - [eva_audit_log](tables/eva_audit_log.md)
