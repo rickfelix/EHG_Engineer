@@ -63,6 +63,7 @@ function generateRouter(data, _fileMapping) {
   const sessionPrologue = sections.find(s => s.section_type === 'session_prologue');
   const autoProceedMode = sections.find(s => s.section_type === 'auto_proceed_mode');
   const orchestratorChaining = sections.find(s => s.section_type === 'orchestrator_chaining');
+  const sdContinuationTruthTable = sections.find(s => s.section_type === 'sd_continuation_truth_table');
   const sessionInit = sections.find(s => s.section_type === 'session_init');
   const workItemRouting = sections.find(s => s.section_type === 'work_item_routing');
   const skillIntentDetection = sections.find(s => s.section_type === 'skill_intent_detection');
@@ -85,6 +86,8 @@ ${sessionPrologue ? formatSection(sessionPrologue) : ''}
 ${autoProceedMode ? formatSection(autoProceedMode) : ''}
 
 ${orchestratorChaining ? formatSection(orchestratorChaining) : ''}
+
+${sdContinuationTruthTable ? formatSection(sdContinuationTruthTable) : ''}
 
 ${sessionInit ? formatSection(sessionInit) : ''}
 

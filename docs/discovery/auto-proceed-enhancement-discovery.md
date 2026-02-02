@@ -281,7 +281,7 @@ Current state of AUTO-PROCEED documentation:
 | 5 | UAT | Auto-pass with flag |
 | 6 | Notifications | Terminal + sound |
 | 7 | Learning trigger | Auto-invoke /learn |
-| 8 | Post-learn | Show queue, pause |
+| 8 | Post-learn | Show queue, pause **[unless Chaining ON]** |
 | 9 | Context | Existing process |
 | 10 | Restart | Auto with logging |
 | 11 | Handoff | Add flag |
@@ -304,6 +304,9 @@ Current state of AUTO-PROCEED documentation:
 | 28 | Error retries | Log inline |
 | 29 | Resume reminder | Yes, show what was happening |
 | 30 | Background task prevention | Use CLAUDE_CODE_DISABLE_BACKGROUND_TASKS env var |
+| 31 | Mode interaction | SD Continuation Truth Table governs ALL transitions |
+| 32 | Child-to-child | AUTO-PROCEED ON → auto-continue to next ready child |
+| 33 | Grandchild return | After grandchild completes, return to parent and continue |
 
 ---
 
@@ -409,6 +412,55 @@ CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1
 
 ---
 
-*Discovery session complete. 29 decisions captured, 19 implementation items, 15 children SDs.*
+---
+
+## Round 6: Complete SD Continuation Specification (Added 2026-02-01)
+
+### 36. AUTO-PROCEED + Chaining Interaction (v1)
+- **Q**: How do AUTO-PROCEED and Orchestrator Chaining modes interact at orchestrator completion?
+- **A**: **Truth table governs behavior** - see SD Continuation Truth Table in CLAUDE.md
+
+### 37. Child-to-Child Continuation (v2 - expanded scope)
+- **Q**: What happens when a child SD completes and there are more children?
+- **A**: **AUTO-PROCEED ON → auto-continue** to next ready child using `getNextReadyChild()`
+- **Q**: How is "next ready child" determined?
+- **A**: **Priority-based via `sortByUrgency()`**: Band (P0→P3) → Score → FIFO
+
+### 38. Grandchild Continuation
+- **Q**: What happens when a grandchild completes?
+- **A**: **Return to parent context** and continue to next child at that level
+
+**Root Cause Addressed (v2)**:
+Original truth table only covered orchestrator completion. System paused BETWEEN children within an orchestrator even with AUTO-PROCEED ON + Chaining ON. The specification was incomplete.
+
+**Issues Fixed**:
+1. Unexpected pauses between sibling SDs within same orchestrator
+2. Only orchestrator-to-orchestrator transitions were specified
+3. Child-to-child continuation logic existed in code but wasn't documented as authoritative behavior
+
+**Resolution (v2)**:
+1. Expanded truth table to **Complete Transition Matrix** covering ALL transition types
+2. Added D32 (child-to-child) and D33 (grandchild return) decisions
+3. Documented implementation files for each transition type
+4. Added "Next SD Selection Priority" algorithm
+5. **CODE FIX**: Updated `cli-main.js:handleExecuteWithContinuation()`:
+   - Added `WORKFLOW_SEQUENCE` mapping to define handoff progression
+   - Removed bug that only continued after `LEAD-FINAL-APPROVAL`
+   - Now continues through full workflow: LEAD-TO-PLAN → LEAD-FINAL-APPROVAL → find next child → repeat
+
+**Complete Transition Matrix** (canonical - see CLAUDE.md for full version):
+| Transition | AUTO-PROCEED | Chaining | Behavior |
+|------------|:------------:|:--------:|----------|
+| Child → next child | ON | * | AUTO-CONTINUE |
+| Child → next child | OFF | * | PAUSE |
+| Child fails gate | ON | * | SKIP to sibling (D16) |
+| All children done | ON | ON | AUTO-CONTINUE to next orchestrator |
+| All children done | ON | OFF | PAUSE (D08) |
+| All children done | OFF | * | PAUSE |
+| All children blocked | * | * | PAUSE (D23) |
+
+---
+
+*Discovery session complete. 33 decisions captured (D01-D33), 19 implementation items, 15 children SDs.*
 *Implementation: 4/15 complete (26.7%)*
-*Last Updated: 2026-01-25*
+*Last Updated: 2026-02-01 (v2 - expanded continuation specification)*

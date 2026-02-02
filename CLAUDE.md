@@ -333,6 +333,111 @@ Keep chaining disabled when:
 
 Both can be configured via `/leo settings`.
 
+## SD Continuation Truth Table
+
+**CRITICAL**: This table is AUTHORITATIVE for ALL SD transition decisions. It covers every transition type, not just orchestrator boundaries. When behavior is ambiguous, THIS TABLE WINS.
+
+### Complete Transition Matrix
+
+| Transition Context | AUTO-PROCEED | Chaining | Behavior | Implementation |
+|-------------------|:------------:|:--------:|----------|----------------|
+| **Child completes → next child** | ON | * | **AUTO-CONTINUE** to next ready child (priority-based) | `getNextReadyChild()` |
+| Child completes → next child | OFF | * | PAUSE for user selection | User must invoke `/leo next` |
+| **Child fails gate (retries exhausted)** | ON | * | **SKIP** to next sibling (D16) | `executeSkipAndContinue()` |
+| Child fails gate (retries exhausted) | OFF | * | PAUSE with failure details | Manual remediation |
+| **All children complete (orchestrator done)** | ON | ON | Run /learn → **AUTO-CONTINUE** to next orchestrator | `orchestrator-completion-hook.js` |
+| All children complete (orchestrator done) | ON | OFF | Run /learn → Show queue → **PAUSE** (D08) | User selects next orchestrator |
+| All children complete (orchestrator done) | OFF | * | PAUSE before /learn | Maximum human control |
+| **All children blocked** | * | * | **PAUSE** - show blockers (D23) | Human decision required |
+| **Dependency unresolved** | * | * | **SKIP** SD, continue to next ready | `checkDependenciesResolved()` |
+| **Grandchild completes** | ON | * | Return to parent context, continue to next child | Hierarchical traversal |
+
+### Key Rules
+
+1. **AUTO-PROCEED OFF always pauses** - Chaining has no effect when AUTO-PROCEED is OFF
+2. **Chaining only affects orchestrator-to-orchestrator transitions** - Child-to-child is controlled by AUTO-PROCEED alone
+3. **Priority determines next SD** - `sortByUrgency()` ranks by: Band (P0→P3) → Score → FIFO
+4. **Dependencies gate readiness** - SD with unresolved deps is skipped, not paused on
+5. **Both ON = no pauses except hard stops** - Runs until D23 (all blocked) or context exhaustion
+
+### Next SD Selection Priority
+
+When AUTO-PROCEED determines "next SD", selection follows this order:
+
+```
+1. Unblocked children of current orchestrator (by urgency score)
+2. Unblocked grandchildren (depth-first, urgency-sorted)
+3. Next orchestrator (if Chaining ON and current orchestrator complete)
+4. PAUSE (if nothing ready or Chaining OFF at orchestrator boundary)
+```
+
+**Urgency Score Components** (from `urgency-scorer.js`):
+- SD Priority (critical/high/medium/low): 25% weight
+- Active issue patterns: 20% weight
+- Downstream blockers: 15% weight
+- Time sensitivity: 15% weight
+- Learning signals: 40% blend
+- Progress (≥80% complete): 10% bonus
+
+### Decision Flow (Complete)
+
+```
+SD Completes (child, grandchild, or orchestrator)
+         │
+         ▼
+   AUTO-PROCEED ON?
+    │           │
+   YES          NO
+    │           └──► PAUSE (ask user to invoke /leo next)
+    ▼
+   Is this an orchestrator with all children done?
+    │           │
+   YES          NO (more children remain)
+    │           │
+    │           └──► getNextReadyChild() → Continue to next child
+    ▼
+   Run /learn automatically
+         │
+         ▼
+   Chaining ON?
+    │           │
+   YES          NO
+    │           └──► Show queue → PAUSE (D08)
+    ▼
+   findNextAvailableOrchestrator()
+    │           │
+   Found       Not Found
+    │           └──► Show queue → PAUSE (no more work)
+    ▼
+   Auto-continue to next orchestrator
+```
+
+### Implementation Files
+
+| Component | File | Key Function |
+|-----------|------|--------------|
+| Child selection | `scripts/modules/handoff/child-sd-selector.js` | `getNextReadyChild()` |
+| Skip failed child | `scripts/modules/handoff/skip-and-continue.js` | `executeSkipAndContinue()` |
+| Orchestrator completion | `scripts/modules/handoff/orchestrator-completion-hook.js` | `executeOrchestratorCompletionHook()` |
+| Urgency scoring | `scripts/modules/auto-proceed/urgency-scorer.js` | `sortByUrgency()` |
+| Dependency check | `scripts/modules/sd-next/dependency-resolver.js` | `checkDependenciesResolved()` |
+| Mode resolution | `scripts/modules/handoff/auto-proceed-resolver.js` | `resolveAutoProceed()` |
+
+### Conflict Resolution
+
+If documentation elsewhere conflicts with this truth table:
+1. **This truth table wins** - It is the canonical specification
+2. **Report the conflict** - Create an issue or RCA to fix inconsistent text
+3. **Never guess** - When behavior is ambiguous, consult this table
+
+### Historical Notes
+
+**2026-02-01 (v1)**: D08 was written as absolute rule without Chaining exception. Added orchestrator completion matrix.
+
+**2026-02-01 (v2)**: Expanded to cover ALL transition types after discovering pause occurred between children within an orchestrator. Root cause: only orchestrator boundaries were specified, not child-to-child continuation.
+
+**2026-02-01 (v2 code fix)**: Fixed `scripts/modules/handoff/cli/cli-main.js:handleExecuteWithContinuation()`. Bug: only continued after `LEAD-FINAL-APPROVAL`, causing break after `LEAD-TO-PLAN` for new children. Fix: Added `WORKFLOW_SEQUENCE` mapping to automatically advance through LEAD-TO-PLAN → LEAD-FINAL-APPROVAL → (find next child) → repeat.
+
 ## Session Initialization - SD Selection
 
 ### Intent Detection Keywords
@@ -543,7 +648,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-02 7:12:21 PM
+**Last Generated**: 2026-02-02 9:01:16 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
