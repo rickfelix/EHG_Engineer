@@ -2,10 +2,12 @@
 /**
  * Board Vetting CLI
  * SD: SD-LEO-SELF-IMPROVE-002C (FR-7)
+ * Enhanced: SD-LEO-ORCH-SELF-IMPROVING-LEO-001-B (Multi-Model Debate System)
  *
  * Commands:
  *   check-families --proposer <modelId> --evaluators <id1,id2,id3>
  *   evaluate --proposal-id <id> --proposer-model <modelId> --models <id1,id2,id3>
+ *   debate --proposal-id <id>    [NEW] Run multi-model debate
  *   verdict --proposal-id <id>
  *
  * Flags:
@@ -16,10 +18,13 @@
  *   1 - General error
  *   2 - CONST-002 violation
  *   3 - Verdict not found
+ *   4 - Debate failed
  */
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { triggerDebate, getLatestDebate } from '../lib/sub-agents/vetting/debate-orchestrator.js';
+import { validateFamilySeparation, getComplianceSummary } from '../lib/sub-agents/vetting/const-002-validator.js';
 
 dotenv.config();
 
@@ -154,7 +159,8 @@ async function getRubricVersion() {
 }
 
 /**
- * Create critic assessments for a proposal
+ * Create critic assessments for a proposal (legacy mode)
+ * @deprecated Use runDebate() for full multi-model debate
  */
 async function evaluate(proposalId, proposerModel, evaluatorModels) {
   // Validate RUBRIC_VERSION exists
@@ -166,10 +172,20 @@ async function evaluate(proposalId, proposerModel, evaluatorModels) {
     process.exit(1);
   }
 
-  // Check CONST-002 compliance first
-  const familyCheck = await checkFamilies(proposerModel, evaluatorModels);
-  if (!familyCheck.const_002_pass) {
-    logError('CONST-002 violation', { violations: familyCheck.violations });
+  // Check CONST-002 compliance first using new validator
+  const familyValidation = validateFamilySeparation({
+    proposerModel,
+    evaluators: evaluatorModels.map((model, i) => ({
+      persona: ['safety', 'value', 'risk'][i],
+      model
+    }))
+  });
+
+  if (!familyValidation.passed) {
+    logError('CONST-002 violation', { violations: familyValidation.violations });
+    if (isJson) {
+      console.log(JSON.stringify({ const_002_summary: getComplianceSummary(familyValidation) }));
+    }
     process.exit(2);
   }
 
@@ -224,6 +240,83 @@ async function evaluate(proposalId, proposerModel, evaluatorModels) {
 }
 
 /**
+ * Run multi-model debate for a proposal
+ * SD-LEO-ORCH-SELF-IMPROVING-LEO-001-B (FR-1, FR-2)
+ */
+async function runDebate(proposalId, options = {}) {
+  log('Starting multi-model debate', { proposalId });
+
+  try {
+    const result = await triggerDebate(proposalId, options);
+
+    if (result.skipped) {
+      log('Debate skipped', {
+        proposalId,
+        reason: result.reason,
+        existingDebateId: result.existingDebateId
+      });
+      return result;
+    }
+
+    if (!result.success) {
+      logError('Debate failed', {
+        debateId: result.debateId,
+        error: result.error,
+        const002Passed: result.const002Passed
+      });
+      process.exit(4);
+    }
+
+    log('Debate completed', {
+      debateId: result.debateId,
+      proposalId: result.proposalId,
+      finalVerdict: result.finalVerdict,
+      finalScore: result.finalScore,
+      consensusReached: result.consensusReached,
+      roundsCompleted: result.roundsCompleted,
+      topIssues: result.topIssues,
+      durationMs: result.durationMs
+    });
+
+    return result;
+  } catch (error) {
+    logError('Debate execution failed', error);
+    process.exit(4);
+  }
+}
+
+/**
+ * Get debate status for a proposal
+ */
+async function getDebateStatus(proposalId) {
+  try {
+    const debate = await getLatestDebate(proposalId);
+
+    if (!debate) {
+      log('No debate found', { proposalId });
+      return null;
+    }
+
+    log('Debate status', {
+      debateId: debate.id,
+      proposalId: debate.proposal_id,
+      status: debate.status,
+      finalVerdict: debate.final_verdict,
+      finalScore: debate.final_score,
+      consensusReached: debate.consensus_reached,
+      roundsCompleted: debate.actual_rounds,
+      createdAt: debate.created_at,
+      completedAt: debate.completed_at
+    });
+
+    return debate;
+  } catch (error) {
+    logError('Failed to get debate status', error);
+    process.exit(1);
+  }
+}
+
+/**
  * Get board verdict for a proposal
  */
 async function getVerdict(proposalId) {
@@ -268,26 +361,35 @@ async function getVerdict(proposalId) {
 async function main() {
   if (!command) {
     console.log(`
-Board Vetting CLI (SD-LEO-SELF-IMPROVE-002C)
+Board Vetting CLI (SD-LEO-SELF-IMPROVE-002C + SD-LEO-ORCH-SELF-IMPROVING-LEO-001-B)
 
 Commands:
   check-families --proposer <modelId> --evaluators <id1,id2,id3>
     Check CONST-002 family separation
 
   evaluate --proposal-id <id> --proposer-model <modelId> --models <id1,id2,id3>
-    Create 3 critic assessments for a proposal
+    Create 3 critic assessments for a proposal (legacy mode)
+
+  debate --proposal-id <id> [--max-rounds <n>]
+    Run multi-model debate with 3 AI critics (Anthropic, OpenAI, Google)
+    Auto-triggers when proposal status is 'submitted'
+
+  debate-status --proposal-id <id>
+    Get latest debate status and results for a proposal
 
   verdict --proposal-id <id>
     Get board verdict for a proposal
 
 Flags:
-  --json    Output line-delimited JSON (CI-friendly)
+  --json         Output line-delimited JSON (CI-friendly)
+  --max-rounds   Max debate rounds (default: 3)
 
 Exit Codes:
   0 - Success
   1 - General error
   2 - CONST-002 violation
   3 - Verdict not found
+  4 - Debate failed
 `);
     process.exit(0);
   }
@@ -325,6 +427,36 @@ Exit Codes:
 
       const models = modelsStr.split(',').map(s => s.trim());
       await evaluate(proposalId, proposerModel, models);
+      break;
+    }
+
+    case 'debate': {
+      const proposalId = getArg('proposal-id');
+
+      if (!proposalId) {
+        logError('Missing required argument: --proposal-id');
+        process.exit(1);
+      }
+
+      const maxRoundsStr = getArg('max-rounds');
+      const options = {};
+      if (maxRoundsStr) {
+        options.maxRounds = parseInt(maxRoundsStr, 10);
+      }
+
+      await runDebate(proposalId, options);
+      break;
+    }
+
+    case 'debate-status': {
+      const proposalId = getArg('proposal-id');
+
+      if (!proposalId) {
+        logError('Missing required argument: --proposal-id');
+        process.exit(1);
+      }
+
+      await getDebateStatus(proposalId);
       break;
     }
 
