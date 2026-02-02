@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T04:15:23.892Z
+**Generated**: 2026-02-02T04:52:34.874Z
 **Rows**: 82
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (26 total)
+## Columns (33 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -42,8 +42,15 @@
 | effectiveness_measured_at | `timestamp with time zone` | YES | - | When effectiveness was measured after applying improvement |
 | baseline_metric | `jsonb` | YES | - | Metric values before improvement was applied |
 | post_metric | `jsonb` | YES | - | Metric values after improvement was applied |
-| rollback_reason | `text` | YES | - | If improvement was rolled back, the reason why |
+| rollback_reason | `text` | YES | - | Explanation for why the improvement was rolled back. Required when rolling back. |
 | apply_tier | `text` | YES | - | - |
+| dry_run_diff | `jsonb` | YES | - | Structured diff preview showing exact changes before application. Required before status=APPLIED. |
+| dry_run_at | `timestamp with time zone` | YES | - | Timestamp when dry-run preview was generated. Must be set before applying change. |
+| rollback_eligible | `boolean` | **NO** | `true` | Whether this improvement can be rolled back. Defaults to TRUE. |
+| rollback_window_hours | `integer(32)` | **NO** | `72` | Number of hours after creation that rollback is allowed. Default 72h. Range: 1-720. |
+| rollback_expires_at | `timestamp with time zone` | YES | - | Auto-calculated timestamp when rollback eligibility expires. Set by trigger. |
+| rolled_back_at | `timestamp with time zone` | YES | - | Timestamp when improvement was rolled back. NULL if not rolled back. |
+| rolled_back_by | `character varying` | YES | - | Identifier of who/what initiated the rollback. Required when rolling back. |
 
 ## Constraints
 
@@ -59,6 +66,7 @@
 - `protocol_improvement_queue_effectiveness_score_check`: CHECK (((effectiveness_score >= 0) AND (effectiveness_score <= 100)))
 - `protocol_improvement_queue_improvement_type_check`: CHECK ((improvement_type = ANY (ARRAY['VALIDATION_RULE'::text, 'CHECKLIST_ITEM'::text, 'SKILL_UPDATE'::text, 'PROTOCOL_SECTION'::text, 'SUB_AGENT_CONFIG'::text])))
 - `protocol_improvement_queue_risk_tier_check`: CHECK (((risk_tier)::text = ANY ((ARRAY['IMMUTABLE'::character varying, 'GOVERNED'::character varying, 'AUTO'::character varying])::text[])))
+- `protocol_improvement_queue_rollback_window_check`: CHECK (((rollback_window_hours >= 1) AND (rollback_window_hours <= 720)))
 - `protocol_improvement_queue_source_type_check`: CHECK ((source_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
 - `protocol_improvement_queue_status_check`: CHECK ((status = ANY (ARRAY['PENDING'::text, 'APPROVED'::text, 'SD_CREATED'::text, 'APPLIED'::text, 'REJECTED'::text, 'SUPERSEDED'::text])))
 - `protocol_improvement_queue_target_operation_check`: CHECK ((target_operation = ANY (ARRAY['INSERT'::text, 'UPDATE'::text, 'UPSERT'::text])))
@@ -67,6 +75,10 @@
 
 ## Indexes
 
+- `idx_protocol_improvement_rollback_expiry`
+  ```sql
+  CREATE INDEX idx_protocol_improvement_rollback_expiry ON public.protocol_improvement_queue USING btree (status, rolled_back_at, rollback_expires_at) WHERE ((status = 'APPLIED'::text) AND (rolled_back_at IS NULL))
+  ```
 - `idx_protocol_queue_assigned_sd`
   ```sql
   CREATE INDEX idx_protocol_queue_assigned_sd ON public.protocol_improvement_queue USING btree (assigned_sd_id) WHERE (assigned_sd_id IS NOT NULL)
@@ -142,6 +154,11 @@
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_auto_apply_boundaries()`
 
+### trg_enforce_change_workflow
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_enforce_change_workflow()`
+
 ### trg_protocol_improvement_audit
 
 - **Timing**: AFTER INSERT
@@ -151,6 +168,16 @@
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION trigger_protocol_improvement_audit()`
+
+### trg_set_rollback_expiry
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION fn_set_rollback_expiry()`
+
+### trg_set_rollback_expiry
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_set_rollback_expiry()`
 
 ---
 
