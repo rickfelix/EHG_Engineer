@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T15:39:22.640Z
-**Tables**: 414
+**Generated**: 2026-02-02T23:50:49.998Z
+**Tables**: 419
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (414)
+## All Tables (419)
 
 ### LEO Protocol
 
@@ -97,6 +97,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_corrections](tables/sd_corrections.md)
 - [sd_data_contracts](tables/sd_data_contracts.md)
 - [sd_dependency_graph](tables/sd_dependency_graph.md)
+- [sd_effectiveness_metrics](tables/sd_effectiveness_metrics.md)
 - [sd_exec_file_operations](tables/sd_exec_file_operations.md)
 - [sd_execution_actuals](tables/sd_execution_actuals.md)
 - [sd_execution_baselines](tables/sd_execution_baselines.md)
@@ -193,6 +194,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [app_config](tables/app_config.md)
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
 - [assumption_sets](tables/assumption_sets.md)
+- [audit_log](tables/audit_log.md)
 - [audit_triangulation_log](tables/audit_triangulation_log.md)
 - [auto_apply_allowlist](tables/auto_apply_allowlist.md)
 - [auto_apply_denylist](tables/auto_apply_denylist.md)
@@ -325,6 +327,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [opportunity_scores](tables/opportunity_scores.md)
 - [opportunity_sources](tables/opportunity_sources.md)
 - [orchestration_metrics](tables/orchestration_metrics.md)
+- [outcome_signals](tables/outcome_signals.md)
 - [pattern_occurrences](tables/pattern_occurrences.md)
 - [pattern_resolution_signals](tables/pattern_resolution_signals.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
@@ -344,6 +347,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [profiles](tables/profiles.md)
 - [prompt_templates](tables/prompt_templates.md)
 - [proposal_approvals](tables/proposal_approvals.md)
+- [proposal_debate_rounds](tables/proposal_debate_rounds.md)
+- [proposal_debates](tables/proposal_debates.md)
 - [proposal_notifications](tables/proposal_notifications.md)
 - [proposal_state_transitions](tables/proposal_state_transitions.md)
 - [protocol_constitution](tables/protocol_constitution.md)

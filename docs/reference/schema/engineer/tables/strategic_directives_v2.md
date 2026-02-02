@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T15:39:22.640Z
-**Rows**: 733
+**Generated**: 2026-02-02T23:50:49.998Z
+**Rows**: 740
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (79 total)
+## Columns (80 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -101,6 +101,7 @@ Use the id column instead - it is the canonical identifier. |
 | target_release_id | `uuid` | YES | - | - |
 | sd_code_user_facing | `character varying(100)` | **NO** | - | - |
 | uuid_internal_pk | `uuid` | **NO** | - | - |
+| type_change_reason | `text` | YES | - | Required explanation when sd_type is changed. Used to document why type was corrected and to detect gaming attempts. |
 
 ## Constraints
 
@@ -452,6 +453,11 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_sd_type_change_explanation()`
 
+### trg_enforce_sd_type_change_governance
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_sd_type_change_governance()`
+
 ### trg_enforce_sd_type_change_risk
 
 - **Timing**: BEFORE UPDATE
@@ -491,6 +497,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION record_mttr_on_sd_completion()`
+
+### trg_record_sd_completion_signal
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_record_sd_completion_signal()`
 
 ### trg_sync_sd_code_user_facing
 

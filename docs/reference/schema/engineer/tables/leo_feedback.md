@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T15:39:22.640Z
+**Generated**: 2026-02-02T23:50:49.998Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,9 @@
 | priority | `integer(32)` | YES | `5` | - |
 | status | `text` | **NO** | `'pending'::text` | - |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
+| sd_id | `character varying(50)` | YES | - | - |
+| resolved_by_sd_id | `character varying(50)` | YES | - | - |
+| resolved_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -37,13 +40,21 @@
 ### Check Constraints
 - `leo_feedback_priority_check`: CHECK (((priority >= 1) AND (priority <= 10)))
 - `leo_feedback_source_type_check`: CHECK ((source_type = ANY (ARRAY['retrospective'::text, 'user_report'::text, 'automated'::text, 'manual'::text])))
-- `leo_feedback_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'vetted'::text, 'rejected'::text, 'implemented'::text, 'duplicate'::text])))
+- `leo_feedback_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'vetted'::text, 'rejected'::text, 'implemented'::text, 'duplicate'::text, 'resolved'::text])))
 
 ## Indexes
 
 - `idx_feedback_source`
   ```sql
   CREATE INDEX idx_feedback_source ON public.leo_feedback USING btree (source_type, source_id)
+  ```
+- `idx_leo_feedback_resolved_by_status_created`
+  ```sql
+  CREATE INDEX idx_leo_feedback_resolved_by_status_created ON public.leo_feedback USING btree (resolved_by_sd_id, status, created_at)
+  ```
+- `idx_leo_feedback_sd_id`
+  ```sql
+  CREATE INDEX idx_leo_feedback_sd_id ON public.leo_feedback USING btree (sd_id)
   ```
 - `leo_feedback_pkey`
   ```sql
