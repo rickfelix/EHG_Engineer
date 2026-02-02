@@ -472,14 +472,30 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   let iterationCount = 0;
   const maxIterations = 50; // Safety limit
 
-  // D32: SD Workflow Sequence - defines the standard handoff progression
-  // Each SD follows: LEAD-TO-PLAN → LEAD-FINAL-APPROVAL → PLAN-TO-EXEC
-  // LEAD-FINAL-APPROVAL is the terminal handoff (SD done) which triggers child continuation
-  const WORKFLOW_SEQUENCE = {
-    'LEAD-TO-PLAN': 'LEAD-FINAL-APPROVAL',
-    'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation
-    'PLAN-TO-EXEC': null, // Also terminal for now (EXEC is outside handoff system)
-  };
+  // Query SD to determine if it's a child or standalone (affects workflow sequence)
+  const { data: initialSD } = await system.supabase
+    .from('strategic_directives_v2')
+    .select('parent_sd_id')
+    .eq('id', sdId)
+    .single();
+  const isChildSD = !!initialSD?.parent_sd_id;
+
+  // D32: SD Workflow Sequence - differs based on SD type
+  // - Orchestrator children: LEAD-TO-PLAN → LEAD-FINAL-APPROVAL (pre-approved, no implementation)
+  // - Standalone SDs: LEAD-TO-PLAN → PLAN-TO-EXEC (full workflow with implementation)
+  // FIX: 2026-02-02 - Was hardcoded for children only, causing standalone SDs to skip PLAN-TO-EXEC
+  const WORKFLOW_SEQUENCE = isChildSD
+    ? {
+        // Orchestrator children: pre-approved, skip directly to final approval
+        'LEAD-TO-PLAN': 'LEAD-FINAL-APPROVAL',
+        'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation
+      }
+    : {
+        // Standalone SDs: full workflow - must go through PLAN-TO-EXEC
+        'LEAD-TO-PLAN': 'PLAN-TO-EXEC',
+        'PLAN-TO-EXEC': null, // Terminal for handoff system (EXEC phase continues outside)
+        'LEAD-FINAL-APPROVAL': null, // Terminal
+      };
 
   // Continue loop only if AUTO-PROCEED is enabled
   // D32: Child-to-child continuation - continue through full workflow, then find next child
