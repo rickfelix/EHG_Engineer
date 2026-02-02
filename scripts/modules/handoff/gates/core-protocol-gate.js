@@ -71,6 +71,13 @@ function getFullFilename(digestFilename) {
 
 /**
  * Required protocol files by trigger type (FULL - base names)
+ *
+ * ⚠️ CRITICAL: Must stay in sync with protocol-file-tracker.cjs hook
+ * See: scripts/hooks/protocol-file-tracker.cjs (PROTOCOL_FILES array)
+ * When changing requirements, update BOTH locations.
+ *
+ * SD-LEO-SELF-IMPROVE-002A: The hook now tracks both FULL and DIGEST versions
+ * as equivalents, so reading either version satisfies either requirement.
  */
 const CORE_PROTOCOL_REQUIREMENTS_FULL = {
   SD_START: ['CLAUDE.md', 'CLAUDE_CORE.md'],
@@ -80,6 +87,13 @@ const CORE_PROTOCOL_REQUIREMENTS_FULL = {
 
 /**
  * Required protocol files by trigger type (DIGEST)
+ *
+ * ⚠️ CRITICAL: Must stay in sync with protocol-file-tracker.cjs hook
+ * See: scripts/hooks/protocol-file-tracker.cjs (PROTOCOL_FILES array)
+ * When changing requirements, update BOTH locations.
+ *
+ * SD-LEO-SELF-IMPROVE-002A: The hook now tracks both FULL and DIGEST versions
+ * as equivalents, so reading either version satisfies either requirement.
  */
 const CORE_PROTOCOL_REQUIREMENTS_DIGEST = {
   SD_START: ['CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md'],

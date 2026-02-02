@@ -22,13 +22,39 @@ const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-st
 const SYNC_MARKER_FILE = path.join(PROJECT_DIR, '.claude', '.protocol-sync');
 
 // Protocol files to track
+// ⚠️ CRITICAL: Must stay in sync with core-protocol-gate.js requirements
+// See: scripts/modules/handoff/gates/core-protocol-gate.js
+// When adding new protocol files, update BOTH locations
+// Fixed in SD-LEO-SELF-IMPROVE-002A: Added DIGEST versions for dual-mode support
 const PROTOCOL_FILES = [
+  // FULL versions (original)
   'CLAUDE_LEAD.md',
   'CLAUDE_PLAN.md',
   'CLAUDE_EXEC.md',
   'CLAUDE_CORE.md',
-  'CLAUDE.md'
+  'CLAUDE.md',
+  // DIGEST versions (added for dual-generation support)
+  'CLAUDE_LEAD_DIGEST.md',
+  'CLAUDE_PLAN_DIGEST.md',
+  'CLAUDE_EXEC_DIGEST.md',
+  'CLAUDE_CORE_DIGEST.md',
+  'CLAUDE_DIGEST.md'
 ];
+
+// Mapping between FULL and DIGEST equivalents
+// When one is read, mark both as read for gate compatibility
+const PROTOCOL_FILE_EQUIVALENTS = {
+  'CLAUDE_LEAD.md': 'CLAUDE_LEAD_DIGEST.md',
+  'CLAUDE_LEAD_DIGEST.md': 'CLAUDE_LEAD.md',
+  'CLAUDE_PLAN.md': 'CLAUDE_PLAN_DIGEST.md',
+  'CLAUDE_PLAN_DIGEST.md': 'CLAUDE_PLAN.md',
+  'CLAUDE_EXEC.md': 'CLAUDE_EXEC_DIGEST.md',
+  'CLAUDE_EXEC_DIGEST.md': 'CLAUDE_EXEC.md',
+  'CLAUDE_CORE.md': 'CLAUDE_CORE_DIGEST.md',
+  'CLAUDE_CORE_DIGEST.md': 'CLAUDE_CORE.md',
+  'CLAUDE.md': 'CLAUDE_DIGEST.md',
+  'CLAUDE_DIGEST.md': 'CLAUDE.md'
+};
 
 /**
  * Read current session state
@@ -96,11 +122,21 @@ function writeSyncMarker() {
 
 /**
  * Check if file path is a protocol file
+ * Returns array of [readFile, equivalentFile] when a protocol file is read
+ * This ensures both FULL and DIGEST versions are marked as read for gate compatibility
+ * Part of SD-LEO-SELF-IMPROVE-002A fix for producer-consumer contract mismatch
  */
 function isProtocolFile(filePath) {
   if (!filePath) return null;
   const basename = path.basename(filePath);
-  return PROTOCOL_FILES.find(pf => basename === pf) || null;
+
+  // Check if this is a known protocol file
+  const isKnown = PROTOCOL_FILES.includes(basename);
+  if (!isKnown) return null;
+
+  // Return array: [actualFileRead, equivalentFile] for dual tracking
+  const equivalent = PROTOCOL_FILE_EQUIVALENTS[basename];
+  return equivalent ? [basename, equivalent] : [basename];
 }
 
 /**
@@ -149,15 +185,19 @@ function processHookInput(hookInput) {
   // Get file path from tool input
   const filePath = toolInputData.file_path || '';
 
-  // Check if this is a protocol file
-  const protocolFile = isProtocolFile(filePath);
+  // Check if this is a protocol file (returns array of [file, equivalent] or null)
+  const protocolFiles = isProtocolFile(filePath);
 
-  if (!protocolFile) {
+  if (!protocolFiles) {
     return;
   }
 
+  // Get the actual file read and its equivalent (for dual-mode tracking)
+  const [actualFile, equivalentFile] = protocolFiles;
+
   // Normalize path for consistent tracking (TR-1)
-  const normalizedPath = normalizeProtocolPath(protocolFile);
+  const normalizedPath = normalizeProtocolPath(actualFile);
+  const normalizedEquivalent = equivalentFile ? normalizeProtocolPath(equivalentFile) : null;
 
   // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Detect partial read parameters
   // TR-3: Only flag when limit/offset explicitly used (including 0)
@@ -211,12 +251,25 @@ function processHookInput(hookInput) {
   // Save updated status
   state.protocolFileReadStatus[normalizedPath] = fileStatus;
 
+  // Also track equivalent file status (SD-LEO-SELF-IMPROVE-002A: dual-mode support)
+  if (normalizedEquivalent) {
+    state.protocolFileReadStatus[normalizedEquivalent] = { ...fileStatus };
+  }
+
   // Maintain legacy array for backward compatibility (TR-2)
+  // Track BOTH the actual file read AND its equivalent for gate compatibility
   if (!state.protocolFilesRead.includes(normalizedPath)) {
     state.protocolFilesRead.push(normalizedPath);
   }
+  // Also track equivalent file (SD-LEO-SELF-IMPROVE-002A: dual-mode support)
+  if (normalizedEquivalent && !state.protocolFilesRead.includes(normalizedEquivalent)) {
+    state.protocolFilesRead.push(normalizedEquivalent);
+  }
   state.protocolFilesReadAt = state.protocolFilesReadAt || {};
   state.protocolFilesReadAt[normalizedPath] = now;
+  if (normalizedEquivalent) {
+    state.protocolFilesReadAt[normalizedEquivalent] = now;
+  }
 
   // Legacy partial read tracking for backward compatibility
   if (!state.protocolFilesPartiallyRead) {
@@ -237,7 +290,8 @@ function processHookInput(hookInput) {
     // Write sync marker AFTER state file is written (PAT-ASYNC-RACE-001)
     // This signals to the gate that state is ready to be read
     writeSyncMarker();
-    console.log(`[protocol-file-tracker] Updated ${normalizedPath} (read #${fileStatus.readCount})`);
+    const equivalentMsg = normalizedEquivalent ? ` + ${normalizedEquivalent}` : '';
+    console.log(`[protocol-file-tracker] Updated ${normalizedPath}${equivalentMsg} (read #${fileStatus.readCount})`);
   }
 }
 
