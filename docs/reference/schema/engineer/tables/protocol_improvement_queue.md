@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-01T23:52:12.478Z
+**Generated**: 2026-02-02T01:36:06.852Z
 **Rows**: 80
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -43,6 +43,7 @@
 | baseline_metric | `jsonb` | YES | - | Metric values before improvement was applied |
 | post_metric | `jsonb` | YES | - | Metric values after improvement was applied |
 | rollback_reason | `text` | YES | - | If improvement was rolled back, the reason why |
+| apply_tier | `text` | YES | - | - |
 
 ## Constraints
 
@@ -130,6 +131,16 @@
 - **With Check**: `true`
 
 ## Triggers
+
+### trg_enforce_auto_apply_boundaries
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_auto_apply_boundaries()`
+
+### trg_enforce_auto_apply_boundaries
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_auto_apply_boundaries()`
 
 ### trg_protocol_improvement_audit
 
