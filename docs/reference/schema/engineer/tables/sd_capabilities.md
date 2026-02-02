@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T02:20:58.352Z
+**Generated**: 2026-02-02T03:32:43.746Z
 **Rows**: 8
 **RLS**: Enabled (2 policies)
 
@@ -22,7 +22,7 @@
 | sd_uuid | `uuid` | **NO** | - | - |
 | sd_id | `character varying(100)` | **NO** | - | - |
 | capability_type | `character varying(50)` | **NO** | - | - |
-| capability_key | `character varying(200)` | **NO** | - | - |
+| capability_key | `character varying(200)` | YES | - | TEMPORARILY NULLABLE: Investigating what inserts NULL values. Should be NOT NULL once root cause fixed. |
 | action | `character varying(20)` | **NO** | - | - |
 | action_details | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | - |
