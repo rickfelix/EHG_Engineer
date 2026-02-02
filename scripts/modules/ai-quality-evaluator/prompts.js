@@ -30,13 +30,14 @@ export function getTypeSpecificGuidance(sdType, sd = null) {
 - Strict on UI/UX requirements and acceptance criteria
 - Apply standard LEO Protocol quality standards
 
-**LEO v4.4.0 - Human-Verifiable Outcome Requirement:**
-- Feature SDs MUST include criteria that a non-technical person could verify
+**LEO v4.4.0 - Human-Verifiable Outcome Requirement (APPLIES to feature/bugfix/security SDs):**
+- Feature, bugfix, and security SDs MUST include criteria that a non-technical person could verify
 - Look for "smoke test" style outcomes: Navigate to X, click Y, see Z
 - Penalize if ALL criteria are technical-only (API returns 200, data in database)
 - Good: "User sees success toast within 2 seconds of clicking Save"
 - Bad: "Data is correctly persisted to venture_artifacts table"
-- If SD lacks human-verifiable outcomes, cap score at 70% for this criterion`,
+- If SD lacks human-verifiable outcomes, cap score at 70% for this criterion
+- NOTE: Infrastructure, database, and documentation SDs are EXEMPT from this requirement`,
 
     database: `- Prioritize schema design quality and data integrity
 - Emphasize migration safety, rollback plans, and RLS policies

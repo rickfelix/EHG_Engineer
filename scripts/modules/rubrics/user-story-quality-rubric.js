@@ -103,29 +103,59 @@ export class UserStoryQualityRubric extends AIQualityEvaluator {
     return guidance[sdType] || guidance.feature;
   }
 
-  constructor(sd = null) {
-    const rubricConfig = {
-      contentType: 'user_story',
-      sd_type: sd?.sd_type || null, // Track sd_type for later reference
-      criteria: [
-        {
-          name: 'acceptance_criteria_clarity_testability',
-          weight: 0.50,
-          prompt: `Evaluate acceptance criteria clarity and testability:
+  /**
+   * Get SD-type-aware acceptance criteria prompt
+   * SD-LEO-INFRA-CONTEXT-AWARE-LLM-001B: Human-verifiable requirement is conditional on SD type
+   * @param {string} sdType - Strategic Directive type (feature, infrastructure, etc.)
+   * @returns {string} Acceptance criteria evaluation prompt
+   */
+  static getAcceptanceCriteriaPrompt(sdType) {
+    const basePrompt = `Evaluate acceptance criteria clarity and testability:
 - 0-3: No acceptance criteria, boilerplate ("works correctly"), or untestable ("good UX")
 - 4-6: Some specific criteria but many vague or not independently testable
 - 7-8: Most criteria are specific, testable, and verifiable
 - 9-10: All acceptance criteria are specific, testable, verifiable, with clear pass/fail conditions
 
-Penalize heavily for generic boilerplate like "system works", "good performance", "user-friendly". Reserve 9-10 for truly testable criteria.
+Penalize heavily for generic boilerplate like "system works", "good performance", "user-friendly". Reserve 9-10 for truly testable criteria.`;
 
-**LEO v4.4.0 - Human-Verifiable Outcome Check (for FEATURE SDs only):**
-For feature SDs, also check that at least one criterion describes a user-observable outcome that a non-technical person could verify:
+    // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001B: Human-verifiable requirement ONLY applies to feature/security SDs
+    const humanVerifiableTypes = ['feature', 'bugfix', 'security'];
+
+    if (humanVerifiableTypes.includes(sdType)) {
+      return basePrompt + `
+
+**LEO v4.4.0 - Human-Verifiable Outcome Requirement (APPLIES to ${sdType} SDs):**
+Feature/bugfix/security SDs MUST include at least one criterion that a non-technical person could verify:
 - GOOD: "User sees success message after clicking Submit"
 - GOOD: "Form validation shows inline error when email format is invalid"
 - BAD: "Data is correctly saved to database" (only a developer can verify)
 - BAD: "API returns 200 status" (only a developer can verify)
-If ALL criteria are technical-only with no user-observable outcomes, score maximum 6/10.`
+If ALL criteria are technical-only with no user-observable outcomes, score maximum 6/10.`;
+    }
+
+    // For infrastructure, database, documentation SDs: technical-only criteria are ACCEPTABLE
+    return basePrompt + `
+
+**SD Type: ${sdType || 'unknown'} - Technical Criteria Acceptable:**
+For infrastructure/database/documentation SDs, technical-only acceptance criteria are VALID:
+- ACCEPTABLE: "Migration completes without errors"
+- ACCEPTABLE: "API returns correct data structure"
+- ACCEPTABLE: "Database query performance under 100ms"
+Do NOT penalize for lack of human-verifiable outcomes - these SDs serve developers/systems, not end-users.`;
+  }
+
+  constructor(sd = null) {
+    // Get SD type for dynamic prompt generation
+    const sdType = sd?.sd_type || 'feature'; // Default to feature for strictest validation
+
+    const rubricConfig = {
+      contentType: 'user_story',
+      sd_type: sdType, // Track sd_type for later reference
+      criteria: [
+        {
+          name: 'acceptance_criteria_clarity_testability',
+          weight: 0.50,
+          prompt: UserStoryQualityRubric.getAcceptanceCriteriaPrompt(sdType)
         },
         {
           name: 'story_independence_implementability',
