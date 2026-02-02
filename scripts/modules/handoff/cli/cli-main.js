@@ -472,30 +472,16 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   let iterationCount = 0;
   const maxIterations = 50; // Safety limit
 
-  // Query SD to determine if it's a child or standalone (affects workflow sequence)
-  const { data: initialSD } = await system.supabase
-    .from('strategic_directives_v2')
-    .select('parent_sd_id')
-    .eq('id', sdId)
-    .single();
-  const isChildSD = !!initialSD?.parent_sd_id;
-
-  // D32: SD Workflow Sequence - differs based on SD type
-  // - Orchestrator children: LEAD-TO-PLAN → LEAD-FINAL-APPROVAL (pre-approved, no implementation)
-  // - Standalone SDs: LEAD-TO-PLAN → PLAN-TO-EXEC (full workflow with implementation)
-  // FIX: 2026-02-02 - Was hardcoded for children only, causing standalone SDs to skip PLAN-TO-EXEC
-  const WORKFLOW_SEQUENCE = isChildSD
-    ? {
-        // Orchestrator children: pre-approved, skip directly to final approval
-        'LEAD-TO-PLAN': 'LEAD-FINAL-APPROVAL',
-        'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation
-      }
-    : {
-        // Standalone SDs: full workflow - must go through PLAN-TO-EXEC
-        'LEAD-TO-PLAN': 'PLAN-TO-EXEC',
-        'PLAN-TO-EXEC': null, // Terminal for handoff system (EXEC phase continues outside)
-        'LEAD-FINAL-APPROVAL': null, // Terminal
-      };
+  // D32: SD Workflow Sequence - ALL SDs follow the same workflow
+  // Both children and standalone SDs need implementation: LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC → LEAD-FINAL-APPROVAL
+  // FIX: 2026-02-02 - Child SDs were incorrectly skipping PLAN-TO-EXEC, jumping directly to LEAD-FINAL-APPROVAL
+  // Root cause: Incorrect assumption that orchestrator children are "pre-approved" and skip implementation
+  const WORKFLOW_SEQUENCE = {
+    // Full workflow for all SD types
+    'LEAD-TO-PLAN': 'PLAN-TO-EXEC',
+    'PLAN-TO-EXEC': null, // Terminal for handoff system (EXEC phase continues outside)
+    'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation for orchestrators
+  };
 
   // Continue loop only if AUTO-PROCEED is enabled
   // D32: Child-to-child continuation - continue through full workflow, then find next child
