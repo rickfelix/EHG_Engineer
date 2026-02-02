@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T04:52:34.874Z
+**Generated**: 2026-02-02T05:32:45.383Z
 **Rows**: 82
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (33 total)
+## Columns (34 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -51,6 +51,7 @@
 | rollback_expires_at | `timestamp with time zone` | YES | - | Auto-calculated timestamp when rollback eligibility expires. Set by trigger. |
 | rolled_back_at | `timestamp with time zone` | YES | - | Timestamp when improvement was rolled back. NULL if not rolled back. |
 | rolled_back_by | `character varying` | YES | - | Identifier of who/what initiated the rollback. Required when rolling back. |
+| source_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -75,6 +76,10 @@
 
 ## Indexes
 
+- `idx_protocol_improvement_queue_lineage`
+  ```sql
+  CREATE INDEX idx_protocol_improvement_queue_lineage ON public.protocol_improvement_queue USING btree (source_type, source_id) WHERE (source_type IS NOT NULL)
+  ```
 - `idx_protocol_improvement_rollback_expiry`
   ```sql
   CREATE INDEX idx_protocol_improvement_rollback_expiry ON public.protocol_improvement_queue USING btree (status, rolled_back_at, rollback_expires_at) WHERE ((status = 'APPLIED'::text) AND (rolled_back_at IS NULL))
@@ -158,6 +163,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION fn_enforce_change_workflow()`
+
+### trg_enforce_improvement_lineage
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION fn_enforce_improvement_lineage()`
 
 ### trg_protocol_improvement_audit
 
