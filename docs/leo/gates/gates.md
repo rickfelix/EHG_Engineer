@@ -3,11 +3,11 @@
 
 ## Metadata
 - **Category**: Guide
-- **Status**: Draft
-- **Version**: 1.0.0
+- **Status**: Approved
+- **Version**: 1.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-20
-- **Tags**: database, api, testing, e2e
+- **Last Updated**: 2026-02-02
+- **Tags**: database, api, testing, e2e, integration-section, validation
 
 ## Overview
 
@@ -343,14 +343,58 @@ graph LR
 
 ## Compliance
 
-The gate system enforces LEO Protocol v4.1.2 requirements:
+The gate system enforces LEO Protocol v4.3.3 requirements:
 - ✅ Database-first architecture (no filesystem artifacts)
 - ✅ Deterministic scoring (reproducible results)
 - ✅ Audit trail (all reviews stored with evidence)
 - ✅ CI enforcement (blocks merge on failure)
 - ✅ Weight integrity (validated to sum to 1.000)
+- ✅ PRD Integration & Operationalization validation (NEW - v4.3.3)
+
+## Gate 1 (PLAN→EXEC) - Additional Validators
+
+**Added in LEO Protocol v4.3.3** (2026-02-02):
+
+### Integration Section Validation
+
+**Purpose**: Ensure PRDs explicitly document how new work integrates with the existing codebase.
+
+**Validator**: `GATE_INTEGRATION_SECTION_VALIDATION`
+
+**Module**: `scripts/modules/handoff/executors/plan-to-exec/gates/integration-section-validation.js`
+
+**Validates**:
+1. PRD has `integration_operationalization` JSONB field populated
+2. All 5 required subsections present:
+   - Consumers & User Journeys
+   - Upstream/Downstream Dependencies
+   - Data Contracts & Schema
+   - Runtime Configuration & Environments
+   - Observability, Rollout & Rollback
+3. For infrastructure SDs with no consumers: `no_consumers_justification` ≥30 characters
+
+**SD Type Enforcement**:
+| SD Type | Enforcement Level |
+|---------|-------------------|
+| feature, bugfix | BLOCKING (handoff rejected if missing) |
+| infrastructure | WARNING (handoff proceeds, logged) |
+| documentation | SKIP (validation bypassed) |
+
+**Error Codes**:
+- `ERR_INTEGRATION_SECTION_MISSING` - Section not found in PRD
+- `ERR_INTEGRATION_CONSUMERS_MISSING` - Consumers subsection missing
+- `ERR_INTEGRATION_DEPENDENCIES_MISSING` - Dependencies subsection missing
+- `ERR_INTEGRATION_CONTRACTS_MISSING` - Data contracts subsection missing
+- `ERR_INTEGRATION_CONFIG_MISSING` - Runtime config subsection missing
+- `ERR_INTEGRATION_OBSERVABILITY_MISSING` - Observability subsection missing
+- `ERR_INFRASTRUCTURE_NO_CONSUMER_JUSTIFICATION` - Infrastructure SD with no consumers lacks justification
+
+**See**:
+- [PRD Integration Section Guide](../../guides/prd-integration-section-guide.md) - How to complete the section
+- [Validation Enforcement](../../reference/validation-enforcement.md) - Complete gate documentation
+- [PRD Creation Process](../../guides/prd-creation-process.md) - Standard PRD workflow
 
 ---
 
-*Last Updated: 2025-01-16*
-*LEO Protocol Version: v4.1.2*
+*Last Updated: 2026-02-02*
+*LEO Protocol Version: v4.3.3*

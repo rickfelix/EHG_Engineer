@@ -3,11 +3,11 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.3.0
+- **Version**: 1.4.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-01-26
-- **Tags**: validation, gates, handoffs, adaptive-thresholds, sd-type-aware
-- **Related SD**: SD-INTELLIGENT-THRESHOLDS (001-006), SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001, SD-LEO-FIX-COMPLETION-WORKFLOW-001
+- **Last Updated**: 2026-02-02
+- **Tags**: validation, gates, handoffs, adaptive-thresholds, sd-type-aware, integration-section
+- **Related SD**: SD-INTELLIGENT-THRESHOLDS (001-006), SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001, SD-LEO-FIX-COMPLETION-WORKFLOW-001, SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001
 
 ## Overview
 
@@ -33,6 +33,36 @@ The Intelligent Validation Framework is a context-aware, adaptive system that va
 | **Gate 2** | EXEC→PLAN | Implementation Fidelity | Did EXEC do it correctly? |
 | **Gate 3** | PLAN→LEAD | End-to-End Traceability | Is work traceable & complete? |
 | **Gate 4** | LEAD Final | Strategic Value | Should we approve this? |
+
+#### Gate 1 Validators (PLAN→EXEC)
+
+**NEW (v1.4.0 - 2026-02-02)**: Added **Integration Section Validation** gate.
+
+| Validator | Purpose | SD Type Enforcement |
+|-----------|---------|---------------------|
+| **PRD Existence** | PRD must exist before implementation | ALL (BLOCKING) |
+| **Integration Section** | PRD must have integration & operationalization section | feature/bugfix (BLOCKING), infrastructure (WARNING), documentation (SKIP) |
+| **Infrastructure Consumer** | Infrastructure SDs must document consumers | infrastructure only |
+| **Test Infrastructure** | E2E test infrastructure must exist | ALL |
+
+**Integration Section Validator Details**:
+- **Gate**: `GATE_INTEGRATION_SECTION_VALIDATION`
+- **Module**: `scripts/modules/handoff/executors/plan-to-exec/gates/integration-section-validation.js`
+- **Validates**:
+  1. Section exists in `product_requirements_v2.integration_operationalization` JSONB column
+  2. All 5 required subsections present: consumers, dependencies, data_contracts, runtime_config, observability
+  3. For infrastructure SDs with no consumers: `no_consumers_justification` ≥30 characters
+
+**Error Codes**:
+- `ERR_INTEGRATION_SECTION_MISSING` - Section not found in PRD
+- `ERR_INTEGRATION_CONSUMERS_MISSING` - Consumers subsection missing
+- `ERR_INTEGRATION_DEPENDENCIES_MISSING` - Dependencies subsection missing
+- `ERR_INTEGRATION_CONTRACTS_MISSING` - Data contracts subsection missing
+- `ERR_INTEGRATION_CONFIG_MISSING` - Runtime config subsection missing
+- `ERR_INTEGRATION_OBSERVABILITY_MISSING` - Observability subsection missing
+- `ERR_INFRASTRUCTURE_NO_CONSUMER_JUSTIFICATION` - Infrastructure SD with no consumers lacks justification
+
+**See**: [PRD Integration Section Guide](../guides/prd-integration-section-guide.md) for detailed completion instructions.
 
 ### Hybrid Validation Logic
 

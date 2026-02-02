@@ -105,7 +105,16 @@ Before running the CLI, prepare:
 node scripts/add-prd-to-database.js
 ```
 
-Follow interactive prompts to enter all PRD data.
+Follow interactive prompts to enter all PRD data, including the **Integration & Operationalization** section.
+
+**NEW (v2.1 - LEO v4.3.3)**: The PRD template now includes a mandatory Integration & Operationalization section with 5 subsections:
+1. **Consumers & User Journeys** - Who uses this? What breaks if it fails?
+2. **Upstream/Downstream Dependencies** - What does it call? What calls it?
+3. **Data Contracts & Schema** - API shapes, database schema changes
+4. **Runtime Configuration & Environments** - Env vars, feature flags
+5. **Observability, Rollout & Rollback** - Metrics, deployment strategy
+
+See [PRD Integration Section Guide](./prd-integration-section-guide.md) for detailed completion instructions.
 
 ### Step 3: Validate PRD Quality
 ```bash
@@ -142,6 +151,7 @@ Include PRD validation results in PLAN-to-EXEC handoff.
 - [ ] **Acceptance Criteria**: 5+ measurable criteria
 - [ ] **Performance Requirements**: Defined metrics
 - [ ] **Risks**: 3+ risks with mitigation strategies
+- [ ] **Integration & Operationalization** (NEW): All 5 subsections complete (consumers, dependencies, data contracts, runtime config, observability)
 
 ### Quality Indicators
 - [ ] **Strategic Alignment**: Linked to Strategic Directive
@@ -173,6 +183,7 @@ Include PRD validation results in PLAN-to-EXEC handoff.
 
 ### Quality Gates
 - **PLAN Phase**: PRD must score 65%+ to proceed to EXEC
+- **PLAN-TO-EXEC Handoff**: Integration section validated by `GATE_INTEGRATION_SECTION_VALIDATION`
 - **EXEC Phase**: Implementation must align with PRD specifications
 - **VERIFICATION Phase**: PRD acceptance criteria must be met
 - **APPROVAL Phase**: Final validation against PRD success criteria
@@ -273,10 +284,12 @@ Instead:
 
 ## Related Documentation
 
+- [PRD Integration Section Guide](./prd-integration-section-guide.md) - How to complete the integration section (NEW)
 - [Script Creation Guidelines](../reference/script-creation-guidelines.md) - Policy for script creation
 - [Strategic Directives Schema](../reference/strategic-directives-v2-schema.md) - SD table schema
 - [Database First Enforcement](../reference/database-first-enforcement-expanded.md) - Database governance
 - [PLAN Phase Guide](../../CLAUDE_PLAN.md) - PLAN phase operations
+- [Validation Enforcement](../reference/validation-enforcement.md) - All validation gates
 
 ---
 
@@ -284,6 +297,7 @@ Instead:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.1 | 2026-02-02 | Added Integration & Operationalization section (SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001) |
 | 2.0 | 2026-01-23 | LEO 5.0 update: Standard CLI enforcement, one-off scripts prohibited |
 | 1.0 | 2025-XX-XX | Initial PRD process documentation |
 
