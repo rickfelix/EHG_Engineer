@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T11:20:40.032Z
-**Rows**: 633
+**Generated**: 2026-02-02T15:39:22.640Z
+**Rows**: 637
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (56 total)
+## Columns (57 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -77,6 +77,13 @@
       - prd: Full Product Requirements Document (default)
       - refactor_brief: Lightweight refactoring documentation
       - architecture_decision_record: ADR for architectural decisions |
+| integration_operationalization | `jsonb` | YES | - | Consolidated Integration & Operationalization section content. JSONB structure with 5 required subsections:
+- consumers: Who/what consumes this functionality (array of { name, type, journey })
+- dependencies: Upstream/downstream systems (array of { name, direction, failure_mode })
+- data_contracts: Schema and API contracts (array of { name, type, schema_ref })
+- runtime_config: Configuration and deployment concerns (array of { name, env, default })
+- observability_rollout: Monitoring, rollout, and rollback plans (object with metrics, alerts, rollback_plan)
+Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integration requirements. |
 
 ## Constraints
 
@@ -110,6 +117,10 @@
 - `idx_prd_directive`
   ```sql
   CREATE INDEX idx_prd_directive ON public.product_requirements_v2 USING btree (directive_id)
+  ```
+- `idx_prd_integration_operationalization_gin`
+  ```sql
+  CREATE INDEX idx_prd_integration_operationalization_gin ON public.product_requirements_v2 USING gin (integration_operationalization)
   ```
 - `idx_prd_phase`
   ```sql
