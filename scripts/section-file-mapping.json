@@ -5,6 +5,7 @@
       "file_warning",
       "smart_router",
       "session_prologue",
+      "migration_execution_protocol_main",
       "auto_proceed_mode",
       "orchestrator_chaining",
       "sd_continuation_truth_table",
@@ -17,6 +18,7 @@
   "CLAUDE_CORE.md": {
     "description": "Essential context for ALL sessions (~15-20k chars)",
     "sections": [
+      "migration_execution_protocol",
       "infrastructure",
       "sub_agent_config",
       "weighted_keyword_scoring",
@@ -58,6 +60,7 @@
   "CLAUDE_LEAD.md": {
     "description": "LEAD phase operations (~25-30k chars)",
     "sections": [
+      "migration_execution_protocol_lead",
       "mandatory_phase_transitions_lead",
       "sd_creation_process",
       "sd_creation_anti_pattern",
@@ -83,6 +86,7 @@
   "CLAUDE_PLAN.md": {
     "description": "PLAN phase operations (~30-35k chars)",
     "sections": [
+      "migration_execution_protocol_plan",
       "mandatory_phase_transitions_plan",
       "workflow",
       "PHASE_2_PLANNING",

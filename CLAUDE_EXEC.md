@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-02 9:01:16 PM
+**Generated**: 2026-02-02 9:15:21 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -461,17 +461,27 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 
 **CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
 
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
 **Trigger the DATABASE sub-agent when you need to**:
 - Apply a migration file to the database
 - Execute schema changes
 - Run SQL statements against Supabase
 
 **Invocation pattern**:
-
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 The DATABASE sub-agent (v1.3.0+) has autonomous execution capability and will:
 1. Determine if operation is safe (AUTO-EXECUTE) or needs routing
-2. Use the correct connection pattern (createDatabaseClient)
+2. Use the correct connection pattern (SUPABASE_POOLER_URL - no password needed)
 3. Split and execute SQL statements properly
 4. Verify success and report results
 
