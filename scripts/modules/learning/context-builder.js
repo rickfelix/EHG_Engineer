@@ -38,12 +38,29 @@ function countOccurrences(arr) {
 }
 
 // Intelligent filtering thresholds
+// SD-LEO-ENH-SEVERITY-WEIGHTED-PATTERN-001: Severity-aware thresholds
 const FILTER_CONFIG = {
-  MIN_OCCURRENCE_FOR_PATTERN: 3,    // Minimum occurrences to be considered a pattern (not incident)
+  // Severity-based occurrence thresholds (bypasses for critical/high)
+  MIN_OCCURRENCE_BY_SEVERITY: {
+    critical: 1,    // Critical issues surface immediately (1 occurrence)
+    high: 1,        // High severity surface with 1-2 occurrences
+    medium: 3,      // Medium requires pattern confirmation (3+)
+    low: 3,         // Low requires pattern confirmation (3+)
+    unknown: 3,     // Unknown defaults to requiring confirmation
+  },
+  MIN_OCCURRENCE_FOR_PATTERN: 3,    // Default for backward compatibility
   MIN_CONFIDENCE_THRESHOLD: 50,      // Minimum confidence % to surface
   STALE_DAYS_THRESHOLD: 60,          // Days after which declining patterns are filtered
   ACTIONABILITY_BONUS: 15,           // Bonus confidence for items with proven solutions
   SESSION_RECENCY_DAYS: 7,           // Prioritize learnings from last 7 days
+  // Severity weights for composite scoring
+  SEVERITY_WEIGHTS: {
+    critical: 10,
+    high: 5,
+    medium: 2,
+    low: 1,
+    unknown: 1,
+  },
 };
 
 /**
@@ -184,11 +201,12 @@ async function getRecentLessons(sdId = null, limit = TOP_N) {
 }
 
 /**
- * Query issue patterns with decay-adjusted confidence
- * Uses v_patterns_with_decay view for recency-weighted ranking
+ * Query issue patterns with severity-weighted composite scoring
+ * Uses v_patterns_with_decay view for severity + recency weighted ranking
  *
- * INTELLIGENT FILTERING (v2):
- * - Minimum occurrence threshold (3+) - incidents aren't patterns
+ * INTELLIGENT FILTERING (v3 - SD-LEO-ENH-SEVERITY-WEIGHTED-PATTERN-001):
+ * - Severity-aware occurrence thresholds (critical/high bypass 3+ rule)
+ * - Composite score: severity_weight*20 + occurrence_count*5 + actionability_bonus
  * - Minimum confidence threshold (50%)
  * - Auto-filter stale (60+ days) patterns with declining trend
  * - Actionability bonus for patterns with proven solutions
@@ -200,13 +218,13 @@ async function getIssuePatterns(limit = TOP_N) {
 
   let { data, error } = await supabase
     .from('v_patterns_with_decay')
-    .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status')
-    .order('decay_adjusted_confidence', { ascending: false })
+    .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold')
+    .order('composite_score', { ascending: false })
     .limit(queryLimit);
 
   // Fallback to base table if view doesn't exist yet
   if (error && (error.message.includes('does not exist') || error.message.includes('schema cache'))) {
-    console.log('Note: Using base table (run migration for decay view)');
+    console.log('Note: Using base table (run migration for severity-weighted decay view)');
     const fallback = await supabase
       .from('issue_patterns')
       .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at')
@@ -216,19 +234,32 @@ async function getIssuePatterns(limit = TOP_N) {
     data = fallback.data;
     error = fallback.error;
 
-    // Calculate decay manually for fallback
+    // Calculate severity-weighted scores manually for fallback
     if (data) {
       data = data.map(p => {
         const daysSince = Math.floor((Date.now() - new Date(p.updated_at || p.created_at).getTime()) / (1000 * 60 * 60 * 24));
         const baseConfidence = 50 + (p.occurrence_count * 5);
         const decayFactor = Math.exp(-0.023 * daysSince);
+        const severityLower = (p.severity || 'unknown').toLowerCase();
+        const severityWeight = FILTER_CONFIG.SEVERITY_WEIGHTS[severityLower] || 1;
+        const actionabilityBonus = (p.proven_solutions?.length > 0) ? FILTER_CONFIG.ACTIONABILITY_BONUS : 0;
+        const compositeScore = (severityWeight * 20) + ((p.occurrence_count || 1) * 5) + actionabilityBonus;
+        const minOccurrence = FILTER_CONFIG.MIN_OCCURRENCE_BY_SEVERITY[severityLower] || 3;
+        const meetsThreshold = (severityLower === 'critical' || severityLower === 'high') ? true : (p.occurrence_count >= 3);
+
         return {
           ...p,
           days_since_update: daysSince,
           decay_adjusted_confidence: Math.round(baseConfidence * decayFactor),
-          recency_status: daysSince > 60 ? 'stale' : daysSince > 30 ? 'aging' : 'fresh'
+          recency_status: daysSince > 60 ? 'stale' : daysSince > 30 ? 'aging' : 'fresh',
+          severity_weight: severityWeight,
+          composite_score: compositeScore,
+          min_occurrence_threshold: minOccurrence,
+          meets_threshold: meetsThreshold
         };
       });
+      // Re-sort by composite score after calculation
+      data.sort((a, b) => b.composite_score - a.composite_score);
     }
   }
 
@@ -251,6 +282,14 @@ async function getIssuePatterns(limit = TOP_N) {
         baseConfidence = Math.min(100, baseConfidence + FILTER_CONFIG.ACTIONABILITY_BONUS);
       }
 
+      // Get severity-aware values from view or calculate fallback
+      const severityLower = (pattern.severity || 'unknown').toLowerCase();
+      const severityWeight = pattern.severity_weight || FILTER_CONFIG.SEVERITY_WEIGHTS[severityLower] || 1;
+      const compositeScore = pattern.composite_score || ((severityWeight * 20) + ((pattern.occurrence_count || 1) * 5) + (hasProvenSolutions ? 15 : 0));
+      const minOccurrenceThreshold = pattern.min_occurrence_threshold || FILTER_CONFIG.MIN_OCCURRENCE_BY_SEVERITY[severityLower] || 3;
+      const meetsThreshold = pattern.meets_threshold !== undefined ? pattern.meets_threshold :
+        (severityLower === 'critical' || severityLower === 'high' || pattern.occurrence_count >= 3);
+
       return {
         id: pattern.pattern_id,
         source_type: 'issue_pattern',
@@ -266,14 +305,21 @@ async function getIssuePatterns(limit = TOP_N) {
         recency_status: pattern.recency_status || 'fresh',
         confidence: baseConfidence,
         has_actionable_solution: hasProvenSolutions,
+        // Severity-weighted fields (SD-LEO-ENH-SEVERITY-WEIGHTED-PATTERN-001)
+        severity_weight: severityWeight,
+        composite_score: compositeScore,
+        min_occurrence_threshold: minOccurrenceThreshold,
+        meets_severity_threshold: meetsThreshold,
         confidence_reason: hasProvenSolutions ? 'boosted: has proven solutions' :
+                           (severityLower === 'critical' || severityLower === 'high') ? 'boosted: high severity bypasses occurrence threshold' :
                            pattern.recency_status === 'stale' ? 'reduced: age (60+ days)' :
                            pattern.recency_status === 'aging' ? 'reduced: age (30+ days)' : null
       };
     })
     .filter(pattern => {
-      // Filter 1: Minimum occurrences (incidents aren't patterns)
-      if (pattern.occurrence_count < FILTER_CONFIG.MIN_OCCURRENCE_FOR_PATTERN) {
+      // Filter 1: Severity-aware occurrence threshold (SD-LEO-ENH-SEVERITY-WEIGHTED-PATTERN-001)
+      // Critical/high severity bypass the 3+ occurrence rule
+      if (!pattern.meets_severity_threshold) {
         filtered.lowOccurrence++;
         return false;
       }
@@ -481,8 +527,8 @@ async function getPendingImprovements(limit = TOP_N) {
  * - Prioritizes actionable items with proven solutions
  */
 export async function buildLearningContext(sdId = null) {
-  console.log('Building learning context with intelligent filtering...');
-  console.log(`  Thresholds: min ${FILTER_CONFIG.MIN_OCCURRENCE_FOR_PATTERN} occurrences, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
+  console.log('Building learning context with severity-weighted filtering...');
+  console.log(`  Thresholds: Critical/High=1 occ, Medium/Low=3 occ, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
   const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
@@ -613,16 +659,19 @@ export function formatContextForDisplay(context) {
 
   lines.push('\n## Patterns (from issue_patterns)');
   if (context.patterns.length === 0) {
-    lines.push('*No patterns meet the quality threshold (3+ occurrences, 50%+ confidence)*');
+    lines.push('*No patterns meet the quality threshold (severity-adjusted occurrences, 50%+ confidence)*');
+    lines.push('*Critical/high severity: 1+ occurrence | Medium/low: 3+ occurrences*');
     lines.push('*This is a good sign - no recurring high-value issues to address!*\n');
   } else {
-    lines.push('High-value recurring issues with proven solutions:\n');
+    lines.push('High-value issues ranked by composite score (severity × frequency × recency):\n');
     for (const p of context.patterns) {
       const actionableBadge = p.has_actionable_solution ? ' ✓ ACTIONABLE' : '';
-      lines.push(`**[${p.id}]** ${p.content}${actionableBadge}`);
-      lines.push(`  - Category: ${p.category} | Severity: ${p.severity} | Occurrences: ${p.occurrence_count} | Confidence: ${p.confidence}%`);
+      const severityBadge = (p.severity?.toLowerCase() === 'critical' || p.severity?.toLowerCase() === 'high') ? ` ⚠️ ${p.severity.toUpperCase()}` : '';
+      lines.push(`**[${p.id}]** ${p.content}${actionableBadge}${severityBadge}`);
+      lines.push(`  - Category: ${p.category} | Severity: ${p.severity} (weight: ${p.severity_weight || '?'}) | Occurrences: ${p.occurrence_count}`);
+      lines.push(`  - Composite Score: ${p.composite_score || 'N/A'} | Confidence: ${p.confidence}%`);
       if (p.confidence_reason) {
-        lines.push(`  - Confidence note: ${p.confidence_reason}`);
+        lines.push(`  - Note: ${p.confidence_reason}`);
       }
       if (p.proven_solutions?.length > 0) {
         lines.push(`  - Proven solution: ${p.proven_solutions[0]?.solution || 'See details'}`);
