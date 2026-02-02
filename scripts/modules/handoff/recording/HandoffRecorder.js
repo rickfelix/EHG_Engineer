@@ -391,6 +391,31 @@ export class HandoffRecorder {
         sub_agent_count: subAgentResults?.length || 0
       };
 
+      // SD-LEO-INFRA-CONTEXT-AWARE-LLM-001C: Log automated test evidence for UAT-exempt SDs
+      if (result.automatedTestEvidence) {
+        metadata.automated_test_verification = {
+          recorded_at: new Date().toISOString(),
+          uatExempt: result.uatExempt || false,
+          uatExemptReason: result.uatExemptReason || null,
+          evidence: {
+            testRunId: result.automatedTestEvidence.testRunId,
+            verdict: result.automatedTestEvidence.verdict,
+            passRate: result.automatedTestEvidence.passRate,
+            totalTests: result.automatedTestEvidence.totalTests,
+            passedTests: result.automatedTestEvidence.passedTests,
+            failedTests: result.automatedTestEvidence.failedTests,
+            testFramework: result.automatedTestEvidence.testFramework,
+            commitSha: result.automatedTestEvidence.commitSha,
+            ciUrl: result.automatedTestEvidence.ciUrl,
+            storiesCovered: result.automatedTestEvidence.storiesCovered
+          }
+        };
+        console.log('   📋 Automated test evidence recorded in handoff metadata');
+        console.log(`      Test Run ID: ${result.automatedTestEvidence.testRunId}`);
+        console.log(`      Commit SHA: ${result.automatedTestEvidence.commitSha || 'N/A'}`);
+        console.log(`      CI URL: ${result.automatedTestEvidence.ciUrl || 'N/A'}`);
+      }
+
       // PAT-RETRO-BOILERPLATE-001: Include discovered issues in handoff metadata
       // Query issue_patterns for this SD to store in metadata
       try {
