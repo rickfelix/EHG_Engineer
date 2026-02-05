@@ -116,7 +116,11 @@ export const MANDATORY_SUBAGENTS_BY_PHASE = {
     // is configured in sd_type_validation_profiles table. Step 3D was overriding this
     // exemption by hardcoding TESTING as mandatory here. Now database SDs correctly
     // use DATABASE agent for schema validation instead of TESTING agent.
-    database: ['DATABASE', 'SECURITY', 'PERFORMANCE'],
+    // ROOT CAUSE FIX (2026-02-05): Removed PERFORMANCE from database mandatory list
+    // SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B: PERFORMANCE is not applicable for
+    // database SDs without runtime code to benchmark. Performance testing applies
+    // to application code with queries, not schema migrations or config changes.
+    database: ['DATABASE', 'SECURITY'],
     security: ['TESTING', 'SECURITY'],
     api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],
     documentation: ['DOCMON'],
