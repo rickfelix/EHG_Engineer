@@ -36,7 +36,7 @@ const PLAN_PRD_BY_SD_TYPE = {
 const PLAN_VERIFY_BY_SD_TYPE = {
   feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY', 'UAT'],
   enhancement: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
-  database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],
+  database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY'],  // PERFORMANCE removed - not applicable for schema/migration work
   security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],
   api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],
   documentation: ['DOCMON', 'STORIES'],
@@ -67,7 +67,7 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
   PLAN_VERIFY: {
     feature: ['TESTING', 'SECURITY', 'PERFORMANCE', 'UAT'],
     enhancement: ['TESTING', 'SECURITY', 'PERFORMANCE'],
-    database: ['DATABASE', 'SECURITY', 'PERFORMANCE'],
+    database: ['DATABASE', 'SECURITY'],  // PERFORMANCE removed - not applicable for schema/migration work
     security: ['TESTING', 'SECURITY'],
     api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],
     documentation: ['DOCMON'],

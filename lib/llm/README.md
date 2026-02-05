@@ -2,6 +2,8 @@
 
 Centralized LLM client management for EHG_Engineer. This module provides a single entry point for all LLM operations, with automatic routing based on task tier and local LLM configuration.
 
+**SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B**: Now supports database-driven model registry via `v_llm_model_registry` view.
+
 ## Architecture
 
 ```
@@ -98,6 +100,83 @@ OLLAMA_MODEL=qwen3-coder:30b            # Default
 OLLAMA_FALLBACK_ENABLED=true            # Auto-fallback to cloud
 OLLAMA_TIMEOUT_MS=30000                 # Request timeout
 ```
+
+## Database-Driven Model Registry
+
+**SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B** introduced database-driven model configuration:
+
+### How It Works
+
+1. **On first call**: Factory loads model registry from `v_llm_model_registry` database view
+2. **Caching**: Registry is cached for 5 minutes to minimize database calls
+3. **Fallback**: If database unavailable, hardcoded constants are used
+4. **Hot reload**: Call `refreshModelRegistry()` to reload without restart
+
+### Database Schema
+
+The factory reads from the `v_llm_model_registry` view which joins:
+- `llm_providers` - Provider config (Anthropic, Ollama, OpenAI, Google)
+- `llm_models` - Model config with `leo_tier` (haiku/sonnet/opus) and `is_local` flag
+
+### Managing Models via Database
+
+```sql
+-- Add a new local model for haiku tier
+INSERT INTO llm_models (
+  provider_id, model_key, model_name, leo_tier, is_local, status
+) VALUES (
+  (SELECT id FROM llm_providers WHERE provider_key = 'ollama'),
+  'llama3.2:3b', 'Llama 3.2 3B', 'haiku', TRUE, 'active'
+);
+
+-- Change the default sonnet model
+UPDATE llm_models
+SET leo_tier = 'sonnet'
+WHERE model_key = 'claude-sonnet-4-20250514';
+
+-- Deactivate a model
+UPDATE llm_models SET status = 'inactive' WHERE model_key = 'old-model';
+```
+
+### Initialization (Recommended)
+
+For optimal performance, initialize the factory at application startup:
+
+```javascript
+import { initializeLLMFactory } from '../llm/index.js';
+
+// In your app init
+await initializeLLMFactory();  // Pre-loads registry from database
+
+// Later calls use cached registry
+const client = getLLMClient({ purpose: 'classification' });
+```
+
+### Refresh Registry
+
+After database changes, refresh without restarting:
+
+```javascript
+import { refreshModelRegistry } from '../llm/index.js';
+
+// After updating llm_models table
+await refreshModelRegistry();
+```
+
+### New API Functions
+
+```javascript
+initializeLLMFactory()   // Pre-load registry at startup
+refreshModelRegistry()   // Force reload from database
+getModelRegistry()       // Get full registry object (async)
+getRoutingStatus()       // Get current routing config with cache info
+```
+
+### Related Files
+
+- **Migration**: `database/migrations/20260205_llm_registry_ollama_integration.sql`
+- **View**: `v_llm_model_registry` (joins providers + models)
+- **Tables**: `llm_providers`, `llm_models`, `model_usage_log`
 
 ## API Reference
 
@@ -196,7 +275,7 @@ node scripts/benchmarks/ollama-model-benchmark.mjs --models <model1>,<model2>
 node scripts/benchmarks/ollama-model-benchmark.mjs --agents --verbose
 ```
 
-Results inform model selection in `client-factory.js` → `LOCAL_HAIKU_REPLACEMENT` constant.
+Results inform model selection in the `llm_models` database table (`is_local=true` + `leo_tier='haiku'`).
 
 ## Related Documentation
 
