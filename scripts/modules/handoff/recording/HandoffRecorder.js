@@ -479,14 +479,19 @@ export class HandoffRecorder {
         console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
       }
 
+      // FIX (SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001A RCA):
+      // CRITICAL: status MUST be set AFTER ...handoffContent spread operator.
+      // ContentBuilder may return fields that could overwrite status if spread comes later.
+      // By placing status AFTER the spread, we guarantee it's always 'pending_acceptance'.
       const handoffRecord = {
         id: handoffId,
         sd_id: sdUuid,
         from_phase: fromPhase,
         to_phase: toPhase,
         handoff_type: handoffType,
-        status: 'pending_acceptance', // Insert as pending first
         ...handoffContent,
+        // AFTER spread: These fields MUST override anything in handoffContent
+        status: 'pending_acceptance', // Always start as pending, update to accepted below
         validation_score: normalizedScore,
         validation_passed: result.success !== false,
         validation_details: result.validation || {},
