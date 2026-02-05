@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T23:50:49.998Z
-**Rows**: 8
+**Generated**: 2026-02-05T23:44:06.410Z
+**Rows**: 9
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -43,6 +43,8 @@
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | deleted_at | `timestamp with time zone` | YES | - | - |
+| leo_tier | `character varying(20)` | YES | - | - |
+| is_local | `boolean` | YES | `false` | - |
 
 ## Constraints
 
@@ -52,11 +54,29 @@
 ### Foreign Keys
 - `llm_models_provider_id_fkey`: provider_id → llm_providers(id)
 
+### Unique Constraints
+- `llm_models_provider_model_key`: UNIQUE (provider_id, model_key)
+
+### Check Constraints
+- `llm_models_leo_tier_check`: CHECK (((leo_tier)::text = ANY ((ARRAY['haiku'::character varying, 'sonnet'::character varying, 'opus'::character varying])::text[])))
+
 ## Indexes
 
+- `idx_llm_models_leo_tier`
+  ```sql
+  CREATE INDEX idx_llm_models_leo_tier ON public.llm_models USING btree (leo_tier) WHERE ((status)::text = 'active'::text)
+  ```
+- `idx_llm_models_local`
+  ```sql
+  CREATE INDEX idx_llm_models_local ON public.llm_models USING btree (is_local) WHERE (((status)::text = 'active'::text) AND (is_local = true))
+  ```
 - `llm_models_pkey`
   ```sql
   CREATE UNIQUE INDEX llm_models_pkey ON public.llm_models USING btree (id)
+  ```
+- `llm_models_provider_model_key`
+  ```sql
+  CREATE UNIQUE INDEX llm_models_provider_model_key ON public.llm_models USING btree (provider_id, model_key)
   ```
 
 ## RLS Policies

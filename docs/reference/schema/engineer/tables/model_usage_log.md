@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-02T23:50:49.998Z
-**Rows**: 886
+**Generated**: 2026-02-05T23:44:06.410Z
+**Rows**: 892
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (11 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -29,6 +29,7 @@
 | config_matches_reported | `boolean` | YES | - | - |
 | captured_at | `timestamp with time zone` | YES | `now()` | - |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
+| provider_source | `character varying(20)` | YES | - | - |
 
 ## Constraints
 
@@ -37,6 +38,7 @@
 
 ### Check Constraints
 - `model_usage_log_phase_check`: CHECK ((phase = ANY (ARRAY['LEAD'::text, 'PLAN'::text, 'EXEC'::text, 'UNKNOWN'::text])))
+- `model_usage_log_provider_source_check`: CHECK (((provider_source)::text = ANY ((ARRAY['local'::character varying, 'cloud'::character varying, 'fallback'::character varying])::text[])))
 
 ## Indexes
 
