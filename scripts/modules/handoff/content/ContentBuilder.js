@@ -8,29 +8,86 @@
 
 export class ContentBuilder {
   /**
+   * Reserved fields that should NEVER be returned from ContentBuilder.
+   * These are managed by HandoffRecorder and must not be overwritten by content.
+   *
+   * FIX (SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001A RCA):
+   * Root cause of rejected handoffs was JavaScript spread operator ordering.
+   * This safeguard ensures ContentBuilder never accidentally includes these fields.
+   */
+  static RESERVED_FIELDS = [
+    'id',
+    'sd_id',
+    'status',
+    'from_phase',
+    'to_phase',
+    'handoff_type',
+    'validation_score',
+    'validation_passed',
+    'validation_details',
+    'metadata',
+    'created_by',
+    'created_at',
+    'accepted_at',
+    'rejection_reason'
+  ];
+
+  /**
    * Build 7-element handoff content based on handoff type
    * @param {string} handoffType - Handoff type (e.g., 'PLAN-TO-EXEC')
    * @param {object} sd - Strategic Directive record
    * @param {object} result - Validation/execution result
    * @param {array} subAgentResults - Sub-agent execution results
-   * @returns {object} 7-element content object
+   * @returns {object} 7-element content object (sanitized of reserved fields)
    */
   build(handoffType, sd, result, subAgentResults = []) {
     const content = this._createEmptyContent();
+    let builtContent;
 
     switch (handoffType) {
       case 'LEAD-TO-PLAN':
-        return this._buildLeadToPlan(content, sd, result, subAgentResults);
+        builtContent = this._buildLeadToPlan(content, sd, result, subAgentResults);
+        break;
       case 'PLAN-TO-EXEC':
-        return this._buildPlanToExec(content, sd, result, subAgentResults);
+        builtContent = this._buildPlanToExec(content, sd, result, subAgentResults);
+        break;
       case 'EXEC-TO-PLAN':
-        return this._buildExecToPlan(content, sd, result, subAgentResults);
+        builtContent = this._buildExecToPlan(content, sd, result, subAgentResults);
+        break;
       case 'PLAN-TO-LEAD':
-        return this._buildPlanToLead(content, sd, result, subAgentResults);
+        builtContent = this._buildPlanToLead(content, sd, result, subAgentResults);
+        break;
       default:
         console.warn(`Unknown handoff type: ${handoffType}, using generic content`);
-        return this._buildGeneric(content, handoffType, sd, result);
+        builtContent = this._buildGeneric(content, handoffType, sd, result);
     }
+
+    // Sanitize: Remove any reserved fields that might have been accidentally added
+    return this._sanitizeContent(builtContent);
+  }
+
+  /**
+   * Remove reserved fields from content to prevent spread operator conflicts
+   * @param {object} content - Content object to sanitize
+   * @returns {object} Sanitized content with only allowed fields
+   */
+  _sanitizeContent(content) {
+    const sanitized = { ...content };
+    let removedFields = [];
+
+    for (const field of ContentBuilder.RESERVED_FIELDS) {
+      if (field in sanitized) {
+        removedFields.push(field);
+        delete sanitized[field];
+      }
+    }
+
+    if (removedFields.length > 0) {
+      console.warn(`⚠️  ContentBuilder: Removed reserved fields from content: ${removedFields.join(', ')}`);
+      console.warn('   These fields are managed by HandoffRecorder and should not be in content.');
+    }
+
+    return sanitized;
   }
 
   /**
@@ -38,10 +95,10 @@ export class ContentBuilder {
    * @param {string} handoffType - Handoff type
    * @param {string} sdId - Strategic Directive ID
    * @param {object} result - Failure result
-   * @returns {object} 7-element content for rejection
+   * @returns {object} 7-element content for rejection (sanitized of reserved fields)
    */
   buildRejection(handoffType, sdId, result) {
-    return {
+    const content = {
       executive_summary: `${handoffType} handoff REJECTED for ${sdId}. Validation score: ${result.actualScore || 0}%. Reason: ${result.reasonCode || 'VALIDATION_FAILED'}`,
       deliverables_manifest: result.message || 'Handoff validation failed',
       key_decisions: `Decision: Reject handoff - ${result.reasonCode || 'quality below threshold'}`,
@@ -50,6 +107,8 @@ export class ContentBuilder {
       action_items: result.recommendations?.join('\n') || 'Address validation issues and retry handoff',
       completeness_report: `Validation Score: ${result.actualScore || 0}%. Required: ${result.requiredScore || 70}%`
     };
+    // Sanitize in case result object contained reserved fields that got spread
+    return this._sanitizeContent(content);
   }
 
   _createEmptyContent() {

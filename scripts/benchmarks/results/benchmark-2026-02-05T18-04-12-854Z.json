@@ -1,0 +1,1023 @@
+{
+  "metadata": {
+    "timestamp": "2026-02-05T18:04:12.855Z",
+    "ollamaUrl": "http://localhost:11434",
+    "toolVersion": "1.0.0"
+  },
+  "results": [
+    {
+      "model": "llama3.2:3b",
+      "results": {
+        "speed": {
+          "test": "speed",
+          "iterations": 2,
+          "successful": 2,
+          "failed": 0,
+          "avgDurationMs": 391,
+          "avgTokensPerSecond": 140.93,
+          "minTokensPerSecond": 137.5,
+          "maxTokensPerSecond": 144.36,
+          "details": [
+            {
+              "iteration": 1,
+              "durationMs": 400,
+              "tokensPerSecond": 137.5,
+              "completionTokens": 55,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "durationMs": 381,
+              "tokensPerSecond": 144.36,
+              "completionTokens": 55,
+              "success": true
+            }
+          ]
+        },
+        "classify": {
+          "test": "classify",
+          "cases": 6,
+          "iterationsPerCase": 2,
+          "overallAccuracy": 50,
+          "details": [
+            {
+              "prompt": "Fix the null pointer exception in user login",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "REFACTOR",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 117,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "REFACTOR",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 113,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Add dark mode support to settings page",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 100,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 93,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Extract duplicate code into shared utility function",
+              "expected": "REFACTOR",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 103,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 97,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Update README with new installation steps",
+              "expected": "DOCS",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 103,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 97,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Button click handler throws TypeError",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 111,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 103,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Implement OAuth2 authentication flow",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 103,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 98,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            }
+          ]
+        },
+        "json": {
+          "test": "json",
+          "iterations": 2,
+          "validOutputs": 2,
+          "reliability": 100,
+          "details": [
+            {
+              "iteration": 1,
+              "response": "{\"name\": \"John Doe\", \"age\": 32, \"active\": true}",
+              "valid": true,
+              "durationMs": 215,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "response": "{\"name\": \"John Doe\", \"age\": 32, \"active\": true}",
+              "valid": true,
+              "durationMs": 197,
+              "success": true
+            }
+          ]
+        },
+        "instruct": {
+          "test": "instruct",
+          "cases": 3,
+          "iterationsPerCase": 2,
+          "overallPassRate": 100,
+          "details": [
+            {
+              "prompt": "List exactly 3 colors, one per line, no numbering.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Red\nBlue\nYellow",
+                  "passed": true,
+                  "durationMs": 125,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Red\nBlue\nYellow",
+                  "passed": true,
+                  "durationMs": 122,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Say only the word \"CONFIRMED\" with no other text.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 114,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 101,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Output the number 42 and nothing else.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 102,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 94,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            }
+          ]
+        },
+        "content": {
+          "test": "content",
+          "agentMatch": null,
+          "cases": 3,
+          "iterationsPerCase": 2,
+          "overallPassRate": 66.7,
+          "avgDurationMs": 2112,
+          "details": [
+            {
+              "prompt": "Generate a chairman insight for this portfolio data:\n- Total ventures: 12\n- Active investments: $4.2",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "**Chairman's Insight:**\n\nAs we approach the midpoint of our fiscal year, I'd like to highlight a few key observations and recommendations for our venture capital portfolio.\n\n**Portfolio Performance:**\nOur total investments stand at $4.2M, with an average runway of 8 months across all ventures. This ",
+                  "passed": false,
+                  "durationMs": 2510,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "**Chairman's Insight**\n\nAs we approach the midpoint of our fiscal year, I'd like to highlight a few key observations and recommendations for our venture capital portfolio.\n\n**Portfolio Performance**\n\nOur total venture count remains steady at 12, with active investments totaling $4.2M. This represent",
+                  "passed": false,
+                  "durationMs": 2292,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Write a navigation suggestion for a user who just viewed:\n1. Security audit page (3 minutes)\n2. Two ",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Based on the user's recent activities, I recommend that they navigate to the \"Portfolio Health\" or \"Portfolio Overview\" page.\n\nHere's why:\n\n* The security audit page suggests that the user is taking a proactive approach to identifying potential vulnerabilities in their portfolio. This indicates a fo",
+                  "passed": true,
+                  "durationMs": 1921,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Based on the user's recent activities, I recommend that they navigate to the \"Portfolio Health\" or \"Portfolio Overview\" page.\n\nHere's why:\n\n* The security audit page suggests that the user is taking a proactive approach to identifying potential vulnerabilities in their portfolio. This indicates a fo",
+                  "passed": true,
+                  "durationMs": 1609,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Create a brief executive summary for a board meeting:\n- 3 new investments this quarter\n- 1 exit (2.3",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "**Executive Summary**\n\n**Quarterly Update and Strategic Considerations**\n\nWe are pleased to report a strong quarterly performance, with three new investments added to our portfolio and one successful exit. The exit of [Company Name] resulted in a 2.3x return on investment, demonstrating the value of",
+                  "passed": true,
+                  "durationMs": 2026,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "**Executive Summary**\n\n**Quarterly Update and Strategic Outlook**\n\nWe are pleased to report a strong quarterly performance, with three new investments added to our portfolio and one successful exit that delivered a 2.3x return. Our pipeline remains robust, with 15 deals in evaluation.\n\nHowever, we m",
+                  "passed": true,
+                  "durationMs": 2314,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            }
+          ]
+        },
+        "analytics": {
+          "test": "analytics",
+          "agentMatch": null,
+          "cases": 2,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "avgDurationMs": 2311,
+          "details": [
+            {
+              "prompt": "Analyze this quarterly data:\nQ1: Revenue $120K, Burn $80K, Headcount 12\nQ2: Revenue $145K, Burn $95K",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "**Summary**\nThe venture capital portfolio has shown steady growth in revenue over the past year, with a compound annual growth rate (CAGR) of approximately 10%. However, burn rates have also increased, indicating potential cash flow challenges. The headcount has expanded to 20 employees, which may i",
+                  "passed": false,
+                  "durationMs": 2194,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "**Summary**\nThe venture capital portfolio has shown steady growth in revenue over the past year, with a compound annual growth rate (CAGR) of approximately 10%. However, burn rates have also increased, indicating potential cash flow challenges. The headcount has expanded to 20 employees, which may i",
+                  "passed": false,
+                  "durationMs": 2406,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Compare these two ventures:\nVenture A: SaaS, $2M ARR, 40% growth, 18mo runway, Series A\nVenture B: M",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "**Summary**\nVenture A, a SaaS company with a higher revenue multiple ($2M ARR) and faster growth rate (40%), has a longer runway (18 months) compared to Venture B, a marketplace with lower GMV ($800K) but significantly higher growth rate (120%). Despite the smaller revenue, Venture B's aggressive gr",
+                  "passed": false,
+                  "durationMs": 2393,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "**Summary**\nVenture A, a SaaS company, has demonstrated stronger financial performance with a higher ARR ($2M) compared to Venture B's marketplace platform (GMV $800K). Despite this, Venture B's growth rate (120%) surpasses that of Venture A (40%). This disparity suggests that Venture B is experienc",
+                  "passed": false,
+                  "durationMs": 2252,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        },
+        "research": {
+          "test": "research",
+          "agentMatch": null,
+          "cases": 3,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "avgDurationMs": 3169,
+          "details": [
+            {
+              "prompt": "Generate funding round data for a B2B SaaS startup in the HR tech space.\nInclude: company_name, roun",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Here's some generated funding round data for a B2B SaaS startup in the HR tech space:\n\n```json\n[\n  {\n    \"company_name\": \"Empyre HR\",\n    \"round_type\": \"Series A\",\n    \"amount_raised\": 12.0,\n    \"valuation\": 150.0,\n    \"lead_investor\": \"Lightspeed Venture Partners\",\n    \"key_metrics\": {\n      \"user_",
+                  "passed": false,
+                  "durationMs": 3217,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Here is some plausible funding round data for a B2B SaaS startup in the HR tech space:\n\n```json\n[\n  {\n    \"company_name\": \"Empyre\",\n    \"round_type\": \"Series A\",\n    \"amount_raised\": 12.0,\n    \"valuation\": 150.0,\n    \"lead_investor\": \"Lightspeed Venture Partners\",\n    \"key_metrics\": {\n      \"user_ac",
+                  "passed": false,
+                  "durationMs": 3218,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Generate market sizing data for the \"AI-powered recruitment\" market.\nInclude: tam, sam, som, cagr, k",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Here is some plausible market sizing data for the \"AI-powered recruitment\" market:\n\n```json\n{\n  \"market_sizing\": {\n    \"tam\": 141.4,\n    \"sam\": 0.5,\n    \"som\": 1.2,\n    \"cagr\": 34.7,\n    \"key_trends\": [\n      \"Increased adoption of AI-powered recruitment tools by large enterprises\",\n      \"Growing d",
+                  "passed": false,
+                  "durationMs": 2930,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Here's a sample market sizing data for the \"AI-powered recruitment\" market:\n\n```json\n{\n  \"market_sizing\": {\n    \"total_addressable_market\": 1234560000,\n    \"serviceable_available_market\": 900000000,\n    \"serviceable_accessible_market\": 800000000,\n    \"potential_customers\": 50000,\n    \"current_custom",
+                  "passed": false,
+                  "durationMs": 3183,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Simulate a competitive analysis for a fintech startup entering the \"expense management\" space.\nInclu",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Here's a simulated competitive analysis for a fintech startup entering the expense management space:\n\n```json\n{\n  \"market_overview\": {\n    \"description\": \"The global expense management market is projected to reach $15.4 billion by 2027, growing at a CAGR of 12.1% from 2022 to 2027.\",\n    \"trends\": [",
+                  "passed": false,
+                  "durationMs": 3261,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Here's a simulated competitive analysis for a fintech startup entering the expense management space:\n\n```json\n{\n  \"market_overview\": {\n    \"description\": \"The global expense management market is projected to reach $15.4 billion by 2027, growing at a CAGR of 12.1% from 2022 to 2027.\",\n    \"trends\": [",
+                  "passed": false,
+                  "durationMs": 3203,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        },
+        "painpoint": {
+          "test": "painpoint",
+          "agentMatch": null,
+          "cases": 2,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "avgDurationMs": 2284,
+          "details": [
+            {
+              "prompt": "Validate this pain point: \"Small business owners spend 10+ hours per week on manual bookkeeping beca",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Here's the analysis:\n\n```json\n{\n  \"pain_point_valid\": true,\n  \"severity\": \"critical\",\n  \"target_segment\": \"small business owners (non-accountants) with limited financial expertise\",\n  \"willingness_to_pay\": \"high\",\n  \"existing_solutions\": [\n    \"Manual bookkeeping spreadsheets\",\n    \"Basic accounting",
+                  "passed": false,
+                  "durationMs": 2357,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Here's the analysis:\n\n```json\n{\n  \"pain_point_valid\": true,\n  \"severity\": \"critical\",\n  \"target_segment\": \"small business owners (non-accountants)\",\n  \"willingness_to_pay\": \"high\",\n  \"existing_solutions\": [\n    \"Complex accounting software\",\n    \"Manual bookkeeping methods\"\n  ],\n  \"validation_confid",
+                  "passed": false,
+                  "durationMs": 2139,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Validate this pain point: \"Enterprise CTOs struggle to track software license compliance across 500+",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Here is the JSON output for the validated pain point:\n\n```json\n{\n  \"pain_point_valid\": true,\n  \"severity\": \"critical\",\n  \"target_segment\": {\n    \"description\": \"Enterprise CTOs and IT decision-makers\",\n    \"characteristics\": [\n      \"Large enterprise organizations (>1000 employees)\",\n      \"Complex ",
+                  "passed": false,
+                  "durationMs": 1966,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Here is the JSON output for the validated pain point:\n\n```json\n{\n  \"pain_point_valid\": true,\n  \"severity\": \"critical\",\n  \"target_segment\": {\n    \"description\": \"Enterprise CTOs and IT decision-makers in large organizations with complex SaaS landscapes.\",\n    \"characteristics\": [\n      \"Enterprise-le",
+                  "passed": false,
+                  "durationMs": 2673,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "model": "deepseek-r1:14b",
+      "results": {
+        "speed": {
+          "test": "speed",
+          "iterations": 2,
+          "successful": 2,
+          "failed": 0,
+          "avgDurationMs": 2257,
+          "avgTokensPerSecond": 44.32,
+          "minTokensPerSecond": 43.96,
+          "maxTokensPerSecond": 44.68,
+          "details": [
+            {
+              "iteration": 1,
+              "durationMs": 2275,
+              "tokensPerSecond": 43.96,
+              "completionTokens": 100,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "durationMs": 2238,
+              "tokensPerSecond": 44.68,
+              "completionTokens": 100,
+              "success": true
+            }
+          ]
+        },
+        "classify": {
+          "test": "classify",
+          "cases": 6,
+          "iterationsPerCase": 2,
+          "overallAccuracy": 0,
+          "details": [
+            {
+              "prompt": "Fix the null pointer exception in user login",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 304,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 271,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Add dark mode support to settings page",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 329,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 271,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Extract duplicate code into shared utility function",
+              "expected": "REFACTOR",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 328,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 271,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Update README with new installation steps",
+              "expected": "DOCS",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 332,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 277,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Button click handler throws TypeError",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 314,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 274,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Implement OAuth2 authentication flow",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 315,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 276,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            }
+          ]
+        },
+        "json": {
+          "test": "json",
+          "iterations": 2,
+          "validOutputs": 0,
+          "reliability": 0,
+          "details": [
+            {
+              "iteration": 1,
+              "response": "",
+              "valid": false,
+              "durationMs": 2283,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "response": "",
+              "valid": false,
+              "durationMs": 2255,
+              "success": true
+            }
+          ]
+        },
+        "instruct": {
+          "test": "instruct",
+          "cases": 3,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "details": [
+            {
+              "prompt": "List exactly 3 colors, one per line, no numbering.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1193,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1168,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Say only the word \"CONFIRMED\" with no other text.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1193,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1169,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Output the number 42 and nothing else.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1183,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1164,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        },
+        "content": {
+          "test": "content",
+          "agentMatch": null,
+          "cases": 3,
+          "iterationsPerCase": 2,
+          "overallPassRate": 50,
+          "avgDurationMs": 10344,
+          "details": [
+            {
+              "prompt": "Generate a chairman insight for this portfolio data:\n- Total ventures: 12\n- Active investments: $4.2",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "**Chairman's Insight: Strategic Focus on Portfolio Performance and Risk Management**\n\nOur portfolio demonstrates strong growth with a 1",
+                  "passed": true,
+                  "durationMs": 11144,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "**Chairman's Insight: Portfolio Performance Review**\n\n*Q3 2023 Portfolio Overview*\n\n1. **Positive Growth Momentum**: The portfolio demonstrated strong performance with a 15% revenue growth across all ventures in Q3. This indicates effective execution and strategic direction across our investments.\n\n",
+                  "passed": false,
+                  "durationMs": 11080,
+                  "success": true
+                }
+              ],
+              "passRate": 0.5
+            },
+            {
+              "prompt": "Write a navigation suggestion for a user who just viewed:\n1. Security audit page (3 minutes)\n2. Two ",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "**Next Step Suggestion:**\n\nAfter reviewing the security audit, venture details, and risk assessment dashboard, I recommend exploring the **Risk Impact Analysis** section for each of the two ventures you examined. This will provide deeper insights into how specific risks could affect individual inves",
+                  "passed": true,
+                  "durationMs": 6744,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Based on your recent activity—reviewing a security audit, exploring two venture details, and analyzing the risk assessment dashboard—the next logical step would be to **explore the Portfolio Risk Overview**. This view aggregates data from across all ventures, highlighting key risks, dependencies, an",
+                  "passed": true,
+                  "durationMs": 10850,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Create a brief executive summary for a board meeting:\n- 3 new investments this quarter\n- 1 exit (2.3",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11144,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11104,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        },
+        "analytics": {
+          "test": "analytics",
+          "agentMatch": null,
+          "cases": 2,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "avgDurationMs": 11162,
+          "details": [
+            {
+              "prompt": "Analyze this quarterly data:\nQ1: Revenue $120K, Burn $80K, Headcount 12\nQ2: Revenue $145K, Burn $95K",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11212,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11160,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Compare these two ventures:\nVenture A: SaaS, $2M ARR, 40% growth, 18mo runway, Series A\nVenture B: M",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11168,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11108,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        },
+        "research": {
+          "test": "research",
+          "agentMatch": null,
+          "cases": 3,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "avgDurationMs": 10784,
+          "details": [
+            {
+              "prompt": "Generate funding round data for a B2B SaaS startup in the HR tech space.\nInclude: company_name, roun",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "```json\n{\n  \"company_name\": \"TalentBridge Technologies Inc.\",\n  \"round_type\": \"Series A\",\n  \"amount_raised\": 12000000,\n  \"valuation\": 60000000,\n  \"lead_investor\": \"NextGen Ventures\",\n  \"key_metrics\": {\n    \"annual_recurring_revenue\": 25000000,\n    \"customer_base\": 1200,\n    \"net_revenue_retention\": ",
+                  "passed": false,
+                  "durationMs": 10708,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "```json\n{\n  \"company_name\": \"WorkFlow Solutions Inc.\",\n  \"round_type\": \"Series A\",\n  \"amount_raised\": 7000000,\n  \"valuation\": 30000000,\n  \"lead_investor\": \"NextGen Ventures\",\n  \"key_metrics\": {\n    \"annual_recurring_revenue\": 15000000,\n    \"customer_retention_rate\": 85,\n    \"active_users\": 20000\n  }",
+                  "passed": false,
+                  "durationMs": 9492,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Generate market sizing data for the \"AI-powered recruitment\" market.\nInclude: tam, sam, som, cagr, k",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "```json\n{\n  \"market_sizing\": {\n    \"tam\": {\n      \"value\": \"$200 billion\",\n      \"description\": \"Total Addressable Market for AI-powered recruitment solutions, encompassing all companies using AI-driven tools for talent acquisition.\"\n    },\n    \"sam\": {\n      \"value\": \"$70 billion\",\n      \"descripti",
+                  "passed": false,
+                  "durationMs": 11127,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "```json\n{\n  \"market_sizing\": {\n    \"tam\": {\n      \"value\": \"$200 billion\",\n      \"description\": \"Total Addressable Market for AI-powered recruitment solutions across all industries globally.\"\n    },\n    \"sam\": {\n      \"value\": \"$60 billion\",\n      \"description\": \"Serviceable Addressable Market, repr",
+                  "passed": false,
+                  "durationMs": 11108,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Simulate a competitive analysis for a fintech startup entering the \"expense management\" space.\nInclu",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "```json\n{\n  \"market_overview\": {\n",
+                  "passed": false,
+                  "durationMs": 11160,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "```json\n{\n  \"market_overview\": {\n    \"size\": \"$10 billion\",\n    \"growth_rate\": \"8%\",\n    \"key_trends\": [\n      \"Shift towards SaaS-based solutions\",\n      \"Integration with AI-driven automation\",\n      \"Focus on real-time data analytics\"\n    ],\n    \"target_segment\": \"Small and medium-sized businesse",
+                  "passed": false,
+                  "durationMs": 11110,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        },
+        "painpoint": {
+          "test": "painpoint",
+          "agentMatch": null,
+          "cases": 2,
+          "iterationsPerCase": 2,
+          "overallPassRate": 0,
+          "avgDurationMs": 11150,
+          "details": [
+            {
+              "prompt": "Validate this pain point: \"Small business owners spend 10+ hours per week on manual bookkeeping beca",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11185,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11127,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Validate this pain point: \"Enterprise CTOs struggle to track software license compliance across 500+",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 11164,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "```json\n{\n  \"pain_point_valid\": true,\n  \"severity\": \"significant\",\n  \"target_segment\": [\"Enterprise CTOs\", \"CFOs\",",
+                  "passed": false,
+                  "durationMs": 11122,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
