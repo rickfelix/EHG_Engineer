@@ -1,0 +1,1409 @@
+{
+  "metadata": {
+    "timestamp": "2026-02-05T14:11:43.868Z",
+    "ollamaUrl": "http://localhost:11434",
+    "toolVersion": "1.0.0"
+  },
+  "results": [
+    {
+      "model": "qwen3-coder:30b",
+      "results": {
+        "speed": {
+          "test": "speed",
+          "iterations": 3,
+          "successful": 3,
+          "failed": 0,
+          "avgDurationMs": 1704,
+          "avgTokensPerSecond": 33.29,
+          "minTokensPerSecond": 28.74,
+          "maxTokensPerSecond": 36.02,
+          "details": [
+            {
+              "iteration": 1,
+              "durationMs": 2018,
+              "tokensPerSecond": 28.74,
+              "completionTokens": 58,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "durationMs": 1527,
+              "tokensPerSecond": 36.02,
+              "completionTokens": 55,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "durationMs": 1566,
+              "tokensPerSecond": 35.12,
+              "completionTokens": 55,
+              "success": true
+            }
+          ]
+        },
+        "classify": {
+          "test": "classify",
+          "cases": 6,
+          "iterationsPerCase": 3,
+          "overallAccuracy": 100,
+          "details": [
+            {
+              "prompt": "Fix the null pointer exception in user login",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 512,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 128,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 118,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Add dark mode support to settings page",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 206,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 122,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 120,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Extract duplicate code into shared utility function",
+              "expected": "REFACTOR",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "REFACTOR",
+                  "expected": "REFACTOR",
+                  "correct": true,
+                  "durationMs": 252,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "REFACTOR",
+                  "expected": "REFACTOR",
+                  "correct": true,
+                  "durationMs": 182,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "REFACTOR",
+                  "expected": "REFACTOR",
+                  "correct": true,
+                  "durationMs": 178,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Update README with new installation steps",
+              "expected": "DOCS",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "DOCS",
+                  "expected": "DOCS",
+                  "correct": true,
+                  "durationMs": 227,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "DOCS",
+                  "expected": "DOCS",
+                  "correct": true,
+                  "durationMs": 144,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "DOCS",
+                  "expected": "DOCS",
+                  "correct": true,
+                  "durationMs": 152,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Button click handler throws TypeError",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 192,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 127,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 125,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Implement OAuth2 authentication flow",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 189,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 124,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 123,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            }
+          ]
+        },
+        "json": {
+          "test": "json",
+          "iterations": 3,
+          "validOutputs": 3,
+          "reliability": 100,
+          "details": [
+            {
+              "iteration": 1,
+              "response": "{\n  \"name\": \"Sarah Johnson\",\n  \"age\": 34,\n  \"active\": true\n}",
+              "valid": true,
+              "durationMs": 1140,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "response": "{\n  \"name\": \"Sarah Johnson\",\n  \"age\": 34,\n  \"active\": true\n}",
+              "valid": true,
+              "durationMs": 776,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "response": "{\n  \"name\": \"Sarah Johnson\",\n  \"age\": 34,\n  \"active\": true\n}",
+              "valid": true,
+              "durationMs": 732,
+              "success": true
+            }
+          ]
+        },
+        "instruct": {
+          "test": "instruct",
+          "cases": 3,
+          "iterationsPerCase": 3,
+          "overallPassRate": 100,
+          "details": [
+            {
+              "prompt": "List exactly 3 colors, one per line, no numbering.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Red\nBlue\nGreen",
+                  "passed": true,
+                  "durationMs": 391,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Red\nBlue\nGreen",
+                  "passed": true,
+                  "durationMs": 216,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "Red\nBlue\nGreen",
+                  "passed": true,
+                  "durationMs": 247,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Say only the word \"CONFIRMED\" with no other text.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 301,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 182,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 173,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Output the number 42 and nothing else.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 242,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 143,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 150,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "model": "gpt-oss:20b",
+      "results": {
+        "speed": {
+          "test": "speed",
+          "iterations": 3,
+          "successful": 3,
+          "failed": 0,
+          "avgDurationMs": 4015,
+          "avgTokensPerSecond": 24.91,
+          "minTokensPerSecond": 24.62,
+          "maxTokensPerSecond": 25.15,
+          "details": [
+            {
+              "iteration": 1,
+              "durationMs": 4061,
+              "tokensPerSecond": 24.62,
+              "completionTokens": 100,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "durationMs": 3976,
+              "tokensPerSecond": 25.15,
+              "completionTokens": 100,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "durationMs": 4008,
+              "tokensPerSecond": 24.95,
+              "completionTokens": 100,
+              "success": true
+            }
+          ]
+        },
+        "classify": {
+          "test": "classify",
+          "cases": 6,
+          "iterationsPerCase": 3,
+          "overallAccuracy": 0,
+          "details": [
+            {
+              "prompt": "Fix the null pointer exception in user login",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 656,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 502,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 492,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Add dark mode support to settings page",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 542,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 492,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 484,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Extract duplicate code into shared utility function",
+              "expected": "REFACTOR",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 524,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 500,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 494,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Update README with new installation steps",
+              "expected": "DOCS",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 534,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 512,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 470,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Button click handler throws TypeError",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 529,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 478,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 513,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Implement OAuth2 authentication flow",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 515,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 501,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 498,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            }
+          ]
+        },
+        "json": {
+          "test": "json",
+          "iterations": 3,
+          "validOutputs": 3,
+          "reliability": 100,
+          "details": [
+            {
+              "iteration": 1,
+              "response": "{\"name\":\"Alice Smith\",\"age\":29,\"active\":true}",
+              "valid": true,
+              "durationMs": 3446,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "response": "{\"name\":\"Alice Johnson\",\"age\":34,\"active\":true}",
+              "valid": true,
+              "durationMs": 4039,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "response": "{\"name\":\"Emily Carter\",\"age\":29,\"active\":true}",
+              "valid": true,
+              "durationMs": 4012,
+              "success": true
+            }
+          ]
+        },
+        "instruct": {
+          "test": "instruct",
+          "cases": 3,
+          "iterationsPerCase": 3,
+          "overallPassRate": 66.7,
+          "details": [
+            {
+              "prompt": "List exactly 3 colors, one per line, no numbering.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 2104,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 2052,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 2100,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Say only the word \"CONFIRMED\" with no other text.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 1901,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 1947,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 1931,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Output the number 42 and nothing else.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 1224,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 1879,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 1319,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "model": "deepseek-r1:14b",
+      "results": {
+        "speed": {
+          "test": "speed",
+          "iterations": 3,
+          "successful": 3,
+          "failed": 0,
+          "avgDurationMs": 2443,
+          "avgTokensPerSecond": 41.01,
+          "minTokensPerSecond": 39.37,
+          "maxTokensPerSecond": 43.52,
+          "details": [
+            {
+              "iteration": 1,
+              "durationMs": 2492,
+              "tokensPerSecond": 40.13,
+              "completionTokens": 100,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "durationMs": 2540,
+              "tokensPerSecond": 39.37,
+              "completionTokens": 100,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "durationMs": 2298,
+              "tokensPerSecond": 43.52,
+              "completionTokens": 100,
+              "success": true
+            }
+          ]
+        },
+        "classify": {
+          "test": "classify",
+          "cases": 6,
+          "iterationsPerCase": 3,
+          "overallAccuracy": 0,
+          "details": [
+            {
+              "prompt": "Fix the null pointer exception in user login",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 300,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 267,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 272,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Add dark mode support to settings page",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 323,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 268,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 269,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Extract duplicate code into shared utility function",
+              "expected": "REFACTOR",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 334,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 285,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 267,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Update README with new installation steps",
+              "expected": "DOCS",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 325,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 282,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 274,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Button click handler throws TypeError",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 311,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 272,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 280,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Implement OAuth2 authentication flow",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 322,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 274,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "expected": "FEATURE",
+                  "correct": false,
+                  "durationMs": 265,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            }
+          ]
+        },
+        "json": {
+          "test": "json",
+          "iterations": 3,
+          "validOutputs": 0,
+          "reliability": 0,
+          "details": [
+            {
+              "iteration": 1,
+              "response": "",
+              "valid": false,
+              "durationMs": 2315,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "response": "",
+              "valid": false,
+              "durationMs": 2289,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "response": "",
+              "valid": false,
+              "durationMs": 2285,
+              "success": true
+            }
+          ]
+        },
+        "instruct": {
+          "test": "instruct",
+          "cases": 3,
+          "iterationsPerCase": 3,
+          "overallPassRate": 0,
+          "details": [
+            {
+              "prompt": "List exactly 3 colors, one per line, no numbering.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1190,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1188,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1190,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Say only the word \"CONFIRMED\" with no other text.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1203,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1194,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1207,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            },
+            {
+              "prompt": "Output the number 42 and nothing else.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1228,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1205,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "",
+                  "passed": false,
+                  "durationMs": 1199,
+                  "success": true
+                }
+              ],
+              "passRate": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "model": "llama3.2:3b",
+      "results": {
+        "speed": {
+          "test": "speed",
+          "iterations": 3,
+          "successful": 3,
+          "failed": 0,
+          "avgDurationMs": 481,
+          "avgTokensPerSecond": 119.52,
+          "minTokensPerSecond": 107.21,
+          "maxTokensPerSecond": 126.36,
+          "details": [
+            {
+              "iteration": 1,
+              "durationMs": 472,
+              "tokensPerSecond": 125,
+              "completionTokens": 59,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "durationMs": 513,
+              "tokensPerSecond": 107.21,
+              "completionTokens": 55,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "durationMs": 459,
+              "tokensPerSecond": 126.36,
+              "completionTokens": 58,
+              "success": true
+            }
+          ]
+        },
+        "classify": {
+          "test": "classify",
+          "cases": 6,
+          "iterationsPerCase": 3,
+          "overallAccuracy": 50,
+          "details": [
+            {
+              "prompt": "Fix the null pointer exception in user login",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "REFACTOR",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 122,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 90,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "REFACTOR",
+                  "expected": "BUG",
+                  "correct": false,
+                  "durationMs": 105,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Add dark mode support to settings page",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 101,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 88,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 87,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Extract duplicate code into shared utility function",
+              "expected": "REFACTOR",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 96,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 92,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "FEATURE",
+                  "expected": "REFACTOR",
+                  "correct": false,
+                  "durationMs": 91,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Update README with new installation steps",
+              "expected": "DOCS",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 95,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 100,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "FEATURE",
+                  "expected": "DOCS",
+                  "correct": false,
+                  "durationMs": 94,
+                  "success": true
+                }
+              ],
+              "accuracy": 0
+            },
+            {
+              "prompt": "Button click handler throws TypeError",
+              "expected": "BUG",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 105,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 87,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "BUG",
+                  "expected": "BUG",
+                  "correct": true,
+                  "durationMs": 90,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            },
+            {
+              "prompt": "Implement OAuth2 authentication flow",
+              "expected": "FEATURE",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 103,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 86,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "FEATURE",
+                  "expected": "FEATURE",
+                  "correct": true,
+                  "durationMs": 96,
+                  "success": true
+                }
+              ],
+              "accuracy": 1
+            }
+          ]
+        },
+        "json": {
+          "test": "json",
+          "iterations": 3,
+          "validOutputs": 3,
+          "reliability": 100,
+          "details": [
+            {
+              "iteration": 1,
+              "response": "{\"name\": \"John Doe\", \"age\": 32, \"active\": true}",
+              "valid": true,
+              "durationMs": 207,
+              "success": true
+            },
+            {
+              "iteration": 2,
+              "response": "{\"name\": \"John Doe\", \"age\": 32, \"active\": true}",
+              "valid": true,
+              "durationMs": 198,
+              "success": true
+            },
+            {
+              "iteration": 3,
+              "response": "{\"name\": \"John Doe\", \"age\": 32, \"active\": true}",
+              "valid": true,
+              "durationMs": 198,
+              "success": true
+            }
+          ]
+        },
+        "instruct": {
+          "test": "instruct",
+          "cases": 3,
+          "iterationsPerCase": 3,
+          "overallPassRate": 100,
+          "details": [
+            {
+              "prompt": "List exactly 3 colors, one per line, no numbering.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "Red\nBlue\nYellow",
+                  "passed": true,
+                  "durationMs": 117,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "Red\nBlue\nYellow",
+                  "passed": true,
+                  "durationMs": 110,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "Red\nBlue\nYellow",
+                  "passed": true,
+                  "durationMs": 116,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Say only the word \"CONFIRMED\" with no other text.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 110,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 96,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "CONFIRMED",
+                  "passed": true,
+                  "durationMs": 103,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            },
+            {
+              "prompt": "Output the number 42 and nothing else.",
+              "results": [
+                {
+                  "iteration": 1,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 91,
+                  "success": true
+                },
+                {
+                  "iteration": 2,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 92,
+                  "success": true
+                },
+                {
+                  "iteration": 3,
+                  "response": "42",
+                  "passed": true,
+                  "durationMs": 89,
+                  "success": true
+                }
+              ],
+              "passRate": 1
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
