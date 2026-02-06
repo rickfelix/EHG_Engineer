@@ -15,7 +15,9 @@ import {
   buildSuccessCriteria,
   buildSmokeTestSteps,
   buildStrategicObjectives,
-  buildKeyPrinciples
+  buildKeyPrinciples,
+  buildRisks,
+  buildKeyChanges
 } from './sd-builders.js';
 
 import {
@@ -48,6 +50,8 @@ export async function createSDFromLearning(items, type, options = {}) {
   const smokeTestSteps = buildSmokeTestSteps(items);
   const strategicObjectives = buildStrategicObjectives(items);
   const keyPrinciples = buildKeyPrinciples(items);
+  const risks = buildRisks(items);
+  const keyChanges = buildKeyChanges(items);
 
   const sdData = {
     id: sdKey,
@@ -69,11 +73,13 @@ export async function createSDFromLearning(items, type, options = {}) {
     smoke_test_steps: smokeTestSteps,
     strategic_objectives: strategicObjectives,
     key_principles: keyPrinciples,
+    key_changes: keyChanges,
     metadata: {
       source: 'learn_command',
       source_items: items.map(i => i.id || i.pattern_id),
       classification: type,
-      created_via: '/learn apply'
+      created_via: '/learn apply',
+      risks: risks
     }
   };
 
