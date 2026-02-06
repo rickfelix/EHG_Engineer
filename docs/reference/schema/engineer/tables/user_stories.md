@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-06T15:37:01.745Z
-**Rows**: 2,426
+**Generated**: 2026-02-06T15:58:55.379Z
+**Rows**: 2,436
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (37 total)
+## Columns (38 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -55,6 +55,7 @@
 | architecture_references | `jsonb` | YES | `'[]'::jsonb` | BMAD Enhancement: Array of relevant architecture docs, component paths, existing patterns to follow |
 | example_code_patterns | `jsonb` | YES | `'[]'::jsonb` | BMAD Enhancement: Array of code examples, patterns, snippets to guide implementation |
 | testing_scenarios | `jsonb` | YES | `'[]'::jsonb` | BMAD Enhancement: Array of test scenarios with expected inputs/outputs |
+| given_when_then | `jsonb` | YES | `'[]'::jsonb` | Structured BDD scenarios extracted from acceptance criteria. Array of {given, when, then} objects. |
 
 ## Constraints
 
@@ -105,6 +106,10 @@
 - `idx_user_stories_e2e_status`
   ```sql
   CREATE INDEX idx_user_stories_e2e_status ON public.user_stories USING btree (sd_id, e2e_test_status)
+  ```
+- `idx_user_stories_given_when_then`
+  ```sql
+  CREATE INDEX idx_user_stories_given_when_then ON public.user_stories USING gin (given_when_then)
   ```
 - `idx_user_stories_validation_status`
   ```sql

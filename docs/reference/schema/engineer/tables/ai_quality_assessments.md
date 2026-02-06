@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-06T15:37:01.745Z
-**Rows**: 8,462
+**Generated**: 2026-02-06T15:58:55.379Z
+**Rows**: 8,489
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -49,7 +49,7 @@
 ### Check Constraints
 - `ai_quality_assessments_content_type_check`: CHECK ((content_type = ANY (ARRAY['sd'::text, 'prd'::text, 'user_story'::text, 'retrospective'::text])))
 - `ai_quality_assessments_pass_threshold_check`: CHECK (((pass_threshold >= 0) AND (pass_threshold <= 100)))
-- `ai_quality_assessments_sd_type_check`: CHECK ((sd_type = ANY (ARRAY['feature'::text, 'bugfix'::text, 'performance'::text, 'database'::text, 'docs'::text, 'documentation'::text, 'infrastructure'::text, 'refactor'::text, 'security'::text, 'orchestrator'::text, 'qa'::text])))
+- `ai_quality_assessments_sd_type_check`: CHECK ((sd_type = ANY (ARRAY['feature'::text, 'bugfix'::text, 'performance'::text, 'database'::text, 'docs'::text, 'documentation'::text, 'infrastructure'::text, 'refactor'::text, 'security'::text, 'orchestrator'::text, 'qa'::text, 'enhancement'::text, 'uat'::text])))
 - `ai_quality_assessments_weighted_score_check`: CHECK (((weighted_score >= 0) AND (weighted_score <= 100)))
 
 ## Indexes
