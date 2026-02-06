@@ -35,11 +35,13 @@ const supabase = createClient(
  * Create SD in strategic_directives_v2 from learning items
  * @param {Array} items - Selected patterns and improvements
  * @param {'quick-fix' | 'full-sd'} type
+ * @param {Object} [options] - Additional options
+ * @param {boolean} [options.skipLeadValidation] - Skip protocol file read check (for CLI/auto-approve)
  * @returns {Promise<{id: string, success: boolean, error?: string}>}
  */
-export async function createSDFromLearning(items, type) {
+export async function createSDFromLearning(items, type, options = {}) {
   const title = buildSDTitle(items);
-  const sdKey = await generateSDId(type, title);
+  const sdKey = await generateSDId(type, title, { skipLeadValidation: options.skipLeadValidation });
   const description = buildSDDescription(items);
   const successMetrics = buildSuccessMetrics(items);
   const successCriteria = buildSuccessCriteria(items);
@@ -160,9 +162,11 @@ export async function tagSourceItems(items, sdKey) {
  * @param {Object} reviewedContext - The reviewed learning context
  * @param {Object} decisions - User decisions: { itemId: { status, reason } }
  * @param {Function} createDecisionRecord - Function to create decision records
+ * @param {Object} [options] - Additional options
+ * @param {boolean} [options.skipLeadValidation] - Skip protocol file read check (for CLI/auto-approve)
  * @returns {Promise<{sd_id: string, success: boolean, ...}>}
  */
-export async function executeSDCreationWorkflow(reviewedContext, decisions, createDecisionRecord) {
+export async function executeSDCreationWorkflow(reviewedContext, decisions, createDecisionRecord, options = {}) {
   console.log('\n============================================================');
   console.log('  /learn → SD Creation Workflow');
   console.log('============================================================\n');
@@ -219,7 +223,7 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
   console.log(`\nClassification: ${classification.toUpperCase()}`);
 
   // 4. Create the SD
-  const sdResult = await createSDFromLearning(approvedItems, classification);
+  const sdResult = await createSDFromLearning(approvedItems, classification, { skipLeadValidation: options.skipLeadValidation });
   if (!sdResult.success) {
     return {
       sd_id: null,

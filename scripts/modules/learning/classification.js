@@ -75,9 +75,11 @@ export function classifyComplexity(selectedItems) {
  * Generate the next available SD key or QF ID
  * @param {'quick-fix' | 'full-sd'} type
  * @param {string} title - Title for semantic content extraction
+ * @param {Object} [options] - Additional options
+ * @param {boolean} [options.skipLeadValidation] - Skip protocol file read check (for CLI/auto-approve)
  * @returns {Promise<string>}
  */
-export async function generateSDId(type, title = 'Learning Improvement') {
+export async function generateSDId(type, title = 'Learning Improvement', options = {}) {
   if (type === 'quick-fix') {
     const now = new Date();
     const year = now.getFullYear();
@@ -90,7 +92,8 @@ export async function generateSDId(type, title = 'Learning Improvement') {
   return generateCentralizedSDKey({
     source: 'LEARN',
     type: 'bugfix',
-    title
+    title,
+    skipLeadValidation: options.skipLeadValidation || false
   });
 }
 

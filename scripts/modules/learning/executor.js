@@ -56,10 +56,12 @@ export { resolvePatterns } from './improvement-appliers.js';
  *
  * @param {Object} reviewedContext - The reviewed learning context
  * @param {Object} decisions - User decisions: { itemId: { status, reason } }
+ * @param {Object} [options] - Additional options
+ * @param {boolean} [options.skipLeadValidation] - Skip protocol file read check (for CLI/auto-approve)
  * @returns {Promise<{sd_id: string, success: boolean, ...}>}
  */
-export async function executeSDCreationWorkflow(reviewedContext, decisions) {
-  return executeSDCreationWorkflowInternal(reviewedContext, decisions, createDecisionRecord);
+export async function executeSDCreationWorkflow(reviewedContext, decisions, options = {}) {
+  return executeSDCreationWorkflowInternal(reviewedContext, decisions, createDecisionRecord, options);
 }
 
 /**
