@@ -3,9 +3,9 @@
 ## Metadata
 - **Category**: Guide
 - **Status**: Draft
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: LEO Protocol Team
-- **Last Updated**: 2026-02-02
+- **Last Updated**: 2026-02-06
 - **Tags**: self-improvement, feedback, proposals, vetting, automation, learning
 
 ---
@@ -37,7 +37,7 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 | **Internal Audit** | Discover opportunities from patterns, retrospectives | `/leo audit` |
 | **Quality Processing** | Sanitize, score, quarantine feedback | Automatic |
 | **Proposal Vetting** | Rubric assessment + AEGIS constitutional validation | Automatic |
-| **Multi-Model Debate** | Board vetting with 3 AI critic personas | Automatic (when implemented) |
+| **Multi-Model Debate** | Board vetting with 3 AI critic personas | Automatic via DebateOrchestrator |
 | **SD Creation** | Convert approved items to Strategic Directives | `/learn apply` |
 | **Outcome Tracking** | Track success/failure of improvements | Automatic |
 | **Loop Closure** | Link outcomes back to original patterns | Automatic |
@@ -156,7 +156,7 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 │  │                     RUBRIC ASSESSMENT                                  │  │
 │  │  6 Criteria: Value, Risk, Complexity, Reversibility, Alignment, Test  │  │
 │  │  Weighted scoring → 0-100 normalized score                            │  │
-│  │  ⚠️ CURRENTLY PLACEHOLDER - Needs AI integration                      │  │
+│  │  ✅ AI-POWERED via evaluateWithAI() (Sonnet tier, SD-001-A)            │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │                     AEGIS VALIDATION                                   │  │
@@ -181,7 +181,7 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 │                    ┌─────────────┐                                          │
 │                    │   VERDICT   │  Consensus: APPROVE / REJECT / REVISE   │
 │                    └─────────────┘                                          │
-│  ⚠️ CURRENTLY PLACEHOLDER - Needs AI integration for critic assessments    │
+│  ✅ FULLY IMPLEMENTED - DebateOrchestrator with 3 personas (SD-002C)       │
 └────────────────────────────────────┬────────────────────────────────────────┘
                                      │
                                      ▼
@@ -371,7 +371,7 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 
 ---
 
-### Stage 5: Vetting - Rubric Assessment (0% Automated - GAP)
+### Stage 5: Vetting - Rubric Assessment (100% Automated)
 
 **Purpose**: Evaluate proposals against 6 criteria
 
@@ -387,17 +387,19 @@ The LEO Self-Improvement System is a comprehensive infrastructure for continuous
 | Protocol Alignment | 0.15 | Does it align with LEO principles? |
 | Testability | 0.10 | Can it be properly tested? |
 
-**Current State**: PLACEHOLDER
+**Current State**: FULLY AUTOMATED (SD-LEO-ORCH-SELF-IMPROVING-LEO-001-A)
 ```javascript
-// lib/sub-agents/vetting/index.js lines 533-571
-// Returns hardcoded heuristics, not AI-based evaluation
-case 'value':
-  return proposal.motivation?.length > 20 ? 4 : 3;  // Always 3-4!
+// lib/sub-agents/vetting/rubric-evaluator.js
+// AI-powered evaluation via evaluateWithAI() using Sonnet tier
+// Falls back to heuristic scoring if LLM unavailable
+const aiResult = await evaluateWithAI(proposal, rubric, { supabase });
+if (aiResult.status === 'SUCCESS') return aiResult;
+// Heuristic fallback via _assessWithHeuristic()
 ```
 
-**Required Fix**: Integrate LLM to evaluate with detailed reasoning
+**Features**: Single structured JSON LLM call, schema validation with retry, full audit trail
 
-**Manual Intervention**: Currently required for real scoring
+**Manual Intervention**: None (AI evaluation with automatic heuristic fallback)
 
 ---
 
@@ -421,32 +423,33 @@ case 'value':
 
 ---
 
-### Stage 7: Board Vetting - Multi-Model Debate (0% Automated - GAP)
+### Stage 7: Board Vetting - Multi-Model Debate (100% Automated)
 
 **Purpose**: Get diverse AI perspectives on proposals
 
-**Key Module**: `scripts/board-vetting.js`
+**Key Module**: `lib/sub-agents/vetting/debate-orchestrator.js`
 
-**Design** (3 Critic Personas):
+**Implementation** (3 Critic Personas):
 | Persona | Focus | Model Family |
 |---------|-------|--------------|
-| Safety | Risk, security, stability | Family A |
-| Value | Business value, user impact | Family B |
-| Risk | Technical risk, complexity | Family C |
+| Safety | Risk, security, stability | Family A (Anthropic) |
+| Value | Business value, user impact | Family B (OpenAI) |
+| Risk | Technical risk, complexity | Family C (Google) |
 
 **CONST-002 Enforcement**: Proposer model cannot share family with any evaluator
 
-**Current State**: PLACEHOLDER
+**Current State**: FULLY AUTOMATED (SD-LEO-ORCH-SELF-IMPROVING-LEO-001 / 002C)
 ```javascript
-// scripts/board-vetting.js lines 189-197
-score: 75,  // HARDCODED
-recommendation: 'APPROVE',  // HARDCODED
-reasoning: `${persona} assessment pending AI evaluation`  // PLACEHOLDER
+// lib/sub-agents/vetting/debate-orchestrator.js
+// Multi-round debate with consensus detection
+const debate = new DebateOrchestrator(supabase);
+const result = await debate.runDebate(proposal);
+// result: { verdict, score, rounds, consensusReached }
 ```
 
-**Required Fix**: Integrate 3 different LLM providers for critic personas
+**Features**: Multi-round debates (max 3), consensus detection (2/3 majority + score delta ≤15), full transcript persistence
 
-**Manual Intervention**: Currently required for real assessments
+**Manual Intervention**: None (fully autonomous debate with consensus-based verdicts)
 
 ---
 
@@ -510,19 +513,24 @@ reasoning: `${persona} assessment pending AI evaluation`  // PLACEHOLDER
 
 ---
 
-### Stage 12: Outcome Tracking (70% Automated - GAP)
+### Stage 12: Outcome Tracking (100% Automated)
 
-**Purpose**: Track improvement effectiveness
+**Purpose**: Track improvement effectiveness and close feedback loops
+
+**Key Module**: `lib/learning/outcome-tracker.js`
 
 **Tables**:
 - `enhancement_proposals.outcome_signal`: success/failure/partial
 - `enhancement_proposals.loop_closed_at`: closure timestamp
+- `outcome_signals`: Tracks sd_completion, pattern_recurrence events
 
-**Current Gap**: No link from SD completion back to original feedback
+**Features** (SD-LEO-ORCH-SELF-IMPROVING-LEO-001 / Outcome Loop Closure):
+- `recordSdCompleted()`: Auto-marks linked feedback as resolved on SD completion
+- `computeEffectiveness()`: Calculates pre/post feedback delta (30-day window)
+- `detectRecurrence()`: Jaccard similarity matching (threshold 0.75) for pattern recurrence
+- `getOutcomeSummary()`: Aggregates completion signals, metrics, and recurrence data
 
-**Required Fix**: Auto-mark feedback as resolved when SD ships; track recurrence
-
-**Manual Intervention**: Currently required for outcome recording
+**Manual Intervention**: None (fully automated on SD completion via LEAD-FINAL-APPROVAL)
 
 ---
 
@@ -660,7 +668,7 @@ See individual table documentation in `docs/reference/schema/engineer/tables/`:
 
 ## Automation Status
 
-### Current State: 62% Automated
+### Current State: 95% Automated
 
 | Stage | Current | Target | Gap |
 |-------|---------|--------|-----|
@@ -668,27 +676,35 @@ See individual table documentation in `docs/reference/schema/engineer/tables/`:
 | Quality Processing | 100% | 100% | 0% |
 | Proposal Creation | 80% | 95% | 15% |
 | Prioritization | 100% | 100% | 0% |
-| **Rubric Assessment** | **0%** | **100%** | **100%** |
+| Rubric Assessment | 100% | 100% | 0% |
 | AEGIS Validation | 100% | 100% | 0% |
-| **Multi-Model Debate** | **0%** | **100%** | **100%** |
+| Multi-Model Debate | 100% | 100% | 0% |
 | Verdict Calculation | 100% | 100% | 0% |
 | /learn Review | 90% | 95% | 5% |
 | SD Implementation | 0% | 0% | 0% (by design) |
 | Auto-Resolution | 100% | 100% | 0% |
-| **Outcome Tracking** | **70%** | **100%** | **30%** |
+| Outcome Tracking | 100% | 100% | 0% |
 
-### Critical Gaps Requiring Implementation
+### Completed Integrations (Self-Improving LEO Orchestrator)
 
-1. **Rubric Assessment AI Integration**
-   - Location: `lib/sub-agents/vetting/index.js:533-571`
-   - Need: LLM evaluation of 6 criteria with reasoning
+1. **Rubric Assessment AI Integration** (SD-LEO-ORCH-SELF-IMPROVING-LEO-001-A)
+   - Module: `lib/sub-agents/vetting/rubric-evaluator.js`
+   - Sonnet-tier LLM evaluation with schema validation and retry
+   - Heuristic fallback if LLM unavailable
 
-2. **Multi-Model Debate AI Integration**
-   - Location: `scripts/board-vetting.js:159-224`
-   - Need: 3 different LLM providers for critic personas
+2. **Multi-Model Debate System** (SD-002C)
+   - Module: `lib/sub-agents/vetting/debate-orchestrator.js`
+   - 3 critic personas across different LLM provider families
+   - Multi-round consensus with early stopping
 
-3. **Outcome Loop Closure**
-   - Need: Link SD completion → feedback resolved → track recurrence
+3. **Outcome Loop Closure** (SD-LEO-ORCH-SELF-IMPROVING-LEO-001 / Outcome Loop)
+   - Module: `lib/learning/outcome-tracker.js`
+   - Auto-resolves feedback on SD completion
+   - Recurrence detection via Jaccard similarity
+
+4. **Unified Inbox** (SD-LEO-ORCH-SELF-IMPROVING-LEO-001 / Inbox)
+   - Module: `lib/inbox/unified-inbox-builder.js`
+   - Lifecycle-based grouping with deduplication
 
 ---
 
