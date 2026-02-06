@@ -23,6 +23,22 @@ import { formatPRDContent } from './formatters.js';
  * @returns {Promise<Object>} Created PRD data
  */
 export async function createPRDEntry(supabase, prdId, sdId, sdIdValue, prdTitle, stakeholderPersonas = []) {
+  // PAT-SDCREATE-001: Pre-check for existing PRD by sd_id to prevent duplicates
+  // Two creation paths (deferred auto-generation + manual add-prd-to-database.js) can create
+  // PRDs with different IDs for the same SD, causing .single() query failures downstream
+  const { data: existingPRD } = await supabase
+    .from('product_requirements_v2')
+    .select('id, sd_id, title, status')
+    .eq('sd_id', sdIdValue)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPRD) {
+    console.log(`⚠️  PRD already exists for SD ${sdId}: ${existingPRD.id} (status: ${existingPRD.status})`);
+    console.log('   Returning existing PRD instead of creating duplicate.');
+    return existingPRD;
+  }
+
   const { data, error } = await supabase
     .from('product_requirements_v2')
     .insert({
@@ -116,6 +132,50 @@ export async function createPRDWithValidatedContent(
   llmContent,
   stakeholderPersonas = []
 ) {
+  // PAT-SDCREATE-001: Pre-check for existing PRD by sd_id to prevent duplicates
+  // Two creation paths (deferred auto-generation + manual add-prd-to-database.js) can create
+  // PRDs with different IDs for the same SD, causing .single() query failures downstream
+  const { data: existingPRD } = await supabase
+    .from('product_requirements_v2')
+    .select('id, sd_id, title, status')
+    .eq('sd_id', sdIdValue)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPRD) {
+    console.log(`⚠️  PRD already exists for SD ${sdId}: ${existingPRD.id} (status: ${existingPRD.status})`);
+    console.log('   Updating existing PRD with validated content instead of creating duplicate.');
+
+    // Update existing PRD with the new validated content
+    const { data: updatedPRD, error: updateError } = await supabase
+      .from('product_requirements_v2')
+      .update({
+        title: prdTitle || existingPRD.title,
+        status: 'approved',
+        executive_summary: llmContent.executive_summary || existingPRD.executive_summary,
+        acceptance_criteria: llmContent.acceptance_criteria || undefined,
+        functional_requirements: llmContent.functional_requirements || undefined,
+        technical_requirements: llmContent.technical_requirements || undefined,
+        system_architecture: llmContent.system_architecture || undefined,
+        implementation_approach: llmContent.implementation_approach || undefined,
+        test_scenarios: llmContent.test_scenarios || undefined,
+        risks: llmContent.risks || undefined,
+        integration_operationalization: llmContent.integration_operationalization || undefined,
+        exploration_summary: llmContent.exploration_summary || undefined,
+        content: formatPRDContent(sdId, sdData, llmContent),
+        metadata: llmContent.metadata || undefined
+      })
+      .eq('id', existingPRD.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return updatedPRD;
+  }
+
   // Build plan checklist based on what LLM generated
   const hasIntegrationSection = llmContent.integration_operationalization &&
     Object.keys(llmContent.integration_operationalization).length >= 5;

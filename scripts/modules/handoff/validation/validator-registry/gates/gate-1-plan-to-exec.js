@@ -167,27 +167,31 @@ export function registerGate1Validators(registry) {
       };
     }
 
-    // Check both prd.file_scope and prd.metadata.file_scope
+    // PAT-VALSCHEMA-001: file_scope column does not exist in product_requirements_v2.
+    // Check both prd.file_scope and prd.metadata.file_scope as fallback.
+    // Missing file_scope is advisory (warning), not blocking, since no PRD
+    // creation path currently populates this field.
     const fileScope = prd?.file_scope || prd?.metadata?.file_scope || {};
-    const issues = [];
+    const warnings = [];
 
     if (!fileScope.create && !fileScope.modify && !fileScope.delete) {
-      issues.push('file_scope should have create/modify/delete arrays');
+      warnings.push('file_scope not defined - consider adding create/modify/delete arrays to PRD metadata');
     }
 
     const hasContent = (fileScope.create?.length > 0) ||
                        (fileScope.modify?.length > 0) ||
                        (fileScope.delete?.length > 0);
 
-    if (!hasContent) {
-      issues.push('file_scope arrays are all empty');
+    if (!hasContent && fileScope.create) {
+      warnings.push('file_scope arrays are all empty');
     }
 
     return {
-      passed: issues.length === 0,
-      score: issues.length === 0 ? 100 : 50,
+      passed: true,  // PAT-VALSCHEMA-001: Never block on missing file_scope
+      score: hasContent ? 100 : 70,
       max_score: 100,
-      issues
+      issues: [],
+      warnings
     };
   }, 'File scope validation');
 
@@ -215,8 +219,16 @@ export function registerGate1Validators(registry) {
       getSteps(prd?.metadata?.execution_plan?.steps) ||
       [];
 
+    // PAT-VALSCHEMA-001: execution_plan is not populated by any PRD creation path.
+    // Downgraded from blocking error to advisory warning.
     if (!executionPlan || executionPlan.length === 0) {
-      return { passed: false, score: 0, max_score: 100, issues: ['Execution plan has no steps'] };
+      return {
+        passed: true,
+        score: 70,
+        max_score: 100,
+        issues: [],
+        warnings: ['Execution plan has no steps - consider adding implementation_steps to PRD']
+      };
     }
 
     return { passed: true, score: 100, max_score: 100, issues: [] };
@@ -241,17 +253,20 @@ export function registerGate1Validators(registry) {
 
     const testing = prd?.testing_strategy || prd?.testing ||
       prd?.metadata?.testing_strategy || {};
-    const issues = [];
+    const warnings = [];
 
+    // PAT-VALSCHEMA-001: testing_strategy is not populated by standard PRD creation.
+    // Downgraded from blocking to advisory - actual test execution is enforced at EXEC-TO-PLAN.
     if (!testing.unit_tests && !testing.e2e_tests) {
-      issues.push('Testing strategy should define unit_tests and e2e_tests');
+      warnings.push('Testing strategy not defined in PRD - will be enforced at EXEC-TO-PLAN handoff');
     }
 
     return {
-      passed: issues.length === 0,
-      score: issues.length === 0 ? 100 : 50,
+      passed: true,  // PAT-VALSCHEMA-001: Never block on missing testing_strategy at PLAN-TO-EXEC
+      score: (testing.unit_tests || testing.e2e_tests) ? 100 : 70,
       max_score: 100,
-      issues
+      issues: [],
+      warnings
     };
   }, 'Testing strategy validation');
 }
