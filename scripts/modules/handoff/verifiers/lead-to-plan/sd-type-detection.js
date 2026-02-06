@@ -26,8 +26,10 @@ export const TYPE_PATTERNS = {
   infrastructure: {
     keywords: ['ci/cd', 'pipeline', 'github action', 'workflow', 'deploy', 'docker',
                'script', 'tooling', 'automation', 'build', 'bundle', 'lint', 'prettier',
-               'eslint', 'pre-commit', 'hook', 'protocol', 'handoff', 'agent system',
-               'mcp', 'leo protocol', 'devops', 'monitoring', 'logging'],
+               'eslint', 'pre-commit', 'hook', 'hooks', 'protocol', 'handoff', 'agent system',
+               'mcp', 'leo protocol', 'devops', 'monitoring', 'logging',
+               'state management', 'internal tooling', 'cli', 'command-line',
+               'cli enhancement', 'developer tool', 'dev tool'],
     weight: 1.0
   },
   documentation: {
