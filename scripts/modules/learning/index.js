@@ -58,6 +58,120 @@ async function processCommand(sdId = null) {
 }
 
 /**
+ * Auto-approve command - for AUTO-PROCEED mode
+ *
+ * Trusts the existing composite score filtering in context-builder.js
+ * and auto-approves all items that passed filtering (score >= threshold).
+ * Creates SD from approved items without human review.
+ *
+ * @param {number} threshold - Minimum composite_score to auto-approve (default: 50)
+ * @param {string|null} sdId - Optional SD context
+ * @returns {Promise<{approved: number, deferred: number, sd_key: string|null}>}
+ */
+async function autoApproveCommand(threshold = 50, sdId = null) {
+  console.log('='.repeat(60));
+  console.log('  /learn AUTO-APPROVE (AUTO-PROCEED Mode)');
+  console.log('='.repeat(60));
+  console.log(`\n  Composite score threshold: >= ${threshold}`);
+  console.log('  Trusting existing severity-weighted filters\n');
+
+  // Build context (same filtering as interactive mode)
+  const context = await buildLearningContext(sdId);
+
+  if (context.summary.total_patterns === 0 &&
+      context.summary.total_lessons === 0 &&
+      context.summary.total_improvements === 0) {
+    console.log('\nNo learning items found to process.');
+    console.log('AUTO-APPROVE: Nothing to act on.\n');
+    return { approved: 0, deferred: 0, sd_key: null };
+  }
+
+  // Add Devil's Advocate (still run for audit trail, but don't pause)
+  const reviewed = reviewContext(context);
+
+  // Separate items by composite score threshold
+  const qualifying = [];
+  const deferred = [];
+
+  for (const pattern of (reviewed.patterns || [])) {
+    const score = pattern.composite_score || 0;
+    if (score >= threshold) {
+      qualifying.push(pattern);
+    } else {
+      deferred.push({ ...pattern, reason: `composite_score ${score} < ${threshold}` });
+    }
+  }
+
+  for (const improvement of (reviewed.improvements || [])) {
+    // Improvements don't have composite_score from the view;
+    // they passed getPendingImprovements() filtering, so auto-approve all
+    qualifying.push(improvement);
+  }
+
+  // Display what was found
+  console.log('  ' + '-'.repeat(40));
+  console.log(`  Items found:       ${qualifying.length + deferred.length}`);
+  console.log(`  Auto-approved:     ${qualifying.length} (score >= ${threshold})`);
+  console.log(`  Deferred:          ${deferred.length} (below threshold)`);
+  console.log('  ' + '-'.repeat(40));
+
+  if (deferred.length > 0) {
+    console.log('\n  Deferred items (will surface next run):');
+    for (const d of deferred) {
+      console.log(`    - [${d.id}] score=${d.composite_score || 'N/A'}: ${(d.content || '').substring(0, 60)}`);
+    }
+  }
+
+  if (qualifying.length === 0) {
+    console.log('\n  No items above threshold. Nothing auto-approved.');
+    console.log('  These items will appear in interactive /learn for manual review.\n');
+    return { approved: 0, deferred: deferred.length, sd_key: null };
+  }
+
+  // Build decisions object (auto-approve all qualifying)
+  const decisions = {};
+  for (const item of qualifying) {
+    const itemId = item.pattern_id || item.id;
+    decisions[itemId] = { status: 'APPROVED' };
+  }
+
+  console.log('\n  Auto-approving and creating SD...\n');
+
+  // Create SD using existing workflow (skip protocol file check for CLI invocation)
+  const result = await executeSDCreationWorkflow(reviewed, decisions, { skipLeadValidation: true });
+
+  if (!result.success) {
+    console.log('\n  Auto-approve SD creation failed:', result.message || result.error);
+    if (result.conflicts) {
+      console.log('  Conflicting assignments:');
+      for (const c of result.conflicts) {
+        console.log(`    - ${c.item_id} already assigned to ${c.assigned_sd_id}`);
+      }
+    }
+    return { approved: 0, deferred: deferred.length, sd_key: null, error: result.error };
+  }
+
+  console.log('\n' + '='.repeat(60));
+  console.log('  AUTO-APPROVE Summary');
+  console.log('='.repeat(60));
+  console.log('  Mode:          AUTO-PROCEED (no human review)');
+  console.log(`  Items approved: ${qualifying.length}`);
+  console.log(`  Items deferred: ${deferred.length}`);
+  console.log(`  SD created:     ${result.sd_key}`);
+  console.log(`  Classification: ${result.classification}`);
+  console.log('='.repeat(60));
+  console.log('');
+
+  return {
+    approved: qualifying.length,
+    deferred: deferred.length,
+    sd_key: result.sd_key,
+    sd_id: result.sd_id,
+    classification: result.classification
+  };
+}
+
+/**
  * Apply command - create SD from approved decisions
  * NEW WORKFLOW: Creates SD instead of directly applying changes
  */
@@ -187,6 +301,15 @@ async function main() {
         break;
       }
 
+      case 'auto-approve': {
+        const thresholdArg = args.find(a => a.startsWith('--threshold='));
+        const threshold = thresholdArg ? parseInt(thresholdArg.split('=')[1], 10) : 50;
+        const sdIdArg = args.find(a => a.startsWith('--sd-id='));
+        const sdId = sdIdArg?.split('=')[1] || null;
+        await autoApproveCommand(threshold, sdId);
+        break;
+      }
+
       case 'apply': {
         const decisionsArg = args.find(a => a.startsWith('--decisions='));
         const decisionsJson = decisionsArg?.split('=').slice(1).join('=');
@@ -224,15 +347,17 @@ async function main() {
         console.log('');
         console.log('Usage:');
         console.log('  node scripts/modules/learning/index.js process [--sd-id=<ID>]');
+        console.log('  node scripts/modules/learning/index.js auto-approve [--threshold=50]');
         console.log('  node scripts/modules/learning/index.js apply --decisions=\'<JSON>\' [--legacy]');
         console.log('  node scripts/modules/learning/index.js rollback <DECISION_ID>');
         console.log('  node scripts/modules/learning/index.js insights');
         console.log('');
         console.log('Commands:');
-        console.log('  process   Query learning sources and display with Devil\'s Advocate');
-        console.log('  apply     Create SD from approved items (default) or apply directly (--legacy)');
-        console.log('  rollback  Undo a previous decision');
-        console.log('  insights  Display historical learning metrics');
+        console.log('  process       Query learning sources and display with Devil\'s Advocate');
+        console.log('  auto-approve  Auto-approve high-value items (for AUTO-PROCEED mode)');
+        console.log('  apply         Create SD from approved items (default) or apply directly (--legacy)');
+        console.log('  rollback      Undo a previous decision');
+        console.log('  insights      Display historical learning metrics');
         console.log('');
         console.log('New Workflow (default):');
         console.log('  - Approved items create a Strategic Directive (SD)');
@@ -255,4 +380,4 @@ async function main() {
 
 main();
 
-export { processCommand, applyCommand, rollbackCommand, insightsCommand };
+export { processCommand, autoApproveCommand, applyCommand, rollbackCommand, insightsCommand };

@@ -136,9 +136,21 @@ supabase.from('claude_sessions')
 ```
 
 **If AUTO-PROCEED is ACTIVE:**
-- Skip AskUserQuestion
-- Output status: `🤖 AUTO-PROCEED: Learning captured, continuing to next SD...`
-- Auto-invoke `/leo next` to continue with next SD in queue
+- **Do NOT skip learning entirely** - use auto-approve to act on high-value items
+- Run the auto-approve command instead of interactive approval:
+  ```bash
+  node scripts/modules/learning/index.js auto-approve --threshold=50
+  ```
+- This will:
+  1. Build learning context (same filtering as interactive mode)
+  2. Auto-approve all patterns with composite_score >= 50
+  3. Auto-approve all pending improvements (already filtered by getPendingImprovements)
+  4. Create an SD from approved items (if any qualify)
+  5. Defer low-score items for future interactive review
+- After auto-approve completes:
+  - If SD was created: Output `AUTO-PROCEED: SD created from learning: <SD-KEY>`
+  - If nothing qualified: Output `AUTO-PROCEED: No high-value learning items to act on`
+  - Auto-invoke `/leo next` to continue with next SD in queue
 
 **If AUTO-PROCEED is INACTIVE:**
 **After SD creation - Use AskUserQuestion:**
