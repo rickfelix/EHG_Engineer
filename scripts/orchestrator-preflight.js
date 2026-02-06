@@ -96,6 +96,13 @@ const SD_TYPE_PROFILES = {
     min_handoffs: 4,
     threshold: 85,
     description: 'Measurable impact verification'
+  },
+  uat: {
+    prd_required: false,
+    e2e_required: false,
+    min_handoffs: 1,
+    threshold: 70,
+    description: 'UAT campaigns execute tests, minimal validation'
   }
 };
 

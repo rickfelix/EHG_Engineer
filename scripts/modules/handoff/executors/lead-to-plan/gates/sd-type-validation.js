@@ -17,6 +17,7 @@ import { autoDetectSdType } from '../../../../../../lib/utils/sd-type-validation
 const VALID_SD_TYPES = [
   'feature', 'infrastructure', 'bugfix', 'database', 'security',
   'refactor', 'documentation', 'orchestrator', 'performance', 'enhancement',
+  'uat',  // Renamed from qa: UAT campaign/test work
   'library', 'fix' // Added from type-classifier profiles
 ];
 
@@ -236,6 +237,6 @@ export function createSdTypeValidationGate(supabase) {
     },
     required: true,
     weight: 0.9,
-    remediation: 'Set sd_type to match the work scope (feature, infrastructure, bugfix, database, security, refactor, documentation, orchestrator)'
+    remediation: 'Set sd_type to match the work scope (feature, infrastructure, bugfix, database, security, refactor, documentation, orchestrator, uat)'
   };
 }
