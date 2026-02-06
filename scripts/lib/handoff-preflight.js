@@ -90,6 +90,7 @@ const HANDOFF_REQUIREMENTS = {
 
 /**
  * SD types that have modified handoff requirements
+ * FIX: 2026-02-05 - Added 'orchestrator' key (matches actual sd_type from database)
  */
 const MODIFIED_WORKFLOW_SD_TYPES = {
   // Infrastructure SDs may skip EXEC-TO-PLAN
@@ -102,7 +103,12 @@ const MODIFIED_WORKFLOW_SD_TYPES = {
     skipHandoffs: ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'],
     reason: 'Documentation SDs may go directly from PLAN to completion'
   },
-  // Parent orchestrator SDs delegate to children
+  // Orchestrator SDs delegate to children (sd_type = 'orchestrator' in database)
+  orchestrator: {
+    skipHandoffs: ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'],
+    reason: 'Orchestrator SDs coordinate children, no direct implementation'
+  },
+  // Legacy alias for backwards compatibility
   parent_orchestrator: {
     skipHandoffs: ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'],
     reason: 'Parent SDs orchestrate children, no direct implementation'

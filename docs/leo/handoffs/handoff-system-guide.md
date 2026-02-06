@@ -31,6 +31,9 @@ This guide documents the LEO Protocol handoff system architecture, gate validati
 
 ## Quick Reference
 
+**📚 NEW: [SD Type Handoff Sequences Reference](../../reference/sd-type-handoff-sequences.md)**
+Complete guide to SD type-aware workflows - which handoffs are required/optional for each SD type (feature, orchestrator, refactor, etc.)
+
 | Component | Location | Purpose | LOC |
 |-----------|----------|---------|-----|
 | Main Entry | scripts/handoff.js | CLI entry point | ~300 |
@@ -1227,9 +1230,12 @@ Coverage includes:
 
 ## Related Documentation
 
+- **[SD Type Handoff Sequences](../../reference/sd-type-handoff-sequences.md)** - Comprehensive SD type-to-handoff workflow mappings (NEW)
 - [Sub-Agent Patterns Guide](../sub-agents/patterns-guide.md) - Sub-agent integration patterns
 - [Sub-Agent System](../sub-agents/sub-agent-system.md) - Complete sub-agent reference
 - [Command Ecosystem](../commands/command-ecosystem.md) - Command workflow integration
+- [Validation Enforcement Framework](../../reference/validation-enforcement.md) - Adaptive thresholds and gate architecture
+- [Workflow Definitions](../../../scripts/modules/handoff/cli/workflow-definitions.js) - Canonical source of truth (code)
 
 ---
 
