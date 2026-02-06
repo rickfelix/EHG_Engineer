@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-06T01:21:49.751Z
-**Rows**: 648
+**Generated**: 2026-02-06T10:56:34.729Z
+**Rows**: 637
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -145,6 +145,10 @@ Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integ
 - `idx_product_requirements_v2_sd_id`
   ```sql
   CREATE INDEX idx_product_requirements_v2_sd_id ON public.product_requirements_v2 USING btree (sd_id)
+  ```
+- `idx_product_requirements_v2_unique_sd_id`
+  ```sql
+  CREATE UNIQUE INDEX idx_product_requirements_v2_unique_sd_id ON public.product_requirements_v2 USING btree (sd_id) WHERE (sd_id IS NOT NULL)
   ```
 - `product_requirements_v2_pkey`
   ```sql
