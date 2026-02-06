@@ -86,3 +86,28 @@ Every UAT test MUST include:
 - **After screenshot**: Final state after test completion
 - **Console check**: Verify no JavaScript errors occurred
 - **Pass/Fail determination**: Based on acceptance criteria
+
+## Three-Tier Testing Architecture Integration
+
+This agent is **Tier 3** (Human Manual Testing) in the Three-Tier Testing Architecture:
+
+| Tier | Type | Tool | Scope |
+|------|------|------|-------|
+| 1 | Automated | Playwright specs | Regression, happy paths |
+| 2 | AI-Autonomous | Vision QA Agent | Visual bugs, a11y, UX judgment |
+| 3 | Human Manual | **/uat command** | Subjective quality, edge cases |
+
+### UAT Debt Registry
+
+Phase 6 loads **pending debt items** from the `uat_debt_registry` table. These are issues detected by Vision QA (Tier 2) that require human judgment:
+
+- **Vision QA findings** with low confidence or non-critical severity
+- **Accessibility violations** detected by automated a11y checks
+- **Performance regressions** (LCP/FCP above thresholds)
+- **UX judgment calls** that AI flagged but cannot verify alone
+- **Skipped/timeout entries** for SDs that Vision QA couldn't test
+
+**Workflow**: Debt items appear as priority checklist items. After manual verification:
+1. **Confirmed bug** → Create quick-fix SD or file issue
+2. **False positive** → Mark as `wont_fix` in registry
+3. **Low priority** → Mark as `deferred` for future sprint
