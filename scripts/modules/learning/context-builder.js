@@ -486,19 +486,53 @@ async function getRecurringFeedbackPatterns(limit = TOP_N) {
 }
 
 /**
- * Query pending protocol improvements sorted by evidence count
+ * Centralized allowlist of statuses that should be surfaced by /learn.
+ * SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-008: Prevents already-applied
+ * or in-progress improvements from being re-surfaced.
+ */
+const SURFACEABLE_IMPROVEMENT_STATUSES = ['PENDING'];
+
+/**
+ * Query pending protocol improvements sorted by evidence count.
+ * SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-008: Also detects orphaned
+ * SD_CREATED items whose assigned SD has completed (these should have
+ * been marked APPLIED but weren't).
  */
 async function getPendingImprovements(limit = TOP_N) {
   const { data, error } = await supabase
     .from('protocol_improvement_queue')
-    .select('id, improvement_type, description, evidence_count, target_table, target_operation, payload, status, source_retro_id')
-    .eq('status', 'PENDING')
+    .select('id, improvement_type, description, evidence_count, target_table, target_operation, payload, status, source_retro_id, assigned_sd_id')
+    .in('status', SURFACEABLE_IMPROVEMENT_STATUSES)
     .order('evidence_count', { ascending: false })
     .limit(limit);
 
   if (error) {
     console.error('Error querying protocol_improvement_queue:', error.message);
     return [];
+  }
+
+  // Detect orphaned SD_CREATED items (SD completed but improvement not marked APPLIED)
+  const { data: orphaned } = await supabase
+    .from('protocol_improvement_queue')
+    .select('id, assigned_sd_id')
+    .eq('status', 'SD_CREATED')
+    .not('assigned_sd_id', 'is', null);
+
+  if (orphaned && orphaned.length > 0) {
+    const sdIds = [...new Set(orphaned.map(o => o.assigned_sd_id))];
+    const { data: completedSDs } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, status')
+      .in('sd_key', sdIds)
+      .in('status', ['completed', 'closed']);
+
+    if (completedSDs && completedSDs.length > 0) {
+      const completedKeys = new Set(completedSDs.map(s => s.sd_key));
+      const orphanCount = orphaned.filter(o => completedKeys.has(o.assigned_sd_id)).length;
+      if (orphanCount > 0) {
+        console.warn(`⚠️  ${orphanCount} improvement(s) in SD_CREATED status but assigned SD is completed. Run /learn to review.`);
+      }
+    }
   }
 
   return (data || []).map(imp => ({
