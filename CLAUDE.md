@@ -267,7 +267,7 @@ Perform 5-whys analysis and recommend systematic fix."
 | D05 | UAT | Auto-pass with flag for later human review |
 | D06 | Notifications | Terminal + Claude Code sound notification |
 | D07 | Learning trigger | Auto-invoke /learn at orchestrator end |
-| D08 | Post-learn | Show queue, pause for user selection |
+| D08 | Post-learn | Show queue; AUTO-START top SD if AUTO-PROCEED ON, else pause for user selection |
 | D09 | Context | Existing compaction process handles it |
 | D10 | Restart | Auto-restart with logging for visibility |
 | D11 | Handoff | Propagate AUTO-PROCEED flag through handoff.js |
@@ -370,6 +370,8 @@ Both can be configured via `/leo settings`.
 | **All children blocked** | * | * | **PAUSE** - show blockers (D23) | Human decision required |
 | **Dependency unresolved** | * | * | **SKIP** SD, continue to next ready | `checkDependenciesResolved()` |
 | **Grandchild completes** | ON | * | Return to parent context, continue to next child | Hierarchical traversal |
+| **/learn completes → /leo next** | ON | * | Show queue → **AUTO-START** top-priority READY SD | `/leo next` handler + `/leo start` |
+| /learn completes → /leo next | OFF | * | Show queue → PAUSE for user selection | User invokes `/leo start <SD-ID>` |
 
 ### Key Rules
 
@@ -378,6 +380,7 @@ Both can be configured via `/leo settings`.
 3. **Priority determines next SD** - `sortByUrgency()` ranks by: Band (P0→P3) → Score → FIFO
 4. **Dependencies gate readiness** - SD with unresolved deps is skipped, not paused on
 5. **Both ON = no pauses except hard stops** - Runs until D23 (all blocked) or context exhaustion
+6. **Post-/learn transition** - When `/learn` creates SD and `/leo next` shows queue, AUTO-PROCEED auto-starts the top-priority READY SD
 
 ### Next SD Selection Priority
 
@@ -456,6 +459,8 @@ If documentation elsewhere conflicts with this truth table:
 **2026-02-01 (v2)**: Expanded to cover ALL transition types after discovering pause occurred between children within an orchestrator. Root cause: only orchestrator boundaries were specified, not child-to-child continuation.
 
 **2026-02-01 (v2 code fix)**: Fixed `scripts/modules/handoff/cli/cli-main.js:handleExecuteWithContinuation()`. Bug: only continued after `LEAD-FINAL-APPROVAL`, causing break after `LEAD-TO-PLAN` for new children. Fix: Added `WORKFLOW_SEQUENCE` mapping to automatically advance through LEAD-TO-PLAN → LEAD-FINAL-APPROVAL → (find next child) → repeat.
+
+**2026-02-06 (v3)**: Added `/leo next` → auto-start transition. Root cause: `/leo next` handler was never retrofitted with AUTO-PROCEED awareness when other commands (/ship, /learn) were. The instruction chain terminated at `/leo next` display, causing a pause. Fix: Added AUTO-PROCEED detection to `/leo next` handler, updated D08, added Truth Table rows for `/learn` → `/leo next` transition.
 
 ## Session Initialization - SD Selection
 
