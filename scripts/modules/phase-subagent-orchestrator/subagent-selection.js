@@ -1,10 +1,46 @@
 /**
  * Sub-Agent Selection Logic for Phase Sub-Agent Orchestrator
  * Determines which sub-agents are required based on SD scope and phase
+ *
+ * SD-Type-Aware: Uses SD_TYPE_PROFILES to determine required sub-agents
  */
 
 import { selectSubAgentsHybrid } from '../../../lib/context-aware-sub-agent-selector.js';
 import { shouldSkipCodeValidation } from '../../../lib/utils/sd-type-validation.js';
+import { SD_TYPE_PROFILES } from '../../../lib/sd/type-classifier.js';
+
+/**
+ * Get always-required sub-agents for a phase, considering SD type
+ * @param {string} phase - Current phase
+ * @param {Object} sd - Strategic Directive
+ * @param {boolean} skipCodeValidation - Whether to skip code validation sub-agents
+ * @returns {string[]} List of required sub-agent codes
+ */
+function getRequiredSubAgents(phase, sd, skipCodeValidation) {
+  const sdType = (sd?.sd_type || 'feature').toLowerCase();
+  const profile = SD_TYPE_PROFILES[sdType] || SD_TYPE_PROFILES.feature;
+
+  // Base requirements per phase
+  const baseRequirements = {
+    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY', 'DATABASE', 'DESIGN'],
+    PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
+    PLAN_VERIFY: skipCodeValidation
+      ? ['DOCMON', 'STORIES']
+      : ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE'],
+    LEAD_FINAL: ['RETRO']
+  };
+
+  const required = [...(baseRequirements[phase] || [])];
+
+  // Add DESIGN for PLAN_PRD if SD type requires it (feature, database)
+  if (phase === 'PLAN_PRD' && profile.designRequired) {
+    if (!required.includes('DESIGN')) {
+      required.push('DESIGN');
+    }
+  }
+
+  return required;
+}
 
 /**
  * Check if sub-agent is required based on SD scope
@@ -19,13 +55,12 @@ async function isSubAgentRequired(subAgent, sd, phase) {
 
   const skipCodeValidation = shouldSkipCodeValidation(sd);
 
+  // Get SD-type-aware requirements
   const alwaysRequired = {
-    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY', 'DATABASE', 'DESIGN'],
-    PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
-    PLAN_VERIFY: skipCodeValidation
-      ? ['DOCMON', 'STORIES']
-      : ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE'],
-    LEAD_FINAL: ['RETRO']
+    LEAD_PRE_APPROVAL: getRequiredSubAgents('LEAD_PRE_APPROVAL', sd, skipCodeValidation),
+    PLAN_PRD: getRequiredSubAgents('PLAN_PRD', sd, skipCodeValidation),
+    PLAN_VERIFY: getRequiredSubAgents('PLAN_VERIFY', sd, skipCodeValidation),
+    LEAD_FINAL: getRequiredSubAgents('LEAD_FINAL', sd, skipCodeValidation)
   };
 
   if (skipCodeValidation && phase === 'PLAN_VERIFY') {
@@ -38,6 +73,13 @@ async function isSubAgentRequired(subAgent, sd, phase) {
   }
 
   if (alwaysRequired[phase]?.includes(code)) {
+    const sdType = (sd?.sd_type || 'feature').toLowerCase();
+    const profile = SD_TYPE_PROFILES[sdType];
+
+    // Provide more specific reason for SD-type-driven requirements
+    if (code === 'DESIGN' && profile?.designRequired) {
+      return { required: true, reason: `Required for ${sdType} SD type (designRequired=true)` };
+    }
     return { required: true, reason: 'Always required for this phase' };
   }
 

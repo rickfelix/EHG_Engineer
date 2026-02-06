@@ -133,9 +133,18 @@ export class HandoffOrchestrator {
       result.autoProceed = autoProceedResult.autoProceed;
       result.autoProceedSource = autoProceedResult.source;
 
-      // Record result
+      // Record result FIRST (before any deferred operations)
+      // SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B-RCA: Record-First Pattern
+      // This ensures handoff is recorded even if post-handoff operations timeout
       if (result.success) {
         await this.recorder.recordSuccess(normalizedType, sdId, result, template);
+        console.log('📝 Handoff recorded successfully');
+
+        // Handle deferred PRD generation for LEAD-TO-PLAN
+        // This happens AFTER recording, so timeout won't lose the handoff
+        if (result._deferredPrdGeneration) {
+          await this._executeDeferredPrdGeneration(result._deferredPrdGeneration);
+        }
       } else if (!result.systemError) {
         await this.recorder.recordFailure(normalizedType, sdId, result, template);
       }
@@ -312,6 +321,47 @@ export class HandoffOrchestrator {
       'PLAN-TO-LEAD': new PlanToLeadExecutor(executorDeps),
       'LEAD-FINAL-APPROVAL': new LeadFinalApprovalExecutor(executorDeps)
     };
+  }
+
+  /**
+   * Execute deferred PRD generation after handoff is recorded
+   * SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B-RCA: Record-First Pattern
+   *
+   * This runs AFTER recordSuccess(), so even if it times out:
+   * - The handoff is already recorded as accepted
+   * - The SD phase has transitioned
+   * - Only PRD generation needs to be retried
+   *
+   * @param {object} params - { sdId, sd }
+   */
+  async _executeDeferredPrdGeneration({ sdId, sd }) {
+    try {
+      // Dynamic import to avoid circular dependencies
+      const { autoGeneratePRDScript } = await import('./executors/lead-to-plan/prd-generation.js');
+      const { autoApprovePRD } = await import('./auto-approve-prd.js');
+
+      // Auto-generate PRD script
+      await autoGeneratePRDScript(sdId, sd);
+
+      // Auto-approve PRD if it meets quality thresholds
+      try {
+        const approvalResult = await autoApprovePRD(sdId);
+        if (approvalResult.approved) {
+          console.log(`   ✅ PRD auto-approved with score: ${approvalResult.score}%`);
+        } else {
+          console.log(`   ℹ️  PRD not auto-approved: ${approvalResult.reason}`);
+        }
+      } catch (err) {
+        // Non-blocking - log error but don't fail
+        console.log(`   ⚠️  Auto-approve error: ${err.message}`);
+      }
+    } catch (error) {
+      // PRD generation failure is non-blocking for the handoff
+      // The handoff is already recorded - user can manually create PRD
+      console.error('⚠️  Deferred PRD generation failed:', error.message);
+      console.log('   💡 Handoff was recorded successfully.');
+      console.log('   💡 Run manually: node scripts/add-prd-to-database.js <sd-id>');
+    }
   }
 
   /**

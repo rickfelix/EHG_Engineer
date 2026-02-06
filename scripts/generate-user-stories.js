@@ -32,7 +32,7 @@ function generateStoryFromRequirement(req, sd, index) {
   return {
     sd_id: sd.id, story_key: storyKey, title: requirementText.substring(0, 100), user_role: userRole,
     user_want: requirementText, user_benefit: `I can ${requirementText.toLowerCase()} efficiently and reliably`,
-    acceptance_criteria: acceptanceCriteria, priority: req.priority || 'medium', status: 'draft', story_points: req.priority === 'HIGH' ? 5 : 3,
+    acceptance_criteria: acceptanceCriteria, priority: (req.priority || 'high').toString().toLowerCase(), status: 'draft', story_points: (req.priority || '').toUpperCase() === 'CRITICAL' ? 5 : 3,
     implementation_context: { key_files: [], patterns: [], considerations: [`Derived from ${req.id || 'PRD requirement'}`] },
     definition_of_done: ['Code implemented and passing lint', 'Unit tests written and passing', 'Code review completed', 'Documentation updated if needed']
   };

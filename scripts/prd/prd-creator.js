@@ -117,6 +117,12 @@ export async function createPRDWithValidatedContent(
   stakeholderPersonas = []
 ) {
   // Build plan checklist based on what LLM generated
+  const hasIntegrationSection = llmContent.integration_operationalization &&
+    Object.keys(llmContent.integration_operationalization).length >= 5;
+  const hasExplorationSummary = llmContent.exploration_summary &&
+    (llmContent.exploration_summary.files_read?.length > 0 ||
+     llmContent.exploration_summary.patterns_identified?.length > 0);
+
   const planChecklist = [
     { text: 'PRD created and saved', checked: true },
     { text: 'SD requirements mapped to technical specs', checked: true },
@@ -124,6 +130,8 @@ export async function createPRDWithValidatedContent(
     { text: 'Implementation approach documented', checked: !!llmContent.implementation_approach },
     { text: 'Test scenarios defined', checked: llmContent.test_scenarios?.length > 0 },
     { text: 'Acceptance criteria established', checked: llmContent.acceptance_criteria?.length > 0 },
+    { text: 'Integration & operationalization documented', checked: hasIntegrationSection },
+    { text: 'Exploration summary documented', checked: hasExplorationSummary },
     { text: 'Resource requirements estimated', checked: false },
     { text: 'Timeline and milestones set', checked: false },
     { text: 'Risk assessment completed', checked: llmContent.risks?.length > 0 }
@@ -140,7 +148,7 @@ export async function createPRDWithValidatedContent(
       directive_id: sdId,
       sd_id: sdIdValue,
       title: prdTitle || `Product Requirements for ${sdId}`,
-      status: 'planning',
+      status: 'approved',  // Auto-approved: grounding validation passed
       category: 'technical',
       priority: 'high',
       executive_summary: llmContent.executive_summary || `Product requirements document for Strategic Directive ${sdId}`,
@@ -174,6 +182,8 @@ export async function createPRDWithValidatedContent(
       implementation_approach: llmContent.implementation_approach || null,
       test_scenarios: llmContent.test_scenarios || [],
       risks: llmContent.risks || [],
+      integration_operationalization: llmContent.integration_operationalization || null,
+      exploration_summary: llmContent.exploration_summary || null,
       progress: progress,
       stakeholders: stakeholderPersonas,
       content: formatPRDContent(sdId, sdData, llmContent),
@@ -329,8 +339,25 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
     prdUpdate.implementation_approach = llmContent.implementation_approach;
   }
 
+  // Update integration_operationalization (SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001)
+  if (llmContent.integration_operationalization) {
+    prdUpdate.integration_operationalization = llmContent.integration_operationalization;
+  }
+
+  // Update exploration_summary (GATE_EXPLORATION_AUDIT requirement)
+  if (llmContent.exploration_summary) {
+    prdUpdate.exploration_summary = llmContent.exploration_summary;
+  }
+
   // Update content field with formatted PRD
   prdUpdate.content = formatPRDContent(sdId, sdData, llmContent);
+
+  // Check if integration section is complete
+  const hasIntegrationSection = llmContent.integration_operationalization &&
+    Object.keys(llmContent.integration_operationalization).length >= 5;
+  const hasExplorationSummary = llmContent.exploration_summary &&
+    (llmContent.exploration_summary.files_read?.length > 0 ||
+     llmContent.exploration_summary.patterns_identified?.length > 0);
 
   // Mark checklist items as complete
   prdUpdate.plan_checklist = [
@@ -340,6 +367,8 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
     { text: 'Implementation approach documented', checked: !!llmContent.implementation_approach },
     { text: 'Test scenarios defined', checked: llmContent.test_scenarios?.length > 0 },
     { text: 'Acceptance criteria established', checked: llmContent.acceptance_criteria?.length > 0 },
+    { text: 'Integration & operationalization documented', checked: hasIntegrationSection },
+    { text: 'Exploration summary documented', checked: hasExplorationSummary },
     { text: 'Resource requirements estimated', checked: false },
     { text: 'Timeline and milestones set', checked: false },
     { text: 'Risk assessment completed', checked: llmContent.risks?.length > 0 }
