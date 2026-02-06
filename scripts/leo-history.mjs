@@ -3,8 +3,8 @@
 /**
  * LEO History - AI-Generated Project Evolution Summary
  *
- * Fetches merged PRs from GitHub, computes stats, and generates
- * an AI narrative summary of how the project evolved over time.
+ * Fetches merged PRs from GitHub, computes stats, and outputs
+ * structured data for Claude Code to narrate.
  *
  * Usage:
  *   node scripts/leo-history.mjs --repos "rickfelix/EHG_Engineer" --since "2026-01-01" --until "2026-02-06" --granularity "month"
@@ -15,10 +15,6 @@
  */
 
 import { execSync } from 'child_process';
-import { getLLMClient } from '../lib/llm/index.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 // =============================================================================
 // ARGUMENT PARSING
@@ -255,55 +251,6 @@ function groupByPeriod(prs, granularity) {
 }
 
 // =============================================================================
-// LLM NARRATIVE GENERATION
-// =============================================================================
-
-const SYSTEM_PROMPT = `You are a technical project historian. Generate a narrative summary of a software project's evolution based on merged pull requests. For each time period:
-1. Lead with the main theme or focus area
-2. Highlight the most significant changes
-3. Note shifts in focus between periods
-4. Mention notable PRs by number when they represent milestones
-End with a brief "Looking Ahead" observation based on recent trends.
-Use markdown headers (###) for each period. Keep the narrative concise but insightful.`;
-
-function buildPeriodsPrompt(periods) {
-  let prompt = 'Here are the merged pull requests grouped by time period:\n\n';
-
-  for (const period of periods) {
-    prompt += `## ${period.label}\n`;
-
-    const catEntries = Object.entries(period.categories);
-    for (const [category, prs] of catEntries) {
-      prompt += `**${category}** (${prs.length} PRs):\n`;
-      // If too many PRs, only show top 5 by size
-      const sorted = [...prs].sort((a, b) => ((b.additions || 0) + (b.deletions || 0)) - ((a.additions || 0) + (a.deletions || 0)));
-      const shown = sorted.slice(0, 5);
-      for (const pr of shown) {
-        prompt += `  - #${pr.number}: ${pr.title} (+${pr.additions || 0}/-${pr.deletions || 0})${pr.repo ? ` [${pr.repo.split('/')[1]}]` : ''}\n`;
-      }
-      if (sorted.length > 5) {
-        prompt += `  - ... and ${sorted.length - 5} more\n`;
-      }
-    }
-    prompt += '\n';
-  }
-
-  return prompt;
-}
-
-async function generateNarrative(periods, repoNames) {
-  try {
-    const client = getLLMClient({ purpose: 'generation' });
-    const userPrompt = `Generate a narrative summary for the following project evolution (repos: ${repoNames.join(', ')}):\n\n${buildPeriodsPrompt(periods)}`;
-
-    const result = await client.complete(SYSTEM_PROMPT, userPrompt);
-    return typeof result === 'string' ? result : result?.content || result?.text || String(result);
-  } catch (err) {
-    return null; // Fallback handled by caller
-  }
-}
-
-// =============================================================================
 // OUTPUT FORMATTING
 // =============================================================================
 
@@ -311,7 +258,7 @@ function formatNumber(n) {
   return n.toLocaleString('en-US');
 }
 
-function formatOutput(stats, periods, narrative, repoNames, since, until, granularity) {
+function formatOutput(stats, periods, repoNames, since, until, granularity) {
   const lines = [];
   const repoDisplay = repoNames.map(r => r.split('/')[1]).join(' + ');
   const sinceDate = new Date(since + 'T00:00:00Z');
@@ -356,26 +303,29 @@ function formatOutput(stats, periods, narrative, repoNames, since, until, granul
     lines.push('');
   }
 
-  // AI Narrative
+  // Period-by-period breakdown
   lines.push('='.repeat(60));
-  lines.push('  AI NARRATIVE SUMMARY');
+  lines.push('  PERIOD BREAKDOWN');
   lines.push('='.repeat(60));
   lines.push('');
 
-  if (narrative) {
-    lines.push(narrative);
-  } else {
-    // Fallback: plain period-by-period listing
-    lines.push('  (LLM unavailable - showing plain period summary)\n');
-    for (const period of periods) {
-      lines.push(`### ${period.label}`);
-      lines.push(`${period.prs.length} PRs merged.`);
-      const catSummary = Object.entries(period.categories)
-        .map(([cat, prs]) => `${cat}: ${prs.length}`)
-        .join(', ');
-      lines.push(`Categories: ${catSummary}`);
-      lines.push('');
+  for (const period of periods) {
+    lines.push(`### ${period.label}`);
+    lines.push(`${period.prs.length} PRs merged.`);
+    const catSummary = Object.entries(period.categories)
+      .map(([cat, prs]) => `${cat}: ${prs.length}`)
+      .join(', ');
+    lines.push(`Categories: ${catSummary}`);
+
+    // Show top 3 PRs by size for each period
+    const topPRs = [...period.prs]
+      .sort((a, b) => ((b.additions || 0) + (b.deletions || 0)) - ((a.additions || 0) + (a.deletions || 0)))
+      .slice(0, 3);
+    for (const pr of topPRs) {
+      const repoTag = pr.repo ? ` [${pr.repo.split('/')[1]}]` : '';
+      lines.push(`  #${pr.number}: ${pr.title} (+${pr.additions || 0}/-${pr.deletions || 0})${repoTag}`);
     }
+    lines.push('');
   }
 
   lines.push('');
@@ -390,7 +340,7 @@ function formatOutput(stats, periods, narrative, repoNames, since, until, granul
 // MAIN
 // =============================================================================
 
-async function main() {
+function main() {
   const { repos, since, until, granularity } = parseArgs();
 
   // Fetch PRs from all repos
@@ -431,15 +381,14 @@ async function main() {
   // Group by period
   const periods = groupByPeriod(allPRs, granularity);
 
-  // Generate AI narrative
-  const narrative = await generateNarrative(periods, repos);
-
   // Format and output
-  const output = formatOutput(stats, periods, narrative, repos, since, until, granularity);
+  const output = formatOutput(stats, periods, repos, since, until, granularity);
   console.log(output);
 }
 
-main().catch(err => {
+try {
+  main();
+} catch (err) {
   console.error('Error:', err.message);
   process.exit(1);
-});
+}
