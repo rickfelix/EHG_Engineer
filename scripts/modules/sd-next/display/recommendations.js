@@ -9,11 +9,12 @@ import { checkDependenciesResolved } from '../dependency-resolver.js';
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
 
 /**
- * Display recommendations section
+ * Display recommendations section and return structured action data.
  *
  * @param {Object} supabase - Supabase client
  * @param {Array} baselineItems - Baseline items
  * @param {Array} conflicts - Active conflicts
+ * @returns {{ action: string, sd_id: string|null, reason: string }} Recommended next action
  */
 export async function displayRecommendations(supabase, baselineItems, conflicts = []) {
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
@@ -51,6 +52,23 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
 
   // Show how to begin work
   displayBeginWorkInstructions();
+
+  // Return structured action data (PAT-AUTO-PROCEED-002 CAPA)
+  if (workingOn) {
+    const sdId = workingOn.sd_key || workingOn.id;
+    return { action: 'continue', sd_id: sdId, reason: `SD ${sdId} is marked as working on (${workingOn.progress_percentage || 0}% complete)` };
+  }
+  if (needsVerificationSDs.length > 0) {
+    const sd = needsVerificationSDs[0];
+    const sdId = sd.sd_key || sd.id;
+    return { action: 'verify', sd_id: sdId, reason: `SD ${sdId} needs verification (phase: ${sd.current_phase})` };
+  }
+  if (readySDs.length > 0) {
+    const sd = readySDs[0];
+    const sdId = sd.sd_key || sd.id;
+    return { action: 'start', sd_id: sdId, reason: `SD ${sdId} is next in queue (rank: ${sd.sequence_rank}, deps satisfied)` };
+  }
+  return { action: 'none', sd_id: null, reason: 'No actionable SDs found in queue' };
 }
 
 /**

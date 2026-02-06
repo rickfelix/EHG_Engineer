@@ -4,6 +4,10 @@
  *
  * This module provides the SD-Next intelligent strategic directive selection system,
  * broken down into focused modules for maintainability.
+ *
+ * Action Semantics (PAT-AUTO-PROCEED-002):
+ * runSDNext() returns { action, sd_id, reason } for programmatic consumers.
+ * Actions: 'start' | 'continue' | 'verify' | 'none'
  */
 
 // Main orchestrator class

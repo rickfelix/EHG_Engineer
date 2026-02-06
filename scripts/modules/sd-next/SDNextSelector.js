@@ -86,6 +86,12 @@ export class SDNextSelector {
     this.sessionManager = null;
   }
 
+  /**
+   * Run the SD-Next selector. Displays the queue and returns structured
+   * action data for programmatic consumers (PAT-AUTO-PROCEED-002 CAPA).
+   *
+   * @returns {{ action: string, sd_id: string|null, reason: string }}
+   */
   async run() {
     console.log(`\n${colors.bold}${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}`);
     console.log(`${colors.bold}${colors.white} LEAD SD EXECUTION QUEUE${colors.reset}`);
@@ -133,7 +139,7 @@ export class SDNextSelector {
       await showFallbackQueue(this.supabase, {
         sessionContext: this.getSessionContext()
       });
-      return;
+      return { action: 'none', sd_id: null, reason: 'No active baseline found' };
     }
 
     // Check if baseline has actionable (non-completed) items
@@ -146,14 +152,14 @@ export class SDNextSelector {
         skipBaselineWarning: true,
         sessionContext: this.getSessionContext()
       });
-      return;
+      return { action: 'none', sd_id: null, reason: 'Baseline exhausted - all items completed' };
     }
 
     // Display tracks
     await this.displayTracks();
 
-    // Display recommendations
-    await displayRecommendations(this.supabase, this.baselineItems, this.conflicts);
+    // Display recommendations and get structured action data
+    const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts);
 
     // Display proactive proposals (LEO v4.4)
     displayProposals(this.pendingProposals);
@@ -165,6 +171,8 @@ export class SDNextSelector {
     displaySessionContext(this.recentActivity);
 
     console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
+
+    return recommendation || { action: 'none', sd_id: null, reason: 'No recommendation available' };
   }
 
   async initializeSession() {
@@ -367,9 +375,14 @@ export class SDNextSelector {
 }
 
 /**
- * Create and run the SD Next selector
+ * Create and run the SD Next selector.
+ *
+ * Returns structured action data for programmatic consumers
+ * (PAT-AUTO-PROCEED-002 CAPA: action semantics for autonomous flows).
+ *
+ * @returns {{ action: string, sd_id: string|null, reason: string }}
  */
 export async function runSDNext() {
   const selector = new SDNextSelector();
-  await selector.run();
+  return await selector.run();
 }

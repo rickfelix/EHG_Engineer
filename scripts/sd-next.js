@@ -18,6 +18,7 @@
  * 6. Conflict detection - Warns about parallel execution risks
  * 7. Track visibility - Shows parallel execution tracks
  * 8. Parallel opportunities - Proactively suggests opening new terminals
+ * 9. AUTO-PROCEED action semantics - Returns structured next-action data (PAT-AUTO-PROCEED-002)
  *
  * @see scripts/modules/sd-next/ for implementation
  */
@@ -25,7 +26,17 @@
 import { runSDNext, colors } from './modules/sd-next/index.js';
 
 // Main execution
-runSDNext().catch(err => {
-  console.error(`${colors.red}Error: ${err.message}${colors.reset}`);
-  process.exit(1);
-});
+runSDNext()
+  .then(result => {
+    // PAT-AUTO-PROCEED-002 CAPA: Output structured action data
+    // This machine-readable line enables autonomous workflow continuation
+    // when AUTO-PROCEED is active. Claude parses this to determine next action
+    // without relying on display-only output.
+    if (result && result.action !== 'none') {
+      console.log(`\nAUTO_PROCEED_ACTION:${JSON.stringify(result)}`);
+    }
+  })
+  .catch(err => {
+    console.error(`${colors.red}Error: ${err.message}${colors.reset}`);
+    process.exit(1);
+  });
