@@ -1,4 +1,4 @@
-# content_types Table
+# persona_config Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -6,7 +6,7 @@
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-06T15:09:28.771Z
 **Rows**: 3
-**RLS**: Enabled (2 policies)
+**RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,20 +14,17 @@
 
 ---
 
-## Columns (13 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| name | `character varying(100)` | **NO** | - | - |
-| display_name | `character varying(255)` | YES | - | - |
-| description | `text` | YES | - | - |
-| creation_method | `jsonb` | YES | `'{}'::jsonb` | - |
-| display_rules | `jsonb` | YES | `'{}'::jsonb` | - |
-| validation_schema | `jsonb` | YES | `'{}'::jsonb` | - |
-| transformation_logic | `jsonb` | YES | `'{}'::jsonb` | - |
-| icon | `character varying(100)` | YES | - | - |
-| color | `character varying(20)` | YES | - | - |
+| target_application | `text` | **NO** | - | - |
+| mandatory_personas | `ARRAY` | **NO** | `'{}'::text[]` | - |
+| allowed_personas | `ARRAY` | YES | - | - |
+| forbidden_personas | `ARRAY` | YES | - | - |
+| optional_triggers | `jsonb` | YES | `'{}'::jsonb` | - |
+| sd_type_overrides | `jsonb` | YES | `'{}'::jsonb` | - |
 | is_active | `boolean` | YES | `true` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
@@ -35,27 +32,25 @@
 ## Constraints
 
 ### Primary Key
-- `content_types_pkey`: PRIMARY KEY (id)
+- `persona_config_pkey`: PRIMARY KEY (id)
+
+### Unique Constraints
+- `persona_config_target_application_key`: UNIQUE (target_application)
 
 ## Indexes
 
-- `content_types_pkey`
+- `idx_persona_config_active`
   ```sql
-  CREATE UNIQUE INDEX content_types_pkey ON public.content_types USING btree (id)
+  CREATE INDEX idx_persona_config_active ON public.persona_config USING btree (target_application) WHERE (is_active = true)
   ```
-
-## RLS Policies
-
-### 1. Allow service_role to manage content_types (ALL)
-
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 2. Anon read content_types (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `true`
+- `persona_config_pkey`
+  ```sql
+  CREATE UNIQUE INDEX persona_config_pkey ON public.persona_config USING btree (id)
+  ```
+- `persona_config_target_application_key`
+  ```sql
+  CREATE UNIQUE INDEX persona_config_target_application_key ON public.persona_config USING btree (target_application)
+  ```
 
 ---
 
