@@ -3,18 +3,18 @@
  * Part of SD-GENESIS-V31-MASON-BRANCH
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock Supabase before importing module
-const mockSelect = jest.fn();
-const mockInsert = jest.fn();
-const mockUpdate = jest.fn();
-const mockEq = jest.fn();
-const mockSingle = jest.fn();
-const mockOrder = jest.fn();
-const mockFilter = jest.fn();
+const mockSelect = vi.fn();
+const mockInsert = vi.fn();
+const mockUpdate = vi.fn();
+const mockEq = vi.fn();
+const mockSingle = vi.fn();
+const mockOrder = vi.fn();
+const mockFilter = vi.fn();
 
-const mockFrom = jest.fn(() => ({
+const mockFrom = vi.fn(() => ({
   select: mockSelect,
   insert: mockInsert,
   update: mockUpdate
@@ -27,7 +27,7 @@ mockSelect.mockReturnValue({
 });
 
 mockInsert.mockReturnValue({
-  select: jest.fn().mockReturnValue({
+  select: vi.fn().mockReturnValue({
     single: mockSingle
   })
 });
@@ -46,8 +46,8 @@ mockOrder.mockReturnValue({
 
 mockFilter.mockReturnValue(Promise.resolve({ data: [], error: null }));
 
-jest.unstable_mockModule('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
     from: mockFrom
   }))
 }));
@@ -63,7 +63,7 @@ const {
 
 describe('Genesis Branch Lifecycle', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('generateBranchName', () => {

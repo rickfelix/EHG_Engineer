@@ -5,7 +5,7 @@
  * Tests evidence accumulation, persistence, and recurrence detection
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 import {
   EvidenceSystem,
   createEvidenceSystem,
@@ -131,10 +131,10 @@ describe('EvidenceSystem', () => {
     it('should persist to database when supabase client provided', async () => {
       const mockData = { id: 'record-001' };
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: mockData, error: null })
+        from: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: mockData, error: null })
       };
 
       const systemWithDb = createEvidenceSystem({ supabase: mockSupabase });
@@ -157,10 +157,10 @@ describe('EvidenceSystem', () => {
 
     it('should handle database errors gracefully', async () => {
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: null, error: { message: 'Insert failed' } })
+        from: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Insert failed' } })
       };
 
       const systemWithDb = createEvidenceSystem({ supabase: mockSupabase });
@@ -196,10 +196,10 @@ describe('EvidenceSystem', () => {
     it('should combine cached and database evidence', async () => {
       const dbEvidence = [{ id: 'db-ev-001', improvement_id: 'imp-001' }];
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockResolvedValue({ data: dbEvidence, error: null })
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: dbEvidence, error: null })
       };
 
       const systemWithDb = createEvidenceSystem({ supabase: mockSupabase });
@@ -233,11 +233,11 @@ describe('EvidenceSystem', () => {
       ];
 
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        contains: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: retros, error: null })
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        contains: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: retros, error: null })
       };
 
       const systemWithDb = createEvidenceSystem({ supabase: mockSupabase });
@@ -254,11 +254,11 @@ describe('EvidenceSystem', () => {
       ];
 
       const mockSupabase = {
-        from: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        contains: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockResolvedValue({ data: retros, error: null })
+        from: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        contains: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: retros, error: null })
       };
 
       const systemWithDb = createEvidenceSystem({ supabase: mockSupabase });
@@ -486,9 +486,9 @@ describe('EvidenceSystem', () => {
 
     it('should accept custom logger', async () => {
       const customLogger = {
-        warn: jest.fn(),
-        error: jest.fn(),
-        debug: jest.fn()
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn()
       };
 
       const customSystem = createEvidenceSystem({ logger: customLogger });

@@ -3,7 +3,7 @@
  * SD-MANIFESTO-004: Manifesto Mode Activation System
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   ManifestoMode,
   ManifestoNotActiveError,
@@ -19,20 +19,20 @@ import {
 
 function createMockSupabaseClient() {
   return {
-    from: jest.fn()
+    from: vi.fn()
   };
 }
 
 function createMockChain(returnValue = { data: null, error: null }) {
   const chain = {
-    select: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockResolvedValue(returnValue),
-    update: jest.fn().mockReturnThis(),
-    upsert: jest.fn().mockResolvedValue(returnValue),
-    eq: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
-    single: jest.fn().mockResolvedValue(returnValue)
+    select: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockResolvedValue(returnValue),
+    update: vi.fn().mockReturnThis(),
+    upsert: vi.fn().mockResolvedValue(returnValue),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue(returnValue)
   };
   return chain;
 }
@@ -46,14 +46,14 @@ describe('ManifestoMode', () => {
   let mockSupabaseClient;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     resetManifestoMode();
     mockSupabaseClient = createMockSupabaseClient();
     manifestoMode = new ManifestoMode({ supabaseClient: mockSupabaseClient });
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     resetManifestoMode();
   });
 
@@ -148,13 +148,13 @@ describe('ManifestoMode', () => {
       // First call checks isActive (returns false)
       // Subsequent calls do upsert and insert
       const mockChain = {
-        select: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        upsert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: { value: false }, error: null })
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { value: false }, error: null })
       };
       mockSupabaseClient.from.mockReturnValue(mockChain);
 
@@ -210,18 +210,18 @@ describe('ManifestoMode', () => {
       // Need eq to support chaining for isActive() check: from().select().eq().single()
       // Also need eq to resolve for update: from().update().eq()
       const mockChain = {
-        select: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        update: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockImplementation(() => {
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockImplementation(() => {
           // Return self for chaining, but also be thenable for direct await
           const result = { ...mockChain };
           result.then = (resolve) => resolve({ data: null, error: null });
           return result;
         }),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: { value: true }, error: null })
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { value: true }, error: null })
       };
       mockSupabaseClient.from.mockReturnValue(mockChain);
 
@@ -253,12 +253,12 @@ describe('ManifestoMode', () => {
 
     it('should log L2+ operations when manifesto active', async () => {
       const mockChain = {
-        select: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: { value: true }, error: null })
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { value: true }, error: null })
       };
       mockSupabaseClient.from.mockReturnValue(mockChain);
 
@@ -291,13 +291,13 @@ describe('ManifestoMode', () => {
   describe('updateVersion', () => {
     it('should update version for L0_CHAIRMAN', async () => {
       const mockChain = {
-        select: jest.fn().mockReturnThis(),
-        insert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        upsert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        single: jest.fn().mockResolvedValue({ data: { value: '1.0.0' }, error: null })
+        select: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { value: '1.0.0' }, error: null })
       };
       mockSupabaseClient.from.mockReturnValue(mockChain);
 

@@ -11,7 +11,7 @@
  * US-005: No secrets in output
  */
 
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { SessionEventCollector, createCollector } from '../../scripts/modules/session-summary/SessionEventCollector.js';
 import { SummaryGenerator, createGenerator, SCHEMA_VERSION } from '../../scripts/modules/session-summary/SummaryGenerator.js';

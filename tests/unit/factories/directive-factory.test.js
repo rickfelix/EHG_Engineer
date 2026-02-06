@@ -5,7 +5,7 @@
  * Tests: 5 unit tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DirectiveFactory } from '../../factories/directive-factory.js';
 
 describe('DirectiveFactory', () => {

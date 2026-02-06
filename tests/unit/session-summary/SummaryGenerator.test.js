@@ -5,7 +5,7 @@
  * Tests schema validation, timeout behavior, and fallback behavior (TS-6)
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { SummaryGenerator, createGenerator, SCHEMA_VERSION, COMPILATION_TIMEOUT_MS } from '../../../scripts/modules/session-summary/SummaryGenerator.js';
 import { createCollector } from '../../../scripts/modules/session-summary/SessionEventCollector.js';
 

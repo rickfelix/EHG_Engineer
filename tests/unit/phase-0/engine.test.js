@@ -11,7 +11,7 @@
  * - Phase 0 gating for feature/enhancement SDs
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   createSession,
   getNextQuestion,

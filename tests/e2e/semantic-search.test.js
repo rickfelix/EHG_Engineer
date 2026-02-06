@@ -11,7 +11,7 @@
  * Story: US-001 - Natural Language Code Search
  */
 
-import { test, expect, describe, beforeAll, afterAll } from '@jest/globals';
+import { test, expect, describe, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { searchCode, getIndexStatus, getCodebaseStats } from '../../lib/semantic-search-client.js';
 import dotenv from 'dotenv';

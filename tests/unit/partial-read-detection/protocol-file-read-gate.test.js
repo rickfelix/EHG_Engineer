@@ -5,7 +5,7 @@
  * Tests for partial read warning and confirmation in protocol-file-read-gate.js
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import {

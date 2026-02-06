@@ -5,18 +5,18 @@
  * Added: 2025-01-15 (SD-DESIGN-WORKFLOW-REVIEW-001)
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock Supabase client
 const mockSupabaseClient = {
-  from: jest.fn(() => mockSupabaseClient),
-  select: jest.fn(() => mockSupabaseClient),
-  eq: jest.fn(() => mockSupabaseClient),
-  single: jest.fn(() => ({ data: null, error: null }))
+  from: vi.fn(() => mockSupabaseClient),
+  select: vi.fn(() => mockSupabaseClient),
+  eq: vi.fn(() => mockSupabaseClient),
+  single: vi.fn(() => ({ data: null, error: null }))
 };
 
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => mockSupabaseClient)
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => mockSupabaseClient)
 }));
 
 // Import functions to test (would need to export them from design.js)

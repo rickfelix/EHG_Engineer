@@ -5,7 +5,7 @@
  * Tests: 5 unit tests
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { AgentRegistry } from '../../../lib/agents/registry.cjs';
 
 describe('Agent Registry', () => {

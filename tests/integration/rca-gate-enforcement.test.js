@@ -5,7 +5,7 @@
  * Tests that the RCA gate properly blocks EXEC->PLAN handoffs when P0/P1 RCRs exist without verified CAPAs.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { checkRCAGate } from '../../scripts/root-cause-agent.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';

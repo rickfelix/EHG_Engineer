@@ -9,7 +9,7 @@
  * TS-4: Provider error mapping
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 const mod = await import(
   '../../../../lib/sub-agents/vetting/rubric-evaluator.js'
@@ -68,7 +68,7 @@ describe('evaluateWithAI - Integration Tests', () => {
   describe('TS-1: Happy path evaluation', () => {
     test('returns SUCCESS with all 6 criteria scored', async () => {
       const validResponse = makeValidLLMResponse();
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(validResponse),
         model: 'claude-sonnet-4-5-20250929',
         durationMs: 1500
@@ -89,7 +89,7 @@ describe('evaluateWithAI - Integration Tests', () => {
 
     test('returns per-criterion structured reasoning', async () => {
       const validResponse = makeValidLLMResponse();
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(validResponse),
         model: 'claude-sonnet-4-5-20250929'
       });
@@ -118,7 +118,7 @@ describe('evaluateWithAI - Integration Tests', () => {
         response.overall_score = 50 + i * 15;
         response.criteria[0].score = 40 + i * 20;
 
-        const mockComplete = jest.fn().mockResolvedValue({
+        const mockComplete = vi.fn().mockResolvedValue({
           content: JSON.stringify(response),
           model: 'claude-sonnet-4-5-20250929'
         });
@@ -138,7 +138,7 @@ describe('evaluateWithAI - Integration Tests', () => {
     test('computes weightedScore for each criterion', async () => {
       const validResponse = makeValidLLMResponse();
       validResponse.criteria[0].score = 80; // value, weight 0.25
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(validResponse),
         model: 'claude-sonnet-4-5-20250929'
       });
@@ -159,7 +159,7 @@ describe('evaluateWithAI - Integration Tests', () => {
       const malformed = { criteria: [], overall_score: 50 };
       const valid = makeValidLLMResponse();
 
-      const mockComplete = jest.fn()
+      const mockComplete = vi.fn()
         .mockResolvedValueOnce({ content: JSON.stringify(malformed), model: 'claude-sonnet-4-5-20250929' })
         .mockResolvedValueOnce({ content: JSON.stringify(valid), model: 'claude-sonnet-4-5-20250929' });
 
@@ -175,7 +175,7 @@ describe('evaluateWithAI - Integration Tests', () => {
     test('returns PARSE_ERROR after retry also fails', async () => {
       const malformed = { criteria: [], overall_score: -1 };
 
-      const mockComplete = jest.fn()
+      const mockComplete = vi.fn()
         .mockResolvedValueOnce({ content: JSON.stringify(malformed), model: 'claude-sonnet-4-5-20250929' })
         .mockResolvedValueOnce({ content: JSON.stringify(malformed), model: 'claude-sonnet-4-5-20250929' });
 
@@ -193,7 +193,7 @@ describe('evaluateWithAI - Integration Tests', () => {
       const valid = makeValidLLMResponse();
       const wrappedResponse = '```json\n' + JSON.stringify(valid) + '\n```';
 
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: wrappedResponse,
         model: 'claude-sonnet-4-5-20250929'
       });
@@ -210,7 +210,7 @@ describe('evaluateWithAI - Integration Tests', () => {
   // TS-3: Timeout handling
   describe('TS-3: Timeout handling', () => {
     test('returns TIMEOUT when LLM exceeds timeout', async () => {
-      const mockComplete = jest.fn().mockImplementation((_sys, _user, opts) => {
+      const mockComplete = vi.fn().mockImplementation((_sys, _user, opts) => {
         return new Promise((resolve, reject) => {
           const timer = setTimeout(() => resolve({ content: '{}', model: 'test' }), 10000);
           if (opts?.signal) {
@@ -241,7 +241,7 @@ describe('evaluateWithAI - Integration Tests', () => {
       const err = new Error('Internal Server Error');
       err.status = 500;
       err.requestId = 'req-abc-123';
-      const mockComplete = jest.fn().mockRejectedValue(err);
+      const mockComplete = vi.fn().mockRejectedValue(err);
 
       const result = await evaluateWithAI(SAMPLE_PROPOSAL, DEFAULT_RUBRIC, {
         llmClient: makeMockClient(mockComplete)
@@ -254,7 +254,7 @@ describe('evaluateWithAI - Integration Tests', () => {
     test('maps 429 to RATE_LIMITED', async () => {
       const err = new Error('rate_limit exceeded');
       err.status = 429;
-      const mockComplete = jest.fn().mockRejectedValue(err);
+      const mockComplete = vi.fn().mockRejectedValue(err);
 
       const result = await evaluateWithAI(SAMPLE_PROPOSAL, DEFAULT_RUBRIC, {
         llmClient: makeMockClient(mockComplete)
@@ -267,7 +267,7 @@ describe('evaluateWithAI - Integration Tests', () => {
     test('maps 400 to PROVIDER_CLIENT_ERROR', async () => {
       const err = new Error('Bad Request');
       err.status = 400;
-      const mockComplete = jest.fn().mockRejectedValue(err);
+      const mockComplete = vi.fn().mockRejectedValue(err);
 
       const result = await evaluateWithAI(SAMPLE_PROPOSAL, DEFAULT_RUBRIC, {
         llmClient: makeMockClient(mockComplete)
@@ -279,7 +279,7 @@ describe('evaluateWithAI - Integration Tests', () => {
 
     test('maps network errors to NETWORK_ERROR', async () => {
       const err = new Error('ECONNREFUSED');
-      const mockComplete = jest.fn().mockRejectedValue(err);
+      const mockComplete = vi.fn().mockRejectedValue(err);
 
       const result = await evaluateWithAI(SAMPLE_PROPOSAL, DEFAULT_RUBRIC, {
         llmClient: makeMockClient(mockComplete)
@@ -293,7 +293,7 @@ describe('evaluateWithAI - Integration Tests', () => {
   // Failure result structure
   describe('Failure result structure', () => {
     test('failure result has consistent shape', async () => {
-      const mockComplete = jest.fn().mockRejectedValue(new Error('test error'));
+      const mockComplete = vi.fn().mockRejectedValue(new Error('test error'));
 
       const result = await evaluateWithAI(SAMPLE_PROPOSAL, DEFAULT_RUBRIC, {
         llmClient: makeMockClient(mockComplete)
@@ -314,7 +314,7 @@ describe('evaluateWithAI - Integration Tests', () => {
   describe('Single LLM call constraint', () => {
     test('makes exactly 1 LLM call on success', async () => {
       const valid = makeValidLLMResponse();
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(valid),
         model: 'claude-sonnet-4-5-20250929'
       });
@@ -328,7 +328,7 @@ describe('evaluateWithAI - Integration Tests', () => {
 
     test('makes at most 2 LLM calls (1 + 1 retry)', async () => {
       const malformed = { criteria: [], overall_score: -1 };
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(malformed),
         model: 'claude-sonnet-4-5-20250929'
       });

@@ -5,7 +5,7 @@
  * Tests: 5 unit tests
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { BaseFactory, Sequence, DataGenerators } from '../../factories/base-factory.js';
 
 describe('BaseFactory', () => {

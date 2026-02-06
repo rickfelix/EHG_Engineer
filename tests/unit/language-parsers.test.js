@@ -5,7 +5,7 @@
  * Story: US-001 - Natural Language Code Search
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { parseCodeEntities, parseTypeScriptJavaScript, parseSQL } from '../../scripts/modules/language-parsers.js';
 
 describe('Language Parsers', () => {

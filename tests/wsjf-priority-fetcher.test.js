@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 import WSJFPriorityFetcher from '../scripts/wsjf-priority-fetcher.js';
 
 describe('WSJFPriorityFetcher', () => {
@@ -8,11 +8,11 @@ describe('WSJFPriorityFetcher', () => {
   beforeEach(() => {
     fetcher = new WSJFPriorityFetcher();
     mockSupabase = {
-      from: jest.fn().mockReturnThis(),
-      select: jest.fn().mockReturnThis(),
-      in: jest.fn().mockReturnThis(),
-      order: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis()
+      from: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis()
     };
     fetcher.supabase = mockSupabase;
   });

@@ -5,7 +5,7 @@
  * Tests: Core observability functionality without database dependency
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AgentObservability } from '../../../lib/agents/observability.cjs';
 
 describe('Agent Observability System', () => {

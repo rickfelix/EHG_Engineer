@@ -5,7 +5,7 @@
  * Tests pattern-based secret redaction
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { redactSecrets, redactObject, containsSecrets } from '../../../scripts/modules/session-summary/secret-redactor.js';
 
 describe('SecretRedactor', () => {

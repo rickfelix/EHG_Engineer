@@ -3,7 +3,7 @@
  * Part of SD-GENESIS-V31-MASON-FIREWALL
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Store original env and fetch
 const originalEnv = { ...process.env };
@@ -11,7 +11,7 @@ let originalFetch;
 
 beforeEach(() => {
   // Reset modules to get fresh state
-  jest.resetModules();
+  vi.resetModules();
   // Restore original env
   process.env = { ...originalEnv };
   // Store original fetch

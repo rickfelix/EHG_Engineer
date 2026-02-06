@@ -9,7 +9,7 @@
  * so we focus on integration testing in E2E tests instead.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { searchCode, searchAllApplications, getIndexStatus, getCodebaseStats } from '../../lib/semantic-search-client.js';
 
 describe('Semantic Search Client API', () => {

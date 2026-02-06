@@ -5,7 +5,6 @@
  * Tests all 9 classification rules plus edge cases
  */
 
-import { jest } from '@jest/globals';
 import {
   RiskClassifier,
   createRiskClassifier,

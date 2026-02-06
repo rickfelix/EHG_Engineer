@@ -9,7 +9,7 @@
  * 3. Existing operations (handoff.js, sub-agent execution) still work
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
