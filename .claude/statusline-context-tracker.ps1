@@ -57,6 +57,7 @@ $modelId = if ($data.model.id) { $data.model.id } else { "unknown" }
 
 # Abbreviate model name
 $modelShort = switch -Regex ($model) {
+    "Opus.*4\.6" { "O4.6" }
     "Opus.*4\.5" { "O4.5" }
     "Opus.*4" { "O4" }
     "Sonnet.*4" { "S4" }

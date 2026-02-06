@@ -119,6 +119,7 @@ fi
 
 # Abbreviate model name
 case "$MODEL" in
+    *"Opus"*"4.6"*) MODEL_SHORT="O4.6" ;;
     *"Opus"*"4.5"*) MODEL_SHORT="O4.5" ;;
     *"Opus"*"4"*) MODEL_SHORT="O4" ;;
     *"Sonnet"*"4"*) MODEL_SHORT="S4" ;;
