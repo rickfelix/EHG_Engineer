@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-02 3:48:09 PM
+**Generated**: 2026-02-06 12:15:59 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -200,47 +200,36 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## 🤖 Built-in Agent Integration
+## Mandatory Agent Invocation Rules
 
-## Built-in Agent Integration
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
 
-### Three-Layer Agent Architecture
+### Task Type -> Required Agent
 
-LEO Protocol uses three complementary agent layers:
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
 
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+### Why This Exists
 
-### Integration Principle
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
 
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+### How to Apply
 
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## Claude Code Plan Mode Integration
 
@@ -285,63 +274,47 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## Mandatory Agent Invocation Rules
+## 🤖 Built-in Agent Integration
 
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+## Built-in Agent Integration
 
-### Task Type -> Required Agent
+### Three-Layer Agent Architecture
 
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+LEO Protocol uses three complementary agent layers:
 
-### Why This Exists
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
 
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
+### Integration Principle
 
-### How to Apply
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
 
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
 
-## Sub-Agent Model Routing
+### When to Use Each Layer
 
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
 
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
+### Parallel Execution
 
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
 
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
+This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Work Tracking Policy
 
@@ -375,38 +348,32 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
-## 🖥️ UI Parity Requirement (MANDATORY)
+## Sub-Agent Model Routing
 
-**Every backend data contract field MUST have a corresponding UI representation.**
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
 
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
 
-### Requirements
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
 
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
 
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
 
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
 
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -444,6 +411,80 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -487,47 +528,6 @@ Before marking any stage/feature as complete:
 - **Project**: .claude/skills/ (project-specific)
 - **Index**: ~/.claude/skills/SKILL-INDEX.md
 - **Total**: 54 skills covering all 14 sub-agents
-
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1434,13 +1434,18 @@ Task tool with subagent_type="validation-agent":
 
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
+| PAT-PRD-DUP-001 | data_integrity | [HIGH] high | 13 | [STABLE] | Added partial unique index idx_product_r |
 | PAT-003 | security | [HIGH] high | 3 | [DOWN] | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | [HIGH] high | 2 | [STABLE] | Check GitHub Actions secrets and package |
-| PAT-MD-001 | database | [CRIT] critical | 1 | [STABLE] | Key Insight: PostgreSQL direct connectio |
 | PAT-DB-SD-E2E-001 | testing | [HIGH] high | 1 | [STABLE] | Update TESTING sub-agent to check SD cat |
-| PAT-E2E-STATUS-001 | database | [HIGH] high | 1 | [STABLE] | See details |
+| PAT-MD-001 | database | [CRIT] critical | 1 | [STABLE] | Key Insight: PostgreSQL direct connectio |
 
 ### Prevention Checklists
+
+**data_integrity**:
+- [ ] Check for existing PRD by sd_id before creating new one
+- [ ] Use createPRDEntry or createPRDWithValidatedContent from prd-creator.js - never insert directly
+- [ ] Database constraint idx_product_requirements_v2_unique_sd_id enforces uniqueness at DB level
 
 **security**:
 - [ ] Verify RLS policies include auth.uid() checks
@@ -1452,15 +1457,15 @@ Task tool with subagent_type="validation-agent":
 - [ ] Test locally with same Node version as CI
 - [ ] Check package-lock.json is committed
 
-**database**:
-- [ ] Check SUPABASE_POOLER_URL availability in .env
-- [ ] Verify migration file exists before execution
-- [ ] Use SSL with rejectUnauthorized: false
-
 **testing**:
 - [ ] Check SD category before requiring E2E tests
 - [ ] For database SDs: validate tables exist via SQL
 - [ ] For infrastructure SDs: validate config/setup
+
+**database**:
+- [ ] Check SUPABASE_POOLER_URL availability in .env
+- [ ] Verify migration file exists before execution
+- [ ] Use SSL with rejectUnauthorized: false
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1730,7 +1735,7 @@ Constitutional vetting of proposals using AEGIS framework. Routes feedback throu
 
 ---
 
-*Generated from database: 2026-02-02*
+*Generated from database: 2026-02-06*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

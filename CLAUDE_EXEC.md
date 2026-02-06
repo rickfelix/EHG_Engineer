@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-02 3:48:09 PM
+**Generated**: 2026-02-06 12:15:59 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -989,86 +989,6 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
-
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -1158,6 +1078,86 @@ When starting implementation:
 3. If multiple SDs detected → split branches
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
 
 ## Auto-Merge Workflow for SD Completion
 
@@ -1279,77 +1279,6 @@ If branch doesn't exist (legacy SDs or manual workflow):
 npm run sd:branch SD-XXX-001    # Creates and switches to branch
 ```
 
-
-## Playwright MCP Integration
-
-## 🎭 Playwright MCP Integration
-
-**Status**: ✅ READY (Installed 2025-10-12)
-
-### Overview
-Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
-
-### Installed Components
-- **Chrome**: Google Chrome browser for MCP operations
-- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
-- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
-- **System Dependencies**: All required Linux libraries installed
-
-### Available MCP Tools
-
-#### Navigation
-- `mcp__playwright__browser_navigate` - Navigate to URL
-- `mcp__playwright__browser_navigate_back` - Go back to previous page
-
-#### Interaction
-- `mcp__playwright__browser_click` - Click elements
-- `mcp__playwright__browser_fill` - Fill form fields
-- `mcp__playwright__browser_select` - Select dropdown options
-- `mcp__playwright__browser_hover` - Hover over elements
-- `mcp__playwright__browser_type` - Type text into elements
-
-#### Verification
-- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
-- `mcp__playwright__browser_take_screenshot` - Take screenshots
-- `mcp__playwright__browser_evaluate` - Execute JavaScript
-
-#### Management
-- `mcp__playwright__browser_close` - Close browser
-- `mcp__playwright__browser_tabs` - Manage tabs
-
-### Testing Integration
-
-**When to Use Playwright MCP**:
-1. ✅ Visual regression testing
-2. ✅ UI component verification
-3. ✅ Screenshot capture for evidence
-4. ✅ Accessibility tree validation
-5. ✅ Cross-browser testing
-
-**When to Use Standard Playwright**:
-1. ✅ E2E test suites (`npm run test:e2e`)
-2. ✅ CI/CD pipeline tests
-3. ✅ Automated test runs
-4. ✅ User story validation
-
-### Usage Example
-
-```javascript
-// Using Playwright MCP for visual verification
-await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
-await mcp__playwright__browser_snapshot(); // Get accessibility tree
-await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
-await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
-```
-
-### QA Director Integration
-
-The QA Engineering Director sub-agent now has access to:
-- Playwright MCP for visual testing
-- Standard Playwright for E2E automation
-- Both Chrome (MCP) and Chromium (tests) browsers
-
-**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Triangulated Runtime Audit Protocol
 
@@ -1568,6 +1497,77 @@ See: `/runtime-audit` skill for full template
 - `codebase-search` - Finding code references
 - `schema-design` - Database schema issues
 
+
+## Playwright MCP Integration
+
+## 🎭 Playwright MCP Integration
+
+**Status**: ✅ READY (Installed 2025-10-12)
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
+
+### Installed Components
+- **Chrome**: Google Chrome browser for MCP operations
+- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
+- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
+- **System Dependencies**: All required Linux libraries installed
+
+### Available MCP Tools
+
+#### Navigation
+- `mcp__playwright__browser_navigate` - Navigate to URL
+- `mcp__playwright__browser_navigate_back` - Go back to previous page
+
+#### Interaction
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_fill` - Fill form fields
+- `mcp__playwright__browser_select` - Select dropdown options
+- `mcp__playwright__browser_hover` - Hover over elements
+- `mcp__playwright__browser_type` - Type text into elements
+
+#### Verification
+- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
+- `mcp__playwright__browser_take_screenshot` - Take screenshots
+- `mcp__playwright__browser_evaluate` - Execute JavaScript
+
+#### Management
+- `mcp__playwright__browser_close` - Close browser
+- `mcp__playwright__browser_tabs` - Manage tabs
+
+### Testing Integration
+
+**When to Use Playwright MCP**:
+1. ✅ Visual regression testing
+2. ✅ UI component verification
+3. ✅ Screenshot capture for evidence
+4. ✅ Accessibility tree validation
+5. ✅ Cross-browser testing
+
+**When to Use Standard Playwright**:
+1. ✅ E2E test suites (`npm run test:e2e`)
+2. ✅ CI/CD pipeline tests
+3. ✅ Automated test runs
+4. ✅ User story validation
+
+### Usage Example
+
+```javascript
+// Using Playwright MCP for visual verification
+await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
+await mcp__playwright__browser_snapshot(); // Get accessibility tree
+await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
+await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
+```
+
+### QA Director Integration
+
+The QA Engineering Director sub-agent now has access to:
+- Playwright MCP for visual testing
+- Standard Playwright for E2E automation
+- Both Chrome (MCP) and Chromium (tests) browsers
+
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Edge Case Testing Checklist
 
@@ -1810,7 +1810,7 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2026-02-02*
+*Generated from database: 2026-02-06*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*
 
