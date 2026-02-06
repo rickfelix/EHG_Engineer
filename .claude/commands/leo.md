@@ -949,6 +949,39 @@ When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
 
 **NOTE**: Consider using `/leo start <SD-ID>` instead for explicit protocol file loading with confirmation.
 
+### If argument is "audit" or "au":
+Run the LEO audit discovery report to show issue patterns, compliance alerts, and retrospective insights.
+
+```bash
+node scripts/leo-audit.js
+```
+
+**Flags:**
+- `--verbose` or `-v`: Show detailed output with proven solutions and key learnings
+- `--format json`: Output machine-readable JSON
+
+**What it shows:**
+1. **Issue Patterns** - Active issues sorted by frequency, with severity and trends
+2. **Compliance Alerts** - Unresolved protocol compliance violations
+3. **Retrospective Insights** - Recent retrospective quality scores and learnings
+
+### If argument is "analytics" or "an":
+Run the LEO self-improvement analytics dashboard to show metrics across feedback, enhancements, patterns, and vetting.
+
+```bash
+node scripts/leo-analytics.js
+```
+
+**Flags:**
+- `--verbose` or `-v`: Show detailed breakdowns by category
+- `--format json`: Output machine-readable JSON
+
+**What it shows:**
+1. **Feedback Pipeline** - Total items, processed count, resolution rate
+2. **Enhancement Outcomes** - Proposals created, approval rate, implementation rate
+3. **Pattern Resolution** - Patterns identified, resolved, recurring, by severity
+4. **Vetting Coverage** - Proposals vetted, average rubric score, approval rate
+
 ### If argument is "run":
 Run the LEO protocol workflow:
 ```bash
@@ -963,6 +996,8 @@ LEO Commands:
   /leo                   - Show this help menu
   /leo start <SD-ID>     - Start SD with auto protocol file loading (RECOMMENDED)
   /leo assist    (a)     - Autonomous inbox processing (issues + enhancements)
+  /leo audit     (au)    - Show audit discovery report (patterns, alerts, retros)
+  /leo analytics (an)    - Show self-improvement analytics dashboard
   /leo restart   (r)     - Restart all LEO servers
   /leo inbox     (inb)   - Show feedback inbox (view only)
   /leo next      (n)     - Show SD queue (what to work on)
