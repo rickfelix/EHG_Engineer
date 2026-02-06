@@ -1,0 +1,172 @@
+{
+  "timestamp": "2026-02-06T18:27:39.076Z",
+  "sdId": "SD-UAT-NAV-001",
+  "userStories": {
+    "US-001": {
+      "criteria": [
+        {
+          "criterion": "sidebar-renders",
+          "status": "PASS",
+          "details": "Sidebar component is present in DOM"
+        },
+        {
+          "criterion": "sidebar-has-items",
+          "status": "PASS",
+          "details": "2 navigation items found"
+        },
+        {
+          "criterion": "nav-All Ventures-url-update",
+          "status": "PASS",
+          "details": "URL updated to http://localhost:8080/chairman/portfolio"
+        },
+        {
+          "criterion": "nav-User Settings-url-update",
+          "status": "PASS",
+          "details": "URL updated to http://localhost:8080/settings"
+        },
+        {
+          "criterion": "sidebar-grouped",
+          "status": "PASS",
+          "details": "2 navigation groups found"
+        },
+        {
+          "criterion": "sidebar-search",
+          "status": "PASS",
+          "details": "Search input found"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-002": {
+      "criteria": [
+        {
+          "criterion": "user-menu-exists",
+          "status": "PASS",
+          "details": "User menu trigger button found"
+        },
+        {
+          "criterion": "dropdown-opens",
+          "status": "PASS",
+          "details": "Dropdown menu opens on click"
+        },
+        {
+          "criterion": "has-profile",
+          "status": "PASS",
+          "details": "Profile option present"
+        },
+        {
+          "criterion": "has-settings",
+          "status": "PASS",
+          "details": "Settings option present"
+        },
+        {
+          "criterion": "has-signout",
+          "status": "PASS",
+          "details": "Sign Out option present"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-003": {
+      "criteria": [
+        {
+          "criterion": "direct-url-Chairman Dashboard",
+          "status": "PASS",
+          "details": "URL matches expected path. Got: http://localhost:8080/chairman"
+        },
+        {
+          "criterion": "direct-url-Settings",
+          "status": "PASS",
+          "details": "URL matches expected path. Got: http://localhost:8080/settings"
+        },
+        {
+          "criterion": "direct-url-Analytics",
+          "status": "PASS",
+          "details": "URL matches expected path. Got: http://localhost:8080/analytics"
+        },
+        {
+          "criterion": "back-button",
+          "status": "PASS",
+          "details": "Back: correct. Got: http://localhost:8080/settings"
+        },
+        {
+          "criterion": "forward-button",
+          "status": "PASS",
+          "details": "Forward: correct. Got: http://localhost:8080/analytics"
+        },
+        {
+          "criterion": "404-page",
+          "status": "PASS",
+          "details": "404 page displays correctly"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-004": {
+      "criteria": [
+        {
+          "criterion": "breadcrumb-hidden-on-home",
+          "status": "PASS",
+          "details": "Correctly hidden on homepage"
+        },
+        {
+          "criterion": "breadcrumb-/settings",
+          "status": "PASS",
+          "details": "Text: \"HomeSettings\", Home: true, Separators: true"
+        },
+        {
+          "criterion": "breadcrumb-home-click-/settings",
+          "status": "PASS",
+          "details": "Home breadcrumb works"
+        },
+        {
+          "criterion": "breadcrumb-/analytics",
+          "status": "PASS",
+          "details": "Text: \"HomeAnalytics\", Home: true, Separators: true"
+        },
+        {
+          "criterion": "breadcrumb-home-click-/analytics",
+          "status": "PASS",
+          "details": "Home breadcrumb works"
+        },
+        {
+          "criterion": "breadcrumb-/chairman/decisions",
+          "status": "PASS",
+          "details": "Text: \"HomeChairman ConsoleDecisions\", Home: true, Separators: true"
+        },
+        {
+          "criterion": "breadcrumb-home-click-/chairman/decisions",
+          "status": "PASS",
+          "details": "Home breadcrumb works"
+        }
+      ],
+      "status": "PASS"
+    }
+  },
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "JS errors on /chairman: Failed to load resource: the server responded with a status of 404 (Not Found); Failed to load resource: the server responded with a status of 400 (); Error fetching ventures: {code: PGRST200, details: Searched for a foreign key relationship between 'v…n the schema 'public', but no matches were found., hint: Perhaps you meant 'venture_stage_work' instead of 'venture_stages'., message: Could not find a relationship between 'ventures' and 'venture_stages' in the schema cache}",
+      "timestamp": "2026-02-06T18:28:11.970Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "JS errors on /settings: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "timestamp": "2026-02-06T18:28:15.119Z"
+    }
+  ],
+  "summary": {
+    "totalStories": 4,
+    "passed": 4,
+    "failed": 0,
+    "blocked": 0,
+    "findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 2,
+      "low": 0
+    }
+  }
+}
