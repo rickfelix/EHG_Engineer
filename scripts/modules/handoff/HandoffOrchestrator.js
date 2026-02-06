@@ -326,41 +326,50 @@ export class HandoffOrchestrator {
   /**
    * Execute deferred PRD generation after handoff is recorded
    * SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B-RCA: Record-First Pattern
+   * SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001E-RCA: Detached Spawn Pattern
    *
-   * This runs AFTER recordSuccess(), so even if it times out:
-   * - The handoff is already recorded as accepted
-   * - The SD phase has transitioned
-   * - Only PRD generation needs to be retried
+   * Spawns PRD generation as a detached child process so the handoff
+   * process can exit cleanly within the Bash timeout window.
+   * The handoff is already recorded - PRD creation is enhancement, not critical path.
+   *
+   * Previous approach awaited autoGeneratePRDScript() which uses execSync with
+   * 3-minute timeout, exceeding the 2-minute Bash tool timeout every time.
    *
    * @param {object} params - { sdId, sd }
    */
   async _executeDeferredPrdGeneration({ sdId, sd }) {
     try {
-      // Dynamic import to avoid circular dependencies
-      const { autoGeneratePRDScript } = await import('./executors/lead-to-plan/prd-generation.js');
-      const { autoApprovePRD } = await import('./auto-approve-prd.js');
+      const { spawn } = await import('child_process');
+      const { join } = await import('path');
 
-      // Auto-generate PRD script
-      await autoGeneratePRDScript(sdId, sd);
+      const scriptPath = join(process.cwd(), 'scripts', 'add-prd-to-database.js');
+      const title = sd.title || 'Technical Implementation';
+      const idToUse = sd.id || sdId;
 
-      // Auto-approve PRD if it meets quality thresholds
-      try {
-        const approvalResult = await autoApprovePRD(sdId);
-        if (approvalResult.approved) {
-          console.log(`   ✅ PRD auto-approved with score: ${approvalResult.score}%`);
-        } else {
-          console.log(`   ℹ️  PRD not auto-approved: ${approvalResult.reason}`);
-        }
-      } catch (err) {
-        // Non-blocking - log error but don't fail
-        console.log(`   ⚠️  Auto-approve error: ${err.message}`);
-      }
+      console.log('\n🤖 PRD GENERATION (Detached)');
+      console.log('='.repeat(70));
+      console.log(`   SD: ${title}`);
+      console.log('   Method: add-prd-to-database.js (detached process)');
+      console.log(`   Command: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+
+      // Spawn as detached process - parent can exit without waiting
+      const child = spawn('node', [scriptPath, idToUse, title], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: process.cwd(),
+        env: process.env
+      });
+      child.unref();
+
+      console.log(`   ✅ PRD generation spawned (PID: ${child.pid})`);
+      console.log('   💡 Handoff is complete - PRD creation continues independently');
+      console.log(`   💡 If needed, retry: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+      console.log('');
     } catch (error) {
-      // PRD generation failure is non-blocking for the handoff
-      // The handoff is already recorded - user can manually create PRD
-      console.error('⚠️  Deferred PRD generation failed:', error.message);
+      // Spawn failure is non-blocking - handoff is already recorded
+      console.error('⚠️  Could not start PRD generation:', error.message);
       console.log('   💡 Handoff was recorded successfully.');
-      console.log('   💡 Run manually: node scripts/add-prd-to-database.js <sd-id>');
+      console.log(`   💡 Run manually: node scripts/add-prd-to-database.js ${sdId}`);
     }
   }
 

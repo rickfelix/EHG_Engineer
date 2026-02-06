@@ -77,6 +77,11 @@ scripts/update-*.js
 scripts/verify-*.mjs
 scripts/verify-*.js
 scripts/verify-*.cjs
+# Exceptions: these verify-*.js files are production dependencies of handoff executors
+!scripts/verify-git-branch-status.js
+!scripts/verify-git-commit-status.js
+!scripts/verify-app-architecture.js
+# Exception: verify-l2p/ directory is production code (modular handoff verifier)
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs
 scripts/full-data-*.mjs
