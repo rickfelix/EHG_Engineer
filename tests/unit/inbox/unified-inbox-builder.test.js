@@ -86,6 +86,20 @@ describe('Normalizers', () => {
     expect(item.linked_items).toBeNull();
   });
 
+  it('normalizeAudit produces correct shape', () => {
+    const row = {
+      id: 'audit-1', title: 'Missing RLS on table', status: 'open',
+      severity: 'high', category: 'security', assigned_sd_id: null,
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z'
+    };
+    const item = normalizeAudit(row);
+    expect(item.item_id).toBe('audit-audit-1');
+    expect(item.item_type).toBe('audit');
+    expect(item.title).toBe('Missing RLS on table');
+    expect(item.lifecycle_status).toBe('NEW');
+    expect(item.source_ref).toEqual({ table: 'audit_findings', pk: 'audit-1' });
+  });
+
   it('normalizeFeedback uses description when title is missing', () => {
     const row = { id: '1', title: null, description: 'A long description of the feedback item that should be truncated', status: 'new', created_at: '2026-01-01T00:00:00Z' };
     const item = normalizeFeedback(row);
