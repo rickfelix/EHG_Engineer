@@ -291,7 +291,7 @@ interface Stage25DatabaseIntegration {
 
 Quality Assurance connects to multiple external services via Integration Hub connectors:
 
-- **Testing Frameworks**: Jest, Vitest, Playwright, Cypress via Testing Hub connectors
+- **Testing Frameworks**: Vitest, Playwright, Cypress via Testing Hub connectors
 - **CI/CD Platforms**: GitHub Actions, CircleCI, Jenkins via CI/CD Hub connectors
 - **Quality Analysis Tools**: SonarQube, CodeClimate, Codacy via Code Quality Hub connectors
 - **Bug Tracking Systems**: Jira, Linear, GitHub Issues via Issue Management Hub connectors
@@ -375,7 +375,7 @@ CREATE TABLE test_suites (
     venture_id UUID REFERENCES ventures(id),
     suite_name VARCHAR(200) NOT NULL,
     suite_type VARCHAR(50) NOT NULL, -- 'unit', 'integration', 'e2e', 'performance', 'security'
-    test_framework VARCHAR(50) NOT NULL, -- 'jest', 'vitest', 'playwright', 'cypress'
+    test_framework VARCHAR(50) NOT NULL, -- 'vitest', 'playwright', 'cypress'
     
     -- Configuration
     configuration JSONB NOT NULL,

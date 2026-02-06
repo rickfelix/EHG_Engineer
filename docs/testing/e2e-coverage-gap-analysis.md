@@ -32,7 +32,7 @@ This document identifies E2E testing coverage gaps in the EHG_Engineer backend A
 - **Database**: Supabase (PostgreSQL)
 - **API Port**: 3000
 - **Frontend**: Separate unified app at port 8080 (EHG)
-- **Testing Framework**: Playwright (E2E), Jest (Unit/Integration)
+- **Testing Framework**: Playwright (E2E), Vitest (Unit/Integration)
 
 ### API Structure
 The server exposes multiple API groups:

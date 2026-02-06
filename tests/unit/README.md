@@ -93,12 +93,12 @@ Comprehensive unit test suite for testing infrastructure built in Phase 1. Tests
 ```bash
 npm run test:unit
 # or
-NODE_OPTIONS=--experimental-vm-modules npx jest --selectProjects unit
+npx vitest --project unit
 ```
 
 **Run specific test file**:
 ```bash
-NODE_OPTIONS=--experimental-vm-modules npx jest tests/unit/factories/base-factory.test.js
+npx vitest tests/unit/factories/base-factory.test.js
 ```
 
 **Run with coverage**:
@@ -109,7 +109,7 @@ npm run test:coverage
 **Run pure unit tests only (no database)**:
 ```bash
 # Set empty env vars to skip integration tests
-SUPABASE_URL= SUPABASE_ANON_KEY= npx jest --selectProjects unit
+SUPABASE_URL= SUPABASE_ANON_KEY= npx vitest --project unit
 ```
 
 ## Test Organization

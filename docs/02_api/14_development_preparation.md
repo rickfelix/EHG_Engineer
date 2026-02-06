@@ -1686,7 +1686,7 @@ const defaultDevelopmentTypeTemplates: DevelopmentTypeTemplate[] = [
     toolchain_requirements: [
       { tool_category: 'version_control', recommended_tools: ['Git', 'GitHub', 'GitLab'] },
       { tool_category: 'ci_cd', recommended_tools: ['GitHub Actions', 'GitLab CI', 'Jenkins'] },
-      { tool_category: 'testing', recommended_tools: ['Jest', 'Cypress', 'Playwright'] },
+      { tool_category: 'testing', recommended_tools: ['Vitest', 'Cypress', 'Playwright'] },
       { tool_category: 'monitoring', recommended_tools: ['Sentry', 'DataDog', 'New Relic'] }
     ],
     skill_requirements: [

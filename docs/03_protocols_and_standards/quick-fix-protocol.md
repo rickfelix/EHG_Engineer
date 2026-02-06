@@ -29,7 +29,7 @@
 | **Unit Test Runner** | `npm run test:unit` with 2 minute timeout |
 | **E2E Smoke Test Runner** | `npm run test:e2e --grep="smoke"` with 5 minute timeout |
 | **TypeScript Verification** | `npx tsc --noEmit` with 1 minute timeout - blocks completion on TS errors |
-| **Test Summary Extraction** | Parses Jest/Playwright output for pass/fail counts |
+| **Test Summary Extraction** | Parses Vitest/Playwright output for pass/fail counts |
 | **Skip Flags** | `--skip-tests` and `--skip-typecheck` for CI/CD edge cases |
 | **CI Workflow Fix** | E2E tests now properly block PR merge on failure |
 
