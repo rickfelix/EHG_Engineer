@@ -24,9 +24,12 @@ const supabase = createClient(
 
 /**
  * Artifact requirements for orchestrator SDs
+ * FIX: 2026-02-05 - Updated to match workflow-definitions.js
+ * Orchestrators have: required=['LEAD-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'], optional=['PLAN-TO-EXEC', 'EXEC-TO-PLAN']
  */
 const ORCHESTRATOR_REQUIREMENTS = {
-  handoffs: ['LEAD-TO-PLAN', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
+  // Orchestrators skip PLAN-TO-EXEC and EXEC-TO-PLAN (children do the work)
+  handoffs: ['LEAD-TO-PLAN', 'PLAN-TO-LEAD'],
   prd: { required: true, minFields: ['title', 'executive_summary', 'status'] },
   retrospective: { required: true, minQualityScore: 70 },
   deliverables: { allComplete: true },

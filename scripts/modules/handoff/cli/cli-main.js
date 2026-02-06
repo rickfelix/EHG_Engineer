@@ -472,43 +472,87 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   let iterationCount = 0;
   const maxIterations = 50; // Safety limit
 
-  // D32: SD Workflow Sequence - ALL SDs follow the same workflow
-  // Both children and standalone SDs need implementation: LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC → LEAD-FINAL-APPROVAL
-  // FIX: 2026-02-02 - Child SDs were incorrectly skipping PLAN-TO-EXEC, jumping directly to LEAD-FINAL-APPROVAL
-  // Root cause: Incorrect assumption that orchestrator children are "pre-approved" and skip implementation
-  const WORKFLOW_SEQUENCE = {
-    // Full workflow for all SD types
-    'LEAD-TO-PLAN': 'PLAN-TO-EXEC',
-    'PLAN-TO-EXEC': null, // Terminal for handoff system (EXEC phase continues outside)
-    'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation for orchestrators
-  };
+  // D32: SD Workflow Sequence - SD-Type-Aware
+  // Full cycle: LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC work] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+  // FIX: 2026-02-02 - Child SDs were incorrectly skipping PLAN-TO-EXEC
+  // FIX: 2026-02-05 - PLAN-TO-LEAD was missing from sequence
+  // FIX: 2026-02-05 - Added SD-type awareness for orchestrators (skip PLAN-TO-EXEC, EXEC-TO-PLAN)
+
+  /**
+   * Get next handoff in workflow sequence based on SD type
+   * @param {string} currentHandoff - Current handoff type (normalized uppercase)
+   * @param {string} sdType - SD type from database
+   * @returns {string|null} - Next handoff or null if terminal
+   */
+  function getNextInWorkflow(currentHandoff, sdType) {
+    // Orchestrators have a special short workflow: LEAD-TO-PLAN → [children work] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+    if (sdType === 'orchestrator') {
+      const orchestratorSequence = {
+        'LEAD-TO-PLAN': null, // Terminal - children work happens outside
+        'PLAN-TO-LEAD': 'LEAD-FINAL-APPROVAL',
+        'LEAD-FINAL-APPROVAL': null, // Terminal - orchestrator complete
+      };
+      return orchestratorSequence[currentHandoff] ?? null;
+    }
+
+    // Cosmetic refactors have ultra-short workflow
+    // Note: intensity_level is checked separately if we need that granularity
+
+    // Default full workflow for feature, database, security, bugfix, performance, etc.
+    // Infrastructure and documentation may skip EXEC-TO-PLAN but it's handled by optional invocation
+    const fullSequence = {
+      'LEAD-TO-PLAN': 'PLAN-TO-EXEC',
+      'PLAN-TO-EXEC': null, // Terminal - EXEC phase work happens outside handoff system
+      'EXEC-TO-PLAN': 'PLAN-TO-LEAD',
+      'PLAN-TO-LEAD': 'LEAD-FINAL-APPROVAL',
+      'LEAD-FINAL-APPROVAL': null, // Terminal - triggers child-to-child continuation
+    };
+    return fullSequence[currentHandoff] ?? null;
+  }
+
+  // Cache SD type for the current SD to avoid repeated queries
+  let currentSdType = null;
 
   // Continue loop only if AUTO-PROCEED is enabled
   // D32: Child-to-child continuation - continue through full workflow, then find next child
   while (autoProceedEnabled && currentResult.success && iterationCount < maxIterations) {
     iterationCount++;
 
-    // D32 FIX: Continue through the FULL workflow for each SD
+    // Fetch SD type if not cached or SD changed
+    if (!currentSdType) {
+      const { data: sdData } = await system.supabase
+        .from('strategic_directives_v2')
+        .select('sd_type')
+        .eq('id', currentSdId)
+        .single();
+      currentSdType = sdData?.sd_type || 'feature';
+    }
+
+    // D32 FIX: Continue through the FULL workflow for each SD (SD-type-aware)
     // Previous bug: Only continued after LEAD-FINAL-APPROVAL, breaking after LEAD-TO-PLAN
     // for new children, causing unexpected pauses between siblings.
     //
-    // New behavior: Use WORKFLOW_SEQUENCE to determine next handoff type.
+    // New behavior: Use getNextInWorkflow() to determine next handoff type.
+    // Orchestrators skip PLAN-TO-EXEC/EXEC-TO-PLAN (they work on children instead).
     // When at terminal handoff (LEAD-FINAL-APPROVAL), find next child.
     const normalizedType = currentHandoffType.toUpperCase();
-    const nextInWorkflow = WORKFLOW_SEQUENCE[normalizedType];
+    const nextInWorkflow = getNextInWorkflow(normalizedType, currentSdType);
 
     if (nextInWorkflow) {
       // Non-terminal handoff - continue to next step in workflow
-      console.log(`\n🔄 AUTO-PROCEED: Continuing workflow (${currentHandoffType} → ${nextInWorkflow})`);
+      console.log(`\n🔄 AUTO-PROCEED: Continuing workflow (${currentHandoffType} → ${nextInWorkflow}) [${currentSdType}]`);
       currentHandoffType = nextInWorkflow;
       currentResult = await handleExecuteCommand(nextInWorkflow, currentSdId, args);
       continue;
     }
 
-    // Terminal handoff (null in WORKFLOW_SEQUENCE) - check if it's LEAD-FINAL-APPROVAL
+    // Terminal handoff (null from getNextInWorkflow) - check if it's LEAD-FINAL-APPROVAL
     if (normalizedType !== 'LEAD-FINAL-APPROVAL') {
-      // Other terminal handoff (like PLAN-TO-EXEC) - workflow continues outside this loop
-      console.log(`\n✅ AUTO-PROCEED: Handoff ${currentHandoffType} complete - workflow continues in EXEC phase`);
+      // Other terminal handoff (like PLAN-TO-EXEC or LEAD-TO-PLAN for orchestrators)
+      const reason = currentSdType === 'orchestrator'
+        ? 'orchestrator children work happens outside handoff system'
+        : 'workflow continues in EXEC phase';
+      console.log(`\n✅ AUTO-PROCEED: Handoff ${currentHandoffType} complete - ${reason}`);
       break;
     }
 
@@ -517,7 +561,7 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
     // Get the completed SD to check if it's a child
     const { data: completedSD, error: sdError } = await system.supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, parent_sd_id, status')
+      .select('id, sd_key, title, parent_sd_id, status, sd_type')
       .eq('id', currentSdId)
       .single();
 
@@ -536,8 +580,9 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
         console.log('   ➡️  Starting LEAD-TO-PLAN...');
         console.log('');
 
-        // Update for next iteration - start the next orchestrator
+        // Update for next iteration - start the next orchestrator (reset SD type cache)
         currentSdId = chainingInfo.nextOrchestrator;
+        currentSdType = null; // Reset - will be fetched on next iteration
         currentHandoffType = 'LEAD-TO-PLAN';
         currentResult = await handleExecuteCommand('LEAD-TO-PLAN', chainingInfo.nextOrchestrator, args);
         continue; // Continue the loop for the new orchestrator's children
@@ -577,18 +622,19 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
     console.log('\n🔄 AUTO-PROCEED: Continuing to next child SD');
     console.log(`   Next: ${nextChild.sd_key || nextChild.id}`);
     console.log(`   Title: ${nextChild.title}`);
+    console.log(`   Type: ${nextChild.sd_type || 'unknown'}`);
     console.log('   ➡️  Starting LEAD-TO-PLAN...');
     console.log('');
 
-    // Update for next iteration
+    // Update for next iteration - reset SD type cache for new SD
     currentSdId = nextChild.id;
+    currentSdType = nextChild.sd_type || null; // Use from query if available, otherwise will be fetched
     currentHandoffType = 'LEAD-TO-PLAN';
 
     // Execute LEAD-TO-PLAN for next child
     currentResult = await handleExecuteCommand('LEAD-TO-PLAN', nextChild.id, args);
 
-    // D32 FIX: Loop continues - WORKFLOW_SEQUENCE will advance to LEAD-FINAL-APPROVAL
-    // then back to finding the next child when this child completes.
+    // D32 FIX: Loop continues - getNextInWorkflow() will determine next handoff based on SD type.
     // This enables full child-to-child continuation within orchestrators.
   }
 

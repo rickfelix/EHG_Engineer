@@ -40,9 +40,10 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // Status must be one that indicates work can start
     // SD-LEO-ENH-AUTO-PROCEED-001-10: Also fetch metadata to check for blockers
     // SD-LEO-ENH-AUTO-PROCEED-001-11: Fetch all candidates for urgency-based sorting
+    // FIX: 2026-02-05 - Added sd_type for SD-type-aware workflow continuation
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type')
       .eq('parent_sd_id', parentSdId)
       .in('status', ['draft', 'in_progress', 'planning', 'active', 'pending_approval', 'review']);
 
