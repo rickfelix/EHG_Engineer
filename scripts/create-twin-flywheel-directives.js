@@ -324,7 +324,7 @@ ${directive.strategic_objectives.map((obj, i) => `${i + 1}. ${obj}`).join('\n')}
 ${directive.success_criteria.map((crit, i) => `${i + 1}. ${crit}`).join('\n')}
 
 ## Key Changes
-${directive.key_changes.map((change, i) => `${i + 1}. ${change}`).join('\n')}
+${(Array.isArray(directive.key_changes) ? directive.key_changes : []).map((change, i) => `${i + 1}. ${change}`).join('\n')}
 
 ## Key Principles
 ${directive.key_principles.map((prin, i) => `${i + 1}. ${prin}`).join('\n')}
