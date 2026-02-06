@@ -325,9 +325,41 @@ Show feedback inbox with options to manage items or create SDs from them.
 
 ### If argument is "next" or "n":
 Show the SD queue to determine what to work on next:
-```bash
-npm run sd:next
-```
+
+1. **Run the queue display:**
+   ```bash
+   npm run sd:next
+   ```
+
+2. **AUTO-PROCEED Detection**: After displaying the queue, check if AUTO-PROCEED mode is active:
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   supabase.from('claude_sessions')
+     .select('metadata')
+     .eq('status', 'active')
+     .order('heartbeat_at', { ascending: false })
+     .limit(1)
+     .single()
+     .then(({data}) => {
+       const autoProceed = data?.metadata?.auto_proceed ?? true;
+       if (autoProceed) console.log('AUTO-PROCEED: ACTIVE');
+       else console.log('AUTO-PROCEED: INACTIVE');
+     });
+   "
+   ```
+
+3. **If AUTO-PROCEED is ACTIVE:**
+   - Parse the recommended SD from `npm run sd:next` output (look for the `START` badge or top READY SD in the "RECOMMENDED ACTIONS" section)
+   - Output status: `🤖 AUTO-PROCEED: Starting recommended SD: <SD-ID>...`
+   - Auto-invoke: `/leo start <SD-ID>` (which claims the SD and loads protocol context)
+   - Do NOT use AskUserQuestion — skip it entirely
+
+4. **If AUTO-PROCEED is INACTIVE:**
+   - Display the queue results
+   - Wait for user to manually invoke `/leo start <SD-ID>` or `/leo <SD-ID>`
 
 ### If argument starts with "create" or "c":
 Launch the SD creation wizard. Parse additional flags:
