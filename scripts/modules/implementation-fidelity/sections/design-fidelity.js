@@ -21,7 +21,7 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
     let sd = null;
     const { data: sdById } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_type, scope')
+      .select('sd_type, scope, title')
       .eq('id', sd_id)
       .single();
 
@@ -31,40 +31,59 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
       // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key instead (column dropped 2026-01-24)
       const { data: sdBySdKey } = await supabase
         .from('strategic_directives_v2')
-        .select('sd_type, scope')
+        .select('sd_type, scope, title')
         .eq('sd_key', sd_id)
         .single();
       sd = sdBySdKey;
     }
 
-    if (sd?.sd_type === 'database') {
-      let scopeToCheck = '';
-      if (typeof sd.scope === 'object' && sd.scope?.included) {
-        scopeToCheck = Array.isArray(sd.scope.included)
-          ? sd.scope.included.join(' ')
-          : String(sd.scope.included);
-      } else if (typeof sd.scope === 'string') {
-        try {
-          const parsed = JSON.parse(sd.scope);
-          if (parsed?.included) {
-            scopeToCheck = Array.isArray(parsed.included)
-              ? parsed.included.join(' ')
-              : String(parsed.included);
-          }
-        } catch {
-          scopeToCheck = sd.scope;
+    // Extract scope text for analysis
+    let scopeToCheck = '';
+    if (typeof sd?.scope === 'object' && sd.scope?.included) {
+      scopeToCheck = Array.isArray(sd.scope.included)
+        ? sd.scope.included.join(' ')
+        : String(sd.scope.included);
+    } else if (typeof sd?.scope === 'string') {
+      try {
+        const parsed = JSON.parse(sd.scope);
+        if (parsed?.included) {
+          scopeToCheck = Array.isArray(parsed.included)
+            ? parsed.included.join(' ')
+            : String(parsed.included);
         }
+      } catch {
+        scopeToCheck = sd.scope;
       }
+    }
 
-      const hasUIScope = /component|ui\s|frontend|form|page|view/i.test(scopeToCheck);
+    const hasUIScope = /component|ui\s|frontend|form|page|view|dashboard/i.test(scopeToCheck);
 
-      if (!hasUIScope) {
-        console.log('   ✅ Database SD without UI requirements - Section A not applicable (25/25)');
+    // SD types that never require UI component validation
+    const noUITypes = ['database', 'infrastructure', 'documentation'];
+    if (noUITypes.includes(sd?.sd_type) && !hasUIScope) {
+      console.log(`   ✅ ${sd.sd_type} SD without UI requirements - Section A not applicable (25/25)`);
+      validation.score += 25;
+      validation.gate_scores.design_fidelity = 25;
+      validation.details.design_fidelity = {
+        skipped: true,
+        reason: `${sd.sd_type} SD without UI requirements - design fidelity not applicable`
+      };
+      return;
+    }
+
+    // PAT-GATE2-BACKEND-ONLY-001: Backend-only feature SDs (CLI, scripts, APIs)
+    if (sd?.sd_type === 'feature' && !hasUIScope) {
+      const hasBackendScope = /\b(script|cli|command|api[\s-]?route|backend|server|lib\/|node\s)/i.test(scopeToCheck);
+      const titleText = (sd.title || '').toLowerCase();
+      const hasBackendTitle = /\b(script|cli|command|api|backend|server|tooling|utility)\b/i.test(titleText);
+
+      if (hasBackendScope || hasBackendTitle) {
+        console.log('   ✅ Backend-only feature SD (scripts/CLI/API) - Section A not applicable (25/25)');
         validation.score += 25;
         validation.gate_scores.design_fidelity = 25;
         validation.details.design_fidelity = {
           skipped: true,
-          reason: 'Database SD without UI requirements - design fidelity not applicable'
+          reason: 'Backend-only feature SD - no UI components expected'
         };
         return;
       }

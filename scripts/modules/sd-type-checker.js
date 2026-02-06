@@ -8,7 +8,7 @@
  * Features:
  * - AI-powered classification via SDTypeClassifier (GPT-5 Mini)
  * - Fast path using declared sd_type when available
- * - Caching to avoid repeated API calls
+ * Caching to avoid repeated API calls
  * - Consistent type categorization across all modules
  *
  * @module sd-type-checker
@@ -23,12 +23,12 @@ const classificationCache = new Map();
 // SD type categories for different behaviors
 export const SD_TYPE_CATEGORIES = {
   // SDs that don't produce code changes - skip TESTING, GITHUB, E2E validation
-  // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type added for test cleanup/review tasks
+  // SD-E2E-WEBSOCKET-AUTH-006 lesson: uat type added for test cleanup/review tasks (renamed from qa)
   // PAT-SD-API-CATEGORY-003: api/backend SDs produce code but need unit/integration tests, not E2E
   // SD-UNIFIED-PATH-1.0: orchestrator added - parent SDs coordinate, children produce code
   // SD-UNIFIED-PATH-2.2.1: database added - DB SDs work via migrations, not app code changes
   // FIX: Added 'docs' alias for 'documentation' - commonly used abbreviation
-  NON_CODE: ['infrastructure', 'documentation', 'docs', 'process', 'qa', 'api', 'backend', 'orchestrator', 'database'],
+  NON_CODE: ['infrastructure', 'documentation', 'docs', 'process', 'uat', 'api', 'backend', 'orchestrator', 'database'],
 
   // SDs that produce code and need full validation
   // LEO Protocol v4.4.1: Added 'enhancement' - improvements to existing features (lighter validation than 'feature')
@@ -53,7 +53,7 @@ export const SCORING_WEIGHTS = {
   infrastructure: { sdWeight: 0.30, retroWeight: 0.70 },
   documentation: { sdWeight: 0.30, retroWeight: 0.70 },
   process: { sdWeight: 0.30, retroWeight: 0.70 },
-  qa: { sdWeight: 0.30, retroWeight: 0.70 },  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review
+  uat: { sdWeight: 0.30, retroWeight: 0.70 },  // Renamed from qa: UAT test campaign work
 
   // PAT-SD-API-CATEGORY-003: API/backend SDs weight retrospective higher (implementation-focused)
   api: { sdWeight: 0.40, retroWeight: 0.60 },
@@ -86,7 +86,7 @@ export const THRESHOLD_PROFILES = {
   documentation: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50, gateThreshold: 60 },
   docs: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50, gateThreshold: 60 }, // Alias for documentation
   process: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 70 },
-  qa: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 70 },  // SD-E2E-WEBSOCKET-AUTH-006
+  uat: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 70 },  // Renamed from qa: UAT campaigns
 
   // PAT-SD-API-CATEGORY-003: API/backend SDs have slightly lower thresholds (no E2E required)
   api: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65, gateThreshold: 75 },
@@ -189,7 +189,7 @@ function isValidSDType(type) {
     'documentation', 'docs',  // docs = alias for documentation
     'bugfix', 'refactor', 'performance', 'process',
     'orchestrator',  // Parent SDs with children - auto-set by trigger
-    'qa'  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review tasks
+    'uat'  // Renamed from qa: UAT test campaign/cleanup work
   ];
   return validTypes.includes(type.toLowerCase());
 }
@@ -228,7 +228,7 @@ export function isInfrastructureSDSync(sd) {
  * causing Promise to always be truthy. This sync version uses declared sd_type directly.
  *
  * Logic:
- * - Non-code types (infrastructure, documentation, process, qa, api, backend, orchestrator, bugfix*) → false
+ * - Non-code types (infrastructure, documentation, process, uat, api, backend, orchestrator, bugfix*) → false
  * - Only feature and database types → true
  *
  * *Note: bugfix is CODE_PRODUCING but does NOT require DESIGN/DATABASE gates

@@ -35,6 +35,11 @@ export const TYPE_PATTERNS = {
                'jsdoc', 'api doc', 'changelog', 'contributing', 'onboarding'],
     weight: 0.9 // Lower weight - easily confused with other types
   },
+  uat: {
+    keywords: ['uat', 'user acceptance', 'acceptance testing', 'test campaign',
+               'manual test', 'test execution', 'test scenarios', 'test plan'],
+    weight: 1.1  // Renamed from qa: UAT-specific keywords
+  },
   bugfix: {
     keywords: ['bug', 'fix', 'error', 'issue', 'broken', 'crash', 'regression',
                'hotfix', 'patch', 'resolve', 'repair'],

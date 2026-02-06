@@ -41,7 +41,7 @@ export const LIGHTWEIGHT_SD_TYPES = [
   'docs',
   'orchestrator',
   'process',
-  'qa',
+  'uat',  // Renamed from qa: UAT campaigns are lightweight (test execution, not feature development)
   'discovery_spike',  // Research/exploration - no code changes expected
 
   // Code-producing but scope-limited SD types
@@ -149,7 +149,8 @@ const SD_TYPE_POLICY = {
     STORIES: RequirementLevel.OPTIONAL
   },
 
-  qa: {
+  uat: {
+    // UAT campaigns execute tests, they don't produce code
     TESTING: RequirementLevel.NON_APPLICABLE,
     DESIGN: RequirementLevel.NON_APPLICABLE,
     GITHUB: RequirementLevel.NON_APPLICABLE,
