@@ -7,6 +7,7 @@ import { validatePRDQuality } from '../../../../prd-quality-validation.js';
 import { validateUserStoriesForHandoff } from '../../../../user-story-quality-validation.js';
 import { validateBMADForPlanToExec } from '../../../../bmad-validation.js';
 import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
+import { getStoryMinimumScoreByCategory } from '../../../verifiers/plan-to-exec/story-quality.js';
 
 /**
  * Register Gate 1 validators
@@ -42,10 +43,16 @@ export function registerGate1Validators(registry) {
     }
 
     // SD-LEO-001: Pass SD type to enable heuristic validation for infrastructure/database SDs
+    // FIX: Compute SD-type-aware minimumScore instead of relying on default (70%)
+    const sdType = sd?.sd_type || '';
+    const sdCategory = sd?.category || '';
+    const minimumScore = getStoryMinimumScoreByCategory(sdCategory, sdType);
+
     const validationOptions = {
       ...options,
-      sdType: sd?.sd_type || '',
-      sdCategory: sd?.category || ''
+      minimumScore,
+      sdType,
+      sdCategory
     };
 
     const result = await validateUserStoriesForHandoff(stories, validationOptions);

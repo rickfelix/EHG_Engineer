@@ -179,7 +179,7 @@ export class PlanToExecVerifier {
       if (!isParentOrchestrator && requiresUserStories) {
         console.log('\n🔍 Validating user story quality...');
         const storyMinimumScore = getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
-        console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
+        console.log(`   SD Type: ${sd.sd_type || 'unknown'}, Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
 
         storyQualityResult = await validateUserStoriesForHandoff(userStories, {
           minimumScore: storyMinimumScore,

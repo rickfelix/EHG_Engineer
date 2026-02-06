@@ -254,7 +254,8 @@ export class PlanToExecExecutor extends BaseExecutor {
       const prdRubric = new PRDQualityRubric();
       const prdAssessment = await prdRubric.validatePRDQuality(prd, sd);
 
-      console.log(`   PRD Score: ${prdAssessment.score}% (threshold: 70%)`);
+      const prdThreshold = prdAssessment.threshold || 70;
+      console.log(`   PRD Score: ${prdAssessment.score}% (threshold: ${prdThreshold}%)`);
       console.log(`   Status: ${prdAssessment.passed ? 'PASSED' : 'NEEDS IMPROVEMENT'}`);
 
       if (prdAssessment.issues && prdAssessment.issues.length > 0) {

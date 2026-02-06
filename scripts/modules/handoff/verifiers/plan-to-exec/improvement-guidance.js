@@ -89,8 +89,8 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
       ];
       guidance.timeEstimate = qualityImprovements?.timeEstimate || '30-60 minutes';
       guidance.instructions = qualityImprovements?.instructions ||
-        `User story quality score is ${qualityValidation?.averageScore || 0}% (minimum 70%). ` +
-        `${qualityValidation?.qualityDistribution?.poor || 0} stories scored below 70. ` +
+        `User story quality score is ${qualityValidation?.averageScore || 0}% (minimum ${qualityValidation?.minimumScore || 70}%). ` +
+        `${qualityValidation?.qualityDistribution?.poor || 0} stories scored below minimum threshold. ` +
         'Focus on stories with blocking issues first. Use the stories-agent skill for guidance.';
       break;
 
@@ -112,7 +112,7 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
       ];
       guidance.timeEstimate = prdImprovements?.timeEstimate || '30-60 minutes';
       guidance.instructions = prdImprovements?.instructions ||
-        `PRD content quality score is ${prdQualityValidation?.score || 0}% (minimum 70%). ` +
+        `PRD content quality score is ${prdQualityValidation?.score || 0}% (minimum ${prdQualityValidation?.minimumScore || 70}%). ` +
         'Focus on replacing placeholder text with specific, measurable content unique to this SD.';
       break;
 
