@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-02 3:48:09 PM
+**Generated**: 2026-02-06 12:15:59 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -59,6 +59,25 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
+
+## Migration Execution Protocol
+
+## ⚠️ CRITICAL: Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -147,25 +166,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
-
-## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## 🎯 Multi-Perspective Planning
 
@@ -307,30 +307,6 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
-
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -368,6 +344,30 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
+
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -537,23 +537,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -624,6 +607,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -889,21 +889,6 @@ node scripts/add-prd-to-database.js {SD-ID}
 - ⚠️ Never create PRDs as markdown files
 - ⚠️ Never skip validation gates
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -955,6 +940,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -1824,6 +1824,34 @@ for (const childId of childIds) {
 > **NOTE**: A database trigger (trg_inherit_parent_metadata) also enforces this automatically as a safety net.
 
 
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
+
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1864,34 +1892,6 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
-
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
 
 ## Visual Documentation Best Practices
 
@@ -2557,9 +2557,15 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
   - Criteria: category: "sd_quality"; description: "SD-LEO-001: Validate SD type matches content-based detection"; handoff_type: "LEAD-TO-PLAN"
 
 
+- **documentationStandardsCompliance** (Gate 1)
+  - Weight: 0.05
+  - Required: No
+  - Criteria: checks: ["sd_type_is_documentation","prd_has_standards_section","standards_checklist_present"]; description: "For documentation SDs, validates PRD includes documentation standards checklist"; applies_only_to: "documentation"
+
+
 ---
 
-*Generated from database: 2026-02-02*
+*Generated from database: 2026-02-06*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
 
