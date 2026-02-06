@@ -178,6 +178,158 @@ getRoutingStatus()       // Get current routing config with cache info
 - **View**: `v_llm_model_registry` (joins providers + models)
 - **Tables**: `llm_providers`, `llm_models`, `model_usage_log`
 
+## Canary Routing (Phase III)
+
+**SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001C** introduces gradual traffic shifting with quality-gate protection.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              getCanaryRoutedClient(options)                      │
+│                   (Canary Entry Point)                          │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │   Bucket Hash     │
+                    │   (Deterministic) │
+                    └─────────┬─────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+    ┌─────────┴─────────┐         ┌──────────┴──────────┐
+    │  Local (Ollama)   │         │   Cloud (Haiku)     │
+    │  % = canary stage │         │   % = 100 - stage   │
+    └─────────┬─────────┘         └─────────────────────┘
+              │
+    ┌─────────┴─────────┐
+    │  Quality Gates    │
+    │  - Error rate <5% │
+    │  - Latency <2x    │
+    └─────────┬─────────┘
+              │
+     [FAIL]───┴───[PASS]
+        │           │
+        ▼           ▼
+   Auto-Rollback  Continue
+```
+
+### Canary Stages
+
+| Stage | Local % | Cloud % | Description |
+|-------|---------|---------|-------------|
+| 0% | 0% | 100% | All cloud (starting state) |
+| 5% | 5% | 95% | Initial canary |
+| 25% | 25% | 75% | Expanded testing |
+| 50% | 50% | 50% | Full validation |
+| 100% | 100% | 0% | Complete rollout |
+
+### Quick Start
+
+```javascript
+import { getCanaryRoutedClient, getCanaryStatus } from '../llm/index.js';
+
+// Get client with canary traffic splitting
+const { client, routing } = await getCanaryRoutedClient({ purpose: 'classification' });
+console.log(`Routed to: ${routing.routedTo} (${routing.model})`);
+
+// Check canary status
+const status = await getCanaryStatus();
+console.log(`Stage: ${status.state.stage}%, Status: ${status.state.status}`);
+```
+
+### CLI Control
+
+```bash
+# View current status
+npm run llm:canary:status
+
+# Advance to next stage (requires passing quality gates)
+npm run llm:canary:advance
+
+# Pause/Resume rollout
+npm run llm:canary:pause
+npm run llm:canary:resume
+
+# Emergency rollback to 0%
+npm run llm:canary:rollback
+
+# Check quality gates
+npm run llm:canary:quality
+
+# View transition history
+npm run llm:canary:history
+```
+
+Or use the CLI directly:
+
+```bash
+node scripts/llm-canary-control.js status
+node scripts/llm-canary-control.js set 5      # Jump to 5%
+node scripts/llm-canary-control.js advance    # Move to next stage
+node scripts/llm-canary-control.js rollback   # Emergency: back to cloud
+```
+
+### Quality Gates
+
+Before advancing stages, these gates must pass:
+
+| Gate | Threshold | Action on Fail |
+|------|-----------|----------------|
+| Error Rate | ≤5% | Block advance |
+| Latency (P95) | ≤2x baseline | Block advance |
+| Consecutive Failures | <3 | Auto-rollback |
+
+Quality gates are evaluated over a 5-minute rolling window with at least 10 requests.
+
+### Deterministic Routing
+
+Routing decisions are **deterministic** based on request context:
+
+```javascript
+// Same request always routes to same target
+const bucketId = getBucketId({ sessionId: 'user-123', subAgent: 'DATABASE' });
+const routesToLocal = shouldRouteToLocal(bucketId, currentStage);
+```
+
+This ensures consistent behavior for retries and debugging.
+
+### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `llm_canary_state` | Singleton state (stage, thresholds, status) |
+| `llm_canary_transitions` | Audit trail of stage changes |
+| `llm_canary_metrics` | Per-request metrics for quality evaluation |
+
+### Canary API Functions
+
+```javascript
+// State management
+getCanaryState()           // Get current state (cached 30s)
+refreshCanaryState()       // Force refresh from database
+
+// Stage control
+advanceCanaryStage()       // Progress to next stage
+setCanaryStage(stage)      // Jump to specific stage
+pauseCanary()              // Pause rollout
+resumeCanary()             // Resume rollout
+rollbackCanary()           // Emergency rollback to 0%
+
+// Quality gates
+evaluateQualityGates()     // Check if gates pass
+checkAndRollbackIfNeeded() // Auto-rollback if gates fail
+
+// Status
+getCanaryStatus()          // Full diagnostic status
+```
+
+### Related Files
+
+- **Migration**: `database/migrations/20260206_llm_canary_routing.sql`
+- **Router**: `lib/llm/canary-router.js`
+- **CLI**: `scripts/llm-canary-control.js`
+
 ## API Reference
 
 ### getLLMClient(options)
@@ -237,9 +389,12 @@ const result = await client.complete(systemPrompt, userPrompt, {
 | File | Purpose |
 |------|---------|
 | `client-factory.js` | Main factory and routing logic |
+| `canary-router.js` | Canary traffic splitting and quality gates |
 | `index.js` | Public exports |
 | `../sub-agents/vetting/provider-adapters.js` | Adapter implementations |
 | `../../config/phase-model-routing.json` | Sub-agent routing config |
+| `../../scripts/llm-canary-control.js` | CLI for canary operations |
+| `../../database/migrations/20260206_llm_canary_routing.sql` | Canary DB schema |
 
 ## Benchmarks
 
