@@ -3,10 +3,10 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.3.0
+- **Version**: 1.4.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-01-30
-- **Tags**: commands, workflow, ecosystem, slash-commands, quick-fix, routing
+- **Last Updated**: 2026-02-06
+- **Tags**: commands, workflow, ecosystem, slash-commands, quick-fix, routing, history
 
 ## Table of Contents
 
@@ -126,6 +126,7 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /document → /ship → /learn →
   - `/leo create` (c) - Create new SD (interactive wizard)
   - `/leo continue` (cont) - Resume current working SD
   - `/leo complete` (comp) - Run full post-completion sequence
+  - `/leo history` (h) - View AI-generated project evolution history from merged PRs
   - `/leo init` (i) - Initialize session (set auto-proceed preference)
   - `/leo resume` (res) - Restore session from saved state (crash recovery)
 - **Direct ID Access**:
@@ -187,6 +188,27 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /document → /ship → /learn →
 - **Pre-condition**: Requires an active working SD
 - **Suggests**: Next SD from queue (via sd:next output)
 - **Receives from**: Manual invocation after SD completion
+
+### `/leo history` - Project Evolution History
+- **Primary**: Generate AI narrative summary of project evolution from merged GitHub PRs
+- **Interactive Flow**:
+  1. **Application selection**: EHG_Engineer, EHG, or Both repositories
+  2. **Date range**: Last month, Last 3 months, Last 6 months, This year, or custom dates
+  3. **Granularity**: Context-sensitive (day/week/month/quarter based on date range)
+- **Output**: Stats dashboard + AI narrative grouped by time period
+- **Features**:
+  - PR categorization (feat/fix/docs/refactor/perf/test/ci)
+  - LOC statistics (additions, deletions, files changed)
+  - Notable PRs (>500 LOC changes)
+  - Multi-repo support (combines both EHG repos)
+  - LLM-generated narrative (Sonnet tier) with fallback to plain summary
+- **Use Cases**:
+  - Sprint retrospectives
+  - Monthly progress reports
+  - Period-over-period comparison
+  - Identifying focus shifts (e.g., 60% infrastructure → 70% features)
+- **Script**: `scripts/leo-history.mjs`
+- **Receives from**: Manual invocation for project insights
 
 ## SD Type-Specific Flows
 
@@ -310,6 +332,7 @@ The following unused commands were removed:
 /leo create    (c)    - Create new SD (interactive wizard)
 /leo continue  (cont) - Resume current working SD
 /leo complete  (comp) - Run full sequence: document → ship → learn → next
+/leo history   (h)    - View AI-generated project evolution history
 ```
 
 ### Rationale
@@ -380,6 +403,7 @@ Every suggestion set includes a "Done for now" option allowing users to:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4.0 | 2026-02-06 | Added /leo history command for AI-generated project evolution summaries |
 | 1.3.0 | 2026-01-30 | Added QF- prefix detection and intelligent routing to quick-fix workflow |
 | 1.2.0 | 2026-01-23 | Added /leo continue and /leo complete subcommands |
 | 1.1.0 | 2026-01-11 | Added AskUserQuestion pattern with auto-invoke behavior |

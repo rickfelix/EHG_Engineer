@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [start <SD-ID>|assist|inbox|create|next|continue|complete|restart|settings]
+argument-hint: [start <SD-ID>|assist|history|inbox|create|next|continue|complete|restart|settings]
 ---
 
 # LEO Stack Control
@@ -128,6 +128,96 @@ Run session initialization explicitly:
 
    💡 Ready for LEO workflow. Run `/leo next` to see SD queue.
    ```
+
+### If argument is "history" or "h":
+Show an AI-generated narrative summary of project evolution based on merged GitHub PRs.
+
+1. **Ask which application:**
+   ```javascript
+   {
+     "questions": [{
+       "question": "Which application's history would you like to view?",
+       "header": "Application",
+       "multiSelect": false,
+       "options": [
+         {"label": "EHG_Engineer", "description": "Backend - CLI, tooling, infrastructure"},
+         {"label": "EHG", "description": "Frontend - React/Vite application"},
+         {"label": "Both", "description": "Combined history across both repositories"}
+       ]
+     }]
+   }
+   ```
+
+2. **Ask date range:**
+   ```javascript
+   {
+     "questions": [{
+       "question": "What time period would you like to review?",
+       "header": "Date Range",
+       "multiSelect": false,
+       "options": [
+         {"label": "Last month", "description": "Past 30 days"},
+         {"label": "Last 3 months", "description": "Past 90 days"},
+         {"label": "Last 6 months", "description": "Past 180 days"},
+         {"label": "This year", "description": "Since January 1, 2026"}
+       ]
+     }]
+   }
+   ```
+   (User can select "Other" for custom start/end dates via free text)
+
+3. **Ask granularity (context-sensitive based on date range):**
+
+   | Date Range | Options shown |
+   |---|---|
+   | Last month | By day, By week |
+   | Last 3 months | By week, By month |
+   | Last 6 months | By month, By quarter |
+   | This year | By month, By quarter |
+   | Custom (<=60 days) | By day, By week |
+   | Custom (61-180 days) | By week, By month |
+   | Custom (>180 days) | By month, By quarter |
+
+   Build the AskUserQuestion dynamically based on the selected date range:
+   ```javascript
+   // Example for "Last month":
+   {
+     "questions": [{
+       "question": "What level of detail would you like?",
+       "header": "Granularity",
+       "multiSelect": false,
+       "options": [
+         {"label": "By week (Recommended)", "description": "Group PRs by week"},
+         {"label": "By day", "description": "Group PRs by day (more detailed)"}
+       ]
+     }]
+   }
+   ```
+
+4. **Compute dates from selection:**
+   - "Last month" → since = 30 days ago, until = today
+   - "Last 3 months" → since = 90 days ago, until = today
+   - "Last 6 months" → since = 180 days ago, until = today
+   - "This year" → since = Jan 1 of current year, until = today
+   - Custom → parse user-provided dates
+
+5. **Map repos:**
+   - "EHG_Engineer" → `--repos "rickfelix/EHG_Engineer"`
+   - "EHG" → `--repos "rickfelix/ehg"`
+   - "Both" → `--repos "rickfelix/EHG_Engineer,rickfelix/ehg"`
+
+6. **Map granularity:**
+   - "By day" → `day`
+   - "By week" → `week`
+   - "By month" → `month`
+   - "By quarter" → `quarter`
+
+7. **Execute:**
+   ```bash
+   node scripts/leo-history.mjs --repos "<repos>" --since "<YYYY-MM-DD>" --until "<YYYY-MM-DD>" --granularity "<day|week|month|quarter>"
+   ```
+
+   Display the script's stdout output directly to the user.
 
 ### If argument is "settings" or "s":
 Display and modify AUTO-PROCEED and Orchestrator Chaining settings.
@@ -873,13 +963,14 @@ LEO Commands:
   /leo                   - Show this help menu
   /leo start <SD-ID>     - Start SD with auto protocol file loading (RECOMMENDED)
   /leo assist    (a)     - Autonomous inbox processing (issues + enhancements)
-  /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
   /leo restart   (r)     - Restart all LEO servers
   /leo inbox     (inb)   - Show feedback inbox (view only)
   /leo next      (n)     - Show SD queue (what to work on)
   /leo create    (c)     - Create new SD (interactive wizard)
   /leo continue  (cont)  - Resume current working SD
   /leo complete  (comp)  - Run full sequence: document → ship → learn → next
+  /leo history   (h)     - View AI-generated project evolution history
+  /leo settings  (s)     - View/modify AUTO-PROCEED and Chaining settings
 
 Inbox Processing:
   /leo assist            - Process inbox autonomously (recommended)
