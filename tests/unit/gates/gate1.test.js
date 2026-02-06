@@ -18,7 +18,7 @@
  * - TS-10: Security: Command timeouts enforced
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 describe('Gate 1: Unit Test Integration - Unit Tests', () => {
   let execSyncMock;
@@ -64,9 +64,9 @@ describe('Gate 1: Unit Test Integration - Unit Tests', () => {
 
   beforeEach(() => {
     // Create fresh mocks for each test
-    execSyncMock = jest.fn();
-    existsSyncMock = jest.fn();
-    readFileSyncMock = jest.fn();
+    execSyncMock = vi.fn();
+    existsSyncMock = vi.fn();
+    readFileSyncMock = vi.fn();
   });
 
   describe('hasUnitTestsExecuted', () => {

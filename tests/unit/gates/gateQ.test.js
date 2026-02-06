@@ -16,7 +16,7 @@
  * - TS-8: hasMigrationCorrectness returns false for invalid migrations
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 describe('Gate Q: Quality Gate Verification - Unit Tests', () => {
 
@@ -176,9 +176,9 @@ describe('Gate Q: Quality Gate Verification - Unit Tests', () => {
 
     beforeEach(() => {
       fsMock = {
-        existsSync: jest.fn(),
-        readdirSync: jest.fn(),
-        statSync: jest.fn()
+        existsSync: vi.fn(),
+        readdirSync: vi.fn(),
+        statSync: vi.fn()
       };
     });
 
@@ -245,7 +245,7 @@ describe('Gate Q: Quality Gate Verification - Unit Tests', () => {
     let execSyncMock;
 
     beforeEach(() => {
-      execSyncMock = jest.fn();
+      execSyncMock = vi.fn();
     });
 
     test('TS-3: should return true when diff is minimal (<=10 files, <=400 lines)', () => {
@@ -337,9 +337,9 @@ describe('Gate Q: Quality Gate Verification - Unit Tests', () => {
 
     beforeEach(() => {
       fsMock = {
-        existsSync: jest.fn(),
-        readdirSync: jest.fn(),
-        readFileSync: jest.fn()
+        existsSync: vi.fn(),
+        readdirSync: vi.fn(),
+        readFileSync: vi.fn()
       };
     });
 
@@ -459,9 +459,9 @@ describe('Gate Q: Quality Gate Verification - Unit Tests', () => {
 
     beforeEach(() => {
       fsMock = {
-        existsSync: jest.fn(),
-        readdirSync: jest.fn(),
-        readFileSync: jest.fn()
+        existsSync: vi.fn(),
+        readdirSync: vi.fn(),
+        readFileSync: vi.fn()
       };
     });
 

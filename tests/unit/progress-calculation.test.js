@@ -3,7 +3,6 @@
  * Tests the core LEO Protocol v4.1 progress formula
  */
 
-import { jest } from '@jest/globals';
 
 // Mock DatabaseLoader for unit tests
 class DatabaseLoader {

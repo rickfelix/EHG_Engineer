@@ -10,7 +10,6 @@
  * - Required field validation
  */
 
-import { jest } from '@jest/globals';
 import { createHash } from 'crypto';
 
 describe('migrate-child-sds.mjs - Core Functions', () => {

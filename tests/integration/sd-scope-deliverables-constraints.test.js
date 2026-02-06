@@ -10,7 +10,7 @@
  * - Any mismatch between documentation and database schema
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';

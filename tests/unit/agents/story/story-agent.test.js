@@ -1,8 +1,8 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 import StorySubAgent from '../../../../agents/story/index.js';
 import axios from 'axios';
 
-jest.mock('axios');
+vi.mock('axios');
 
 describe('STORY Sub-Agent', () => {
   let agent;
@@ -18,7 +18,7 @@ describe('STORY Sub-Agent', () => {
 
   afterEach(() => {
     agent.shutdown();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('story.create handler', () => {
@@ -144,14 +144,14 @@ describe('STORY Sub-Agent', () => {
       process.env.FEATURE_STORY_AGENT = 'false';
       const disabledAgent = new StorySubAgent();
 
-      const spy = jest.spyOn(console, 'log');
+      const spy = vi.spyOn(console, 'log');
       await disabledAgent.initialize();
 
       expect(spy).toHaveBeenCalledWith('STORY sub-agent disabled by feature flag');
     });
 
     it('should initialize when enabled', async () => {
-      const spy = jest.spyOn(console, 'log');
+      const spy = vi.spyOn(console, 'log');
       await agent.initialize();
 
       expect(spy).toHaveBeenCalledWith('STORY sub-agent initialized');

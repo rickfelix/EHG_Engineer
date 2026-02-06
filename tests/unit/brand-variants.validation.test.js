@@ -12,7 +12,7 @@
  * - Helper functions (isEditableStatus, isPromotable)
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 // Mock the validation module since TypeScript files need compilation
 // In actual implementation, this would import from compiled dist/

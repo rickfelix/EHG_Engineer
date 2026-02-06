@@ -13,11 +13,11 @@
  * Each gate has at least one passing and one failing test case.
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock fs module before importing validator
-jest.unstable_mockModule('fs', () => ({
-  existsSync: jest.fn()
+vi.mock('fs', () => ({
+  existsSync: vi.fn()
 }));
 
 const { existsSync } = await import('fs');
@@ -30,7 +30,7 @@ const {
 
 describe('Carry-Forward Validator', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default: all files exist
     existsSync.mockReturnValue(true);
   });
@@ -73,7 +73,7 @@ describe('Carry-Forward Validator', () => {
         }
       };
 
-      const mockFetchAncestors = jest.fn().mockResolvedValue({
+      const mockFetchAncestors = vi.fn().mockResolvedValue({
         id: 'SD-VISION-V2-000',
         parent_sd_id: null,
         metadata: {}
@@ -452,7 +452,7 @@ describe('Carry-Forward Validator', () => {
       };
 
       // Mock ancestor fetch - parent is root
-      const mockFetchAncestors = jest.fn().mockResolvedValue({
+      const mockFetchAncestors = vi.fn().mockResolvedValue({
         id: 'SD-VISION-V2-000',
         parent_sd_id: null,
         metadata: {}
@@ -488,7 +488,7 @@ describe('Carry-Forward Validator', () => {
       };
 
       // Mock ancestor fetch for 2-level hierarchy
-      const mockFetchAncestors = jest.fn()
+      const mockFetchAncestors = vi.fn()
         .mockImplementation((sdId) => {
           if (sdId === 'SD-VISION-V2-001') {
             return Promise.resolve({
@@ -534,7 +534,7 @@ describe('Carry-Forward Validator', () => {
         }
       };
 
-      const mockFetchAncestors = jest.fn().mockResolvedValue({
+      const mockFetchAncestors = vi.fn().mockResolvedValue({
         id: 'SD-VISION-V2-000',
         parent_sd_id: null
       });
@@ -568,7 +568,7 @@ describe('Carry-Forward Validator', () => {
         }
       };
 
-      const mockFetchAncestors = jest.fn().mockResolvedValue({
+      const mockFetchAncestors = vi.fn().mockResolvedValue({
         id: 'SD-VISION-V2-000',
         parent_sd_id: null
       });

@@ -5,7 +5,7 @@
  * Tests: 5 unit tests (integration tests with real database)
  */
 
-import { describe, it, expect, afterEach } from '@jest/globals';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   createTestDirective,
   deleteTestDirective,

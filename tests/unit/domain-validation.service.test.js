@@ -12,7 +12,7 @@
  * - Error handling for invalid names
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from 'vitest';
 
 /**
  * Mock Domain Provider

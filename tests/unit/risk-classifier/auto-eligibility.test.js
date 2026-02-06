@@ -5,7 +5,6 @@
  * Tests AUTO tier eligibility checking with AI Quality Judge integration
  */
 
-import { jest } from '@jest/globals';
 import {
   AutoEligibilityChecker,
   createAutoEligibilityChecker,
@@ -13,7 +12,7 @@ import {
   ELIGIBILITY_DECISION
 } from '../../../scripts/modules/risk-classifier/auto-eligibility.js';
 
-// Note: Using inline mocks since jest.unstable_mockModule doesn't work well with dynamic imports
+// Note: Using inline mocks since vi.mock doesn't work well with dynamic imports
 // The config is mocked by the module itself falling back to defaults
 
 describe('AutoEligibilityChecker', () => {

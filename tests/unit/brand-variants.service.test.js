@@ -13,7 +13,7 @@
  * - Edge cases and error handling
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
  * Mock Supabase client

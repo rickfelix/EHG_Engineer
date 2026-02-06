@@ -4,7 +4,7 @@
  * Target execution time: <60 seconds
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -105,9 +105,9 @@ describe('Smoke Tests - Critical System Validation', () => {
       expect(parsed.version).toBeDefined();
     });
 
-    test('should access jest config', async () => {
+    test('should access vitest config', async () => {
       const fs = await import('fs/promises');
-      const configExists = await fs.access('./jest.config.cjs')
+      const configExists = await fs.access('./vitest.config.ts')
         .then(() => true)
         .catch(() => false);
 

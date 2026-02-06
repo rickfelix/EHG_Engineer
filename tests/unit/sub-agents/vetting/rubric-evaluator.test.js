@@ -6,7 +6,6 @@
  * logic of the AI-powered rubric evaluator.
  */
 
-import { jest } from '@jest/globals';
 
 // We test the validation function directly since the module is ESM
 // Import the module to test schema validation

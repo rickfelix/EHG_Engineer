@@ -14,7 +14,7 @@
  * - TS-6: hasImportsPass returns false when import resolution fails
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Create check function implementations (mirrors gate0.ts logic)
 // These are tested in isolation with mocked execSync
@@ -24,7 +24,7 @@ describe('Gate 0: Static Analysis Verification - Unit Tests', () => {
 
   beforeEach(() => {
     // Create a fresh mock for each test
-    execSyncMock = jest.fn();
+    execSyncMock = vi.fn();
   });
 
   describe('hasESLintPass', () => {

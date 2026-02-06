@@ -5,7 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 dotenv.config();
 

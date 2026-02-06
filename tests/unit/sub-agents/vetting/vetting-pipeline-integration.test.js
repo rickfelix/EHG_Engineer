@@ -9,7 +9,7 @@
  * without requiring live LLM or database connections.
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Import rubric evaluator
 const evalMod = await import(
@@ -86,7 +86,7 @@ describe('Vetting Pipeline Integration', () => {
   describe('Full pipeline: Proposal → AI Rubric → Persistence', () => {
     test('evaluates proposal and persists results to audit_log and vetting_outcomes', async () => {
       const validResponse = makeValidLLMResponse();
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(validResponse),
         model: 'claude-sonnet-4-5-20250929'
       });
@@ -121,7 +121,7 @@ describe('Vetting Pipeline Integration', () => {
     test('failed evaluation writes audit log but NOT vetting outcome', async () => {
       const err = new Error('Service unavailable');
       err.status = 503;
-      const mockComplete = jest.fn().mockRejectedValue(err);
+      const mockComplete = vi.fn().mockRejectedValue(err);
       const mockSupabase = makeMockSupabase();
 
       const result = await evaluateWithAI(makeProposal(), DEFAULT_RUBRIC, {
@@ -147,7 +147,7 @@ describe('Vetting Pipeline Integration', () => {
   describe('Pipeline data integrity', () => {
     test('correlation ID flows through evaluation to persistence', async () => {
       const validResponse = makeValidLLMResponse();
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(validResponse),
         model: 'claude-sonnet-4-5-20250929'
       });
@@ -176,7 +176,7 @@ describe('Vetting Pipeline Integration', () => {
       validResponse.criteria[0].score = 90; // value
       validResponse.criteria[1].score = 60; // risk
 
-      const mockComplete = jest.fn().mockResolvedValue({
+      const mockComplete = vi.fn().mockResolvedValue({
         content: JSON.stringify(validResponse),
         model: 'claude-sonnet-4-5-20250929'
       });

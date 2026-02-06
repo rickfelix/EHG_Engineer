@@ -5,7 +5,7 @@
  * Tests collector invariants: no negative durations, terminal set once, attempt_count increments
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { SessionEventCollector, createCollector, VALID_STATUSES, VALID_SEVERITIES } from '../../../scripts/modules/session-summary/SessionEventCollector.js';
 
 describe('SessionEventCollector', () => {

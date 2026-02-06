@@ -5,7 +5,7 @@
  * Tests the ALL_BLOCKED state detection, aggregation, and decision recording.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import {

@@ -6,7 +6,7 @@
  * the core vetting logic using direct instantiation with mocked deps.
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Define DEFAULT_RUBRIC here to test against
 const DEFAULT_RUBRIC = {
@@ -23,17 +23,17 @@ const DEFAULT_RUBRIC = {
 
 // Mock implementations for testing
 const mockSupabase = {
-  from: jest.fn(() => mockSupabase),
-  select: jest.fn(() => mockSupabase),
-  insert: jest.fn(() => mockSupabase),
-  update: jest.fn(() => mockSupabase),
-  eq: jest.fn(() => mockSupabase),
-  single: jest.fn(() => Promise.resolve({ data: { id: 'test-id' }, error: null })),
-  rpc: jest.fn(() => Promise.resolve({ data: [], error: null }))
+  from: vi.fn(() => mockSupabase),
+  select: vi.fn(() => mockSupabase),
+  insert: vi.fn(() => mockSupabase),
+  update: vi.fn(() => mockSupabase),
+  eq: vi.fn(() => mockSupabase),
+  single: vi.fn(() => Promise.resolve({ data: { id: 'test-id' }, error: null })),
+  rpc: vi.fn(() => Promise.resolve({ data: [], error: null }))
 };
 
 const mockAegisEnforcer = {
-  validate: jest.fn(() => Promise.resolve({
+  validate: vi.fn(() => Promise.resolve({
     passed: true,
     violations: [],
     warnings: [],
@@ -182,7 +182,7 @@ describe('VettingEngine', () => {
   let engine;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     engine = new VettingEngine({
       supabase: mockSupabase,
       aegisEnforcer: mockAegisEnforcer

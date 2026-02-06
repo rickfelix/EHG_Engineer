@@ -6,7 +6,7 @@
  * This validates that the system works with actual orchestrator SDs.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import {

@@ -5,7 +5,7 @@
  * Tests: 5 unit tests for CLI functionality
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   searchScripts,
   getScriptsByCategory,
