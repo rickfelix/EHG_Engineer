@@ -196,3 +196,92 @@ See `lib/utils/post-completion-requirements.js` for the logic.
 | Critical confidence threshold | 0.85 | `vision-qa-finding-router.js` |
 | Performance LCP threshold | 2,500ms | `vision-qa-finding-router.js` |
 | Performance FCP threshold | 1,800ms | `vision-qa-finding-router.js` |
+
+## Implementation Status
+
+### Completed Integration (SD-LEO-ENH-VISION-QA-AUTO-PROCEED-001)
+
+**Status**: ✅ Shipped and merged to main (PR #891)
+**Completion Date**: 2026-02-06
+
+#### Changes Delivered
+
+**1. AUTO-PROCEED Integration** (`scripts/leo-continuous.js`):
+- Added `vision-qa` commandMap entry pointing to `scripts/execute-vision-qa.js`
+- Integrated UI-touching classifier into post-completion sequence
+- Passes `hasUIChanges` boolean to determine if vision-qa step runs
+- Conditional inclusion: only when `hasUIChanges=true` AND `autoProceed=true`
+
+**2. Execution Wrapper** (`scripts/execute-vision-qa.js`):
+- Finds active SD from database (via `is_working_on=true` or `--sd-id` flag)
+- Calls `executeVisionQAPipeline(sd, {supabase, autoProceed: true})`
+- Exits with code 0 (skip/clean-pass) or 1 (issues found)
+- Handles Vision QA pipeline errors gracefully
+
+**3. Unit Test Coverage** (106 tests, all passing):
+- `tests/unit/testing/ui-touching-classifier.test.js` (33 tests)
+  - File path pattern matching (UI vs backend detection)
+  - Order insensitivity, edge cases, custom patterns
+- `tests/unit/testing/vision-qa-finding-router.test.js` (25 tests)
+  - Routing rules (critical+high-confidence → quick-fix)
+  - Issue signature generation and deduplication
+  - Boundary conditions at 0.85 confidence threshold
+- `tests/unit/testing/post-completion-requirements.test.js` (48 tests)
+  - Vision QA conditional logic (all 3 conditions tested)
+  - Sequence ordering validation (restart → vision-qa → document → ship → learn)
+  - Full vs minimal sequence type requirements
+
+#### Post-Completion Sequence
+
+The integrated sequence now runs:
+```
+SD completes EXEC phase
+  -> /restart (servers)
+  -> [vision-qa]  ← CONDITIONAL: only if hasUIChanges=true AND autoProceed=true
+  -> /document
+  -> /ship
+  -> /learn
+```
+
+#### Test Execution
+
+All tests run via:
+```bash
+NODE_OPTIONS=--experimental-vm-modules npx jest tests/unit/testing/
+```
+
+Test results: 106 tests passed in 0.544s
+
+#### Files Changed
+
+| File | Lines Changed | Type |
+|------|--------------|------|
+| `scripts/leo-continuous.js` | +21, -5 | Modified |
+| `scripts/execute-vision-qa.js` | +99 | New |
+| `tests/unit/testing/ui-touching-classifier.test.js` | +255 | New |
+| `tests/unit/testing/vision-qa-finding-router.test.js` | +203 | New |
+| `tests/unit/testing/post-completion-requirements.test.js` | +291 | New |
+| **Total** | **+869, -5** | **874 net** |
+
+#### Verification
+
+- ✅ ESLint passes (no new warnings from our changes)
+- ✅ Smoke tests pass
+- ✅ All 106 unit tests pass
+- ✅ Pre-commit hooks pass (secret detection, LOC threshold warning acknowledged)
+- ✅ PR #891 merged to main
+
+#### Known Limitations
+
+- Vision QA only runs when AUTO-PROCEED is active (not available in manual mode)
+- UI-touching detection is file-path based (may miss UI work in backend files)
+- 2-minute timeout per Vision QA cycle (may not catch all issues in large UIs)
+- Max 2 quick-fix cycles per SD (prevents infinite loops)
+
+#### Next Steps
+
+Future enhancements could include:
+- Manual `/vision-qa` command for non-AUTO-PROCEED sessions
+- Configurable timeout per SD type
+- Vision QA result caching to avoid re-running on unchanged UI
+- Enhanced UI-touching classifier using AST analysis
