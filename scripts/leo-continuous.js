@@ -41,6 +41,9 @@ import {
   displayPostCompletionSummary
 } from '../lib/utils/post-completion-requirements.js';
 
+// Import UI-touching classifier for Vision QA integration (SD-LEO-ENH-VISION-QA-AUTO-PROCEED-001)
+import { classifySD } from '../lib/testing/ui-touching-classifier.js';
+
 // Import continuation state management (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
 import {
   readState as readContinuationState,
@@ -133,7 +136,8 @@ async function executePostCompletionCommand(command) {
       'document': ['node', ['scripts/execute-skill.js', 'document']],
       'ship': ['node', ['scripts/execute-skill.js', 'ship']],
       'learn': ['node', ['scripts/modules/learning/index.js', 'process']],
-      'restart': ['node', ['scripts/cross-platform-run.js', 'leo-stack', 'restart']]
+      'restart': ['node', ['scripts/cross-platform-run.js', 'leo-stack', 'restart']],
+      'vision-qa': ['node', ['scripts/execute-vision-qa.js']]
     };
 
     const [cmd, args] = commandMap[command] || ['node', ['scripts/execute-skill.js', command]];
@@ -196,12 +200,23 @@ async function triggerPostCompletionSequence(sd) {
   console.log(`\n${colors.cyan}POST-COMPLETION SEQUENCE${colors.reset}`);
   console.log(`${colors.dim}SD Type: ${sdType}${colors.reset}`);
 
-  // Get post-completion requirements
-  const requirements = getPostCompletionRequirements(sdType, { source });
-  const sequence = getPostCompletionSequence(sdType, { source });
+  // SD-LEO-ENH-VISION-QA-AUTO-PROCEED-001: Detect UI changes for Vision QA
+  let hasUIChanges = false;
+  try {
+    const classification = await classifySD(sd);
+    hasUIChanges = classification.ui_touching;
+    console.log(`${colors.dim}UI-touching: ${hasUIChanges} (${classification.reason})${colors.reset}`);
+  } catch (err) {
+    console.log(`${colors.dim}UI classification failed: ${err.message} (defaulting to false)${colors.reset}`);
+  }
+
+  // Get post-completion requirements (with Vision QA awareness)
+  const postCompOptions = { source, hasUIChanges, autoProceed: true };
+  const requirements = getPostCompletionRequirements(sdType, postCompOptions);
+  const sequence = getPostCompletionSequence(sdType, postCompOptions);
 
   // Display summary
-  displayPostCompletionSummary(sdType, { source });
+  displayPostCompletionSummary(sdType, postCompOptions);
 
   // Build result with commands to execute
   const result = {
@@ -212,6 +227,7 @@ async function triggerPostCompletionSequence(sd) {
     commandResults: [],
     requirements: {
       restart: requirements.restart,
+      visionQA: requirements.visionQA,
       ship: requirements.ship,
       document: requirements.document,
       learn: requirements.learn
