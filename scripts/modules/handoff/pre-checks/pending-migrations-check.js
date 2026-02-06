@@ -414,20 +414,24 @@ async function executeDirectMigrations(supabase, pendingInfo) {
     }
 
     try {
-      const sql = await readFile(filePath, 'utf-8');
-
-      // Try exec_sql RPC
-      const { error: execError } = await supabase.rpc('exec_sql', {
-        sql_query: sql
-      });
-
-      if (execError) {
-        lastError = `Failed to execute ${file}: ${execError.message}`;
-        console.log(`   ❌ ${lastError}`);
-        // Continue to try other files
+      // exec_sql RPC does not exist in Supabase. Use the manual migration
+      // execution script which connects via SUPABASE_POOLER_URL instead.
+      const scriptPath = path.join(PROJECT_ROOT, 'scripts', 'execute-manual-migrations.js');
+      if (existsSync(scriptPath)) {
+        const { stdout: migOut, stderr: migErr } = await execAsync(
+          `node "${scriptPath}" --file "${filePath}"`,
+          { cwd: PROJECT_ROOT, timeout: 60000 }
+        );
+        if (migErr && migErr.includes('ERROR')) {
+          lastError = `Failed to execute ${file}: ${migErr.trim()}`;
+          console.log(`   ❌ ${lastError}`);
+        } else {
+          executedCount++;
+          console.log(`   ✅ Executed: ${file}`);
+        }
       } else {
-        executedCount++;
-        console.log(`   ✅ Executed: ${file}`);
+        lastError = `Migration script not found and exec_sql RPC unavailable for ${file}`;
+        console.log(`   ❌ ${lastError}`);
       }
     } catch (fileError) {
       lastError = `Error processing ${file}: ${fileError.message}`;

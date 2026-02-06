@@ -216,7 +216,7 @@ export async function loadSDContext(sdId) {
         description: data.description,
         rationale: data.rationale,
         scope: data.scope,
-        keyChanges: data.key_changes || [],
+        keyChanges: Array.isArray(data.key_changes) ? data.key_changes : [],
         status: data.status,
         currentPhase: data.current_phase,
         type: data.sd_type || 'feature',
