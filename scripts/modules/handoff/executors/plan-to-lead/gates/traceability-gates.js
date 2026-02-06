@@ -22,18 +22,21 @@ export function createTraceabilityGate(supabase) {
       // Lazy load validator
       const { validateGate3PlanToLead } = await import('../../../../traceability-validation.js');
 
+      // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
+      const sdUuid = ctx.sd?.id || ctx.sdId;
+
       // Fetch Gate 2 results from EXEC→PLAN handoff
       const { data: execToPlanHandoff } = await supabase
         .from('sd_phase_handoffs')
         .select('metadata')
-        .eq('sd_id', ctx.sdId)
+        .eq('sd_id', sdUuid)
         .eq('handoff_type', 'EXEC-TO-PLAN')
         .order('created_at', { ascending: false })
         .limit(1);
 
       const gate2Results = execToPlanHandoff?.[0]?.metadata?.gate2_validation || null;
 
-      const result = await validateGate3PlanToLead(ctx.sdId, supabase, gate2Results);
+      const result = await validateGate3PlanToLead(sdUuid, supabase, gate2Results);
       ctx._gate3Results = result;
 
       return result;
@@ -58,11 +61,14 @@ export function createWorkflowROIGate(supabase) {
       // Lazy load validator
       const { validateGate4LeadFinal } = await import('../../../../workflow-roi-validation.js');
 
+      // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
+      const sdUuid = ctx.sd?.id || ctx.sdId;
+
       // Fetch Gate 1 results from PLAN→EXEC handoff
       const { data: planToExecHandoff } = await supabase
         .from('sd_phase_handoffs')
         .select('metadata')
-        .eq('sd_id', ctx.sdId)
+        .eq('sd_id', sdUuid)
         .eq('handoff_type', 'PLAN-TO-EXEC')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -71,7 +77,7 @@ export function createWorkflowROIGate(supabase) {
       const { data: execToPlanHandoff } = await supabase
         .from('sd_phase_handoffs')
         .select('metadata')
-        .eq('sd_id', ctx.sdId)
+        .eq('sd_id', sdUuid)
         .eq('handoff_type', 'EXEC-TO-PLAN')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -82,7 +88,7 @@ export function createWorkflowROIGate(supabase) {
         gate3: ctx._gate3Results || null
       };
 
-      const result = await validateGate4LeadFinal(ctx.sdId, supabase, allGateResults);
+      const result = await validateGate4LeadFinal(sdUuid, supabase, allGateResults);
       ctx._gate4Results = result;
 
       return result;

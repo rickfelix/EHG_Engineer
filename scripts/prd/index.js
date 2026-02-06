@@ -271,7 +271,7 @@ async function handlePersonaIngestion(sdData, sdId) {
   let personaContextBlock = '';
 
   if (isPersonaIngestionEnabled()) {
-    const personaResult = extractPersonasFromSD(sdData);
+    const personaResult = await extractPersonasFromSD(sdData);
     stakeholderPersonas = personaResult.personas;
     personaSource = personaResult.source;
 

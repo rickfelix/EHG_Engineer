@@ -446,7 +446,7 @@ async function addPRDToDatabase(sdId, prdTitle) {
     let personaContextBlock = '';
 
     if (isPersonaIngestionEnabled()) {
-      const personaResult = extractPersonasFromSD(sdData);
+      const personaResult = await extractPersonasFromSD(sdData);
       stakeholderPersonas = personaResult.personas;
       personaSource = personaResult.source;
       console.log(`   👥 Personas: ${personaResult.count} (source: ${personaSource})`);
