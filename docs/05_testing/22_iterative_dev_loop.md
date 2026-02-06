@@ -52,7 +52,7 @@ interface Stage22DatabaseIntegration {
 Iterative Development Loop connects to multiple external services via Integration Hub connectors:
 
 - **Development Tools**: GitHub, GitLab, Bitbucket via Git Repository Hub connectors
-- **Testing Frameworks**: Jest, Cypress, Playwright via Testing Hub connectors  
+- **Testing Frameworks**: Vitest, Cypress, Playwright via Testing Hub connectors  
 - **CI/CD Platforms**: GitHub Actions, Jenkins, CircleCI via CI/CD Hub connectors
 - **Monitoring Services**: DataDog, New Relic, Grafana via Monitoring Hub connectors
 - **Project Management**: Jira, Linear, Asana via Project Management Hub connectors
@@ -326,7 +326,7 @@ CREATE TABLE cycle_test_runs (
     cycle_id UUID REFERENCES iteration_cycles(cycle_id),
     test_suite_name VARCHAR(100) NOT NULL,
     test_type VARCHAR(50) NOT NULL, -- 'unit', 'integration', 'e2e', 'performance', 'security'
-    runner_type VARCHAR(50) NOT NULL, -- 'jest', 'vitest', 'playwright', 'cypress'
+    runner_type VARCHAR(50) NOT NULL, -- 'vitest', 'playwright', 'cypress'
     
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
     completed_at TIMESTAMP,

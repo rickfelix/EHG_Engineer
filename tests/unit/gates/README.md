@@ -80,7 +80,7 @@ This creates 3 validation rules:
 
 ## Test Dependencies
 
-- **Jest**: Test runner (configured for ES modules)
+- **Vitest**: Test runner (native ES module support)
 - **@supabase/supabase-js**: Database client for integration tests
 - **dotenv**: Environment variable loading
 - **child_process**: Command execution (mocked in unit tests)

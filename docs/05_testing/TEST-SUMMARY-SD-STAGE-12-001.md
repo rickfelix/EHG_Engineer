@@ -52,7 +52,7 @@ I have created a complete, production-ready test suite for the Brand Variant Man
 
 **Total E2E Tests**: 26 tests covering all 12 PRD scenarios + 14 edge cases
 
-### 📁 Unit Tests (Jest) - 3 Files
+### 📁 Unit Tests (Vitest) - 3 Files
 
 1. **`tests/unit/brand-variants.validation.test.js`**
    - Zod schema validation (all fields)

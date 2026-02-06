@@ -19,7 +19,7 @@ This directory contains comprehensive E2E and unit tests for the Brand Variant M
 
 **Total E2E Tests**: 26 tests covering all 12 PRD scenarios + 14 edge cases
 
-### Unit Tests (Jest) - 3 Files
+### Unit Tests (Vitest) - 3 Files
 
 | File | Coverage |
 |------|----------|
@@ -404,7 +404,7 @@ test.afterAll(async () => {
 
 2. **Use Node debugger**:
    ```bash
-   node --inspect-brk node_modules/.bin/jest tests/unit/brand-variants.validation.test.js
+   node --inspect-brk node_modules/.bin/vitest tests/unit/brand-variants.validation.test.js
    ```
 
 3. **Add console.log statements** (mocked functions log to console)

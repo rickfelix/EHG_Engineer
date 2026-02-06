@@ -171,7 +171,7 @@ To modify hook behavior, edit `.husky/pre-commit`:
 
 **Change test timeouts:**
 ```bash
-# Edit jest.config.cjs or test files
+# Edit vitest.config.ts or test files
 ```
 
 ## Integration with CI/CD

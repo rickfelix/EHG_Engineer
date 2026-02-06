@@ -31,7 +31,7 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 
 3. **[Integration Guide](../guides/enhanced-testing-integration.md)**
    - Step-by-step integration instructions
-   - Playwright, Jest, and CI/CD integration
+   - Playwright, Vitest, and CI/CD integration
    - Migration from basic testing agents
    - Real-world implementation examples
 
@@ -69,7 +69,7 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 
 ### Integration Examples
 - [Playwright Integration](../guides/enhanced-testing-integration.md)
-- [Jest Integration](../guides/enhanced-testing-integration.md)
+- [Vitest Integration](../guides/enhanced-testing-integration.md)
 - [CI/CD Pipeline](../guides/enhanced-testing-integration.md)
 
 ### Troubleshooting

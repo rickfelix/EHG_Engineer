@@ -156,7 +156,7 @@ This check can be added to CI to prevent deployment when SD types are out of syn
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `coverage_tool` | VARCHAR(50) | Tool used (jest, istanbul, c8, nyc, etc.) |
+| `coverage_tool` | VARCHAR(50) | Tool used (vitest, istanbul, c8, nyc, etc.) |
 | `coverage_pre_percent` | DECIMAL(5,2) | Coverage % before SD |
 | `coverage_post_percent` | DECIMAL(5,2) | Coverage % after SD |
 | `coverage_delta_percent` | DECIMAL(5,2) | Change (post - pre) |
@@ -183,7 +183,7 @@ SELECT * FROM get_sd_coverage_summary('SD-XXX-001');
   "sd_type": "qa",
   "requires_coverage_metrics": true,
   "coverage": {
-    "tool": "jest",
+    "tool": "vitest",
     "pre_percent": 72.10,
     "post_percent": 75.55,
     "delta_percent": 3.45,

@@ -667,7 +667,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-06 12:50:58 PM
+**Last Generated**: 2026-02-06 4:25:10 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -778,7 +778,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 | `SALES` | close deal, objection handling, sales cycle, sales pipeline, sales playbook, sales process, sales strategy, close, closing, deal (+17 more) |
 | `SECURITY` | api key exposed, authentication bypass, csrf vulnerability, cve, exposed credential, hardcoded secret, owasp, penetration test, security audit, security vulnerability (+34 more) |
 | `STORIES` | acceptance criteria, as a user, definition of done, epic, feature request, i want to, so that, user stories, user story, PLAN_PRD (+23 more) |
-| `TESTING` | EXEC_IMPLEMENTATION_COMPLETE, add tests, create tests, e2e test, end to end test, integration test, jest test, playwright test, spec file, test coverage (+42 more) |
+| `TESTING` | EXEC_IMPLEMENTATION_COMPLETE, add tests, create tests, e2e test, end to end test, integration test, vitest test, playwright test, spec file, test coverage (+42 more) |
 | `UAT` | acceptance criteria, click through, happy path, human test, manual test, test scenario, uat test, user acceptance test, user journey, TEST-AUTH (+31 more) |
 | `VALIDATION` | already exists, already implemented, before i build, check if exists, codebase search, duplicate check, existing implementation, codebase, codebase check, conflict (+18 more) |
 | `VALUATION` | acquisition target, company valuation, dcf analysis, exit strategy, fundraising round, series a, startup valuation, DCF, IPO, Series A (+20 more) |

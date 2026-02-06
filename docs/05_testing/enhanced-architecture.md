@@ -25,7 +25,7 @@ graph TB
     
     subgraph "Test Interface Layer"
         PW[Playwright Tests]
-        JEST[Jest Tests]
+        VT[Vitest Tests]
         CI[CI/CD Pipeline]
     end
     
@@ -42,7 +42,7 @@ graph TB
     end
     
     PW --> TC
-    JEST --> TC
+    VT --> TC
     CI --> TC
     
     TC --> TSA
@@ -526,7 +526,7 @@ graph TB
     
     subgraph "Testing Frameworks"
         PW[Playwright]
-        JEST[Jest]
+        VT[Vitest]
         CYPRESS[Cypress]
         WEBDRIVER[WebDriver]
     end
@@ -559,7 +559,7 @@ graph TB
     end
     
     ETS --> PW
-    ETS --> JEST
+    ETS --> VT
     ETS --> CYPRESS
     ETS --> WEBDRIVER
     

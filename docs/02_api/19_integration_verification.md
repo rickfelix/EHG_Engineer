@@ -51,7 +51,7 @@ interface Stage19DatabaseIntegration {
 
 Tri-Party Integration Verification connects to multiple external services via Integration Hub connectors:
 
-- **Testing Frameworks**: Jest, Cypress, Postman via Testing Hub connectors
+- **Testing Frameworks**: Vitest, Cypress, Postman via Testing Hub connectors
 - **Monitoring Services**: DataDog, New Relic, Prometheus via Monitoring Hub connectors  
 - **API Management**: Kong, AWS API Gateway, Azure API Management via API Hub connectors
 - **CI/CD Platforms**: Jenkins, GitHub Actions, GitLab CI via CI/CD Hub connectors

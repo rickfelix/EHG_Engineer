@@ -247,7 +247,7 @@ SD completes EXEC phase
 
 All tests run via:
 ```bash
-NODE_OPTIONS=--experimental-vm-modules npx jest tests/unit/testing/
+npx vitest tests/unit/testing/
 ```
 
 Test results: 106 tests passed in 0.544s
