@@ -301,7 +301,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     }
 
     if (!PlanToExecVerifier) {
-      const { default: Verifier } = await import('../../../../verify-handoff-plan-to-exec.js');
+      const { PlanToExecVerifier: Verifier } = await import('../../verifiers/plan-to-exec/PlanToExecVerifier.js');
       PlanToExecVerifier = Verifier;
     }
 

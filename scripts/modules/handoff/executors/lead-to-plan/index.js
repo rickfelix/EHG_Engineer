@@ -125,7 +125,7 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
   async _loadVerifier() {
     if (!LeadToPlanVerifier) {
-      const { default: Verifier } = await import('../../../../verify-handoff-lead-to-plan.js');
+      const { default: Verifier } = await import('../../../../verify-l2p/index.js');
       LeadToPlanVerifier = Verifier;
     }
   }
