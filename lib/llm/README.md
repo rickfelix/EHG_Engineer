@@ -432,9 +432,183 @@ node scripts/benchmarks/ollama-model-benchmark.mjs --agents --verbose
 
 Results inform model selection in the `llm_models` database table (`is_local=true` + `leo_tier='haiku'`).
 
+## Migration Guide
+
+### Converting Direct Anthropic Calls to Factory Pattern
+
+Before the factory, modules created their own Anthropic clients:
+
+```javascript
+// OLD PATTERN (deprecated)
+import Anthropic from '@anthropic-ai/sdk';
+const anthropic = new Anthropic();
+const response = await anthropic.messages.create({
+  model: 'claude-haiku-3-5-20241022',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: prompt }]
+});
+const text = response.content[0].text;
+```
+
+Replace with the factory pattern:
+
+```javascript
+// NEW PATTERN (use this)
+import { getClassificationClient } from '../llm/index.js';
+const client = getClassificationClient();
+const result = await client.complete(systemPrompt, userPrompt, {
+  maxTokens: 1024
+});
+const text = result.content;
+```
+
+### Migration Checklist
+
+1. **Identify the tier**: Is this a classification/fast task (haiku), validation/generation (sonnet), or security (opus)?
+2. **Choose the helper**: Use `getClassificationClient()`, `getValidationClient()`, or `getSecurityClient()`
+3. **Replace the call**: Swap `anthropic.messages.create()` for `client.complete()`
+4. **Remove imports**: Remove `@anthropic-ai/sdk` import if no longer needed in the file
+5. **Check env vars**: Ensure `USE_LOCAL_LLM=true` is set if you want local routing
+
+### Adapter Response Differences
+
+| Property | Old (Anthropic SDK) | New (Factory) |
+|----------|--------------------|----|
+| Response text | `response.content[0].text` | `result.content` |
+| Model used | (hardcoded) | `result.model` |
+| Provider | Always Anthropic | `result.provider` |
+| Local? | No | `result.local` |
+| Duration | Not tracked | `result.durationMs` |
+| Token usage | `response.usage` | `result.usage` |
+
+## Codebase Migration Audit
+
+**SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001E** conducted a full audit of all LLM call sites.
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total LLM call sites | 166 |
+| Haiku-eligible (local routing candidates) | 45 |
+| Sonnet-tier (cloud only) | 38 |
+| Already migrated to factory | 1 |
+| Archived/legacy (not active) | 80 |
+| Estimated monthly token savings | ~61,500 |
+
+### Top Migration Candidates
+
+These modules are haiku-tier and would benefit most from local routing:
+
+| Module | Purpose | Migration Complexity |
+|--------|---------|---------------------|
+| `scripts/modules/sd-type-classifier.js` | SD type classification | Low |
+| `lib/sub-agents/api-relevance-classifier.js` | API relevance scoring | Low |
+| `lib/governance/semantic-diff-validator.js` | Semantic diff validation | Medium |
+| `lib/context-aware-sub-agent-selector.js` | Sub-agent selection | Medium |
+| `lib/agents/context-monitor.js` | Context monitoring | Low |
+
+### Migration Priority Matrix
+
+| Priority | Criteria | Candidate Count |
+|----------|----------|----------------|
+| Quick wins | Classification/fast tasks, <50 LOC change | ~15 |
+| Medium effort | Structured output, some refactoring | ~20 |
+| Complex | Multi-step prompts, custom error handling | ~10 |
+
+### Token Savings Breakdown
+
+- **Already saved** (factory + `intelligent-impact-analyzer.js`): ~159,000 tokens/week
+- **Additional potential** (45 haiku-eligible modules): ~61,500 tokens/month
+- **Total monthly savings** at full migration: ~695,500 tokens/month
+
+## Operational Runbook
+
+### Prerequisites
+
+- **Ollama**: v0.15.4+ installed and running
+- **Hardware**: 12 GB VRAM minimum for `qwen3-coder:30b`
+  - Tested on: RTX 5070 Ti (12 GB VRAM), 96 GB RAM
+  - Throughput: ~33 tokens/second
+
+### Installation
+
+```bash
+# Install Ollama (see https://ollama.com)
+# Pull the selected model
+ollama pull qwen3-coder:30b
+
+# Verify
+ollama list
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USE_LOCAL_LLM` | `false` | Enable local LLM routing for haiku tier |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `OLLAMA_MODEL` | `qwen3-coder:30b` | Default local model |
+| `OLLAMA_FALLBACK_ENABLED` | `true` | Fall back to cloud if Ollama unavailable |
+| `OLLAMA_TIMEOUT_MS` | `30000` | Request timeout in milliseconds |
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `ECONNREFUSED` on port 11434 | Ollama not running | Start Ollama: `ollama serve` |
+| Slow responses (>60s) | Model too large for VRAM | Use smaller model or check GPU memory |
+| Garbled output | Model incompatibility | Benchmark the model with `ollama-model-benchmark.mjs` |
+| Fallback messages in logs | Ollama temporarily unavailable | Check Ollama process, restart if needed |
+| `USE_LOCAL_LLM` not working | Env var checked at wrong time | Ensure `dotenv.config()` runs before factory calls |
+
+### Monitoring
+
+Check routing status at runtime:
+
+```javascript
+import { getRoutingStatus, getCanaryStatus } from '../llm/index.js';
+
+// Basic routing info
+const status = getRoutingStatus();
+console.log(status);
+// { localEnabled: true, localModel: 'qwen3-coder:30b', cacheAge: '2m 30s' }
+
+// Canary status (if using gradual rollout)
+const canary = await getCanaryStatus();
+console.log(canary);
+// { stage: 100, status: 'active', quality: { errorRate: 0.01, latencyRatio: 1.2 } }
+```
+
+### Adding a New Model
+
+1. Pull the model: `ollama pull <model-name>`
+2. Benchmark it: `node scripts/benchmarks/ollama-model-benchmark.mjs --models <model-name>`
+3. If benchmarks pass, add to database:
+
+```sql
+INSERT INTO llm_models (provider_id, model_key, model_name, leo_tier, is_local, status)
+VALUES (
+  (SELECT id FROM llm_providers WHERE provider_key = 'ollama'),
+  '<model-name>', '<Display Name>', 'haiku', TRUE, 'active'
+);
+```
+
+4. Refresh the factory: `await refreshModelRegistry()`
+
+### Lessons Learned
+
+1. **Always benchmark on actual hardware** - External AI predictions about model performance were wrong
+2. **Thinking token leakage** - `deepseek-r1:14b` leaked `<think>` tags into output, corrupting JSON
+3. **Classification is the hardest task** - Models that pass JSON/instruct tests can still fail classification
+4. **Env var timing** - Check `USE_LOCAL_LLM` at call time, not module load time (dotenv timing issue)
+5. **Centralize all LLM calls** - Don't let modules create their own clients; route through the factory
+
 ## Related Documentation
 
 - **[Benchmark Tool](../../scripts/benchmarks/README.md)** - Run benchmarks, test categories, agent routing
 - **[Benchmark History](../../scripts/benchmarks/results/BENCHMARK_HISTORY.md)** - Full results and triangulation analysis
 - **[Phase Model Routing](../../config/phase-model-routing.json)** - Sub-agent to tier mapping
 - **[Provider Adapters](../sub-agents/vetting/provider-adapters.js)** - Adapter implementations
+- **[Migration SQL](../../database/migrations/20260205_llm_registry_ollama_integration.sql)** - Database schema for model registry
+- **[Canary SQL](../../database/migrations/20260206_llm_canary_routing.sql)** - Database schema for canary routing
