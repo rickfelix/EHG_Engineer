@@ -62,6 +62,7 @@ scripts/fix-*.mjs
 scripts/get-*.mjs
 scripts/implement-*.mjs
 scripts/insert-*.mjs
+scripts/insert-*.cjs
 scripts/list-*.mjs
 scripts/migrate-*.mjs
 scripts/query-*.mjs
@@ -69,9 +70,13 @@ scripts/review-*.mjs
 scripts/smart-*.mjs
 scripts/stories-*.mjs
 scripts/test-auth-*.mjs
+scripts/test-grounding-*.js
+scripts/test-llm-*.js
 scripts/update-*.mjs
 scripts/update-*.js
 scripts/verify-*.mjs
+scripts/verify-*.js
+scripts/verify-*.cjs
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs
 scripts/full-data-*.mjs
@@ -79,6 +84,12 @@ scripts/create-*-handoff.mjs
 scripts/create-*-via-*.mjs
 scripts/create-*-children.js
 scripts/audit-*.js
+
+# One-off story generation scripts (SD-specific, use generate-user-stories.js instead)
+scripts/generate-user-stories-*.js
+
+# Root-level temp fix scripts
+/temp-fix-*.mjs
 
 # Database results/exports (temporary artifacts)
 database/*.json
@@ -93,6 +104,10 @@ repro_*.js
 /*-stories-summary.json
 /credential-scan-results.json
 /SD-*-README.md
+/MANUAL_FIX_REQUIRED_*.md
+/MIGRATION_BLOCKER_*.md
+/USER_STORIES_SUMMARY_*.md
+/VERIFICATION_*.md
 
 # Root-level temp directories
 /sub-agents/
@@ -121,6 +136,9 @@ src/client/dist/
 
 # Claude session state (modified during protocol operations, local only)
 .claude/unified-session-state.json
+.claude/auto-proceed-state.json
+.claude/continuation-state.json
+.claude/status-line/
 .claude-code-config.json
 .claude-status-line
 .leo-status.json
