@@ -29,6 +29,8 @@
     "create-app-sd": "node scripts/create-app-sd.js",
     "deploy-sd": "node scripts/deploy-sd-to-app.js",
     "leo": "node scripts/run-leo.cjs",
+    "leo:audit": "node scripts/leo-audit.js",
+    "leo:analytics": "node scripts/leo-analytics.js",
     "leo-status": "node scripts/leo-status-line.js show",
     "build:loader": "tsc -p tsconfig.json",
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
