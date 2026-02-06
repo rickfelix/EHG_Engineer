@@ -62,11 +62,14 @@ export function createPerformanceCriticalGate(supabase) {
           getValidationRequirements = sdType.getValidationRequirements;
         }
 
+        // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - queries use UUID FK
+        const sdUuid = ctx.sd?.id || ctx.sdId;
+
         // Get SD details
         const { data: sd, error: sdError } = await supabase
           .from('strategic_directives_v2')
           .select('id, sd_type, title')
-          .eq('id', ctx.sdId)
+          .eq('id', sdUuid)
           .single();
 
         if (sdError || !sd) {
@@ -94,7 +97,7 @@ export function createPerformanceCriticalGate(supabase) {
         const { data: perfResults, error: perfError } = await supabase
           .from('sub_agent_execution_results')
           .select('verdict, findings, critical_issues, warnings')
-          .eq('sd_id', ctx.sdId)
+          .eq('sd_id', sdUuid)
           .eq('sub_agent_code', 'PERFORMANCE')
           .order('created_at', { ascending: false })
           .limit(1)

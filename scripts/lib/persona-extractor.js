@@ -56,8 +56,9 @@ const EVA_KEYWORDS = [
 ];
 
 /**
- * Application-specific persona defaults.
- * Determines mandatory personas based on target_application + sd_type.
+ * Application-specific persona defaults (hardcoded fallback).
+ * SD-MAN-GEN-TITLE-TARGET-APPLICATION-001: Now also loads from persona_config DB table.
+ * These hardcoded values are used ONLY when the database is unavailable.
  *
  * - EHG (runtime app): Chairman + Solo Entrepreneur for feature SDs
  * - EHG_Engineer (governance): Chairman + DevOps for infrastructure
@@ -79,6 +80,28 @@ const APPLICATION_PERSONA_DEFAULTS = {
     optional_trigger: { eva: 'automation' }
   }
 };
+
+/**
+ * Try to load application persona config from database (persona_config table).
+ * Returns null if unavailable, allowing fallback to hardcoded defaults.
+ * @param {string} targetApp - Target application name
+ * @returns {Promise<Object|null>} Config from database or null
+ */
+async function loadPersonaConfigFromDB(targetApp) {
+  try {
+    const { getPersonaConfig } = await import('../../lib/persona-config-provider.js');
+    const config = await getPersonaConfig(targetApp);
+    if (config && config.mandatory_personas) {
+      return {
+        mandatory: config.mandatory_personas,
+        optional_trigger: config.optional_triggers || {}
+      };
+    }
+  } catch {
+    // Database unavailable or module not found - use hardcoded defaults
+  }
+  return null;
+}
 
 /**
  * Check if persona payload is enabled via feature flag
@@ -215,7 +238,7 @@ function mentionsAutomation(sdData) {
  * @param {Object} sdData - Strategic Directive data
  * @returns {Array} - Array of persona objects
  */
-function generateDefaultPersonas(sdData) {
+async function generateDefaultPersonas(sdData) {
   const personas = [];
   const sdType = sdData.sd_type || 'feature';
   const targetApp = sdData.target_application || 'unknown';
@@ -234,9 +257,17 @@ function generateDefaultPersonas(sdData) {
     console.warn('');
   }
 
-  // Get application-specific config (falls back to 'unknown' config)
-  const appConfig = APPLICATION_PERSONA_DEFAULTS[targetApp]
-    || APPLICATION_PERSONA_DEFAULTS['unknown'];
+  // Try database-driven config first, fall back to hardcoded defaults
+  let appConfig = null;
+  try {
+    appConfig = await loadPersonaConfigFromDB(targetApp);
+  } catch {
+    // Fallback handled below
+  }
+  if (!appConfig) {
+    appConfig = APPLICATION_PERSONA_DEFAULTS[targetApp]
+      || APPLICATION_PERSONA_DEFAULTS['unknown'];
+  }
 
   // Add mandatory personas for this application
   const addedMandatory = [];
@@ -283,7 +314,7 @@ function generateDefaultPersonas(sdData) {
  * @param {Object} sdData - Strategic Directive data with metadata field
  * @returns {{ personas: Array, source: string, count: number }}
  */
-export function extractPersonasFromSD(sdData) {
+export async function extractPersonasFromSD(sdData) {
   // Check feature flag first
   if (!isPersonaIngestionEnabled()) {
     return {
@@ -312,7 +343,7 @@ export function extractPersonasFromSD(sdData) {
   }
 
   // Generate intelligent defaults
-  const defaultPersonas = generateDefaultPersonas(sdData);
+  const defaultPersonas = await generateDefaultPersonas(sdData);
 
   return {
     personas: defaultPersonas,

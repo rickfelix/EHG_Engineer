@@ -27,7 +27,9 @@ export function createGate2ImplementationFidelityGate(supabase) {
         validateGate2ExecToPlan = gate2.validateGate2ExecToPlan;
       }
 
-      return validateGate2ExecToPlan(ctx.sdId, supabase);
+      // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - queries use UUID FK
+      const sdUuid = ctx.sd?.id || ctx.sdId;
+      return validateGate2ExecToPlan(sdUuid, supabase);
     },
     required: true
   };
