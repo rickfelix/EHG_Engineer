@@ -104,31 +104,18 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Gap #7 Fix (2026-01-01): Update SD current_phase to PLAN_PRD
     await transitionSdToPlan(sdId, sd, this.supabase);
 
-    // Auto-generate PRD script on successful LEAD→PLAN handoff
-    await autoGeneratePRDScript(sdId, sd);
-
-    // Auto-approve PRD if it meets quality thresholds (SD-LEO-FIX-PRD-STATUS-001)
-    // This enables full automation - PRDs that pass validation are auto-approved
-    try {
-      const approvalResult = await autoApprovePRD(sdId);
-      if (approvalResult.approved) {
-        console.log(`   ✅ PRD auto-approved with score: ${approvalResult.score}%`);
-      } else {
-        console.log(`   ℹ️  PRD not auto-approved: ${approvalResult.reason}`);
-      }
-    } catch (err) {
-      // Non-blocking - log error but don't fail the handoff
-      console.log(`   ⚠️  Auto-approve error: ${err.message}`);
-    }
-
     // Create handoff retrospective after successful handoff
     await createHandoffRetrospective(sdId, sd, result, 'LEAD_TO_PLAN', this.supabase);
 
-    // Merge additional context
+    // SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B-RCA: Return success BEFORE PRD generation
+    // PRD generation is deferred to post-handoff phase in HandoffOrchestrator
+    // This ensures handoff is recorded even if PRD generation times out
     return {
       success: true,
       ...result,
-      qualityScore: result.qualityScore || 100
+      qualityScore: result.qualityScore || 100,
+      // Flag for orchestrator to trigger PRD generation after recording
+      _deferredPrdGeneration: { sdId, sd }
     };
   }
 
