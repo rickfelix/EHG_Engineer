@@ -45,7 +45,7 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type')
       .eq('parent_sd_id', parentSdId)
-      .in('status', ['draft', 'in_progress', 'planning', 'active', 'pending_approval', 'review']);
+      .in('status', ['draft', 'active']);
 
     // Exclude the just-completed SD if provided
     if (excludeCompletedId) {

@@ -165,7 +165,10 @@ ${llmContent.functional_requirements.map(req => {
   if (req.priority) lines.push(`\n**Priority**: ${req.priority}`);
   if (req.acceptance_criteria && req.acceptance_criteria.length > 0) {
     lines.push('\n**Acceptance Criteria**:');
-    req.acceptance_criteria.forEach(ac => lines.push(`- ${ac}`));
+    const acList = Array.isArray(req.acceptance_criteria)
+      ? req.acceptance_criteria
+      : req.acceptance_criteria.split('\n').filter(l => l.trim());
+    acList.forEach(ac => lines.push(`- ${ac}`));
   }
   return lines.join('');
 }).join('\n\n')}`);

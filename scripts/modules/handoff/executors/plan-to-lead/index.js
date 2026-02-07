@@ -185,7 +185,72 @@ export class PlanToLeadExecutor extends BaseExecutor {
           { incompleteChildren: incomplete.map(c => ({ sd_id: c.sd_id || c.id, title: c.title, status: c.status })) }
         );
       }
-      return ResultBuilder.rejected('NO_PRD', 'No PRD found - cannot verify work');
+
+      // Check if this SD type requires a PRD via validation profile
+      const sdType = (sd.sd_type || '').toLowerCase();
+      let requiresPrd = true;
+      if (sdType && this.supabase) {
+        const { data: profile } = await this.supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_prd')
+          .eq('sd_type', sdType)
+          .single();
+        if (profile && profile.requires_prd === false) {
+          requiresPrd = false;
+        }
+      }
+
+      if (requiresPrd) {
+        return ResultBuilder.rejected('NO_PRD', 'No PRD found - cannot verify work');
+      }
+
+      // NO-PRD PATH: SD type does not require a PRD (e.g., uat, infrastructure)
+      console.log(`\n📋 NO-PRD COMPLETION PATH (sd_type="${sdType}" does not require PRD)`);
+      console.log('═'.repeat(50));
+
+      // Finalize user stories by SD ID (no PRD ID available)
+      await finalizeUserStories(this.supabase, null, sdId);
+
+      // Complete SD without PRD validation
+      const handoffId = `PLAN-to-LEAD-noPRD-${sdId}-${Date.now()}`;
+      const sdCanonicalId = (await import('../../../sd-id-normalizer.js')).normalizeSDId
+        ? await (await import('../../../sd-id-normalizer.js')).normalizeSDId(this.supabase, sdId)
+        : sdId;
+
+      const { error: sdError } = await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'pending_approval',
+          current_phase: 'LEAD',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sdCanonicalId || sdId);
+
+      if (sdError) {
+        console.log(`   ⚠️  SD update error: ${sdError.message}`);
+      } else {
+        console.log('   ✅ SD status transitioned: → pending_approval (no PRD required)');
+      }
+
+      console.log('📊 Handoff ID:', handoffId);
+
+      const orchestratorResult = await checkAndCompleteParentSD(this.supabase, sd);
+
+      return {
+        success: true,
+        sdId: sdId,
+        prdId: null,
+        handoffId,
+        validation: { complete: true, score: 100, issues: [], warnings: [], noPrdRequired: true },
+        qualityScore: 100,
+        orchestratorFlow: {
+          isChild: !!sd.parent_sd_id,
+          parentCompleted: orchestratorResult.parentCompleted,
+          commandsToRun: orchestratorResult.commandsToRun,
+          childCommands: orchestratorResult.childCommands,
+          parentCommands: orchestratorResult.parentCommands
+        }
+      };
     }
 
     // Finalize user stories BEFORE validation

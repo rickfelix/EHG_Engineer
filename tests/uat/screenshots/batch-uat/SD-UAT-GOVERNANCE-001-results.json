@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-02-06T23:33:44.902Z",
+  "sdId": "SD-UAT-GOVERNANCE-001",
+  "userStories": {
+    "US-001": {
+      "criteria": [
+        {
+          "criterion": "Governance page loads",
+          "status": "PASS",
+          "details": "Page at http://localhost:8080/governance"
+        },
+        {
+          "criterion": "Governance metrics visible",
+          "status": "PASS",
+          "details": "7 cards found"
+        },
+        {
+          "criterion": "Compliance status displays",
+          "status": "PASS",
+          "details": "Compliance data visible"
+        },
+        {
+          "criterion": "Governance tabs accessible",
+          "status": "PASS",
+          "details": "5 tabs"
+        },
+        {
+          "criterion": "Can view policy details",
+          "status": "PASS",
+          "details": "Detail links visible"
+        }
+      ],
+      "status": "PASS",
+      "passRate": 1
+    }
+  },
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/v2/chairman/insights?format=simple",
+      "timestamp": "2026-02-06T23:34:16.489Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 400: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/ventures?select=id%2Cname%2Cstatus%2Ccurrent_lifecycle_stage%2Ccreated_",
+      "timestamp": "2026-02-06T23:34:16.489Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/crew_assignments?select=status&status=in.%28in_progress%2Cqueued%2Cpend",
+      "timestamp": "2026-02-06T23:34:16.489Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/placeholder/150/150",
+      "timestamp": "2026-02-06T23:34:16.489Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/governance/metrics",
+      "timestamp": "2026-02-06T23:34:16.489Z"
+    }
+  ],
+  "summary": {
+    "totalStories": 1,
+    "passed": 1,
+    "partial": 0,
+    "failed": 0,
+    "overallPassRate": 1,
+    "totalFindings": 5,
+    "criticalFindings": 0,
+    "highFindings": 0,
+    "mediumFindings": 5
+  }
+}

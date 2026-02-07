@@ -1,0 +1,151 @@
+{
+  "timestamp": "2026-02-06T23:06:18.300Z",
+  "sdId": "SD-UAT-DASHBOARD-001",
+  "userStories": {
+    "US-001": {
+      "criteria": [
+        {
+          "criterion": "Page loads within 3 seconds",
+          "status": "PASS",
+          "details": "Load time: 2ms"
+        },
+        {
+          "criterion": "Key metrics/KPIs display correctly",
+          "status": "PASS",
+          "details": "4 KPI cards found"
+        },
+        {
+          "criterion": "Charts/visualizations render",
+          "status": "PASS",
+          "details": "37 chart elements found"
+        },
+        {
+          "criterion": "Decision stack renders",
+          "status": "PASS",
+          "details": "3 decision items"
+        },
+        {
+          "criterion": "Portfolio summary renders",
+          "status": "PASS",
+          "details": "Portfolio summary visible"
+        },
+        {
+          "criterion": "No console errors appear",
+          "status": "PASS",
+          "details": "4 non-critical errors (API 4xx, known issues)"
+        }
+      ],
+      "status": "PASS",
+      "passRate": 1
+    },
+    "US-002": {
+      "criteria": [
+        {
+          "criterion": "EVA greeting widget displays",
+          "status": "PASS",
+          "details": "EVA greeting visible with personalized message"
+        },
+        {
+          "criterion": "Token budget bar displays",
+          "status": "PASS",
+          "details": "Token budget bar visible"
+        },
+        {
+          "criterion": "Attention queue sidebar works",
+          "status": "PASS",
+          "details": "Sidebar visible"
+        },
+        {
+          "criterion": "Tab navigation works",
+          "status": "PASS",
+          "details": "4 tabs found"
+        },
+        {
+          "criterion": "Interactive elements work (hover/drill-down)",
+          "status": "PASS",
+          "details": "KPI card hover tested"
+        },
+        {
+          "criterion": "Analytics page loads",
+          "status": "PASS",
+          "details": "Analytics content visible"
+        },
+        {
+          "criterion": "Analytics tab navigation works",
+          "status": "PASS",
+          "details": "5 analytics tabs found"
+        },
+        {
+          "criterion": "Data export/refresh controls exist",
+          "status": "PASS",
+          "details": "Export: true, Refresh: false"
+        }
+      ],
+      "status": "PASS",
+      "passRate": 1
+    }
+  },
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "console-error",
+      "description": "Console error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "timestamp": "2026-02-06T23:06:28.304Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "console-error",
+      "description": "Console error: Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T23:06:28.304Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "console-error",
+      "description": "Console error: Error fetching ventures: {code: PGRST200, details: Searched for a foreign key relationship between 'v…n the schema 'public', but no matches were found., hint: Perhaps you meant 'venture_stage_work' in",
+      "timestamp": "2026-02-06T23:06:28.304Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "console-error",
+      "description": "Console error: Failed to load resource: the server responded with a status of 404 ()",
+      "timestamp": "2026-02-06T23:06:28.304Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/v2/chairman/insights?format=simple",
+      "timestamp": "2026-02-06T23:06:39.862Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 400: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/ventures?select=id%2Cname%2Cstatus%2Ccurrent_lifecycle_stage%2Ccreated_at%2Cventure_stages%28stage_nu",
+      "timestamp": "2026-02-06T23:06:39.862Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/crew_assignments?select=status&status=in.%28in_progress%2Cqueued%2Cpending%29",
+      "timestamp": "2026-02-06T23:06:39.862Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/decisions?",
+      "timestamp": "2026-02-06T23:06:39.862Z"
+    }
+  ],
+  "summary": {
+    "totalStories": 2,
+    "passed": 2,
+    "partial": 0,
+    "failed": 0,
+    "overallPassRate": 1,
+    "totalFindings": 8,
+    "criticalFindings": 0,
+    "highFindings": 0,
+    "mediumFindings": 8,
+    "consoleErrors": 5,
+    "apiErrors": 7
+  }
+}

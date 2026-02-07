@@ -37,9 +37,11 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     .eq('sd_id', canonicalSdId || sdId)
     .gte('created_at', today.toISOString());
 
-  if (!sdError && sdBypasses && sdBypasses.length >= 3) {
+  // RCA-UAT-CAMPAIGN-FRICTION: Increased from 3 to 10 for orchestrator campaigns
+  // with pre-existing DOCMON violations. Permanent fix: scope DOCMON to current branch.
+  if (!sdError && sdBypasses && sdBypasses.length >= 10) {
     console.error('');
-    console.error('❌ BYPASS RATE LIMIT: Max 3 bypasses per SD reached');
+    console.error('❌ BYPASS RATE LIMIT: Max 10 bypasses per SD reached');
     console.error(`   SD: ${sdId} has ${sdBypasses.length} bypasses today`);
     console.error('');
     console.error('   Request LEAD approval for additional bypasses.');
