@@ -19,7 +19,7 @@ describe('US-001: Feedback Resolution Tracking', () => {
     it('should set strategic_directive_id and resolution_sd_id on feedback update', () => {
       // Verify the update payload includes both FK columns
       const createdSd = { id: 'SD-BUG-LOGIN-FIX-001', sd_key: 'SD-BUG-LOGIN-FIX-001', title: 'Fix login bug' };
-      const feedbackId = 'fb-uuid-001';
+      const _feedbackId = 'fb-uuid-001';
 
       const updatePayload = {
         status: 'in_progress',
@@ -73,7 +73,7 @@ describe('US-001: Feedback Resolution Tracking', () => {
 // ============================================================================
 describe('US-002: Auto-Close Feedback on SD Completion', () => {
   let mockSupabase;
-  let executor;
+  let _executor;
 
   beforeEach(() => {
     // Build a mock Supabase client chain
@@ -94,7 +94,7 @@ describe('US-002: Auto-Close Feedback on SD Completion', () => {
     };
 
     // Minimal executor mock with autoCloseFeedback method
-    executor = {
+    _executor = {
       supabase: mockSupabase
     };
   });
