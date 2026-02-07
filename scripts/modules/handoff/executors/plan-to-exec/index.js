@@ -219,7 +219,8 @@ export class PlanToExecExecutor extends BaseExecutor {
     await transitionSdToExec(this.supabase, sdId, sd);
 
     // Display EXEC phase requirements (proactive guidance)
-    await displayExecPhaseRequirements(this.supabase, sdId, prd);
+    // PAT-E2E-STATUS-001: Pass SD type so E2E requirements are skipped for infra SDs
+    await displayExecPhaseRequirements(this.supabase, sdId, prd, { sdType: sd?.sd_type });
 
     // Merge validation details
     const branchResults = gateResults.gateResults.GATE6_BRANCH_ENFORCEMENT?.details || {};

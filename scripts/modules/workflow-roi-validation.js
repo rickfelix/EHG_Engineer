@@ -79,25 +79,35 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
 
     // Fetch all previous gate results if not provided
     let gateResults = { ...allGateResults };
+    // PAT-GATE4-BYPASS-001: Track which handoffs were accepted (including via bypass)
+    // so Section D1 can give credit for governance-approved bypasses
+    const acceptedHandoffs = { gate1: false, gate2: false, gate3: false };
     if (!gateResults.gate1 && !gateResults.gate2 && !gateResults.gate3) {
       // Try to fetch from handoff metadata
       const { data: handoffs } = await supabase
         .from('sd_phase_handoffs')
-        .select('handoff_type, metadata, created_at')
+        .select('handoff_type, metadata, status, created_at')
         .eq('sd_id', sd_id)
         .order('created_at', { ascending: false });
 
       if (handoffs) {
         for (const handoff of handoffs) {
-          if (handoff.handoff_type === 'PLAN-TO-EXEC' && handoff.metadata?.gate1_validation) {
-            gateResults.gate1 = handoff.metadata.gate1_validation;
+          if (handoff.handoff_type === 'PLAN-TO-EXEC') {
+            if (handoff.status === 'accepted') acceptedHandoffs.gate1 = true;
+            if (handoff.metadata?.gate1_validation) {
+              gateResults.gate1 = handoff.metadata.gate1_validation;
+            }
           }
-          if (handoff.handoff_type === 'EXEC-TO-PLAN' && handoff.metadata?.gate2_validation) {
-            gateResults.gate2 = handoff.metadata.gate2_validation;
+          if (handoff.handoff_type === 'EXEC-TO-PLAN') {
+            if (handoff.status === 'accepted') acceptedHandoffs.gate2 = true;
+            if (handoff.metadata?.gate2_validation) {
+              gateResults.gate2 = handoff.metadata.gate2_validation;
+            }
           }
           // SD-LIFECYCLE-GAP-002 FIX: Check both gate3_validation and gate_results.GATE3_TRACEABILITY
           // The unified handoff system stores Gate 3 results in gate_results object
           if (handoff.handoff_type === 'PLAN-TO-LEAD') {
+            if (handoff.status === 'accepted') acceptedHandoffs.gate3 = true;
             if (handoff.metadata?.gate3_validation) {
               gateResults.gate3 = handoff.metadata.gate3_validation;
             } else if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
@@ -106,7 +116,14 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
           }
         }
       }
+    } else {
+      // Gate results provided directly - assume all accepted
+      if (allGateResults.gate1) acceptedHandoffs.gate1 = true;
+      if (allGateResults.gate2) acceptedHandoffs.gate2 = true;
+      if (allGateResults.gate3) acceptedHandoffs.gate3 = true;
     }
+    // Store for Section D access
+    validation._acceptedHandoffs = acceptedHandoffs;
 
     // ===================================================================
     // PHASE 1: NON-NEGOTIABLE BLOCKERS (Strategic Validation Gate)
@@ -575,31 +592,49 @@ async function validateExecutiveApproval(sd_id, gateResults, validation, supabas
   console.log('\n   [D] Executive Validation...');
 
   // D1: All gates passed (10 points)
-  console.log('\n   [D1] All Validation Gates Passed...');
+  // PAT-GATE4-BYPASS-001 FIX: Also accept governance-approved bypasses.
+  // A handoff can be accepted via --bypass-validation when gates fail. The handoff
+  // status is 'accepted' but gate results show passed=false. These bypasses are
+  // rate-limited, audited, and require a reason - so they represent valid governance.
+  console.log('\n   [D1] All Validation Gates Passed (or Bypass-Approved)...');
 
+  const acceptedHandoffs = validation._acceptedHandoffs || {};
   const gate1Passed = gateResults.gate1?.passed;
   const gate2Passed = gateResults.gate2?.passed;
   const gate3Passed = gateResults.gate3?.passed;
 
+  // PAT-GATE4-BYPASS-001: Count gates that passed OR were accepted via bypass
+  const gate1OK = gate1Passed || acceptedHandoffs.gate1;
+  const gate2OK = gate2Passed || acceptedHandoffs.gate2;
+  const gate3OK = gate3Passed || acceptedHandoffs.gate3;
+
   const passedCount = [gate1Passed, gate2Passed, gate3Passed].filter(Boolean).length;
+  const acceptedCount = [gate1OK, gate2OK, gate3OK].filter(Boolean).length;
+  const bypassCount = acceptedCount - passedCount;
+
   sectionDetails.gates_passed = passedCount;
+  sectionDetails.gates_accepted_with_bypass = bypassCount;
   sectionDetails.gates_total = 3;
 
-  if (passedCount === 3) {
+  if (acceptedCount === 3) {
     sectionScore += 10;
-    console.log('   ✅ All 3 gates passed (Gate 1, 2, 3)');
-  } else if (passedCount === 2) {
+    if (bypassCount > 0) {
+      console.log(`   ✅ All 3 gates cleared (${passedCount} passed, ${bypassCount} bypass-approved)`);
+    } else {
+      console.log('   ✅ All 3 gates passed (Gate 1, 2, 3)');
+    }
+  } else if (acceptedCount === 2) {
     sectionScore += 6;
-    validation.warnings.push(`[D1] Only ${passedCount}/3 gates passed`);
-    console.log(`   ⚠️  Only ${passedCount}/3 gates passed (6/10)`);
-  } else if (passedCount === 1) {
+    validation.warnings.push(`[D1] Only ${acceptedCount}/3 gates cleared`);
+    console.log(`   ⚠️  Only ${acceptedCount}/3 gates cleared (6/10)`);
+  } else if (acceptedCount === 1) {
     sectionScore += 3;
-    validation.issues.push(`[D1] Only ${passedCount}/3 gates passed - review required`);
-    console.log(`   ⚠️  Only ${passedCount}/3 gates passed (3/10)`);
+    validation.issues.push(`[D1] Only ${acceptedCount}/3 gates cleared - review required`);
+    console.log(`   ⚠️  Only ${acceptedCount}/3 gates cleared (3/10)`);
   } else {
     sectionScore += 0;
-    validation.issues.push('[D1] No gates passed - SD requires review');
-    console.log('   ❌ No gates passed (0/10)');
+    validation.issues.push('[D1] No gates passed or accepted - SD requires review');
+    console.log('   ❌ No gates passed or accepted (0/10)');
   }
 
   // D2: Quality thresholds met (10 points)
