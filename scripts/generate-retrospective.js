@@ -306,6 +306,32 @@ async function generateRetrospective(sdId) {
     console.warn('   You can run manually: npm run pattern:alert');
   }
 
+  // GAP-005: Verify linked feedback was auto-resolved by SD completion trigger
+  try {
+    const { data: linkedFeedback } = await supabase
+      .from('feedback')
+      .select('id, status, resolution_type')
+      .or(`strategic_directive_id.eq.${sdId},resolution_sd_id.eq.${sdId}`);
+
+    if (linkedFeedback && linkedFeedback.length > 0) {
+      const resolved = linkedFeedback.filter(f => f.status === 'resolved');
+      const unresolved = linkedFeedback.filter(f => f.status !== 'resolved');
+      console.log('\n📋 FEEDBACK LINKAGE VERIFICATION (GAP-005)');
+      console.log(`   Linked feedback items: ${linkedFeedback.length}`);
+      console.log(`   Auto-resolved: ${resolved.length}`);
+      if (unresolved.length > 0) {
+        console.log(`   ⚠️  Unresolved: ${unresolved.length} (trigger may not have fired)`);
+        for (const f of unresolved) {
+          console.log(`      - ${f.id} (status: ${f.status})`);
+        }
+      } else {
+        console.log('   ✅ All linked feedback resolved');
+      }
+    }
+  } catch (err) {
+    console.warn(`   ⚠️  Feedback verification failed (non-fatal): ${err.message}`);
+  }
+
   return {
     success: true,
     retrospective_id: retroId,
