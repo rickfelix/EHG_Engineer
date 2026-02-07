@@ -208,7 +208,12 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
 
     const pattern = reviewedContext.patterns.find(p => p.pattern_id === itemId || p.id === itemId);
     if (pattern) {
-      approvedItems.push(pattern);
+      // RCA-LEARN-EMPTY-IMPROVEMENTS: Normalize pattern field names
+      // context-builder.js uses 'id' field, but sd-builders.js expects 'pattern_id'
+      approvedItems.push({
+        ...pattern,
+        pattern_id: pattern.id || pattern.pattern_id  // Ensure pattern_id is set
+      });
       continue;
     }
 

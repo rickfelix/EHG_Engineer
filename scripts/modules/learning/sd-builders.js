@@ -6,6 +6,33 @@
  */
 
 /**
+ * Validate learning item shape before rendering (RCA-LEARN-EMPTY-IMPROVEMENTS)
+ * Ensures field consistency between context-builder and sd-builders
+ *
+ * @param {Object} item - Learning item to validate
+ * @param {number} index - Item index (for error messages)
+ * @throws {Error} If item is missing both id and pattern_id
+ */
+function validateLearningItem(item, index) {
+  if (!item.id && !item.pattern_id) {
+    throw new Error(`Learning item ${index} missing both 'id' and 'pattern_id' fields`);
+  }
+
+  // If it looks like a pattern (has category/severity), ensure pattern_id is set
+  if ((item.category || item.severity || item.occurrence_count) && !item.pattern_id) {
+    console.warn(`⚠️  Warning: Pattern-like item ${item.id} missing 'pattern_id' field - may render incorrectly`);
+    console.warn(`   Expected pattern fields: category="${item.category}", severity="${item.severity}"`);
+    console.warn('   This indicates a field contract violation between context-builder and sd-builders');
+  }
+
+  // If it looks like an improvement (has improvement_type/target_table), ensure description is set
+  if ((item.improvement_type || item.target_table) && !item.description) {
+    console.warn(`⚠️  Warning: Improvement-like item ${item.id} missing 'description' field - may render incorrectly`);
+    console.warn(`   Expected improvement fields: improvement_type="${item.improvement_type}", target_table="${item.target_table}"`);
+  }
+}
+
+/**
  * Build SD description from selected items
  * @param {Array} items - Selected patterns and improvements
  * @returns {string}
@@ -13,7 +40,12 @@
 export function buildSDDescription(items) {
   const lines = ['## Items to Address\n'];
 
-  for (const item of items) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    // RCA-LEARN-EMPTY-IMPROVEMENTS: Validate item shape before rendering
+    validateLearningItem(item, i);
+
     if (item.pattern_id) {
       lines.push(`### Pattern: ${item.pattern_id}`);
       lines.push(`- **Category:** ${item.category || 'Unknown'}`);
