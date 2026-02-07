@@ -168,17 +168,15 @@ if (Test-Path $StateFile) {
 # ANSI escape codes
 $esc = [char]27
 
-# Activity bar colors
+# Activity bar colors - only show when it's the user's turn (idle)
+$reset = "$esc[0m"
 if ($activityState -eq "running") {
-    $activityColor = "$esc[97;42m"  # White on green
-    $label = "  WORKING   "
+    $activitySignal = ""
 } else {
     $activityColor = "$esc[97;41m"  # White on red
     $label = " YOUR TURN  "
+    $activitySignal = "${activityColor}[${label}]${reset} "
 }
-$reset = "$esc[0m"
-
-$activitySignal = "${activityColor}[${label}]${reset}"
 
 # Progress bar colors
 if ($percentUsed -ge $EmergencyThreshold) {
@@ -237,8 +235,15 @@ if (Test-Path $leoStatusFile) {
     } catch { }
 }
 
+# Build progress section - only show when WARNING or above (hide green/healthy)
+if ($status -eq "HEALTHY") {
+    $progressSection = ""
+} else {
+    $progressSection = " ${barColor}[${bar}]${reset} ${percentUsed}%${icon}"
+}
+
 # Build output
-$output = "${activitySignal} ${projectInfo}${autoProceedInfo} ${barColor}[${bar}]${reset} ${percentUsed}% (${modelShort})${icon}"
+$output = "${activitySignal}${projectInfo}${autoProceedInfo}${progressSection} (${modelShort})"
 
 # Update state file
 $totalInput = if ($data.context_window.total_input_tokens) { [int]$data.context_window.total_input_tokens } else { 0 }
