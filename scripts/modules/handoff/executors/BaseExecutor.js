@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
 import { applyGatePolicies } from '../gate-policy-resolver.js';
+import { validateMultiSessionClaim } from '../gates/multi-session-claim-gate.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -61,6 +62,18 @@ export class BaseExecutor {
 
       // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
       await this._checkAndExecutePendingMigrations(sd, options);
+
+      // Step 1.8: PAT-MSESS-BYP-001 - Multi-session claim conflict check (BLOCKING)
+      // Prevents duplicate work when another Claude Code instance is already working on this SD
+      const claimConflict = await this._checkMultiSessionClaimConflict(sdId, sd);
+      if (claimConflict && !claimConflict.pass) {
+        return ResultBuilder.gateFailure('GATE_MULTI_SESSION_CLAIM_CONFLICT', {
+          issues: claimConflict.issues,
+          score: claimConflict.score,
+          max_score: claimConflict.max_score,
+          warnings: claimConflict.warnings
+        }, claimConflict.issues[0] || 'SD is claimed by another active session. Pick a different SD.');
+      }
 
       // Step 2: Pre-execution setup (optional, override in subclass)
       const setupResult = await this.setup(sdId, sd, options);
@@ -484,6 +497,48 @@ export class BaseExecutor {
     } catch (error) {
       // Non-fatal - allow handoff to proceed
       console.log(`   [Claim] ⚠️ Auto-claim error (non-blocking): ${error.message}`);
+    }
+  }
+
+  /**
+   * PAT-MSESS-BYP-001: Check for multi-session claim conflicts
+   *
+   * BLOCKING check that prevents handoff execution when another active
+   * session has claimed the target SD. Runs before gates and before
+   * _claimSDForSession to prevent duplicate work.
+   *
+   * @param {string} sdId - SD ID (UUID)
+   * @param {object} sd - SD record
+   * @returns {Promise<Object|null>} Gate result if blocked, null if OK
+   */
+  async _checkMultiSessionClaimConflict(sdId, sd) {
+    try {
+      // Get current session ID for self-exclusion
+      let currentSessionId = null;
+      try {
+        const sessionManager = await import('../../../../lib/session-manager.mjs');
+        const session = await sessionManager.getOrCreateSession();
+        currentSessionId = session?.session_id || null;
+      } catch (_err) {
+        // If session manager unavailable, proceed without self-exclusion
+      }
+
+      // Use sd_key for claim lookup (matches how claims are stored)
+      const claimId = sd?.sd_key || sdId;
+
+      const result = await validateMultiSessionClaim(this.supabase, claimId, {
+        currentSessionId
+      });
+
+      if (!result.pass) {
+        return result;
+      }
+
+      return null; // No conflict - proceed
+    } catch (error) {
+      // Non-fatal: fail-open on unexpected errors
+      console.log(`   [MultiSession] ⚠️ Claim check error (non-blocking): ${error.message}`);
+      return null;
     }
   }
 
