@@ -360,6 +360,9 @@ Both can be configured via `/leo settings`.
 
 | Transition Context | AUTO-PROCEED | Chaining | Behavior | Implementation |
 |-------------------|:------------:|:--------:|----------|----------------|
+| **Handoff completes (not LEAD-FINAL-APPROVAL)** | * | * | **TERMINAL** - Phase work required before next handoff | `getNextInWorkflow()` returns null |
+| Handoff completes (LEAD-FINAL-APPROVAL) | ON | * | **AUTO-CONTINUE** to next ready child (if orchestrator) | Child-to-child continuation |
+| Handoff completes (LEAD-FINAL-APPROVAL) | OFF | * | PAUSE for user selection | User must invoke next handoff |
 | **Child completes → next child** | ON | * | **AUTO-CONTINUE** to next ready child (priority-based) | `getNextReadyChild()` |
 | Child completes → next child | OFF | * | PAUSE for user selection | User must invoke `/leo next` |
 | **Child fails gate (retries exhausted)** | ON | * | **SKIP** to next sibling (D16) | `executeSkipAndContinue()` |
@@ -371,13 +374,33 @@ Both can be configured via `/leo settings`.
 | **Dependency unresolved** | * | * | **SKIP** SD, continue to next ready | `checkDependenciesResolved()` |
 | **Grandchild completes** | ON | * | Return to parent context, continue to next child | Hierarchical traversal |
 
+### Phase Work Between Handoffs (D34 - Added 2026-02-06)
+
+**ALL handoffs are terminal.** Phase work must happen between every handoff:
+
+| After Handoff | Required Phase Work | Next Handoff |
+|---------------|---------------------|--------------|
+| LEAD-TO-PLAN | Create PRD via `add-prd-to-database.js` | PLAN-TO-EXEC |
+| PLAN-TO-EXEC | Implement features (coding, testing) | EXEC-TO-PLAN |
+| EXEC-TO-PLAN | Verify implementation (QA, review) | PLAN-TO-LEAD |
+| PLAN-TO-LEAD | Final review, address feedback | LEAD-FINAL-APPROVAL |
+| LEAD-FINAL-APPROVAL | (Triggers child-to-child continuation) | (Next child SD via AUTO-PROCEED) |
+
+**Why handoffs are terminal:**
+- Prevents skipping critical work (PRD creation, implementation, verification)
+- Clarifies AUTO-PROCEED scope: child-to-child only, not handoff-to-handoff
+- Aligns with original design intent
+
+**SD-type-specific workflows** are defined in `workflow-definitions.js` (which handoffs are required/optional per type), not in auto-chaining logic.
+
 ### Key Rules
 
 1. **AUTO-PROCEED OFF always pauses** - Chaining has no effect when AUTO-PROCEED is OFF
 2. **Chaining only affects orchestrator-to-orchestrator transitions** - Child-to-child is controlled by AUTO-PROCEED alone
-3. **Priority determines next SD** - `sortByUrgency()` ranks by: Band (P0→P3) → Score → FIFO
-4. **Dependencies gate readiness** - SD with unresolved deps is skipped, not paused on
-5. **Both ON = no pauses except hard stops** - Runs until D23 (all blocked) or context exhaustion
+3. **All handoffs are terminal (D34)** - No auto-chaining within a single SD, phase work required between handoffs
+4. **Priority determines next SD** - `sortByUrgency()` ranks by: Band (P0→P3) → Score → FIFO
+5. **Dependencies gate readiness** - SD with unresolved deps is skipped, not paused on
+6. **Both ON = no pauses except hard stops** - Runs until D23 (all blocked) or context exhaustion
 
 ### Next SD Selection Priority
 
@@ -402,6 +425,17 @@ When AUTO-PROCEED determines "next SD", selection follows this order:
 
 ```
 SD Completes (child, grandchild, or orchestrator)
+         │
+         ▼
+   Is this a handoff completion (not LEAD-FINAL-APPROVAL)?
+    │           │
+   YES          NO (LEAD-FINAL-APPROVAL or child SD done)
+    │           │
+    │           └──► Continue below to check AUTO-PROCEED
+    ▼
+   TERMINAL - Show phase work guidance
+   Example: "Create PRD, then run PLAN-TO-EXEC"
+   PAUSE
          │
          ▼
    AUTO-PROCEED ON?
@@ -435,12 +469,14 @@ SD Completes (child, grandchild, or orchestrator)
 
 | Component | File | Key Function |
 |-----------|------|--------------|
+| Handoff termination | `scripts/modules/handoff/cli/cli-main.js` | `getNextInWorkflow()` (always returns null) |
 | Child selection | `scripts/modules/handoff/child-sd-selector.js` | `getNextReadyChild()` |
 | Skip failed child | `scripts/modules/handoff/skip-and-continue.js` | `executeSkipAndContinue()` |
 | Orchestrator completion | `scripts/modules/handoff/orchestrator-completion-hook.js` | `executeOrchestratorCompletionHook()` |
 | Urgency scoring | `scripts/modules/auto-proceed/urgency-scorer.js` | `sortByUrgency()` |
 | Dependency check | `scripts/modules/sd-next/dependency-resolver.js` | `checkDependenciesResolved()` |
 | Mode resolution | `scripts/modules/handoff/auto-proceed-resolver.js` | `resolveAutoProceed()` |
+| SD-type workflows | `scripts/modules/handoff/cli/workflow-definitions.js` | `getWorkflowForType()` |
 
 ### Conflict Resolution
 
@@ -451,11 +487,12 @@ If documentation elsewhere conflicts with this truth table:
 
 ### Historical Notes
 
+**2026-02-06 (v3)**: D34 added - All handoffs are terminal (no auto-chaining within SD). Added phase work guidance table. Previous auto-chaining behavior (LEAD-TO-PLAN → PLAN-TO-EXEC) removed as it skipped PRD creation.
+
+**2026-02-01 (v2)**: Expanded to cover ALL transition types, not just orchestrator boundaries. Added child-to-child and grandchild transitions.
+
 **2026-02-01 (v1)**: D08 was written as absolute rule without Chaining exception. Added orchestrator completion matrix.
 
-**2026-02-01 (v2)**: Expanded to cover ALL transition types after discovering pause occurred between children within an orchestrator. Root cause: only orchestrator boundaries were specified, not child-to-child continuation.
-
-**2026-02-01 (v2 code fix)**: Fixed `scripts/modules/handoff/cli/cli-main.js:handleExecuteWithContinuation()`. Bug: only continued after `LEAD-FINAL-APPROVAL`, causing break after `LEAD-TO-PLAN` for new children. Fix: Added `WORKFLOW_SEQUENCE` mapping to automatically advance through LEAD-TO-PLAN → LEAD-FINAL-APPROVAL → (find next child) → repeat.
 
 ## Session Initialization - SD Selection
 
@@ -667,7 +704,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-06 4:25:10 PM
+**Last Generated**: 2026-02-07 8:15:45 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -789,7 +826,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-02-06*
+*Router generated from database: 2026-02-07*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 
