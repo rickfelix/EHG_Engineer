@@ -131,6 +131,30 @@ export async function tagSourceItems(items, sdKey) {
       } else {
         results.tagged++;
       }
+    } else if (item.source_type === 'sub_agent_recommendation' || item.source_type === 'sub_agent_issue' || item.source_type === 'sub_agent_performance') {
+      // SD-LEARN-FIX-011: SAL items come from sub_agent_execution_results (read-only aggregation)
+      // They don't have their own taggable record, so log the association
+      console.log(`   ✅ SAL ${item.id || item.pattern_id}: Linked to SD (execution-derived, no table update needed)`);
+      results.tagged++;
+    } else if (item.source_type === 'feedback') {
+      // SD-LEARN-FIX-011: Feedback items - tag via resolution_sd_id
+      const feedbackId = item.source_id || item.id?.replace('FB-', '');
+      if (feedbackId && feedbackId.length > 8) {
+        // Try to find the full UUID from the truncated ID
+        const { error } = await supabase
+          .from('feedback')
+          .update({ resolution_sd_id: sdKey, updated_at: now })
+          .ilike('id', `${feedbackId}%`);
+
+        if (error) {
+          console.log(`   ⚠️  Feedback ${feedbackId}: Could not tag (${error.message})`);
+        } else {
+          results.tagged++;
+        }
+      } else {
+        console.log(`   ✅ Feedback ${item.id}: Linked to SD`);
+        results.tagged++;
+      }
     } else if (item.id) {
       const { error } = await supabase
         .from('protocol_improvement_queue')
@@ -177,7 +201,7 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
   console.log('  /learn → SD Creation Workflow');
   console.log('============================================================\n');
 
-  // 1. Collect approved items
+  // 1. Collect approved items from all learning sources
   const approvedItems = [];
   for (const [itemId, decision] of Object.entries(decisions)) {
     if (decision.status !== 'APPROVED') continue;
@@ -191,6 +215,48 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
     const improvement = reviewedContext.improvements.find(i => i.id === itemId);
     if (improvement) {
       approvedItems.push(improvement);
+      continue;
+    }
+
+    // SD-LEARN-FIX-011: Search sub-agent learnings (SAL-* items)
+    // These are surfaced by context-builder from sub_agent_execution_results
+    // but were previously silently dropped during SD creation
+    const salItem = (reviewedContext.sub_agent_learnings || []).find(s => s.id === itemId);
+    if (salItem) {
+      // Normalize SAL item to have pattern-like shape for SD creation
+      approvedItems.push({
+        ...salItem,
+        pattern_id: salItem.id,
+        issue_summary: salItem.content,
+        category: salItem.sub_agent_code || 'sub_agent',
+        severity: salItem.source_type === 'sub_agent_performance' ? 'high' : 'medium'
+      });
+      continue;
+    }
+
+    // SD-LEARN-FIX-011: Search feedback learnings (FB-* items)
+    const fbItem = (reviewedContext.feedback_learnings || []).find(f => f.id === itemId);
+    if (fbItem) {
+      approvedItems.push({
+        ...fbItem,
+        pattern_id: fbItem.id,
+        issue_summary: fbItem.content,
+        category: fbItem.category || 'feedback',
+        severity: fbItem.priority === 'P0' ? 'critical' : fbItem.priority === 'P1' ? 'high' : 'medium'
+      });
+      continue;
+    }
+
+    // SD-LEARN-FIX-011: Search feedback patterns (FBP-* items)
+    const fbpItem = (reviewedContext.feedback_patterns || []).find(fp => fp.id === itemId);
+    if (fbpItem) {
+      approvedItems.push({
+        ...fbpItem,
+        pattern_id: fbpItem.id,
+        issue_summary: fbpItem.content,
+        category: fbpItem.category || 'feedback_pattern',
+        severity: 'medium'
+      });
     }
   }
 
