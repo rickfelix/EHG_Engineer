@@ -172,6 +172,15 @@ async function createFromFeedback(feedbackId) {
     process.exit(1);
   }
 
+  // GAP-008: Check if feedback already has a linked SD (duplicate guard)
+  if (feedback.strategic_directive_id || feedback.resolution_sd_id) {
+    const linkedId = feedback.strategic_directive_id || feedback.resolution_sd_id;
+    console.log(`\n⚠️  Feedback already linked to SD: ${linkedId}`);
+    console.log('   Skipping SD creation to prevent duplicates.');
+    console.log('   Use --force flag to create anyway.\n');
+    process.exit(0);
+  }
+
   // Map feedback type to SD type
   const typeMap = { issue: 'fix', enhancement: 'enhancement', bug: 'bugfix' };
   const type = typeMap[feedback.type] || 'feature';
@@ -199,10 +208,14 @@ async function createFromFeedback(feedbackId) {
     }
   });
 
-  // Update feedback status
+  // GAP-001: Set strategic_directive_id FK on feedback (not just metadata)
+  // GAP-009: Update feedback status to in_progress with proper linkage
   await supabase
     .from('feedback')
-    .update({ status: 'in_progress' })
+    .update({
+      status: 'in_progress',
+      strategic_directive_id: sd.id
+    })
     .eq('id', feedback.id);
 
   return sd;
