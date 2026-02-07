@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-07 8:15:45 PM
+**Generated**: 2026-02-07 6:01:34 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -473,6 +473,39 @@ node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md
 | `success_criteria` | JSONB array | **YES** | `[{ criterion: "What", measure: "How" }]` - At least one entry required |
 | `success_metrics` | JSONB array | **ALT** | `[{ metric: "Name", target: "Goal", actual: "Current" }]` - Alternative to success_criteria |
 | `target_application` | text | **YES** | EHG (frontend) or EHG_Engineer (backend) |
+| `key_changes` | JSONB array | Recommended | `[{ change: "Description", type: "fix" }]` - Must be array of objects |
+| `key_principles` | JSONB array | Recommended | `["Principle 1", ...]` - Must be non-empty if provided |
+| `strategic_objectives` | JSONB array | Recommended | `["Objective 1", ...]` |
+| `risks` | JSONB array | Recommended | `[{ risk: "Description", mitigation: "Plan" }]` |
+
+### JSONB Field Constraints (Database-Enforced)
+
+**CRITICAL**: The `strategic_directives_v2` table has CHECK constraints that enforce data types at the database level. Violating these causes insert failures.
+
+| Constraint | Field | Requirement | Error if Violated |
+|------------|-------|-------------|-------------------|
+| `key_changes_is_array` | `key_changes` | Must be a JSONB array of **objects** (not strings) | `violates check constraint "key_changes_is_array"` |
+| `key_principles_not_empty` | `key_principles` | Must be non-empty array when provided (length >= 1) | `violates check constraint "key_principles_not_empty"` |
+
+**Correct formats:**
+```json
+// key_changes - MUST be objects with 'change' and 'type' keys
+"key_changes": [
+  { "change": "Add feedback learning loop", "type": "feature" },
+  { "change": "Fix triage classification", "type": "fix" }
+]
+
+// key_principles - MUST be non-empty string array
+"key_principles": [
+  "Backward compatible with existing inbox",
+  "Database-first pattern enforcement"
+]
+```
+
+**Common mistakes:**
+- Passing `key_changes` as an array of strings -> Use objects with `change` and `type` keys
+- Omitting `key_principles` or passing `[]` -> Provide at least one principle
+- Using `JSON.stringify()` on arrays before passing to Supabase -> Pass native JS arrays
 
 ### Success Metrics Requirement (MANDATORY)
 
