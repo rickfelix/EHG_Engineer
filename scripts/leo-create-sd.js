@@ -148,7 +148,7 @@ async function createFromFeedback(feedbackId) {
   // Fetch feedback item (support full or partial UUID)
   let feedback;
   // Try exact match first (full UUID)
-  const { data: exactMatch, error: exactError } = await supabase
+  const { data: exactMatch } = await supabase
     .from('feedback')
     .select('*')
     .eq('id', feedbackId)
@@ -158,7 +158,7 @@ async function createFromFeedback(feedbackId) {
     feedback = exactMatch;
   } else {
     // Partial UUID: use text cast via RPC
-    const { data: partialResult, error: partialError } = await supabase
+    const { data: partialResult } = await supabase
       .rpc('exec_sql', { sql_text: `SELECT id FROM feedback WHERE id::text LIKE '${feedbackId.replace(/'/g, "''")}%' LIMIT 1` });
     const partialId = partialResult?.[0]?.result?.[0]?.id;
     if (partialId) {
