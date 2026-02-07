@@ -292,10 +292,14 @@ async function createSdFromFeedback(feedback, parentId = null) {
     // Table might not exist, ignore
   }
 
-  // Update feedback status to 'in_progress'
+  // Update feedback status and link SD references (US-001: resolution tracking)
   await supabase
     .from('feedback')
-    .update({ status: 'in_progress' })
+    .update({
+      status: 'in_progress',
+      strategic_directive_id: created.id,
+      resolution_sd_id: created.id
+    })
     .eq('id', feedback.id);
 
   return created;
