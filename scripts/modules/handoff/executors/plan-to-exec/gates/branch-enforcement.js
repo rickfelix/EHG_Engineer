@@ -119,7 +119,11 @@ export function createBranchEnforcementGate(sd, appPath) {
       // Lazy load the verifier
       const { default: GitBranchVerifier } = await import('../../../../../verify-git-branch-status.js');
 
-      const branchVerifier = new GitBranchVerifier(ctx.sdId, sd.title, appPath);
+      // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: worktreeMode creates
+      // the branch without switching main repo - worktree handles checkout
+      const branchVerifier = new GitBranchVerifier(ctx.sdId, sd.title, appPath, {
+        worktreeMode: true
+      });
       const branchResults = await branchVerifier.verify();
 
       ctx._branchResults = branchResults;

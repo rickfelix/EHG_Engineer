@@ -36,6 +36,9 @@ import { displayPreHandoffWarnings, displayExecPhaseRequirements } from './displ
 import { getParentOrchestratorGates, isParentOrchestrator } from './parent-orchestrator.js';
 import { getRemediation } from './remediation.js';
 
+// Worktree integration (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
+import { createWorktree, symlinkNodeModules, getRepoRoot } from '../../../../../lib/worktree-manager.js';
+
 // External validators (lazy loaded)
 let validateBMADForPlanToExec;
 let PlanToExecVerifier;
@@ -218,12 +221,51 @@ export class PlanToExecExecutor extends BaseExecutor {
     // STATE TRANSITION: Update SD current_phase to EXEC
     await transitionSdToExec(this.supabase, sdId, sd);
 
+    // Merge validation details (needed for worktree creation)
+    const branchResults = gateResults.gateResults.GATE6_BRANCH_ENFORCEMENT?.details || {};
+
+    // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: Create worktree after state transitions
+    let worktreeResult = null;
+    const sdKey = sd.sd_key || sdId;
+    const worktreeBranch = branchResults.expectedBranch;
+
+    if (worktreeBranch) {
+      try {
+        console.log('\n🌲 Step 4: Worktree Creation');
+        console.log('-'.repeat(50));
+        worktreeResult = createWorktree({ sdKey, branch: worktreeBranch });
+
+        if (worktreeResult.reused) {
+          console.log(`   ℹ️  Worktree already exists: .worktrees/${sdKey}`);
+        } else {
+          console.log(`   ✅ Worktree created: .worktrees/${sdKey}`);
+        }
+        console.log(`   📂 Path: ${worktreeResult.path}`);
+        console.log(`   🌿 Branch: ${worktreeResult.branch}`);
+
+        // Symlink node_modules for convenience
+        try {
+          symlinkNodeModules(worktreeResult.path, getRepoRoot());
+          console.log('   ✅ node_modules linked');
+        } catch (symlinkError) {
+          console.warn(`   ⚠️  Could not link node_modules: ${symlinkError.message}`);
+        }
+      } catch (worktreeError) {
+        console.warn(`   ⚠️  Worktree creation failed (non-blocking): ${worktreeError.message}`);
+        console.warn(`   📝 SD Key: ${sdKey}, Branch: ${worktreeBranch}`);
+        console.warn('   💡 Create manually: npm run session:worktree -- --sd-key ' + sdKey + ' --branch ' + worktreeBranch);
+      }
+    } else {
+      console.log('\n   ℹ️  Worktree creation skipped: no branch resolved from gate results');
+    }
+
     // Display EXEC phase requirements (proactive guidance)
     // PAT-E2E-STATUS-001: Pass SD type so E2E requirements are skipped for infra SDs
-    await displayExecPhaseRequirements(this.supabase, sdId, prd, { sdType: sd?.sd_type });
-
-    // Merge validation details
-    const branchResults = gateResults.gateResults.GATE6_BRANCH_ENFORCEMENT?.details || {};
+    await displayExecPhaseRequirements(this.supabase, sdId, prd, {
+      sdType: sd?.sd_type,
+      worktreePath: worktreeResult?.path || null,
+      sdKey
+    });
 
     return {
       success: true,
@@ -235,6 +277,12 @@ export class PlanToExecExecutor extends BaseExecutor {
         switched: branchResults.branchSwitched,
         remote_tracking: branchResults.remoteTrackingSetup
       },
+      worktree: worktreeResult ? {
+        path: worktreeResult.path,
+        sdKey: worktreeResult.sdKey,
+        created: worktreeResult.created,
+        reused: worktreeResult.reused
+      } : null,
       repository: options._appPath
     };
   }

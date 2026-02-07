@@ -40,10 +40,21 @@ const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 const execAsync = promisify(exec);
 
 class GitBranchVerifier {
-  constructor(sdId, sdTitle, appPath = EHG_ROOT) {
+  /**
+   * @param {string} sdId - Strategic Directive ID
+   * @param {string} sdTitle - SD title for branch naming
+   * @param {string} appPath - Target application path
+   * @param {Object} [options] - Additional options
+   * @param {boolean} [options.worktreeMode=false] - When true, creates branch without
+   *   switching main repo. Main stays on current branch. Branch checkout happens
+   *   in a worktree created by worktree-manager.js after the gate passes.
+   *   (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
+   */
+  constructor(sdId, sdTitle, appPath = EHG_ROOT, options = {}) {
     this.sdId = sdId;
     this.sdTitle = sdTitle || '';
     this.appPath = appPath;
+    this.worktreeMode = options.worktreeMode || false;
     this.expectedBranchName = this.generateBranchName(sdId, sdTitle);
 
     this.results = {
@@ -60,7 +71,8 @@ class GitBranchVerifier {
       expectedBranch: this.expectedBranchName,
       branchCreated: false,
       branchSwitched: false,
-      changesStashed: false
+      changesStashed: false,
+      worktreeMode: this.worktreeMode
     };
   }
 
@@ -181,8 +193,25 @@ class GitBranchVerifier {
     console.log(`   Expected branch: ${this.expectedBranchName}`);
 
     if (currentBranch === this.expectedBranchName) {
+      // In worktree mode, if we're ON the feature branch in main repo, we need
+      // to switch AWAY so the worktree can check it out (git constraint: a branch
+      // can only be checked out in one worktree at a time).
+      if (this.worktreeMode) {
+        console.log('🌲 WORKTREE MODE: Main repo is on feature branch - will switch to main');
+        console.log('   (Branch can only be checked out in one location at a time)');
+        this.results.actions.push('switch_to_main');
+        this.results.onCorrectBranch = false;
+        return false;
+      }
       console.log('✅ Already on correct branch');
       this.results.onCorrectBranch = true;
+      return true;
+    }
+
+    // In worktree mode, staying on current branch is correct behavior
+    if (this.worktreeMode) {
+      console.log(`🌲 WORKTREE MODE: Staying on "${currentBranch}" (worktree will use feature branch)`);
+      this.results.onCorrectBranch = true; // "correct" means we DON'T switch
       return true;
     }
 
@@ -294,6 +323,35 @@ class GitBranchVerifier {
     console.log('\n🔨 ACTION: Creating Branch');
     console.log('-'.repeat(50));
 
+    if (this.worktreeMode) {
+      // Worktree mode: create branch WITHOUT checking it out
+      // The worktree will handle checkout in .worktrees/<sdKey>/
+      const createResult = await this.gitCommand(`git branch ${this.expectedBranchName}`);
+
+      if (!createResult.success) {
+        this.results.blockers.push(`Failed to create branch: ${createResult.stderr}`);
+        console.error(`❌ Branch creation failed: ${createResult.stderr}`);
+        return false;
+      }
+
+      console.log(`✅ Branch created (worktree mode - no checkout): ${this.expectedBranchName}`);
+      this.results.branchCreated = true;
+      this.results.branchExists = true;
+      this.results.onCorrectBranch = true; // In worktree mode, "correct" = branch exists
+
+      // Push branch to remote (without -u since we're not on it)
+      const pushResult = await this.gitCommand(`git push origin ${this.expectedBranchName}`);
+      if (pushResult.success) {
+        console.log('✅ Branch pushed to remote');
+        this.results.remoteTrackingSetup = true;
+      } else {
+        console.warn(`⚠️  Could not push branch to remote: ${pushResult.stderr}`);
+      }
+
+      return true;
+    }
+
+    // Standard mode: create and checkout
     // Check for uncommitted changes before creating branch
     const statusResult = await this.gitCommand('git status --porcelain');
     if (statusResult.stdout.length > 0) {
@@ -495,7 +553,21 @@ class GitBranchVerifier {
         this.printSummary();
         return this.results;
       }
-    } else if (this.results.actions.includes('switch_branch') && !this.results.onCorrectBranch) {
+    } else if (this.worktreeMode && this.results.actions.includes('switch_to_main')) {
+      // Worktree mode: main repo is on the feature branch, switch to main
+      // so the worktree can check out the feature branch
+      console.log('\n🔨 ACTION: Switching main repo to main (worktree mode)');
+      console.log('-'.repeat(50));
+      const switchResult = await this.gitCommand('git checkout main');
+      if (switchResult.success) {
+        console.log('✅ Main repo switched to main');
+        this.results.onCorrectBranch = true;
+        this.results.branchSwitched = true;
+      } else {
+        console.warn(`⚠️  Could not switch to main: ${switchResult.stderr}`);
+        this.results.warnings.push('Could not switch main repo to main - worktree creation may fail');
+      }
+    } else if (!this.worktreeMode && this.results.actions.includes('switch_branch') && !this.results.onCorrectBranch) {
       const switched = await this.switchBranch();
       if (!switched) {
         this.results.verdict = 'FAIL';
@@ -509,15 +581,26 @@ class GitBranchVerifier {
       await this.setupRemoteTracking();
     }
 
-    // Final verification: Check if on correct branch now
-    const finalBranchCheck = await this.gitCommand('git branch --show-current');
-    const finalBranch = finalBranchCheck.stdout;
-
-    if (finalBranch !== this.expectedBranchName) {
-      this.results.blockers.push(`Final verification failed: still on "${finalBranch}" instead of "${this.expectedBranchName}"`);
-      this.results.verdict = 'FAIL';
+    if (this.worktreeMode) {
+      // Worktree mode: verify branch EXISTS (not that we're on it)
+      const branchExistsCheck = await this.gitCommand(`git rev-parse --verify ${this.expectedBranchName}`);
+      if (!branchExistsCheck.success) {
+        this.results.blockers.push(`Branch "${this.expectedBranchName}" does not exist after creation attempt`);
+        this.results.verdict = 'FAIL';
+      } else {
+        this.results.verdict = this.results.blockers.length === 0 ? 'PASS' : 'FAIL';
+      }
     } else {
-      this.results.verdict = this.results.blockers.length === 0 ? 'PASS' : 'FAIL';
+      // Standard mode: verify we're ON the correct branch
+      const finalBranchCheck = await this.gitCommand('git branch --show-current');
+      const finalBranch = finalBranchCheck.stdout;
+
+      if (finalBranch !== this.expectedBranchName) {
+        this.results.blockers.push(`Final verification failed: still on "${finalBranch}" instead of "${this.expectedBranchName}"`);
+        this.results.verdict = 'FAIL';
+      } else {
+        this.results.verdict = this.results.blockers.length === 0 ? 'PASS' : 'FAIL';
+      }
     }
 
     this.printSummary();
@@ -580,6 +663,11 @@ class GitBranchVerifier {
       console.log('   3. Resolve any git conflicts if present');
       console.log('   4. Re-run PLAN→EXEC handoff');
       console.log('');
+    } else if (this.worktreeMode) {
+      console.log('\n✅ GATE 6 PASSED: Branch ready for worktree creation');
+      console.log(`   Branch: ${this.expectedBranchName}`);
+      console.log('   Mode: worktree-first (main repo stays on current branch)');
+      console.log('   Next: Worktree will be created at .worktrees/<sdKey>/');
     } else {
       console.log('\n✅ GATE 6 PASSED: On correct branch, ready for EXEC work');
       console.log(`   Branch: ${this.expectedBranchName}`);

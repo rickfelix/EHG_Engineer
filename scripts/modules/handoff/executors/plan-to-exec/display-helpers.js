@@ -82,6 +82,8 @@ export async function displayPreHandoffWarnings(supabase, handoffType) {
  * @param {Object} _prd - PRD object (unused, for future expansion)
  * @param {Object} [options] - Options
  * @param {string} [options.sdType] - SD type (e.g., 'infrastructure') for conditional display
+ * @param {string} [options.worktreePath] - Worktree path if created (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
+ * @param {string} [options.sdKey] - SD key for worktree instructions
  */
 export async function displayExecPhaseRequirements(supabase, sdId, _prd, options = {}) {
   try {
@@ -89,6 +91,15 @@ export async function displayExecPhaseRequirements(supabase, sdId, _prd, options
     console.log('📋 EXEC PHASE REQUIREMENTS');
     console.log('   To complete EXEC-TO-PLAN handoff, you must:');
     console.log('='.repeat(70));
+
+    // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: Display worktree info
+    if (options.worktreePath) {
+      console.log(`\n   🌲 Worktree: .worktrees/${options.sdKey}`);
+      console.log(`      cd ${options.worktreePath}`);
+    } else if (options.sdKey) {
+      console.log('\n   ⚠️  Worktree: not created');
+      console.log(`      Create manually: npm run session:worktree -- --sd-key ${options.sdKey} --branch <branch>`);
+    }
 
     // Get user stories for this SD
     const { data: userStories, error } = await supabase
