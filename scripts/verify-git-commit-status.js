@@ -72,7 +72,7 @@ class GitCommitVerifier {
     try {
       const { stdout, stderr } = await execAsync(command, { cwd: this.appPath });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
-    } catch (_error) {
+    } catch (error) {
       return {
         stdout: error.stdout?.trim() || '',
         stderr: error.stderr?.trim() || error.message,
