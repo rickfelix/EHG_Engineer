@@ -76,9 +76,8 @@ export class PlanToLeadExecutor extends BaseExecutor {
           stdio: 'pipe'
         });
 
-        let retroOutput = '';
-        retroProcess.stdout.on('data', (data) => { retroOutput += data.toString(); });
-        retroProcess.stderr.on('data', (data) => { retroOutput += data.toString(); });
+        retroProcess.stdout.on('data', () => {});
+        retroProcess.stderr.on('data', () => {});
 
         await new Promise((resolve, reject) => {
           retroProcess.on('close', (code) => {
