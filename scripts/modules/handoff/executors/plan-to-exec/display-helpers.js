@@ -80,8 +80,10 @@ export async function displayPreHandoffWarnings(supabase, handoffType) {
  * @param {Object} supabase - Supabase client
  * @param {string} sdId - SD ID
  * @param {Object} _prd - PRD object (unused, for future expansion)
+ * @param {Object} [options] - Options
+ * @param {string} [options.sdType] - SD type (e.g., 'infrastructure') for conditional display
  */
-export async function displayExecPhaseRequirements(supabase, sdId, _prd) {
+export async function displayExecPhaseRequirements(supabase, sdId, _prd, options = {}) {
   try {
     console.log('\n' + '='.repeat(70));
     console.log('📋 EXEC PHASE REQUIREMENTS');
@@ -105,14 +107,26 @@ export async function displayExecPhaseRequirements(supabase, sdId, _prd) {
       });
 
       // E2E test requirements
-      const needsE2E = userStories.filter(s => !s.e2e_test_path);
-      if (needsE2E.length > 0) {
-        console.log(`\n   □ Create E2E tests for ${needsE2E.length} user stories:`);
-        console.log('     - Each user story must have e2e_test_path populated');
-        console.log('     - Tests must pass (e2e_test_status = "passing")');
-        console.log('     - Example: tests/e2e/phase-N-stages.spec.ts');
+      // PAT-E2E-STATUS-001 FIX: Infrastructure/documentation SDs don't require E2E tests.
+      // The DB progress function uses OR logic (validation_status='validated' OR e2e_test_status='passing'),
+      // so infra SDs complete via validation_status alone. Don't display E2E requirements for them.
+      const sdType = (options.sdType || '').toLowerCase();
+      const infraTypes = ['infrastructure', 'documentation', 'discovery_spike', 'orchestrator', 'uat', 'refactor'];
+      const isInfraType = infraTypes.includes(sdType);
+
+      if (isInfraType) {
+        console.log('\n   ✓ E2E tests: NOT REQUIRED for this SD type');
+        console.log(`     (sd_type="${sdType}" uses validation_status for progress)`);
       } else {
-        console.log('\n   ✓ E2E test paths already mapped');
+        const needsE2E = userStories.filter(s => !s.e2e_test_path);
+        if (needsE2E.length > 0) {
+          console.log(`\n   □ Create E2E tests for ${needsE2E.length} user stories:`);
+          console.log('     - Each user story must have e2e_test_path populated');
+          console.log('     - Tests must pass (e2e_test_status = "passing")');
+          console.log('     - Example: tests/e2e/phase-N-stages.spec.ts');
+        } else {
+          console.log('\n   ✓ E2E test paths already mapped');
+        }
       }
     } else {
       console.log('\n   ⚠️  No user stories found - create them during EXEC');

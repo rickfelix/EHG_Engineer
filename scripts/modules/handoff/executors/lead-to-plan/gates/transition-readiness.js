@@ -57,13 +57,16 @@ export async function validateTransitionReadiness(sd, supabase) {
   }
 
   // Check 3: Look for previous failed/rejected LEAD-TO-PLAN handoffs
+  // PAT-HANDOFF-PHZ-001 FIX: Query correct table (sd_phase_handoffs) with correct
+  // case (lowercase). Previous code queried non-existent 'sd_handoffs' table, so
+  // rejections were never detected and handoffs were never blocked by prior failures.
   try {
     const { data: previousHandoffs } = await supabase
-      .from('sd_handoffs')
+      .from('sd_phase_handoffs')
       .select('id, status, created_at, rejection_reason')
       .eq('sd_id', sd.id)
       .eq('handoff_type', 'LEAD-TO-PLAN')
-      .in('status', ['REJECTED', 'FAILED', 'BLOCKED'])
+      .in('status', ['rejected', 'failed', 'blocked'])
       .order('created_at', { ascending: false })
       .limit(5);
 
@@ -74,7 +77,7 @@ export async function validateTransitionReadiness(sd, supabase) {
       console.log(`   ⚠️  Found ${failedCount} previous failed/rejected handoff attempt(s)`);
 
       // If the most recent attempt was rejected, require acknowledgment
-      if (latestFailed.status === 'REJECTED') {
+      if (latestFailed.status === 'rejected') {
         issues.push(`Previous LEAD-TO-PLAN handoff was REJECTED: ${latestFailed.rejection_reason || 'No reason provided'}`);
         issues.push('Action: Address rejection reason before retrying handoff');
         console.log(`   ❌ Last rejection: ${latestFailed.rejection_reason || 'No reason provided'}`);
