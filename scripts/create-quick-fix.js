@@ -230,71 +230,121 @@ async function createQuickFix(options = {}) {
   console.log(`   Estimated LOC: ${estimatedLoc}`);
   console.log(`   Status: ${data.status}\n`);
 
-  // Enhancement #3: Auto-Branch Creation
+  // Worktree Isolation for Quick-Fix work
   if (options.autoBranch !== false) { // Default to true
-    console.log('🌿 Auto-Branch Creation\n');
+    console.log('🌲 Worktree Isolation\n');
 
     try {
       // Check if git repo
       try {
         execSync('git rev-parse --git-dir', { stdio: 'pipe' });
       } catch (_err) {
-        console.log('   ⚠️  Not a git repository - skipping branch creation\n');
-        return printNextSteps(qfId, false);
+        console.log('   ⚠️  Not a git repository - skipping worktree creation\n');
+        return printNextSteps(qfId, false, null);
       }
 
-      // Check for uncommitted changes
-      const status = execSync('git status --porcelain', { encoding: 'utf-8' });
-      if (status.trim()) {
-        console.log('   ⚠️  Uncommitted changes detected');
-        console.log('   Would you like to:');
-        console.log('   a) Stash changes and create branch');
-        console.log('   b) Skip branch creation (manual later)');
+      // Dynamically import worktree-manager (ESM)
+      const { createWorkTypeWorktree, symlinkNodeModules } = await import('../lib/worktree-manager.js');
 
-        const choice = await prompt('   Choice (a/b): ');
+      const result = createWorkTypeWorktree({
+        workType: 'QF',
+        workKey: qfId,
+        branch: `qf/${qfId}`
+      });
 
-        if (choice.toLowerCase() === 'a') {
-          execSync(`git stash push -m "Pre quick-fix/${qfId}"`, { stdio: 'inherit' });
-          console.log('   ✅ Changes stashed\n');
-        } else {
-          return printNextSteps(qfId, false);
+      if (result.mode === 'worktree') {
+        // Symlink node_modules into worktree
+        try {
+          symlinkNodeModules(result.path);
+        } catch (symlinkErr) {
+          console.log(`   ⚠️  node_modules symlink failed: ${symlinkErr.message}`);
+          console.log('   Run npm ci in the worktree if needed.\n');
+        }
+
+        const action = result.created ? 'Created' : 'Reusing existing';
+        console.log(`   ✅ ${action} worktree: ${result.path}`);
+        console.log(`   Branch: ${result.branch}\n`);
+
+        // Set environment marker
+        process.env.EHG_WORKTREE_MODE = 'worktree';
+
+        // Update database with branch name and worktree path
+        await supabase
+          .from('quick_fixes')
+          .update({ branch_name: result.branch })
+          .eq('id', qfId);
+
+        return printNextSteps(qfId, true, result.path);
+      } else {
+        // Fallback to main repo
+        console.log('   ⚠️  Worktree creation fell back to main repo');
+        console.log(`   Reason: ${result.reason}`);
+        console.log('');
+
+        process.env.EHG_WORKTREE_MODE = 'main-fallback';
+
+        // Still create a branch in main repo
+        const branchName = `qf/${qfId}`;
+        try {
+          execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
+          console.log(`   ✅ Branch created in main repo: ${branchName}\n`);
+
+          await supabase
+            .from('quick_fixes')
+            .update({ branch_name: branchName })
+            .eq('id', qfId);
+
+          return printNextSteps(qfId, true, null);
+        } catch (branchErr) {
+          console.log(`   ❌ Branch creation also failed: ${branchErr.message}\n`);
+          return printNextSteps(qfId, false, null);
         }
       }
-
-      // Create branch
-      const branchName = `quick-fix/${qfId}`;
-      execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
-
-      console.log(`   ✅ Branch created: ${branchName}\n`);
-
-      // Update database with branch name
-      await supabase
-        .from('quick_fixes')
-        .update({ branch_name: branchName })
-        .eq('id', qfId);
-
-      return printNextSteps(qfId, true);
-
     } catch (err) {
-      console.log(`   ❌ Branch creation failed: ${err.message}\n`);
-      return printNextSteps(qfId, false);
+      console.log(`   ❌ Worktree creation failed: ${err.message}`);
+      console.log('   Falling back to branch-only mode.\n');
+
+      process.env.EHG_WORKTREE_MODE = 'main-fallback';
+
+      // Fallback: try simple branch creation
+      try {
+        const branchName = `qf/${qfId}`;
+        execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
+        console.log(`   ✅ Fallback branch created: ${branchName}\n`);
+
+        await supabase
+          .from('quick_fixes')
+          .update({ branch_name: branchName })
+          .eq('id', qfId);
+
+        return printNextSteps(qfId, true, null);
+      } catch (_fallbackErr) {
+        return printNextSteps(qfId, false, null);
+      }
     }
   } else {
-    return printNextSteps(qfId, false);
+    return printNextSteps(qfId, false, null);
   }
 }
 
-function printNextSteps(qfId, branchCreated) {
+function printNextSteps(qfId, branchCreated, worktreePath) {
   console.log('📍 Next steps:');
-  console.log(`   1. Read details: node scripts/read-quick-fix.js ${qfId}`);
-  if (!branchCreated) {
-    console.log(`   2. Create branch: git checkout -b quick-fix/${qfId}`);
+  if (worktreePath) {
+    console.log(`   1. cd ${worktreePath}`);
+    console.log('   2. Implement fix (≤50 LOC)');
+    console.log('   3. Run tests: npm run test:unit && npm run test:e2e');
+    console.log(`   4. Complete: node scripts/complete-quick-fix.js ${qfId}\n`);
+  } else {
+    console.log(`   1. Read details: node scripts/read-quick-fix.js ${qfId}`);
+    if (!branchCreated) {
+      console.log(`   2. Create branch: git checkout -b qf/${qfId}`);
+    }
+    console.log(`   ${branchCreated ? '2' : '3'}. Implement fix (≤50 LOC)`);
+    console.log(`   ${branchCreated ? '3' : '4'}. Run tests: npm run test:unit && npm run test:e2e`);
+    console.log(`   ${branchCreated ? '4' : '5'}. Complete: node scripts/complete-quick-fix.js ${qfId}\n`);
   }
-  console.log(`   ${branchCreated ? '2' : '3'}. Implement fix (≤50 LOC)`);
-  console.log(`   ${branchCreated ? '3' : '4'}. Run tests: npm run test:unit && npm run test:e2e`);
-  console.log(`   ${branchCreated ? '4' : '5'}. Complete: node scripts/complete-quick-fix.js ${qfId}\n`);
 
-  return { escalated: false, qfId, branchCreated };
+  return { escalated: false, qfId, branchCreated, worktreePath };
 }
 
 // CLI argument parsing
