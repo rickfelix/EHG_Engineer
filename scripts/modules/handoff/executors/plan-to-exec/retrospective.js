@@ -56,7 +56,7 @@ async function getRecentActiveIssues(supabase) {
     }
 
     return data || [];
-  } catch (err) {
+  } catch (_err) {
     return [];
   }
 }
@@ -173,7 +173,7 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
 
     // Create retrospective record
     const retrospective = {
-      sd_id: sdId,
+      sd_id: sd?.id || sdId,
       project_name: sd.title,
       retro_type: 'SD_COMPLETION', // Use valid enum value
       retrospective_type: retrospectiveType, // Store actual handoff type here
