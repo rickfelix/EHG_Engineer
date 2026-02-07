@@ -5,6 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { normalizeSDId } from './modules/sd-id-normalizer.js';
 
 dotenv.config();
 
@@ -13,9 +14,20 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const sdId = process.argv[2] || 'SD-VWC-PHASE1-001';
+let sdId = process.argv[2] || 'SD-VWC-PHASE1-001';
 
 console.log(`🔄 Synchronizing database state for ${sdId}...`);
+
+// Resolve SD key to UUID for FK references
+const resolvedId = await normalizeSDId(supabase, sdId);
+if (!resolvedId) {
+  console.error(`❌ Could not resolve SD identifier: ${sdId}`);
+  process.exit(1);
+}
+if (resolvedId !== sdId) {
+  console.log(`  Resolved to UUID: ${resolvedId}`);
+  sdId = resolvedId;
+}
 
 // Step 1: Update PRD status
 const { data: prd } = await supabase

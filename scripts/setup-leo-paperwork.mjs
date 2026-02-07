@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
+import { normalizeSDId } from './modules/sd-id-normalizer.js';
 dotenv.config();
 
 const supabase = createClient(
@@ -10,6 +11,17 @@ const supabase = createClient(
 
 async function setupSD(sdId) {
   console.log('\n=== Setting up ' + sdId + ' ===');
+
+  // Resolve SD key to UUID for FK references
+  const resolvedId = await normalizeSDId(supabase, sdId);
+  if (!resolvedId) {
+    console.error('  ❌ Could not resolve SD identifier: ' + sdId);
+    return;
+  }
+  if (resolvedId !== sdId) {
+    console.log('  Resolved to UUID: ' + resolvedId);
+  }
+  sdId = resolvedId;
 
   // 1. Create PRD if missing
   const { data: prdCheck } = await supabase
