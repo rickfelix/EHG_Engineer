@@ -1,12 +1,12 @@
-# integration_config Table
+# sd_workflow_templates Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-07T02:59:02.369Z
-**Rows**: 2
-**RLS**: Enabled (1 policy)
+**Rows**: 12
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -19,50 +19,54 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| sd_type | `text` | **NO** | - | - |
+| name | `text` | **NO** | - | - |
+| is_active | `boolean` | **NO** | `false` | - |
+| version | `integer(32)` | **NO** | `1` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
-| config_key | `text` | **NO** | - | - |
-| config_value | `jsonb` | **NO** | `'{}'::jsonb` | - |
-| description | `text` | YES | - | - |
-| is_active | `boolean` | **NO** | `true` | - |
 
 ## Constraints
 
 ### Primary Key
-- `integration_config_pkey`: PRIMARY KEY (id)
+- `sd_workflow_templates_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `uq_integration_config_key`: UNIQUE (config_key)
+- `sd_workflow_templates_sd_type_version_key`: UNIQUE (sd_type, version)
 
 ## Indexes
 
-- `idx_integration_config_active`
+- `idx_sd_workflow_templates_active`
   ```sql
-  CREATE INDEX idx_integration_config_active ON public.integration_config USING btree (is_active, config_key)
+  CREATE UNIQUE INDEX idx_sd_workflow_templates_active ON public.sd_workflow_templates USING btree (sd_type) WHERE (is_active = true)
   ```
-- `integration_config_pkey`
+- `sd_workflow_templates_pkey`
   ```sql
-  CREATE UNIQUE INDEX integration_config_pkey ON public.integration_config USING btree (id)
+  CREATE UNIQUE INDEX sd_workflow_templates_pkey ON public.sd_workflow_templates USING btree (id)
   ```
-- `uq_integration_config_key`
+- `sd_workflow_templates_sd_type_version_key`
   ```sql
-  CREATE UNIQUE INDEX uq_integration_config_key ON public.integration_config USING btree (config_key)
+  CREATE UNIQUE INDEX sd_workflow_templates_sd_type_version_key ON public.sd_workflow_templates USING btree (sd_type, version)
   ```
 
 ## RLS Policies
 
-### 1. Service role full access to integration_config (ALL)
+### 1. sd_workflow_templates_read (SELECT)
+
+- **Roles**: {public}
+- **Using**: `true`
+
+### 2. sd_workflow_templates_service (ALL)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'service_role'::text)`
-- **With Check**: `(auth.role() = 'service_role'::text)`
 
 ## Triggers
 
-### trg_integration_config_update_timestamp
+### set_updated_at_sd_workflow_templates
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION integration_config_update_timestamp()`
+- **Action**: `EXECUTE FUNCTION update_updated_at_column()`
 
 ---
 
