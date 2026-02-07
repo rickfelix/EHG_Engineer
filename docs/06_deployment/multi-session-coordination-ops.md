@@ -479,14 +479,182 @@ SELECT * FROM v_session_metrics;
 - `stale_cleanups` - Count of stale cleanups
 - `terminal_replacements` - Count of same-terminal replacements
 
+## Git Worktree Automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001)
+
+### Overview
+
+Git worktree automation provides isolated git working trees for concurrent Claude Code sessions, preventing cross-session contamination when multiple sessions work on different SDs simultaneously.
+
+**Use Cases**:
+- Developer working on Track A (infrastructure) and Track B (features) in parallel
+- Hotfix while feature work is in progress
+- Testing different approaches concurrently
+
+### Components
+
+**CLI Tool**: `scripts/session-worktree.js`
+- Creates isolated worktrees under `.sessions/`
+- Symlinks node_modules (junction on Windows, symlink on Unix)
+- Manages worktree lifecycle (create, list, cleanup)
+
+**Core Library**: `lib/worktree-manager.js`
+- `createWorktree()` - Create worktree with branch checkout
+- `symlinkNodeModules()` - Link node_modules to avoid reinstall
+- `removeWorktree()` - Clean up worktree
+- `listWorktrees()` - Show active worktrees
+- `resolveExpectedBranch()` - Resolve expected branch from `.session.json` or `v_active_sessions`
+
+**Branch Guard**: `.husky/pre-commit` Stage 0.1
+- Blocks commits when current branch != expected branch (from `.session.json`)
+- Prevents accidental commits to wrong SD's branch
+
+### Usage
+
+**Create Worktree**:
+```bash
+npm run session:worktree -- --session track-a --branch feat/SD-INFRA-001-feature
+```
+
+**List Active Worktrees**:
+```bash
+npm run session:worktree -- --list
+```
+
+**Cleanup Worktree**:
+```bash
+npm run session:worktree -- --cleanup --session track-a
+```
+
+**Options**:
+- `--session <name>` - Session name (directory name under `.sessions/`)
+- `--branch <branch>` - Branch to check out
+- `--force` - Force recreate if exists with different branch
+- `--no-symlink` - Skip node_modules symlink
+- `--list` - List all active worktrees
+- `--cleanup` - Remove worktree and deregister
+
+### Branch Guard Protection
+
+The pre-commit hook (Stage 0.1) reads `.session.json` from the worktree and blocks commits if the current branch doesn't match the expected branch.
+
+**Bypass Options**:
+- `SKIP_BRANCH_GUARD=1 git commit ...` - Skip guard with warning
+- `BRANCH_GUARD_ALLOW_UNKNOWN=1 git commit ...` - Allow commits when `.session.json` missing (fail-open)
+
+**Example `.session.json`**:
+```json
+{
+  "session": "track-a",
+  "expectedBranch": "feat/SD-INFRA-001-feature",
+  "createdAt": "2026-02-07T03:18:54.281Z",
+  "hostname": "Legion-Laptop",
+  "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
+}
+```
+
+### Operational Patterns
+
+**Pattern 1: Parallel Track Execution**
+```bash
+# Terminal 1: Infrastructure work
+npm run session:worktree -- --session track-a --branch feat/SD-INFRA-001
+cd .sessions/track-a
+npm run sd:start SD-INFRA-001
+
+# Terminal 2: Feature work
+npm run session:worktree -- --session track-b --branch feat/SD-FEAT-002
+cd .sessions/track-b
+npm run sd:start SD-FEAT-002
+```
+
+**Pattern 2: Hotfix While Feature In Progress**
+```bash
+# Main repo on feature branch
+git branch  # feat/SD-FEAT-002
+
+# Create hotfix worktree
+npm run session:worktree -- --session hotfix --branch fix/QF-20260207-001
+cd .sessions/hotfix
+# Work on hotfix without disturbing main repo's feature work
+```
+
+### Troubleshooting
+
+**Issue: "Branch already used by worktree"**
+
+**Symptom**: Error when trying to create worktree for branch that's already checked out in main repo
+
+**Resolution**:
+- Cannot create worktree for a branch that's currently checked out elsewhere
+- Either checkout a different branch in main repo, or use a different branch for worktree
+
+**Issue: "Failed to create junction for node_modules"**
+
+**Symptom**: On Windows, junction creation fails
+
+**Resolution**:
+- Ensure main repo has `node_modules` present (run `npm ci` first)
+- On Windows, may require administrator privileges
+- Use `--no-symlink` flag to skip symlink creation (manual `npm ci` in worktree required)
+
+**Issue: Branch guard blocks commit unexpectedly**
+
+**Symptom**: Commit blocked even though on correct branch
+
+**Diagnosis**:
+```bash
+cat .session.json  # Check expected branch
+git branch --show-current  # Check current branch
+```
+
+**Resolution**:
+- If branches match, `.session.json` may be stale — recreate worktree with `--force`
+- If intentional mismatch, use `SKIP_BRANCH_GUARD=1 git commit ...`
+
+### Integration with Multi-Session Claims
+
+Git worktrees work alongside the multi-session claim system:
+
+**Claim Detection**: The multi-session claim gate (PAT-SESSION-IDENTITY-001) compares by **hostname**, not session ID. Multiple CLI processes on the same machine (e.g., `sd:start` in main repo, `handoff.js` in worktree) are allowed because they're the same developer.
+
+**Best Practice**: Use worktrees for different SDs, not for the same SD in multiple locations.
+
+### Cleanup and Maintenance
+
+**List All Worktrees (including stale)**:
+```bash
+npm run session:worktree -- --list
+```
+
+**Remove Stale Worktrees**:
+```bash
+# Manual cleanup
+npm run session:worktree -- --cleanup --session <name>
+
+# Or via git directly
+git worktree prune
+```
+
+**Disk Space Management**:
+- Each worktree shares `.git` with main repo (minimal overhead)
+- node_modules is symlinked (no duplication)
+- Only working tree files are duplicated
+
+### Related Features
+
+- **Multi-Session Claim Gate**: `scripts/modules/handoff/gates/multi-session-claim-gate.js` (hostname-based comparison)
+- **Session Lifecycle**: `lib/session-manager.mjs` (session creation/release)
+- **Heartbeat Manager**: `lib/heartbeat-manager.mjs` (session liveness)
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.0.0 | 2026-02-07 | Added git worktree automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001) |
 | 2.0.0 | 2026-02-01 | Added lifecycle event monitoring (SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001) |
 | 1.0.0 | 2026-01-30 | Initial release (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001) |
 
 ---
 
 *Part of LEO Protocol v4.3.3 - Multi-Session Coordination & Lifecycle Management*
-*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001*
+*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001*

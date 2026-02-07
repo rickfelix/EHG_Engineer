@@ -403,7 +403,44 @@ npm run session:prologue     # Generate session prologue
 npm run session:status       # Show session status
 npm run session:cleanup      # Cleanup sessions
 npm run session:info         # Session info
+npm run session:worktree     # Manage git worktrees for concurrent sessions
 ```
+
+### Git Worktree Management
+
+Create isolated git worktrees for concurrent Claude Code sessions (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001).
+
+```bash
+# Create worktree
+npm run session:worktree -- --session <name> --branch <branch>
+
+# List active worktrees
+npm run session:worktree -- --list
+
+# Cleanup worktree
+npm run session:worktree -- --cleanup --session <name>
+```
+
+**Options**:
+- `--session <name>` - Session name (directory under `.sessions/`)
+- `--branch <branch>` - Branch to check out in worktree
+- `--force` - Force recreate if exists with different branch
+- `--no-symlink` - Skip node_modules symlink/junction
+- `--list` - List all active worktree sessions
+- `--cleanup` - Remove worktree and deregister
+
+**Features**:
+- Creates isolated worktrees under `.sessions/` directory
+- Symlinks node_modules to avoid npm reinstall (junction on Windows)
+- Branch guard pre-commit hook blocks commits to wrong branch
+- Idempotent create (safe to run multiple times)
+
+**Use Cases**:
+- Parallel track execution (infrastructure + features)
+- Hotfix while feature work in progress
+- Testing different approaches concurrently
+
+**See also**: [Multi-Session Coordination Ops Guide](../06_deployment/multi-session-coordination-ops.md#git-worktree-automation-sd-leo-infra-git-worktree-automation-001)
 
 ---
 
