@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T12:18:33.844Z
+**Generated**: 2026-02-07T13:21:15.711Z
 **Rows**: 32
 **RLS**: Enabled (2 policies)
 
@@ -119,6 +119,13 @@
 - **Roles**: {authenticated}
 - **Using**: `true`
 - **With Check**: `true`
+
+## Triggers
+
+### trg_auto_close_feedback_on_qf_completion
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_auto_close_feedback_on_qf_completion()`
 
 ---
 
