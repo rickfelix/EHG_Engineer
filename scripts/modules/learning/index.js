@@ -108,6 +108,18 @@ async function autoApproveCommand(threshold = 50, sdId = null) {
     qualifying.push(improvement);
   }
 
+  // SD-LEARN-FIX-011: Include sub-agent learnings (SAL-* items)
+  // These were previously invisible to auto-approve, causing silent drops
+  for (const sal of (reviewed.sub_agent_learnings || [])) {
+    // SAL items with high confidence (>=threshold) are auto-approved
+    const score = sal.confidence || 0;
+    if (score >= threshold) {
+      qualifying.push(sal);
+    } else {
+      deferred.push({ ...sal, reason: `confidence ${score} < ${threshold}` });
+    }
+  }
+
   // Display what was found
   console.log('  ' + '-'.repeat(40));
   console.log(`  Items found:       ${qualifying.length + deferred.length}`);

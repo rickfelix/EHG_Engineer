@@ -222,9 +222,10 @@ async function getIssuePatterns(limit = TOP_N) {
     .order('composite_score', { ascending: false })
     .limit(queryLimit);
 
-  // Fallback to base table if view doesn't exist yet
-  if (error && (error.message.includes('does not exist') || error.message.includes('schema cache'))) {
-    console.log('Note: Using base table (run migration for severity-weighted decay view)');
+  // Fallback to base table if view fails (doesn't exist, schema error, or data type issues)
+  // SD-LEARN-FIX-011: Also catch "cannot get array length of a scalar" from jsonb_array_length bug
+  if (error && (error.message.includes('does not exist') || error.message.includes('schema cache') || error.message.includes('array length') || error.message.includes('scalar'))) {
+    console.log(`Note: Using base table fallback (view error: ${error.message.substring(0, 60)})`);
     const fallback = await supabase
       .from('issue_patterns')
       .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at')
