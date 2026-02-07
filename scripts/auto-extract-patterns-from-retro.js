@@ -107,7 +107,7 @@ function determineSeverity(text, impact) {
 /**
  * Extract patterns from "What Needs Improvement" items
  */
-async function extractPatternsFromImprovements(retro, sdId, _sdKey) {
+async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedbackIds = []) {
   if (!retro.what_needs_improvement || retro.what_needs_improvement.length === 0) {
     console.log('  ℹ️  No improvement items to extract');
     return [];
@@ -171,7 +171,8 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey) {
         sd_id: sdId,
         solution: retro.action_items.length > 0 ? retro.action_items[0] : null,
         resolution_time_minutes: null,
-        related_sub_agents: relatedSubAgents
+        related_sub_agents: relatedSubAgents,
+        source_feedback_ids: linkedFeedbackIds
       });
 
       patterns.push({
@@ -275,12 +276,26 @@ async function extractPatternsFromRetrospective(retroId) {
   const sdKey = sd?.sd_key || 'UNKNOWN';
   console.log(`SD Key: ${sdKey}`);
 
+  // GAP-007: Query linked feedback IDs for bidirectional pattern linkage
+  let linkedFeedbackIds = [];
+  if (retro.sd_id) {
+    const { data: linkedFeedback } = await supabase
+      .from('feedback')
+      .select('id')
+      .or(`strategic_directive_id.eq.${retro.sd_id},resolution_sd_id.eq.${retro.sd_id}`);
+    linkedFeedbackIds = (linkedFeedback || []).map(f => f.id);
+    if (linkedFeedbackIds.length > 0) {
+      console.log(`Linked feedback: ${linkedFeedbackIds.length} item(s)`);
+    }
+  }
+
   // Extract patterns from improvements
   console.log('\n📊 Extracting patterns from improvement items...');
   const improvementPatterns = await extractPatternsFromImprovements(
     retro,
     retro.sd_id,
-    sdKey
+    sdKey,
+    linkedFeedbackIds
   );
 
   // Extract success patterns
