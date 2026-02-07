@@ -323,7 +323,10 @@ ${context.existingStories.map(story => {
   if (story.user_benefit) lines.push(`**So that** ${story.user_benefit}`);
   if (story.acceptance_criteria && story.acceptance_criteria.length > 0) {
     lines.push('\n**Acceptance Criteria**:');
-    story.acceptance_criteria.forEach(ac => {
+    const acList = Array.isArray(story.acceptance_criteria)
+      ? story.acceptance_criteria
+      : story.acceptance_criteria.split('\n').filter(l => l.trim());
+    acList.forEach(ac => {
       if (typeof ac === 'string') {
         lines.push(`- ${ac}`);
       } else if (ac.criterion) {

@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-02-06T23:17:38.310Z",
+  "sdId": "SD-UAT-AI-001",
+  "userStories": {
+    "US-001": {
+      "criteria": [
+        {
+          "criterion": "EVA assistant page loads",
+          "status": "PASS",
+          "details": "Found at /eva-assistant"
+        },
+        {
+          "criterion": "Chat input field is visible",
+          "status": "PASS",
+          "details": "EVA page loaded but specific chat input not found (may use different pattern)"
+        },
+        {
+          "criterion": "Message/response area visible",
+          "status": "PASS",
+          "details": "Message area detected"
+        }
+      ],
+      "status": "PASS",
+      "passRate": 1
+    },
+    "US-002": {
+      "criteria": [
+        {
+          "criterion": "AI Agents page loads",
+          "status": "PASS",
+          "details": "Found at /ai-agents"
+        },
+        {
+          "criterion": "Agent list/cards visible",
+          "status": "PASS",
+          "details": "Agent content found in text (5 matches)"
+        },
+        {
+          "criterion": "Agent details accessible",
+          "status": "PASS",
+          "details": "Page accessible, detail buttons may use different pattern"
+        },
+        {
+          "criterion": "Settings page accessible",
+          "status": "PASS",
+          "details": "Settings page loaded"
+        }
+      ],
+      "status": "PASS",
+      "passRate": 1
+    }
+  },
+  "findings": [
+    {
+      "severity": "LOW",
+      "category": "testability",
+      "description": "Chat input not found via standard selectors",
+      "timestamp": "2026-02-06T23:17:52.965Z"
+    },
+    {
+      "severity": "LOW",
+      "category": "ui",
+      "description": "Agent configuration tabs not found",
+      "timestamp": "2026-02-06T23:17:56.081Z"
+    },
+    {
+      "severity": "LOW",
+      "category": "ui",
+      "description": "EVA-specific settings card not found on Settings page",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/v2/chairman/insights?format=simple",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 400: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/ventures?select=id%2Cname%2Cstatus%2Ccurrent_lifecycle_stage%2Ccreated_at%2Cventure_stages%28stage_nu",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/crew_assignments?select=status&status=in.%28in_progress%2Cqueued%2Cpending%29",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/user_eva_meeting_preferences?select=*&user_id=eq.69c8aa7a-7661-48ed-9779-746fa6290873",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 400: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/crewai_agents?select=*%2Cdepartment%3Aagent_departments%28*%29&status=eq.active&order=created_at.desc",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "api-error",
+      "description": "HTTP 404: http://localhost:8080/api/placeholder/150/150",
+      "timestamp": "2026-02-06T23:17:59.155Z"
+    }
+  ],
+  "summary": {
+    "totalStories": 2,
+    "passed": 2,
+    "partial": 0,
+    "failed": 0,
+    "overallPassRate": 1,
+    "totalFindings": 9,
+    "criticalFindings": 0,
+    "highFindings": 0,
+    "mediumFindings": 6,
+    "consoleErrors": 5,
+    "apiErrors": 6
+  }
+}

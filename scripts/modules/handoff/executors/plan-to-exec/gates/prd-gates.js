@@ -21,6 +21,29 @@ export function createPrdExistsGate(prdRepo) {
       console.log('   Reference: SD-LEARN-008 (prevent undocumented EXEC)');
 
       try {
+        // RCA-PRD-FRICTION: Check validation profile for sd_type exemption
+        // UAT, documentation, and infrastructure SDs may not require PRDs
+        const sdType = ctx.sd?.sd_type || 'feature';
+        if (ctx.supabase) {
+          const { data: profile } = await ctx.supabase
+            .from('sd_type_validation_profiles')
+            .select('requires_prd')
+            .eq('sd_type', sdType)
+            .maybeSingle();
+
+          if (profile && profile.requires_prd === false) {
+            console.log(`   ✅ PRD not required for sd_type='${sdType}' (validation profile)`);
+            return {
+              passed: true,
+              score: 100,
+              max_score: 100,
+              issues: [],
+              warnings: [`PRD exempted for sd_type='${sdType}' per validation profile`],
+              details: { exemption_reason: 'validation_profile_requires_prd_false', sd_type: sdType }
+            };
+          }
+        }
+
         // Get PRD for this SD
         const sdUuid = ctx.sd?.id || ctx.sdId;
         const prd = await prdRepo?.getBySdId(sdUuid);

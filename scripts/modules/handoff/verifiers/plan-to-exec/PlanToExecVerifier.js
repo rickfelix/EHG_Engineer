@@ -118,6 +118,24 @@ export class PlanToExecVerifier {
       }
 
       if (prdError || !prds || prds.length === 0) {
+        // RCA-PRD-FRICTION: Check validation profile for sd_type exemption
+        const { data: prdProfile } = await this.supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_prd')
+          .eq('sd_type', sd.sd_type || 'feature')
+          .maybeSingle();
+
+        if (prdProfile && prdProfile.requires_prd === false) {
+          console.log(`   ℹ️  PRD not required for sd_type='${sd.sd_type}' - proceeding without PRD`);
+          // Return success with minimal verification for PRD-exempt SDs
+          return {
+            success: true,
+            prdId: null,
+            qualityScore: 100,
+            message: `PRD exempted for sd_type='${sd.sd_type}' per validation profile`
+          };
+        }
+
         console.log(`   ❌ No PRD found with sd_id: ${sd.id}`);
         return rejectHandoff(this.supabase,sdId, 'NO_PRD', 'No PRD found for Strategic Directive');
       }

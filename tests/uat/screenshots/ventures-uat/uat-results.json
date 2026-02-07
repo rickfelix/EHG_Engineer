@@ -1,0 +1,542 @@
+{
+  "timestamp": "2026-02-06T22:44:39.144Z",
+  "sdId": "SD-UAT-VENTURE-001",
+  "userStories": {
+    "US-001": {
+      "criteria": [
+        {
+          "criterion": "page-loads",
+          "status": "PASS",
+          "details": "Ventures page loads. URL: http://localhost:8080/chairman/portfolio"
+        },
+        {
+          "criterion": "summary-view-renders",
+          "status": "PASS",
+          "details": "Summary view: Total Ventures=true, Avg Stage=true, Distribution=true, Triage=false"
+        },
+        {
+          "criterion": "new-venture-button",
+          "status": "PASS",
+          "details": "New Venture button present"
+        },
+        {
+          "criterion": "ventures-table-render",
+          "status": "PASS",
+          "details": "Table renders with 1 rows"
+        },
+        {
+          "criterion": "search-exists",
+          "status": "PASS",
+          "details": "Search input present in table view"
+        },
+        {
+          "criterion": "search-filters",
+          "status": "PASS",
+          "details": "Search: before=1, during=0, after-clear=1"
+        },
+        {
+          "criterion": "filter-exists",
+          "status": "PASS",
+          "details": "Status filter present"
+        },
+        {
+          "criterion": "sort-clickable",
+          "status": "PASS",
+          "details": "Sort column \"\" clickable"
+        },
+        {
+          "criterion": "click-to-detail",
+          "status": "PASS",
+          "details": "Navigated to detail: http://localhost:8080/ventures/10cafb11-9dbb-4a50-bda2-78566c882421"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-002": {
+      "criteria": [
+        {
+          "criterion": "stage-1-load",
+          "status": "PASS",
+          "details": "Stage 1 (Draft Idea) loads with content"
+        },
+        {
+          "criterion": "stage-1-indicator",
+          "status": "PASS",
+          "details": "Stage 1 indicator found by number"
+        },
+        {
+          "criterion": "stage-2-load",
+          "status": "PASS",
+          "details": "Stage 2 (AI Review) loads with content"
+        },
+        {
+          "criterion": "stage-2-indicator",
+          "status": "PASS",
+          "details": "Stage 2 indicator found by number"
+        },
+        {
+          "criterion": "stage-3-load",
+          "status": "PASS",
+          "details": "Stage 3 (Comprehensive Validation) [KILL GATE] loads with content"
+        },
+        {
+          "criterion": "stage-3-indicator",
+          "status": "INFO",
+          "details": "Stage 3 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-3-gate",
+          "status": "INFO",
+          "details": "kill gate UI not explicitly visible for stage 3"
+        },
+        {
+          "criterion": "stage-4-load",
+          "status": "PASS",
+          "details": "Stage 4 (Competitive Intelligence) loads with content"
+        },
+        {
+          "criterion": "stage-4-indicator",
+          "status": "PASS",
+          "details": "Stage 4 indicator found by number"
+        },
+        {
+          "criterion": "stage-5-load",
+          "status": "PASS",
+          "details": "Stage 5 (Profitability Forecasting) [KILL GATE] loads with content"
+        },
+        {
+          "criterion": "stage-5-indicator",
+          "status": "PASS",
+          "details": "Stage 5 indicator found by number"
+        },
+        {
+          "criterion": "stage-5-gate",
+          "status": "INFO",
+          "details": "kill gate UI not explicitly visible for stage 5"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-003": {
+      "criteria": [
+        {
+          "criterion": "stage-6-load",
+          "status": "PASS",
+          "details": "Stage 6 (Risk Evaluation) loads with content"
+        },
+        {
+          "criterion": "stage-6-indicator",
+          "status": "PASS",
+          "details": "Stage 6 indicator found by number"
+        },
+        {
+          "criterion": "stage-7-load",
+          "status": "PASS",
+          "details": "Stage 7 (Comprehensive Planning) loads with content"
+        },
+        {
+          "criterion": "stage-7-indicator",
+          "status": "PASS",
+          "details": "Stage 7 indicator found by number"
+        },
+        {
+          "criterion": "stage-8-load",
+          "status": "PASS",
+          "details": "Stage 8 (Problem Decomposition) loads with content"
+        },
+        {
+          "criterion": "stage-8-indicator",
+          "status": "PASS",
+          "details": "Stage 8 indicator found by number"
+        },
+        {
+          "criterion": "stage-9-load",
+          "status": "PASS",
+          "details": "Stage 9 (Gap Analysis) loads with content"
+        },
+        {
+          "criterion": "stage-9-indicator",
+          "status": "PASS",
+          "details": "Stage 9 indicator found by number"
+        },
+        {
+          "criterion": "stage-10-load",
+          "status": "PASS",
+          "details": "Stage 10 (Technical Review) loads with content"
+        },
+        {
+          "criterion": "stage-10-indicator",
+          "status": "PASS",
+          "details": "Stage 10 indicator found by number"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-004": {
+      "criteria": [
+        {
+          "criterion": "stage-11-load",
+          "status": "PASS",
+          "details": "Stage 11 (Go-to-Market Strategy) loads with content"
+        },
+        {
+          "criterion": "stage-11-indicator",
+          "status": "PASS",
+          "details": "Stage 11 indicator found by number"
+        },
+        {
+          "criterion": "stage-12-load",
+          "status": "PASS",
+          "details": "Stage 12 (Sales & Success Logic) loads with content"
+        },
+        {
+          "criterion": "stage-12-indicator",
+          "status": "PASS",
+          "details": "Stage 12 indicator found by number"
+        },
+        {
+          "criterion": "stage-13-load",
+          "status": "PASS",
+          "details": "Stage 13 (Tech Stack Interrogation) [KILL GATE] loads with content"
+        },
+        {
+          "criterion": "stage-13-indicator",
+          "status": "INFO",
+          "details": "Stage 13 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-13-gate",
+          "status": "INFO",
+          "details": "kill gate UI not explicitly visible for stage 13"
+        },
+        {
+          "criterion": "stage-14-load",
+          "status": "PASS",
+          "details": "Stage 14 (Data Model & Architecture) loads with content"
+        },
+        {
+          "criterion": "stage-14-indicator",
+          "status": "INFO",
+          "details": "Stage 14 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-15-load",
+          "status": "PASS",
+          "details": "Stage 15 (Epic & User Story Breakdown) loads with content"
+        },
+        {
+          "criterion": "stage-15-indicator",
+          "status": "INFO",
+          "details": "Stage 15 indicator not explicitly found (may be embedded in workflow visualization)"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-005": {
+      "criteria": [
+        {
+          "criterion": "stage-16-load",
+          "status": "PASS",
+          "details": "Stage 16 (Schema Firewall) [PROMOTION GATE] loads with content"
+        },
+        {
+          "criterion": "stage-16-indicator",
+          "status": "INFO",
+          "details": "Stage 16 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-16-gate",
+          "status": "INFO",
+          "details": "promotion gate UI not explicitly visible for stage 16"
+        },
+        {
+          "criterion": "stage-17-load",
+          "status": "PASS",
+          "details": "Stage 17 (Environment Config) [PROMOTION GATE] loads with content"
+        },
+        {
+          "criterion": "stage-17-indicator",
+          "status": "INFO",
+          "details": "Stage 17 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-17-gate",
+          "status": "INFO",
+          "details": "promotion gate UI not explicitly visible for stage 17"
+        },
+        {
+          "criterion": "stage-18-load",
+          "status": "PASS",
+          "details": "Stage 18 (MVP Development Loop) loads with content"
+        },
+        {
+          "criterion": "stage-18-indicator",
+          "status": "INFO",
+          "details": "Stage 18 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-19-load",
+          "status": "PASS",
+          "details": "Stage 19 (Integration & API Layer) loads with content"
+        },
+        {
+          "criterion": "stage-19-indicator",
+          "status": "INFO",
+          "details": "Stage 19 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-20-load",
+          "status": "PASS",
+          "details": "Stage 20 (Security & Performance) loads with content"
+        },
+        {
+          "criterion": "stage-20-indicator",
+          "status": "INFO",
+          "details": "Stage 20 indicator not explicitly found (may be embedded in workflow visualization)"
+        }
+      ],
+      "status": "PASS"
+    },
+    "US-006": {
+      "criteria": [
+        {
+          "criterion": "stage-21-load",
+          "status": "PASS",
+          "details": "Stage 21 (QA & UAT) loads with content"
+        },
+        {
+          "criterion": "stage-21-indicator",
+          "status": "PASS",
+          "details": "Stage 21 indicator found by number"
+        },
+        {
+          "criterion": "stage-22-load",
+          "status": "PASS",
+          "details": "Stage 22 (Deployment) [PROMOTION GATE] loads with content"
+        },
+        {
+          "criterion": "stage-22-indicator",
+          "status": "INFO",
+          "details": "Stage 22 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-22-gate",
+          "status": "INFO",
+          "details": "promotion gate UI not explicitly visible for stage 22"
+        },
+        {
+          "criterion": "stage-23-load",
+          "status": "PASS",
+          "details": "Stage 23 (Production Launch) [KILL GATE] loads with content"
+        },
+        {
+          "criterion": "stage-23-indicator",
+          "status": "INFO",
+          "details": "Stage 23 indicator not explicitly found (may be embedded in workflow visualization)"
+        },
+        {
+          "criterion": "stage-23-gate",
+          "status": "INFO",
+          "details": "kill gate UI not explicitly visible for stage 23"
+        },
+        {
+          "criterion": "stage-24-load",
+          "status": "PASS",
+          "details": "Stage 24 (Analytics & Feedback) loads with content"
+        },
+        {
+          "criterion": "stage-24-indicator",
+          "status": "PASS",
+          "details": "Stage 24 indicator found by number"
+        },
+        {
+          "criterion": "stage-25-load",
+          "status": "PASS",
+          "details": "Stage 25 (Optimization & Scale) loads with content"
+        },
+        {
+          "criterion": "stage-25-indicator",
+          "status": "INFO",
+          "details": "Stage 25 indicator not explicitly found (may be embedded in workflow visualization)"
+        }
+      ],
+      "status": "PASS"
+    }
+  },
+  "findings": [
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "JS errors on portfolio page: process is not defined; process is not defined; process is not defined",
+      "timestamp": "2026-02-06T22:45:01.428Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "JS errors on detail page: process is not defined; process is not defined; process is not defined",
+      "timestamp": "2026-02-06T22:45:05.286Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 1 (Draft Idea): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:09.266Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 2 (AI Review): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:13.231Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 3 (Comprehensive Validation): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:17.215Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 4 (Competitive Intelligence): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:21.178Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 5 (Profitability Forecasting): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:25.132Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 6 (Risk Evaluation): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:29.080Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 7 (Comprehensive Planning): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:33.030Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 8 (Problem Decomposition): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:36.962Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 9 (Gap Analysis): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:40.980Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 10 (Technical Review): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:44.945Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 11 (Go-to-Market Strategy): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:48.913Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 12 (Sales & Success Logic): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:52.879Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 13 (Tech Stack Interrogation): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:45:56.883Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 14 (Data Model & Architecture): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:00.861Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 15 (Epic & User Story Breakdown): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:04.847Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 16 (Schema Firewall): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:08.797Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 17 (Environment Config): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:12.731Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 18 (MVP Development Loop): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:16.713Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 19 (Integration & API Layer): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:20.677Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 20 (Security & Performance): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:24.662Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 21 (QA & UAT): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:28.664Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 22 (Deployment): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:32.629Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 23 (Production Launch): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:36.648Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 24 (Analytics & Feedback): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:40.627Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "js-error",
+      "description": "Stage 25 (Optimization & Scale): Failed to load resource: the server responded with a status of 400 (); Failed to load resource: the server responded with a status of 400 ()",
+      "timestamp": "2026-02-06T22:46:44.576Z"
+    }
+  ],
+  "summary": {
+    "totalStories": 6,
+    "passed": 6,
+    "failed": 0,
+    "blocked": 0,
+    "findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 27,
+      "low": 0
+    }
+  }
+}
