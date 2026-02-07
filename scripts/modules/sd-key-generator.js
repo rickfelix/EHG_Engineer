@@ -312,6 +312,27 @@ export const SD_SOURCES = {
 };
 
 /**
+ * Normalize a venture name into a valid SD key prefix segment.
+ * - Uppercase
+ * - Spaces/underscores to hyphens
+ * - Only [A-Z0-9-] allowed
+ * - Trim leading/trailing hyphens
+ *
+ * @param {string} ventureName - Raw venture name (e.g., "Acme Labs")
+ * @returns {string} Normalized prefix (e.g., "ACME-LABS")
+ */
+export function normalizeVenturePrefix(ventureName) {
+  if (!ventureName || typeof ventureName !== 'string') return '';
+
+  return ventureName
+    .toUpperCase()
+    .replace(/[\s_]+/g, '-')       // Spaces/underscores to hyphens
+    .replace(/[^A-Z0-9-]/g, '')    // Remove invalid chars
+    .replace(/-{2,}/g, '-')        // Collapse multiple hyphens
+    .replace(/^-|-$/g, '');        // Trim leading/trailing hyphens
+}
+
+/**
  * Valid SD types (abbreviated for key)
  */
 export const SD_TYPES = {
@@ -495,6 +516,7 @@ export async function getNextSequentialNumber(prefix) {
  * @param {number} [options.hierarchyDepth] - Depth in hierarchy (0=root, 1=child, etc.)
  * @param {number} [options.siblingIndex] - Index among siblings (for hierarchy suffix)
  * @param {boolean} [options.skipLeadValidation] - Skip CLAUDE_LEAD.md read validation (for internal use only)
+ * @param {string} [options.venturePrefix] - Venture name for scoped keys (e.g., "ACME"). When provided, key format is SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM}
  * @returns {Promise<string>} Generated SD key
  * @throws {Error} If CLAUDE_LEAD.md has not been fully read
  */
@@ -506,7 +528,8 @@ export async function generateSDKey(options) {
     parentKey = null,
     hierarchyDepth = 0,
     siblingIndex = 0,
-    skipLeadValidation = false
+    skipLeadValidation = false,
+    venturePrefix = null
   } = options;
 
   // SD-LEO-SDKEY-ENFORCE-LEAD-READ-001: Validate CLAUDE_CORE.md and CLAUDE_LEAD.md have been fully read
@@ -540,7 +563,10 @@ export async function generateSDKey(options) {
 
   // Root SD - generate full key
   const semantic = extractSemanticWords(title);
-  const prefix = `SD-${sourceAbbrev}-${typeAbbrev}-${semantic}`;
+  const normalizedVenture = venturePrefix ? normalizeVenturePrefix(venturePrefix) : '';
+  const prefix = normalizedVenture
+    ? `SD-${normalizedVenture}-${sourceAbbrev}-${typeAbbrev}-${semantic}`
+    : `SD-${sourceAbbrev}-${typeAbbrev}-${semantic}`;
 
   // Get next sequential number
   const seqNum = await getNextSequentialNumber(prefix);
@@ -595,6 +621,27 @@ export function parseSDKey(sdKey) {
     return null;
   }
 
+  // Venture-scoped root key pattern: SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM}
+  // Must check before non-venture pattern since venture keys have an extra segment
+  const ventureRootPattern = /^SD-([A-Z][A-Z0-9-]*)-([A-Z]+)-([A-Z]+)-([A-Z0-9-]+)-(\d{3})$/;
+  const ventureRootMatch = sdKey.match(ventureRootPattern);
+
+  // Distinguish venture keys from non-venture by checking if segment 1 is a known source
+  const knownSources = new Set(Object.values(SD_SOURCES));
+
+  if (ventureRootMatch && !knownSources.has(ventureRootMatch[1])) {
+    return {
+      isRoot: true,
+      venturePrefix: ventureRootMatch[1],
+      source: ventureRootMatch[2],
+      type: ventureRootMatch[3],
+      semantic: ventureRootMatch[4],
+      number: parseInt(ventureRootMatch[5], 10),
+      hierarchyDepth: 0,
+      parentKey: null
+    };
+  }
+
   // Root key pattern: SD-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM}
   const rootPattern = /^SD-([A-Z]+)-([A-Z]+)-([A-Z0-9-]+)-(\d{3})$/;
   const rootMatch = sdKey.match(rootPattern);
@@ -602,6 +649,7 @@ export function parseSDKey(sdKey) {
   if (rootMatch) {
     return {
       isRoot: true,
+      venturePrefix: null,
       source: rootMatch[1],
       type: rootMatch[2],
       semantic: rootMatch[3],
@@ -664,6 +712,7 @@ Usage:
   node scripts/modules/sd-key-generator.js --check-core
   node scripts/modules/sd-key-generator.js --check-lead
   node scripts/modules/sd-key-generator.js --skip-validation <source> <type> "<title>"
+  node scripts/modules/sd-key-generator.js --venture <name> <source> <type> "<title>"
 
 Sources: ${Object.keys(SD_SOURCES).join(', ')}
 Types: ${Object.keys(SD_TYPES).join(', ')}
@@ -676,6 +725,7 @@ Protocol Enforcement (SD-LEO-SDKEY-ENFORCE-LEAD-READ-001):
   --check-core       Check if CLAUDE_CORE.md has been fully read
   --check-lead       Check if CLAUDE_LEAD.md has been fully read
   --skip-validation  Skip protocol file validation (emergency use only)
+  --venture <name>   Generate venture-scoped key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
 
 Examples:
   node scripts/modules/sd-key-generator.js UAT fix "Navigation route not working"
@@ -732,6 +782,16 @@ Examples:
         console.log('⚠️  Skipping protocol file validation (emergency mode)');
         const key = await generateSDKey({ source, type, title, skipLeadValidation: true });
         console.log('Generated SD key:', key);
+      } else if (args[0] === '--venture') {
+        // Venture-scoped key generation
+        const [, ventureName, source, type, ...titleParts] = args;
+        const title = titleParts.join(' ');
+        if (!ventureName || !source || !type || !title) {
+          console.error('Usage: --venture <name> <source> <type> "<title>"');
+          process.exit(1);
+        }
+        const key = await generateSDKey({ source, type, title, venturePrefix: ventureName });
+        console.log('Generated venture-scoped SD key:', key);
       } else {
         const [source, type, ...titleParts] = args;
         const title = titleParts.join(' ');
@@ -758,6 +818,7 @@ export default {
   getHierarchySuffix,
   keyExists,
   getNextSequentialNumber,
+  normalizeVenturePrefix,
   validateCoreFileRead,
   validateLeadFileRead,
   validateProtocolFilesRead,
