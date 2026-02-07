@@ -64,7 +64,7 @@ node scripts/search-prior-issues.js "documentation"
 - ✅ PRDs → \`product_requirements_v2\` table (NOT .md files)
 - ✅ Handoffs → \`sd_phase_handoffs\` table (NOT .md files)
 - ✅ Retrospectives → \`retrospectives\` table (NOT .md files)
-- ✅ Documentation → \`ai_generated_documents\` table (NOT .md files)
+- ✅ Documentation → \`product_requirements_v2\` table (NOT .md files)
 
 **Auto-Trigger Events** (SD-LEO-004):
 1. \`LEAD_SD_CREATION\` → Verify SD in database, not file
@@ -79,7 +79,7 @@ node scripts/search-prior-issues.js "documentation"
 ❌ Creating handoff-XXX.md files
 ❌ Saving PRDs as markdown files
 ❌ Writing retrospectives to .md files
-❌ Creating manual documentation outside ai_generated_documents table
+❌ Creating manual documentation outside product_requirements_v2 table
 
 ✅ All data MUST be in database tables
 ✅ Documentation generated via AI Documentation Platform
@@ -133,7 +133,7 @@ node scripts/orchestrate-phase-subagents.js EXEC_IMPL <SD-ID>
 - Search by SD-ID, status, type, date
 
 **Database Tables**:
-- \`ai_generated_documents\`: Document storage
+- \`product_requirements_v2\`: Document storage
 - \`strategic_directives_v2\`: SD context
 - \`product_requirements_v2\`: PRD context
 
@@ -149,7 +149,7 @@ node scripts/orchestrate-phase-subagents.js EXEC_IMPL <SD-ID>
 
 ### Generation
 - [ ] Documentation generated via script
-- [ ] Stored in \`ai_generated_documents\` table (NOT file)
+- [ ] Stored in \`product_requirements_v2\` table (NOT file)
 - [ ] All sections complete (overview, features, usage, technical)
 
 ### Post-Generation
@@ -235,7 +235,7 @@ node scripts/orchestrate-phase-subagents.js EXEC_IMPL <SD-ID>
     'Auto-trigger on SD completion events',
     'Dashboard-based documentation management (/ai-docs-admin)',
     'Multi-type documentation generation (feature, technical, API, workflow)',
-    'Centralized documentation storage (ai_generated_documents table)',
+    'Centralized documentation storage (product_requirements_v2 table)',
     'Documentation review and publishing workflows',
     'Link validation (internal/external)',
     'Code example testing and validation',

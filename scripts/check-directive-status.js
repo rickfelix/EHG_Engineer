@@ -17,9 +17,9 @@ async function checkDirectiveStatus() {
     // Check various possible tables
     const tables = [
         'strategic_directives',
-        'directive_submissions', 
+        'directive_submissions',
         'sdip_strategic_directives',
-        'prd_documents',
+        'product_requirements_v2',
         'leo_protocols'
     ];
 
@@ -33,7 +33,7 @@ async function checkDirectiveStatus() {
                 console.log(`✅ Table '${table}' exists - ${count || 0} records`);
                 
                 // Get sample data for strategic tables
-                if (table.includes('directive') || table === 'prd_documents') {
+                if (table.includes('directive') || table === 'product_requirements_v2') {
                     const { data: samples } = await supabase
                         .from(table)
                         .select('*')
@@ -62,7 +62,7 @@ async function checkDirectiveStatus() {
     
     try {
         const { data: prds } = await supabase
-            .from('prd_documents')
+            .from('product_requirements_v2')
             .select('*')
             .in('status', ['draft', 'in_progress', 'pending_review'])
             .order('created_at', { ascending: false })
