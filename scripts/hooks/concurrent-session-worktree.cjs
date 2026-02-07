@@ -1,22 +1,26 @@
 /**
  * Concurrent Session Worktree Auto-Invocation Hook
  * SD-LEO-INFRA-AUTO-INVOKE-WORKTREE-001
+ * SD-LEO-INFRA-EXTEND-WORKTREE-ISOLATION-001
  *
  * Trigger: SessionStart
  * Timeout: 5s
  *
  * Detects concurrent active sessions on the same repo+branch and
  * automatically creates a worktree to isolate the new session.
+ * Supports all work types: SD, QF, and ad-hoc sessions.
  *
  * Feature flag: AUTO_WORKTREE_ON_CONCURRENT_SESSION (default: true)
+ * Override: EHG_CONCURRENT_OVERRIDE=1 to skip detection
  *
  * Flow:
- * 1. Check feature flag
- * 2. Query v_active_sessions for concurrent sessions on same codebase
- * 3. Validate liveness via heartbeat staleness
- * 4. Re-check after debounce delay to avoid race conditions
- * 5. If concurrent session confirmed, invoke worktree creation
- * 6. Emit structured log events throughout
+ * 1. Check feature flag and override
+ * 2. Detect current work type from branch prefix or .ehg-session.json
+ * 3. Query v_active_sessions for concurrent sessions on same codebase
+ * 4. Validate liveness via heartbeat staleness
+ * 5. Re-check after debounce delay to avoid race conditions
+ * 6. If concurrent session confirmed, invoke worktree creation
+ * 7. Emit structured log events throughout
  */
 
 const { execSync } = require('child_process');
@@ -139,6 +143,46 @@ function sleep(ms) {
 /**
  * Main hook logic
  */
+/**
+ * Detect the current work type from branch name or session marker files.
+ * @returns {{ workType: string, workKey: string|null }}
+ */
+function detectWorkType() {
+  const branch = getBranch();
+
+  // Check branch prefix for work type
+  if (branch.startsWith('feat/SD-') || branch.startsWith('fix/SD-') || branch.startsWith('docs/SD-')) {
+    const sdMatch = branch.match(/SD-[A-Z0-9_-]+/);
+    return { workType: 'SD', workKey: sdMatch ? sdMatch[0] : null };
+  }
+  if (branch.startsWith('qf/') || branch.startsWith('quick-fix/')) {
+    const qfMatch = branch.match(/QF-[A-Z0-9_-]+/i);
+    return { workType: 'QF', workKey: qfMatch ? qfMatch[0] : null };
+  }
+  if (branch.startsWith('adhoc/')) {
+    return { workType: 'ADHOC', workKey: branch.replace('adhoc/', '') };
+  }
+
+  // Check for .ehg-session.json marker file in cwd
+  try {
+    const markerPath = path.join(process.cwd(), '.ehg-session.json');
+    if (fs.existsSync(markerPath)) {
+      const marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+      if (marker.workType && marker.workKey) {
+        return { workType: marker.workType, workKey: marker.workKey };
+      }
+    }
+  } catch {
+    // Ignore marker read failures
+  }
+
+  // Default: ad-hoc or unknown
+  if (branch === 'main' || branch === 'master') {
+    return { workType: 'ADHOC', workKey: null };
+  }
+  return { workType: 'UNKNOWN', workKey: null };
+}
+
 async function main() {
   // FR-5: Check feature flag (default: true)
   const featureFlag = process.env.AUTO_WORKTREE_ON_CONCURRENT_SESSION;
@@ -146,10 +190,19 @@ async function main() {
     return; // Feature disabled
   }
 
+  // Check override (FR-3: EHG_CONCURRENT_OVERRIDE)
+  if (process.env.EHG_CONCURRENT_OVERRIDE === '1') {
+    logEvent('session.concurrent_check.override', { overrideUsed: true });
+    return;
+  }
+
   // Skip if already inside a worktree
   if (isInsideWorktree()) {
     return;
   }
+
+  // Detect current work type
+  const { workType, workKey } = detectWorkType();
 
   // Initialize Supabase
   let supabase;
@@ -175,6 +228,8 @@ async function main() {
   logEvent('session.concurrent_check', {
     repo_id: codebase,
     branch,
+    work_type: workType,
+    work_key: workKey,
     concurrent_found: concurrent.length > 0,
     concurrent_count: concurrent.length,
     staleness_window_s: STALENESS_WINDOW_S

@@ -205,29 +205,116 @@ do
   fi
 
   # ========================================================================
-  # CASE 3: No tracking - BLOCKED
+  # CASE 3: No tracking - Interactive wizard (TTY) or block (non-TTY)
   # ========================================================================
-  echo "❌ Push blocked: No work tracking found"
-  echo ""
-  echo "   Branch: $BRANCH"
-  echo ""
-  echo "All changes to main must be tracked as either:"
-  echo ""
-  echo "  📋 STRATEGIC DIRECTIVE (for substantial work >50 LOC)"
-  echo "     npm run sd:create"
-  echo "     Then: git checkout -b feat/SD-XXX-description"
-  echo ""
-  echo "  🔧 QUICK-FIX (for small fixes ≤50 LOC)"
-  echo "     node scripts/create-quick-fix.js --interactive"
-  echo "     Then: git checkout -b quick-fix/QF-YYYYMMDD-NNN"
-  echo ""
-  echo "  🚨 EMERGENCY (with logged justification)"
-  echo "     EMERGENCY_PUSH=\"critical: reason\" git push"
-  echo ""
-  echo "This ensures all work is tracked, lessons are captured,"
-  echo "and quality gates are enforced."
-  echo ""
-  exit 1
+
+  # Check if EHG_ALLOW_MAIN_PUSH is set (for automation)
+  if [ "$EHG_ALLOW_MAIN_PUSH" = "1" ]; then
+    echo "⚠️  EHG_ALLOW_MAIN_PUSH=1 - allowing untracked push"
+    continue
+  fi
+
+  # Detect interactive vs non-interactive
+  if [ -t 0 ] && [ -t 1 ] && [ "$CI" != "true" ]; then
+    # ====== INTERACTIVE MODE: Show wizard ======
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "  UNTRACKED WORK DETECTED"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+    echo "  Branch: $BRANCH"
+    echo "  No SD or QF tracking found for this push."
+    echo ""
+    echo "  Choose an option:"
+    echo ""
+    echo "  1) Create Quick-Fix worktree   (small fix, ≤50 LOC)"
+    echo "  2) Create SD worktree          (substantial work, >50 LOC)"
+    echo "  3) EMERGENCY_PUSH              (requires confirmation phrase)"
+    echo "  4) Cancel                       (abort push)"
+    echo ""
+    printf "  Choice [1-4]: "
+    read WIZARD_CHOICE
+
+    case "$WIZARD_CHOICE" in
+      1)
+        # Generate QF ID and create worktree
+        QF_AUTO_ID="QF-$(date +%Y%m%d-%H%M%S)"
+        echo ""
+        echo "  Creating Quick-Fix worktree: $QF_AUTO_ID"
+        echo ""
+        node -e "
+          const { createWorkTypeWorktree } = await import('./lib/worktree-manager.js');
+          const result = createWorkTypeWorktree({ workType: 'QF', workKey: '$QF_AUTO_ID' });
+          if (result.mode === 'worktree') {
+            console.log('WORKTREE_PATH=' + result.path);
+            console.log('WORKTREE_BRANCH=' + result.branch);
+          } else {
+            console.log('WORKTREE_FAILED=1');
+            console.log('WORKTREE_REASON=' + result.reason);
+          }
+        " 2>/dev/null || echo "WORKTREE_FAILED=1"
+        echo ""
+        echo "  To push from the worktree:"
+        echo "    cd <worktree-path>"
+        echo "    git add . && git commit -m \"fix: description\""
+        echo "    git push -u origin qf/$QF_AUTO_ID"
+        echo ""
+        exit 1
+        ;;
+      2)
+        echo ""
+        echo "  Create an SD using:"
+        echo "    /leo create"
+        echo "  Then work in the automatically created worktree."
+        echo ""
+        exit 1
+        ;;
+      3)
+        echo ""
+        printf "  Type EMERGENCY_PUSH to confirm: "
+        read CONFIRM
+        if [ "$CONFIRM" = "EMERGENCY_PUSH" ]; then
+          # Log the emergency
+          EMERG_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          EMERG_COMMIT=$(git rev-parse --short HEAD)
+          echo "{\"event\":\"emergency_push\",\"branch\":\"$EMERG_BRANCH\",\"commit\":\"$EMERG_COMMIT\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"emergencyPush\":true}" >&2
+          echo ""
+          echo "  ⚠️  Emergency push confirmed. Please create SD/QF retroactively."
+          echo ""
+          continue
+        else
+          echo ""
+          echo "  ❌ Confirmation failed. Push aborted."
+          echo ""
+          exit 1
+        fi
+        ;;
+      *)
+        echo ""
+        echo "  Push cancelled."
+        echo ""
+        exit 1
+        ;;
+    esac
+  else
+    # ====== NON-INTERACTIVE MODE: Deterministic failure ======
+    echo "❌ Push blocked: No work tracking found (non-interactive)"
+    echo ""
+    echo "   Branch: $BRANCH"
+    echo ""
+    echo "This push was blocked because no SD or QF tracking was detected."
+    echo "In non-interactive mode (CI or no TTY), set one of:"
+    echo ""
+    echo "  EHG_CONCURRENT_OVERRIDE=1   - Override concurrent session check"
+    echo "  EHG_ALLOW_MAIN_PUSH=1       - Allow untracked pushes"
+    echo "  EMERGENCY_PUSH=\"reason\"      - Emergency bypass with logging"
+    echo ""
+    echo "Or create proper tracking:"
+    echo "  SD: node scripts/leo-create-sd.js LEO fix \"description\""
+    echo "  QF: node scripts/create-quick-fix.js --title \"description\" --type bug"
+    echo ""
+    exit 1
+  fi
 
 done
 
