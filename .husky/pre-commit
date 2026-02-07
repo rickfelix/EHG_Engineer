@@ -28,6 +28,73 @@ if [ "$BRANCH" = "main" ]; then
 fi
 
 # ============================================================================
+# STAGE 0.1: Branch Guard for Worktree Sessions (BLOCKING)
+# ============================================================================
+# SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001 (FR-3)
+# When working in a .sessions/ worktree, ensures the current branch matches
+# the expected branch configured at worktree creation (.session.json).
+# This prevents cross-session contamination (e.g., committing SD-A work to SD-B branch).
+# ============================================================================
+
+SESSION_CONFIG=".session.json"
+if [ -f "$SESSION_CONFIG" ]; then
+  EXPECTED_BRANCH=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$SESSION_CONFIG','utf8')).expectedBranch||'')}catch{console.log('')}" 2>/dev/null || true)
+
+  if [ ! -z "$EXPECTED_BRANCH" ] && [ "$EXPECTED_BRANCH" != "$BRANCH" ]; then
+    if [ "$SKIP_BRANCH_GUARD" = "1" ]; then
+      echo ""
+      echo "  WARNING: Branch guard bypassed (SKIP_BRANCH_GUARD=1)"
+      echo "  Expected: $EXPECTED_BRANCH"
+      echo "  Actual:   $BRANCH"
+      echo ""
+    else
+      echo ""
+      echo "  BLOCKED: Branch mismatch in worktree session!"
+      echo ""
+      echo "  Expected branch: $EXPECTED_BRANCH"
+      echo "  Current branch:  $BRANCH"
+      echo ""
+      echo "  This worktree was created for branch '$EXPECTED_BRANCH'."
+      echo "  Committing on '$BRANCH' would contaminate another session."
+      echo ""
+      echo "  REMEDIATION:"
+      echo "  1. Checkout the expected branch: git checkout $EXPECTED_BRANCH"
+      echo "  2. Or recreate the worktree: npm run session:worktree -- --session <name> --branch $BRANCH --force"
+      echo "  3. Bypass (not recommended): SKIP_BRANCH_GUARD=1 git commit ..."
+      echo ""
+      exit 1
+    fi
+  else
+    echo "  Branch guard: $BRANCH matches expected branch"
+  fi
+elif [ -z "$EXPECTED_BRANCH" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # Not in a session worktree — check if .session.json is missing but we're in .sessions/
+  CURRENT_DIR=$(pwd)
+  case "$CURRENT_DIR" in
+    */.sessions/*)
+      if [ "$BRANCH_GUARD_ALLOW_UNKNOWN" = "1" ]; then
+        echo ""
+        echo "  WARNING: In .sessions/ directory but no .session.json found."
+        echo "  Cannot determine expected branch. Allowing due to BRANCH_GUARD_ALLOW_UNKNOWN=1"
+        echo ""
+      else
+        echo ""
+        echo "  BLOCKED: In .sessions/ directory but no .session.json found."
+        echo "  Cannot determine expected branch for this worktree."
+        echo ""
+        echo "  REMEDIATION:"
+        echo "  1. Recreate worktree: npm run session:worktree -- --session <name> --branch <branch>"
+        echo "  2. Bypass: BRANCH_GUARD_ALLOW_UNKNOWN=1 git commit ..."
+        echo ""
+        exit 1
+      fi
+      ;;
+  esac
+fi
+
+echo "  Branch guard check passed"
+
+# ============================================================================
 # STAGE 0.5: CLAUDE*.md Protection (BLOCKING)
 # ============================================================================
 # SD-LEO-SELF-IMPROVE-001A: Prevent direct edits to CLAUDE*.md files

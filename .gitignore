@@ -122,6 +122,9 @@ repro_*.js
 /.temp/
 /plans/
 
+# Git worktree session directories (created by npm run session:worktree)
+.sessions/
+
 # Build artifacts (rebuild when needed)
 src/client/dist/
 

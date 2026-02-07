@@ -526,8 +526,12 @@ export class BaseExecutor {
       // Use sd_key for claim lookup (matches how claims are stored)
       const claimId = sd?.sd_key || sdId;
 
+      // PAT-SESSION-IDENTITY-001: Pass hostname for same-machine detection
+      // Multiple CLI processes from same Claude Code instance share hostname
+      const os = await import('os');
       const result = await validateMultiSessionClaim(this.supabase, claimId, {
-        currentSessionId
+        currentSessionId,
+        currentHostname: os.hostname()
       });
 
       if (!result.pass) {
