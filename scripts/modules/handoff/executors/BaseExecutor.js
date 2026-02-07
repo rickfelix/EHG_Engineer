@@ -10,6 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
+import { applyGatePolicies } from '../gate-policy-resolver.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -80,6 +81,22 @@ export class BaseExecutor {
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
+      // SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001: Apply database-driven gate policies
+      // Filters gates based on validation_gate_registry policies (DISABLED gates removed)
+      const { filteredGates: policyFilteredGates, fallbackUsed } = await applyGatePolicies(
+        this.supabase,
+        hardcodedGates,
+        {
+          sdType: sd?.sd_type,
+          validationProfile: sd?.validation_profile || options?.validationProfile,
+          sdId: sd?.sd_key || sdId
+        }
+      );
+
+      if (fallbackUsed) {
+        console.log('   [GatePolicy] Using hardcoded gate set (DB policy unavailable)');
+      }
+
       // SD-LEO-001: Load PRD for validators that need it (e.g., prdQualityValidation)
       // This fixes the "No PRD provided" error in PLAN-TO-EXEC handoffs
       let prd = null;
@@ -101,7 +118,7 @@ export class BaseExecutor {
 
       // Use database-driven gates when available, fall back to hardcoded
       const gates = await this.validationOrchestrator.buildGatesFromRules(
-        hardcodedGates,
+        policyFilteredGates,
         this.handoffType,
         validationContext
       );
