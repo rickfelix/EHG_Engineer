@@ -22,6 +22,9 @@ import { getRemediation } from './remediations.js';
 import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
 import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.js';
 
+// Worktree cleanup (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
+import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-manager.js';
+
 export class LeadFinalApprovalExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
     super(dependencies);
@@ -185,6 +188,25 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  Auto-shipping error (non-blocking): ${shippingError.message}`);
     }
 
+    // SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001: Cleanup worktree on SD completion
+    let worktreeCleanupResult = null;
+    const sdKey = sd.sd_key || sdId;
+    try {
+      validateSdKey(sdKey);
+      console.log('\n🌲 Worktree Cleanup');
+      console.log('-'.repeat(50));
+      worktreeCleanupResult = cleanupWorktree(sdKey, { force: true });
+      if (worktreeCleanupResult.cleaned) {
+        console.log(`   ✅ Worktree .worktrees/${sdKey} removed`);
+      } else if (worktreeCleanupResult.reason === 'worktree_not_found') {
+        console.log(`   ℹ️  No worktree found for ${sdKey} (may not have been created)`);
+      } else {
+        console.warn(`   ⚠️  Worktree cleanup incomplete: ${worktreeCleanupResult.reason}`);
+      }
+    } catch (worktreeError) {
+      console.warn(`   ⚠️  Worktree cleanup failed (non-blocking): ${worktreeError.message}`);
+    }
+
     return {
       success: true,
       sdId: sdId,
@@ -204,6 +226,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           escalated: shippingResults.cleanup.shouldEscalate
         } : null
       },
+      worktree_cleanup: worktreeCleanupResult,
       qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100),
       // SD-LEO-ENH-AUTO-PROCEED-001-05: Orchestrator chaining info
       orchestratorChaining: orchestratorChainingInfo.orchestratorCompleted ? {
