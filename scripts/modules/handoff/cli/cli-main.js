@@ -759,5 +759,24 @@ export async function main() {
       break;
   }
 
+  // RCA Auto-Trigger: Capture failures for continuous improvement (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
+  if (!result.success && command === 'execute') {
+    try {
+      const { triggerRCAOnFailure, buildHandoffContext } = await import('../../../../lib/rca/index.js');
+      const handoffType = args[1];
+      const sdId = args[2];
+      await triggerRCAOnFailure(buildHandoffContext({
+        command: `handoff.js ${command}`,
+        args: args.join(' '),
+        exitCode: 1,
+        sdId,
+        handoffType,
+        stderr: result.message || result.reasonCode || 'Unknown failure'
+      }));
+    } catch {
+      // RCA trigger should never prevent exit
+    }
+  }
+
   process.exit(result.success ? 0 : 1);
 }
