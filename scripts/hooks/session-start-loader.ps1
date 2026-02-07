@@ -54,6 +54,21 @@ if ($hasRecentState -and $state) {
         if ($state.sd.phase) {
             Write-Host "[SD] Phase: $($state.sd.phase)"
         }
+
+        # SD-LEO-INFRA-COMPACTION-CLAIM-001: Trigger SD re-claim after compaction
+        $reclaimScript = Join-Path $ProjectDir "scripts\hooks\reclaim-sd-after-compaction.cjs"
+        if (Test-Path $reclaimScript) {
+            try {
+                $reclaimOutput = & node $reclaimScript 2>&1
+                $reclaimOutput | ForEach-Object {
+                    if ($_ -match "RECLAIM.*✅") {
+                        Write-Host "[SD] $_"
+                    }
+                }
+            } catch {
+                # Don't block session start on re-claim failure
+            }
+        }
     }
 
     # Pending actions
