@@ -33,7 +33,12 @@ function getRequiredSubAgents(phase, sd, skipCodeValidation) {
   const required = [...(baseRequirements[phase] || [])];
 
   // Add DESIGN for PLAN_PRD if SD type requires it (feature, database)
-  if (phase === 'PLAN_PRD' && profile.designRequired) {
+  // PAT-DESIGN-001: Also check category - infrastructure SDs should NOT require DESIGN
+  // even if sd_type profile says designRequired, when category is 'infrastructure'
+  const category = (sd?.category || '').toLowerCase();
+  const isInfraCategory = ['infrastructure', 'tooling', 'backend'].includes(category);
+
+  if (phase === 'PLAN_PRD' && profile.designRequired && !isInfraCategory) {
     if (!required.includes('DESIGN')) {
       required.push('DESIGN');
     }
@@ -75,6 +80,12 @@ async function isSubAgentRequired(subAgent, sd, phase) {
   if (alwaysRequired[phase]?.includes(code)) {
     const sdType = (sd?.sd_type || 'feature').toLowerCase();
     const profile = SD_TYPE_PROFILES[sdType];
+
+    // PAT-DESIGN-001: Category override - infrastructure category skips DESIGN
+    const sdCategory = (sd?.category || '').toLowerCase();
+    if (code === 'DESIGN' && ['infrastructure', 'tooling', 'backend'].includes(sdCategory)) {
+      return { required: false, reason: `Skipped: category '${sdCategory}' overrides designRequired for ${sdType}` };
+    }
 
     // Provide more specific reason for SD-type-driven requirements
     if (code === 'DESIGN' && profile?.designRequired) {

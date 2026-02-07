@@ -275,6 +275,12 @@ export function createRetrospectiveExistsGate(supabase) {
 
 /**
  * Create Gate 4: PR merge verification
+ *
+ * PAT-SHIP-ORDER-001: Correct ordering is:
+ *   EXEC complete → /ship (commit, PR, merge) → LEAD-FINAL-APPROVAL
+ * This gate enforces that PRs are merged BEFORE final approval.
+ * If this gate fails, run /ship first.
+ *
  * @returns {Object} Gate definition
  */
 export function createPRMergeVerificationGate() {
@@ -282,6 +288,7 @@ export function createPRMergeVerificationGate() {
     name: 'PR_MERGE_VERIFICATION',
     validator: async (ctx) => {
       console.log('\n🔒 GATE 4: PR Merge Verification');
+      console.log('   ℹ️  Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL');
       console.log('-'.repeat(50));
 
       const sdId = ctx.sd.sd_key || ctx.sd.id;
