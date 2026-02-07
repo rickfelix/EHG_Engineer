@@ -3,31 +3,38 @@
  * PAT-MSESS-BYP-001 corrective action
  *
  * BLOCKING gate that prevents handoff execution when the target SD
- * is already claimed by another active session. This prevents duplicate
- * work across concurrent Claude Code instances.
+ * is already claimed by an active session on a DIFFERENT machine.
+ * This prevents duplicate work across concurrent Claude Code instances.
  *
- * Previously, _claimSDForSession() in BaseExecutor only WARNED about
- * conflicts but proceeded anyway. This gate makes claim conflicts a
- * hard block.
+ * Same-machine sessions are allowed because a single Claude Code
+ * conversation spawns multiple CLI processes (sd:start, handoff.js)
+ * that each create separate session IDs but represent the same user.
  *
  * Checks:
  *   1. Query v_active_sessions for the SD
- *   2. If claimed by another session with active heartbeat → BLOCK
- *   3. If claimed by THIS session → PASS
+ *   2. If claimed by session on DIFFERENT hostname → BLOCK
+ *   3. If claimed by session on SAME hostname → PASS (same developer)
  *   4. If unclaimed or stale claim → PASS
+ *
+ * RCA: PAT-SESSION-IDENTITY-001 - Session identity for AI-driven CLI
+ * workflows must compare by hostname, not subprocess PID.
  */
 
+import os from 'os';
+
 /**
- * Validate that no other active session has claimed this SD
+ * Validate that no session on another machine has claimed this SD
  *
  * @param {Object} supabase - Supabase client
  * @param {string} sdId - SD identifier (sd_key like "SD-XXX-001" or UUID)
  * @param {Object} [options] - Options
  * @param {string} [options.currentSessionId] - This session's ID (to exclude self)
+ * @param {string} [options.currentHostname] - This machine's hostname (for same-machine detection)
  * @returns {Promise<Object>} Gate result { pass, score, max_score, issues, warnings, claimDetails }
  */
 export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
   const currentSessionId = options.currentSessionId || null;
+  const currentHostname = options.currentHostname || os.hostname();
 
   console.log('\n🔒 GATE: Multi-Session Claim Conflict Check');
   console.log('-'.repeat(50));
@@ -54,13 +61,28 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       };
     }
 
-    // Filter out our own session
-    const otherClaims = (data || []).filter(
-      claim => claim.session_id !== currentSessionId
-    );
+    // Filter out claims from the same machine (same developer, different CLI process)
+    // PAT-SESSION-IDENTITY-001: A single Claude Code conversation spawns multiple
+    // CLI processes (sd:start, handoff.js), each with different PIDs and session IDs.
+    // Same hostname = same machine = same developer = allow.
+    const otherClaims = (data || []).filter(claim => {
+      // Exact session ID match → always exclude (backward compat)
+      if (claim.session_id === currentSessionId) return false;
+      // Same hostname → same machine → not a conflict
+      if (claim.hostname && claim.hostname === currentHostname) return false;
+      return true;
+    });
 
     if (otherClaims.length === 0) {
-      console.log('   ✅ No conflicting session claims found');
+      // Check if we passed due to same-hostname exclusion (log for visibility)
+      const sameHostClaims = (data || []).filter(
+        claim => claim.session_id !== currentSessionId && claim.hostname === currentHostname
+      );
+      if (sameHostClaims.length > 0) {
+        console.log(`   ✅ SD claimed by same-machine session (${sameHostClaims[0].session_id?.substring(0, 24)}...) — allowing`);
+      } else {
+        console.log('   ✅ No conflicting session claims found');
+      }
       return {
         pass: true,
         score: 100,
@@ -70,7 +92,7 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       };
     }
 
-    // Another active session has this SD claimed → BLOCK
+    // Another active session on a DIFFERENT machine has this SD claimed → BLOCK
     const claim = otherClaims[0];
 
     console.log('');

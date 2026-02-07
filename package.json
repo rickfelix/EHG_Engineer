@@ -225,6 +225,7 @@
     "session:status": "node scripts/claude-session-coordinator.mjs status",
     "session:cleanup": "node scripts/claude-session-coordinator.mjs cleanup",
     "session:info": "node scripts/claude-session-coordinator.mjs info",
+    "session:worktree": "node scripts/session-worktree.js",
     "handoff": "node scripts/handoff.js",
     "handoff:list": "node scripts/handoff.js list",
     "handoff:stats": "node scripts/handoff.js stats",
