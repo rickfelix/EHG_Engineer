@@ -187,6 +187,20 @@ export class BaseExecutor {
           await this._displayOnFailureDirectives(failurePhase);
 
           const remediation = this.getRemediation(gateResults.failedGate);
+
+          // RCA Auto-Trigger on gate failure (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
+          try {
+            const { triggerRCAOnFailure, buildGateContext } = await import('../../../../lib/rca/index.js');
+            await triggerRCAOnFailure(buildGateContext({
+              gateName: gateResults.failedGate,
+              score: gateResults.totalScore,
+              threshold: gateResults.totalMaxScore,
+              breakdown: gateResults.issues,
+              sdId,
+              handoffType: this.handoffType
+            }));
+          } catch { /* RCA trigger should never block handoff */ }
+
           return ResultBuilder.gateFailure(gateResults.failedGate, {
             issues: gateResults.issues,
             score: gateResults.totalScore,

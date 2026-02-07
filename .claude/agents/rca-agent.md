@@ -378,6 +378,60 @@ npm run pattern:analyze PAT-XXX-001
 
 If the user asks a general debugging question without an SD context (e.g., "Why do race conditions happen in async code?"), you may provide expert guidance based on forensic analysis principles. However, for any actual issue investigation, you must invoke the scripts above and perform formal 5-Whys analysis.
 
+## Structured JSON Output Contract (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
+
+When invoked by the auto-trigger system (via `lib/rca/rca-orchestrator.js`), produce machine-readable JSON output in addition to human-readable analysis:
+
+```json
+{
+  "trigger_type": "handoff_failure|gate_validation_failure|api_failure|migration_failure|script_crash|test_failure_retry_exhausted|prd_validation_failure|state_mismatch",
+  "summary": "One-line description of root cause",
+  "five_whys": [
+    {"level": 1, "question": "Why...", "answer": "...", "evidence": "..."},
+    {"level": 2, "question": "Why...", "answer": "...", "evidence": "..."},
+    {"level": 3, "question": "Why...", "answer": "...", "evidence": "..."},
+    {"level": 4, "question": "Why...", "answer": "...", "evidence": "..."},
+    {"level": 5, "question": "Why...", "answer": "...", "evidence": "..."}
+  ],
+  "root_cause": "Actionable root cause statement",
+  "classification": "code_bug|process_issue|infrastructure|data_quality",
+  "category": "data_quality|encoding|cross_cutting|protocol_process|configuration|code_bug|infrastructure|process_issue",
+  "capa_corrective": [
+    {"action": "...", "file": "...", "urgency": "immediate|next-session|planned"}
+  ],
+  "capa_preventive": [
+    {"control": "...", "location": "...", "type": "validation_gate|runtime_check|pre_commit|documentation"}
+  ],
+  "confidence": 0.0-1.0,
+  "experts_consulted": [
+    {"expert": "database-agent", "findings": "...", "capa_items": ["..."]}
+  ]
+}
+```
+
+### Classification Rules
+
+| Category | When to Use |
+|----------|-------------|
+| `encoding` | Invalid Unicode, surrogate pairs, character set issues |
+| `data_quality` | Corrupt data, unexpected nulls, malformed payloads |
+| `protocol_process` | LEO workflow issues, handoff/gate/validation failures |
+| `configuration` | Missing env vars, wrong settings, feature flag issues |
+| `cross_cutting` | Spans multiple domains (e.g., encoding + API boundary) |
+| `infrastructure` | Network, DB connection, timeout, resource exhaustion |
+| `code_bug` | Logic errors, missing null checks, incorrect algorithms |
+| `process_issue` | Missing validation steps, skipped reviews, incomplete checklist |
+
+### Multi-Expert Trigger Rules
+
+Invoke parallel expert analysis when:
+- Initial classification confidence < 0.7
+- Category is `cross_cutting`, `encoding`, `data_quality`, `protocol_process`, or `configuration`
+- The issue spans database + API boundary (invoke both `database-agent` and `api-agent`)
+- The issue involves security concerns (always add `security-agent`)
+
+For `cross_cutting` or `encoding` issues, CAPA must include defensive measures at **two or more layers** (e.g., DB sanitization + API payload validation).
+
 ## Output Requirements
 
 1. **Evidence-based**: Every conclusion must cite specific files, logs, or data
