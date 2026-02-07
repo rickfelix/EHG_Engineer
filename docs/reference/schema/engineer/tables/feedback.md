@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T15:02:05.311Z
+**Generated**: 2026-02-07T18:04:39.649Z
 **Rows**: 21
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (49 total)
+## Columns (51 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -67,6 +67,8 @@
 | ai_triage_confidence | `integer(32)` | YES | - | Confidence score (0-100) from AI triage classification. Higher values indicate more certain classification. |
 | ai_triage_classification | `character varying(50)` | YES | - | AI-determined classification: bug, enhancement, question, duplicate, invalid. May differ from user-submitted type. |
 | ai_triage_source | `character varying(20)` | YES | - | Source of triage classification: llm (cloud/local LLM) or rules (rule-based fallback). |
+| rubric_score | `integer(32)` | YES | - | Automated quality score (0-100) based on rubric evaluation |
+| quality_assessment | `jsonb` | YES | - | Detailed rubric breakdown: {criteria: {name, score, rationale, weight}, overall_assessment} |
 
 ## Constraints
 
@@ -95,6 +97,7 @@ END)
 - `chk_resolved_requires_reference`: CHECK ((((status)::text <> 'resolved'::text) OR ((quick_fix_id IS NOT NULL) OR (strategic_directive_id IS NOT NULL) OR (resolution_sd_id IS NOT NULL) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0)))))
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
+- `feedback_rubric_score_check`: CHECK (((rubric_score >= 0) AND (rubric_score <= 100)))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying])::text[])))
 - `feedback_status_check`: CHECK (((status)::text = ANY (ARRAY[('new'::character varying)::text, ('triaged'::character varying)::text, ('in_progress'::character varying)::text, ('resolved'::character varying)::text, ('wont_fix'::character varying)::text, ('duplicate'::character varying)::text, ('invalid'::character varying)::text, ('backlog'::character varying)::text, ('shipped'::character varying)::text])))
@@ -139,9 +142,17 @@ END)
   ```sql
   CREATE INDEX idx_feedback_priority ON public.feedback USING btree (priority)
   ```
+- `idx_feedback_quality_assessment`
+  ```sql
+  CREATE INDEX idx_feedback_quality_assessment ON public.feedback USING gin (quality_assessment)
+  ```
 - `idx_feedback_quick_fix_id`
   ```sql
   CREATE INDEX idx_feedback_quick_fix_id ON public.feedback USING btree (quick_fix_id) WHERE (quick_fix_id IS NOT NULL)
+  ```
+- `idx_feedback_rubric_score`
+  ```sql
+  CREATE INDEX idx_feedback_rubric_score ON public.feedback USING btree (rubric_score DESC NULLS LAST) WHERE (rubric_score IS NOT NULL)
   ```
 - `idx_feedback_sd_id`
   ```sql
