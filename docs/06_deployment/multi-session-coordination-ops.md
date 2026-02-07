@@ -493,16 +493,18 @@ Git worktree automation provides isolated git working trees for concurrent Claud
 ### Components
 
 **CLI Tool**: `scripts/session-worktree.js`
-- Creates isolated worktrees under `.sessions/`
+- Creates isolated worktrees under `.worktrees/<sdKey>/` (SD-keyed)
 - Symlinks node_modules (junction on Windows, symlink on Unix)
 - Manages worktree lifecycle (create, list, cleanup)
+- Supports `--sd-key` (primary) and deprecated `--session` alias
 
 **Core Library**: `lib/worktree-manager.js`
-- `createWorktree()` - Create worktree with branch checkout
+- `createWorktree({sdKey, branch})` - Create SD-keyed worktree
+- `cleanupWorktree(sdKey)` - Safe cleanup with dirty-state protection
 - `symlinkNodeModules()` - Link node_modules to avoid reinstall
 - `removeWorktree()` - Clean up worktree
-- `listWorktrees()` - Show active worktrees
-- `resolveExpectedBranch()` - Resolve expected branch from `.session.json` or `v_active_sessions`
+- `listWorktrees()` - Show active SD worktrees
+- `resolveExpectedBranch()` - Resolve expected branch from `.worktree.json` or `v_active_sessions`
 
 **Branch Guard**: `.husky/pre-commit` Stage 0.1
 - Blocks commits when current branch != expected branch (from `.session.json`)

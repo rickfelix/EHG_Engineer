@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-07 6:01:34 AM
+**Generated**: 2026-02-07 9:17:27 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -659,11 +659,11 @@ git worktree remove /mnt/c/_EHG/ehg-worktrees/${SD_ID}
 ### Quick Reference
 
 ```bash
-# Helper script (recommended)
-bash scripts/create-sd-worktree.sh SD-STAGE-09-001
+# Node CLI (recommended)
+node scripts/session-worktree.js --sd-key SD-STAGE-09-001 --branch feat/SD-STAGE-09-001
 
 # List active worktrees
-git worktree list
+node scripts/session-worktree.js --list
 
 # Check if directory is worktree
 git rev-parse --is-inside-work-tree
@@ -771,6 +771,24 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
+
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -854,24 +872,6 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
-
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
