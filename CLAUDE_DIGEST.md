@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-07T01:15:45.015Z -->
-<!-- git_commit: 6c51d872 -->
+<!-- generated_at: 2026-02-07T11:01:34.677Z -->
+<!-- git_commit: 766cd556 -->
 <!-- db_snapshot_hash: c027b5d1209ddcbe -->
 <!-- file_content_hash: pending -->
 
@@ -121,5 +121,5 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*DIGEST generated: 2026-02-07 8:15:45 PM*
+*DIGEST generated: 2026-02-07 6:01:34 AM*
 *Protocol: 4.3.3*
