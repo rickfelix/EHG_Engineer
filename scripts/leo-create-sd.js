@@ -145,20 +145,36 @@ async function createFromLearn(patternId) {
 async function createFromFeedback(feedbackId) {
   console.log(`\n📋 Creating SD from feedback: ${feedbackId}`);
 
-  // Fetch feedback item (support partial ID)
-  const { data: feedback, error } = await supabase
+  // Fetch feedback item (support full or partial UUID)
+  let feedback;
+  // Try exact match first (full UUID)
+  const { data: exactMatch, error: exactError } = await supabase
     .from('feedback')
     .select('*')
-    .or(`id.eq.${feedbackId},id.ilike.${feedbackId}%`)
-    .single();
+    .eq('id', feedbackId)
+    .maybeSingle();
 
-  if (error || !feedback) {
+  if (exactMatch) {
+    feedback = exactMatch;
+  } else {
+    // Partial UUID: use text cast via RPC
+    const { data: partialResult, error: partialError } = await supabase
+      .rpc('exec_sql', { sql_text: `SELECT id FROM feedback WHERE id::text LIKE '${feedbackId.replace(/'/g, "''")}%' LIMIT 1` });
+    const partialId = partialResult?.[0]?.result?.[0]?.id;
+    if (partialId) {
+      const { data } = await supabase.from('feedback').select('*').eq('id', partialId).single();
+      feedback = data;
+    }
+  }
+
+  if (!feedback) {
     console.error('Feedback not found:', feedbackId);
     process.exit(1);
   }
 
   // Map feedback type to SD type
-  const type = feedback.type === 'issue' ? 'fix' : 'feature';
+  const typeMap = { issue: 'fix', enhancement: 'enhancement', bug: 'bugfix' };
+  const type = typeMap[feedback.type] || 'feature';
 
   // Generate key
   const sdKey = await generateSDKey({
