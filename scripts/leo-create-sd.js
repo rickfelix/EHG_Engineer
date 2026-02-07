@@ -510,6 +510,14 @@ function mapPriority(feedbackPriority) {
  * orchestrator, qa, refactor, security, implementation, strategic_observation,
  * architectural_review, discovery_spike, ux_debt, product_decision
  */
+// PAT-SDCREATE-001: Valid SD types that exist in all registration points
+// Keep in sync with: sd-type-validation.js VALID_SD_TYPES, type-classifier.js SD_TYPE_PROFILES
+const VALID_DB_SD_TYPES = [
+  'feature', 'infrastructure', 'bugfix', 'database', 'security',
+  'refactor', 'documentation', 'docs', 'orchestrator', 'performance',
+  'enhancement', 'uat', 'library', 'fix', 'implementation', 'qa'
+];
+
 function mapToDbType(userType) {
   const map = {
     // User-friendly -> Database type
@@ -533,7 +541,14 @@ function mapToDbType(userType) {
     implementation: 'implementation',
     enhancement: 'feature'  // Map enhancement to feature
   };
-  return map[userType?.toLowerCase()] || 'feature';
+  const mapped = map[userType?.toLowerCase()] || 'feature';
+
+  // PAT-SDCREATE-001: Validate the mapped type exists in VALID_DB_SD_TYPES
+  if (!VALID_DB_SD_TYPES.includes(mapped)) {
+    console.warn(`⚠️  Mapped sd_type '${mapped}' not in VALID_DB_SD_TYPES list. Defaulting to 'feature'.`);
+    return 'feature';
+  }
+  return mapped;
 }
 
 /**

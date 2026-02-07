@@ -91,7 +91,8 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
   async executeSpecific(sdId, sd, _options, _gateResults) {
     // Display pre-handoff warnings from recent retrospectives
-    await displayPreHandoffWarnings('LEAD_TO_PLAN', this.supabase);
+    // PAT-LATE-REQ-001: Pass SD to surface type-specific requirements early
+    await displayPreHandoffWarnings('LEAD_TO_PLAN', this.supabase, sd);
 
     // Delegate to existing LeadToPlanVerifier
     const verifier = this.verifier || new LeadToPlanVerifier();

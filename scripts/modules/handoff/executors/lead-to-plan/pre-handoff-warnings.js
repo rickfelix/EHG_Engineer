@@ -7,13 +7,54 @@
  */
 
 /**
+ * PAT-LATE-REQ-001 + PAT-E2E-EARLY-001: Surface SD-type-specific requirements
+ * BEFORE LEAD approval so implementers know what's expected upfront.
+ *
+ * @param {Object} sd - Strategic Directive
+ */
+function displayTypeRequirements(sd) {
+  // Import inline to avoid circular deps at module level
+  const SD_TYPE_REQUIREMENTS = {
+    feature:        { prd: true,  e2e: true,  design: true,  minHandoffs: 4, threshold: '85%' },
+    infrastructure: { prd: true,  e2e: false, design: false, minHandoffs: 3, threshold: '80%' },
+    bugfix:         { prd: false, e2e: false, design: false, minHandoffs: 1, threshold: '70%' },
+    fix:            { prd: false, e2e: false, design: false, minHandoffs: 1, threshold: '70%' },
+    database:       { prd: true,  e2e: false, design: false, minHandoffs: 2, threshold: '80%' },
+    security:       { prd: true,  e2e: true,  design: false, minHandoffs: 3, threshold: '90%' },
+    refactor:       { prd: false, e2e: true,  design: false, minHandoffs: 2, threshold: '80%' },
+    documentation:  { prd: false, e2e: false, design: false, minHandoffs: 1, threshold: '60%' },
+    enhancement:    { prd: false, e2e: false, design: false, minHandoffs: 2, threshold: '75%' },
+    library:        { prd: false, e2e: false, design: false, minHandoffs: 2, threshold: '75%' },
+  };
+
+  const sdType = (sd?.sd_type || 'feature').toLowerCase();
+  const reqs = SD_TYPE_REQUIREMENTS[sdType] || SD_TYPE_REQUIREMENTS.feature;
+
+  console.log('\n📋 SD TYPE REQUIREMENTS (surfaced at LEAD for early awareness):');
+  console.log('='.repeat(70));
+  console.log(`   SD Type:       ${sdType}`);
+  console.log(`   PRD Required:  ${reqs.prd ? '✅ YES' : '⏭️  No'}`);
+  console.log(`   E2E Required:  ${reqs.e2e ? '✅ YES - plan E2E strategy early' : '⏭️  No'}`);
+  console.log(`   DESIGN Review: ${reqs.design ? '✅ YES' : '⏭️  No'}`);
+  console.log(`   Min Handoffs:  ${reqs.minHandoffs}`);
+  console.log(`   Gate Threshold: ${reqs.threshold}`);
+  console.log('');
+}
+
+/**
  * Display pre-handoff warnings from recent retrospectives
  *
  * @param {string} handoffType - Type of handoff
  * @param {Object} supabase - Supabase client
+ * @param {Object} [sd] - Strategic Directive (optional, for type-specific requirements)
  */
-export async function displayPreHandoffWarnings(handoffType, supabase) {
+export async function displayPreHandoffWarnings(handoffType, supabase, sd) {
   try {
+    // PAT-LATE-REQ-001 + PAT-E2E-EARLY-001: Show type requirements first
+    if (sd && handoffType === 'LEAD-TO-PLAN') {
+      displayTypeRequirements(sd);
+    }
+
     console.log('\n⚠️  PRE-HANDOFF WARNINGS: Recent Friction Points');
     console.log('='.repeat(70));
 
