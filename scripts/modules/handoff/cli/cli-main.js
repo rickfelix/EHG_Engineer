@@ -486,24 +486,6 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
   // SD-type-aware workflow definitions live in workflow-definitions.js.
   // Use getWorkflowForType(sdType) to check required/optional handoffs per type.
 
-  /**
-   * Get next handoff in workflow sequence.
-   *
-   * Always returns null — every handoff is terminal because phase work
-   * (PRD creation, implementation, verification, review) must happen
-   * between handoffs and cannot be skipped.
-   *
-   * The only auto-continuation is child-to-child within an orchestrator,
-   * handled separately after LEAD-FINAL-APPROVAL (see while loop below).
-   *
-   * @param {string} _currentHandoff - Current handoff type (unused, all terminal)
-   * @param {string} _sdType - SD type from database (unused, all terminal)
-   * @returns {null} - Always null (terminal)
-   */
-  function getNextInWorkflow(_currentHandoff, _sdType) {
-    return null;
-  }
-
   // Continue loop only if AUTO-PROCEED is enabled
   // Child-to-child continuation: after LEAD-FINAL-APPROVAL, find next ready child in orchestrator
   while (autoProceedEnabled && currentResult.success && iterationCount < maxIterations) {
