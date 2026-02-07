@@ -67,11 +67,49 @@ const FILTER_CONFIG = {
 };
 
 /**
+ * NON-ACTIONABLE recommendation patterns for SAL filtering.
+ * These indicate normal/positive sub-agent behavior, NOT problems to fix.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008: Prevents noise SDs from being created.
+ */
+const NON_ACTIONABLE_SAL_PATTERNS = [
+  // Normal "no action needed" signals
+  /no (?:database )?migrations? needed/i,
+  /no (?:action|changes?) (?:needed|required)/i,
+  /no issues? (?:found|detected)/i,
+  /proceed with standard/i,
+  /low risk profile/i,
+  // Status reports, not action items
+  /user stories (?:now )?include/i,
+  /implementation.?context/i,
+  /stories already have/i,
+  /this is a success/i,
+  /no additional work needed/i,
+  /read the instructions above/i,
+  // Generic boilerplate recommendations
+  /maintain test coverage/i,
+  /follow existing patterns/i,
+  /standard (?:LEO )?workflow/i,
+];
+
+/**
+ * Check if a recommendation text is non-actionable (normal sub-agent behavior).
+ * Returns true if the text matches known non-actionable patterns.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008
+ */
+function isNonActionableRecommendation(text) {
+  if (!text || typeof text !== 'string') return false;
+  return NON_ACTIONABLE_SAL_PATTERNS.some(pattern => pattern.test(text));
+}
+
+/**
  * Query sub-agent execution results to extract learnable patterns
  * Groups by sub-agent code and identifies:
  * - Recurring recommendations
  * - Recurring critical issues
  * - Underperforming sub-agents (low pass rate)
+ *
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008: Filters non-actionable recommendations
+ * to prevent noise SDs from being created by /learn auto-approve.
  */
 async function getSubAgentLearnings(limit = TOP_N) {
   // Query recent sub-agent execution results
@@ -114,30 +152,42 @@ async function getSubAgentLearnings(limit = TOP_N) {
     const topIssues = Object.entries(issueCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
     // Generate learning for recurring recommendations (3+ occurrences)
-    if (topRecs.length > 0 && topRecs[0][1] >= 3) {
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008: Filter non-actionable recommendations
+    const actionableRecs = topRecs.filter(([text]) => !isNonActionableRecommendation(text));
+    const filteredRecCount = topRecs.length - actionableRecs.length;
+
+    if (actionableRecs.length > 0 && actionableRecs[0][1] >= 3) {
+      // Adjust confidence: high pass rate + recommendations = informational, not urgent
+      // A sub-agent that passes 90% of the time with the same rec is reporting status, not problems
+      const actionabilityPenalty = passRate > 0.8 ? 20 : 0;
+      const adjustedConfidence = Math.max(30, avgConfidence - actionabilityPenalty);
+
       learnings.push({
         id: `SAL-${code}-REC`,
         source_type: 'sub_agent_recommendation',
         sub_agent_code: code,
-        content: `${code} frequently recommends: ${topRecs.map(r => r[0]).join(', ')}`,
-        occurrence_count: topRecs.reduce((sum, r) => sum + r[1], 0),
-        confidence: avgConfidence,
-        metrics: { pass_rate: passRate, avg_confidence: avgConfidence, execution_count: executions.length },
-        items: topRecs.map(r => ({ recommendation: r[0], count: r[1] }))
+        content: `${code} frequently recommends: ${actionableRecs.map(r => r[0]).join(', ')}`,
+        occurrence_count: actionableRecs.reduce((sum, r) => sum + r[1], 0),
+        confidence: adjustedConfidence,
+        metrics: { pass_rate: passRate, avg_confidence: avgConfidence, execution_count: executions.length, filtered_non_actionable: filteredRecCount },
+        items: actionableRecs.map(r => ({ recommendation: r[0], count: r[1] }))
       });
     }
 
     // Generate learning for recurring issues (2+ occurrences)
-    if (topIssues.length > 0 && topIssues[0][1] >= 2) {
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008: Filter non-actionable issues too
+    const actionableIssues = topIssues.filter(([text]) => !isNonActionableRecommendation(text));
+
+    if (actionableIssues.length > 0 && actionableIssues[0][1] >= 2) {
       learnings.push({
         id: `SAL-${code}-ISS`,
         source_type: 'sub_agent_issue',
         sub_agent_code: code,
-        content: `${code} frequently detects: ${topIssues.map(i => i[0]).join(', ')}`,
-        occurrence_count: topIssues.reduce((sum, i) => sum + i[1], 0),
-        confidence: Math.min(100, 50 + topIssues[0][1] * 10),
+        content: `${code} frequently detects: ${actionableIssues.map(i => i[0]).join(', ')}`,
+        occurrence_count: actionableIssues.reduce((sum, i) => sum + i[1], 0),
+        confidence: Math.min(100, 50 + actionableIssues[0][1] * 10),
         metrics: { pass_rate: passRate, execution_count: executions.length },
-        items: topIssues.map(i => ({ issue: i[0], count: i[1] }))
+        items: actionableIssues.map(i => ({ issue: i[0], count: i[1] }))
       });
     }
 

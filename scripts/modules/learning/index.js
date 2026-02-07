@@ -109,14 +109,16 @@ async function autoApproveCommand(threshold = 50, sdId = null) {
   }
 
   // SD-LEARN-FIX-011: Include sub-agent learnings (SAL-* items)
-  // These were previously invisible to auto-approve, causing silent drops
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-008: SAL items use a HIGHER threshold
+  // than patterns/improvements because they originate from sub-agent execution
+  // history, not from actual issue pattern analysis. This prevents noise SDs.
+  const salThreshold = Math.max(threshold, 75); // SAL minimum: 75%
   for (const sal of (reviewed.sub_agent_learnings || [])) {
-    // SAL items with high confidence (>=threshold) are auto-approved
     const score = sal.confidence || 0;
-    if (score >= threshold) {
+    if (score >= salThreshold) {
       qualifying.push(sal);
     } else {
-      deferred.push({ ...sal, reason: `confidence ${score} < ${threshold}` });
+      deferred.push({ ...sal, reason: `SAL confidence ${score} < ${salThreshold} (SAL-specific threshold)` });
     }
   }
 
