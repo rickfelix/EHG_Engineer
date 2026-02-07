@@ -57,6 +57,42 @@ export class PlanToLeadExecutor extends BaseExecutor {
     const appPath = this.determineTargetRepository(sd);
     options._appPath = appPath;
     options._sd = sd;
+
+    // RCA-PAT-WORKFLOW-GAP-001: Auto-generate retrospective if missing
+    // Gates validate retrospective existence but workflow never generated one.
+    // Generate here (before gates run) to prevent "Validation Without Generation" gap.
+    const { data: existingRetro } = await this.supabase
+      .from('retrospectives')
+      .select('id')
+      .eq('sd_id', sd.id || sdId)
+      .limit(1);
+
+    if (!existingRetro || existingRetro.length === 0) {
+      console.log('   🔄 No retrospective found - auto-generating before gate validation...');
+      try {
+        const { spawn } = await import('child_process');
+        const retroProcess = spawn('node', ['scripts/generate-retrospective.js', sd.id || sdId], {
+          cwd: process.cwd(),
+          stdio: 'pipe'
+        });
+
+        retroProcess.stdout.on('data', () => {});
+        retroProcess.stderr.on('data', () => {});
+
+        await new Promise((resolve, reject) => {
+          retroProcess.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`Retrospective generation exited with code ${code}`));
+          });
+        });
+
+        console.log('   ✅ Retrospective auto-generated (PLAN-TO-LEAD setup)');
+      } catch (retroErr) {
+        console.warn(`   ⚠️  Retrospective auto-generation failed (non-fatal): ${retroErr.message}`);
+        console.warn('   📝 Gate will report this - run manually: node scripts/generate-retrospective.js <SD_UUID>');
+      }
+    }
+
     return null;
   }
 
