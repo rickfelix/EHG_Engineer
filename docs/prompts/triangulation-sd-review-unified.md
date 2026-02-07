@@ -45,7 +45,7 @@ EHG has created 3 parent Strategic Directives (SDs) based on triangulation resea
 
 3. **Database**: Supabase with tables including:
    - `strategic_directives_v2` - SD storage
-   - `prd_documents` - PRD storage
+   - `product_requirements_v2` - PRD storage
    - `scaffold_patterns` - Pattern library (~45 patterns)
 
 ---

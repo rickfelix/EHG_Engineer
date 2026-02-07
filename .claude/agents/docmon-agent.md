@@ -80,7 +80,7 @@ If the user asks general documentation questions without an SD context (e.g., "W
 
 **Key Documentation Patterns**:
 - **Auto-Generation**: AI Documentation Platform auto-generates from SD/PRD
-- **Database Storage**: All docs stored in `ai_generated_documents` table
+- **Database Storage**: All docs stored in `product_requirements_v2` table
 - **Dashboard Access**: `/ai-docs-admin` for review and publishing
 - **EXEC Requirement**: Generate docs before EXEC→PLAN handoff
 - **Version Control**: Docs versioned by SD completion state
@@ -106,7 +106,7 @@ node scripts/search-prior-issues.js "documentation"
 - ✅ PRDs → `product_requirements_v2` table (NOT markdown files)
 - ✅ Handoffs → `sd_phase_handoffs` table (NOT markdown files)
 - ✅ Retrospectives → `retrospectives` table (NOT markdown files)
-- ✅ Documentation → `ai_generated_documents` table
+- ✅ Documentation → `product_requirements_v2` table
 
 **Auto-Trigger Events** (SD-LEO-004):
 1. LEAD_SD_CREATION → Verify SD in database, not file
@@ -164,7 +164,7 @@ From AI Documentation Platform and 74+ retrospectives:
 - Filters: By SD-ID, status, type, date
 
 **Database Tables**:
-- `ai_generated_documents`: Document storage
+- `product_requirements_v2`: Document storage
 - `strategic_directives_v2`: SD context
 - `product_requirements_v2`: PRD context
 

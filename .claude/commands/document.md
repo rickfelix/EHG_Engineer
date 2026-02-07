@@ -44,7 +44,7 @@ Different Strategic Directive types require different documentation approaches.
 
 | SD Type | Primary Docs | Secondary Docs | Location |
 |---------|--------------|----------------|----------|
-| **feature** | User guide, feature docs | API docs, architecture | `docs/04_features/`, `ai_generated_documents` |
+| **feature** | User guide, feature docs | API docs, architecture | `docs/04_features/`, `product_requirements_v2` |
 | **api** | OpenAPI spec, endpoint docs | Integration guide | `docs/02_api/`, `docs/reference/` |
 | **database** | Schema docs, migration notes | RLS policy docs | `docs/database/`, `docs/reference/` |
 | **infrastructure** | Operational runbook, deployment guide | Architecture diagram | `docs/06_deployment/`, `docs/operations/` |
@@ -81,7 +81,7 @@ supabase.from('strategic_directives_v2')
 2. Update docs/04_features/ with new feature guide
 3. If API involved: Update OpenAPI specs
 4. If UI involved: Update component documentation
-5. Store in `ai_generated_documents` table
+5. Store in `product_requirements_v2` table
 
 **Database SD**:
 1. Update schema documentation in `docs/database/`
@@ -566,12 +566,12 @@ grep -r -l -i "KEYWORD1\|KEYWORD2" docs/ --include="*.md"
 Query existing documentation records:
 
 ```bash
-# Search ai_generated_documents for existing documentation
+# Search product_requirements_v2 for existing documentation
 node -e "
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('ai_generated_documents')
+supabase.from('product_requirements_v2')
   .select('id, title, document_type, file_path, status, created_at')
   .or('title.ilike.%KEYWORD%,content.ilike.%KEYWORD%')
   .then(({data, error}) => {
@@ -746,7 +746,7 @@ gh pr create --title "docs(<scope>): <description>" --body "..."
 │   │   └── Find recently modified docs (git log)
 │   │
 │   ├── Search database:
-│   │   ├── Query ai_generated_documents table
+│   │   ├── Query product_requirements_v2 table
 │   │   └── Query documentation_inventory table
 │   │
 │   ├── Apply Decision Matrix:
@@ -903,7 +903,7 @@ supabase.from('leo_protocol_sections')
 #### Database Records Found
 | Table | ID | Title | Action |
 |-------|-----|-------|--------|
-| ai_generated_documents | 45 | Feature X Guide | Updated |
+| product_requirements_v2 | 45 | Feature X Guide | Updated |
 
 #### Decision Rationale
 - [x] Edited existing: `docs/existing/file.md` (covers same topic)

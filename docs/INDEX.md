@@ -59,7 +59,7 @@ grep -n "your change" CLAUDE*.md
 | `leo_sub_agents` | Sub-agent definitions | ~25 agents |
 | `leo_sub_agent_triggers` | Trigger keywords | ~350 triggers |
 | `strategic_directives_v2` | SD metadata | Active SDs |
-| `ai_generated_documents` | AI docs | Generated content |
+| `product_requirements_v2` | PRDs and documentation | Active PRDs |
 
 ### Documentation Principles
 

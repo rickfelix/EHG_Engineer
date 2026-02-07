@@ -118,29 +118,15 @@ async function analyzeSDTables() {
     console.log('\n\n🔗 TABLE REFERENCES:');
     console.log('─'.repeat(60));
     
-    // Check PRD tables
-    const { data: prdV1 } = await supabase
-        .from('prd_documents')
-        .select('*')
-        .limit(1);
-        
-    const { data: prdV2 } = await supabase
+    // Check PRD table
+    const { data: prdData } = await supabase
         .from('product_requirements_v2')
         .select('*')
         .limit(1);
 
-    console.log('\n📄 PRD Tables:');
-    if (prdV1) {
-        const sample = prdV1[0];
-        if (sample) {
-            console.log('   • prd_documents references:');
-            console.log(`     - Has 'sd_id' field: ${sample.sd_id !== undefined ? '✅' : '❌'}`);
-            console.log(`     - Has 'directive_id' field: ${sample.directive_id !== undefined ? '✅' : '❌'}`);
-        }
-    }
-    
-    if (prdV2) {
-        const sample = prdV2[0];
+    console.log('\n📄 PRD Table:');
+    if (prdData) {
+        const sample = prdData[0];
         if (sample) {
             console.log('   • product_requirements_v2 references:');
             console.log(`     - Has 'sd_id' field: ${sample.sd_id !== undefined ? '✅' : '❌'}`);

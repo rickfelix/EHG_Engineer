@@ -71,14 +71,14 @@ async function queryActiveStrategicDirectives() {
 
                 // Check for associated PRDs
                 const { data: prds } = await supabase
-                    .from('prd_documents')
-                    .select('prd_id, status')
+                    .from('product_requirements_v2')
+                    .select('id, status')
                     .eq('sd_id', sd.sd_id || sd.id);
                 
                 if (prds && prds.length > 0) {
                     console.log(`   Associated PRDs: ${prds.length}`);
                     prds.forEach(prd => {
-                        console.log(`     • ${prd.prd_id} (${prd.status})`);
+                        console.log(`     • ${prd.id} (${prd.status})`);
                     });
                 }
             }
