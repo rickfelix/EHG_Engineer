@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T11:05:08.363Z
-**Rows**: 4
+**Generated**: 2026-02-07T11:58:03.214Z
+**Rows**: 8
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -79,10 +79,10 @@
 - `root_cause_reports_log_quality_check`: CHECK (((log_quality >= 0) AND (log_quality <= 20)))
 - `root_cause_reports_pattern_match_score_check`: CHECK (((pattern_match_score >= 0) AND (pattern_match_score <= 15)))
 - `root_cause_reports_repro_success_rate_check`: CHECK (((repro_success_rate >= (0)::numeric) AND (repro_success_rate <= (1)::numeric)))
-- `root_cause_reports_root_cause_category_check`: CHECK ((root_cause_category = ANY (ARRAY['CODE_DEFECT'::text, 'CONFIG_ERROR'::text, 'INFRASTRUCTURE'::text, 'PROCESS_GAP'::text, 'REQUIREMENTS_AMBIGUITY'::text, 'TEST_COVERAGE_GAP'::text, 'DEPENDENCY_ISSUE'::text, 'ENVIRONMENTAL'::text, 'UNKNOWN'::text])))
+- `root_cause_reports_root_cause_category_check`: CHECK ((root_cause_category = ANY (ARRAY['CODE_DEFECT'::text, 'CONFIG_ERROR'::text, 'INFRASTRUCTURE'::text, 'PROCESS_GAP'::text, 'REQUIREMENTS_AMBIGUITY'::text, 'TEST_COVERAGE_GAP'::text, 'DEPENDENCY_ISSUE'::text, 'ENVIRONMENTAL'::text, 'UNKNOWN'::text, 'DATA_QUALITY'::text, 'ENCODING'::text, 'CROSS_CUTTING'::text, 'PROTOCOL_PROCESS'::text, 'CONFIGURATION'::text])))
 - `root_cause_reports_scope_type_check`: CHECK ((scope_type = ANY (ARRAY['SD'::text, 'PRD'::text, 'BACKLOG'::text, 'PIPELINE'::text, 'RUNTIME'::text, 'SUB_AGENT'::text])))
 - `root_cause_reports_status_check`: CHECK ((status = ANY (ARRAY['OPEN'::text, 'IN_REVIEW'::text, 'CAPA_PENDING'::text, 'CAPA_APPROVED'::text, 'FIX_IN_PROGRESS'::text, 'RESOLVED'::text, 'WONT_FIX'::text, 'STALE'::text])))
-- `root_cause_reports_trigger_source_check`: CHECK ((trigger_source = ANY (ARRAY['QUALITY_GATE'::text, 'CI_PIPELINE'::text, 'RUNTIME'::text, 'MANUAL'::text, 'SUB_AGENT'::text, 'TEST_FAILURE'::text, 'HANDOFF_REJECTION'::text])))
+- `root_cause_reports_trigger_source_check`: CHECK ((trigger_source = ANY (ARRAY['QUALITY_GATE'::text, 'CI_PIPELINE'::text, 'RUNTIME'::text, 'MANUAL'::text, 'SUB_AGENT'::text, 'TEST_FAILURE'::text, 'HANDOFF_REJECTION'::text, 'API_FAILURE'::text, 'MIGRATION_FAILURE'::text, 'SCRIPT_CRASH'::text, 'PRD_VALIDATION_FAILURE'::text, 'STATE_MISMATCH'::text, 'TEST_RETRY_EXHAUSTED'::text, 'AUTO_TRIGGER'::text])))
 - `root_cause_reports_trigger_tier_check`: CHECK (((trigger_tier >= 1) AND (trigger_tier <= 4)))
 - `valid_confidence_for_status`: CHECK ((((status = 'OPEN'::text) AND (confidence >= 40)) OR ((status = ANY (ARRAY['IN_REVIEW'::text, 'CAPA_PENDING'::text])) AND (confidence >= 60)) OR ((status = ANY (ARRAY['CAPA_APPROVED'::text, 'FIX_IN_PROGRESS'::text, 'RESOLVED'::text])) AND (confidence >= 70)) OR (status = ANY (ARRAY['WONT_FIX'::text, 'STALE'::text]))))
 

@@ -1,12 +1,12 @@
-# db_agent_config Table
+# rca_auto_trigger_config Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-07T11:58:03.214Z
-**Rows**: 4
-**RLS**: Enabled (1 policy)
+**Rows**: 8
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,39 +14,48 @@
 
 ---
 
-## Columns (6 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| key | `character varying(100)` | **NO** | - | - |
-| value | `jsonb` | **NO** | - | - |
-| description | `text` | YES | - | - |
+| trigger_type | `text` | **NO** | - | - |
+| enabled | `boolean` | YES | `true` | - |
+| rate_limit_per_minute | `integer(32)` | YES | `3` | - |
+| auto_create_fix_sd | `boolean` | YES | `false` | - |
+| recurrence_threshold | `integer(32)` | YES | `3` | - |
+| recurrence_window_days | `integer(32)` | YES | `14` | - |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `db_agent_config_pkey`: PRIMARY KEY (id)
+- `rca_auto_trigger_config_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `db_agent_config_key_key`: UNIQUE (key)
+- `rca_auto_trigger_config_trigger_type_key`: UNIQUE (trigger_type)
 
 ## Indexes
 
-- `db_agent_config_key_key`
+- `rca_auto_trigger_config_pkey`
   ```sql
-  CREATE UNIQUE INDEX db_agent_config_key_key ON public.db_agent_config USING btree (key)
+  CREATE UNIQUE INDEX rca_auto_trigger_config_pkey ON public.rca_auto_trigger_config USING btree (id)
   ```
-- `db_agent_config_pkey`
+- `rca_auto_trigger_config_trigger_type_key`
   ```sql
-  CREATE UNIQUE INDEX db_agent_config_pkey ON public.db_agent_config USING btree (id)
+  CREATE UNIQUE INDEX rca_auto_trigger_config_trigger_type_key ON public.rca_auto_trigger_config USING btree (trigger_type)
   ```
 
 ## RLS Policies
 
-### 1. service_role_all_db_agent_config (ALL)
+### 1. authenticated_read_rca_config (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. service_role_all_rca_config (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

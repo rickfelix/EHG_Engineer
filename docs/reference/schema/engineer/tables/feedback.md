@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T11:05:08.363Z
+**Generated**: 2026-02-07T11:58:03.214Z
 **Rows**: 20
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (46 total)
+## Columns (49 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -64,6 +64,9 @@
 | quick_fix_id | `text` | YES | - | Foreign key to quick_fixes.id. When feedback is resolved via a quick fix, this references the QF-YYYYMMDD-NNN identifier. Required when status=resolved (unless strategic_directive_id is set). |
 | strategic_directive_id | `character varying(50)` | YES | - | Foreign key to strategic_directives_v2.id. When feedback is resolved via a full Strategic Directive, this references the SD-XXX-NNN identifier. Required when status=resolved (unless quick_fix_id is set). |
 | duplicate_of_id | `uuid` | YES | - | Foreign key to feedback.id (self-reference). When status=duplicate, this references the original feedback item that this one duplicates. Cannot reference itself (enforced by CHECK constraint). |
+| ai_triage_confidence | `integer(32)` | YES | - | Confidence score (0-100) from AI triage classification. Higher values indicate more certain classification. |
+| ai_triage_classification | `character varying(50)` | YES | - | AI-determined classification: bug, enhancement, question, duplicate, invalid. May differ from user-submitted type. |
+| ai_triage_source | `character varying(20)` | YES | - | Source of triage classification: llm (cloud/local LLM) or rules (rule-based fallback). |
 
 ## Constraints
 
@@ -76,6 +79,8 @@
 - `fk_feedback_strategic_directive`: strategic_directive_id → strategic_directives_v2(id)
 
 ### Check Constraints
+- `chk_ai_triage_confidence_range`: CHECK (((ai_triage_confidence IS NULL) OR ((ai_triage_confidence >= 0) AND (ai_triage_confidence <= 100))))
+- `chk_ai_triage_source_valid`: CHECK (((ai_triage_source IS NULL) OR ((ai_triage_source)::text = ANY ((ARRAY['llm'::character varying, 'rules'::character varying])::text[]))))
 - `chk_duplicate_requires_reference`: CHECK ((((status)::text <> 'duplicate'::text) OR ((duplicate_of_id IS NOT NULL) AND (duplicate_of_id <> id))))
 - `chk_resolved_requires_reference`: CHECK ((((status)::text <> 'resolved'::text) OR ((quick_fix_id IS NOT NULL) OR (strategic_directive_id IS NOT NULL) OR (resolution_sd_id IS NOT NULL) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0)))))
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
@@ -91,6 +96,10 @@
 - `feedback_pkey`
   ```sql
   CREATE UNIQUE INDEX feedback_pkey ON public.feedback USING btree (id)
+  ```
+- `idx_feedback_ai_triage_confidence`
+  ```sql
+  CREATE INDEX idx_feedback_ai_triage_confidence ON public.feedback USING btree (ai_triage_confidence) WHERE (ai_triage_confidence IS NOT NULL)
   ```
 - `idx_feedback_clustering`
   ```sql

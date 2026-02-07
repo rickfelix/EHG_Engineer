@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T11:05:08.363Z
+**Generated**: 2026-02-07T11:58:03.214Z
 **Rows**: 53
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,7 @@
 | assignment_date | `timestamp with time zone` | YES | - | When pattern was assigned to an SD via /learn. |
 | source | `character varying(50)` | YES | `'retrospective'::character varying` | Origin of pattern: retrospective (default), feedback_cluster, or manual |
 | source_feedback_ids | `jsonb` | YES | `'[]'::jsonb` | Array of feedback UUIDs that contributed to this pattern (for feedback_cluster source) |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 
@@ -56,7 +57,7 @@
 - `issue_patterns_pattern_id_key`: UNIQUE (pattern_id)
 
 ### Check Constraints
-- `issue_patterns_source_check`: CHECK (((source)::text = ANY ((ARRAY['retrospective'::character varying, 'feedback_cluster'::character varying, 'manual'::character varying, 'quick_fix_cluster'::character varying])::text[])))
+- `issue_patterns_source_check`: CHECK (((source)::text = ANY ((ARRAY['retrospective'::character varying, 'feedback_cluster'::character varying, 'manual'::character varying, 'quick_fix_cluster'::character varying, 'auto_rca'::character varying])::text[])))
 - `issue_patterns_status_check`: CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'assigned'::character varying, 'resolved'::character varying, 'obsolete'::character varying])::text[])))
 
 ## Indexes
