@@ -159,7 +159,7 @@ export class SDNextSelector {
     await this.displayTracks();
 
     // Display recommendations and get structured action data
-    const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts);
+    const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts, this.getSessionContext());
 
     // Display proactive proposals (LEO v4.4)
     displayProposals(this.pendingProposals);

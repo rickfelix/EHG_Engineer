@@ -16,7 +16,7 @@ import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration
  * @param {Array} conflicts - Active conflicts
  * @returns {{ action: string, sd_id: string|null, reason: string }} Recommended next action
  */
-export async function displayRecommendations(supabase, baselineItems, conflicts = []) {
+export async function displayRecommendations(supabase, baselineItems, conflicts = [], sessionContext = {}) {
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
   console.log(`${colors.bold}${colors.green}RECOMMENDED ACTIONS:${colors.reset}\n`);
 
@@ -27,8 +27,8 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
     await displayWorkingOnSD(supabase, workingOn);
   }
 
-  // Find ready SDs from baseline
-  const { readySDs, needsVerificationSDs } = await categorizeBaselineSDs(supabase, baselineItems);
+  // Find ready SDs from baseline (skip SDs claimed by other sessions)
+  const { readySDs, needsVerificationSDs } = await categorizeBaselineSDs(supabase, baselineItems, sessionContext);
 
   // Show SDs needing verification/close-out FIRST (Control Gap Fix)
   if (needsVerificationSDs.length > 0) {
@@ -117,9 +117,11 @@ async function displayWorkingOnSD(supabase, workingOn) {
 /**
  * Categorize baseline SDs into ready and needs verification
  */
-async function categorizeBaselineSDs(supabase, baselineItems) {
+async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {}) {
   const readySDs = [];
   const needsVerificationSDs = [];
+  const { claimedSDs, currentSession } = sessionContext;
+  const currentSessionId = currentSession?.session_id;
 
   for (const item of baselineItems) {
     const { data: sd } = await supabase
@@ -129,6 +131,15 @@ async function categorizeBaselineSDs(supabase, baselineItems) {
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
+      // Skip SDs claimed by OTHER sessions
+      if (claimedSDs) {
+        const sdId = sd.sd_key || sd.id;
+        const claimingSession = claimedSDs.get(sdId) || claimedSDs.get(sd.id);
+        if (claimingSession && claimingSession !== currentSessionId) {
+          continue;
+        }
+      }
+
       const depsResolved = await checkDependenciesResolved(supabase, sd.dependencies);
       const enrichedSD = { ...item, ...sd, deps_resolved: depsResolved };
 
