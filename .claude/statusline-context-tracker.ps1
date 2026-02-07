@@ -115,6 +115,27 @@ if (Test-Path $gitDir) {
     Pop-Location
 }
 
+# Detect active SD from worktrees (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
+# With worktree-first model, main repo stays on 'main'. Show active SD key instead.
+$activeWorktreeSd = ""
+$worktreesDir = Join-Path $cwd ".worktrees"
+if (Test-Path $worktreesDir) {
+    try {
+        # Find worktrees with .worktree.json (active SD worktrees)
+        $sdWorktrees = Get-ChildItem -Path $worktreesDir -Directory | Where-Object {
+            Test-Path (Join-Path $_.FullName ".worktree.json")
+        }
+        if ($sdWorktrees.Count -eq 1) {
+            # Unambiguous: only one SD worktree exists
+            $activeWorktreeSd = $sdWorktrees[0].Name
+        } elseif ($sdWorktrees.Count -gt 1) {
+            # Multiple worktrees: show count (can't determine which session owns which
+            # without session-keyed claim files - avoids showing wrong SD)
+            $activeWorktreeSd = "$($sdWorktrees.Count)wt"
+        }
+    } catch { }
+}
+
 # Determine status
 $status = "HEALTHY"
 $icon = ""
@@ -199,7 +220,10 @@ $emptyChar = [char]0x2591  # Light shade
 $bar = ($fillChar.ToString() * $filled) + ($emptyChar.ToString() * $empty)
 
 # Build project info
-if ($gitBranch) {
+# With worktree-first: show active SD key when on main and worktree exists
+if ($gitBranch -and $activeWorktreeSd) {
+    $projectInfo = "${projectName}:${gitBranch}${gitDirty} [${activeWorktreeSd}]"
+} elseif ($gitBranch) {
     $projectInfo = "${projectName}:${gitBranch}${gitDirty}"
 } else {
     $projectInfo = $projectName
