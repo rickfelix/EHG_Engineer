@@ -86,8 +86,31 @@ function sanitizeUnicode(value) {
 }
 
 /**
+ * Recursively sanitize all string values within an object/array.
+ * Handles nested structures where surrogates hide inside object properties.
+ *
+ * @param {any} value - Value to deep-sanitize
+ * @returns {any} Sanitized value with all string surrogates replaced
+ */
+function deepSanitizeUnicode(value) {
+  if (typeof value === 'string') return sanitizeUnicode(value);
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(deepSanitizeUnicode);
+
+  const result = {};
+  for (const key of Object.keys(value)) {
+    result[sanitizeUnicode(key)] = deepSanitizeUnicode(value[key]);
+  }
+  return result;
+}
+
+/**
  * Install Unicode sanitization on console output.
  * This prevents invalid surrogates from corrupting Claude Code's API calls.
+ *
+ * Note: Objects are deep-sanitized recursively rather than via JSON round-trip,
+ * because ES2019 JSON.stringify escapes lone surrogates as \ud800 (ASCII chars)
+ * which sanitizeUnicode doesn't detect, and JSON.parse converts them back.
  */
 function installOutputSanitizer() {
   const originalLog = console.log;
@@ -98,8 +121,7 @@ function installOutputSanitizer() {
     if (typeof arg === 'string') return sanitizeUnicode(arg);
     if (typeof arg === 'object' && arg !== null) {
       try {
-        // Sanitize JSON stringified objects
-        return JSON.parse(sanitizeUnicode(JSON.stringify(arg)));
+        return deepSanitizeUnicode(arg);
       } catch {
         return arg;
       }
