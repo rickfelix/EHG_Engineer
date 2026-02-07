@@ -35,6 +35,11 @@
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\scripts\\hooks\\session-start-loader.ps1",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/concurrent-session-worktree.cjs",
+            "timeout": 5
           }
         ]
       }
