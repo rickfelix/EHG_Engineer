@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T13:21:15.711Z
+**Generated**: 2026-02-07T15:02:05.311Z
 **Rows**: 21
 **RLS**: Enabled (4 policies)
 
@@ -75,13 +75,23 @@
 
 ### Foreign Keys
 - `fk_feedback_duplicate_of`: duplicate_of_id → feedback(id)
+- `fk_feedback_duplicate_of_id`: duplicate_of_id → feedback(id)
 - `fk_feedback_quick_fix`: quick_fix_id → quick_fixes(id)
+- `fk_feedback_quick_fix_id`: quick_fix_id → quick_fixes(id)
 - `fk_feedback_strategic_directive`: strategic_directive_id → strategic_directives_v2(id)
 
 ### Check Constraints
 - `chk_ai_triage_confidence_range`: CHECK (((ai_triage_confidence IS NULL) OR ((ai_triage_confidence >= 0) AND (ai_triage_confidence <= 100))))
 - `chk_ai_triage_source_valid`: CHECK (((ai_triage_source IS NULL) OR ((ai_triage_source)::text = ANY ((ARRAY['llm'::character varying, 'rules'::character varying])::text[]))))
 - `chk_duplicate_requires_reference`: CHECK ((((status)::text <> 'duplicate'::text) OR ((duplicate_of_id IS NOT NULL) AND (duplicate_of_id <> id))))
+- `chk_feedback_no_self_duplicate`: CHECK (((duplicate_of_id IS NULL) OR (duplicate_of_id <> id)))
+- `chk_feedback_terminal_resolution`: CHECK (
+CASE
+    WHEN ((status)::text = 'resolved'::text) THEN ((resolution_sd_id IS NOT NULL) OR (quick_fix_id IS NOT NULL) OR (strategic_directive_id IS NOT NULL) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0)))
+    WHEN ((status)::text = 'wont_fix'::text) THEN ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))
+    WHEN ((status)::text = 'duplicate'::text) THEN (duplicate_of_id IS NOT NULL)
+    ELSE true
+END)
 - `chk_resolved_requires_reference`: CHECK ((((status)::text <> 'resolved'::text) OR ((quick_fix_id IS NOT NULL) OR (strategic_directive_id IS NOT NULL) OR (resolution_sd_id IS NOT NULL) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0)))))
 - `chk_wont_fix_requires_notes`: CHECK ((((status)::text <> 'wont_fix'::text) OR ((resolution_notes IS NOT NULL) AND (length(TRIM(BOTH FROM resolution_notes)) > 0))))
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
