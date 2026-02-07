@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Session Worktree CLI
- * SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001 (FR-1, FR-2, FR-5)
+ * SD Worktree CLI
+ * SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001
  *
- * Creates isolated git worktrees for concurrent Claude Code sessions.
+ * Creates isolated git worktrees keyed by Strategic Directive (SD).
  *
  * Usage:
- *   npm run session:worktree -- --session <name> --branch <branch>
+ *   npm run session:worktree -- --sd-key <key> --branch <branch>
  *   npm run session:worktree -- --list
- *   npm run session:worktree -- --cleanup --session <name>
+ *   npm run session:worktree -- --cleanup --sd-key <key>
  */
 
 import {
   createWorktree,
   symlinkNodeModules,
-  removeWorktree,
+  cleanupWorktree,
   listWorktrees,
   getRepoRoot
 } from '../lib/worktree-manager.js';
@@ -24,7 +24,9 @@ function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--session' && argv[i + 1]) {
+    if (arg === '--sd-key' && argv[i + 1]) {
+      args.sdKey = argv[++i];
+    } else if (arg === '--session' && argv[i + 1]) {
       args.session = argv[++i];
     } else if (arg === '--branch' && argv[i + 1]) {
       args.branch = argv[++i];
@@ -45,32 +47,33 @@ function parseArgs(argv) {
 
 function printUsage() {
   console.log(`
-Session Worktree Manager
+SD Worktree Manager
 ========================
 
 Create:
-  npm run session:worktree -- --session <name> --branch <branch> [--force] [--no-symlink]
+  npm run session:worktree -- --sd-key <key> --branch <branch> [--force] [--no-symlink]
 
 List:
   npm run session:worktree -- --list
 
 Cleanup:
-  npm run session:worktree -- --cleanup --session <name>
+  npm run session:worktree -- --cleanup --sd-key <key> [--force]
 
 Options:
-  --session <name>   Session name (used as directory name under .sessions/)
+  --sd-key <key>     SD key (used as directory name under .worktrees/)
+  --session <name>   DEPRECATED: Maps to --sd-key session-<name>
   --branch <branch>  Branch to check out in the worktree
   --force            Force recreate if worktree exists with different branch
   --no-symlink       Skip node_modules symlink/junction
-  --list             List all active worktree sessions
-  --cleanup          Remove a worktree and deregister it
+  --list             List all active SD worktrees
+  --cleanup          Remove a worktree and deregister it from git
   --help, -h         Show this help
 
 Examples:
-  npm run session:worktree -- --session track-a --branch feat/SD-INFRA-001-feature
-  npm run session:worktree -- --session track-b --branch feat/SD-FEAT-002-ui-work
+  npm run session:worktree -- --sd-key SD-INFRA-001 --branch feat/SD-INFRA-001-feature
+  npm run session:worktree -- --sd-key SD-FEAT-002 --branch feat/SD-FEAT-002-ui-work
   npm run session:worktree -- --list
-  npm run session:worktree -- --cleanup --session track-a
+  npm run session:worktree -- --cleanup --sd-key SD-INFRA-001
 `);
 }
 
@@ -82,35 +85,48 @@ async function main() {
     process.exit(0);
   }
 
+  // Warn if --session provided with --sd-key
+  if (args.sdKey && args.session) {
+    console.warn('[worktree-cli] WARNING: Both --sd-key and --session provided. Using --sd-key, ignoring --session.');
+  }
+
   // ── List mode ──
   if (args.list) {
-    const sessions = listWorktrees();
-    if (sessions.length === 0) {
-      console.log('No active worktree sessions found.');
+    const worktrees = listWorktrees();
+    if (worktrees.length === 0) {
+      console.log('No active SD worktrees found.');
       process.exit(0);
     }
 
-    console.log('\nActive Worktree Sessions:');
-    console.log('─'.repeat(70));
-    for (const s of sessions) {
-      const status = s.exists ? '  active' : '  STALE (directory missing)';
-      console.log(`  ${s.session.padEnd(20)} ${s.branch.padEnd(40)} ${status}`);
+    console.log('\nActive SD Worktrees:');
+    console.log('\u2500'.repeat(70));
+    for (const wt of worktrees) {
+      const status = wt.exists ? '  active' : '  STALE (directory missing)';
+      console.log(`  ${wt.sdKey.padEnd(20)} ${wt.branch.padEnd(40)} ${status}`);
     }
-    console.log('─'.repeat(70));
-    console.log(`Total: ${sessions.length} session(s)\n`);
+    console.log('\u2500'.repeat(70));
+    console.log(`Total: ${worktrees.length} worktree(s)\n`);
     process.exit(0);
   }
 
   // ── Cleanup mode ──
   if (args.cleanup) {
-    if (!args.session) {
-      console.error('Error: --cleanup requires --session <name>');
+    const key = args.sdKey || args.session;
+    if (!key) {
+      console.error('Error: --cleanup requires --sd-key <key>');
       process.exit(1);
     }
 
     try {
-      removeWorktree(args.session);
-      console.log(`Worktree '${args.session}' removed successfully.`);
+      const result = cleanupWorktree(args.sdKey || key, { force: args.force || false });
+      if (result.cleaned) {
+        console.log(`Worktree '${key}' removed successfully.`);
+      } else {
+        console.log(`Worktree cleanup result: ${result.reason}`);
+        if (result.reason === 'dirty_worktree') {
+          console.log('Use --force to override dirty-worktree safety check.');
+        }
+      }
     } catch (err) {
       console.error(`Error removing worktree: ${err.message}`);
       process.exit(1);
@@ -119,28 +135,30 @@ async function main() {
   }
 
   // ── Create mode ──
-  if (!args.session || !args.branch) {
-    console.error('Error: --session and --branch are required for worktree creation.');
+  const key = args.sdKey || args.session;
+  if (!key || !args.branch) {
+    console.error('Error: --sd-key and --branch are required for worktree creation.');
     console.error('Run with --help for usage information.');
     process.exit(1);
   }
 
   try {
     const result = createWorktree({
+      sdKey: args.sdKey,
       session: args.session,
       branch: args.branch,
       force: args.force || false
     });
 
     if (result.reused) {
-      console.log(`\nWorktree '${args.session}' already exists on branch '${result.branch}'.`);
+      console.log(`\nWorktree '${result.sdKey}' already exists on branch '${result.branch}'.`);
       console.log(`Path: ${result.path}`);
       console.log('\nTo use it:');
       console.log(`  cd ${result.path}`);
       process.exit(0);
     }
 
-    // Symlink node_modules (FR-2)
+    // Symlink node_modules
     if (!args.noSymlink) {
       try {
         symlinkNodeModules(result.path, getRepoRoot());
@@ -152,6 +170,7 @@ async function main() {
     }
 
     console.log('\nWorktree created successfully!');
+    console.log(`  SD Key: ${result.sdKey}`);
     console.log(`  Path:   ${result.path}`);
     console.log(`  Branch: ${result.branch}`);
     console.log('\nTo start working:');
