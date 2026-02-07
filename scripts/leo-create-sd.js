@@ -19,8 +19,10 @@ import {
   generateSDKey,
   generateChildKey,
   SD_SOURCES,
-  SD_TYPES
+  SD_TYPES,
+  normalizeVenturePrefix
 } from './modules/sd-key-generator.js';
+import { VentureContextManager } from '../lib/eva/venture-context-manager.js';
 import {
   checkGate,
   getArtifacts,
@@ -44,6 +46,55 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+// ============================================================================
+// Venture Context Resolution (SD-LEO-INFRA-SD-NAMESPACING-001)
+// ============================================================================
+
+/**
+ * Resolve venture prefix from CLI flag, env var, or active session.
+ * Precedence: --venture CLI flag > VENTURE env var > session context
+ *
+ * @param {string|null} cliVenture - Venture name from --venture flag
+ * @returns {Promise<string|null>} Normalized venture prefix or null
+ */
+async function resolveVenturePrefix(cliVenture = null) {
+  // 1. CLI flag (highest priority)
+  if (cliVenture) {
+    const prefix = normalizeVenturePrefix(cliVenture);
+    if (prefix) {
+      console.log(`   🏢 Venture context: ${cliVenture} (from --venture flag)`);
+      return prefix;
+    }
+  }
+
+  // 2. Environment variable
+  const envVenture = process.env.VENTURE;
+  if (envVenture) {
+    const prefix = normalizeVenturePrefix(envVenture);
+    if (prefix) {
+      console.log(`   🏢 Venture context: ${envVenture} (from VENTURE env var)`);
+      return prefix;
+    }
+  }
+
+  // 3. Active session context
+  try {
+    const vcm = new VentureContextManager({ supabaseClient: supabase });
+    const venture = await vcm.getActiveVenture();
+    if (venture) {
+      const prefix = normalizeVenturePrefix(venture.name);
+      if (prefix) {
+        console.log(`   🏢 Venture context: ${venture.name} (from session)`);
+        return prefix;
+      }
+    }
+  } catch {
+    // Non-fatal - proceed without venture prefix
+  }
+
+  return null;
+}
 
 // ============================================================================
 // Source Handlers
@@ -70,11 +121,15 @@ async function createFromUAT(testId) {
   // Determine type from UAT result
   const type = uatResult.status === 'failed' ? 'fix' : 'feature';
 
+  // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
+  const venturePrefix = await resolveVenturePrefix();
+
   // Generate key
   const sdKey = await generateSDKey({
     source: 'UAT',
     type,
-    title: uatResult.test_name || uatResult.title || 'UAT Finding'
+    title: uatResult.test_name || uatResult.title || 'UAT Finding',
+    venturePrefix
   });
 
   // Create SD
@@ -115,11 +170,15 @@ async function createFromLearn(patternId) {
   // Determine type
   const type = pattern.lesson_type === 'bug' ? 'fix' : 'enhancement';
 
+  // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
+  const venturePrefix = await resolveVenturePrefix();
+
   // Generate key
   const sdKey = await generateSDKey({
     source: 'LEARN',
     type,
-    title: pattern.key_lesson || pattern.title || 'Learning Pattern'
+    title: pattern.key_lesson || pattern.title || 'Learning Pattern',
+    venturePrefix
   });
 
   // Create SD
@@ -185,11 +244,15 @@ async function createFromFeedback(feedbackId) {
   const typeMap = { issue: 'fix', enhancement: 'enhancement', bug: 'bugfix' };
   const type = typeMap[feedback.type] || 'feature';
 
+  // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
+  const venturePrefix = await resolveVenturePrefix();
+
   // Generate key
   const sdKey = await generateSDKey({
     source: 'FEEDBACK',
     type,
-    title: feedback.title
+    title: feedback.title,
+    venturePrefix
   });
 
   // Create SD
@@ -363,10 +426,14 @@ async function createFromPlan(planPath = null, skipConfirmation = false) {
 
   // Step 5: Generate SD key
   // Protocol files (CLAUDE_CORE.md, CLAUDE_LEAD.md) must be read before SD creation
+  // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
+  const venturePrefix = await resolveVenturePrefix();
+
   const sdKey = await generateSDKey({
     source: 'LEO',
     type: parsed.type,
-    title: parsed.title
+    title: parsed.title,
+    venturePrefix
   });
 
   console.log(`   Generated SD Key: ${sdKey}`);
@@ -885,9 +952,14 @@ Sources: ${Object.keys(SD_SOURCES).join(', ')}
 Types: ${Object.keys(SD_TYPES).join(', ')}
 
 Flags:
-  --force, -f    Force SD creation even if key has QF- prefix (normally redirects to quick-fix)
-  --yes, -y      Skip confirmation for auto-detected plans
-  --help         Show this help message
+  --force, -f        Force SD creation even if key has QF- prefix (normally redirects to quick-fix)
+  --yes, -y          Skip confirmation for auto-detected plans
+  --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
+  --help             Show this help message
+
+Venture Context:
+  Venture prefix is resolved in order: --venture flag > VENTURE env var > active session venture.
+  When a venture context is active, SD keys are automatically prefixed with the venture name.
 
 Examples:
   node scripts/leo-create-sd.js --from-uat abc123
@@ -992,7 +1064,13 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
         console.log('\n✓ Phase 0 artifacts loaded into SD metadata');
       }
 
-      const sdKey = await generateSDKey({ source, type, title });
+      // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
+      // Check for --venture flag in args
+      const ventureArgIdx = args.indexOf('--venture');
+      const cliVenture = ventureArgIdx !== -1 ? args[ventureArgIdx + 1] : null;
+      const venturePrefix = await resolveVenturePrefix(cliVenture);
+
+      const sdKey = await generateSDKey({ source, type, title, venturePrefix });
 
       // QF-CLAIM-CONFLICT-UX-001: Check for --force flag to bypass QF- prefix warning
       const forceCreate = args.includes('--force') || args.includes('-f');

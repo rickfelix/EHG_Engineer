@@ -12,6 +12,8 @@ import dotenv from 'dotenv';
 import { warnIfTempFilesExceedThreshold } from '../../../lib/root-temp-checker.mjs';
 import { checkUncommittedChanges, getAffectedRepos } from '../../../lib/multi-repo/index.js';
 import { checkDependencyStatus } from '../../child-sd-preflight.js';
+import { VentureContextManager } from '../../../lib/eva/venture-context-manager.js';
+import { normalizeVenturePrefix } from '../sd-key-generator.js';
 
 import { colors } from './colors.js';
 import { checkDependenciesResolved } from './dependency-resolver.js';
@@ -84,6 +86,7 @@ export class SDNextSelector {
     this.allSDs = new Map();
     this.multiRepoStatus = null;
     this.sessionManager = null;
+    this.ventureContext = null; // Active venture context for SD filtering
   }
 
   /**
@@ -98,8 +101,17 @@ export class SDNextSelector {
     console.log(`${colors.dim} Multi-Session Aware Strategic Directive Selection${colors.reset}`);
     console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
+    // Show venture context indicator after header (FR-5: user-facing output)
+    // Resolved later in resolveVentureContext(), displayed here if VENTURE env is set early
+    if (process.env.VENTURE) {
+      console.log(`${colors.bold}${colors.green}🏢 Venture: ${process.env.VENTURE}${colors.reset}\n`);
+    }
+
     // Initialize session (auto-register and heartbeat)
     await this.initializeSession();
+
+    // Resolve venture context for SD filtering (SD-LEO-INFRA-SD-NAMESPACING-001)
+    await this.resolveVentureContext();
 
     // Load OKR scorecard first (strategic context)
     const okrData = await loadOKRScorecard(this.supabase);
@@ -222,6 +234,41 @@ export class SDNextSelector {
   }
 
   /**
+   * Resolve venture context from session or environment.
+   * When a venture is active, sd:next will filter to show only venture-scoped SDs.
+   * SD-LEO-INFRA-SD-NAMESPACING-001
+   */
+  async resolveVentureContext() {
+    try {
+      // CLI override: VENTURE env var or --venture flag
+      const envVenture = process.env.VENTURE;
+      if (envVenture) {
+        const prefix = normalizeVenturePrefix(envVenture);
+        if (prefix) {
+          this.ventureContext = { name: envVenture, prefix, source: 'env' };
+          console.log(`${colors.dim}Venture context: ${this.ventureContext.name} (from VENTURE env var)${colors.reset}`);
+          return;
+        }
+      }
+
+      // Session-based: check active venture in session metadata
+      const vcm = new VentureContextManager({ supabaseClient: this.supabase });
+      const venture = await vcm.getActiveVenture();
+      if (venture) {
+        const prefix = normalizeVenturePrefix(venture.name);
+        if (prefix) {
+          this.ventureContext = { name: venture.name, prefix, source: 'session', ventureId: venture.id };
+          console.log(`${colors.dim}Venture context: ${this.ventureContext.name} (from session)${colors.reset}`);
+          return;
+        }
+      }
+    } catch {
+      // Non-fatal - continue without venture filtering
+    }
+    this.ventureContext = null;
+  }
+
+  /**
    * Check for blocked orchestrators (SD-LEO-ENH-AUTO-PROCEED-001-12)
    * Detects ALL_BLOCKED state for orchestrator SDs and displays warning
    */
@@ -300,14 +347,29 @@ export class SDNextSelector {
       return;
     }
 
+    // SD-LEO-INFRA-SD-NAMESPACING-001: Filter by venture prefix when venture context is active
+    let filteredSDs = allSDs;
+    if (this.ventureContext?.prefix) {
+      const ventureKeyPrefix = `SD-${this.ventureContext.prefix}-`;
+      filteredSDs = allSDs.filter(sd => {
+        const key = sd.sd_key || '';
+        return key.startsWith(ventureKeyPrefix);
+      });
+      console.log(`${colors.dim}Filtered to ${filteredSDs.length} venture-scoped SDs (prefix: ${ventureKeyPrefix})${colors.reset}`);
+      if (filteredSDs.length === 0) {
+        console.log(`${colors.yellow}No SDs found for venture "${this.ventureContext.name}". Showing all SDs.${colors.reset}`);
+        filteredSDs = allSDs;
+      }
+    }
+
     // Create baseline lookup map for ordering and track assignment
     const baselineMap = new Map();
     for (const item of this.baselineItems) {
       baselineMap.set(item.sd_id, item);
     }
 
-    // Process each SD
-    for (const sd of allSDs) {
+    // Process each SD (uses filtered list when venture context is active)
+    for (const sd of filteredSDs) {
       if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
       // Look up baseline item by sd_key or id
