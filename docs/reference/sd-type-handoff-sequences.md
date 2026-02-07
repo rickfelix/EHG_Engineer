@@ -337,41 +337,44 @@ LEAD-FINAL-APPROVAL (100%)
 
 ## AUTO-PROCEED Workflow Routing Logic
 
-### Implementation
+### Implementation (Updated 2026-02-06)
 
 **File**: `scripts/modules/handoff/cli/cli-main.js`
 
-**Function**: `getNextInWorkflow(currentHandoff, sdType)`
+**Function**: `getNextInWorkflow(currentHandoff, sdType)` - **ALL HANDOFFS ARE TERMINAL**
 
 ```javascript
-function getNextInWorkflow(currentHandoff, sdType) {
-  // Orchestrator-specific workflow (skips PLAN-TO-EXEC and EXEC-TO-PLAN)
-  if (sdType === 'orchestrator') {
-    const orchestratorSequence = {
-      'LEAD-TO-PLAN': null,              // Terminal - children work outside parent
-      'PLAN-TO-LEAD': 'LEAD-FINAL-APPROVAL',
-      'LEAD-FINAL-APPROVAL': null,
-    };
-    return orchestratorSequence[currentHandoff] ?? null;
-  }
-
-  // Full workflow (feature, database, security, bugfix, performance)
-  const fullSequence = {
-    'LEAD-TO-PLAN': 'PLAN-TO-EXEC',
-    'PLAN-TO-EXEC': 'EXEC-TO-PLAN',      // Added 2026-02-01 (was missing)
-    'EXEC-TO-PLAN': 'PLAN-TO-LEAD',
-    'PLAN-TO-LEAD': 'LEAD-FINAL-APPROVAL',
-    'LEAD-FINAL-APPROVAL': null,
-  };
-  return fullSequence[currentHandoff] ?? null;
+/**
+ * Get next handoff in workflow sequence.
+ *
+ * Always returns null — every handoff is terminal because phase work
+ * (PRD creation, implementation, verification, review) must happen
+ * between handoffs and cannot be skipped.
+ *
+ * The only auto-continuation is child-to-child within an orchestrator,
+ * handled separately after LEAD-FINAL-APPROVAL (see while loop below).
+ */
+function getNextInWorkflow(_currentHandoff, _sdType) {
+  return null;
 }
 ```
 
-**Why SD-Type Awareness Is Critical**:
-- Orchestrators skip PLAN-TO-EXEC and EXEC-TO-PLAN (children do implementation)
-- Infrastructure/Documentation SDs may skip EXEC-TO-PLAN (optional)
-- Refactor SDs may skip LEAD-FINAL-APPROVAL (depends on intensity)
-- AUTO-PROCEED must know the correct next handoff for each SD type
+**CRITICAL CHANGE (2026-02-06)**: All handoffs are now terminal. The function always returns `null`.
+
+**Why This Changed**:
+- **Previous bug**: LEAD-TO-PLAN auto-chained to PLAN-TO-EXEC, skipping PRD creation
+- **Previous bug**: EXEC-TO-PLAN auto-chained to PLAN-TO-LEAD, skipping verification work
+- **Design intent**: AUTO-PROCEED = child-to-child continuation within orchestrators, NOT handoff-to-handoff chaining within a single SD
+- **Phase work must happen between handoffs**: PRD creation, implementation, verification, review
+- **SD-type-aware workflows** still exist in `workflow-definitions.js` (which handoffs are required/optional per type)
+
+**AUTO-PROCEED Scope**:
+- ✅ Child-to-child continuation after LEAD-FINAL-APPROVAL (orchestrator children)
+- ❌ Handoff-to-handoff chaining within a single SD (all handoffs terminal)
+
+**Chaining Scope**:
+- ✅ Orchestrator-to-orchestrator transitions (when chaining enabled)
+- ❌ Handoff sequence within SD (handled manually or via phase work)
 
 ---
 
@@ -468,9 +471,16 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 **Symptom**: Workflow pauses instead of continuing to LEAD-FINAL-APPROVAL.
 
-**Root Cause**: Missing `PLAN-TO-LEAD` → `LEAD-FINAL-APPROVAL` mapping in `WORKFLOW_SEQUENCE` (2026-02-01 fix).
+**Root Cause (2026-02-06 UPDATE)**: ALL handoffs are now terminal. AUTO-PROCEED no longer auto-chains handoffs within a single SD.
 
-**Solution**: Added complete workflow sequence with SD-type awareness in `getNextInWorkflow()`.
+**Solution**: Phase work must happen manually between handoffs:
+- After LEAD-TO-PLAN → Create PRD → Run PLAN-TO-EXEC
+- After PLAN-TO-EXEC → Implement features → Run EXEC-TO-PLAN
+- After EXEC-TO-PLAN → Verify implementation → Run PLAN-TO-LEAD
+- After PLAN-TO-LEAD → Final review → Run LEAD-FINAL-APPROVAL
+
+**Previous Implementation (2026-02-01)** - SUPERSEDED:
+- Auto-chained PLAN-TO-LEAD → LEAD-FINAL-APPROVAL (caused PRD skipping on earlier handoffs)
 
 ---
 
@@ -519,11 +529,16 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 **Implementation**: `scripts/modules/handoff/cli/cli-main.js` - `handleExecuteWithContinuation()`
 
-**Critical Fix (2026-02-01)**:
-- Added WORKFLOW_SEQUENCE mappings (PLAN-TO-LEAD, EXEC-TO-PLAN)
-- Implemented SD-type-aware routing via `getNextInWorkflow()`
-- Orchestrators skip PLAN-TO-EXEC and EXEC-TO-PLAN
-- Children continue through their own workflow sequences
+**Critical Fix (2026-02-06)**: ALL HANDOFFS ARE TERMINAL
+- Changed `getNextInWorkflow()` to always return `null`
+- Removed auto-chaining: LEAD-TO-PLAN → PLAN-TO-EXEC, EXEC-TO-PLAN → PLAN-TO-LEAD
+- Phase work (PRD creation, implementation, verification) must happen between handoffs
+- AUTO-PROCEED only handles child-to-child continuation at LEAD-FINAL-APPROVAL
+- SD-type-aware workflows defined in `workflow-definitions.js` (required/optional handoffs per type)
+
+**Previous Implementation (2026-02-01)** - SUPERSEDED:
+- ❌ Auto-chained handoffs within SD workflow (caused PRD skipping bug)
+- ❌ SD-type-aware routing in `getNextInWorkflow()` (no longer used)
 
 ---
 
@@ -540,22 +555,30 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 ## Summary
 
-**Key Takeaways**:
+**Key Takeaways** (Updated 2026-02-06):
 1. **SD types determine workflow** - Not all SDs follow the same handoff sequence
-2. **Orchestrators skip implementation phases** - Children do PLAN-TO-EXEC and EXEC-TO-PLAN work
-3. **Refactor SDs use REGRESSION, not TESTING** - Intensity-aware workflow
-4. **AUTO-PROCEED requires SD-type awareness** - Routing logic in `getNextInWorkflow()`
-5. **Each child follows its own workflow** - Orchestrator children may have different SD types
-6. **Progress calculation is SD-type-aware** - Minimum handoff count varies (2-3)
+2. **All handoffs are terminal** - Phase work must happen between every handoff (no auto-chaining)
+3. **AUTO-PROCEED = child-to-child only** - Continues after LEAD-FINAL-APPROVAL within orchestrators
+4. **Orchestrators skip implementation phases** - Children do PLAN-TO-EXEC and EXEC-TO-PLAN work
+5. **Refactor SDs use REGRESSION, not TESTING** - Intensity-aware workflow
+6. **Each child follows its own workflow** - Orchestrator children may have different SD types
+7. **Progress calculation is SD-type-aware** - Minimum handoff count varies (2-3)
+8. **Workflow definitions in separate file** - `workflow-definitions.js` has required/optional handoffs per type
 7. **Validators are SD-type-aware** - Non-applicable validators return SKIPPED status
 
 **When Adding New SD Types**:
 1. Update `workflow-definitions.js` with required/optional handoffs
 2. Update `sd-type-applicability-policy.js` with validator requirements
 3. Update `get_min_required_handoffs()` database function
-4. Add SD type to `getNextInWorkflow()` if it has special routing logic
+4. ~~Add SD type to `getNextInWorkflow()`~~ ← NO LONGER NEEDED (all handoffs terminal as of 2026-02-06)
 5. Update this documentation with new SD type workflow
+
+**Note**: `getNextInWorkflow()` always returns `null` regardless of SD type. SD-type-specific routing is handled by `workflow-definitions.js` for determining which handoffs are required/optional.
 
 ---
 
-*Version 1.0.0 | Generated 2026-02-05 | LEO Protocol v4.3.3*
+*Version 1.1.0 | Updated 2026-02-06 | LEO Protocol v4.3.3*
+
+**Changelog**:
+- **v1.1.0** (2026-02-06): Updated for terminal handoffs - all handoffs return null, no auto-chaining within SD
+- **v1.0.0** (2026-02-05): Initial SD-type-aware handoff sequences documentation

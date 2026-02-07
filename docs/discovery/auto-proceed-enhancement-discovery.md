@@ -307,6 +307,7 @@ Current state of AUTO-PROCEED documentation:
 | 31 | Mode interaction | SD Continuation Truth Table governs ALL transitions |
 | 32 | Child-to-child | AUTO-PROCEED ON → auto-continue to next ready child |
 | 33 | Grandchild return | After grandchild completes, return to parent and continue |
+| 34 | Handoff chaining | ALL handoffs terminal - no auto-chain within SD (2026-02-06) |
 
 ---
 
@@ -461,6 +462,57 @@ Original truth table only covered orchestrator completion. System paused BETWEEN
 
 ---
 
-*Discovery session complete. 33 decisions captured (D01-D33), 19 implementation items, 15 children SDs.*
+## Round 5: Terminal Handoffs (Added 2026-02-06)
+
+### 34. Handoff Chaining Within SD
+- **Q**: Should AUTO-PROCEED auto-chain handoffs within a single SD (e.g., LEAD-TO-PLAN → PLAN-TO-EXEC)?
+- **A**: **NO - All handoffs are terminal. Phase work must happen between every handoff.**
+
+**Issue Discovered**:
+- Previous implementation (2026-02-01) auto-chained `LEAD-TO-PLAN → PLAN-TO-EXEC`
+- This skipped PRD creation phase work that must happen between these handoffs
+- Similarly, `EXEC-TO-PLAN → PLAN-TO-LEAD` skipped verification work
+
+**Root Cause**:
+- Confusion between two distinct concepts:
+  - **AUTO-PROCEED** = child-to-child continuation within orchestrators (correct)
+  - **Handoff chaining** = auto-advancing handoffs within a single SD (incorrect)
+
+**Design Intent Clarification**:
+- **AUTO-PROCEED scope**: Child-to-child continuation after LEAD-FINAL-APPROVAL
+- **Chaining scope**: Orchestrator-to-orchestrator transitions
+- **Neither applies to**: Handoffs within a single SD (all terminal)
+
+**Implementation Fix**:
+- Changed `getNextInWorkflow()` in `cli-main.js` to always return `null`
+- Removed all handoff-to-handoff mappings
+- Added phase work guidance messages (e.g., "Create PRD, then run PLAN-TO-EXEC")
+- Removed SD type cache (no longer needed for routing decisions)
+
+**Phase Work Between Handoffs**:
+| After Handoff | Required Phase Work | Next Handoff |
+|---------------|---------------------|--------------|
+| LEAD-TO-PLAN | Create PRD | PLAN-TO-EXEC |
+| PLAN-TO-EXEC | Implement features | EXEC-TO-PLAN |
+| EXEC-TO-PLAN | Verify implementation | PLAN-TO-LEAD |
+| PLAN-TO-LEAD | Final review | LEAD-FINAL-APPROVAL |
+| LEAD-FINAL-APPROVAL | (Child-to-child continuation) | (Next child SD) |
+
+**Why This Matters**:
+- Prevents skipping critical work (PRD creation, implementation, verification)
+- Aligns with original AUTO-PROCEED design intent
+- SD-type-specific workflows still defined in `workflow-definitions.js` (which handoffs are required/optional)
+- Maintains simplicity: all handoffs have same terminal behavior
+
+**Files Changed**:
+- `scripts/modules/handoff/cli/cli-main.js` - `getNextInWorkflow()` simplified
+- `docs/reference/sd-type-handoff-sequences.md` - Updated AUTO-PROCEED routing documentation
+- `docs/discovery/auto-proceed-enhancement-discovery.md` - This decision (D34)
+
+**Issue Pattern**: PAT-AUTO-PROCEED-002 - Handoff auto-chaining skips phase work
+
+---
+
+*Discovery session complete. 34 decisions captured (D01-D34), 19 implementation items, 15 children SDs.*
 *Implementation: 4/15 complete (26.7%)*
-*Last Updated: 2026-02-01 (v2 - expanded continuation specification)*
+*Last Updated: 2026-02-06 (v3 - terminal handoffs fix)*
