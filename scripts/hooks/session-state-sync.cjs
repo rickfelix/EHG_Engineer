@@ -4,6 +4,9 @@
  * Validates and synchronizes auto-proceed state on session start.
  * Ensures database is the single source of truth (PAT-STATE-SYNC-001).
  *
+ * SD-LEO-INFRA-COMPACTION-CLAIM-001: Also restores SD claims lost
+ * during context compaction by invoking reclaim-sd-after-compaction.cjs.
+ *
  * Trigger: SessionStart
  *
  * What it does:
@@ -11,6 +14,7 @@
  * 2. Validates that auto-proceed-state.json matches database
  * 3. Auto-fixes mismatches (database wins)
  * 4. Outputs warning if divergence detected
+ * 5. Attempts SD re-claim if preserved state exists but session has no claim
  */
 
 const fs = require('fs');
@@ -155,6 +159,119 @@ async function main() {
   } catch (err) {
     // Silent fail - don't block session start
     console.warn(`[session-state-sync] Warning: ${err.message}`);
+  }
+
+  // SD-LEO-INFRA-COMPACTION-CLAIM-001: Check for SD claim that needs restoring
+  try {
+    await attemptSDReclaim(sessionId);
+  } catch (err) {
+    console.warn(`[session-state-sync] Reclaim warning: ${err.message}`);
+  }
+}
+
+/**
+ * Attempt to restore an SD claim from preserved state after compaction.
+ * Only acts if: (1) current session has no claim, (2) preserved state has an SD,
+ * (3) previous session's claim is stale.
+ */
+async function attemptSDReclaim(currentSessionId) {
+  if (!supabase || !currentSessionId) return;
+
+  // Check if current session already has a claim
+  const { data: session } = await supabase
+    .from('claude_sessions')
+    .select('sd_id')
+    .eq('session_id', currentSessionId)
+    .single();
+
+  if (session?.sd_id) return; // Already has a claim
+
+  // Read preserved state
+  const unifiedStateFile = path.resolve(__dirname, '../../.claude/unified-session-state.json');
+  if (!fs.existsSync(unifiedStateFile)) return;
+
+  const stateAge = Date.now() - fs.statSync(unifiedStateFile).mtimeMs;
+  if (stateAge > 30 * 60 * 1000) return; // State too old (>30 min)
+
+  let state;
+  try {
+    state = JSON.parse(fs.readFileSync(unifiedStateFile, 'utf8'));
+  } catch { return; }
+
+  if (!state?.sd?.id) return; // No SD in preserved state
+
+  const sdKey = state.sd.id;
+  const previousSessionId = state.sd.previousSessionId;
+
+  // Check if SD is still claimed by previous (now-stale) session
+  const { data: existingClaims } = await supabase
+    .from('claude_sessions')
+    .select('session_id, heartbeat_at, status')
+    .eq('sd_id', sdKey)
+    .eq('status', 'active');
+
+  if (existingClaims && existingClaims.length > 0) {
+    const claim = existingClaims[0];
+    const heartbeatAge = Date.now() - new Date(claim.heartbeat_at).getTime();
+    const isStale = heartbeatAge > 5 * 60 * 1000; // 5 min threshold
+
+    if (!isStale) {
+      // Claim is still active - don't interfere
+      return;
+    }
+
+    // Release stale claim
+    console.log(`[session-state-sync] Releasing stale claim on ${sdKey} (age: ${Math.round(heartbeatAge / 1000)}s)`);
+    await supabase.rpc('release_sd', {
+      p_session_id: claim.session_id,
+      p_reason: 'compaction_auto_reclaim'
+    });
+  }
+
+  // Claim for current session
+  try {
+    const { data: sdBaseline } = await supabase
+      .from('sd_baseline_items')
+      .select('track')
+      .eq('sd_id', sdKey)
+      .single();
+
+    const track = sdBaseline?.track || 'STANDALONE';
+
+    const { error: claimError } = await supabase.rpc('claim_sd', {
+      p_sd_id: sdKey,
+      p_session_id: currentSessionId,
+      p_track: track
+    });
+
+    if (claimError) {
+      // Fallback: direct update
+      await supabase
+        .from('claude_sessions')
+        .update({ sd_id: sdKey })
+        .eq('session_id', currentSessionId);
+    }
+
+    // Restore is_working_on
+    await supabase
+      .from('strategic_directives_v2')
+      .update({ is_working_on: true })
+      .eq('sd_key', sdKey);
+
+    console.log('');
+    console.log('========================================');
+    console.log('  SD CLAIM RESTORED (COMPACTION-CLAIM-001)');
+    console.log('========================================');
+    console.log(`  SD: ${sdKey}`);
+    console.log(`  Phase: ${state.sd.phase || 'unknown'}`);
+    if (previousSessionId) {
+      console.log(`  Previous session: ${previousSessionId}`);
+    }
+    console.log(`  ✅ Claim transferred to: ${currentSessionId}`);
+    console.log('========================================');
+    console.log('');
+  } catch (err) {
+    console.warn(`[session-state-sync] Reclaim failed: ${err.message}`);
   }
 }
 
