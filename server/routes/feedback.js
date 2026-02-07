@@ -1,12 +1,18 @@
 /**
  * Feedback API Routes
  * SD-QUALITY-INT-001: Feedback-to-SD Promotion
+ * SD-FDBK-ENH-ADD-INTELLIGENT-RESOLUTION-001: Resolution enforcement
  * Extracted from server.js for modularity
  * SD-LEO-REFACTOR-SERVER-001
  */
 
 import { Router } from 'express';
 import { dbLoader } from '../config.js';
+import {
+  validateStatusTransition,
+  validateReferences,
+  ERROR_CODES
+} from '../../lib/quality/feedback-resolution-validator.js';
 
 const router = Router();
 
@@ -149,6 +155,87 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching feedback:', error);
     res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+});
+
+/**
+ * Update feedback status with resolution enforcement (FR-4)
+ * Validates terminal status transitions have proper resolution metadata.
+ * Returns stable error codes for constraint violations.
+ */
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, resolution_sd_id, quick_fix_id, duplicate_of_id, resolution_notes } = req.body;
+
+    if (!dbLoader.supabase) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    if (!status) {
+      return res.status(400).json({ error: 'status field is required' });
+    }
+
+    // Fetch existing feedback for merge validation
+    const { data: existing, error: fetchError } = await dbLoader.supabase
+      .from('feedback')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existing) {
+      return res.status(404).json({
+        error: 'Feedback not found',
+        code: ERROR_CODES.FEEDBACK_REFERENCE_NOT_FOUND
+      });
+    }
+
+    const updateData = { status };
+    if (resolution_sd_id !== undefined) updateData.resolution_sd_id = resolution_sd_id;
+    if (quick_fix_id !== undefined) updateData.quick_fix_id = quick_fix_id;
+    if (duplicate_of_id !== undefined) updateData.duplicate_of_id = duplicate_of_id;
+    if (resolution_notes !== undefined) updateData.resolution_notes = resolution_notes;
+
+    // Validate status transition (FR-4: structured error codes)
+    const validation = validateStatusTransition({
+      feedbackId: id,
+      newStatus: status,
+      updateData,
+      existingFeedback: existing
+    });
+
+    if (!validation.valid) {
+      return res.status(422).json(validation.error);
+    }
+
+    // Validate foreign key references exist
+    const refValidation = await validateReferences(dbLoader.supabase, {
+      quick_fix_id: updateData.quick_fix_id,
+      duplicate_of_id: updateData.duplicate_of_id,
+      resolution_sd_id: updateData.resolution_sd_id
+    });
+
+    if (!refValidation.valid) {
+      return res.status(422).json(refValidation.error);
+    }
+
+    // Persist the update
+    updateData.updated_at = new Date().toISOString();
+    const { error: updateError } = await dbLoader.supabase
+      .from('feedback')
+      .update(updateData)
+      .eq('id', id);
+
+    if (updateError) {
+      console.error(`[feedback] Failed to update ${id}:`, updateError.message);
+      return res.status(500).json({ error: 'Failed to update feedback', details: updateError.message });
+    }
+
+    res.json({ success: true, id, status, message: `Feedback status updated to '${status}'` });
+
+  } catch (error) {
+    console.error('[feedback] Error updating status:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
 
