@@ -111,6 +111,16 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.warn(`   ⚠️  Outcome loop closure failed: ${outcomeError.message}`);
     }
 
+    // US-002: Auto-close feedback items linked to this SD
+    try {
+      const feedbackCloseResult = await this.autoCloseFeedback(sd);
+      if (feedbackCloseResult.closedCount > 0) {
+        console.log(`   ✅ Auto-closed ${feedbackCloseResult.closedCount} linked feedback item(s)`);
+      }
+    } catch (feedbackError) {
+      console.warn(`   ⚠️  Feedback auto-close failed (non-blocking): ${feedbackError.message}`);
+    }
+
     // Resolve patterns/improvements if this SD was created from /learn
     await resolveLearningItems(sd, this.supabase);
 
@@ -203,6 +213,50 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null
       } : null
     };
+  }
+
+  /**
+   * Auto-close feedback items linked to this SD (US-002)
+   * Queries feedback table for items with matching strategic_directive_id
+   * or resolution_sd_id, and transitions them to 'resolved'.
+   */
+  async autoCloseFeedback(sd) {
+    const sdId = sd.id;
+    const now = new Date().toISOString();
+
+    // Find feedback items linked to this SD that aren't already terminal
+    const { data: linkedFeedback, error: queryError } = await this.supabase
+      .from('feedback')
+      .select('id, status, strategic_directive_id, resolution_sd_id')
+      .or(`strategic_directive_id.eq.${sdId},resolution_sd_id.eq.${sdId}`)
+      .not('status', 'in', '(resolved,wont_fix,shipped,duplicate,invalid)');
+
+    if (queryError) {
+      throw new Error(`Failed to query linked feedback: ${queryError.message}`);
+    }
+
+    if (!linkedFeedback || linkedFeedback.length === 0) {
+      return { closedCount: 0 };
+    }
+
+    const feedbackIds = linkedFeedback.map(f => f.id);
+
+    const { data: updated, error: updateError } = await this.supabase
+      .from('feedback')
+      .update({
+        status: 'resolved',
+        resolved_at: now,
+        resolution_notes: `Auto-resolved: linked SD ${sd.sd_key || sdId} completed via LEAD-FINAL-APPROVAL`,
+        updated_at: now
+      })
+      .in('id', feedbackIds)
+      .select('id');
+
+    if (updateError) {
+      throw new Error(`Failed to auto-close feedback: ${updateError.message}`);
+    }
+
+    return { closedCount: updated?.length || 0 };
   }
 
   getRemediation(gateName) {
