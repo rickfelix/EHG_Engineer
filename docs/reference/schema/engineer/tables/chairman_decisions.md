@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-07T18:04:39.649Z
+**Generated**: 2026-02-07T22:23:03.207Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,9 @@
 | risks_acknowledged | `jsonb` | YES | - | - |
 | quick_fixes_applied | `jsonb` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
+| preference_key | `text` | YES | - | - |
+| preference_ref_id | `uuid` | YES | - | - |
+| preference_snapshot | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -35,6 +38,7 @@
 - `chairman_decisions_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `chairman_decisions_preference_ref_id_fkey`: preference_ref_id → chairman_preferences(id)
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
