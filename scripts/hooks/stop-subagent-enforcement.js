@@ -60,29 +60,28 @@ process.on('SIGTERM', () => gracefulExit(0));
 // Module exports and execution
 // ============================================================================
 
-// Re-export everything from the modular implementation
-export {
-  main,
-  checkBypass,
-  validatePostCompletion,
-  validateCompletionForType,
-  getValidationRequirements,
-  getUATRequirement,
-  detectBiasesForType,
-  validateSubAgents,
-  handleValidationResults,
-  CACHE_DURATION_MS,
-  REQUIREMENTS,
-  TIMING_RULES,
-  REMEDIATION_ORDER,
-  getRequiredSubAgents,
-  normalizeToUTC
-} from './stop-subagent-enforcement/index.js';
+// Use dynamic imports to avoid ESM hoisting issue:
+// Static imports resolve BEFORE any code executes, so the uncaughtException
+// handlers above would never be registered if a dependency is missing.
+// Dynamic imports can be wrapped in try/catch.
 
-// Import for direct execution
-import { main } from './stop-subagent-enforcement/index.js';
 import { fileURLToPath } from 'url';
 import { resolve } from 'path';
+
+// Lazy-loaded module reference for re-exports
+let _module = null;
+
+async function loadModule() {
+  if (!_module) {
+    _module = await import('./stop-subagent-enforcement/index.js');
+  }
+  return _module;
+}
+
+// Re-export via async accessors (consumers must await)
+export async function getExports() {
+  return loadModule();
+}
 
 // Only run if this is the main module (not imported)
 const __filename = fileURLToPath(import.meta.url);
@@ -96,13 +95,17 @@ if (isMainModule) {
     gracefulExit(0);
   }, HARD_TIMEOUT_MS).unref(); // unref() so it doesn't keep the process alive
 
-  main().catch(err => {
-    // Suppress shutdown-related errors
-    if (err.message === 'SHUTDOWN_IN_PROGRESS' || isShuttingDown) {
-      gracefulExit(0);
+  try {
+    const mod = await loadModule();
+    await mod.main();
+  } catch (err) {
+    if (err.code === 'ERR_MODULE_NOT_FOUND') {
+      console.error(`Stop hook: Missing dependency (${err.message.split("'")[1] || 'unknown'}). Run 'npm ci' in repo root.`);
+    } else if (err.message === 'SHUTDOWN_IN_PROGRESS' || isShuttingDown) {
+      // Suppress shutdown-related errors
     } else {
       console.error('Stop hook error:', err.message);
-      gracefulExit(0);
     }
-  });
+    gracefulExit(0);
+  }
 }
