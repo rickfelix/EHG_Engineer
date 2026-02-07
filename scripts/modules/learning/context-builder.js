@@ -89,6 +89,16 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /maintain test coverage/i,
   /follow existing patterns/i,
   /standard (?:LEO )?workflow/i,
+  // Positive status reports (not problems)
+  /security posture is strong/i,
+  /no (?:critical )?vulnerabilities/i,
+  /continue following.*best practices/i,
+  /regular.*audits? recommended/i,
+  // Vague catch-all recommendations
+  /fix all (?:accessibility|a11y) violations/i,
+  /(?:wcag|aria).*compliance.*required/i,
+  /add missing (?:alt text|aria)/i,
+  /use.*testing tools for.*coverage/i,
 ];
 
 /**
