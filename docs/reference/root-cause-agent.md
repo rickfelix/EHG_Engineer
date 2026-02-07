@@ -1,20 +1,22 @@
 # Root Cause Agent (RCA) - Operator Guide
 
-**Strategic Directive**: SD-RCA-001
-**Version**: 2.1
-**Last Updated**: 2026-01-26
+**Strategic Directive**: SD-LEO-ENH-ENHANCE-RCA-SUB-001
+**Version**: 2.2
+**Last Updated**: 2026-02-07
 
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 2.1.0
+- **Version**: 2.2.0
 - **Author**: LEO Protocol Team
-- **Last Updated**: 2026-01-26
-- **Tags**: rca, root-cause-analysis, quality-gates, forensics, sub-agent, slash-commands
+- **Last Updated**: 2026-02-07
+- **Tags**: rca, root-cause-analysis, quality-gates, forensics, sub-agent, slash-commands, auto-trigger
 
 ## Overview
 
 The Root Cause Agent (RCA) is LEO Protocol's corrective intelligence system that automatically detects failures, performs forensic analysis, and ensures proper remediation before allowing work to proceed. RCA operates as a quality gate enforcer and learning capture mechanism.
+
+**🆕 NEW in v2.2**: Automatic RCA Trigger SDK with inline failure capture at handoffs, gates, and API calls. Fire-and-forget API with deduplication, rate limiting, and secret redaction.
 
 **🆕 NEW in v2.1**: Skill command renamed from `/escalate` to `/rca` for consistency with sub-agent naming
 
@@ -125,11 +127,73 @@ import { createDatabaseClient } from './lib/supabase-connection.js';
 
 ---
 
-## ⚡ Error-Triggered Auto-Invocation (NEW in v2.0)
+## ⚡ Automatic RCA Trigger System (NEW in v2.1)
 
-**When ANY of these patterns occur**, the RCA agent MUST be invoked immediately:
+**SD-LEO-ENH-ENHANCE-RCA-SUB-001** introduced an automatic RCA trigger SDK that captures failures at critical points and creates Root Cause Reports (RCRs) without manual intervention.
 
-### Auto-Trigger Patterns
+### RCA Trigger SDK
+
+The RCA Trigger SDK provides a unified, fire-and-forget API for triggering RCA analysis from anywhere in the codebase.
+
+**Location**: `lib/rca/trigger-sdk.js`
+
+**Key Features**:
+- **8 Trigger Types**: handoff_failure, gate_validation_failure, api_failure, migration_failure, script_crash, test_failure_retry_exhausted, prd_validation_failure, state_mismatch
+- **8 Classification Categories**: code_bug, encoding, data_quality, infrastructure, protocol_process, configuration, cross_cutting, process_issue
+- **Fingerprint Deduplication**: SHA-256 hash of (trigger_type + normalized_error + module) prevents duplicate RCRs
+- **Rate Limiting**: Max 3 triggers per fingerprint per 60-second window (in-memory per-process)
+- **Secret Redaction**: Automatic removal of API keys, JWT tokens, env vars from error messages
+- **Context Truncation**: Limits context to 20k chars to prevent token exhaustion
+
+### Integration Points
+
+The SDK is currently integrated at 3 critical failure points:
+
+1. **Handoff Failures** (`scripts/modules/handoff/cli/cli-main.js`)
+   - Triggers on handoff execution failures before process.exit
+   - Captures: command, args, exit_code, sd_id, handoff_type, stderr
+
+2. **Gate Validation Failures** (`scripts/modules/handoff/executors/BaseExecutor.js`)
+   - Triggers on gate score < threshold
+   - Captures: gate_name, score, threshold, sd_id, handoff_type, breakdown
+
+3. **API/LLM Provider Failures** (`lib/sub-agents/vetting/provider-adapters.js`)
+   - Triggers on API errors after retry exhaustion
+   - Captures: provider, model, http_status, error_code, error_message
+   - Integrated in all 4 adapters (Anthropic, OpenAI, Google, Ollama)
+
+### Usage Example
+
+```javascript
+import { triggerRCAOnFailure, buildHandoffContext } from './lib/rca/index.js';
+
+// Fire-and-forget - never throws
+await triggerRCAOnFailure(buildHandoffContext({
+  command: 'handoff.js execute',
+  args: 'LEAD-TO-PLAN SD-TEST-001',
+  exitCode: 1,
+  sdId: 'SD-TEST-001',
+  handoffType: 'LEAD-TO-PLAN',
+  stderr: 'SMOKE_TEST_SPECIFICATION validation failed'
+}));
+```
+
+### Database Schema
+
+**New table**: `rca_auto_trigger_config` (migration `20260207_rca_auto_trigger_enhancements.sql`)
+- Stores per-trigger-type configuration (enabled flag, rate limits, classification rules)
+- Allows runtime configuration without code changes
+
+**Extended enums**:
+- `trigger_source`: Added 7 new values (handoff_failure, gate_validation_failure, api_failure, etc.)
+- `root_cause_category`: Added 5 new values (encoding, configuration, protocol_process, etc.)
+
+**New view**: `v_rca_auto_trigger_summary`
+- Analytics view showing trigger counts, classifications, and trends per trigger type
+
+### Auto-Trigger Patterns (Legacy Manual Invocation)
+
+**For issues NOT yet covered by automatic triggers**, the RCA agent MUST be invoked manually:
 
 | Pattern | Action |
 |---------|--------|
@@ -137,12 +201,12 @@ import { createDatabaseClient } from './lib/supabase-connection.js';
 | `pattern detected` in logs | STOP, invoke RCA agent |
 | `test failure after fix` (regression) | STOP, invoke RCA agent |
 | `sub_agent_blocked` status | STOP, invoke RCA agent |
-| `quality_gate_critical` failure | STOP, invoke RCA agent |
-| `handoff_rejection` event | STOP, invoke RCA agent |
+| `quality_gate_critical` failure | **AUTO-TRIGGERED** via gate validation hook |
+| `handoff_rejection` event | **AUTO-TRIGGERED** via handoff failure hook |
 | CI/CD pipeline failures | STOP, invoke RCA agent |
 | ANY issue that "keeps happening" | STOP, invoke RCA agent |
 
-### Invocation Protocol
+### Manual Invocation Protocol (When Auto-Trigger Not Available)
 
 1. Detect recurring or complex issue
 2. STOP current approach (no trial-and-error fixes)
@@ -1075,14 +1139,30 @@ PENDING → UNDER_REVIEW → APPROVED → IN_PROGRESS → IMPLEMENTED → VERIFI
 
 ---
 
-**Document Version**: 2.0
-**Last Updated**: 2026-01-25
+**Document Version**: 2.2
+**Last Updated**: 2026-02-07
 **Maintained By**: LEO Protocol Team
 **Feedback**: Report issues to RCA sub-agent or create SD for improvements
 
 ---
 
 ## Changelog
+
+### v2.2.0 (2026-02-07)
+- **NEW**: Automatic RCA Trigger SDK (`lib/rca/trigger-sdk.js`)
+  - Fire-and-forget API with 8 trigger types and 8 classification categories
+  - Fingerprint deduplication via SHA-256 hashing
+  - Rate limiting (max 3 triggers per fingerprint per 60s window)
+  - Automatic secret redaction and context truncation
+- **NEW**: Integration at 3 critical failure points (handoffs, gates, API calls)
+- **NEW**: Database schema enhancements (migration `20260207_rca_auto_trigger_enhancements.sql`)
+  - Extended `trigger_source` enum with 7 new values
+  - Extended `root_cause_category` enum with 5 new values
+  - Added `rca_auto_trigger_config` table for runtime configuration
+  - Added `v_rca_auto_trigger_summary` analytics view
+- **NEW**: 28 unit tests covering all SDK functionality (`tests/unit/rca-trigger-sdk.test.js`)
+- Updated "Auto-Trigger Patterns" section to distinguish automatic vs manual invocation
+- Comprehensive SD: SD-LEO-ENH-ENHANCE-RCA-SUB-001
 
 ### v2.1.0 (2026-01-26)
 - Renamed skill command from `/escalate` to `/rca` for clarity and consistency
