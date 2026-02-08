@@ -138,6 +138,11 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /expected debugging time savings/i,
   /consult troubleshooting tactics arsenal/i,
   /fix all critical issues before proceeding/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-016: RISK boilerplate for database SDs (SAL-RISK-ISS)
+  /database changes:.*schema migration required/i,
+  /critical risk mitigation required/i,
+  /data migration risk management/i,
+  /develop mitigation plan before proceeding to exec/i,
 ];
 
 /**
