@@ -133,6 +133,11 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-013: STORIES failure on non-feature SDs (SAL-STORIES-ISS)
   /failed to create (?:any )?user stories/i,
   /no user stories (?:could be )?(?:generated|created)/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-014: TESTING boilerplate recommendations (SAL-TESTING-REC)
+  /full troubleshooting arsenal.*\d+ tactics/i,
+  /expected debugging time savings/i,
+  /consult troubleshooting tactics arsenal/i,
+  /fix all critical issues before proceeding/i,
 ];
 
 /**
