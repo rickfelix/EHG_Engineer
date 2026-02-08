@@ -1,8 +1,9 @@
 /**
  * Unit tests for stage templates index/registry
- * Part of SD-LEO-FEAT-TMPL-TRUTH-001, SD-LEO-FEAT-TMPL-ENGINE-001, SD-LEO-FEAT-TMPL-IDENTITY-001
+ * Part of SD-LEO-FEAT-TMPL-TRUTH-001, SD-LEO-FEAT-TMPL-ENGINE-001,
+ *   SD-LEO-FEAT-TMPL-IDENTITY-001, SD-LEO-FEAT-TMPL-BLUEPRINT-001
  *
- * Test Scenario TS-5: Registry returns correct templates (stages 1-12)
+ * Test Scenario TS-5: Registry returns correct templates (stages 1-16)
  *
  * @module tests/unit/eva/stage-templates/index.test
  */
@@ -21,10 +22,16 @@ import {
   stage10,
   stage11,
   stage12,
+  stage13,
+  stage14,
+  stage15,
+  stage16,
   evaluateStage03KillGate,
   evaluateStage05KillGate,
+  evaluateStage13KillGate,
   evaluatePhase2RealityGate,
   evaluatePhase3RealityGate,
+  evaluatePhase4PromotionGate,
   getTemplate,
   getAllTemplates,
 } from '../../../../lib/eva/stage-templates/index.js';
@@ -118,6 +125,41 @@ describe('index.js - Stage templates registry', () => {
     });
   });
 
+  describe('Named exports - Phase 4 (Stages 13-16)', () => {
+    it('should export all Phase 4 stage templates', () => {
+      expect(stage13).toBeDefined();
+      expect(stage14).toBeDefined();
+      expect(stage15).toBeDefined();
+      expect(stage16).toBeDefined();
+    });
+
+    it('should export Phase 4 gate functions', () => {
+      expect(typeof evaluateStage13KillGate).toBe('function');
+      expect(typeof evaluatePhase4PromotionGate).toBe('function');
+    });
+
+    it('should have correct Phase 4 template IDs', () => {
+      expect(stage13.id).toBe('stage-13');
+      expect(stage14.id).toBe('stage-14');
+      expect(stage15.id).toBe('stage-15');
+      expect(stage16.id).toBe('stage-16');
+    });
+
+    it('should have correct Phase 4 template slugs', () => {
+      expect(stage13.slug).toBe('product-roadmap');
+      expect(stage14.slug).toBe('technical-architecture');
+      expect(stage15.slug).toBe('resource-planning');
+      expect(stage16.slug).toBe('financial-projections');
+    });
+
+    it('should have correct Phase 4 template titles', () => {
+      expect(stage13.title).toBe('Product Roadmap');
+      expect(stage14.title).toBe('Technical Architecture');
+      expect(stage15.title).toBe('Resource Planning');
+      expect(stage16.title).toBe('Financial Projections');
+    });
+  });
+
   describe('Registry helper functions', () => {
     it('should export registry helper functions', () => {
       expect(typeof getTemplate).toBe('function');
@@ -201,9 +243,37 @@ describe('index.js - Stage templates registry', () => {
       expect(template.slug).toBe('sales-logic');
     });
 
+    it('should return stage13 for stageNumber 13', () => {
+      const template = getTemplate(13);
+      expect(template).toBe(stage13);
+      expect(template.id).toBe('stage-13');
+      expect(template.slug).toBe('product-roadmap');
+    });
+
+    it('should return stage14 for stageNumber 14', () => {
+      const template = getTemplate(14);
+      expect(template).toBe(stage14);
+      expect(template.id).toBe('stage-14');
+      expect(template.slug).toBe('technical-architecture');
+    });
+
+    it('should return stage15 for stageNumber 15', () => {
+      const template = getTemplate(15);
+      expect(template).toBe(stage15);
+      expect(template.id).toBe('stage-15');
+      expect(template.slug).toBe('resource-planning');
+    });
+
+    it('should return stage16 for stageNumber 16', () => {
+      const template = getTemplate(16);
+      expect(template).toBe(stage16);
+      expect(template.id).toBe('stage-16');
+      expect(template.slug).toBe('financial-projections');
+    });
+
     it('should return null for invalid stage numbers', () => {
       expect(getTemplate(0)).toBeNull();
-      expect(getTemplate(13)).toBeNull();
+      expect(getTemplate(17)).toBeNull();
       expect(getTemplate(-1)).toBeNull();
       expect(getTemplate(100)).toBeNull();
     });
@@ -214,6 +284,8 @@ describe('index.js - Stage templates registry', () => {
       expect(getTemplate('9')).toBe(stage09);
       expect(getTemplate('10')).toBe(stage10);
       expect(getTemplate('12')).toBe(stage12);
+      expect(getTemplate('13')).toBe(stage13);
+      expect(getTemplate('16')).toBe(stage16);
       expect(getTemplate('invalid')).toBeNull();
     });
 
@@ -231,13 +303,13 @@ describe('index.js - Stage templates registry', () => {
   });
 
   describe('getAllTemplates() - TS-5: Full registry', () => {
-    it('should return an array of all 12 templates (TS-5)', () => {
+    it('should return an array of all 16 templates', () => {
       const templates = getAllTemplates();
       expect(Array.isArray(templates)).toBe(true);
-      expect(templates).toHaveLength(12);
+      expect(templates).toHaveLength(16);
     });
 
-    it('should return templates in order (stage01 to stage12)', () => {
+    it('should return templates in order (stage01 to stage16)', () => {
       const templates = getAllTemplates();
       expect(templates[0]).toBe(stage01);
       expect(templates[1]).toBe(stage02);
@@ -251,6 +323,10 @@ describe('index.js - Stage templates registry', () => {
       expect(templates[9]).toBe(stage10);
       expect(templates[10]).toBe(stage11);
       expect(templates[11]).toBe(stage12);
+      expect(templates[12]).toBe(stage13);
+      expect(templates[13]).toBe(stage14);
+      expect(templates[14]).toBe(stage15);
+      expect(templates[15]).toBe(stage16);
     });
 
     it('should return templates with correct IDs', () => {
@@ -267,6 +343,10 @@ describe('index.js - Stage templates registry', () => {
       expect(templates[9].id).toBe('stage-10');
       expect(templates[10].id).toBe('stage-11');
       expect(templates[11].id).toBe('stage-12');
+      expect(templates[12].id).toBe('stage-13');
+      expect(templates[13].id).toBe('stage-14');
+      expect(templates[14].id).toBe('stage-15');
+      expect(templates[15].id).toBe('stage-16');
     });
 
     it('should return new array on each call (not cached reference)', () => {
@@ -298,6 +378,20 @@ describe('index.js - Stage templates registry', () => {
       const result = evaluateStage05KillGate({
         roi3y: 0.6,
         breakEvenMonth: 20,
+      });
+      expect(result.decision).toBe('pass');
+      expect(result.blockProgression).toBe(false);
+    });
+
+    it('evaluateStage13KillGate should work correctly', () => {
+      const result = evaluateStage13KillGate({
+        milestone_count: 3,
+        milestones: [
+          { name: 'M1', deliverables: ['D1'] },
+          { name: 'M2', deliverables: ['D2'] },
+          { name: 'M3', deliverables: ['D3'] },
+        ],
+        timeline_months: 6,
       });
       expect(result.decision).toBe('pass');
       expect(result.blockProgression).toBe(false);
@@ -379,6 +473,44 @@ describe('index.js - Stage templates registry', () => {
       expect(result.pass).toBe(true);
       expect(result.blockers).toEqual([]);
     });
+
+    it('evaluatePhase4PromotionGate should work correctly', () => {
+      const prerequisites = {
+        stage13: {
+          milestones: [
+            { name: 'M1', deliverables: ['D1'] },
+            { name: 'M2', deliverables: ['D2'] },
+            { name: 'M3', deliverables: ['D3'] },
+          ],
+          decision: 'pass',
+        },
+        stage14: {
+          layers: {
+            frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+            backend: { technology: 'Node', components: ['API'], rationale: 'Fast' },
+            data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
+            infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          },
+        },
+        stage15: {
+          team_members: [
+            { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100 },
+            { role: 'Designer', skills: ['Figma'], allocation_pct: 50 },
+          ],
+        },
+        stage16: {
+          initial_capital: 100000,
+          revenue_projections: Array.from({ length: 6 }, (_, i) => ({
+            month: i + 1,
+            revenue: 1000,
+            costs: 500,
+          })),
+        },
+      };
+      const result = evaluatePhase4PromotionGate(prerequisites);
+      expect(result.pass).toBe(true);
+      expect(result.blockers).toEqual([]);
+    });
   });
 
   describe('Template structure consistency', () => {
@@ -415,7 +547,7 @@ describe('index.js - Stage templates registry', () => {
   describe('Integration: getTemplate matches getAllTemplates', () => {
     it('should return same template references', () => {
       const allTemplates = getAllTemplates();
-      for (let i = 1; i <= 12; i++) {
+      for (let i = 1; i <= 16; i++) {
         const singleTemplate = getTemplate(i);
         expect(singleTemplate).toBe(allTemplates[i - 1]);
       }
@@ -570,6 +702,64 @@ describe('index.js - Stage templates registry', () => {
       };
       const result1 = stage12.computeDerived(input);
       const result2 = stage12.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should produce deterministic output for stage 13', () => {
+      const input = {
+        vision_statement: 'A'.repeat(20),
+        milestones: [
+          { name: 'M1', date: '2026-01-01', deliverables: ['D1'], dependencies: [] },
+          { name: 'M2', date: '2026-04-01', deliverables: ['D2'], dependencies: [] },
+          { name: 'M3', date: '2026-07-01', deliverables: ['D3'], dependencies: [] },
+        ],
+        phases: [{ name: 'Phase 1', start_date: '2026-01-01', end_date: '2026-07-01' }],
+      };
+      const result1 = stage13.computeDerived(input);
+      const result2 = stage13.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should produce deterministic output for stage 14', () => {
+      const input = {
+        architecture_summary: 'A'.repeat(20),
+        layers: {
+          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          backend: { technology: 'Node', components: ['API'], rationale: 'Fast' },
+          data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
+          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+        },
+        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+      };
+      const result1 = stage14.computeDerived(input);
+      const result2 = stage14.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should produce deterministic output for stage 15', () => {
+      const input = {
+        team_members: [
+          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
+          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
+        ],
+      };
+      const result1 = stage15.computeDerived(input);
+      const result2 = stage15.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should produce deterministic output for stage 16', () => {
+      const input = {
+        initial_capital: 100000,
+        monthly_burn_rate: 5000,
+        revenue_projections: Array.from({ length: 6 }, (_, i) => ({
+          month: i + 1,
+          revenue: 1000 * (i + 1),
+          costs: 500 * (i + 1),
+        })),
+      };
+      const result1 = stage16.computeDerived(input);
+      const result2 = stage16.computeDerived(input);
       expect(result1).toEqual(result2);
     });
   });
