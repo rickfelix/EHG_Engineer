@@ -107,7 +107,7 @@ describe('parseReviewResponse', () => {
       summary: 'This venture has significant concerns.',
     });
 
-    const result = parseReviewResponse(json, { stageId: 3, gateType: 'kill' });
+    const result = parseReviewResponse(json);
     expect(result.overallAssessment).toBe('challenge');
     expect(result.counterArguments).toHaveLength(2);
     expect(result.risks).toHaveLength(1);
@@ -117,13 +117,13 @@ describe('parseReviewResponse', () => {
 
   it('handles JSON in markdown code blocks', () => {
     const response = '```json\n{"overallAssessment":"support","counterArguments":["Looks good"],"risks":[],"alternatives":[],"summary":"Strong"}\n```';
-    const result = parseReviewResponse(response, { stageId: 16, gateType: 'promotion' });
+    const result = parseReviewResponse(response);
     expect(result.overallAssessment).toBe('support');
     expect(result.counterArguments).toHaveLength(1);
   });
 
   it('gracefully handles non-JSON response', () => {
-    const result = parseReviewResponse('This is not JSON at all', { stageId: 3, gateType: 'kill' });
+    const result = parseReviewResponse('This is not JSON at all');
     expect(result.overallAssessment).toBe('concern');
     expect(result.counterArguments).toHaveLength(1);
     expect(result.counterArguments[0]).toContain('This is not JSON');
