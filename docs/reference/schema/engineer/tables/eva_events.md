@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-08T00:47:01.129Z
+**Generated**: 2026-02-08T23:25:43.489Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (8 total)
+## Columns (9 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -26,6 +26,7 @@
 | processed | `boolean` | YES | `false` | - |
 | processed_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
+| trace_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -43,6 +44,10 @@
 - `eva_events_pkey`
   ```sql
   CREATE UNIQUE INDEX eva_events_pkey ON public.eva_events USING btree (id)
+  ```
+- `idx_eva_events_trace_id`
+  ```sql
+  CREATE INDEX idx_eva_events_trace_id ON public.eva_events USING btree (trace_id) WHERE (trace_id IS NOT NULL)
   ```
 - `idx_eva_events_type`
   ```sql
@@ -63,6 +68,12 @@
 
 - **Roles**: {public}
 - **Using**: `true`
+
+### 2. service_role_all_eva_events (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
