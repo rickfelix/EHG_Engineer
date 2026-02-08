@@ -143,6 +143,10 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /critical risk mitigation required/i,
   /data migration risk management/i,
   /develop mitigation plan before proceeding to exec/i,
+  // SD-LEARN-FIX-ADDRESS-SAL-TESTING-001: TESTING E2E mandate boilerplate (SAL-TESTING-REC)
+  /execute e2e tests before approval.*mandatory/i,
+  /e2e testing is not optional per protocol/i,
+  /node scripts\/execute-subagent\.js --code testing/i,
 ];
 
 /**
