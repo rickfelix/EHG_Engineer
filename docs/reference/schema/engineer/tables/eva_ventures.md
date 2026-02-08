@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-08T23:40:59.484Z
+**Generated**: 2026-02-08T23:57:20.132Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,9 @@
 | pending_decisions | `integer(32)` | YES | `0` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| orchestrator_state | `text` | YES | `'idle'::text` | Current execution state: idle, processing, blocked, failed |
+| orchestrator_lock_id | `uuid` | YES | - | UUID of the processing lock holder (null when idle) |
+| orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | When the processing lock was acquired |
 
 ## Constraints
 
@@ -48,6 +51,7 @@
 ### Check Constraints
 - `eva_ventures_decision_class_check`: CHECK ((decision_class = ANY (ARRAY['A'::text, 'B'::text, 'C'::text])))
 - `eva_ventures_health_status_check`: CHECK ((health_status = ANY (ARRAY['green'::text, 'yellow'::text, 'red'::text])))
+- `eva_ventures_orchestrator_state_check`: CHECK ((orchestrator_state = ANY (ARRAY['idle'::text, 'processing'::text, 'blocked'::text, 'failed'::text])))
 - `eva_ventures_status_check`: CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'killed'::text, 'graduated'::text])))
 
 ## Indexes
@@ -63,6 +67,14 @@
 - `idx_eva_ventures_health`
   ```sql
   CREATE INDEX idx_eva_ventures_health ON public.eva_ventures USING btree (health_status)
+  ```
+- `idx_eva_ventures_orchestrator_lock`
+  ```sql
+  CREATE UNIQUE INDEX idx_eva_ventures_orchestrator_lock ON public.eva_ventures USING btree (id) WHERE (orchestrator_lock_id IS NOT NULL)
+  ```
+- `idx_eva_ventures_orchestrator_state`
+  ```sql
+  CREATE INDEX idx_eva_ventures_orchestrator_state ON public.eva_ventures USING btree (orchestrator_state) WHERE (orchestrator_state = 'processing'::text)
   ```
 - `idx_eva_ventures_status`
   ```sql
