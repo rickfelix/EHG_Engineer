@@ -16,6 +16,7 @@ import {
   createWorktree,
   symlinkNodeModules,
   cleanupWorktree,
+  cleanupStaleWorktrees,
   listWorktrees,
   getRepoRoot
 } from '../lib/worktree-manager.js';
@@ -38,6 +39,12 @@ function parseArgs(argv) {
       args.cleanup = true;
     } else if (arg === '--no-symlink') {
       args.noSymlink = true;
+    } else if (arg === '--cleanup-stale') {
+      args.cleanupStale = true;
+    } else if (arg === '--dry-run') {
+      args.dryRun = true;
+    } else if (arg === '--max-age-hours' && argv[i + 1]) {
+      args.maxAgeHours = parseInt(argv[++i], 10);
     } else if (arg === '--help' || arg === '-h') {
       args.help = true;
     }
@@ -131,6 +138,50 @@ async function main() {
       console.error(`Error removing worktree: ${err.message}`);
       process.exit(1);
     }
+    process.exit(0);
+  }
+
+  // ── Cleanup stale mode ──
+  if (args.cleanupStale) {
+    let supabase = null;
+    try {
+      const dotenv = await import('dotenv');
+      dotenv.config();
+      const { createClient } = await import('@supabase/supabase-js');
+      supabase = createClient(
+        process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+    } catch {
+      console.log('Note: Supabase unavailable - SD completion check skipped');
+    }
+
+    const maxAgeMs = (args.maxAgeHours || 24) * 60 * 60 * 1000;
+    console.log(`\nStale Worktree Cleanup ${args.dryRun ? '(DRY RUN)' : ''}`);
+    console.log('\u2500'.repeat(60));
+
+    const result = await cleanupStaleWorktrees({ dryRun: args.dryRun, maxAgeMs, supabase });
+
+    if (result.cursorWarnings.length > 0) {
+      console.log('\n  Cursor worktrees detected (not touched):');
+      for (const w of result.cursorWarnings) console.log(`    ${w}`);
+    }
+    if (result.cleaned.length > 0) {
+      console.log(`\n  Cleaned (${result.cleaned.length}):`);
+      for (const c of result.cleaned) console.log(`    ${c}`);
+    }
+    if (result.skipped.length > 0) {
+      console.log(`\n  Skipped (${result.skipped.length}):`);
+      for (const s of result.skipped) console.log(`    ${s}`);
+    }
+    if (result.errors.length > 0) {
+      console.log(`\n  Errors (${result.errors.length}):`);
+      for (const e of result.errors) console.log(`    ${e}`);
+    }
+    if (result.cleaned.length === 0 && result.skipped.length === 0 && result.errors.length === 0) {
+      console.log('\n  No stale worktrees found.');
+    }
+    console.log('\u2500'.repeat(60));
     process.exit(0);
   }
 
