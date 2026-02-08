@@ -99,6 +99,19 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /(?:wcag|aria).*compliance.*required/i,
   /add missing (?:alt text|aria)/i,
   /use.*testing tools for.*coverage/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-011: DOCMON positive confirmations (SAL-DOCMON-REC)
+  /no new markdown files/i,
+  /database.?first (?:maintained|compliant|enforced)/i,
+  /consider cleanup SD/i,
+  /migrate legacy markdown/i,
+  /ignored? \d+ pre.?existing/i,
+  /retrospective validation.*ignored/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-011: DESIGN positive confirmations (SAL-DESIGN-REC)
+  /design compliance (?:maintained|at) (?:at )?\d+%/i,
+  /continue following design system/i,
+  /excellent (?:UI\/UX |design )?consistency/i,
+  /ui\/ux consistency/i,
+  /design system guidelines/i,
 ];
 
 /**
