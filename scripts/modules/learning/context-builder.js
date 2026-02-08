@@ -130,6 +130,9 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /relaxed CI\/CD validation/i,
   // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-012: Sub-agent performance meta-observations (SAL-*-PERF)
   /has low pass rate.*review triggers/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-013: STORIES failure on non-feature SDs (SAL-STORIES-ISS)
+  /failed to create (?:any )?user stories/i,
+  /no user stories (?:could be )?(?:generated|created)/i,
 ];
 
 /**
