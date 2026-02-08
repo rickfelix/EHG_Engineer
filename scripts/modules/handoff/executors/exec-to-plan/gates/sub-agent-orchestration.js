@@ -33,7 +33,7 @@ export function createSubAgentOrchestrationGate(supabase) {
       // Query database for SD type validation profile
       const { data: validationProfile } = await supabase
         .from('sd_type_validation_profiles')
-        .select('requires_sub_agents, validation_requirements')
+        .select('requires_sub_agents')
         .eq('sd_type', sdType)
         .single();
 
