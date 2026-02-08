@@ -2,9 +2,9 @@
  * Unit tests for stage templates index/registry
  * Part of SD-LEO-FEAT-TMPL-TRUTH-001, SD-LEO-FEAT-TMPL-ENGINE-001,
  *   SD-LEO-FEAT-TMPL-IDENTITY-001, SD-LEO-FEAT-TMPL-BLUEPRINT-001,
- *   SD-LEO-FEAT-TMPL-BUILD-001
+ *   SD-LEO-FEAT-TMPL-BUILD-001, SD-LEO-FEAT-TMPL-LAUNCH-001
  *
- * Test Scenario TS-5: Registry returns correct templates (stages 1-22)
+ * Test Scenario TS-5: Registry returns correct templates (stages 1-25)
  *
  * @module tests/unit/eva/stage-templates/index.test
  */
@@ -33,13 +33,18 @@ import {
   stage20,
   stage21,
   stage22,
+  stage23,
+  stage24,
+  stage25,
   evaluateStage03KillGate,
   evaluateStage05KillGate,
   evaluateStage13KillGate,
+  evaluateStage23KillGate,
   evaluatePhase2RealityGate,
   evaluatePhase3RealityGate,
   evaluatePhase4PromotionGate,
   evaluatePhase5PromotionGate,
+  detectDrift,
   getTemplate,
   getAllTemplates,
 } from '../../../../lib/eva/stage-templates/index.js';
@@ -210,6 +215,37 @@ describe('index.js - Stage templates registry', () => {
     });
   });
 
+  describe('Named exports - Phase 6 (Stages 23-25)', () => {
+    it('should export all Phase 6 stage templates', () => {
+      expect(stage23).toBeDefined();
+      expect(stage24).toBeDefined();
+      expect(stage25).toBeDefined();
+    });
+
+    it('should export Phase 6 gate and drift detection functions', () => {
+      expect(typeof evaluateStage23KillGate).toBe('function');
+      expect(typeof detectDrift).toBe('function');
+    });
+
+    it('should have correct Phase 6 template IDs', () => {
+      expect(stage23.id).toBe('stage-23');
+      expect(stage24.id).toBe('stage-24');
+      expect(stage25.id).toBe('stage-25');
+    });
+
+    it('should have correct Phase 6 template slugs', () => {
+      expect(stage23.slug).toBe('launch-execution');
+      expect(stage24.slug).toBe('metrics-learning');
+      expect(stage25.slug).toBe('venture-review');
+    });
+
+    it('should have correct Phase 6 template titles', () => {
+      expect(stage23.title).toBe('Launch Execution');
+      expect(stage24.title).toBe('Metrics & Learning');
+      expect(stage25.title).toBe('Venture Review');
+    });
+  });
+
   describe('Registry helper functions', () => {
     it('should export registry helper functions', () => {
       expect(typeof getTemplate).toBe('function');
@@ -285,9 +321,30 @@ describe('index.js - Stage templates registry', () => {
       expect(template.slug).toBe('release-readiness');
     });
 
+    it('should return stage23 for stageNumber 23', () => {
+      const template = getTemplate(23);
+      expect(template).toBe(stage23);
+      expect(template.id).toBe('stage-23');
+      expect(template.slug).toBe('launch-execution');
+    });
+
+    it('should return stage24 for stageNumber 24', () => {
+      const template = getTemplate(24);
+      expect(template).toBe(stage24);
+      expect(template.id).toBe('stage-24');
+      expect(template.slug).toBe('metrics-learning');
+    });
+
+    it('should return stage25 for stageNumber 25', () => {
+      const template = getTemplate(25);
+      expect(template).toBe(stage25);
+      expect(template.id).toBe('stage-25');
+      expect(template.slug).toBe('venture-review');
+    });
+
     it('should return null for invalid stage numbers', () => {
       expect(getTemplate(0)).toBeNull();
-      expect(getTemplate(23)).toBeNull();
+      expect(getTemplate(26)).toBeNull();
       expect(getTemplate(-1)).toBeNull();
       expect(getTemplate(100)).toBeNull();
     });
@@ -297,6 +354,9 @@ describe('index.js - Stage templates registry', () => {
       expect(getTemplate('16')).toBe(stage16);
       expect(getTemplate('17')).toBe(stage17);
       expect(getTemplate('22')).toBe(stage22);
+      expect(getTemplate('23')).toBe(stage23);
+      expect(getTemplate('24')).toBe(stage24);
+      expect(getTemplate('25')).toBe(stage25);
       expect(getTemplate('invalid')).toBeNull();
     });
 
@@ -310,17 +370,18 @@ describe('index.js - Stage templates registry', () => {
       expect(getTemplate(1.5)).toBeNull();
       expect(getTemplate(17.9)).toBeNull();
       expect(getTemplate(22.5)).toBeNull();
+      expect(getTemplate(25.5)).toBeNull();
     });
   });
 
   describe('getAllTemplates() - TS-5: Full registry', () => {
-    it('should return an array of all 22 templates', () => {
+    it('should return an array of all 25 templates', () => {
       const templates = getAllTemplates();
       expect(Array.isArray(templates)).toBe(true);
-      expect(templates).toHaveLength(22);
+      expect(templates).toHaveLength(25);
     });
 
-    it('should return templates in order (stage01 to stage22)', () => {
+    it('should return templates in order (stage01 to stage25)', () => {
       const templates = getAllTemplates();
       expect(templates[0]).toBe(stage01);
       expect(templates[15]).toBe(stage16);
@@ -330,6 +391,9 @@ describe('index.js - Stage templates registry', () => {
       expect(templates[19]).toBe(stage20);
       expect(templates[20]).toBe(stage21);
       expect(templates[21]).toBe(stage22);
+      expect(templates[22]).toBe(stage23);
+      expect(templates[23]).toBe(stage24);
+      expect(templates[24]).toBe(stage25);
     });
 
     it('should return templates with correct IDs', () => {
@@ -340,6 +404,9 @@ describe('index.js - Stage templates registry', () => {
       expect(templates[19].id).toBe('stage-20');
       expect(templates[20].id).toBe('stage-21');
       expect(templates[21].id).toBe('stage-22');
+      expect(templates[22].id).toBe('stage-23');
+      expect(templates[23].id).toBe('stage-24');
+      expect(templates[24].id).toBe('stage-25');
     });
 
     it('should return new array on each call (not cached reference)', () => {
@@ -386,6 +453,25 @@ describe('index.js - Stage templates registry', () => {
       expect(result.pass).toBe(true);
       expect(result.blockers).toEqual([]);
     });
+
+    it('evaluateStage23KillGate should work correctly', () => {
+      const result = evaluateStage23KillGate({
+        go_decision: 'go',
+        incident_response_plan: 'Incident response plan details',
+        monitoring_setup: 'Monitoring setup details',
+        rollback_plan: 'Rollback plan details',
+      });
+      expect(result.decision).toBe('pass');
+      expect(result.blockProgression).toBe(false);
+    });
+
+    it('detectDrift should work correctly', () => {
+      const result = detectDrift({
+        original_vision: 'Building revolutionary platform technology solutions',
+        current_vision: 'Building revolutionary platform technology solutions',
+      });
+      expect(result.drift_detected).toBe(false);
+    });
   });
 
   describe('Template structure consistency', () => {
@@ -422,7 +508,7 @@ describe('index.js - Stage templates registry', () => {
   describe('Integration: getTemplate matches getAllTemplates', () => {
     it('should return same template references', () => {
       const allTemplates = getAllTemplates();
-      for (let i = 1; i <= 22; i++) {
+      for (let i = 1; i <= 25; i++) {
         const singleTemplate = getTemplate(i);
         expect(singleTemplate).toBe(allTemplates[i - 1]);
       }
@@ -515,6 +601,65 @@ describe('index.js - Stage templates registry', () => {
       };
       const result1 = stage22.computeDerived(input);
       const result2 = stage22.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+  });
+
+  describe('Round-trip determinism for stages 23-25', () => {
+    it('should produce deterministic output for stage 23', () => {
+      const input = {
+        go_decision: 'go',
+        incident_response_plan: 'Incident response plan details',
+        monitoring_setup: 'Monitoring setup details',
+        rollback_plan: 'Rollback plan details',
+        launch_tasks: [
+          { name: 'Deploy to production', status: 'ready', owner: 'DevOps' },
+        ],
+        launch_date: '2026-03-01',
+      };
+      const result1 = stage23.computeDerived(input);
+      const result2 = stage23.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should produce deterministic output for stage 24', () => {
+      const input = {
+        aarrr: {
+          acquisition: [{ name: 'Signups', value: 100, target: 150 }],
+          activation: [{ name: 'First Action', value: 80, target: 90 }],
+          retention: [{ name: '30-day retention', value: 70, target: 75 }],
+          revenue: [{ name: 'MRR', value: 10000, target: 12000 }],
+          referral: [{ name: 'Referral rate', value: 5, target: 10 }],
+        },
+        funnels: [
+          { name: 'Signup funnel', steps: ['Landing', 'Signup', 'Activation'] },
+        ],
+        learnings: [
+          { insight: 'Users drop off at step 2', action: 'Simplify onboarding' },
+        ],
+      };
+      const result1 = stage24.computeDerived(input);
+      const result2 = stage24.computeDerived(input);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should produce deterministic output for stage 25', () => {
+      const input = {
+        review_summary: 'Comprehensive review of all venture aspects',
+        initiatives: {
+          product: [{ title: 'MVP Launch', status: 'complete', outcome: 'Success' }],
+          market: [{ title: 'Market Analysis', status: 'complete', outcome: 'Success' }],
+          technical: [{ title: 'Infrastructure', status: 'complete', outcome: 'Success' }],
+          financial: [{ title: 'Funding Round', status: 'complete', outcome: 'Success' }],
+          team: [{ title: 'Team Expansion', status: 'complete', outcome: 'Success' }],
+        },
+        current_vision: 'Building revolutionary platform technology solutions',
+        next_steps: [
+          { action: 'Launch next phase', owner: 'CEO', timeline: 'Q1 2026' },
+        ],
+      };
+      const result1 = stage25.computeDerived(input);
+      const result2 = stage25.computeDerived(input);
       expect(result1).toEqual(result2);
     });
   });
