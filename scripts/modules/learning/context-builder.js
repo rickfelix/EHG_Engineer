@@ -112,6 +112,24 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /excellent (?:UI\/UX |design )?consistency/i,
   /ui\/ux consistency/i,
   /design system guidelines/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-012: DOCMON generic recommendations (SAL-DOCMON-REC)
+  /delete markdown files/i,
+  /use database.?first scripts/i,
+  /immediately convert \d+ file/i,
+  /convert (?:to )?database records/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-012: DOCMON worktree file detections (SAL-DOCMON-ISS)
+  /\.worktrees[\/\\]/i,
+  /Strategic Directive markdown file\(s\) found/i,
+  /retrospective markdown file\(s\) found/i,
+  /handoff markdown file\(s\) found/i,
+  /violation_type.*(?:SD_FILE_CREATED|RETRO_FILE_CREATED|HANDOFF_FILE_CREATED)/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-012: GITHUB generic CI/CD recommendations (SAL-GITHUB-REC)
+  /consider setting up GitHub Actions/i,
+  /recommended workflows:.*(?:test|lint|build)/i,
+  /infrastructure SD.*relaxed/i,
+  /relaxed CI\/CD validation/i,
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-012: Sub-agent performance meta-observations (SAL-*-PERF)
+  /has low pass rate.*review triggers/i,
 ];
 
 /**
@@ -215,12 +233,15 @@ async function getSubAgentLearnings(limit = TOP_N) {
     }
 
     // Flag underperforming sub-agents (5+ executions, <60% pass rate)
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-012: Filter non-actionable perf observations
     if (executions.length >= 5 && passRate < 0.6) {
+      const perfContent = `${code} has low pass rate (${Math.round(passRate * 100)}%). Review triggers/prompts.`;
+      if (isNonActionableRecommendation(perfContent)) continue;
       learnings.push({
         id: `SAL-${code}-PERF`,
         source_type: 'sub_agent_performance',
         sub_agent_code: code,
-        content: `${code} has low pass rate (${Math.round(passRate * 100)}%). Review triggers/prompts.`,
+        content: perfContent,
         occurrence_count: executions.length,
         confidence: 80,
         metrics: { pass_rate: passRate, fail_count: executions.filter(e => e.verdict === 'FAIL').length }
