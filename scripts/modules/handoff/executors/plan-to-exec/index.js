@@ -20,7 +20,8 @@ import {
   createDeliverablesPlanningGate,
   createBranchEnforcementGate,
   createInfrastructureConsumerCheckGate,
-  createIntegrationSectionValidationGate
+  createIntegrationSectionValidationGate,
+  createMigrationDataVerificationGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -122,6 +123,10 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Integration Section Validation (SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001)
     // Validates PRD has complete Integration & Operationalization section
     gates.push(createIntegrationSectionValidationGate(this.prdRepo, this.supabase));
+
+    // Migration Data Verification (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-A)
+    // After migration executes, verifies data was inserted. BLOCKING for database SDs.
+    gates.push(createMigrationDataVerificationGate(this.supabase));
 
     // Parent orchestrators get simplified gates
     if (parentOrchestrator) {
