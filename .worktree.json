@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-REALITY-GATES-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-REALITY-GATES-001-reality-gate-enforcement",
-  "createdAt": "2026-02-07T23:12:27.832Z",
+  "sdKey": "SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-B",
+  "expectedBranch": "feat/SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-B-test-coverage-quality-gate",
+  "createdAt": "2026-02-09T00:06:18.747Z",
   "hostname": "Legion-Laptop",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
