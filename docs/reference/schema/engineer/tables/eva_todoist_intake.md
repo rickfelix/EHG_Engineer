@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T12:38:17.321Z
+**Generated**: 2026-02-09T14:43:56.070Z
 **Rows**: 104
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (20 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,6 +38,9 @@
 | raw_data | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| todoist_parent_id | `text` | YES | - | - |
+| todoist_section_id | `text` | YES | - | - |
+| todoist_child_order | `integer(32)` | YES | `0` | - |
 
 ## Constraints
 
@@ -62,6 +65,10 @@
   ```sql
   CREATE UNIQUE INDEX eva_todoist_intake_todoist_task_id_key ON public.eva_todoist_intake USING btree (todoist_task_id)
   ```
+- `idx_eva_todoist_intake_parent`
+  ```sql
+  CREATE INDEX idx_eva_todoist_intake_parent ON public.eva_todoist_intake USING btree (todoist_parent_id) WHERE (todoist_parent_id IS NOT NULL)
+  ```
 - `idx_eva_todoist_intake_pending`
   ```sql
   CREATE INDEX idx_eva_todoist_intake_pending ON public.eva_todoist_intake USING btree (status) WHERE (status = 'pending'::text)
@@ -69,6 +76,10 @@
 - `idx_eva_todoist_intake_project`
   ```sql
   CREATE INDEX idx_eva_todoist_intake_project ON public.eva_todoist_intake USING btree (todoist_project_name)
+  ```
+- `idx_eva_todoist_intake_section`
+  ```sql
+  CREATE INDEX idx_eva_todoist_intake_section ON public.eva_todoist_intake USING btree (todoist_section_id) WHERE (todoist_section_id IS NOT NULL)
   ```
 - `idx_eva_todoist_intake_status`
   ```sql
