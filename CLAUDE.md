@@ -658,6 +658,14 @@ PAT-WORKFLOW-ROUTING-001: Quick-Fix and SD systems are separate. Route correctly
 - "compact the conversation", "running out of context"
 
 **Action**: Use Skill tool with 
+### Brainstorm Triggers → - "brainstorm", "brainstorm this", "let's brainstorm"
+- "explore this idea", "think through this", "venture idea"
+- "strategic thinking", "evaluate this concept", "should we build"
+- "four-plane", "capability graph", "venture evaluation"
+- When exploring new features, ventures, or strategic ideas
+
+**Action**: Use Skill tool with `skill: "brainstorm"` and pass the topic as `args`
+
 ---
 
 ### Command Ecosystem Flow (Quick Reference)
@@ -704,7 +712,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-09 5:48:15 AM
+**Last Generated**: 2026-02-09 9:04:45 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
