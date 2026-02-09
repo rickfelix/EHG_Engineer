@@ -1,26 +1,50 @@
 /**
  * Multi-Session Claim Conflict Gate
- * PAT-MSESS-BYP-001 corrective action
+ * PAT-MSESS-BYP-001 + SD-LEO-FIX-FIX-MULTI-SESSION-001 corrective action
  *
  * BLOCKING gate that prevents handoff execution when the target SD
- * is already claimed by an active session on a DIFFERENT machine.
- * This prevents duplicate work across concurrent Claude Code instances.
+ * is already claimed by an active session from a DIFFERENT Claude Code
+ * conversation. This prevents duplicate work across concurrent instances.
  *
- * Same-machine sessions are allowed because a single Claude Code
- * conversation spawns multiple CLI processes (sd:start, handoff.js)
- * that each create separate session IDs but represent the same user.
+ * Identity model (PAT-SESSION-IDENTITY-002):
+ *   - Different hostname → different machine → BLOCK
+ *   - Same hostname + different terminal_id → different conversation → BLOCK
+ *   - Same hostname + same terminal_id → same conversation (multiple CLI
+ *     subprocesses from one Claude Code instance) → ALLOW
  *
  * Checks:
  *   1. Query v_active_sessions for the SD
  *   2. If claimed by session on DIFFERENT hostname → BLOCK
- *   3. If claimed by session on SAME hostname → PASS (same developer)
- *   4. If unclaimed or stale claim → PASS
+ *   3. If claimed by session on SAME hostname + DIFFERENT terminal_id → BLOCK
+ *   4. If claimed by session on SAME hostname + SAME terminal_id → PASS
+ *   5. If unclaimed or stale claim → PASS
  *
  * RCA: PAT-SESSION-IDENTITY-001 - Session identity for AI-driven CLI
  * workflows must compare by hostname, not subprocess PID.
+ * FIX: SD-LEO-FIX-FIX-MULTI-SESSION-001 - Add terminal_id to discriminator.
  */
 
 import os from 'os';
+import { execSync } from 'child_process';
+
+/**
+ * Get the current terminal identifier (stable per Claude Code conversation).
+ * On Windows: uses process.ppid (parent PID = Claude Code process).
+ * On Unix: uses the TTY device path.
+ * This matches the terminal_id stored in claude_sessions by session-manager.
+ */
+function getTerminalId() {
+  try {
+    if (process.platform === 'win32') {
+      return `win-ppid-${process.ppid || process.pid}`;
+    }
+    const tty = execSync('tty', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    // Hash not needed here — just need the raw value to match
+    return tty;
+  } catch {
+    return `pid-${process.ppid || process.pid}`;
+  }
+}
 
 /**
  * Validate that no session on another machine has claimed this SD
@@ -30,11 +54,13 @@ import os from 'os';
  * @param {Object} [options] - Options
  * @param {string} [options.currentSessionId] - This session's ID (to exclude self)
  * @param {string} [options.currentHostname] - This machine's hostname (for same-machine detection)
+ * @param {string} [options.currentTerminalId] - This conversation's terminal_id (for same-conversation detection)
  * @returns {Promise<Object>} Gate result { pass, score, max_score, issues, warnings, claimDetails }
  */
 export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
   const currentSessionId = options.currentSessionId || null;
   const currentHostname = options.currentHostname || os.hostname();
+  const currentTerminalId = options.currentTerminalId || getTerminalId();
 
   console.log('\n🔒 GATE: Multi-Session Claim Conflict Check');
   console.log('-'.repeat(50));
@@ -44,7 +70,7 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
     // Query v_active_sessions for any active claim on this SD
     const { data, error } = await supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, sd_title, hostname, tty, heartbeat_age_human, heartbeat_age_seconds, computed_status, codebase')
+      .select('session_id, sd_id, sd_title, hostname, tty, terminal_id, heartbeat_age_human, heartbeat_age_seconds, computed_status, codebase')
       .eq('sd_id', sdId)
       .in('computed_status', ['active']);
 
@@ -61,25 +87,33 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       };
     }
 
-    // Filter out claims from the same machine (same developer, different CLI process)
-    // PAT-SESSION-IDENTITY-001: A single Claude Code conversation spawns multiple
+    // Filter out claims from the SAME Claude Code conversation.
+    // PAT-SESSION-IDENTITY-002: A single Claude Code conversation spawns multiple
     // CLI processes (sd:start, handoff.js), each with different PIDs and session IDs.
-    // Same hostname = same machine = same developer = allow.
+    // These share the same hostname AND terminal_id (based on parent PID).
+    // Two DIFFERENT Claude Code conversations on the same machine have the same
+    // hostname but DIFFERENT terminal_ids — those ARE conflicts.
     const otherClaims = (data || []).filter(claim => {
       // Exact session ID match → always exclude (backward compat)
       if (claim.session_id === currentSessionId) return false;
-      // Same hostname → same machine → not a conflict
-      if (claim.hostname && claim.hostname === currentHostname) return false;
+      // Same hostname + same terminal_id → same conversation → not a conflict
+      if (claim.hostname && claim.hostname === currentHostname &&
+          claim.terminal_id && claim.terminal_id === currentTerminalId) {
+        return false;
+      }
       return true;
     });
 
     if (otherClaims.length === 0) {
-      // Check if we passed due to same-hostname exclusion (log for visibility)
-      const sameHostClaims = (data || []).filter(
-        claim => claim.session_id !== currentSessionId && claim.hostname === currentHostname
+      // Check if we passed due to same-conversation exclusion (log for visibility)
+      const sameConversationClaims = (data || []).filter(
+        claim => claim.session_id !== currentSessionId &&
+                 claim.hostname === currentHostname &&
+                 claim.terminal_id === currentTerminalId
       );
-      if (sameHostClaims.length > 0) {
-        console.log(`   ✅ SD claimed by same-machine session (${sameHostClaims[0].session_id?.substring(0, 24)}...) — allowing`);
+      if (sameConversationClaims.length > 0) {
+        console.log(`   ✅ SD claimed by same-conversation session (${sameConversationClaims[0].session_id?.substring(0, 24)}...) — allowing`);
+        console.log(`      (hostname: ${currentHostname}, terminal_id: ${currentTerminalId})`);
       } else {
         console.log('   ✅ No conflicting session claims found');
       }
@@ -92,19 +126,27 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       };
     }
 
-    // Another active session on a DIFFERENT machine has this SD claimed → BLOCK
+    // Another active session (different machine OR different conversation) has this SD → BLOCK
     const claim = otherClaims[0];
+    const isSameMachine = claim.hostname === currentHostname;
 
     console.log('');
     console.log('   ┌─────────────────────────────────────────────────────────────┐');
     console.log('   │  🚫 BLOCKED: SD CLAIMED BY ANOTHER ACTIVE SESSION           │');
     console.log('   ├─────────────────────────────────────────────────────────────┤');
-    console.log(`   │  SD:         ${sdId}`);
-    console.log(`   │  Session:    ${claim.session_id?.substring(0, 36) || 'unknown'}`);
-    console.log(`   │  Hostname:   ${claim.hostname || 'unknown'}`);
-    console.log(`   │  TTY:        ${claim.tty || 'unknown'}`);
-    console.log(`   │  Heartbeat:  ${claim.heartbeat_age_human || 'unknown'}`);
-    console.log(`   │  Codebase:   ${claim.codebase || 'unknown'}`);
+    console.log(`   │  SD:            ${sdId}`);
+    console.log(`   │  Session:       ${claim.session_id?.substring(0, 36) || 'unknown'}`);
+    console.log(`   │  Hostname:      ${claim.hostname || 'unknown'}`);
+    console.log(`   │  Terminal ID:   ${claim.terminal_id || 'unknown'}`);
+    console.log(`   │  TTY:           ${claim.tty || 'unknown'}`);
+    console.log(`   │  Heartbeat:     ${claim.heartbeat_age_human || 'unknown'}`);
+    console.log(`   │  Codebase:      ${claim.codebase || 'unknown'}`);
+    if (isSameMachine) {
+      console.log('   ├─────────────────────────────────────────────────────────────┤');
+      console.log('   │  ⚠️  SAME MACHINE, DIFFERENT CONVERSATION                   │');
+      console.log(`   │  Your terminal_id:  ${currentTerminalId}`);
+      console.log(`   │  Their terminal_id: ${claim.terminal_id || 'unknown'}`);
+    }
     console.log('   ├─────────────────────────────────────────────────────────────┤');
     console.log('   │  Another Claude Code instance is actively working on this   │');
     console.log('   │  SD. Starting work here would cause duplicate effort.       │');
@@ -127,10 +169,12 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       claimDetails: {
         sessionId: claim.session_id,
         hostname: claim.hostname,
+        terminalId: claim.terminal_id,
         tty: claim.tty,
         heartbeatAgeHuman: claim.heartbeat_age_human,
         heartbeatAgeSeconds: claim.heartbeat_age_seconds,
-        codebase: claim.codebase
+        codebase: claim.codebase,
+        isSameMachine
       }
     };
   } catch (err) {
