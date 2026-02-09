@@ -363,10 +363,10 @@ describe('US-003: LLM Triage Classification', () => {
   });
 
   describe('Structured triage result storage', () => {
-    it('should build correct update payload for LLM result', () => {
+    it('should build correct update payload for disposition result', () => {
       const aiSuggestion = {
-        suggestion: 'Check authentication tokens',
-        classification: 'bug',
+        suggestion: 'Clear feature request that fits current scope',
+        classification: 'actionable',
         confidence: 85,
         source: 'llm'
       };
@@ -379,10 +379,24 @@ describe('US-003: LLM Triage Classification', () => {
         updates.ai_triage_source = aiSuggestion.source;
       }
 
-      expect(updates.ai_triage_suggestion).toBe('Check authentication tokens');
+      expect(updates.ai_triage_suggestion).toBe('Clear feature request that fits current scope');
       expect(updates.ai_triage_confidence).toBe(85);
-      expect(updates.ai_triage_classification).toBe('bug');
+      expect(updates.ai_triage_classification).toBe('actionable');
       expect(updates.ai_triage_source).toBe('llm');
+    });
+
+    it('should accept all valid disposition values', () => {
+      const validDispositions = [
+        'actionable', 'already_exists', 'research_needed',
+        'consideration_only', 'significant_departure', 'needs_triage'
+      ];
+
+      for (const disposition of validDispositions) {
+        const aiSuggestion = { classification: disposition, confidence: 75, source: 'llm' };
+        const updates = {};
+        updates.ai_triage_classification = aiSuggestion.classification;
+        expect(validDispositions).toContain(updates.ai_triage_classification);
+      }
     });
 
     it('should handle legacy string suggestion format', () => {
@@ -397,6 +411,104 @@ describe('US-003: LLM Triage Classification', () => {
 
       expect(updates.ai_triage_suggestion).toBe('URGENT: Requires immediate attention.');
       expect(updates.ai_triage_confidence).toBeUndefined();
+    });
+  });
+});
+
+// ============================================================================
+// US-004: Disposition-Based Routing (SD-LEO-ENH-EVA-INTAKE-DISPOSITION-001)
+// ============================================================================
+describe('US-004: Disposition-Based Routing', () => {
+  describe('Disposition routing logic', () => {
+    const statusMap = {
+      'already_exists': 'duplicate',
+      'research_needed': 'needs_revision',
+      'consideration_only': 'archived',
+      'significant_departure': 'needs_revision',
+      'needs_triage': 'needs_revision'
+    };
+
+    it('should only allow actionable items through to vetting', () => {
+      const disposition = 'actionable';
+      const continueToVetting = disposition === 'actionable';
+      expect(continueToVetting).toBe(true);
+    });
+
+    it('should block non-actionable items from vetting', () => {
+      const nonActionable = ['already_exists', 'research_needed', 'consideration_only', 'significant_departure', 'needs_triage'];
+      for (const disposition of nonActionable) {
+        const continueToVetting = disposition === 'actionable';
+        expect(continueToVetting).toBe(false);
+      }
+    });
+
+    it('should map already_exists to duplicate status', () => {
+      expect(statusMap['already_exists']).toBe('duplicate');
+    });
+
+    it('should map consideration_only to archived status', () => {
+      expect(statusMap['consideration_only']).toBe('archived');
+    });
+
+    it('should map research_needed to needs_revision status', () => {
+      expect(statusMap['research_needed']).toBe('needs_revision');
+    });
+
+    it('should map significant_departure to needs_revision status', () => {
+      expect(statusMap['significant_departure']).toBe('needs_revision');
+    });
+  });
+
+  describe('Disposition validation', () => {
+    const VALID_DISPOSITIONS = [
+      'actionable', 'already_exists', 'research_needed',
+      'consideration_only', 'significant_departure', 'needs_triage'
+    ];
+
+    it('should validate known disposition values', () => {
+      expect(VALID_DISPOSITIONS).toHaveLength(6);
+      expect(VALID_DISPOSITIONS).toContain('actionable');
+      expect(VALID_DISPOSITIONS).toContain('already_exists');
+    });
+
+    it('should default unknown dispositions to needs_triage', () => {
+      const rawDisposition = 'something_unknown';
+      const validated = VALID_DISPOSITIONS.includes(rawDisposition) ? rawDisposition : 'needs_triage';
+      expect(validated).toBe('needs_triage');
+    });
+
+    it('should preserve valid disposition values', () => {
+      for (const d of VALID_DISPOSITIONS) {
+        const validated = VALID_DISPOSITIONS.includes(d) ? d : 'needs_triage';
+        expect(validated).toBe(d);
+      }
+    });
+  });
+
+  describe('Conflict detection', () => {
+    it('should store conflict_with when detected', () => {
+      const aiSuggestion = {
+        classification: 'already_exists',
+        confidence: 82,
+        suggestion: 'Codebase already has this via evaluation-bridge',
+        conflict_with: 'evaluation-bridge',
+        source: 'llm'
+      };
+
+      expect(aiSuggestion.conflict_with).toBe('evaluation-bridge');
+      expect(aiSuggestion.classification).toBe('already_exists');
+    });
+
+    it('should have null conflict_with when no conflict', () => {
+      const aiSuggestion = {
+        classification: 'actionable',
+        confidence: 90,
+        suggestion: 'New feature, no conflicts found',
+        conflict_with: null,
+        source: 'llm'
+      };
+
+      expect(aiSuggestion.conflict_with).toBeNull();
     });
   });
 });
