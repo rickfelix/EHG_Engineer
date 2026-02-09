@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T04:05:18.684Z
-**Rows**: 5,556
+**Generated**: 2026-02-09T12:38:17.321Z
+**Rows**: 5,584
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -56,7 +56,7 @@
 ### Check Constraints
 - `chk_handoff_validation_threshold`: CHECK (((validation_score IS NULL) OR ((status)::text = 'blocked'::text) OR ((validation_score >= 0) AND (validation_score <= 100))))
 - `sd_phase_handoffs_from_phase_check`: CHECK (((from_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
-- `sd_phase_handoffs_handoff_type_check`: CHECK (((handoff_type)::text = ANY ((ARRAY['LEAD-TO-PLAN'::character varying, 'PLAN-TO-EXEC'::character varying, 'EXEC-TO-PLAN'::character varying, 'PLAN-TO-LEAD'::character varying])::text[])))
+- `sd_phase_handoffs_handoff_type_check`: CHECK (((handoff_type)::text = ANY ((ARRAY['LEAD-TO-PLAN'::character varying, 'PLAN-TO-EXEC'::character varying, 'EXEC-TO-PLAN'::character varying, 'PLAN-TO-LEAD'::character varying, 'LEAD-FINAL-APPROVAL'::character varying])::text[])))
 - `sd_phase_handoffs_status_check`: CHECK (((status)::text = ANY ((ARRAY['pending_acceptance'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'blocked'::character varying])::text[])))
 - `sd_phase_handoffs_to_phase_check`: CHECK (((to_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
 - `sd_phase_handoffs_validation_score_check`: CHECK (((validation_score >= 0) AND (validation_score <= 100)))
