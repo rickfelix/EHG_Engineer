@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T03:03:13.715Z
-**Tables**: 437
+**Generated**: 2026-02-09T03:28:36.177Z
+**Tables**: 442
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (437)
+## All Tables (442)
 
 ### LEO Protocol
 
@@ -276,11 +276,15 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_circuit_state_transitions](tables/eva_circuit_state_transitions.md)
 - [eva_decisions](tables/eva_decisions.md)
 - [eva_events](tables/eva_events.md)
+- [eva_idea_categories](tables/eva_idea_categories.md)
 - [eva_orchestration_sessions](tables/eva_orchestration_sessions.md)
 - [eva_saga_log](tables/eva_saga_log.md)
+- [eva_sync_state](tables/eva_sync_state.md)
+- [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)
 - [eva_ventures](tables/eva_ventures.md)
 - [eva_weekly_review_templates](tables/eva_weekly_review_templates.md)
+- [eva_youtube_intake](tables/eva_youtube_intake.md)
 - [exec_authorizations](tables/exec_authorizations.md)
 - [exec_implementation_sessions](tables/exec_implementation_sessions.md)
 - [exec_quality_checkpoints](tables/exec_quality_checkpoints.md)
@@ -417,6 +421,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [system_settings](tables/system_settings.md)
 - [task_hydration_log](tables/task_hydration_log.md)
 - [tech_stack_references](tables/tech_stack_references.md)
+- [telemetry_analysis_runs](tables/telemetry_analysis_runs.md)
 - [telemetry_thresholds](tables/telemetry_thresholds.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
 - [test_default](tables/test_default.md)
