@@ -53,6 +53,19 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       });
     }
 
+    // SD-LEO-INFRA-WIRE-FEEDBACK-QUALITY-001: Vetting gate before SD promotion
+    // Quality score must meet minimum threshold for promotion
+    if (feedback.quality_score != null && feedback.quality_score < 40) {
+      console.log(`⚠️ [SERVER] Feedback ${id} blocked: quality_score ${feedback.quality_score} < 40`);
+      return res.status(422).json({
+        error: 'Feedback quality too low for SD promotion',
+        code: 'QUALITY_GATE_FAILED',
+        quality_score: feedback.quality_score,
+        threshold: 40,
+        message: 'Improve feedback quality before promoting to SD. Add details, reproduction steps, or impact assessment.'
+      });
+    }
+
     // Generate SD ID
     const date = new Date();
     const year = date.getFullYear();
