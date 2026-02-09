@@ -20,6 +20,8 @@ export default defineConfig({
       '**/press-kit/**',
       '**/agents/**',
       '**/archive/**',
+      '**/.worktrees/**',
+      '**/.cursor/worktrees/**',
     ],
     coverage: {
       provider: 'v8',
