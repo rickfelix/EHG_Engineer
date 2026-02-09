@@ -303,7 +303,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
-    "@babel/parser": "^7.28.4",
+    "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.28.4",
     "@doist/todoist-api-typescript": "^6.4.0",
     "@octokit/rest": "^22.0.1",
