@@ -56,6 +56,7 @@ Features organized by development stage number:
 | `ai_ceo_competitive_intelligence_integration.md` | AI CEO competitive intelligence features |
 | `ai_ceo_exit_decision_integration.md` | AI CEO exit decision capabilities |
 | `eva_assistant_orchestration.md` | EVA assistant orchestration system |
+| `eva-intake-disposition-system.md` | **EVA intake disposition classification (6-bucket taxonomy)** |
 | `chairman_console.md` | Chairman Console interface |
 | `chairman-console-assessment-prompt.md` | Chairman Console assessment prompts |
 
