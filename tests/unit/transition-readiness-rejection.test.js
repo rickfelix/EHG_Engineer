@@ -27,6 +27,8 @@ function createSD(overrides = {}) {
 }
 
 // Helper: mock Supabase with chainable API
+// Chain: from → select → eq → eq → in → is → order → limit
+// The .is() call filters resolved_at IS NULL (RCA-MULTI-SESSION-CASCADE-001)
 function createMockSupabase(handoffs = [], handoffError = null) {
   return {
     from: vi.fn().mockReturnValue({
@@ -34,10 +36,12 @@ function createMockSupabase(handoffs = [], handoffError = null) {
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             in: vi.fn().mockReturnValue({
-              order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({
-                  data: handoffs,
-                  error: handoffError
+              is: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValue({
+                    data: handoffs,
+                    error: handoffError
+                  })
                 })
               })
             })
@@ -99,8 +103,10 @@ describe('PAT-HANDOFF-PHZ-001: Transition Readiness Rejection Check', () => {
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               in: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockRejectedValue(new Error('Connection refused'))
+                is: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockRejectedValue(new Error('Connection refused'))
+                  })
                 })
               })
             })

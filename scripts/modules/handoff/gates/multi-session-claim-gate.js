@@ -25,26 +25,10 @@
  */
 
 import os from 'os';
-import { execSync } from 'child_process';
 
-/**
- * Get the current terminal identifier (stable per Claude Code conversation).
- * On Windows: uses process.ppid (parent PID = Claude Code process).
- * On Unix: uses the TTY device path.
- * This matches the terminal_id stored in claude_sessions by session-manager.
- */
-function getTerminalId() {
-  try {
-    if (process.platform === 'win32') {
-      return `win-ppid-${process.ppid || process.pid}`;
-    }
-    const tty = execSync('tty', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-    // Hash not needed here — just need the raw value to match
-    return tty;
-  } catch {
-    return `pid-${process.ppid || process.pid}`;
-  }
-}
+// PAT-SESSION-IDENTITY-003: Centralized terminal identity
+// Import from single source of truth to prevent duplication cascade
+import { getTerminalId } from '../../../../lib/terminal-identity.js';
 
 /**
  * Validate that no session on another machine has claimed this SD

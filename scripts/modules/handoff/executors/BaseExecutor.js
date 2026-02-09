@@ -594,20 +594,10 @@ export class BaseExecutor {
       // Use sd_key for claim lookup (matches how claims are stored)
       const claimId = sd?.sd_key || sdId;
 
-      // PAT-SESSION-IDENTITY-002: Pass hostname + terminal_id for same-conversation detection
-      // Multiple CLI processes from same Claude Code instance share hostname AND terminal_id
+      // PAT-SESSION-IDENTITY-003: Use centralized terminal identity
       const os = await import('os');
-      let currentTerminalId;
-      try {
-        if (process.platform === 'win32') {
-          currentTerminalId = `win-ppid-${process.ppid || process.pid}`;
-        } else {
-          const { execSync } = await import('child_process');
-          currentTerminalId = execSync('tty', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-        }
-      } catch {
-        currentTerminalId = `pid-${process.ppid || process.pid}`;
-      }
+      const { getTerminalId } = await import('../../../../lib/terminal-identity.js');
+      const currentTerminalId = getTerminalId();
       const result = await validateMultiSessionClaim(this.supabase, claimId, {
         currentSessionId,
         currentHostname: os.hostname(),

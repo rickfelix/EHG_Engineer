@@ -61,12 +61,15 @@ export async function validateTransitionReadiness(sd, supabase) {
   // case (lowercase). Previous code queried non-existent 'sd_handoffs' table, so
   // rejections were never detected and handoffs were never blocked by prior failures.
   try {
+    // RCA-MULTI-SESSION-CASCADE-001: Only check UNRESOLVED failures
+    // Resolved failures (resolved_at IS NOT NULL) should not block retries
     const { data: previousHandoffs } = await supabase
       .from('sd_phase_handoffs')
-      .select('id, status, created_at, rejection_reason')
+      .select('id, status, created_at, rejection_reason, resolved_at')
       .eq('sd_id', sd.id)
       .eq('handoff_type', 'LEAD-TO-PLAN')
       .in('status', ['rejected', 'failed', 'blocked'])
+      .is('resolved_at', null)
       .order('created_at', { ascending: false })
       .limit(5);
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T14:43:56.070Z
-**Rows**: 5,588
+**Generated**: 2026-02-09T16:45:30.736Z
+**Rows**: 5,598
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,9 @@
 | validation_details | `jsonb` | YES | `'{}'::jsonb` | Detailed validation results from handoff verification including sub-agent outputs, gate checks, and quality metrics. |
 | validation_score | `integer(32)` | YES | - | Quality score from handoff validation (0-100). Higher scores indicate better handoff quality. |
 | validation_passed | `boolean` | YES | - | Boolean indicating whether handoff passed all validation gates. NULL = not yet validated. |
+| resolved_at | `timestamp with time zone` | YES | - | - |
+| resolution_type | `text` | YES | - | - |
+| resolution_notes | `text` | YES | - | - |
 
 ## Constraints
 
@@ -87,6 +90,10 @@
 - `idx_sd_phase_handoffs_type`
   ```sql
   CREATE INDEX idx_sd_phase_handoffs_type ON public.sd_phase_handoffs USING btree (handoff_type)
+  ```
+- `idx_sd_phase_handoffs_unresolved`
+  ```sql
+  CREATE INDEX idx_sd_phase_handoffs_unresolved ON public.sd_phase_handoffs USING btree (sd_id, handoff_type, status) WHERE ((resolved_at IS NULL) AND ((status)::text = ANY ((ARRAY['rejected'::character varying, 'failed'::character varying, 'blocked'::character varying])::text[])))
   ```
 - `idx_sd_phase_handoffs_validation_details`
   ```sql
