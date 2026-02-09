@@ -255,10 +255,18 @@ describe('Path Router', () => {
 
   test('routes to discovery mode', async () => {
     const supabase = createMockSupabase();
+    const llmClient = {
+      _model: 'mock-model',
+      messages: {
+        create: vi.fn().mockResolvedValue({
+          content: [{ text: JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]) }],
+        }),
+      },
+    };
     const result = await routePath(
       ENTRY_PATHS.DISCOVERY_MODE,
       { strategy: 'trend_scanner' },
-      { supabase, logger: silentLogger }
+      { supabase, logger: silentLogger, llmClient }
     );
     expect(result.origin_type).toBe('discovery');
     expect(result.discovery_strategy).toBe('trend_scanner');
@@ -355,13 +363,21 @@ describe('Stage 0 Orchestrator', () => {
 
   test('executes full flow with discovery path', async () => {
     const supabase = createMockSupabase();
+    const llmClient = {
+      _model: 'mock-model',
+      messages: {
+        create: vi.fn().mockResolvedValue({
+          content: [{ text: JSON.stringify([{ name: 'TestVenture', problem_statement: 'Test problem', solution: 'Test solution', target_market: 'SMBs', automation_feasibility: 8 }]) }],
+        }),
+      },
+    };
     const result = await executeStageZero(
       {
         path: ENTRY_PATHS.DISCOVERY_MODE,
         pathParams: { strategy: 'trend_scanner' },
         options: { dryRun: true },
       },
-      { supabase, logger: silentLogger }
+      { supabase, logger: silentLogger, llmClient }
     );
 
     expect(result.success).toBe(true);
