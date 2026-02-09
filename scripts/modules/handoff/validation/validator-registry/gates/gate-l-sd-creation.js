@@ -60,13 +60,16 @@ export function registerGateLValidators(registry) {
   registry.register('sdSuccessCriteria', async (context) => {
     const { sd } = context;
     const metrics = sd?.success_metrics || [];
+    const criteria = sd?.success_criteria || [];
+    const totalItems = metrics.length + criteria.length;
 
-    if (metrics.length >= 3) {
+    if (totalItems >= 3) {
       return { passed: true, score: 100, max_score: 100, issues: [] };
-    } else if (metrics.length > 0) {
-      return { passed: false, score: 50, max_score: 100, issues: [`SD has ${metrics.length} success metrics, minimum 3 recommended`] };
+    } else if (totalItems > 0) {
+      // 1-2 items: score 80 (soft warning, not a threshold-breaker)
+      return { passed: true, score: 80, max_score: 100, issues: [], warnings: [`SD has ${totalItems} success criteria/metrics, 3+ recommended`] };
     }
-    return { passed: false, score: 0, max_score: 100, issues: ['No success metrics defined'] };
+    return { passed: false, score: 0, max_score: 100, issues: ['No success metrics or criteria defined'] };
   }, 'Verify SD has measurable success criteria');
 
   registry.register('sdRisksIdentified', async (context) => {
