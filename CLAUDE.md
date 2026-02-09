@@ -704,7 +704,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-07 9:17:27 AM
+**Last Generated**: 2026-02-09 5:48:15 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -826,7 +826,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-02-07*
+*Router generated from database: 2026-02-09*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 

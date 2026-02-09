@@ -117,7 +117,8 @@
       "parent_child_validation",
       "vision_v2_plan",
       "negative_constraints_plan",
-      "prd_template_scaffold"
+      "prd_template_scaffold",
+      "documentation_link_validation_gate"
     ]
   },
   "CLAUDE_EXEC.md": {
@@ -146,7 +147,9 @@
       "negative_constraints_exec",
       "workflow",
       "migration_execution_delegation",
-      "migration_script_pattern"
+      "migration_script_pattern",
+      "test_coverage_quality_gate",
+      "integration_test_requirement_gate"
     ]
   },
   "SHARED": {

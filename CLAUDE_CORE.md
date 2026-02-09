@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-07 9:17:27 AM
+**Generated**: 2026-02-09 5:48:15 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -200,6 +200,49 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## Claude Code Plan Mode Integration
+
+**Status**: ACTIVE | **Version**: 1.0.0
+
+### Overview
+Claude Code's Plan Mode integrates with LEO Protocol to provide:
+- **Automatic Permission Bundling** - Reduces prompts by 70-80%
+- **Intelligent Plan Generation** - SD-type aware action plans
+- **Phase Transition Automation** - Activates at phase boundaries
+
+### SD Type Profiles
+| SD Type | Workflow | Sub-Agents | PR Size Target |
+|---------|----------|------------|----------------|
+| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
+| `enhancement` | standard | VALIDATION | 75 (max 200) |
+| `bug` | fast | RCA | 50 (max 100) |
+| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
+| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
+| `security` | careful | SECURITY, RISK | 50 (max 150) |
+| `documentation` | light | DOCMON | no limit |
+
+### Permission Bundling by Phase
+| Phase | Pre-approved Actions |
+|-------|---------------------|
+| LEAD | SD queue commands, handoff scripts, git status |
+| PLAN | PRD generation, sub-agent orchestration, git branches |
+| EXEC | Tests, builds, git commit/push, handoff scripts |
+| VERIFY | Verification scripts, handoff scripts |
+| FINAL | Merge operations, archive commands |
+
+### Automatic Activation
+- **Session start**: If SD detected on current branch
+- **Phase boundaries**: Before each handoff execution
+
+### Configuration
+```json
+// .claude/leo-plan-mode-config.json
+{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
+```
+
+### Module Location
+`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
+
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -273,48 +316,32 @@ This is faster than sequential exploration and provides comprehensive coverage.
 3. Agent findings inform implementation
 4. Re-run agent AFTER changes to verify fixes
 
-## Claude Code Plan Mode Integration
+## Sub-Agent Model Routing
 
-**Status**: ACTIVE | **Version**: 1.0.0
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
 
-### Overview
-Claude Code's Plan Mode integrates with LEO Protocol to provide:
-- **Automatic Permission Bundling** - Reduces prompts by 70-80%
-- **Intelligent Plan Generation** - SD-type aware action plans
-- **Phase Transition Automation** - Activates at phase boundaries
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
 
-### SD Type Profiles
-| SD Type | Workflow | Sub-Agents | PR Size Target |
-|---------|----------|------------|----------------|
-| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
-| `enhancement` | standard | VALIDATION | 75 (max 200) |
-| `bug` | fast | RCA | 50 (max 100) |
-| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
-| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
-| `security` | careful | SECURITY, RISK | 50 (max 150) |
-| `documentation` | light | DOCMON | no limit |
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
 
-### Permission Bundling by Phase
-| Phase | Pre-approved Actions |
-|-------|---------------------|
-| LEAD | SD queue commands, handoff scripts, git status |
-| PLAN | PRD generation, sub-agent orchestration, git branches |
-| EXEC | Tests, builds, git commit/push, handoff scripts |
-| VERIFY | Verification scripts, handoff scripts |
-| FINAL | Merge operations, archive commands |
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
 
-### Automatic Activation
-- **Session start**: If SD detected on current branch
-- **Phase boundaries**: Before each handoff execution
-
-### Configuration
-```json
-// .claude/leo-plan-mode-config.json
-{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 ```
 
-### Module Location
-`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
 
 ## Work Tracking Policy
 
@@ -347,33 +374,6 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
-
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
 
 ## Execution Philosophy
 
@@ -445,6 +445,47 @@ Before marking any stage/feature as complete:
 
 **BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
+
 ## 🎯 Skill Integration (Claude Code Skills)
 
 ## Skill Integration (Claude Code Skills)
@@ -487,47 +528,6 @@ Before marking any stage/feature as complete:
 - **Project**: .claude/skills/ (project-specific)
 - **Index**: ~/.claude/skills/SKILL-INDEX.md
 - **Total**: 54 skills covering all 14 sub-agents
-
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1428,37 +1428,6 @@ Task tool with subagent_type="validation-agent":
 
 
 
-## Hot Issue Patterns (Auto-Updated)
-
-**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
-
-| Pattern ID | Category | Severity | Count | Trend | Top Solution |
-|------------|----------|----------|-------|-------|--------------|
-| PAT-PRD-DUP-001 | data_integrity | [HIGH] high | 13 | [STABLE] | Added partial unique index idx_product_r |
-| PAT-VAL-ISSU-001 | quality | [HIGH] high | 6 | [STABLE] | See details |
-| PAT-AUTO-89a22fe5 | process | [HIGH] high | 3 | [STABLE] | N/A |
-| PAT-AUTO-fc4cd518 | process | [HIGH] high | 3 | [STABLE] | N/A |
-| PAT-003 | security | [HIGH] high | 3 | [DOWN] | Add auth.uid() check to RLS policy USING |
-
-### Prevention Checklists
-
-**data_integrity**:
-- [ ] Check for existing PRD by sd_id before creating new one
-- [ ] Use createPRDEntry or createPRDWithValidatedContent from prd-creator.js - never insert directly
-- [ ] Database constraint idx_product_requirements_v2_unique_sd_id enforces uniqueness at DB level
-
-**quality**:
-- [ ] [
-- [ ] "
-- [ ] V
-
-**security**:
-- [ ] Verify RLS policies include auth.uid() checks
-- [ ] Test with authenticated user context
-- [ ] Check policy applies to correct operations
-
-
-*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
 
@@ -1725,9 +1694,9 @@ Constitutional vetting of proposals using AEGIS framework. Routes feedback throu
 
 ---
 
-*Generated from database: 2026-02-07*
+*Generated from database: 2026-02-09*
 *Protocol Version: 4.3.3*
-*Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
 
 ## ⚠️ CRITICAL: Issue Resolution Protocol
