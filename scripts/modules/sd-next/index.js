@@ -51,7 +51,8 @@ export {
   showExhaustedBaselineMessage,
   displayBlockedStateBanner,
   getBlockedStateIndicator,
-  isOrchestratorBlocked
+  isOrchestratorBlocked,
+  displayTelemetryFindings
 } from './display/index.js';
 
 // Blocked state detection (SD-LEO-ENH-AUTO-PROCEED-001-12)

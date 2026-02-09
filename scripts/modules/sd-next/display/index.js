@@ -24,3 +24,4 @@ export {
   getBlockedStateIndicator,
   isOrchestratorBlocked
 } from './blocked-state.js';
+export { displayTelemetryFindings } from './telemetry-findings.js';

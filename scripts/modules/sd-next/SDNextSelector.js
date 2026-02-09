@@ -38,7 +38,8 @@ import {
   showFallbackQueue,
   showExhaustedBaselineMessage,
   displayBlockedStateBanner,
-  isOrchestratorBlocked
+  isOrchestratorBlocked,
+  displayTelemetryFindings
 } from './display/index.js';
 import {
   detectAllBlockedState,
@@ -182,6 +183,9 @@ export class SDNextSelector {
     // Display session context
     displaySessionContext(this.recentActivity);
 
+    // Display telemetry findings (SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001C)
+    await this.displayTelemetryFindings();
+
     console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
     return recommendation || { action: 'none', sd_id: null, reason: 'No recommendation available' };
@@ -316,6 +320,17 @@ export class SDNextSelector {
       currentSession: this.currentSession,
       activeSessions: this.activeSessions
     };
+  }
+
+  async displayTelemetryFindings() {
+    try {
+      const { getLatestFindings } = await import('../../../lib/telemetry/auto-trigger.js');
+      const verbose = process.argv.includes('--verbose');
+      const findings = await getLatestFindings(this.supabase);
+      displayTelemetryFindings(findings, { verbose });
+    } catch {
+      // Non-critical - silently skip if telemetry module unavailable
+    }
   }
 
   getSDRepos(sd) {

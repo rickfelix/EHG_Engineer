@@ -40,6 +40,11 @@
             "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/concurrent-session-worktree.cjs",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/telemetry-auto-trigger.cjs",
+            "timeout": 5
           }
         ]
       }
