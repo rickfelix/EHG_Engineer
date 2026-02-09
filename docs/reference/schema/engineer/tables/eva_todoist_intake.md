@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T14:43:56.070Z
+**Generated**: 2026-02-09T17:14:24.341Z
 **Rows**: 104
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,11 +41,17 @@
 | todoist_parent_id | `text` | YES | - | - |
 | todoist_section_id | `text` | YES | - | - |
 | todoist_child_order | `integer(32)` | YES | `0` | - |
+| extracted_youtube_id | `text` | YES | - | - |
+| extracted_youtube_url | `text` | YES | - | - |
+| youtube_intake_id | `uuid` | YES | - | - |
 
 ## Constraints
 
 ### Primary Key
 - `eva_todoist_intake_pkey`: PRIMARY KEY (id)
+
+### Foreign Keys
+- `eva_todoist_intake_youtube_intake_id_fkey`: youtube_intake_id → eva_youtube_intake(id)
 
 ### Unique Constraints
 - `eva_todoist_intake_todoist_task_id_key`: UNIQUE (todoist_task_id)
@@ -88,6 +94,10 @@
 - `idx_eva_todoist_intake_venture`
   ```sql
   CREATE INDEX idx_eva_todoist_intake_venture ON public.eva_todoist_intake USING btree (venture_tag)
+  ```
+- `idx_eva_todoist_intake_youtube_id`
+  ```sql
+  CREATE INDEX idx_eva_todoist_intake_youtube_id ON public.eva_todoist_intake USING btree (extracted_youtube_id) WHERE (extracted_youtube_id IS NOT NULL)
   ```
 
 ## RLS Policies
