@@ -24,7 +24,8 @@ import {
   createGitCommitEnforcementGate,
   createTraceabilityGate,
   createWorkflowROIGate,
-  createUserStoryExistenceGate
+  createUserStoryExistenceGate,
+  createDocumentationLinkValidationGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -132,6 +133,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // User story existence gate
     gates.push(createUserStoryExistenceGate(this.supabase));
+
+    // Documentation link validation gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-D)
+    gates.push(createDocumentationLinkValidationGate(this.supabase));
 
     return gates;
   }

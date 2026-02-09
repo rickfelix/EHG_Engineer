@@ -11,3 +11,4 @@ export { createRetrospectiveQualityGate } from './retrospective-quality.js';
 export { createGitCommitEnforcementGate } from './git-commit-enforcement.js';
 export { createTraceabilityGate, createWorkflowROIGate, requiresTraceabilityGates } from './traceability-gates.js';
 export { createUserStoryExistenceGate } from './user-story-existence.js';
+export { createDocumentationLinkValidationGate } from './documentation-link-validation.js';
