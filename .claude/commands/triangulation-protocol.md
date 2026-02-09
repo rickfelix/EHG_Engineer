@@ -1,5 +1,19 @@
 # Ground-Truth Triangulation Protocol
 
+> **Verification Lens**: CODEBASE-AWARE, SEMI-MANUAL
+> **Question it answers**: "Is it real? Does the code actually exist and work?"
+> **Requires**: Codebase access (via AI Projects or Claude Code)
+
+## Verification Taxonomy
+
+This is one of three verification tools in the LEO ecosystem. Choose the right tool:
+
+| Tool | Access | Mode | Question | Use When |
+|------|--------|------|----------|----------|
+| **Ground-Truth Triangulation** (this) | Codebase | Semi-manual | "Is it real?" | Verifying implementation claims against actual code |
+| **Multi-Model Debate** (`/learn`) | API only | Automated | "Should we do it?" | Evaluating proposal quality via 3 AI critics |
+| **Deep Research** (`/research`) | API only | Automated | "What's the best way?" | Exploring approaches and comparing options |
+
 ## Purpose
 Ensure multi-AI analysis (OpenAI, Gemini, Claude) produces accurate, evidence-based assessments by forcing verification of actual implementation vs. documentation claims.
 
@@ -8,6 +22,7 @@ Ensure multi-AI analysis (OpenAI, Gemini, Claude) produces accurate, evidence-ba
 - Comparing AI analyses of codebase features
 - Validating claims about feature completeness
 - Any multi-model triangulation exercise
+- When someone says "it's already implemented" and you need proof
 
 ---
 
