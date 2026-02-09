@@ -14,7 +14,8 @@ import {
   getPostCompletionRequirementsFromSD,
   FULL_SEQUENCE_TYPES,
   MINIMAL_SEQUENCE_TYPES,
-  LEARN_SKIP_SOURCES
+  LEARN_SKIP_SOURCES,
+  SD_TYPE_DOC_DIRECTORIES
 } from '../../lib/utils/post-completion-requirements.js';
 
 describe('Post-Completion Requirements', () => {
@@ -36,7 +37,7 @@ describe('Post-Completion Requirements', () => {
         // Bugfix doesn't need restart unless hasUIChanges is true
         expect(reqs.restart).toBe(false);
         expect(reqs.ship).toBe(true);
-        expect(reqs.document).toBe(false); // bugfix doesn't need document
+        expect(reqs.document).toBe(true); // all types except orchestrator get document
         expect(reqs.learn).toBe(true);
         expect(reqs.sequenceType).toBe('full');
       });
@@ -75,47 +76,47 @@ describe('Post-Completion Requirements', () => {
 
         expect(reqs.ship).toBe(true);
         expect(reqs.learn).toBe(true);
-        expect(reqs.document).toBe(false); // refactor doesn't need new docs
+        expect(reqs.document).toBe(true); // all types except orchestrator get document
       });
     });
 
     describe('Minimal sequence SD types (documentation, orchestrator, infrastructure)', () => {
-      it('should return minimal sequence for documentation SD', () => {
+      it('should return minimal sequence for documentation SD (with document)', () => {
         const reqs = getPostCompletionRequirements('documentation');
 
         expect(reqs.restart).toBe(false);
         expect(reqs.ship).toBe(true);
-        expect(reqs.document).toBe(false);
+        expect(reqs.document).toBe(true); // all types except orchestrator get document
         expect(reqs.learn).toBe(false);
         expect(reqs.sequenceType).toBe('minimal');
       });
 
-      it('should return minimal sequence for orchestrator SD', () => {
+      it('should return minimal sequence for orchestrator SD (no document)', () => {
         const reqs = getPostCompletionRequirements('orchestrator');
 
         expect(reqs.restart).toBe(false);
         expect(reqs.ship).toBe(true);
-        expect(reqs.document).toBe(false);
+        expect(reqs.document).toBe(false); // orchestrator excluded - children handle docs
         expect(reqs.learn).toBe(false);
         expect(reqs.sequenceType).toBe('minimal');
       });
 
-      it('should return minimal sequence for infrastructure SD', () => {
+      it('should return minimal sequence for infrastructure SD (with document)', () => {
         const reqs = getPostCompletionRequirements('infrastructure');
 
         expect(reqs.restart).toBe(false);
         expect(reqs.ship).toBe(true);
-        expect(reqs.document).toBe(false);
+        expect(reqs.document).toBe(true); // all types except orchestrator get document
         expect(reqs.learn).toBe(false);
         expect(reqs.sequenceType).toBe('minimal');
       });
 
-      it('should return minimal sequence for database SD', () => {
+      it('should return minimal sequence for database SD (with document)', () => {
         const reqs = getPostCompletionRequirements('database');
 
         expect(reqs.restart).toBe(false);
         expect(reqs.ship).toBe(true);
-        expect(reqs.document).toBe(false);
+        expect(reqs.document).toBe(true); // all types except orchestrator get document
         expect(reqs.learn).toBe(false);
         expect(reqs.sequenceType).toBe('minimal');
       });
@@ -175,10 +176,10 @@ describe('Post-Completion Requirements', () => {
       expect(sequence).toEqual(['restart', 'document', 'ship', 'learn']);
     });
 
-    it('should return minimal sequence for infrastructure SD', () => {
+    it('should return sequence with document for infrastructure SD', () => {
       const sequence = getPostCompletionSequence('infrastructure');
 
-      expect(sequence).toEqual(['ship']);
+      expect(sequence).toEqual(['document', 'ship']);
     });
 
     it('should return sequence without learn for learn-source SD', () => {
@@ -291,6 +292,15 @@ describe('Post-Completion Requirements', () => {
       expect(LEARN_SKIP_SOURCES).toContain('learn');
       expect(LEARN_SKIP_SOURCES).toContain('quick-fix');
       expect(LEARN_SKIP_SOURCES).toContain('escalation');
+    });
+
+    it('should export SD_TYPE_DOC_DIRECTORIES mapping', () => {
+      expect(typeof SD_TYPE_DOC_DIRECTORIES).toBe('object');
+      expect(SD_TYPE_DOC_DIRECTORIES.feature).toContain('docs/04_features/');
+      expect(SD_TYPE_DOC_DIRECTORIES.database).toContain('docs/database/');
+      expect(SD_TYPE_DOC_DIRECTORIES.infrastructure).toContain('docs/06_deployment/');
+      expect(SD_TYPE_DOC_DIRECTORIES.api).toContain('docs/02_api/');
+      expect(SD_TYPE_DOC_DIRECTORIES).not.toHaveProperty('orchestrator');
     });
   });
 });

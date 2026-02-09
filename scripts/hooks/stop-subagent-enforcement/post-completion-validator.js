@@ -6,7 +6,7 @@
  * Validates that post-completion commands were executed:
  * - /ship (BLOCK if missing) - Required for all completed SDs
  * - /learn (WARN if missing) - Recommended for code SDs
- * - /document (WARN if missing) - Recommended for feature SDs
+ * - /document (WARN if missing) - Recommended for all SD types except orchestrator
  *
  * @module stop-subagent-enforcement/post-completion-validator
  */
@@ -84,8 +84,8 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
       missingRecommended.push('LEARN');
     }
 
-    // Check /document - Recommended for feature SDs
-    if (sd.sd_type === 'feature' || sd.sd_type === 'enhancement') {
+    // Check /document - Recommended for all SD types except orchestrator
+    if (sd.sd_type !== 'orchestrator') {
       const hasDocument = docmonResults && docmonResults.length > 0 &&
         ['PASS', 'CONDITIONAL_PASS'].includes(docmonResults[0].verdict);
       if (!hasDocument) {
