@@ -21,7 +21,8 @@ import {
   createBranchEnforcementGate,
   createInfrastructureConsumerCheckGate,
   createIntegrationSectionValidationGate,
-  createMigrationDataVerificationGate
+  createMigrationDataVerificationGate,
+  createArchitecturalPatternChecklistGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -164,6 +165,11 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     // Branch Enforcement
     gates.push(createBranchEnforcementGate(sd, appPath));
+
+    // Architectural Pattern Checklist (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-C)
+    // ADVISORY: Scans PRD for state management, error handling, observability patterns
+    // Only runs for complex SDs (story_points >= 8 OR LOC >= 500 OR hasChildren)
+    gates.push(createArchitecturalPatternChecklistGate(this.prdRepo, sd, this.supabase));
 
     return gates;
   }
