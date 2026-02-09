@@ -419,6 +419,41 @@ ORDER BY event_count DESC;
 
 ### Terminal Identity Management
 
+**Centralized Implementation** (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018):
+- All terminal identity logic consolidated in `lib/terminal-identity.js`
+- Single source of truth prevents false multi-session claim conflicts
+- Eliminates duplication across session-manager, claim-gate, and BaseExecutor
+
+**Implementation Details**:
+```javascript
+// lib/terminal-identity.js
+export function getTerminalId() {
+  if (process.platform === 'win32') {
+    // Windows: PowerShell console SessionId (more reliable than PPID)
+    const cmd = `powershell -Command "(Get-Process -Id ${process.pid}).SessionId"`;
+    const sessionId = execSync(cmd).trim();
+    if (sessionId && /^\d+$/.test(sessionId)) {
+      return `win-session-${sessionId}`;
+    }
+    // Fallback to PPID if PowerShell unavailable
+    return `win-ppid-${process.ppid || process.pid}`;
+  }
+  // Unix: TTY device path (hashed for cleaner ID)
+  const tty = execSync('tty').trim();
+  return `tty-${crypto.createHash('sha256').update(tty).digest('hex').substring(0, 12)}`;
+}
+```
+
+**Why Centralized?**
+- **Before**: Terminal identity logic duplicated in 3 files, causing cascade failures when implementations diverged
+- **After**: Single shared utility, consistent behavior across all claim checks
+- **Pattern**: PAT-AUTO-e646ab92 (terminal identity duplication) → resolved
+
+**Files Using Centralized Utility**:
+- `lib/session-manager.mjs` - Session creation
+- `scripts/modules/handoff/gates/multi-session-claim-gate.js` - Claim conflict detection
+- `scripts/modules/handoff/executors/BaseExecutor.js` - Handoff execution context
+
 **Issue: Session Auto-Released Unexpectedly**
 
 **Symptom**: New session starts and previous session on same terminal is auto-released
@@ -478,6 +513,85 @@ SELECT * FROM v_session_metrics;
 - `graceful_exits` - Count of graceful exits
 - `stale_cleanups` - Count of stale cleanups
 - `terminal_replacements` - Count of same-terminal replacements
+
+### Handoff Resolution Tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018)
+
+**Purpose**: Track lifecycle of handoff failures and their resolution, preventing permanently blocked SDs.
+
+**Database Schema**:
+```sql
+ALTER TABLE sd_phase_handoffs
+ADD COLUMN resolved_at TIMESTAMPTZ,
+ADD COLUMN resolution_type TEXT,
+ADD COLUMN resolution_notes TEXT;
+
+-- Partial index for efficient unresolved-only queries
+CREATE INDEX idx_sd_phase_handoffs_unresolved
+ON sd_phase_handoffs (sd_id, handoff_type, status)
+WHERE resolved_at IS NULL;
+```
+
+**Resolution Lifecycle**:
+1. **Handoff fails** → status='rejected'/'failed'/'blocked', resolved_at=NULL
+2. **Issue diagnosed** → resolution_notes updated
+3. **Issue fixed, retry succeeds** → resolved_at=NOW(), resolution_type='retry_succeeded'
+4. **Issue no longer blocking** → resolved_at=NOW(), resolution_type='obsolete'
+5. **Issue escalated to new SD** → resolved_at=NOW(), resolution_type='escalated_to_sd'
+
+**Resolution Types**:
+- `retry_succeeded` - Handoff retried and passed after fixes
+- `obsolete` - Issue no longer relevant (SD cancelled, approach changed)
+- `escalated_to_sd` - Created dedicated SD to address root cause
+- `manual_override` - Human decision to mark as resolved
+
+**Why This Matters**:
+- **Before**: Failed handoffs permanently blocked transition-readiness gate, even after fixes
+- **After**: Gate only checks UNRESOLVED failures (WHERE resolved_at IS NULL)
+- **Pattern**: PAT-AUTO-e74d3e36 (permanently blocked handoffs) → resolved
+
+**Query Unresolved Failures**:
+```sql
+SELECT
+  id,
+  sd_id,
+  handoff_type,
+  status,
+  rejection_reason,
+  created_at,
+  EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600 as hours_blocked
+FROM sd_phase_handoffs
+WHERE status IN ('rejected', 'failed', 'blocked')
+  AND resolved_at IS NULL
+ORDER BY created_at ASC;
+```
+
+**Mark Failure as Resolved**:
+```sql
+UPDATE sd_phase_handoffs
+SET
+  resolved_at = NOW(),
+  resolution_type = 'retry_succeeded',
+  resolution_notes = 'Fixed terminal identity duplication, retry passed at 97%'
+WHERE id = 'handoff-uuid-here';
+```
+
+**Monitor Resolution Effectiveness**:
+```sql
+SELECT
+  resolution_type,
+  COUNT(*) as resolution_count,
+  AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) as avg_hours_to_resolution
+FROM sd_phase_handoffs
+WHERE resolved_at IS NOT NULL
+  AND resolved_at > NOW() - INTERVAL '30 days'
+GROUP BY resolution_type
+ORDER BY resolution_count DESC;
+```
+
+**Related Components**:
+- **Gate**: `scripts/modules/handoff/executors/lead-to-plan/gates/transition-readiness.js`
+- **Migration**: `database/migrations/20260209_handoff_resolution_tracking.sql`
+- **Schema**: `docs/reference/schema/engineer/tables/sd_phase_handoffs.md`
 
 ## Git Worktree Automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001)
 
@@ -652,6 +766,7 @@ git worktree prune
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.1.0 | 2026-02-09 | Added terminal identity centralization and handoff resolution tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018) |
 | 3.0.0 | 2026-02-07 | Added git worktree automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001) |
 | 2.0.0 | 2026-02-01 | Added lifecycle event monitoring (SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001) |
 | 1.0.0 | 2026-01-30 | Initial release (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001) |
@@ -659,4 +774,4 @@ git worktree prune
 ---
 
 *Part of LEO Protocol v4.3.3 - Multi-Session Coordination & Lifecycle Management*
-*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001*
+*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018*
