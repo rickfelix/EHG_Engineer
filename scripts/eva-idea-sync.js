@@ -47,6 +47,7 @@ async function main() {
       results.todoist = await syncTodoist({ dryRun, limit, verbose });
       console.log(`  Inserted: ${results.todoist.totalInserted}`);
       console.log(`  Updated:  ${results.todoist.totalUpdated}`);
+      if (results.todoist.totalSkipped) console.log(`  Skipped:  ${results.todoist.totalSkipped} (already processed)`);
       console.log(`  Errors:   ${results.todoist.totalErrors}`);
     } catch (err) {
       console.error(`  Todoist sync failed: ${err.message}`);
@@ -62,6 +63,7 @@ async function main() {
       results.youtube = await syncYouTube({ dryRun, limit, verbose });
       console.log(`  Inserted: ${results.youtube.totalInserted}`);
       console.log(`  Updated:  ${results.youtube.totalUpdated}`);
+      if (results.youtube.totalSkipped) console.log(`  Skipped:  ${results.youtube.totalSkipped} (already synced)`);
       console.log(`  Errors:   ${results.youtube.totalErrors}`);
     } catch (err) {
       console.error(`  YouTube sync not yet available: ${err.message}`);
