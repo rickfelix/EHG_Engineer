@@ -57,6 +57,12 @@ Different Strategic Directive types require different documentation approaches.
 | **qa** | Test strategy, coverage report | E2E patterns | `docs/05_testing/` |
 | **orchestrator** | Workflow documentation | Phase transition guide | `docs/workflow/`, LEO protocol sections |
 
+### Relevant Doc Directories by SD Type
+
+When `/document` runs, it should scan these directories for existing documentation that may need updating:
+
+Use `SD_TYPE_DOC_DIRECTORIES` from `lib/utils/post-completion-requirements.js` for the mapping. This constant maps each SD type to an array of directories most likely to contain documentation affected by that SD type's work.
+
 ### SD Type Detection
 
 Detect SD type from context or query database:

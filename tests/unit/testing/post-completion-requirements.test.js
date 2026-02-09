@@ -12,7 +12,8 @@ import {
   shouldSkipLearn,
   FULL_SEQUENCE_TYPES,
   MINIMAL_SEQUENCE_TYPES,
-  LEARN_SKIP_SOURCES
+  LEARN_SKIP_SOURCES,
+  SD_TYPE_DOC_DIRECTORIES
 } from '../../../lib/utils/post-completion-requirements.js';
 
 // ============================================================================
@@ -142,6 +143,7 @@ describe('getPostCompletionSequence() - Vision QA step', () => {
       autoProceed: true
     });
     expect(seq).not.toContain('vision-qa');
+    expect(seq).toContain('document'); // infrastructure now gets document
   });
 
   it('should produce full sequence: restart -> vision-qa -> document -> ship -> learn', () => {
@@ -160,9 +162,9 @@ describe('getPostCompletionSequence() - Vision QA step', () => {
     expect(seq).toEqual(['restart', 'document', 'ship', 'learn']);
   });
 
-  it('should produce minimal sequence for infrastructure: ship only', () => {
+  it('should produce sequence with document for infrastructure', () => {
     const seq = getPostCompletionSequence('infrastructure');
-    expect(seq).toEqual(['ship']);
+    expect(seq).toEqual(['document', 'ship']);
   });
 });
 
@@ -257,6 +259,14 @@ describe('Exported constants', () => {
     expect(Array.isArray(LEARN_SKIP_SOURCES)).toBe(true);
     expect(LEARN_SKIP_SOURCES).toContain('learn');
     expect(LEARN_SKIP_SOURCES).toContain('quick-fix');
+  });
+
+  it('should export SD_TYPE_DOC_DIRECTORIES mapping', () => {
+    expect(typeof SD_TYPE_DOC_DIRECTORIES).toBe('object');
+    expect(SD_TYPE_DOC_DIRECTORIES.feature).toContain('docs/04_features/');
+    expect(SD_TYPE_DOC_DIRECTORIES.database).toContain('docs/database/');
+    expect(SD_TYPE_DOC_DIRECTORIES.infrastructure).toContain('docs/06_deployment/');
+    expect(SD_TYPE_DOC_DIRECTORIES).not.toHaveProperty('orchestrator');
   });
 });
 
