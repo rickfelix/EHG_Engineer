@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-09T10:48:15.445Z -->
-<!-- git_commit: ed8fb913 -->
+<!-- generated_at: 2026-02-09T14:04:45.437Z -->
+<!-- git_commit: ac426f22 -->
 <!-- db_snapshot_hash: a218161803a78bba -->
 <!-- file_content_hash: pending -->
 
@@ -334,5 +334,5 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*DIGEST generated: 2026-02-09 5:48:15 AM*
+*DIGEST generated: 2026-02-09 9:04:45 AM*
 *Protocol: 4.3.3*
