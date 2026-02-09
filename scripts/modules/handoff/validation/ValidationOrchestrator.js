@@ -25,6 +25,9 @@ import {
   POLICY_VERSION
 } from './sd-type-applicability-policy.js';
 
+// SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Gate telemetry
+import { startSpan, endSpan } from '../../../../lib/telemetry/workflow-timer.js';
+
 // SD-LEO-INFRA-HARDENING-001: Import threshold profiles for gate enforcement
 import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
 
@@ -75,6 +78,20 @@ export class ValidationOrchestrator {
     console.log(`\n🔍 Validating ${gateName}`);
     console.log('-'.repeat(50));
 
+    // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Gate telemetry span
+    let gateSpan;
+    try {
+      const traceCtx = context._traceCtx;
+      const parentSpan = context._parentSpan;
+      if (traceCtx) {
+        gateSpan = startSpan('gate.execute', {
+          span_type: 'gate',
+          gate_name: gateName,
+          gate_runner_class: 'ValidationOrchestrator',
+        }, traceCtx, parentSpan);
+      }
+    } catch { /* telemetry failure is non-fatal */ }
+
     try {
       const result = await validator(context);
 
@@ -92,9 +109,14 @@ export class ValidationOrchestrator {
 
       ResultBuilder.logGateResult(gateName, normalizedResult, !normalizedResult.passed);
 
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End gate span with result
+      try { endSpan(gateSpan, { result: normalizedResult.passed ? 'pass' : 'fail', gate_name: gateName }); } catch { /* non-fatal */ }
+
       return normalizedResult;
     } catch (error) {
       console.error(`\n❌ ${gateName} validation error: ${error.message}`);
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End gate span with error
+      try { endSpan(gateSpan, { result: 'error', gate_name: gateName, error_class: error.constructor?.name, error_message: error.message }); } catch { /* non-fatal */ }
       // Return a schema-validated error result
       return validateGateResult({
         passed: false,

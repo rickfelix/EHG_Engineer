@@ -13,6 +13,9 @@ import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.j
 import { applyGatePolicies } from '../gate-policy-resolver.js';
 import { validateMultiSessionClaim } from '../gates/multi-session-claim-gate.js';
 
+// SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Workflow telemetry
+import { createTraceContext, startSpan, endSpan, persist } from '../../../../lib/telemetry/workflow-timer.js';
+
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,17 +59,42 @@ export class BaseExecutor {
     console.log(`🔍 ${this.handoffType} HANDOFF EXECUTION`);
     console.log('-'.repeat(30));
 
+    // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Create trace context for this execution
+    let traceCtx, rootSpan;
+    try {
+      const executionId = `${this.handoffType}-${sdId}-${Date.now()}`;
+      traceCtx = createTraceContext(executionId, { sdId });
+      rootSpan = startSpan('workflow.execute', {
+        span_type: 'workflow',
+        workflow_execution_id: executionId,
+        sd_id: sdId,
+        handoff_type: this.handoffType,
+        executor_class: this.constructor.name,
+        telemetry_version: '1',
+      }, traceCtx);
+    } catch { /* telemetry init failure is non-fatal */ }
+
     try {
       // Step 1: Load SD
+      let step1Span;
+      try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       const sd = await this.sdRepo.getById(sdId);
+      try { endSpan(step1Span); } catch { /* non-fatal */ }
 
       // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
+      let step1_5Span;
+      try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       await this._checkAndExecutePendingMigrations(sd, options);
+      try { endSpan(step1_5Span); } catch { /* non-fatal */ }
 
       // Step 1.8: PAT-MSESS-BYP-001 - Multi-session claim conflict check (BLOCKING)
       // Prevents duplicate work when another Claude Code instance is already working on this SD
+      let step1_8Span;
+      try { step1_8Span = startSpan('step.claimConflictCheck', { span_type: 'phase', step_name: 'claimConflictCheck', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       const claimConflict = await this._checkMultiSessionClaimConflict(sdId, sd);
+      try { endSpan(step1_8Span); } catch { /* non-fatal */ }
       if (claimConflict && !claimConflict.pass) {
+        try { endSpan(rootSpan, { result: 'claim_conflict' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
         return ResultBuilder.gateFailure('GATE_MULTI_SESSION_CLAIM_CONFLICT', {
           issues: claimConflict.issues,
           score: claimConflict.score,
@@ -76,12 +104,18 @@ export class BaseExecutor {
       }
 
       // Step 2: Pre-execution setup (optional, override in subclass)
+      let step2Span;
+      try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       const setupResult = await this.setup(sdId, sd, options);
+      try { endSpan(step2Span); } catch { /* non-fatal */ }
       if (setupResult && !setupResult.success) {
+        try { endSpan(rootSpan, { result: 'setup_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
         return setupResult;
       }
 
       // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
+      let step2_5Span;
+      try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       await this._claimSDForSession(sdId, sd);
 
       // Step 2.6: SD-LEARN-010:US-004 - Auto-trigger DATABASE sub-agent for schema SDs
@@ -90,8 +124,11 @@ export class BaseExecutor {
       // Step 2.7: SD-LEO-CONTINUITY-001 - Display HANDOFF_START directives (protocol familiarization)
       const targetPhase = this._getTargetPhaseFromHandoff();
       await this._displayHandoffStartDirectives(targetPhase);
+      try { endSpan(step2_5Span); } catch { /* non-fatal */ }
 
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
+      let step3Span;
+      try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
       // SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001: Apply database-driven gate policies
@@ -136,7 +173,12 @@ export class BaseExecutor {
         validationContext
       );
 
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Pass trace context to gate validation for gate-level spans
+      validationContext._traceCtx = traceCtx;
+      validationContext._parentSpan = step3Span;
+
       const gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
+      try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch { /* non-fatal */ }
 
       // SD-LEARN-010:US-005: Handle bypass validation
       if (!gateResults.passed) {
@@ -168,6 +210,7 @@ export class BaseExecutor {
               sessionId: options.autoProceedSessionId || 'unknown'
             });
 
+            try { endSpan(rootSpan, { result: 'skipped' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
             // Return special result for skip-and-continue
             return {
               success: false,
@@ -201,6 +244,7 @@ export class BaseExecutor {
             }));
           } catch { /* RCA trigger should never block handoff */ }
 
+          try { endSpan(rootSpan, { result: 'gate_failure' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
           return ResultBuilder.gateFailure(gateResults.failedGate, {
             issues: gateResults.issues,
             score: gateResults.totalScore,
@@ -212,8 +256,12 @@ export class BaseExecutor {
       }
 
       // Step 4: Execute type-specific logic
+      let step4Span;
+      try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       const executionResult = await this.executeSpecific(sdId, sd, options, gateResults);
+      try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch { /* non-fatal */ }
       if (!executionResult.success) {
+        try { endSpan(rootSpan, { result: 'exec_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
         return executionResult;
       }
 
@@ -222,6 +270,9 @@ export class BaseExecutor {
 
       // Step 5: Build success result
       console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
+
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End root span and persist
+      try { endSpan(rootSpan, { result: 'success' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
 
       return {
         success: true,
@@ -237,6 +288,9 @@ export class BaseExecutor {
 
     } catch (error) {
       console.error(`❌ ${this.handoffType} execution error:`, error.message);
+
+      // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Record error in telemetry
+      try { endSpan(rootSpan, { result: 'error', error_class: error.constructor?.name, error_message: error.message }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
 
       // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
       const failurePhase = this._getSourcePhaseFromHandoff();
