@@ -12,6 +12,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
+import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -138,6 +139,123 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
 }
 
 /**
+ * Get all ready (unblocked) children from parent orchestrator.
+ * SD-LEO-ORCH-AGENT-EXPERIENCE-FACTORY-001-B (FR-1)
+ *
+ * Unlike getNextReadyChild() which returns sorted[0], this returns
+ * ALL children whose blockers are satisfied, ordered by urgency.
+ * Used by the parallel coordinator to spawn concurrent teammates.
+ *
+ * When ORCH_PARALLEL_CHILDREN_ENABLED=false (default), returns only
+ * the first child (matching legacy sequential behavior).
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} parentSdId - Parent orchestrator SD ID (UUID)
+ * @param {Object} [options]
+ * @param {string} [options.excludeCompletedId] - Just-completed child to exclude
+ * @param {boolean} [options.parallelEnabled] - Override feature flag
+ * @returns {Promise<{children: object[], allComplete: boolean, dagErrors: string[], reason: string}>}
+ */
+export async function getReadyChildren(supabase, parentSdId, options = {}) {
+  const parallelEnabled = options.parallelEnabled ??
+    (process.env.ORCH_PARALLEL_CHILDREN_ENABLED === 'true');
+
+  if (!parentSdId) {
+    return { children: [], allComplete: false, dagErrors: [], reason: 'No parent ID provided' };
+  }
+
+  try {
+    // Fetch ALL children (not just active/draft) for DAG construction
+    const { data: allChildren, error: allError } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type')
+      .eq('parent_sd_id', parentSdId);
+
+    if (allError) {
+      return { children: [], allComplete: false, dagErrors: [], reason: `Query error: ${allError.message}` };
+    }
+
+    if (!allChildren || allChildren.length === 0) {
+      return { children: [], allComplete: true, dagErrors: [], reason: 'No children found' };
+    }
+
+    // Check if all children are completed
+    const completedCount = allChildren.filter(c => c.status === 'completed').length;
+    if (completedCount === allChildren.length) {
+      return { children: [], allComplete: true, dagErrors: [], reason: `All ${allChildren.length} children completed` };
+    }
+
+    // Build DAG from ALL children
+    const { dag, errors: dagErrors } = buildDependencyDAG(allChildren);
+
+    // Check for cycles
+    const { hasCycles, cyclePath } = detectCycles(dag);
+    if (hasCycles) {
+      const pathStr = cyclePath.map(id => dag.nodes.get(id)?.sdKey || id).join(' -> ');
+      dagErrors.push(`Cycle detected: ${pathStr}`);
+      return { children: [], allComplete: false, dagErrors, reason: `Dependency cycle: ${pathStr}` };
+    }
+
+    // Build completion/failure sets from actual statuses
+    const completedIds = new Set();
+    const failedIds = new Set();
+    const runningIds = new Set();
+
+    for (const child of allChildren) {
+      if (child.status === 'completed') completedIds.add(child.id);
+      if (child.status === 'blocked' || child.status === 'cancelled') failedIds.add(child.id);
+      // Exclude the just-completed child from consideration
+      if (options.excludeCompletedId && child.id === options.excludeCompletedId) {
+        completedIds.add(child.id);
+      }
+    }
+
+    // Compute runnable set
+    const { runnable } = computeRunnableSet(dag, completedIds, failedIds, runningIds);
+
+    // Filter to only children that are in workable status (draft or active)
+    const workableStatuses = ['draft', 'active'];
+    const readyCandidates = runnable
+      .map(id => allChildren.find(c => c.id === id))
+      .filter(c => c && workableStatuses.includes(c.status));
+
+    // Apply urgency sorting (same as getNextReadyChild)
+    const withUrgency = readyCandidates.map(child => ({
+      ...child,
+      urgency_score: child.metadata?.urgency_score ?? 0.5,
+      urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),
+      enqueue_time: child.created_at
+    }));
+
+    const sorted = sortByUrgency(withUrgency);
+
+    // If parallel disabled, return only the first child (sequential compat)
+    if (!parallelEnabled) {
+      const selected = sorted.length > 0 ? [sorted[0]] : [];
+      return {
+        children: selected,
+        allComplete: false,
+        dagErrors,
+        reason: selected.length > 0
+          ? `Sequential mode: 1 of ${sorted.length} ready children selected`
+          : 'No ready children'
+      };
+    }
+
+    return {
+      children: sorted,
+      allComplete: false,
+      dagErrors,
+      reason: sorted.length > 0
+        ? `${sorted.length} independent children ready for parallel execution`
+        : 'No ready children (all blocked or in unexpected state)'
+    };
+  } catch (err) {
+    return { children: [], allComplete: false, dagErrors: [], reason: err.message };
+  }
+}
+
+/**
  * Get orchestrator context (parent info and child stats)
  *
  * @param {object} supabase - Supabase client
@@ -207,6 +325,7 @@ export function createSupabaseClient() {
 export default {
   isChildSD,
   getNextReadyChild,
+  getReadyChildren,
   getOrchestratorContext,
   createSupabaseClient
 };
