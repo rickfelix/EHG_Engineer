@@ -20,7 +20,8 @@ import {
   createHumanVerificationGate,
   createSubAgentEnforcementValidationGate,
   createLOCThresholdValidationGate,
-  createPerformanceCriticalGate
+  createPerformanceCriticalGate,
+  createTestCoverageQualityGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -132,6 +133,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Performance critical gate (SD-LEO-INFRA-INTEGRATE-VERCEL-REACT-001)
     // Blocks feature/performance/enhancement SDs with new barrel imports
     gates.push(createPerformanceCriticalGate(this.supabase));
+
+    // Test coverage quality gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-B)
+    // Checks coverage thresholds for changed files, flags 0% coverage
+    gates.push(createTestCoverageQualityGate(this.supabase));
 
     return gates;
   }
