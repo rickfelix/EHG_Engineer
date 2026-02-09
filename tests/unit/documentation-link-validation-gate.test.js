@@ -11,7 +11,7 @@
  * - Handles optional title in markdown links
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   stripCodeBlocks,
   extractRelativeLinks,
