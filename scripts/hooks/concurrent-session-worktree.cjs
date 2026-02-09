@@ -183,7 +183,84 @@ function detectWorkType() {
   return { workType: 'UNKNOWN', workKey: null };
 }
 
+/**
+ * Clean up stale concurrent-auto-* worktrees from previous sessions.
+ * Runs inline before concurrent detection to prevent accumulation.
+ * Uses 1-hour threshold (not 24h) since these are temporary by nature.
+ */
+function cleanupStaleConcurrentWorktrees() {
+  const maxAgeMs = 60 * 60 * 1000; // 1 hour
+  const worktreesDir = path.resolve(__dirname, '../../.worktrees');
+
+  if (!fs.existsSync(worktreesDir)) return;
+
+  let entries;
+  try {
+    entries = fs.readdirSync(worktreesDir)
+      .filter(e => e.startsWith('concurrent-'));
+  } catch { return; }
+
+  if (entries.length === 0) return;
+
+  let cleaned = 0;
+  const repoRoot = path.resolve(__dirname, '../..');
+
+  for (const entry of entries) {
+    const wtPath = path.join(worktreesDir, entry);
+
+    // Determine age from metadata or directory mtime
+    let createdAt = null;
+    for (const metaFile of ['.worktree.json', '.ehg-session.json']) {
+      const metaPath = path.join(wtPath, metaFile);
+      if (fs.existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          if (meta.createdAt) createdAt = new Date(meta.createdAt);
+        } catch { /* ignore */ }
+        break;
+      }
+    }
+    if (!createdAt) {
+      try { createdAt = fs.statSync(wtPath).mtime; } catch { continue; }
+    }
+
+    if (Date.now() - createdAt.getTime() <= maxAgeMs) continue;
+
+    // Unlock if locked (git prune won't remove locked entries)
+    try {
+      execSync(`git worktree unlock "${wtPath}"`, {
+        cwd: repoRoot, stdio: 'pipe', timeout: 2000
+      });
+    } catch { /* not locked or already unlocked */ }
+
+    // Force remove — concurrent worktrees are throwaway and may have
+    // inherited dirty state from the main repo's uncommitted changes
+    try {
+      execSync(`git worktree remove --force "${wtPath}"`, {
+        cwd: repoRoot, stdio: 'pipe', timeout: 3000
+      });
+      cleaned++;
+    } catch {
+      // git worktree remove can fail — fall back to rm + prune
+      try {
+        fs.rmSync(wtPath, { recursive: true, force: true });
+        cleaned++;
+      } catch { /* best effort */ }
+    }
+  }
+
+  if (cleaned > 0) {
+    try {
+      execSync('git worktree prune', { cwd: repoRoot, stdio: 'pipe', timeout: 3000 });
+    } catch { /* best effort */ }
+    logEvent('session.stale_cleanup', { cleaned, total: entries.length });
+  }
+}
+
 async function main() {
+  // Clean up stale concurrent worktrees before doing anything else
+  cleanupStaleConcurrentWorktrees();
+
   // FR-5: Check feature flag (default: true)
   const featureFlag = process.env.AUTO_WORKTREE_ON_CONCURRENT_SESSION;
   if (featureFlag === 'false' || featureFlag === '0') {
