@@ -21,7 +21,8 @@ import {
   createSubAgentEnforcementValidationGate,
   createLOCThresholdValidationGate,
   createPerformanceCriticalGate,
-  createTestCoverageQualityGate
+  createTestCoverageQualityGate,
+  createIntegrationTestRequirementGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -137,6 +138,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Test coverage quality gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-B)
     // Checks coverage thresholds for changed files, flags 0% coverage
     gates.push(createTestCoverageQualityGate(this.supabase));
+
+    // Integration test requirement gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-E)
+    // For complex SDs, checks for non-trivial integration tests in tests/integration/
+    gates.push(createIntegrationTestRequirementGate(this.supabase));
 
     return gates;
   }
