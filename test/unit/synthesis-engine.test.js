@@ -359,7 +359,7 @@ describe('Synthesis - reframeProblem', () => {
 // ── Combined Synthesis Tests ──────────────────────────────
 
 describe('Synthesis - runSynthesis', () => {
-  test('runs all 3 components and returns enriched brief', async () => {
+  test('runs all 8 components and returns enriched brief', async () => {
     const supabase = createMockSupabase({
       nurseryItems: [{ id: 'n1', name: 'Prior Item', problem_statement: 'P', solution: 'S', parked_reason: 'R' }],
       ventures: [{ id: 'v1', name: 'ExistingVenture', problem_statement: 'P', solution: 'S', target_market: 'M', status: 'active', metadata: {} }],
@@ -379,7 +379,7 @@ describe('Synthesis - runSynthesis', () => {
 
     // Check synthesis metadata
     expect(result.metadata.synthesis).toBeDefined();
-    expect(result.metadata.synthesis.components_run).toBe(3);
+    expect(result.metadata.synthesis.components_run).toBe(8);
     expect(result.metadata.synthesis.cross_reference).toBeDefined();
     expect(result.metadata.synthesis.portfolio_evaluation).toBeDefined();
     expect(result.metadata.synthesis.problem_reframing).toBeDefined();
@@ -415,7 +415,7 @@ describe('Synthesis - runSynthesis', () => {
     );
 
     expect(result.name).toBe('AutoReview AI');
-    expect(result.metadata.synthesis.components_run).toBe(3);
+    expect(result.metadata.synthesis.components_run).toBe(8);
   });
 
   test('preserves path output metadata', async () => {
