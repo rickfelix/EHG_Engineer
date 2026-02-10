@@ -38,7 +38,11 @@ export async function validateSmokeTestSpecification(sd) {
   console.log(`   SD Type: ${sdType} - smoke test specification REQUIRED`);
 
   // Check if smoke_test_steps exists and is valid
-  const smokeTestSteps = sd.smoke_test_steps || [];
+  // Handle TEXT column returning JSON string (not pre-parsed JSONB)
+  let smokeTestSteps = sd.smoke_test_steps || [];
+  if (typeof smokeTestSteps === 'string') {
+    try { smokeTestSteps = JSON.parse(smokeTestSteps); } catch { smokeTestSteps = []; }
+  }
   const isArray = Array.isArray(smokeTestSteps);
   const stepCount = isArray ? smokeTestSteps.length : 0;
 
