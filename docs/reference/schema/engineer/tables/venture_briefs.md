@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-10T04:58:07.280Z
+**Generated**: 2026-02-10T05:19:24.137Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (24 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -42,6 +42,7 @@
 | created_by | `text` | YES | `'stage0_engine'::text` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| profile_id | `uuid` | YES | - | Evaluation profile active when this brief was created (nullable for pre-profile briefs) |
 
 ## Constraints
 
@@ -49,6 +50,7 @@
 - `venture_briefs_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `venture_briefs_profile_id_fkey`: profile_id → evaluation_profiles(id)
 - `venture_briefs_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
@@ -70,6 +72,10 @@
 - `idx_venture_briefs_origin_type`
   ```sql
   CREATE INDEX idx_venture_briefs_origin_type ON public.venture_briefs USING btree (origin_type)
+  ```
+- `idx_venture_briefs_profile_id`
+  ```sql
+  CREATE INDEX idx_venture_briefs_profile_id ON public.venture_briefs USING btree (profile_id)
   ```
 - `idx_venture_briefs_venture_id`
   ```sql
