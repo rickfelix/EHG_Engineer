@@ -69,28 +69,18 @@ export class PlanToLeadExecutor extends BaseExecutor {
       .limit(1);
 
     if (!existingRetro || existingRetro.length === 0) {
-      console.log('   🔄 No retrospective found - auto-generating before gate validation...');
+      console.log('   🔄 No retrospective found - invoking RETRO sub-agent...');
       try {
-        const { spawn } = await import('child_process');
-        const retroProcess = spawn('node', ['scripts/generate-retrospective.js', sd.id || sdId], {
-          cwd: process.cwd(),
-          stdio: 'pipe'
-        });
-
-        retroProcess.stdout.on('data', () => {});
-        retroProcess.stderr.on('data', () => {});
-
-        await new Promise((resolve, reject) => {
-          retroProcess.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`Retrospective generation exited with code ${code}`));
-          });
-        });
-
-        console.log('   ✅ Retrospective auto-generated (PLAN-TO-LEAD setup)');
+        const { executeSubAgent } = await import('../../../../lib/sub-agent-executor.js');
+        const retroResult = await executeSubAgent('RETRO', sd.id || sdId, { mode: 'completion' });
+        if (retroResult?.verdict === 'FAIL') {
+          console.warn(`   ⚠️  RETRO sub-agent returned FAIL: ${retroResult.findings?.[0]?.detail || 'unknown'}`);
+        } else {
+          console.log('   ✅ Retrospective generated via RETRO sub-agent');
+        }
       } catch (retroErr) {
-        console.warn(`   ⚠️  Retrospective auto-generation failed (non-fatal): ${retroErr.message}`);
-        console.warn('   📝 Gate will report this - run manually: node scripts/generate-retrospective.js <SD_UUID>');
+        console.warn(`   ⚠️  RETRO sub-agent invocation failed (non-fatal): ${retroErr.message}`);
+        console.warn('   📝 Run manually: node scripts/execute-subagent.js --code RETRO --sd-id <SD_UUID>');
       }
     }
 
