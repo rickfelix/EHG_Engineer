@@ -39,7 +39,7 @@ const DEFAULT_CHILD_TIMEOUT_MS = parseInt(process.env.ORCH_CHILD_TIMEOUT_MS || '
  */
 export async function planParallelExecution(supabase, parentSdId, completedChildId) {
   // Fetch all ready children using DAG-aware selector
-  const { children: readyChildren, allComplete, dagErrors, reason: selectorReason } =
+  const { children: readyChildren, allComplete, dagErrors, reason: _selectorReason } =
     await getReadyChildren(supabase, parentSdId, {
       excludeCompletedId: completedChildId,
       parallelEnabled: true
