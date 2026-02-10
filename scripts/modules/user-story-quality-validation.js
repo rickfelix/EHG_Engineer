@@ -154,7 +154,7 @@ export async function validateUserStoryQuality(story, options = {}) {
   // AI scoring is too strict for these SD types - database SDs focus on schema/migrations, not user narratives
   // Added 'theming', 'ux', 'design', 'ui' - these focus on visual/style fixes, not complex user narratives
   // Check both sdType and sdCategory since SDs can have type='implementation' but category='theming'
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'database', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
+  const heuristicTypes = ['bugfix', 'bug_fix', 'fix', 'infrastructure', 'database', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
   const usesHeuristic = process.env.STORY_VALIDATION_MODE === 'heuristic' ||
                         heuristicTypes.includes(sdType) ||
                         heuristicTypes.includes(sdCategory);
