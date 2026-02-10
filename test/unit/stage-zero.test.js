@@ -146,8 +146,20 @@ describe('Stage 0 Interfaces', () => {
       expect(result.errors.some(e => e.includes('origin_type'))).toBe(true);
     });
 
+    test('accepts nursery_reeval origin type', () => {
+      const output = createPathOutput({
+        origin_type: 'nursery_reeval',
+        raw_material: { nursery_id: 'n-1' },
+        suggested_name: 'Reactivated Venture',
+        suggested_problem: 'Problem evolved',
+        suggested_solution: 'New approach',
+        target_market: 'Enterprise',
+      });
+      expect(validatePathOutput(output).valid).toBe(true);
+    });
+
     test('accepts all valid origin types', () => {
-      for (const type of ['competitor_teardown', 'blueprint', 'discovery', 'manual']) {
+      for (const type of ['competitor_teardown', 'blueprint', 'discovery', 'manual', 'nursery_reeval']) {
         const output = createPathOutput({
           origin_type: type,
           raw_material: {},
@@ -193,6 +205,32 @@ describe('Stage 0 Interfaces', () => {
       };
       const result = validateVentureBrief(brief);
       expect(result.valid).toBe(false);
+    });
+
+    test('accepts blocked maturity from synthesis constraints', () => {
+      const brief = {
+        name: 'Test',
+        problem_statement: 'Test',
+        solution: 'Test',
+        target_market: 'Test',
+        origin_type: 'manual',
+        raw_chairman_intent: 'Test',
+        maturity: 'blocked',
+      };
+      expect(validateVentureBrief(brief).valid).toBe(true);
+    });
+
+    test('accepts nursery maturity from time-horizon', () => {
+      const brief = {
+        name: 'Test',
+        problem_statement: 'Test',
+        solution: 'Test',
+        target_market: 'Test',
+        origin_type: 'manual',
+        raw_chairman_intent: 'Test',
+        maturity: 'nursery',
+      };
+      expect(validateVentureBrief(brief).valid).toBe(true);
     });
   });
 
@@ -325,6 +363,40 @@ describe('Chairman Review', () => {
     const result = await conductChairmanReview(brief, { supabase, logger: silentLogger });
     expect(result.decision).toBe('seed');
   });
+
+  test('maps blocked maturity to park decision', async () => {
+    const supabase = createMockSupabase();
+    const brief = {
+      name: 'Blocked Venture',
+      problem_statement: 'Test',
+      solution: 'Test',
+      target_market: 'Test',
+      origin_type: 'manual',
+      maturity: 'blocked',
+      metadata: { synthesis: { chairman_constraints: { verdict: 'fail', summary: 'Regulatory concern' } } },
+    };
+
+    const result = await conductChairmanReview(brief, { supabase, logger: silentLogger });
+    expect(result.decision).toBe('park');
+    expect(result.brief.maturity).toBe('blocked');
+  });
+
+  test('maps nursery maturity to park decision', async () => {
+    const supabase = createMockSupabase();
+    const brief = {
+      name: 'Future Venture',
+      problem_statement: 'Test',
+      solution: 'Test',
+      target_market: 'Test',
+      origin_type: 'manual',
+      maturity: 'nursery',
+      metadata: { synthesis: { time_horizon: { position: 'park_and_build_later', summary: 'Market not ready' } } },
+    };
+
+    const result = await conductChairmanReview(brief, { supabase, logger: silentLogger });
+    expect(result.decision).toBe('park');
+    expect(result.brief.maturity).toBe('nursery');
+  });
 });
 
 // ── Stage 0 Orchestrator Tests ──────────────────────────────
@@ -336,7 +408,7 @@ describe('Stage 0 Orchestrator', () => {
       {
         path: ENTRY_PATHS.COMPETITOR_TEARDOWN,
         pathParams: { urls: ['https://competitor.com'] },
-        options: { dryRun: true },
+        options: { dryRun: true, skipSynthesis: true },
       },
       { supabase, logger: silentLogger }
     );
@@ -352,7 +424,7 @@ describe('Stage 0 Orchestrator', () => {
       {
         path: ENTRY_PATHS.BLUEPRINT_BROWSE,
         pathParams: {},
-        options: { dryRun: true },
+        options: { dryRun: true, skipSynthesis: true },
       },
       { supabase, logger: silentLogger }
     );
@@ -375,7 +447,7 @@ describe('Stage 0 Orchestrator', () => {
       {
         path: ENTRY_PATHS.DISCOVERY_MODE,
         pathParams: { strategy: 'trend_scanner' },
-        options: { dryRun: true },
+        options: { dryRun: true, skipSynthesis: true },
       },
       { supabase, logger: silentLogger, llmClient }
     );
@@ -391,6 +463,33 @@ describe('Stage 0 Orchestrator', () => {
         { logger: silentLogger }
       )
     ).rejects.toThrow('supabase client is required');
+  });
+
+  test('runs synthesis by default when synthesize dep not provided', async () => {
+    const supabase = createMockSupabase();
+    const customSynthesize = vi.fn().mockResolvedValue({
+      name: 'Auto-Synthesized',
+      problem_statement: 'Enriched problem',
+      solution: 'Enriched solution',
+      target_market: 'Enterprise',
+      origin_type: 'competitor_teardown',
+      raw_chairman_intent: 'Original',
+      maturity: 'ready',
+      metadata: {},
+    });
+
+    // Provide synthesize to verify it's called (proving the wiring works)
+    const result = await executeStageZero(
+      {
+        path: ENTRY_PATHS.COMPETITOR_TEARDOWN,
+        pathParams: { urls: ['https://test.com'] },
+        options: { dryRun: true },
+      },
+      { supabase, logger: silentLogger, synthesize: customSynthesize }
+    );
+
+    expect(customSynthesize).toHaveBeenCalled();
+    expect(result.brief.name).toBe('Auto-Synthesized');
   });
 
   test('supports custom synthesis function', async () => {

@@ -327,49 +327,115 @@ export class HandoffOrchestrator {
    * Execute deferred PRD generation after handoff is recorded
    * SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001B-RCA: Record-First Pattern
    * SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001E-RCA: Detached Spawn Pattern
+   * SD-LEO-FIX-FIX-STAGE-INTEGRATION-001-RCA: Observability Fix
    *
-   * Spawns PRD generation as a detached child process so the handoff
-   * process can exit cleanly within the Bash timeout window.
-   * The handoff is already recorded - PRD creation is enhancement, not critical path.
+   * Spawns PRD generation as a detached child process with log file output
+   * and post-spawn verification. Falls back to inline execution if the
+   * detached process fails to create a PRD within the verification window.
    *
-   * Previous approach awaited autoGeneratePRDScript() which uses execSync with
-   * 3-minute timeout, exceeding the 2-minute Bash tool timeout every time.
+   * Previous issue: stdio: 'ignore' hid all errors, making detached process
+   * failures completely silent. Now logs to file and verifies completion.
    *
    * @param {object} params - { sdId, sd }
    */
   async _executeDeferredPrdGeneration({ sdId, sd }) {
+    const { spawn } = await import('child_process');
+    const { join } = await import('path');
+    const fs = await import('fs');
+
+    const scriptPath = join(process.cwd(), 'scripts', 'add-prd-to-database.js');
+    const title = sd.title || 'Technical Implementation';
+    const idToUse = sd.id || sdId;
+
+    console.log('\n🤖 PRD GENERATION (Detached with Verification)');
+    console.log('='.repeat(70));
+    console.log(`   SD: ${title}`);
+    console.log('   Method: add-prd-to-database.js (detached + log + verify)');
+    console.log(`   Command: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+
+    // Ensure logs directory exists
+    const logsDir = join(process.cwd(), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const logPath = join(logsDir, `prd-generation-${timestamp}.log`);
+    let logFd;
+
     try {
-      const { spawn } = await import('child_process');
-      const { join } = await import('path');
+      logFd = fs.openSync(logPath, 'w');
 
-      const scriptPath = join(process.cwd(), 'scripts', 'add-prd-to-database.js');
-      const title = sd.title || 'Technical Implementation';
-      const idToUse = sd.id || sdId;
-
-      console.log('\n🤖 PRD GENERATION (Detached)');
-      console.log('='.repeat(70));
-      console.log(`   SD: ${title}`);
-      console.log('   Method: add-prd-to-database.js (detached process)');
-      console.log(`   Command: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
-
-      // Spawn as detached process - parent can exit without waiting
+      // Spawn with log file output instead of stdio: 'ignore'
       const child = spawn('node', [scriptPath, idToUse, title], {
         detached: true,
-        stdio: 'ignore',
+        stdio: ['ignore', logFd, logFd],
         cwd: process.cwd(),
         env: process.env
       });
       child.unref();
 
       console.log(`   ✅ PRD generation spawned (PID: ${child.pid})`);
-      console.log('   💡 Handoff is complete - PRD creation continues independently');
-      console.log(`   💡 If needed, retry: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+      console.log(`   📝 Log file: ${logPath}`);
+
+      // Verify PRD creation with polling (max 90 seconds)
+      const maxWaitMs = 90000;
+      const pollIntervalMs = 5000;
+      let elapsed = 0;
+      let prdCreated = false;
+
+      while (elapsed < maxWaitMs) {
+        await new Promise(r => setTimeout(r, pollIntervalMs));
+        elapsed += pollIntervalMs;
+
+        try {
+          const { data } = await this.supabase
+            .from('product_requirements_v2')
+            .select('prd_id')
+            .eq('sd_id', sdId)
+            .limit(1);
+
+          if (data && data.length > 0) {
+            prdCreated = true;
+            console.log(`   ✅ PRD creation verified after ${Math.round(elapsed / 1000)}s`);
+            break;
+          }
+        } catch {
+          // Supabase query failed - keep waiting
+        }
+
+        if (elapsed % 15000 === 0) {
+          console.log(`   ⏳ Waiting for PRD... (${Math.round(elapsed / 1000)}s elapsed)`);
+        }
+      }
+
+      if (!prdCreated) {
+        // Read log file for error details
+        let logContents = '';
+        try {
+          fs.closeSync(logFd);
+          logFd = null;
+          logContents = fs.readFileSync(logPath, 'utf-8');
+        } catch { /* ignore read errors */ }
+
+        const lastLines = logContents.split('\n').filter(Boolean).slice(-10).join('\n   ');
+        console.warn(`   ⚠️  PRD not created after ${maxWaitMs / 1000}s`);
+        if (lastLines) {
+          console.warn(`   📋 Last log output:\n   ${lastLines}`);
+        }
+        console.log(`   💡 Full log: ${logPath}`);
+        console.log(`   💡 Retry: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+      }
+
       console.log('');
     } catch (error) {
-      // Spawn failure is non-blocking - handoff is already recorded
       console.error('⚠️  Could not start PRD generation:', error.message);
       console.log('   💡 Handoff was recorded successfully.');
-      console.log(`   💡 Run manually: node scripts/add-prd-to-database.js ${sdId}`);
+      console.log(`   💡 Run manually: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+    } finally {
+      if (logFd != null) {
+        try { fs.closeSync(logFd); } catch { /* ignore */ }
+      }
     }
   }
 
