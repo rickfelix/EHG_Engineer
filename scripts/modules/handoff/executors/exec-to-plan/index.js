@@ -22,7 +22,8 @@ import {
   createLOCThresholdValidationGate,
   createPerformanceCriticalGate,
   createTestCoverageQualityGate,
-  createIntegrationTestRequirementGate
+  createIntegrationTestRequirementGate,
+  createIntegrationContractGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -142,6 +143,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Integration test requirement gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-E)
     // For complex SDs, checks for non-trivial integration tests in tests/integration/
     gates.push(createIntegrationTestRequirementGate(this.supabase));
+
+    // Integration contract gate (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-2)
+    // Verifies integration_contract items from PRD metadata are present in codebase
+    gates.push(createIntegrationContractGate(this.supabase));
 
     return gates;
   }

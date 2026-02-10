@@ -11,6 +11,9 @@ import { fileURLToPath } from 'url';
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
+// Pipeline Flow Verifier (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
+import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../../../lib/pipeline-flow-verifier.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -448,6 +451,118 @@ export function createPRMergeVerificationGate() {
 }
 
 /**
+ * Create Gate 5: Pipeline Flow Verification for standalone code-producing SDs
+ * Part of SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 (FR-5)
+ *
+ * @returns {Object} Gate definition
+ */
+export function createPipelineFlowGate() {
+  return {
+    name: 'GATE_PIPELINE_FLOW',
+    validator: async (ctx) => {
+      console.log('\n🔄 GATE 5: Pipeline Flow Verification');
+      console.log('-'.repeat(50));
+
+      const sdType = ctx.sd?.sd_type || 'feature';
+
+      // Check if this is a code-producing standalone SD
+      if (!requiresPipelineFlowVerification(sdType)) {
+        console.log(`   SKIPPED: sd_type='${sdType}' does not require pipeline verification`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`Non-code SD type '${sdType}' - pipeline flow not required`],
+          details: { skipped: true, reason: `sd_type=${sdType}` }
+        };
+      }
+
+      // Check if this is an orchestrator (children have their own verification)
+      const isOrchestrator = ctx.sd?.parent_sd_id === null && ctx._childCount > 0;
+      if (isOrchestrator) {
+        console.log('   SKIPPED: Orchestrator SD - verification runs at orchestrator completion');
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: ['Orchestrator SD - pipeline flow runs at orchestrator completion']
+        };
+      }
+
+      try {
+        const report = await verifyPipelineFlow({
+          sdId: ctx.sd?.id || ctx.sdId,
+          stage: 'LEAD-FINAL-APPROVAL',
+          scopePaths: ['lib', 'scripts']
+        });
+
+        if (report.status === 'skipped' || report.status === 'bypassed') {
+          console.log(`   ${report.status.toUpperCase()}: ${report.reasoning_notes?.[0] || 'See report'}`);
+          return {
+            passed: true,
+            score: 80,
+            max_score: 100,
+            issues: [],
+            warnings: [report.reasoning_notes?.[0] || `Pipeline flow ${report.status}`],
+            details: { report }
+          };
+        }
+
+        const coveragePct = ((report.coverage_score || 0) * 100).toFixed(1);
+        const thresholdPct = ((report.threshold_used || 0.6) * 100).toFixed(1);
+
+        if (report.status === 'pass') {
+          console.log(`   ✅ Pipeline flow: ${coveragePct}% coverage (threshold: ${thresholdPct}%)`);
+          return {
+            passed: true,
+            score: Math.round((report.coverage_score || 0) * 100),
+            max_score: 100,
+            issues: [],
+            warnings: [],
+            details: { report }
+          };
+        }
+
+        // Failed
+        console.log(`   ❌ Pipeline flow: ${coveragePct}% BELOW threshold ${thresholdPct}%`);
+        if (report.unreachable_exports?.length > 0) {
+          console.log('   Unreachable exports:');
+          report.unreachable_exports.slice(0, 5).forEach(e =>
+            console.log(`      - ${e.file}:${e.symbol}`)
+          );
+          if (report.unreachable_exports.length > 5) {
+            console.log(`      ... and ${report.unreachable_exports.length - 5} more`);
+          }
+        }
+
+        return {
+          passed: false,
+          score: Math.round((report.coverage_score || 0) * 100),
+          max_score: 100,
+          issues: [`Pipeline coverage ${coveragePct}% is below threshold ${thresholdPct}%`],
+          warnings: [],
+          details: { report }
+        };
+
+      } catch (err) {
+        console.log(`   ⚠️  Pipeline flow verification error: ${err.message}`);
+        return {
+          passed: true,
+          score: 70,
+          max_score: 100,
+          issues: [],
+          warnings: [`Pipeline flow verification error: ${err.message}`],
+          details: { error: err.message }
+        };
+      }
+    },
+    required: false // Advisory initially, becomes required after stabilization
+  };
+}
+
+/**
  * Get all required gates for LEAD-FINAL-APPROVAL
  * @param {Object} supabase - Supabase client
  * @param {Object} prdRepo - PRD repository
@@ -468,6 +583,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createRetrospectiveExistsGate(supabase));
   gates.push(createPRMergeVerificationGate());
 
+  // Pipeline Flow Verification (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
+  // For standalone code-producing SDs
+  gates.push(createPipelineFlowGate());
+
   return gates;
 }
 
@@ -477,5 +596,6 @@ export default {
   createUserStoriesCompleteGate,
   createRetrospectiveExistsGate,
   createPRMergeVerificationGate,
+  createPipelineFlowGate,
   getRequiredGates
 };
