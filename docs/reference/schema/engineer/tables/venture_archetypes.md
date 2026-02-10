@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T17:14:24.341Z
-**Rows**: 8
-**RLS**: Enabled (4 policies)
+**Generated**: 2026-02-10T04:49:18.110Z
+**Rows**: 14
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (22 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,14 +27,34 @@
 | color | `character varying(50)` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| archetype_key | `text` | YES | - | - |
+| detection_keywords | `ARRAY` | YES | `'{}'::text[]` | - |
+| detection_patterns | `jsonb` | YES | - | - |
+| total_ventures | `integer(32)` | YES | `0` | - |
+| graduated_count | `integer(32)` | YES | `0` | - |
+| killed_count | `integer(32)` | YES | `0` | - |
+| avg_completion_stages | `numeric(4,1)` | YES | - | - |
+| common_kill_stages | `ARRAY` | YES | `'{}'::integer[]` | - |
+| common_kill_reasons | `ARRAY` | YES | `'{}'::text[]` | - |
+| recommended_strategies | `jsonb` | YES | `'[]'::jsonb` | - |
+| known_pitfalls | `jsonb` | YES | `'[]'::jsonb` | - |
+| benchmark_metrics | `jsonb` | YES | - | - |
+| is_active | `boolean` | YES | `true` | - |
 
 ## Constraints
 
 ### Primary Key
 - `venture_archetypes_pkey`: PRIMARY KEY (id)
 
+### Unique Constraints
+- `venture_archetypes_archetype_key_key`: UNIQUE (archetype_key)
+
 ## Indexes
 
+- `venture_archetypes_archetype_key_key`
+  ```sql
+  CREATE UNIQUE INDEX venture_archetypes_archetype_key_key ON public.venture_archetypes USING btree (archetype_key)
+  ```
 - `venture_archetypes_pkey`
   ```sql
   CREATE UNIQUE INDEX venture_archetypes_pkey ON public.venture_archetypes USING btree (id)
@@ -62,6 +82,12 @@
 
 - **Roles**: {service_role}
 - **Using**: `true`
+
+### 5. venture_archetypes_service_all (ALL)
+
+- **Roles**: {public}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 

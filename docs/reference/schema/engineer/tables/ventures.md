@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T17:14:24.341Z
+**Generated**: 2026-02-10T04:49:18.110Z
 **Rows**: 6
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (68 total)
+## Columns (74 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -91,6 +91,12 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | vertical_category | `text` | YES | `'other'::text` | Industry vertical for calibration multipliers. Values: healthcare (1.5x), fintech (1.3x), edtech (1.2x), logistics (1.0x), other (1.0x) |
 | raw_chairman_intent | `text` | YES | - | Immutable original Chairman input captured at venture creation. This field should NEVER be modified after initial creation. Use problem_statement for the working/editable version. |
 | problem_statement_locked_at | `timestamp with time zone` | YES | - | Timestamp when the problem_statement was locked (moved from draft to Stage 1). Once set, the raw_chairman_intent should be considered immutable. |
+| moat_strategy | `jsonb` | YES | - | Moat type, compounding mechanism, and portfolio connection from Stage 0 moat architecture step |
+| portfolio_synergy_score | `numeric(3,2)` | YES | - | - |
+| time_horizon_classification | `text` | YES | - | - |
+| build_estimate | `jsonb` | YES | - | - |
+| brief_id | `uuid` | YES | - | - |
+| discovery_strategy | `text` | YES | - | - |
 
 ## Constraints
 
@@ -99,6 +105,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ### Foreign Keys
 - `ventures_archetype_fkey`: archetype → archetype_benchmarks(archetype)
+- `ventures_brief_id_fkey`: brief_id → venture_briefs(id)
 - `ventures_ceo_agent_id_fkey`: ceo_agent_id → agents(id)
 - `ventures_company_id_fkey`: company_id → companies(id)
 - `ventures_portfolio_id_fkey`: portfolio_id → portfolios(id)
@@ -106,6 +113,8 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 ### Check Constraints
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 25)))
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
+- `ventures_portfolio_synergy_score_check`: CHECK (((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric)))
+- `ventures_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
 - `ventures_vertical_category_check`: CHECK ((vertical_category = ANY (ARRAY['healthcare'::text, 'fintech'::text, 'edtech'::text, 'logistics'::text, 'other'::text])))
 
 ## Indexes
