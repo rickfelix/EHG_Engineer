@@ -18,3 +18,4 @@ export { createLOCThresholdValidationGate } from './loc-threshold-validation.js'
 export { createPerformanceCriticalGate } from './performance-critical-gate.js';
 export { createTestCoverageQualityGate } from './test-coverage-quality.js';
 export { createIntegrationTestRequirementGate } from './integration-test-requirement.js';
+export { createIntegrationContractGate } from './integration-contract-gate.js';

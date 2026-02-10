@@ -36,6 +36,9 @@ import {
 // Note: createPRDEntry and updatePRDWithLLMContent are deprecated
 // We now use createPRDWithValidatedContent (generate-first pattern)
 
+// Import integration discovery (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001)
+import { runIntegrationDiscovery, isCodeProducingSdType } from './integration-discovery.js';
+
 // Import external dependencies
 import { autoTriggerStories } from '../modules/auto-trigger-stories.mjs';
 import { getComponentRecommendations, formatForPRD, generateInstallScript } from '../../lib/shadcn-semantic-explainable-selector.js';
@@ -105,6 +108,34 @@ export async function addPRDToDatabase(sdId, prdTitle) {
     const { stakeholderPersonas, personaSource: _personaSource, personaContextBlock } =
       await handlePersonaIngestion(sdData, sdId);
 
+    // Step 0: Integration Discovery (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001)
+    // Scans codebase for barrel exports, routers, registries, validators
+    let integrationContract = null;
+    if (isCodeProducingSdType(sdData.sd_type)) {
+      console.log('\n' + '='.repeat(55));
+      console.log('STEP 0: INTEGRATION DISCOVERY');
+      console.log('='.repeat(55));
+
+      try {
+        const discoveryResult = await runIntegrationDiscovery(sdData, {
+          logger: (msg) => console.log(msg)
+        });
+        if (discoveryResult) {
+          integrationContract = discoveryResult.contract;
+          console.log(`   Cache hit: ${discoveryResult.cache_hit}`);
+        }
+      } catch (discoveryError) {
+        console.error(`   Integration Discovery failed: ${discoveryError.message}`);
+        // FR-1 AC3: Fail PRD generation if discovery fails
+        if (discoveryError.artifact) {
+          console.error(`   Error artifact: ${JSON.stringify(discoveryError.artifact)}`);
+        }
+        process.exit(1);
+      }
+    } else {
+      console.log(`\n   Integration Discovery: SKIPPED (sd_type='${sdData.sd_type}' is not code-producing)`);
+    }
+
     // Execute sub-agent analyses FIRST (before PRD creation)
     // These don't need PRD ID - they analyze the SD
     const designAnalysis = await executeDesignAnalysis(sdId, sdData, personaContextBlock);
@@ -121,6 +152,15 @@ export async function addPRDToDatabase(sdId, prdTitle) {
       riskAnalysis,
       stakeholderPersonas
     });
+
+    // Attach integration contract to LLM content metadata (FR-1)
+    if (integrationContract) {
+      llmContent.metadata = {
+        ...(llmContent.metadata || {}),
+        integration_contract: integrationContract
+      };
+      console.log('   Integration contract attached to PRD metadata');
+    }
 
     // Only create PRD AFTER LLM content is validated (no placeholders)
     let data;

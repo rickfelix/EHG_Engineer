@@ -15,6 +15,7 @@ import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolv
 import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
 import { generateAndEmitSummary, createCollector } from '../session-summary/index.js';
 import { execSync } from 'child_process';
+import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../lib/pipeline-flow-verifier.js';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -736,6 +737,49 @@ export async function executeOrchestratorCompletionHook(
   } catch (auditError) {
     console.warn(`   ⚠️  Completeness audit failed (advisory): ${auditError.message}`);
     hookDetails.completenessAudit = { status: 'ERROR', error: auditError.message };
+  }
+
+  // Pipeline Flow Verification (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-4)
+  // Runs after completeness audit, blocks completion when coverage is below threshold
+  console.log('\n   🔄 Running pipeline flow verification...');
+  try {
+    // Get orchestrator details to check if code-producing
+    const { data: orchSD } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_type')
+      .eq('id', orchestratorId)
+      .single();
+
+    if (orchSD && requiresPipelineFlowVerification(orchSD.sd_type)) {
+      const pipelineReport = await verifyPipelineFlow({
+        sdId: orchestratorId,
+        stage: 'ORCHESTRATOR_COMPLETION',
+        scopePaths: ['lib', 'scripts']
+      });
+
+      hookDetails.pipelineFlow = {
+        status: pipelineReport.status,
+        coverage_score: pipelineReport.coverage_score,
+        threshold: pipelineReport.threshold_used,
+        total_exports: pipelineReport.total_exports,
+        unreachable_count: pipelineReport.unreachable_exports?.length || 0
+      };
+
+      if (pipelineReport.status === 'pass') {
+        console.log(`   ✅ Pipeline flow: ${(pipelineReport.coverage_score * 100).toFixed(1)}% coverage (threshold: ${(pipelineReport.threshold_used * 100).toFixed(1)}%)`);
+      } else if (pipelineReport.status === 'fail') {
+        console.log(`   ⚠️  Pipeline flow: ${(pipelineReport.coverage_score * 100).toFixed(1)}% coverage BELOW threshold ${(pipelineReport.threshold_used * 100).toFixed(1)}%`);
+        console.log(`      Unreachable exports: ${pipelineReport.unreachable_exports?.length || 0}`);
+      } else {
+        console.log(`   ℹ️  Pipeline flow: ${pipelineReport.status}`);
+      }
+    } else {
+      console.log('   ℹ️  Pipeline flow: SKIPPED (non-code-producing orchestrator)');
+      hookDetails.pipelineFlow = { status: 'skipped', reason: 'non-code-producing' };
+    }
+  } catch (pfError) {
+    console.warn(`   ⚠️  Pipeline flow verification failed (advisory): ${pfError.message}`);
+    hookDetails.pipelineFlow = { status: 'error', error: pfError.message };
   }
 
   if (autoProceedResult.autoProceed) {
