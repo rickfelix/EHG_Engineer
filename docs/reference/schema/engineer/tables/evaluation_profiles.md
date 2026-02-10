@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-10T04:49:18.110Z
+**Generated**: 2026-02-10T04:58:07.280Z
 **Rows**: 3
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,7 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_by | `text` | YES | `'system'::text` | - |
+| gate_thresholds | `jsonb` | **NO** | `'{}'::jsonb` | Profile-specific reality gate threshold overrides. Keyed by boundary (e.g. "5->6"), each containing artifact_type → min_quality_score overrides. |
 
 ## Constraints
 
