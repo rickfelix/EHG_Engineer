@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-09T17:14:24.341Z
-**Tables**: 442
+**Generated**: 2026-02-10T04:49:18.110Z
+**Tables**: 450
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (442)
+## All Tables (450)
 
 ### LEO Protocol
 
@@ -210,6 +210,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brand_variants](tables/brand_variants.md)
 - [capital_transactions](tables/capital_transactions.md)
 - [chairman_approval_requests](tables/chairman_approval_requests.md)
+- [chairman_constraints](tables/chairman_constraints.md)
 - [chairman_decisions](tables/chairman_decisions.md)
 - [chairman_directives](tables/chairman_directives.md)
 - [chairman_feedback](tables/chairman_feedback.md)
@@ -253,6 +254,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [debate_sessions](tables/debate_sessions.md)
 - [defect_taxonomy](tables/defect_taxonomy.md)
 - [directive_submissions](tables/directive_submissions.md)
+- [discovery_strategies](tables/discovery_strategies.md)
 - [distribution_channels](tables/distribution_channels.md)
 - [distribution_history](tables/distribution_history.md)
 - [doctrine_constraint_violations](tables/doctrine_constraint_violations.md)
@@ -285,6 +287,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_ventures](tables/eva_ventures.md)
 - [eva_weekly_review_templates](tables/eva_weekly_review_templates.md)
 - [eva_youtube_intake](tables/eva_youtube_intake.md)
+- [evaluation_profiles](tables/evaluation_profiles.md)
 - [exec_authorizations](tables/exec_authorizations.md)
 - [exec_implementation_sessions](tables/exec_implementation_sessions.md)
 - [exec_quality_checkpoints](tables/exec_quality_checkpoints.md)
@@ -328,10 +331,12 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [market_segments](tables/market_segments.md)
 - [marketing_content_queue](tables/marketing_content_queue.md)
 - [model_usage_log](tables/model_usage_log.md)
+- [modeling_requests](tables/modeling_requests.md)
 - [naming_favorites](tables/naming_favorites.md)
 - [naming_suggestions](tables/naming_suggestions.md)
 - [nav_preferences](tables/nav_preferences.md)
 - [nav_routes](tables/nav_routes.md)
+- [nursery_evaluation_log](tables/nursery_evaluation_log.md)
 - [objectives](tables/objectives.md)
 - [operations_audit_log](tables/operations_audit_log.md)
 - [opportunities](tables/opportunities.md)
@@ -464,11 +469,14 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [validation_gate_registry](tables/validation_gate_registry.md)
 - [venture_archetypes](tables/venture_archetypes.md)
 - [venture_artifacts](tables/venture_artifacts.md)
+- [venture_blueprints](tables/venture_blueprints.md)
+- [venture_briefs](tables/venture_briefs.md)
 - [venture_compliance_artifacts](tables/venture_compliance_artifacts.md)
 - [venture_compliance_progress](tables/venture_compliance_progress.md)
 - [venture_decisions](tables/venture_decisions.md)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
+- [venture_nursery](tables/venture_nursery.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
