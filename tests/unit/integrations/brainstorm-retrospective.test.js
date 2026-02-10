@@ -57,7 +57,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
 const {
   recordSession,
   recordQuestionInteractions,
-  updateQuestionEffectiveness,
+  updateQuestionEffectiveness: _updateQuestionEffectiveness,
   getEffectiveQuestions,
   findRelatedSessions,
   completeRetrospective,
@@ -245,7 +245,7 @@ describe('brainstorm-retrospective', () => {
       // For the effectiveness recalc, the interactions query returns empty
       // This happens via from().select().eq() chain where eq resolves
       let eqCallCount = 0;
-      mockEq.mockImplementation((...args) => {
+      mockEq.mockImplementation(() => {
         eqCallCount++;
         // After the update chain completes, subsequent eq() calls are for
         // the effectiveness recalc queries - return resolved empty data
@@ -255,7 +255,7 @@ describe('brainstorm-retrospective', () => {
         return chainable;
       });
 
-      const result = await completeRetrospective('session-1', {
+      await completeRetrospective('session-1', {
         createdSdId: 'SD-LEARN-001',
         qualityScore: 90,
       });
