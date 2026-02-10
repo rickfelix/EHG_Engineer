@@ -46,6 +46,7 @@ export const LIGHTWEIGHT_SD_TYPES = [
 
   // Code-producing but scope-limited SD types
   'bugfix',
+  'fix',       // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-022: 'fix' is database equivalent of bugfix
   'refactor',
   'ux_debt',          // Similar to refactor but for UX
   'implementation'    // Typically follows a pre-defined spec
@@ -188,6 +189,17 @@ const SD_TYPE_POLICY = {
   },
 
   bugfix: {
+    TESTING: RequirementLevel.REQUIRED,        // Must verify fix
+    DESIGN: RequirementLevel.NON_APPLICABLE,   // Usually no design changes
+    GITHUB: RequirementLevel.REQUIRED,
+    DATABASE: RequirementLevel.OPTIONAL,
+    REGRESSION: RequirementLevel.OPTIONAL,
+    DOCMON: RequirementLevel.OPTIONAL,
+    STORIES: RequirementLevel.OPTIONAL
+  },
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-022: 'fix' is the database sd_type equivalent of bugfix
+  fix: {
     TESTING: RequirementLevel.REQUIRED,        // Must verify fix
     DESIGN: RequirementLevel.NON_APPLICABLE,   // Usually no design changes
     GITHUB: RequirementLevel.REQUIRED,

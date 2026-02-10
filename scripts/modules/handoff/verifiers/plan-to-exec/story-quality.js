@@ -37,6 +37,7 @@ export const CATEGORY_THRESHOLDS = {
   // Bugfix stories are targeted fixes, not full feature narratives
   'bugfix': 55,
   'bug_fix': 55,  // Handle underscore variant
+  'fix': 55,      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-022: 'fix' is the database sd_type equivalent of bugfix
 
   // Stricter for data/security work
   'database': 68,
