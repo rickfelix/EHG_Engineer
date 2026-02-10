@@ -573,7 +573,48 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
       console.log(`   ${context.stats.completed}/${context.stats.total} children completed`);
     }
 
-    // Get next ready child
+    // === PARALLEL TEAM CHECK (SD-LEO-FEAT-WIRE-PARALLEL-TEAM-001) ===
+    const parallelEnabled = process.env.ORCH_PARALLEL_CHILDREN_ENABLED === 'true';
+    if (parallelEnabled) {
+      try {
+        const { planParallelExecution } = await import('../parallel-team-spawner.js');
+        const plan = await planParallelExecution(
+          system.supabase,
+          completedSD.parent_sd_id,
+          currentSdId
+        );
+
+        if (plan.mode === 'parallel') {
+          console.log(`\n🔀 PARALLEL EXECUTION: ${plan.readyCount} independent children detected`);
+          console.log(`   Team: ${plan.teamName}`);
+          plan.toStart.forEach(child => {
+            console.log(`   • ${child.sdKey} (${child.sdType}) → ${child.worktreePath}`);
+          });
+          console.log(`   Coordinator state: ${plan.coordinatorStatePath}`);
+
+          // Return parallel plan to Claude Code for team execution
+          return {
+            success: true,
+            parallelExecution: {
+              teamName: plan.teamName,
+              toStart: plan.toStart,
+              coordinatorStatePath: plan.coordinatorStatePath,
+              totalChildren: plan.totalChildren,
+              readyCount: plan.readyCount
+            }
+          };
+        }
+        // mode === 'sequential': fall through to existing logic
+        if (plan.reason) {
+          console.log(`   ℹ️  Parallel check: ${plan.reason} - using sequential path`);
+        }
+      } catch (parallelErr) {
+        console.warn(`   ⚠️  Parallel check failed: ${parallelErr.message} - using sequential path`);
+      }
+    }
+    // === END PARALLEL TEAM CHECK ===
+
+    // Get next ready child (sequential fallback)
     const { sd: nextChild, allComplete, reason } = await getNextReadyChild(
       system.supabase,
       completedSD.parent_sd_id,
