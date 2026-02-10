@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-10T11:36:25.221Z
-**Rows**: 3
+**Generated**: 2026-02-10T12:28:46.954Z
+**Rows**: 9
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -35,10 +35,15 @@
 - `evaluation_profiles_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
+- `evaluation_profiles_name_version_key`: UNIQUE (name, version)
 - `uq_evaluation_profiles_name_version`: UNIQUE (name, version)
 
 ## Indexes
 
+- `evaluation_profiles_name_version_key`
+  ```sql
+  CREATE UNIQUE INDEX evaluation_profiles_name_version_key ON public.evaluation_profiles USING btree (name, version)
+  ```
 - `evaluation_profiles_pkey`
   ```sql
   CREATE UNIQUE INDEX evaluation_profiles_pkey ON public.evaluation_profiles USING btree (id)
