@@ -147,6 +147,11 @@ const NON_ACTIONABLE_SAL_PATTERNS = [
   /execute e2e tests before approval.*mandatory/i,
   /e2e testing is not optional per protocol/i,
   /node scripts\/execute-subagent\.js --code testing/i,
+  // QF-20260210-539: Additional patterns from false positive analysis
+  /test evidence is (?:fresh|recent|up.?to.?date)/i,
+  /\d+ user stories? not fully (?:covered|tested|verified)/i,
+  /capture (?:key )?learnings? (?:from|after)/i,
+  /retrospective (?:quality|completeness) (?:score|at)/i,
 ];
 
 /**
@@ -263,6 +268,34 @@ async function getSubAgentLearnings(limit = TOP_N) {
         confidence: 80,
         metrics: { pass_rate: passRate, fail_count: executions.filter(e => e.verdict === 'FAIL').length }
       });
+    }
+  }
+
+  // QF-20260210-539: Suppress SAL items already linked to active/cancelled SDs
+  // Prevents the same SAL-TESTING-REC from creating SDs repeatedly
+  if (learnings.length > 0) {
+    const { data: existingLearnSDs } = await supabase
+      .from('strategic_directives_v2')
+      .select('metadata, status')
+      .eq('created_by', 'LEARN-Agent')
+      .in('status', ['draft', 'in_progress', 'cancelled']);
+
+    const suppressedSalIds = new Set();
+    for (const sd of (existingLearnSDs || [])) {
+      for (const itemId of (sd.metadata?.source_items || [])) {
+        if (typeof itemId === 'string' && itemId.startsWith('SAL-')) {
+          suppressedSalIds.add(itemId);
+        }
+      }
+    }
+
+    if (suppressedSalIds.size > 0) {
+      const before = learnings.length;
+      const deduped = learnings.filter(l => !suppressedSalIds.has(l.id));
+      if (deduped.length < before) {
+        console.log(`  Filtered ${before - deduped.length} SAL item(s) already linked to existing/cancelled SDs`);
+      }
+      return deduped.slice(0, limit);
     }
   }
 
