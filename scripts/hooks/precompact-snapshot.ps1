@@ -97,3 +97,15 @@ Write-Host "============================================================"
 Write-Host "[WARNING] COMPACTION ABOUT TO OCCUR - Full state preserved"
 Write-Host "[FILE] .claude/unified-session-state.json"
 Write-Host ""
+
+# Signal to context-compact-nudge that compaction occurred
+$FlagDir = Join-Path $env:USERPROFILE ".claude\flags"
+New-Item -ItemType Directory -Force -Path $FlagDir | Out-Null
+
+# Clear the nudge flag (no longer needed - compaction is happening)
+$NudgeFlag = Join-Path $FlagDir "context-compact-needed.json"
+if (Test-Path $NudgeFlag) { Remove-Item $NudgeFlag -Force }
+
+# Write compaction marker so nudge resets its cooldown
+$CompactionMarker = Join-Path $FlagDir "last-compaction.json"
+@{ timestamp = $timestamp; sessionId = $env:CLAUDE_SESSION_ID; trigger = "auto-precompact" } | ConvertTo-Json | Out-File -FilePath $CompactionMarker -Encoding UTF8 -Force
