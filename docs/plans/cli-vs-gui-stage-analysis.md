@@ -1320,7 +1320,64 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus (3/3 agree)**:
+
+1. **Add `analysisStep` for pricing strategy generation (P0)**. All three agree Stage 7 must become an active strategy generator consuming Stages 4-6, not a passive data entry form. Claude: single LLM call with risk-informed pricing rules. OpenAI: optional with human-in-the-loop and multiple proposals. AntiGravity: mandatory, AI proposes tiers based on competitive/financial/risk context. **Decision**: Add `analysisStep` that generates a complete pricing strategy from Stages 4-6 context. Single LLM call producing pricing model, tiers, and unit economics inputs. Risk-informed rules (high risk → conservative pricing).
+
+2. **Add explicit pricing model enum (P0)**. All three agree tier structure alone doesn't describe the monetization mechanic. Claude: 6 models (merge flat/tiered subscription). OpenAI: 7 models (keep flat/tiered separate) + `revenueDriver` field. AntiGravity: 7 models including `enterprise`. **Decision**: Use 6-model enum: `freemium`, `subscription`, `usage_based`, `per_seat`, `transaction_fee`, `hybrid`. Merge flat/tiered subscription (tier count makes it obvious). Add required `modelRationale` string.
+
+3. **ELIMINATE discount policies**. All three rate discounts as Low/2 importance. Go-to-market implementation detail, not venture evaluation. **Decision**: Omit from CLI.
+
+4. **Consume Stage 4 competitive pricing, don't re-analyze**. All three agree Stage 7 should read Stage 4's output, not duplicate competitor analysis. Claude: `stage4PricingContext` carry-through. OpenAI: `competitiveReference` with `positioningDecision` enum. AntiGravity: pipeline consumption model. **Decision**: Add `competitiveContext` object (derived) carrying Stage 4's dominant model, price range, competitive intensity. Add `positioningDecision` enum: `below_market | at_market | premium`.
+
+5. **Add value metrics**. All three agree on adding primary value metric and price anchor. Small schema cost, high strategic payoff for Stage 8 BMC Value Propositions. **Decision**: Add `primaryValueMetric` (string) and `priceAnchor` (string). Drop secondary metrics (minimal value-add).
+
+6. **Preserve CLI's clean unit economics**. All three recognize CLI's LTV/CAC/payback formulas as superior to GUI's projection-based approach. Zero-churn edge case handling, high-churn warning, deterministic computation. **Decision**: Preserve all existing `computeDerived()` logic unchanged.
+
+**2-1 Splits**:
+
+7. **Tier richness** -- AntiGravity (5/Critical) vs Claude (2/Low, ELIMINATE) vs OpenAI (3/Medium, add minimal). AntiGravity argues features/limits are essential for Stage 8 BMC Value Propositions. Claude argues features are product specification for BUILD phase, not venture evaluation. OpenAI adds lightweight `valueProposition`, `keyLimit`, `isPrimaryOffer`. **Decision**: Keep CLI's simple 5-field tier structure. Do NOT add features[], limits{}, or presentation fields. Stage 8 BMC can derive Value Propositions from the venture description + pricing model + value metrics without per-tier feature lists. If AntiGravity is right that Stage 8 needs tier-level detail, it will surface during Stage 8 analysis.
+
+8. **Unit economics reconciliation (Stage 5 vs Stage 7)** -- OpenAI uniquely proposes `baselineRef`, `deltaFromBaseline`, `assumptionOverrides` fields for formal reconciliation tracking. Claude proposes a validation warning when Stage 7 economics are worse than Stage 5 projections. AntiGravity doesn't address reconciliation. **Decision**: Add validation warning comparing Stage 7 LTV:CAC to Stage 5 projections (Claude's approach). Skip formal reconciliation fields (OpenAI's approach adds complexity for a rare edge case in autonomous generation).
+
+**Novel Contributions**:
+
+- **AntiGravity**: Correctly flags that the *current* Stage 4 CLI schema doesn't have pricing fields -- the Stage 4 consensus (adding pricingModel, pricingTiers, pricingSummary per competitor) must be implemented before Stage 7 can consume it. This is a dependency, not a gap.
+- **OpenAI**: `revenueDriver` field (seat/usage/transaction/subscription/hybrid) is redundant with pricing model enum -- the model already implies the driver.
+- **Claude**: Risk-informed pricing rules (overallRiskScore > 70 → conservative pricing, Market risk → competitive pricing, Financial risk → higher margins) provide actionable LLM guidance.
+
+**ELIMINATE (all three agree)**:
+- Discount policies (implementation detail)
+- Chairman override table (existing governance handles this)
+- CTA/presentation fields (UI/marketing concern)
+
+**Recommended Changes (Priority Order)**:
+
+| Priority | Change | Rationale |
+|----------|--------|-----------|
+| P0 | Add `analysisStep` consuming Stages 4-6 | Core gap: Stage 7 is empty without generation |
+| P0 | Add `pricingModel` enum (6 values) + `modelRationale` | Essential for Stage 8 Revenue Streams |
+| P0 | Wire Stage 4/5/6 consumption into analysisStep | Pricing in vacuum is guesswork |
+| P1 | Add `primaryValueMetric` + `priceAnchor` | Feeds Stage 8 Value Propositions |
+| P1 | Add `competitiveContext` + `positioningDecision` | Traceability from Stage 4 |
+| P1 | Add Stage 5 reconciliation warning | Catch pricing that doesn't support financial model |
+| P2 | Risk-informed pricing rules in analysisStep prompt | Better LLM output quality |
+| P3 | Do NOT add tier features/limits | BUILD phase concern |
+| P3 | Do NOT add discount policies | Implementation detail |
+
+**Recommended Schema v2.0.0**:
+```
+pricingModel: enum [freemium, subscription, usage_based, per_seat, transaction_fee, hybrid] (required)
+modelRationale: string, minLength: 20 (required)
+currency: string (required, existing)
+tiers[]: name, price, billing_period, included_units, target_segment (existing, unchanged)
+gross_margin_pct, churn_rate_monthly, cac, arpa (existing, unchanged)
+primaryValueMetric: string (new)
+priceAnchor: string (new)
+competitiveContext: { dominantModel, priceRange, competitiveIntensity, positioningDecision } (new, derived)
+ltv, cac_ltv_ratio, payback_months, warnings (existing derived, unchanged)
+provenance: { dataSource, model, riskInfluence } (new, derived)
+```
 
 ---
 
