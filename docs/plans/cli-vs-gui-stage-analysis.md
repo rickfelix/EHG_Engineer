@@ -1490,7 +1490,59 @@ provenance: { dataSource, model, riskInfluence } (new, derived)
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus (3/3 agree)**:
+
+1. **Add `analysisStep` for BMC generation from Stages 1-7 (P0)**. All three rate this as 5/Critical -- the single highest-leverage change. Neither CLI nor GUI currently generates BMC content. Claude: single LLM call synthesizing all 7 prior stages into 9 blocks with evidence citations. OpenAI: draft generation with human edits allowed. AntiGravity: "Generation-First Workflow" where user reviews/edits rather than starting from blank. **Decision**: Add `analysisStep` that generates a complete 9-block BMC from prior stages. Single LLM call with explicit mapping rules (Stage 7 → Revenue Streams, Stage 6 → Cost Structure, Stage 4 → Value Propositions, Stage 1 → Customer Segments). Every generated item must include text, priority, and evidence.
+
+2. **Preserve CLI's item structure (text + priority + evidence) (P0)**. All three explicitly agree the CLI's structured items are superior to the GUI's plain string arrays. Claude: "analytically superior." OpenAI: "CLI structure as canonical." AntiGravity: "strictly better for identifying Key partners vs trivial ones." **Decision**: Keep text + priority (1-3) + evidence per item. Do NOT regress to string[].
+
+3. **Wire prior stage consumption (P0)**. All three rate this 5/Critical. The GUI passes prior stage data as props but never uses it. The CLI has static cross-links but doesn't consume data. **Decision**: The `analysisStep` must explicitly consume Stages 1-7 data with deterministic mapping rules. Evidence field traces each item back to its source stage.
+
+4. **Keep pass/fail validation, skip completeness scoring**. Claude: "pass/fail is sufficient for LLM-generated content." OpenAI: adds optional readiness score (informational only). AntiGravity: "56% vs 62% is vanity capability." **Decision**: Keep pass/fail via minItems validation. Add `blockCompleteness` metadata (item counts per block) for observability only. No percentage score or threshold.
+
+5. **Add structural validation/recommendations**. All three agree to add validation but disagree on approach. Claude: structural validation rules in `computeDerived()`. OpenAI: minimal rules engine with warnings[] + recommendations[]. AntiGravity: post-generation "Critique" step (like Stage 2's Devil's Advocate). **Decision**: Add cross-block validation warnings in `computeDerived()`: Revenue-Pricing alignment, Cost-Risk alignment, Segment-Market alignment, block balance check. Output as `warnings[]` array. No separate recommendations engine.
+
+6. **Integrate guiding prompts into analysisStep, not schema**. All three agree prompts belong in the LLM prompt, not the data model. **Decision**: Use the GUI's per-block questions as LLM prompt instructions. Don't add prompt fields to the schema.
+
+7. **Keep CLI's min items thresholds**. All three agree CLI's 2 per block (1 for partnerships) is appropriate. **Decision**: No change.
+
+8. **Preserve CLI's cross_links + add dynamic validation**. Static cross-links provide deterministic baseline. Dynamic validation catches contradictions. **Decision**: Keep existing `cross_links` array. Add `warnings[]` for dynamic checks.
+
+**No splits** -- Remarkable 3/3 agreement across all major decisions. The only minor variation is OpenAI's optional readiness score (0-100), which Claude and AntiGravity both reject as unnecessary.
+
+**Novel Contributions**:
+
+- **AntiGravity**: "Post-Generation Critique" pattern -- after BMC generation, run a consistency check as a secondary prompt. Analogous to Stage 2's Devil's Advocate. Interesting but adds a second LLM call; can be folded into the primary analysisStep prompt instead.
+- **OpenAI**: Explicit `readinessScore` with thresholds (>=70 ready, 50-69 flagged, <50 incomplete). Useful for manual entry workflows but unnecessary when LLM generates the full BMC.
+- **Claude**: Detailed Stage-to-Block mapping showing ALL 7 stages feeding into specific blocks (not just 1, 4, 6, 7). Stages 2, 3, and 5 also contribute.
+
+**ELIMINATE (all three agree)**:
+- Visual layout / CSS grid (CLI is data, not presentation)
+- Draft saving (orchestrator handles this)
+- Artifact versioning (platform-level concern)
+- GUI's plain string[] item format (regressive)
+
+**Recommended Changes (Priority Order)**:
+
+| Priority | Change | Rationale |
+|----------|--------|-----------|
+| P0 | Add `analysisStep` generating 9-block BMC from Stages 1-7 | Core gap: Stage 8 is empty without generation |
+| P0 | Wire all prior stage consumption with mapping rules | BMC must synthesize the pipeline, not restart |
+| P0 | Require evidence field on all generated items | Prevents hallucination, enables audit trail |
+| P1 | Add cross-block validation warnings | Revenue-Pricing, Cost-Risk, Segment-Market alignment |
+| P1 | Add `blockCompleteness` and `provenance` metadata | Observability without complexity |
+| P2 | Include GUI's per-block prompts in analysisStep system prompt | Better LLM output quality |
+| P3 | Do NOT add completeness scoring | Pass/fail is sufficient |
+| P3 | Do NOT add recommendations engine | Validation warnings replace it |
+
+**Recommended Schema v2.0.0**:
+```
+9 BMC blocks (unchanged): items[] with { text, priority (1-3), evidence }
+blockCompleteness: { blockName: itemCount } (new, derived)
+warnings: string[] (new, derived) -- cross-block validation
+cross_links: array (existing, unchanged)
+provenance: { dataSource, model, stagesConsumed[] } (new, derived)
+```
 
 ---
 
