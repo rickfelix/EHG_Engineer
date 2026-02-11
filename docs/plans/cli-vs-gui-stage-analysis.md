@@ -475,7 +475,96 @@
 
 ### Synthesis
 
-*Pending external AI responses*
+#### Strong Consensus (All 3 Agree)
+
+1. **CLI Stage 3 needs active metric generation -- Importance 5/5 (Critical).** All three rate this as the #1 gap. Without scores, the kill gate is dead code. No existing infrastructure (DA, DFE) substitutes for primary score generation. Unanimous CLOSE.
+
+2. **Keep CLI's 6-metric structure -- superior to GUI's 3 dimensions.** All three independently conclude the 6-metric model catches failure modes that 3 dimensions average away. AntiGravity: "GUI's 'Technical' lumps Complexity (bad) with Team Capability (good)." OpenAI adds 3 rollups for readability without replacing 6-metric gating.
+
+3. **Hybrid scoring approach with deterministic baseline.** All three agree on a deterministic + AI fusion model. The deterministic component provides reproducibility; the AI component adds nuance. AntiGravity: "Deterministic anchors prevent AI yes-man syndrome."
+
+4. **Devil's Advocate stays separate -- challenger, not scorer.** All three agree DA should challenge the fused result, not participate in score generation. AntiGravity's framing is clearest: "Propose -> Challenge dynamic." Claude: DA at gate boundary is architecturally superior.
+
+5. **Hard kill gate enforcement is superior to GUI's soft gate.** All three prefer `blockProgression=true`. Claude: "fail-closed default." AntiGravity: "Hard gate is better for autonomous pipelines." OpenAI: "Keep hard block behavior for Truth phase integrity."
+
+6. **0-100 integer scale (consistent with Stage 2 consensus).** No dissent. Stage 2 -> Stage 3 pipeline requires consistent scale.
+
+7. **Stage 2 -> Stage 3 formal artifact contract.** All three agree Stage 2 should emit a structured artifact (6 aligned scores + evidence) that Stage 3 consumes and validates. OpenAI and AntiGravity both specify: flag divergences > 20 points between Stage 2 preliminary and Stage 3 validated scores for adversarial review.
+
+8. **Raise per-metric kill threshold from 40.** All three agree 40 is too permissive for "The Truth" phase. (Specific threshold differs -- see disagreements.)
+
+#### Key Disagreements
+
+| Topic | Claude | OpenAI | AntiGravity |
+|-------|--------|--------|-------------|
+| **Deterministic/AI weight** | 60% deterministic / 40% DA | 60% deterministic / 40% AI | **30% deterministic / 70% AI** (matches GUI) |
+| **Per-metric kill threshold** | Keep 40, maybe raise to 50 | **Raise to 50** | **Raise to 60** (matches GUI's 6/10) |
+| **Market data source** | Wire Stage 0 synthesis (no forms, no new services) | **3 sources**: Stage 0 + Stage 2 evidence + Stage 3 questionnaire step | **MarketAssumptions Service** (search agent fills `market_assumptions.json`) |
+| **Competitor extraction** | Not emphasized (deferred to Stage 4) | **CLOSE** (importance 4) -- Stage 4 needs structured intel from Stage 3 | **CLOSE** (importance 4) -- Stage 3 MUST output competitor entities |
+| **3-dimension rollups** | Not mentioned | **Yes** -- add 3 rollups (Market, Technical, Financial) for readability | Not explicitly proposed, but maps GUI 3 dimensions -> CLI 6 metrics |
+| **Confidence scores** | ELIMINATE (trivially derived) | **CLOSE** (importance 3) -- false precision can trigger bad kills | Not addressed |
+| **"Revise" outcome** | Add via DFE (score 50-70) | Add as "conditional hold" if confidence low | Not proposed (prefers raising floor instead) |
+| **AI adjustment bounds** | Not specified | **Max +/-15 per metric** cap on AI adjustments | Not specified |
+
+#### Unique Contributions
+
+**Claude found**:
+- Detailed Stage 0 data point mapping (TAM from `market-sizing`, growth from `time-horizon`, complexity from `build-cost-estimation`) -- most concrete "wire existing data" proposal
+- Chairman Preference Store is PROACTIVE governance (adjusts thresholds before scoring) vs GUI's REACTIVE override (after gate). Proactive is architecturally superior.
+- "Revise" path via DFE for ventures scoring 50-70 reduces false kills without lowering quality bar
+- Financial modeling at Stage 3 is premature -- Stage 7 (Revenue Architecture) does the real financial work
+
+**OpenAI found**:
+- **3 rollup dimensions** (Market, Technical, Financial) computed FROM the 6 metrics -- best of both worlds for gating precision + governance readability
+- **Bounded AI adjustments** (max +/-15 per metric) -- prevents AI from overriding deterministic baseline by too much
+- **Evidence completeness check** -- if < 80% of required fields present, block as "insufficient evidence" before scoring
+- **Confidence per metric** -- explicit confidence scores prevent false precision in kill decisions
+- **Formal Stage 2->3 schema contract** with delta checks and divergence flagging
+
+**AntiGravity found**:
+- **"Assumption Brief" pattern** -- generate `market_assumptions.json` template pre-filled with defaults/inferences, allow chairman review, then execute. Elegant solution for CLI data acquisition.
+- **MarketAssumptions Service** with search agent -- fully autonomous alternative to forms. "Use Search Agent to fill 'The Truth' data."
+- **Explicit input-to-metric mapping**: TAM+Growth -> marketFit, Pain+Clarity -> customerNeed, Price+Margin+CAC+LTV -> revenuePotential, Competitors+Differentiation -> competitiveBarrier, Complexity+Team+Stack -> executionFeasibility. Most concrete derivation rules.
+- **Structured competitor output** for Stage 4 -- Stage 3 MUST produce competitor entities (not just abstract score) because Stage 4 is passive and needs entities to analyze.
+
+#### Resolved Recommendations (Post-Triangulation)
+
+**Metric structure**: Keep 6 metrics as canonical gate inputs (unanimous). Add 3 rollup dimensions for readability (OpenAI's contribution).
+
+**Score generation**: Deterministic-first hybrid. Weight: **50% deterministic / 50% AI** (compromise between Claude/OpenAI's 60/40 and AntiGravity's 30/70). Cap AI adjustments at +/-15 per metric (OpenAI's bound). DA challenges fused result separately.
+
+**Per-metric threshold**: **Raise to 50** (compromise between Claude's 40-50, OpenAI's 50, AntiGravity's 60). 40 is too permissive; 60 may be too aggressive without data to calibrate. 50 provides meaningful floor while allowing tuning from real venture data.
+
+**Market data acquisition**: Layered approach:
+1. Stage 0 synthesis (seed data -- Claude's mapping)
+2. Stage 2 evidence pack (pre-flight signals)
+3. MarketAssumptions Service for gaps (AntiGravity's search agent pattern)
+4. Completeness check before scoring (OpenAI's 80% threshold)
+
+**Competitor extraction**: Stage 3 MUST output structured competitor entities (name, positioning, threat level) for Stage 4 consumption (OpenAI + AntiGravity agree, importance 4). This is a new addition to the Stage 3 schema.
+
+**Kill gate formula**:
+- **Kill**: `overallScore < 70 OR any metric < 50`
+- **Revise** (new): `overallScore >= 50 AND < 70 AND no metric < 50` -- routes back for Stage 2 re-analysis
+- **Pass**: `overallScore >= 70 AND all metrics >= 50`
+- Hard block enforcement preserved (`blockProgression=true`)
+
+**Implementation priority**:
+1. Add `analysisStep` to Stage 3 that loads Stage 2 artifact + Stage 0 data and generates 6 metric scores
+2. Define formal Stage 2->3 artifact schema contract (scores, evidence, confidence, assumptions)
+3. Implement deterministic scorer with AntiGravity's input-to-metric mapping rules
+4. Add AI calibration step with +/-15 bounded adjustments
+5. Add MarketAssumptions Service for autonomous data acquisition
+6. Add structured competitor extraction to Stage 3 output (for Stage 4)
+7. Raise per-metric threshold from 40 to 50
+8. Add "revise" outcome path via DFE
+9. Add 3 rollup dimensions for governance readability
+10. Add confidence scores and evidence completeness checks
+
+**What to NOT build**:
+- Market data input forms (use pipeline data + search agent instead)
+- Chairman override at Stage 3 (CLI's proactive governance is superior)
+- Per-dimension rationales/recommendations (UX concerns for GUI dashboard)
 
 ---
 
