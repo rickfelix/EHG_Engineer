@@ -8,11 +8,12 @@
  *   node scripts/create-quick-fix.js --title "Fix broken button" --type bug --severity high
  *   node scripts/create-quick-fix.js --interactive  (prompts for all fields)
  *
- * Auto-escalates to full SD if:
- * - Estimated LOC > 50
- * - Type is 'feature' (not allowed in quick-fix)
- * - Database schema changes needed
- * - Security/auth changes needed
+ * Tiered routing via Unified Work-Item Router:
+ *   Tier 1 (<=30 LOC): Auto-approve QF, skip compliance rubric
+ *   Tier 2 (31-75 LOC): Standard QF, requires compliance rubric >=70
+ *   Tier 3 (>75 LOC or risk keywords): Escalate to full SD workflow
+ *
+ * Thresholds are database-driven (work_item_thresholds table).
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -21,6 +22,7 @@ import dotenv from 'dotenv';
 import readline from 'readline';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { routeWorkItem } from '../lib/utils/work-item-router.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -152,12 +154,20 @@ async function createQuickFix(options = {}) {
   // Generate ID
   const qfId = generateQuickFixId();
 
-  // Auto-classification check
-  const shouldEscalate = estimatedLoc > 50;
+  // Unified Work-Item Router: determine tier based on LOC + risk keywords
+  const routingDecision = await routeWorkItem({
+    estimatedLoc,
+    type,
+    description,
+    entryPoint: 'create-quick-fix',
+  }, supabase);
 
-  if (shouldEscalate) {
+  console.log(`\n📊 Routing Decision: ${routingDecision.tierLabel} (${estimatedLoc} LOC, threshold: ${routingDecision.thresholdId})`);
+
+  // Tier 3: Escalate to full Strategic Directive
+  if (routingDecision.tier === 3) {
     console.log('\n⚠️  ESCALATION REQUIRED\n');
-    console.log(`Estimated LOC (${estimatedLoc}) exceeds quick-fix threshold (50 LOC)`);
+    console.log(`Reason: ${routingDecision.escalationReason}`);
     console.log('This requires a full Strategic Directive.\n');
     console.log('📋 Next steps:');
     console.log('   1. Create Strategic Directive with LEAD approval');
@@ -179,7 +189,9 @@ async function createQuickFix(options = {}) {
         estimated_loc: estimatedLoc,
         target_application: targetApplication,
         status: 'escalated',
-        escalation_reason: `Estimated LOC (${estimatedLoc}) exceeds 50 line threshold`,
+        escalation_reason: routingDecision.escalationReason,
+        routing_tier: routingDecision.tier,
+        routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
         created_at: new Date().toISOString()
       })
       .select()
@@ -196,7 +208,8 @@ async function createQuickFix(options = {}) {
     return { escalated: true, qfId, data };
   }
 
-  // Create quick-fix record
+  // Tier 1 or Tier 2: Create quick-fix record
+  const qfStatus = routingDecision.tier === 1 ? 'approved' : 'open';
   const { data, error } = await supabase
     .from('quick_fixes')
     .insert({
@@ -210,7 +223,9 @@ async function createQuickFix(options = {}) {
       actual_behavior: actual,
       estimated_loc: estimatedLoc,
       target_application: targetApplication,
-      status: 'open',
+      status: qfStatus,
+      routing_tier: routingDecision.tier,
+      routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
       created_at: new Date().toISOString()
     })
     .select()
@@ -228,6 +243,12 @@ async function createQuickFix(options = {}) {
   console.log(`   Severity: ${severity}`);
   console.log(`   Target App: ${targetApplication}`);
   console.log(`   Estimated LOC: ${estimatedLoc}`);
+  console.log(`   Tier: ${routingDecision.tierLabel}`);
+  if (routingDecision.tier === 1) {
+    console.log('   Compliance: Skipped (Tier 1 auto-approve)');
+  } else {
+    console.log(`   Compliance: Required (min score: ${routingDecision.complianceMinScore})`);
+  }
   console.log(`   Status: ${data.status}\n`);
 
   // Worktree Isolation for Quick-Fix work
@@ -405,11 +426,11 @@ Examples:
   node scripts/create-quick-fix.js --title "Fix save button" --type bug --severity high
   node scripts/create-quick-fix.js --title "Fix typo in header" --type typo --severity low --estimated-loc 1
 
-Auto-Escalation (to full SD):
-  - Estimated LOC > 50
-  - Type is 'feature' (not allowed)
-  - Database schema changes
-  - Security/auth changes
+Tiered Routing:
+  - Tier 1 (<=30 LOC): Auto-approve, skip compliance
+  - Tier 2 (31-75 LOC): Standard QF, compliance >=70
+  - Tier 3 (>75 LOC): Escalate to full SD
+  - Risk keywords (security, auth, schema): Force Tier 3
     `);
     process.exit(0);
   }

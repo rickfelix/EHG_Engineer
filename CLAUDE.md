@@ -531,28 +531,48 @@ This command provides:
 
 ## Work Item Creation Routing
 
-**Before creating any work item, determine the appropriate workflow:**
+**Before creating any work item, the Unified Work-Item Router determines the appropriate workflow tier.**
 
-| Criteria | Use Quick-Fix | Use Strategic Directive |
-|----------|---------------|-------------------------|
-| LOC estimate | ≤50 LOC | >50 LOC |
-| Scope | 1-2 files | Multiple components |
-| DB changes | Data only | Schema changes |
-| Root cause | Clear & obvious | Needs investigation |
-| Planning | Minimal | Full LEAD approval |
+### Tiered Routing (Database-Driven)
+
+| Tier | LOC Range | Workflow | Compliance | LEAD Review |
+|------|-----------|----------|------------|-------------|
+| Tier 1 | <=30 LOC | Auto-approve QF | Skipped | No |
+| Tier 2 | 31-75 LOC | Standard QF | Required (>=70) | No |
+| Tier 3 | >75 LOC | Full SD | N/A | Yes |
+
+Thresholds are stored in work_item_thresholds table and cached for 5 minutes.
+
+### Risk Keyword Escalation (Always Tier 3)
+
+Regardless of LOC, these keywords force Tier 3:
+- **Type**: feature always requires full SD
+- **Security**: auth, authentication, authorization, rls, payments, credentials
+- **Schema**: migration, schema, alter table, create table, drop table
 
 ### Commands
 
 | Workflow | Command | When to Use |
 |----------|---------|-------------|
-| Quick-Fix | `node scripts/create-quick-fix.js --title "<title>" --type bug` | Small bugs, polish, ≤50 LOC |
-| Strategic Directive | `node scripts/leo-create-sd.js LEO bugfix "<title>"` | Features, refactors, complex work |
+| Quick-Fix | node scripts/create-quick-fix.js --title ... --type bug | Tier 1/2 work items |
+| Strategic Directive | node scripts/leo-create-sd.js LEO bugfix ... | Tier 3 work items |
+
+### Routing Module
+
+Central router: lib/utils/work-item-router.js
+- routeWorkItem({ estimatedLoc, type, description, entryPoint }) returns RoutingDecision
+- getActiveThresholds() returns current tier boundaries from DB
+- clearThresholdCache() forces re-fetch after threshold changes
 
 ### Prefix Enforcement
 
-- **QF-*** prefix → Indicates Quick-Fix workflow. `leo-create-sd.js` will warn and redirect.
-- **SD-*** prefix → Strategic Directive workflow (full LEAD→PLAN→EXEC).
-- Use `--force` flag to override QF- prefix warning if intentional.
+- **QF-*** prefix: Router confirms QF scope. leo-create-sd.js will warn and redirect.
+- **SD-*** prefix: Strategic Directive workflow (full LEAD to PLAN to EXEC).
+- Use --force flag to override QF- prefix warning if intentional.
+
+### Audit Trail
+
+Quick-fix records include routing_tier and routing_threshold_id columns for traceability.
 
 ### Pattern Reference
 PAT-WORKFLOW-ROUTING-001: Quick-Fix and SD systems are separate. Route correctly at creation time.
@@ -712,7 +732,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-09 9:04:45 AM
+**Last Generated**: 2026-02-11 9:11:45 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -834,7 +854,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-02-09*
+*Router generated from database: 2026-02-11*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 
