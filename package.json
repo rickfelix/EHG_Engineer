@@ -147,6 +147,7 @@
     "prepare": "husky",
     "postinstall": "node scripts/generate-agent-md-from-db.js || echo 'Agent compilation skipped (missing DB credentials)'",
     "agents:compile": "node scripts/generate-agent-md-from-db.js",
+    "hooks:install": "node scripts/hooks/install-hooks.js",
     "agents:audit": "node scripts/agent-reconciliation-audit.js",
     "prd:new": "node scripts/add-prd-to-database.js",
     "lint": "eslint scripts/ lib/ tools/ --ext .js,.ts",

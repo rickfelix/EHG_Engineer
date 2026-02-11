@@ -1,6 +1,9 @@
 node_modules/
 .env
-.env.local
+.env.*
+!.env.example
+!.env.claude.example
+!.env.project-template
 *.log
 verification-packages/
 .worktrees/
@@ -52,27 +55,50 @@ scripts/create-*-venture-*.mjs
 scripts/delete-orphan-*.mjs
 
 # One-off database/migration scripts (use process scripts instead)
+# Covers .js, .mjs, and .cjs variants
+scripts/add-*.js
+scripts/add-*.cjs
+scripts/analyze-*.cjs
 scripts/apply-*.mjs
 scripts/apply-*.js
 scripts/check-*.mjs
+scripts/check-*.js
+scripts/check-*.cjs
+scripts/cleanup-*.js
 scripts/complete-*.mjs
+scripts/configure-*.sh
+scripts/delete-*.js
 scripts/diagnose-*.mjs
 scripts/execute-*.mjs
+scripts/execute-*.js
 scripts/export-*.mjs
+scripts/fetch-*.js
 scripts/fix-*.mjs
+scripts/fix-*.js
 scripts/get-*.mjs
 scripts/implement-*.mjs
 scripts/insert-*.mjs
 scripts/insert-*.cjs
+scripts/investigate-*.cjs
 scripts/list-*.mjs
+scripts/list-*.cjs
 scripts/migrate-*.mjs
 scripts/query-*.mjs
+scripts/register-*.js
+scripts/remediate-*.js
+scripts/rename-*.js
+scripts/restore-*.js
 scripts/review-*.mjs
+scripts/seed-*.js
+scripts/simple-*.cjs
+scripts/simple-*.js
 scripts/smart-*.mjs
 scripts/stories-*.mjs
 scripts/test-auth-*.mjs
+scripts/test-exec-*.js
 scripts/test-grounding-*.js
 scripts/test-llm-*.js
+scripts/uat-*.js
 scripts/update-*.mjs
 scripts/update-*.js
 scripts/verify-*.mjs
@@ -103,6 +129,10 @@ database/*.json
 # One-off root level scripts
 audit_rls.js
 repro_*.js
+test-pr*.sh
+
+# Archived one-off scripts with hardcoded credentials
+scripts/archived-sd-scripts/
 
 # Root-level session artifacts (never commit)
 /*_APPLIED.md

@@ -79,7 +79,7 @@ SD-VIDEO-VARIANT-001   | Sora 2 Video Variant Testing & Optimization Engine | 0
 
 ```bash
 # From EHG_Engineer root directory
-export SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g"
+export SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"  # Set in your .env file
 node scripts/populate-sd-video-variant-fields.cjs
 ```
 
