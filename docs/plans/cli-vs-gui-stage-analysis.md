@@ -2216,7 +2216,153 @@ The consensus handles all three: 8 channels with $0 allowed (constraint without 
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength**: Strong (3/3 on core architecture, 2/3 on most details)
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Confidence |
+|----------|:------:|:------:|:-----------:|:----------:|
+| Keep CLI deal/funnel stage separation | Y | Y | Y | High |
+| Keep 6-value sales_model enum | Y | Y | Y | High |
+| Add `analysisStep` consuming Stages 5/7/10/11 | Y | Y | Y | High |
+| Enhance Reality Gate beyond count checks | Y | Y | Y | High |
+| Don't duplicate LTV/CAC in Stage 12 | Y | Y (ref only) | Y (split brain risk) | High |
+| Add conversion rates to schema | Y | Y | Y | High |
+| Enrich customer journey beyond touchpoint | Y | Y | Y | High |
+| No upstream dependency conflicts | Y | Y | Y (minor Stage 7 watch) | High |
+
+#### Divergences Resolved
+
+**1. Where to put conversion rates** (deal stages vs funnel stages)
+- Claude: `conversion_rate` on deal_stages (enables per-stage funnel math)
+- OpenAI: `baseline_conversion` + `target_conversion` on funnel_stages
+- AntiGravity: `conversion_rate_estimate` on funnel_stages (enables dynamic target calculation)
+- **Resolution: funnel_stages** (2:1). Funnel stages measure volume flow; deal stages measure workflow progression. Conversion is inherently a volume metric. AntiGravity's insight is key: storing rates on funnel stages enables `Stage N Target = Stage N-1 Target × Rate`, which is more powerful than static targets alone.
+- **Field name**: `conversion_rate_estimate` (signals these are projections, not actuals)
+
+**2. Customer journey enrichment scope**
+- Claude: Add `touchpoint_type` (automated/manual/hybrid)
+- AntiGravity: Add `trigger` + `exit_criteria`
+- OpenAI: Add `trigger_action` + `success_criteria` + `owner`
+- **Resolution**: Add `trigger` (what advances the customer -- 2/3 want it). Add `touchpoint_type` (1/3 but analytically valuable for sales model alignment: self-serve=automated, enterprise=manual). Skip `exit_criteria`/`success_criteria` (execution detail). Skip `owner` (pre-team at IDENTITY phase, AntiGravity correctly calls this premature).
+- **Fields added**: `trigger`, `touchpoint_type` (enum: automated/manual/hybrid)
+
+**3. Success metrics (owner + frequency)**
+- Claude: Don't add (P3, execution tracking)
+- AntiGravity: Ignore (premature at IDENTITY)
+- OpenAI: Add `success_metrics[]` with owner/frequency
+- **Resolution: Don't add** (2:1). At IDENTITY phase, there's no team to assign owners to. Funnel target_values already define success thresholds. Push to Stage 13+ execution planning.
+
+**4. Deal stage enrichment**
+- Claude: No enrichment (just add conversion_rate, resolved above to funnel instead)
+- AntiGravity: Add `mapped_funnel_stage` (link deal stages to funnel stages)
+- OpenAI: Add optional `entry_criteria`, `exit_criteria`, `key_actions`
+- **Resolution**: Add `mapped_funnel_stage` (lightweight traceability, enforces deal→funnel relationship). Skip entry/exit criteria and key_actions (execution detail for IDENTITY phase).
+
+**5. Sales metrics handling**
+- Claude: Add only `avg_deal_size` (new, not captured elsewhere). Cross-reference Stage 5/7 for rest.
+- AntiGravity: Add nothing. AnalysisStep reads from prior stages (split brain risk).
+- OpenAI: Add lightweight `sales_kpis_snapshot` (references, not recomputation)
+- **Resolution**: Add `avg_deal_size` only (Claude's insight: connects pricing ARPA to sales reality with discounts/multi-seat). All other metrics (CAC, LTV, churn) are read from Stages 5/7/11 by the analysisStep. No snapshot object -- the provenance tracking already handles cross-stage references.
+
+**6. Reality Gate enhancement scope**
+- Claude: Add Stage 10 decision status check, Stage 11 non-zero budget channel, Stage 12 conversion rates present
+- AntiGravity: Add coherence check (deal→funnel mapping), velocity check (cycle = sum of durations), **Economy Check** (funnel volume × conversion × price ≥ revenue target)
+- OpenAI: Sales model vs channel mix, cycle vs pricing/CAC, journey covers funnel transitions, named metric owners
+- **Resolution**: Preserve existing count checks. Add:
+  1. **Coherence check**: deal_stages must map to funnel_stages via `mapped_funnel_stage`
+  2. **Velocity check**: `sales_cycle_days` ≈ sum of `deal_stages[].avg_duration_days` (±20% tolerance)
+  3. **Economy Check** (AntiGravity's key contribution): Stage 11 lead volume × Stage 12 conversion rates × Stage 7 price ≥ Stage 5 revenue target. If this fails, the venture identity is mathematically invalid. This is the most impactful Reality Gate enhancement.
+  4. Skip owner/frequency checks (no success metrics added)
+
+#### Contrarian Synthesis
+
+All three raised valid concerns about over-engineering:
+- **Claude**: Sales model enum might lock in too early → Mitigate by having analysisStep propose model with rationale AND flag alternatives
+- **AntiGravity**: Deal stages are premature CRM → Counter: sales cycle length/complexity defines venture DNA, but keep deal stages lightweight (no entry/exit criteria)
+- **OpenAI**: Over-engineering operational detail → Counter: keep generated defaults, require only coherence-critical fields
+
+The synthesis reflects these concerns: minimal new fields, conversion rates on the analytically correct entity (funnel), no execution-time fields (owners, frequencies), and the Economy Check as the only "heavy" addition (but it's derived, not user-input).
+
+#### Consensus Schema (Stage 12 v2.0)
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-12',
+  slug: 'sales-logic',
+  title: 'Sales Logic',
+  version: '2.0.0',
+  schema: {
+    // === Existing (unchanged) ===
+    sales_model: { type: 'enum', values: ['self-serve', 'inside-sales', 'enterprise', 'hybrid', 'marketplace', 'channel'], required: true },
+    sales_cycle_days: { type: 'number', min: 1, required: true },
+
+    // === Updated: deal_stages with mapped_funnel_stage ===
+    deal_stages: {
+      type: 'array', minItems: 3,
+      items: {
+        name: { type: 'string', required: true },
+        description: { type: 'string', required: true },
+        avg_duration_days: { type: 'number', min: 0 },
+        mapped_funnel_stage: { type: 'string' },  // NEW: traceability to funnel
+      },
+    },
+
+    // === Updated: funnel_stages with conversion_rate_estimate ===
+    funnel_stages: {
+      type: 'array', minItems: 4,
+      items: {
+        name: { type: 'string', required: true },
+        metric: { type: 'string', required: true },
+        target_value: { type: 'number', min: 0, required: true },
+        conversion_rate_estimate: { type: 'number', min: 0, max: 1 },  // NEW
+      },
+    },
+
+    // === Updated: customer_journey with trigger + touchpoint_type ===
+    customer_journey: {
+      type: 'array', minItems: 5,
+      items: {
+        step: { type: 'string', required: true },
+        funnel_stage: { type: 'string', required: true },
+        touchpoint: { type: 'string', required: true },
+        touchpoint_type: { type: 'enum', values: ['automated', 'manual', 'hybrid'] },  // NEW
+        trigger: { type: 'string' },  // NEW: what advances the customer
+      },
+    },
+
+    // === NEW ===
+    avg_deal_size: { type: 'number', min: 0 },
+
+    // === Existing derived (enhanced) ===
+    reality_gate: { type: 'object', derived: true },  // Enhanced with coherence, velocity, economy checks
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` for sales logic generation (single LLM call consuming Stages 1-11, producing sales_model with rationale, deal stages, funnel stages, customer journey)
+2. **P0**: Wire sales model selection to prior stages (Stage 7 pricing model + ARPA → model heuristic, Stage 11 channel mix → model refinement)
+3. **P1**: Add `conversion_rate_estimate` to funnel_stages (enables dynamic target calculation and Economy Check)
+4. **P1**: Add `mapped_funnel_stage` to deal_stages (deal→funnel traceability for coherence check)
+5. **P1**: Add `trigger` + `touchpoint_type` to customer_journey
+6. **P1**: Add `avg_deal_size` (new metric not captured in prior stages)
+7. **P2**: Enhance Reality Gate with coherence check, velocity check, and Economy Check
+8. **P3**: Do NOT add success_metrics (execution tracking, not IDENTITY planning)
+9. **P3**: Do NOT add LTV/CAC/churn fields (already in Stage 5/7/11, split brain risk)
+10. **P3**: Do NOT add entry/exit criteria to deal stages (execution detail)
+11. **P3**: Do NOT add KPI snapshot object (provenance tracking handles cross-stage refs)
+
+#### Cross-Stage Impact
+
+| Change | Stage 13 (Product Roadmap) | Stage 15 (Resource Planning) | Broader Pipeline |
+|--------|--------------------------|----------------------------|--------------------|
+| Sales model selection | Product roadmap prioritizes for sales model (self-serve → onboarding UX, enterprise → admin/security) | Staffing: self-serve = few sales reps, enterprise = large sales team | Most impactful identity decision. Affects staffing, product, marketing, financials. |
+| Conversion rates on funnel | Identifies conversion bottlenecks → product features to fix them | Sales enablement resource allocation | Enables end-to-end funnel modeling from marketing spend to revenue |
+| Economy Check (Reality Gate) | Stage 13 only starts if funnel math works | Resource plans based on validated economics | Prevents mathematically invalid ventures from entering BLUEPRINT |
+| Customer journey triggers | `trigger` → feature requirements for Stage 13 product roadmap | Automation vs manual touchpoints → resource allocation | Touchpoint types define automation-human balance for the venture |
 
 ---
 
