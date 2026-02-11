@@ -410,6 +410,33 @@ This step runs automatically via PostToolUse hook - no manual action required.
 
 **Why this matters**: Previously, learnings from documentation fixes, ad-hoc improvements, and polish sessions were lost because they didn't go through the full SD workflow. Now all valuable work contributes to the learning system.
 
+### Step 6.7: Worktree Cleanup (AUTOMATED)
+
+**After a successful merge, if running inside a worktree, clean it up automatically.**
+
+This prevents zombie worktree directories that point at deleted branches.
+
+```bash
+node scripts/modules/shipping/post-merge-worktree-cleanup.js
+```
+
+**If output contains `"cleaned": true`:**
+1. The worktree directory has been removed
+2. `cd` to the `mainRepoPath` from the output to return to the main repo
+3. Run `git checkout main && git pull` from the main repo
+
+**If output contains `"cleaned": false`:**
+- No action needed (not inside a worktree)
+- Continue to Step 7
+
+**Example outputs:**
+```json
+{"cleaned":true,"mainRepoPath":"C:/Users/rickf/Projects/_EHG/EHG_Engineer","workKey":"QF-20260211-001"}
+{"cleaned":false,"reason":"not_in_worktree"}
+```
+
+**Note:** The existing LEAD-FINAL-APPROVAL cleanup is kept as a safety net. It is idempotent — if this step already cleaned up, it reports "worktree_not_found" and moves on.
+
 ### Step 7: Post-Merge Command Ecosystem (NEW)
 
 **After a successful merge, present contextual suggestions using AskUserQuestion:**
