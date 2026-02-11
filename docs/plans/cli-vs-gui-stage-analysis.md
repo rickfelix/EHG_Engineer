@@ -355,7 +355,127 @@
 
 ## Stage 3: Market Validation & RAT
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-03.js`
+**Type**: Passive validation with **KILL GATE** (NO analysisSteps)
+
+**Schema** (6 metrics + 4 derived fields):
+| Field | Type | Range | Required | Derived |
+|-------|------|-------|----------|---------|
+| `marketFit` | integer | 0-100 | Yes | No |
+| `customerNeed` | integer | 0-100 | Yes | No |
+| `momentum` | integer | 0-100 | Yes | No |
+| `revenuePotential` | integer | 0-100 | Yes | No |
+| `competitiveBarrier` | integer | 0-100 | Yes | No |
+| `executionFeasibility` | integer | 0-100 | Yes | No |
+| `overallScore` | integer | 0-100 | -- | Yes (average of 6 metrics) |
+| `decision` | enum | pass/kill | -- | Yes |
+| `blockProgression` | boolean | -- | -- | Yes |
+| `reasons` | array | -- | -- | Yes (kill gate violation details) |
+
+**Kill Gate Logic** (`evaluateKillGate()` -- exported pure function):
+- `overallScore < 70` -> KILL (overall below threshold)
+- Any single metric `< 40` -> KILL (metric below per-metric threshold)
+- Both conditions checked independently; either triggers kill
+- Kill reasons are structured objects with type, metric, message, threshold, actual
+
+**Processing**:
+- `validate(data)`: Checks all 6 metrics are integers 0-100
+- `computeDerived(data)`: Calculates `overallScore = Math.round(sum / 6)`, then runs `evaluateKillGate()`
+- No `analysisSteps` -- template is purely passive
+- **Does NOT generate metrics** -- expects them to already exist (same pattern as Stage 2)
+
+**Score scale**: 0-100 (integer)
+
+**Critical observation**: Like Stage 2, the CLI Stage 3 is a passive container. It validates and applies the kill gate formula but has zero capability to generate the 6 metric scores. The scores must come from somewhere upstream or from DB-defined `analysisSteps`.
+
+**Orchestrator flow**:
+1. Load venture context + chairman preferences
+2. Execute analysisSteps (empty in hardcoded template)
+3. Merge artifact outputs
+4. **Run stage gates -- KILL GATE enforced here**
+5. Run Decision Filter Engine
+6. Persist artifacts
+7. If decision=kill, block progression; if pass, advance to Stage 4
+
+**Infrastructure at Stage 3 boundary**:
+- Devil's Advocate runs at Stage 3 (one of the configured gate stages: 3, 5, 13, 23)
+- Decision Filter Engine evaluates cost, tech, score, patterns, constraint drift
+- Reality gates may apply
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: EHG frontend code (`src/components/stages/Stage3ComprehensiveValidation.tsx` [legacy], `src/components/stages/v2/Stage03ComprehensiveValidation.tsx` [v2], `src/hooks/comprehensive_validation/service.ts`, edge function `comprehensive-validation`)
+
+**Two parallel systems exist**:
+1. **Legacy** (`Stage3ComprehensiveValidation.tsx`): Form-based input + AI scoring
+2. **V2** (`Stage03ComprehensiveValidation.tsx`): Read-only metrics viewer (appears primary)
+
+**GUI Stage 3 -- "Comprehensive Validation"** (hybrid: deterministic + AI):
+
+**Input Form** (4 tabs):
+
+| Tab | Fields | Defaults |
+|-----|--------|----------|
+| Market Analysis | TAM (USD, default $10M), Annual Growth Rate (%, default 15%), 3 Key Competitors (name/URL/positioning), Problem Clarity (derived from Stage 2) | -- |
+| Technical Assessment | Complexity Points (0-100, default 40), Team Capability (0-2, default 1.5), Integration Risk (0-2, default 1), Target Stack (array, default: React/TS/Supabase) | -- |
+| Financial Modeling | Monthly Price ($, default $99), Gross Margin (%, default 80%), CAC ($, default $250), LTV Months (default 24), LTV/CAC Min Ratio (default 3x) | -- |
+| Customer Intelligence | Dynamically loaded from venture data | -- |
+
+**Scoring approach -- Hybrid (30% deterministic + 70% GPT-4)**:
+
+1. **Deterministic baseline (30% weight)**:
+   - Market: TAM >= $1M (+3), Growth >= 5% (+2), Competitors <= 12 (+2), Problem Clarity 0-2 (+0-2) = 1-10 scale
+   - Technical: Complexity <= 80pts (+3), Integration Risk <= 2 (+2), Team 0-2 (+0-2), Stack defined (+1) = 1-10 scale
+   - Financial: GM >= 50% (+3), LTV/CAC >= 3 (+3), Payback <= 18mo (+2) = 1-10 scale
+
+2. **AI enhancement (70% weight)**:
+   - GPT-4 call with temperature 0.3 (low variance)
+   - Returns enhanced scores (1-10), rationales, blockers, recommendations per dimension
+   - Max tokens: 1500
+
+3. **Fusion**: `final_score = (baseline * 0.30) + (ai_score * 0.70)`
+
+**Output schema**:
+| Field | Type | Scale | Description |
+|-------|------|-------|-------------|
+| `dimensions[].key` | enum | -- | market / technical / financial |
+| `dimensions[].score` | number | 1-10 | Fused score |
+| `dimensions[].pass` | boolean | -- | >= 6 threshold |
+| `dimensions[].rationale` | string | -- | 2-4 sentence justification |
+| `dimensions[].blockers` | array | -- | Max 5 blocking issues |
+| `dimensions[].recommendations` | array | -- | Max 5 actionable items |
+| `overall` | number | 1-10 | Average of 3 dimensions |
+| `kpiThresholdsMet` | boolean | -- | All dimensions >= 6 |
+| `decision` | enum | -- | advance / revise / reject |
+
+**Kill gate logic (GUI)**:
+- `overall >= 7 AND each dimension >= 6` -> advance
+- `overall >= 5 but failed dimension threshold` -> revise
+- `overall < 5` -> reject
+- Chairman can override any decision with rationale + voice notes
+
+**Stage 2 consumption**: Weak -- only `problemClarity = Math.min(2, reviewData.overallScore / 5)`. No direct Stage 2 data object passed.
+
+**Score scale**: 1-10 per dimension, 0-100% for display
+
+**Database tables**:
+- Writes: `validations` (main results), `validation_reports` (enhanced framework), `chairman_overrides` (optional)
+- Reads: `user_company_access`, venture data
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-03-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-03-claude.md`
+- OpenAI: `docs/plans/responses/stage-03-openai.md`
+- AntiGravity: `docs/plans/responses/stage-03-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
