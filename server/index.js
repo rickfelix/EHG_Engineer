@@ -20,6 +20,8 @@ import http from 'http';
 import path from 'path';
 // fs removed - no longer used in main entry point
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import chokidar from 'chokidar';
 
 // Import configuration and services
@@ -94,6 +96,30 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
+// Security headers (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-E)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", 'ws://localhost:*', 'wss://localhost:*'],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow cross-origin API calls from frontend
+}));
+
+// Rate limiting (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-E)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute per IP
+  standardHeaders: true, // Return rate limit info in RateLimit-* headers
+  legacyHeaders: false,
+  message: { error: 'Too many requests', message: 'Rate limit exceeded. Try again later.', code: 'RATE_LIMITED' },
+});
+app.use('/api', apiLimiter);
+
 app.use(express.json());
 
 // =============================================================================

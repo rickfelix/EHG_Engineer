@@ -45,7 +45,7 @@ async function main() {
   if (!match) {
     throw new Error('Could not find AGENT_KEYWORDS in scorer file');
   }
-  const currentKeywords = eval('(' + match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '') + ')');
+  const currentKeywords = new Function('return (' + match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '') + ')')();
   console.log(`   Found ${Object.keys(currentKeywords).length} agents in scorer file`);
 
   // Step 2: Get triggers from database table

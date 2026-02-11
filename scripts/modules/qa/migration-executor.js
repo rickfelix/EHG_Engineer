@@ -113,11 +113,9 @@ export async function executeViaPSQL(migrationFile, targetApp = 'ehg') {
   }
 
   try {
-    // Read migration SQL
-    const sqlContent = await readFile(migrationFile.filepath, 'utf8');
-
-    // Execute via psql
-    execSync(`psql "${poolerUrl}" -c "${sqlContent}"`, {
+    // Execute via psql using -f (file-based) to avoid shell injection
+    // Previously used -c with interpolated SQL content, which allowed shell metacharacter injection
+    execSync(`psql "${poolerUrl}" -f "${migrationFile.filepath}"`, {
       encoding: 'utf8',
       stdio: 'pipe'
     });

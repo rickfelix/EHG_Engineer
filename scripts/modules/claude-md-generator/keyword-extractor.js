@@ -40,9 +40,8 @@ export function extractKeywordsFromScorer() {
       return {};
     }
 
-    // Evaluate the object (safe because we control the source file)
-    // eslint-disable-next-line no-eval
-    const keywords = eval(`(${match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '')})`);
+    // Parse the object using Function constructor (safer than eval - no local scope access)
+    const keywords = new Function(`return (${match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '')})`)();
 
     return keywords;
   } catch (error) {
