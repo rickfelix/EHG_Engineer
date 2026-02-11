@@ -1857,7 +1857,84 @@ The consensus architecture balances these risks: structured enough for downstrea
 
 ### Synthesis
 
-*Pending external AI responses*
+**Agreement: 3/3 on core architecture, meaningful divergence on brand genome expansion and decision gates.** Stage 10 produced the first real debate in the analysis -- how much "brand strategy" belongs in the naming stage.
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Consensus |
+|----------|--------|--------|-------------|-----------|
+| Add `analysisStep` consuming Stages 1-9 | Yes (P0) | Yes (priority 1) | Yes (priority 4, but agreed) | **Add single analysisStep generating brand genome + name candidates from prior stages** |
+| Stage mapping: CLI is correct | Technical review belongs in Stage 14 | No tech review contamination | Correctly out-of-scope for Identity | **CLI's "Naming/Brand" scope is correct. GUI's technical review at Stage 10 is a design error.** |
+| Preserve flexible weighted scoring | Keep user-defined criteria | Keep flexible + add defaults | Keep CLI scoring, add hybrid | **Keep fully flexible scoring with weights summing to 100** |
+| Defer full visual identity | Defer to BUILD | Defer, add visual_direction only | Defer, add visual_direction only | **Defer full visual identity. Optional visual_direction string at most.** |
+| Defer live domain/trademark checking | Defer live checks | Defer real checks | Defer automated checks | **No live checking at IDENTITY phase** |
+| Exit strategy informs brand positioning | buyer_type → brand tone | exit_type/buyer_type → naming strategy | Exit Strategy as Brand Editor | **Stage 9 buyer_type and exit_type must flow into analysisStep as brand conditioning** |
+| No dependency conflicts | None blocking | Wiring/contract tasks only | Stage 1 sparseness risk, Stage 9 gate check | **No blocking conflicts** |
+
+#### Divergence Points
+
+| Topic | Claude | OpenAI | AntiGravity | Resolution |
+|-------|--------|--------|-------------|------------|
+| **Brand genome expansion** | Add optional `positioning_statement` only. Vision/mission are premature. | Add narrative extension (vision/mission/voice/messages/position) as separate layer. | Restructure into Identity/Purpose/Expression/Market subgroups with vision + mission. | **Add narrative extension as optional layer.** OpenAI's core+narrative split is the right balance. Keep existing 5-key genome as `core`, add `narrative` (vision, mission, brand_voice, key_messages[]) as optional fields populated by analysisStep. Don't restructure the existing schema -- extend it. |
+| **Decision output** | Ranking IS the decision. ADVANCE/REVISE/REJECT adds complexity without clarity. | Add soft decision signal (ADVANCE/REVISE). | Need decision field + "Working Title" status. | **Add soft `decision` object.** Claude's point about ranking-as-decision is valid, but Stage 11 needs a clear signal: "Is naming complete or does it need more work?" Use `status: approved | revise | working_title` -- AntiGravity's "working_title" option handles the contrarian case well. |
+| **Domain/trademark schema** | Defer entirely (trademark) / heuristic suggestions only (domain) | Add placeholder fields (not_checked status) | Include as schema with unknown/available/taken statuses | **Add placeholder fields with `not_checked` default.** OpenAI/AntiGravity are right that the schema should support storing results even if checking is deferred. Claude's point about false confidence is valid -- status defaults to `not_checked`. |
+| **Candidate count** | Generate 7-10 | Generate 12-20, shortlist to 5-8 | Generate 10, curate to 5 | **Generate 8-12, shortlist to 5+.** 20 is excessive; 7 is tight. 8-12 gives diversity without noise. Keep minItems: 5 for the final shortlist. |
+| **Candidate metadata** | naming_approach enum (6 values) + domain_suggestions | strategy_cluster + semantic_tags[] + risks[] | origin + risks + availability object | **Add naming_strategy enum + risks[].** All three want some kind of naming approach classification. Claude's 6-value enum (portmanteau, metaphor, acronym, invented, real_word, compound) is the cleanest. Add `risks[]` per OpenAI/AntiGravity for negative connotation flags. Drop semantic_tags (redundant with rationale). |
+| **Default scoring criteria** | Suggest defaults based on venture type (B2B vs B2C) | Provide editable default rubric (6 criteria) | Hybrid: mandatory validity + custom criteria | **Provide suggested defaults, keep fully flexible.** The analysisStep should propose criteria and weights based on venture type. Users accept or customize. Don't make any criteria mandatory -- that removes the CLI's flexibility advantage. |
+| **Contrarian focus** | naming_approach and domain_suggestions may be unnecessary noise | Over-engineering identity too early, analysis theater | The name doesn't matter yet, use working title | **AntiGravity's contrarian is the strongest.** The "working_title" concept is pragmatic -- ventures may pivot. The `decision.status = working_title` option addresses this without deferring naming entirely. |
+
+#### Stage 10 Consensus Schema
+
+```
+brandGenome: object (required)
+  .archetype: string (required) -- existing
+  .values: array (minItems: 1) -- existing
+  .tone: string (required) -- existing
+  .audience: string (required) -- existing
+  .differentiators: array (minItems: 1) -- existing
+  .positioning_statement: string (optional, NEW)
+  .narrative: object (optional, NEW -- populated by analysisStep)
+    .vision: string
+    .mission: string
+    .brand_voice: string
+    .key_messages: array
+
+scoringCriteria[]: array (minItems: 1, weights sum to 100) -- existing, unchanged
+
+candidates[]: array (minItems: 5)
+  .name: string (required) -- existing
+  .rationale: string (required) -- existing
+  .naming_strategy: enum [portmanteau, metaphor, acronym, invented, real_word, compound] (NEW, optional)
+  .risks: array (NEW, optional -- negative connotation flags)
+  .availability: object (NEW, optional)
+    .domain_status: enum [not_checked, available, taken] (default: not_checked)
+    .trademark_status: enum [not_checked, clear, conflict, unknown] (default: not_checked)
+    .notes: string
+  .scores: object (required) -- existing
+  .weighted_score: number (derived) -- existing
+
+ranked_candidates: array (derived) -- existing, unchanged
+
+decision: object (NEW)
+  .selected_name: string
+  .status: enum [approved, revise, working_title]
+  .rationale: string
+
+provenance: object (derived, NEW)
+```
+
+**Changes from CLI v1**: (1) Added optional narrative extension to brandGenome, (2) Added positioning_statement, (3) Added naming_strategy enum to candidates, (4) Added risks[] per candidate, (5) Added availability placeholder per candidate, (6) Added decision object with working_title option, (7) Added provenance tracking. All existing fields preserved unchanged.
+
+**Eliminated from GUI**: Cultural design styles (5 presets → defer), full visual identity system, technical review content (→ Stage 14), AI readiness assessment, improvement plans, dedicated brand/naming database tables.
+
+#### Contrarian Synthesis
+
+The three contrarian takes form a coherent argument:
+- **Naming approach is retrospective** (Claude): Classification doesn't help users decide. But it does help users verify diversity of options.
+- **Over-engineering identity** (OpenAI): Risk of "analysis theater" before market traction. Mitigated by keeping the schema lean and most additions optional.
+- **The name doesn't matter yet** (AntiGravity): The strongest argument. Ventures pivot. The `working_title` status is the elegant solution -- it acknowledges that naming is important for Stage 11 GTM but may change.
+
+The consensus architecture handles this: the `decision.status = working_title` option lets ventures proceed with a provisional name without pretending it's final.
 
 ---
 
