@@ -2458,7 +2458,153 @@ The GUI's planned Blueprint was developer-centric (tech stack → data model →
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength**: Strong (3/3 on core decisions, interesting divergence on prioritization)
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Confidence |
+|----------|:------:|:------:|:-----------:|:----------:|
+| Add `analysisStep` consuming Stages 7/10/11/12 | Y | Y | Y | High |
+| Sales model → roadmap alignment (warn on mismatch) | Y | Y | Y | High |
+| Keep flat dependency array (no DAG) | Y | Y | Y | High |
+| No full RICE/MoSCoW scoring | Y | Y | Y | High |
+| Enhance kill gate beyond structural checks | Y | Y | Y | High |
+| Link milestones to phases (phase_ref) | Y | Y | Y | High |
+| No upstream dependency conflicts | Y | Y | Y | High |
+| Defer detailed resource estimation to Stage 15 | Y (explicit) | Partial (wants S/M/L bands) | Y (explicit) | High |
+
+#### Divergences Resolved
+
+**1. Feature prioritization: explicit tiers vs timeline-as-priority**
+- Claude: P0/P1/P2 on milestones AND deliverables
+- AntiGravity: SKIP -- "Date is priority in a roadmap. If it's Month 1, it's P0."
+- OpenAI: now/next/later bands + confidence
+- **Resolution: Add priority on milestones only** (2:1 for some priority signal). AntiGravity's insight that timeline implies priority is valid, but Claude and OpenAI correctly note that Stage 14 needs an explicit signal about what to architect first -- two milestones could share the same date but have different criticality. Use `now/next/later` (OpenAI's framing, equivalent to P0/P1/P2 but reads more naturally for roadmaps). Skip per-deliverable priority (AntiGravity's simplicity argument wins here).
+
+**2. Deliverable typing: on deliverables vs on milestones**
+- Claude: Type enum on deliverables (feature/infrastructure/integration/content)
+- AntiGravity: Keep deliverables as strings. Add type to MILESTONE instead (release/validation/infrastructure/compliance). "Detailed ticket typing belongs in Jira/Linear."
+- OpenAI: Lightweight enum on deliverables (feature/integration/infrastructure/compliance)
+- **Resolution: Type on deliverables** (2:1, Claude + OpenAI). But make it optional -- the analysisStep assigns types, users don't have to. AntiGravity's milestone-level typing is a different dimension (what kind of milestone) which is also valuable. Add BOTH: `milestone.type` (release/validation/infrastructure/compliance) AND `deliverable.type` (feature/infrastructure/integration/content) -- both optional, both set by analysisStep.
+
+**3. Milestone outcomes / alignment tags**
+- Claude: No explicit outcomes field
+- AntiGravity: Add `outcomes[]` string array linking milestones to business results (e.g., "Hit 50% retention")
+- OpenAI: Add `alignment_tags[]` and `expected_outcome` (activation/revenue/retention/compliance)
+- **Resolution: Add `outcomes[]`** (2:1, AntiGravity + OpenAI). Simple string array linking milestones back to Stage 3 validation metrics and Stage 5 economics. Lightweight and valuable -- forces the roadmap to connect to business reality. Skip OpenAI's `alignment_tags` (overlaps with outcomes).
+
+**4. Effort estimation**
+- Claude: Don't add (Stage 15's job)
+- AntiGravity: Don't add (Stage 15/16's job)
+- OpenAI: Add coarse effort bands (S/M/L) per milestone
+- **Resolution: Don't add** (2:1). Stage 13 = WHAT and WHEN. Stage 15 = WHO and HOW MUCH. Clean separation of concerns. If Stage 15 needs a seed, it can infer from milestone scope.
+
+**5. Phase goal/purpose field**
+- Claude: No goal field
+- AntiGravity: Add `goal` to phases ("What is the purpose of this phase?")
+- OpenAI: Keep phases simple (name/start/end only)
+- **Resolution: Add `goal`** (optional). AntiGravity's single-string field adds meaningful context with zero complexity cost. A phase named "Foundation" with goal "Validate core hypothesis and achieve first paying customer" is materially more useful than just "Foundation" alone.
+
+**6. Kill gate enhancement specifics**
+- Claude: P0 coverage, sales model alignment warnings, vision coherence, min 8 deliverables
+- AntiGravity: Density check (timeline > 6mo with only 3 milestones), metrics/analytics mention check. Rely on AI critique for content quality.
+- OpenAI: Hard fail on sales-model-critical deliverables, dependency cycle, no phase assignment, no customer value in first half. Soft fail on infra-heavy, pricing not reflected, GTM unsupported.
+- **Resolution**: Keep existing hard kills (structural). Add:
+  1. **Density check** (AntiGravity): If timeline_months > 6 and milestone_count < 4, warn (too sparse)
+  2. **Customer value check** (OpenAI): At least one milestone in the first half of timeline must contain a feature-type deliverable (not all infrastructure)
+  3. **Sales model coherence** (all three): Warning if sales_model requires capabilities not present in any deliverable
+  4. **Phase integrity** (AntiGravity + OpenAI): All milestone dates must fall within their referenced phase range
+  5. Skip vision-coherence fuzzy matching (too subjective for deterministic gate)
+
+#### Contrarian Synthesis
+
+All three raised complementary concerns:
+- **Claude**: Typed deliverables and priority may be "categorization theater" → Mitigate by making types optional, set by analysisStep
+- **AntiGravity**: "The Roadmap is a Lie" -- any plan beyond 3 months is fiction → Mitigate by treating later phases as low-resolution hypotheses. The kill gate ensures a plan exists, not that it's correct.
+- **OpenAI**: "Rich PM machinery" is over-engineering → Mitigate by keeping schema lean, using lightweight enums
+
+The synthesis reflects all three concerns: optional typing, implicit timeline priority supplemented by simple bands, outcomes connecting to business reality rather than process theater.
+
+#### Consensus Schema (Stage 13 v2.0)
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-13',
+  slug: 'product-roadmap',
+  title: 'Product Roadmap',
+  version: '2.0.0',
+  schema: {
+    // === Existing (unchanged) ===
+    vision_statement: { type: 'string', minLength: 20, required: true },
+
+    // === Updated: phases with goal ===
+    phases: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        start_date: { type: 'string', required: true },
+        end_date: { type: 'string', required: true },
+        goal: { type: 'string' },  // NEW: purpose of this phase
+      },
+    },
+
+    // === Updated: milestones with priority, type, phase_ref, outcomes ===
+    milestones: {
+      type: 'array', minItems: 3,
+      items: {
+        name: { type: 'string', required: true },
+        date: { type: 'string', required: true },
+        phase_ref: { type: 'string' },  // NEW: references phases[].name
+        type: { type: 'enum', values: ['release', 'validation', 'infrastructure', 'compliance'] },  // NEW
+        priority: { type: 'enum', values: ['now', 'next', 'later'] },  // NEW
+        deliverables: {
+          type: 'array', minItems: 1,
+          items: {
+            name: { type: 'string', required: true },
+            type: { type: 'enum', values: ['feature', 'infrastructure', 'integration', 'content'] },  // NEW (optional)
+          },
+        },
+        dependencies: { type: 'array' },  // Keep flat (milestone names)
+        outcomes: { type: 'array', items: { type: 'string' } },  // NEW: business results
+      },
+    },
+
+    // === Existing derived (enhanced) ===
+    timeline_months: { type: 'number', derived: true },
+    milestone_count: { type: 'number', derived: true },
+    decision: { type: 'enum', values: ['pass', 'kill'], derived: true },
+    blockProgression: { type: 'boolean', derived: true },
+    reasons: { type: 'array', derived: true },
+    warnings: { type: 'array', derived: true },  // NEW: quality warnings (non-blocking)
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` for roadmap generation (single LLM call consuming Stages 1-12, producing vision, milestones with typed deliverables, phases with goals, outcomes linking to Stage 3/5 metrics)
+2. **P0**: Wire sales_model → feature generation (Stage 12 sales_model determines mandatory capability themes in deliverables)
+3. **P1**: Add `priority` (now/next/later) to milestones. Enables Stage 14 architecture prioritization and kill gate quality checks.
+4. **P1**: Add `type` to milestones (release/validation/infrastructure/compliance) and optional `type` to deliverables (feature/infrastructure/integration/content)
+5. **P1**: Add `phase_ref` to milestones + `goal` to phases. Links milestones to phases with purpose.
+6. **P1**: Add `outcomes[]` to milestones. Connects roadmap to business metrics (Stage 3/5).
+7. **P2**: Enhance kill gate with density check, customer value check, sales model coherence, phase integrity. Warnings only (not hard kills) except phase integrity.
+8. **P3**: Do NOT add effort/resource bands (Stage 15's job)
+9. **P3**: Do NOT add RICE/MoSCoW scoring (false precision at BLUEPRINT)
+10. **P3**: Do NOT add dependency DAG (flat array sufficient)
+
+#### Cross-Stage Impact
+
+| Change | Stage 14 (Technical Architecture) | Stage 15 (Resource Planning) | Stage 16 (Financial Projections) |
+|--------|----------------------------------|----------------------------|---------------------------------|
+| Typed deliverables | Architecture maps to deliverable types (features → app arch, infrastructure → DevOps, integrations → API design) | Resource allocation by category (infrastructure ≠ feature skills) | Cost estimation by deliverable type |
+| Milestone priority (now/next/later) | Architect for "now" milestones first | Allocate resources to "now" priority | Revenue projections weighted by priority ordering |
+| Sales model alignment | Architecture aligned to sales model (self-serve → scalable frontend, enterprise → security-first) | Team composition matches model | Revenue model tied to sales model |
+| Outcomes | Architecture supports measurable outcomes (analytics, metrics instrumentation) | Resource allocation tied to outcome importance | Financial projections connected to business outcomes |
+| Phase goals | Architecture can be phased (Foundation → Growth → Scale) | Resource ramp-up follows phases | Burn rate projections per phase |
 
 ---
 
