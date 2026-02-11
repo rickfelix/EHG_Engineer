@@ -1,430 +1,370 @@
 /**
  * Parallel Team Spawner
- * SD-LEO-FEAT-WIRE-PARALLEL-TEAM-001
+ * SD-LEO-FEAT-WIRE-PARALLEL-TEAM-001 (FR-1..FR-6, TR-1..TR-3)
  *
- * Bridge between ParallelCoordinator, AgentExperienceFactory, worktree manager,
- * and Claude Code's team tools. Node.js computes the schedule and returns
- * structured instructions; Claude Code executes team operations.
+ * Bridge module that plans parallel execution for orchestrator children.
+ * Composes: child-sd-selector + worktree-manager + AEF + coordinator state.
  *
- * Exports:
- *   planParallelExecution(supabase, parentSdId, completedChildId)
- *   onChildComplete(coordinatorStatePath, childId, status, details)
- *   buildTeammatePrompt(supabase, childSD, worktreePath)
- *   getCoordinatorState(coordinatorStatePath)
+ * Pure planning logic: does not write to stdout (TR-1).
+ * cli-main.js is responsible for all I/O.
  *
  * @module parallel-team-spawner
  */
 
+import { getReadyChildren } from './child-sd-selector.js';
+import { createWorktree, getRepoRoot } from '../../../lib/worktree-manager.js';
+import { compose } from '../../../lib/agent-experience-factory/index.js';
 import fs from 'fs';
 import path from 'path';
-import { getReadyChildren } from './child-sd-selector.js';
-import { ParallelCoordinator } from '../../../lib/orchestrator/parallel-coordinator.js';
-import { AgentExperienceFactory } from '../../../lib/agent-experience-factory/factory.js';
-import { createWorkTypeWorktree } from '../../../lib/worktree-manager.js';
 
-/** Default timeout for unresponsive teammates (30 min) */
-const DEFAULT_CHILD_TIMEOUT_MS = parseInt(process.env.ORCH_CHILD_TIMEOUT_MS || '1800000', 10);
+const SCHEMA_VERSION = '1.0';
+const DEFAULT_MAX_CONCURRENCY = 3;
+const AGENT_DEFINITION_PATH = '.claude/agents/orchestrator-child-agent.md';
+const STATE_DIR_NAME = 'parallel-state';
+
+// ─── Concurrency Configuration (FR-6) ───
+
+let _concurrencyWarned = false;
 
 /**
- * Plan parallel execution for an orchestrator's children.
- *
- * Called when a child completes LEAD-FINAL-APPROVAL and parallel mode is enabled.
- * Determines whether to use parallel or sequential mode, creates worktrees,
- * builds teammate prompts, and returns structured instructions for Claude Code.
- *
- * @param {object} supabase - Supabase client
- * @param {string} parentSdId - Parent orchestrator SD ID (UUID)
- * @param {string} completedChildId - Just-completed child ID to exclude
- * @returns {Promise<{mode: 'parallel'|'sequential', teamName?: string, toStart?: Array, coordinatorStatePath?: string, totalChildren?: number, readyCount?: number, reason: string}>}
+ * Parse ORCH_MAX_CONCURRENCY from environment.
+ * Defaults to 3 if missing or invalid. Warns once per process.
+ * @returns {number}
  */
-export async function planParallelExecution(supabase, parentSdId, completedChildId) {
-  // Fetch all ready children using DAG-aware selector
-  const { children: readyChildren, allComplete, dagErrors, reason: _selectorReason } =
-    await getReadyChildren(supabase, parentSdId, {
-      excludeCompletedId: completedChildId,
-      parallelEnabled: true
-    });
-
-  // If all complete or fewer than 2 ready, fall back to sequential
-  if (allComplete) {
-    return { mode: 'sequential', reason: 'All children complete' };
-  }
-
-  if (readyChildren.length < 2) {
-    return { mode: 'sequential', reason: `Only ${readyChildren.length} child ready - sequential is sufficient` };
-  }
-
-  // Fetch ALL children (including completed) for coordinator state
-  const { data: allChildren, error: allError } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage, sd_type')
-    .eq('parent_sd_id', parentSdId);
-
-  if (allError) {
-    return { mode: 'sequential', reason: `DB error fetching all children: ${allError.message}` };
-  }
-
-  // Derive parent SD key for naming
-  const { data: parentSD } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key')
-    .eq('id', parentSdId)
-    .single();
-
-  const parentSdKey = parentSD?.sd_key || parentSdId;
-  const teamName = `orch-${parentSdKey.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase().substring(0, 40)}`;
-
-  // Create coordinator
-  let coordinator;
-  try {
-    coordinator = new ParallelCoordinator(allChildren, {
-      parallelEnabled: true,
-      runId: `run-${Date.now()}`
-    });
-  } catch (err) {
-    // Cycle detected or other DAG error - fall back to sequential
-    return { mode: 'sequential', reason: `Coordinator error: ${err.message}` };
-  }
-
-  // Mark already-completed children in coordinator
-  for (const child of allChildren) {
-    if (child.status === 'completed') {
-      coordinator.onChildComplete(child.id, 'succeeded');
+function parseMaxConcurrency() {
+  const raw = process.env.ORCH_MAX_CONCURRENCY;
+  if (raw === undefined || raw === '') return DEFAULT_MAX_CONCURRENCY;
+  const parsed = parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    if (!_concurrencyWarned) {
+      console.warn(
+        `[parallel-team-spawner] ORCH_MAX_CONCURRENCY="${raw}" is invalid ` +
+        `(must be integer >=1). Defaulting to ${DEFAULT_MAX_CONCURRENCY}.`
+      );
+      _concurrencyWarned = true;
     }
+    return DEFAULT_MAX_CONCURRENCY;
   }
-
-  // Get initial schedule
-  const schedule = coordinator.getInitialSchedule();
-
-  if (schedule.toStart.length < 2) {
-    return { mode: 'sequential', reason: `Only ${schedule.toStart.length} child schedulable after DAG analysis` };
-  }
-
-  // Prepare each child to start: create worktree and build prompt
-  const toStart = [];
-
-  for (const childId of schedule.toStart) {
-    const childSD = allChildren.find(c => c.id === childId);
-    if (!childSD) continue;
-
-    const sdKey = childSD.sd_key || childId;
-
-    // Create worktree for this child
-    let worktreePath;
-    try {
-      const wtResult = createWorkTypeWorktree({ workType: 'SD', workKey: sdKey });
-      worktreePath = wtResult.path;
-    } catch (wtErr) {
-      console.warn(`   [parallel-team-spawner] Worktree creation failed for ${sdKey}: ${wtErr.message}`);
-      continue; // Skip this child - sequential can handle it
-    }
-
-    // Mark started in coordinator
-    coordinator.markStarted(childId, worktreePath);
-
-    // Build teammate prompt (AEF enrichment done asynchronously below)
-    const prompt = await buildTeammatePrompt(supabase, childSD, worktreePath);
-
-    toStart.push({
-      id: childId,
-      sdKey,
-      title: childSD.title,
-      sdType: childSD.sd_type,
-      worktreePath,
-      prompt
-    });
-  }
-
-  // If worktree failures reduced to <2 startable, fall back
-  if (toStart.length < 2) {
-    return { mode: 'sequential', reason: `Only ${toStart.length} child could be prepared (worktree failures)` };
-  }
-
-  // Persist coordinator state
-  const coordinatorStatePath = getStateFilePath(parentSdKey);
-  saveCoordinatorState(coordinatorStatePath, coordinator, {
-    parentSdId,
-    parentSdKey,
-    teamName,
-    childTimeoutMs: DEFAULT_CHILD_TIMEOUT_MS
-  });
-
-  return {
-    mode: 'parallel',
-    teamName,
-    toStart,
-    coordinatorStatePath,
-    totalChildren: allChildren.length,
-    readyCount: toStart.length,
-    dagErrors: dagErrors.length > 0 ? dagErrors : undefined,
-    reason: `${toStart.length} independent children ready for parallel execution`
-  };
+  return parsed;
 }
 
-/**
- * Handle a child's completion. Updates coordinator state and returns
- * newly unblocked children to spawn.
- *
- * @param {string} coordinatorStatePath - Path to coordinator state JSON
- * @param {string} childId - Completed child SD ID
- * @param {'succeeded'|'failed'|'canceled'} status - Completion status
- * @param {object} [details] - Additional details (tokensUsed, reason)
- * @param {object} [supabase] - Supabase client (needed if new children are unblocked)
- * @returns {Promise<{newlyReady: Array, toSkip: string[], allComplete: boolean, runSummary?: object, reason: string}>}
- */
-export async function onChildComplete(coordinatorStatePath, childId, status, details = {}, supabase = null) {
-  const state = loadCoordinatorState(coordinatorStatePath);
-  if (!state) {
-    return { newlyReady: [], toSkip: [], allComplete: false, reason: 'Could not load coordinator state' };
-  }
-
-  // Reconstruct coordinator from saved state
-  const coordinator = reconstructCoordinator(state);
-
-  // Record completion
-  const schedule = coordinator.onChildComplete(childId, status, details);
-
-  if (schedule.allTerminal) {
-    const runSummary = coordinator.getRunSummary();
-    saveCoordinatorState(coordinatorStatePath, coordinator, state.meta);
-    return {
-      newlyReady: [],
-      toSkip: schedule.toSkip,
-      allComplete: true,
-      runSummary,
-      reason: 'All children in terminal state'
-    };
-  }
-
-  // Prepare newly unblocked children
-  const newlyReady = [];
-
-  if (schedule.toStart.length > 0 && supabase) {
-    // Fetch child SD details for the newly unblocked
-    const { data: childSDs } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, sd_type, metadata')
-      .in('id', schedule.toStart);
-
-    for (const childSD of (childSDs || [])) {
-      const sdKey = childSD.sd_key || childSD.id;
-
-      let worktreePath;
-      try {
-        const wtResult = createWorkTypeWorktree({ workType: 'SD', workKey: sdKey });
-        worktreePath = wtResult.path;
-      } catch (wtErr) {
-        console.warn(`   [parallel-team-spawner] Worktree failed for ${sdKey}: ${wtErr.message}`);
-        continue;
-      }
-
-      coordinator.markStarted(childSD.id, worktreePath);
-
-      const prompt = await buildTeammatePrompt(supabase, childSD, worktreePath);
-      newlyReady.push({
-        id: childSD.id,
-        sdKey,
-        title: childSD.title,
-        sdType: childSD.sd_type,
-        worktreePath,
-        prompt
-      });
-    }
-  }
-
-  // Persist updated state
-  saveCoordinatorState(coordinatorStatePath, coordinator, state.meta);
-
-  const runSummary = coordinator.getRunSummary();
-  return {
-    newlyReady,
-    toSkip: schedule.toSkip,
-    allComplete: false,
-    runSummary,
-    reason: newlyReady.length > 0
-      ? `${newlyReady.length} newly unblocked children ready`
-      : 'No new children unblocked'
-  };
-}
+// ─── Coordinator State Persistence (FR-5, TR-2) ───
 
 /**
- * Build the full instruction prompt for a teammate, enriched by AEF.
- *
- * @param {object} supabase - Supabase client
- * @param {object} childSD - Child SD record
- * @param {string} worktreePath - Path to the child's worktree
- * @returns {Promise<string>} Full instruction prompt
- */
-export async function buildTeammatePrompt(supabase, childSD, worktreePath) {
-  const sdKey = childSD.sd_key || childSD.id;
-  const sdType = childSD.sd_type || 'feature';
-
-  // Try AEF enrichment (fail-open: empty preamble if AEF fails)
-  let aefPreamble = '';
-  try {
-    const factory = new AgentExperienceFactory(supabase);
-    const { promptPreamble } = await factory.compose({
-      agentCode: sdType.toUpperCase(),
-      domain: sdType,
-      sessionId: `parallel-${sdKey}-${Date.now()}`,
-      sdId: sdKey,
-      maxPromptTokens: 800
-    });
-    aefPreamble = promptPreamble;
-  } catch {
-    // AEF failure is non-blocking
-  }
-
-  return `# Parallel Child SD Assignment
-
-## Your Child SD
-- **SD Key**: ${sdKey}
-- **Title**: ${childSD.title || 'Untitled'}
-- **Type**: ${sdType}
-- **Status**: ${childSD.status || 'draft'}
-
-## Worktree
-- **Path**: ${worktreePath}
-- All file operations MUST use this worktree path as working directory.
-
-## Workflow
-1. Read CLAUDE.md and CLAUDE_CORE.md (mandatory protocol files)
-2. Run: \`npm run sd:start ${sdKey}\` to claim the SD
-3. Execute LEAD-TO-PLAN handoff: \`node scripts/handoff.js execute LEAD-TO-PLAN ${sdKey}\`
-4. Follow the full LEO Protocol workflow for this SD type (${sdType})
-5. Work through all required phases until LEAD-FINAL-APPROVAL
-6. When complete: mark your task as completed via TaskUpdate
-7. Send completion message to team lead via SendMessage
-
-## Reporting
-When done, send a message to the team lead with:
-- Child SD key: ${sdKey}
-- Final status: succeeded or failed
-- If failed: include error details
-
-## Rules
-- Work ONLY in your assigned worktree: ${worktreePath}
-- Follow AUTO-PROCEED rules (no user prompts)
-- If blocked, report to team lead immediately via SendMessage
-${aefPreamble}`;
-}
-
-/**
- * Read current coordinator state from file.
- *
- * @param {string} coordinatorStatePath - Path to state JSON
- * @returns {object|null} Coordinator state or null if not found
- */
-export function getCoordinatorState(coordinatorStatePath) {
-  return loadCoordinatorState(coordinatorStatePath);
-}
-
-// ── Internal helpers ──
-
-/**
- * Get the state file path for a parent SD.
- * @param {string} parentSdKey
+ * Get coordinator state file path for an orchestrator.
+ * @param {string} repoRoot
+ * @param {string} orchestratorKey
  * @returns {string}
  */
-function getStateFilePath(parentSdKey) {
-  const sanitized = parentSdKey.replace(/[^a-zA-Z0-9_-]/g, '-');
-  const worktreesDir = path.join(process.cwd(), '.worktrees');
-  if (!fs.existsSync(worktreesDir)) {
-    fs.mkdirSync(worktreesDir, { recursive: true });
-  }
-  return path.join(worktreesDir, `_coordinator-${sanitized}.json`);
+function getStatePath(repoRoot, orchestratorKey) {
+  const sanitized = orchestratorKey.replace(/[^a-zA-Z0-9_-]/g, '-');
+  return path.join(repoRoot, '.claude', STATE_DIR_NAME, `${sanitized}.json`);
 }
 
 /**
- * Save coordinator state to JSON file (atomic write).
- * @param {string} filePath
- * @param {ParallelCoordinator} coordinator
- * @param {object} meta - Extra metadata (parentSdId, teamName, etc.)
+ * Load coordinator state from disk.
+ * Ignores leftover .tmp files and handles corruption gracefully (FR-5, TR-2).
+ * @param {string} statePath
+ * @returns {Object}
  */
-function saveCoordinatorState(filePath, coordinator, meta) {
-  const state = {
-    meta,
-    config: coordinator.config,
-    children: Object.fromEntries(coordinator.children),
-    dagNodes: Object.fromEntries(coordinator.dag.nodes),
-    dagRootIds: coordinator.dag.rootIds,
-    dagErrors: coordinator.dagErrors,
-    startTime: coordinator.startTime,
-    maxConcurrencyObserved: coordinator.maxConcurrencyObserved,
-    events: coordinator.events,
-    budgetUsed: coordinator.budgetUsed,
-    budgetExceeded: coordinator.budgetExceeded,
-    savedAt: new Date().toISOString()
+function loadState(statePath) {
+  const empty = {
+    schemaVersion: SCHEMA_VERSION,
+    children: {},
+    createdAt: new Date().toISOString()
   };
 
-  // Atomic write: write to temp file then rename
-  const tmpPath = filePath + '.tmp';
-  fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf8');
+  // Clean up leftover .tmp from interrupted writes
+  const tmpPath = `${statePath}.tmp`;
+  try {
+    if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+  } catch { /* ignore */ }
+
+  try {
+    if (!fs.existsSync(statePath)) return empty;
+    const raw = fs.readFileSync(statePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.children) {
+      console.warn('[parallel-team-spawner] Invalid state schema, reinitializing');
+      return empty;
+    }
+    return parsed;
+  } catch (err) {
+    console.warn(`[parallel-team-spawner] State read error: ${err.message}. Using empty state.`);
+    return empty;
+  }
+}
+
+/**
+ * Atomically write JSON to disk (temp + fsync + rename) (TR-2).
+ * @param {string} filePath
+ * @param {Object} data
+ */
+function atomicWriteJSON(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const tmpPath = `${filePath}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+
+  const fd = fs.openSync(tmpPath, 'r+');
+  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+
   fs.renameSync(tmpPath, filePath);
 }
 
-/**
- * Load coordinator state from JSON file.
- * @param {string} filePath
- * @returns {object|null}
- */
-function loadCoordinatorState(filePath) {
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
+// ─── Prompt Building (FR-4) ───
 
 /**
- * Reconstruct a ParallelCoordinator from saved state.
- * We can't use the constructor directly (it rebuilds the DAG),
- * so we reconstruct the internal state manually.
+ * Build AEF-enriched child prompt with DYNAMIC KNOWLEDGE preamble.
+ * Includes explicit childSdId and orchestratorSdId keys (FR-4 acceptance criteria).
+ * @param {Object} params
+ * @returns {string}
+ */
+function buildChildPrompt({
+  aefPreamble,
+  childSdId,
+  childSdKey,
+  childSdType,
+  childTitle,
+  orchestratorSdId,
+  worktreePath
+}) {
+  return [
+    '<!-- DYNAMIC KNOWLEDGE -->',
+    aefPreamble || '',
+    '<!-- END DYNAMIC KNOWLEDGE -->',
+    '',
+    '## Assignment',
+    '',
+    'You are responsible only for this child SD. Do not modify files outside your scope.',
+    '',
+    `childSdId: ${childSdId}`,
+    `childSdKey: ${childSdKey}`,
+    `orchestratorSdId: ${orchestratorSdId}`,
+    `sdType: ${childSdType || 'feature'}`,
+    `title: ${childTitle || childSdKey}`,
+    `worktreePath: ${worktreePath}`,
+    '',
+    '## Instructions',
+    '',
+    `1. You are working on child SD **${childSdKey}** of orchestrator **${orchestratorSdId}**.`,
+    `2. Your worktree is at: \`${worktreePath}\``,
+    '3. Follow the full LEO Protocol workflow: LEAD -> PLAN -> EXEC for this child SD.',
+    '4. Run handoffs via: `node scripts/handoff.js execute <HANDOFF_TYPE> <SD_KEY>`',
+    '5. When implementation is complete, run the post-completion sequence.',
+    '6. Do NOT modify files that belong to sibling child SDs.',
+    '7. If you encounter blocking dependencies, report them and stop.',
+  ].join('\n');
+}
+
+// ─── Main Entry Point ───
+
+/**
+ * Plan parallel execution for orchestrator children.
  *
- * @param {object} state - Saved state from loadCoordinatorState
- * @returns {ParallelCoordinator}
+ * Called by cli-main.js when ORCH_PARALLEL_CHILDREN_ENABLED=true.
+ * Uses getReadyChildren() for DAG-aware child selection, then provisions
+ * worktrees, enriches prompts via AEF, and persists coordinator state.
+ *
+ * Returns a structured plan for Claude Code to spawn teammates (TR-3).
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} parentSdId - Parent orchestrator SD UUID
+ * @param {string} currentSdId - Just-completed child SD ID to exclude
+ * @returns {Promise<Object>} Plan with schemaVersion, mode, toStart, etc.
  */
-function reconstructCoordinator(state) {
-  // Build minimal children array for constructor (it rebuilds the DAG)
-  const childRecords = [];
-  for (const [id, entry] of Object.entries(state.children)) {
-    const dagNode = state.dagNodes[id];
-    childRecords.push({
-      id,
-      sd_key: entry.sdKey,
-      metadata: dagNode ? { blocked_by: dagNode.blockedBy } : {}
-    });
-  }
+export async function planParallelExecution(supabase, parentSdId, currentSdId) {
+  const repoRoot = getRepoRoot();
+  const maxConcurrency = parseMaxConcurrency();
 
-  const coordinator = new ParallelCoordinator(childRecords, state.config);
+  // 1. Resolve parent SD key for naming and state paths
+  let parentSdKey = parentSdId;
+  try {
+    const { data: parent } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key')
+      .eq('id', parentSdId)
+      .single();
+    if (parent?.sd_key) parentSdKey = parent.sd_key;
+  } catch { /* UUID fallback */ }
 
-  // Restore child states
-  for (const [id, entry] of Object.entries(state.children)) {
-    const child = coordinator.children.get(id);
-    if (child) {
-      child.state = entry.state;
-      child.startedAt = entry.startedAt;
-      child.completedAt = entry.completedAt;
-      child.worktreePath = entry.worktreePath;
-      child.reason = entry.reason;
+  // 2. Get ready children via DAG-aware selector (handles deps, urgency, cycles)
+  const { children, allComplete, dagErrors, reason } = await getReadyChildren(
+    supabase, parentSdId, {
+      excludeCompletedId: currentSdId,
+      parallelEnabled: true
     }
+  );
+
+  if (allComplete) {
+    return { schemaVersion: SCHEMA_VERSION, mode: 'sequential', reason: 'All children complete' };
   }
 
-  // Restore metrics
-  coordinator.startTime = state.startTime;
-  coordinator.maxConcurrencyObserved = state.maxConcurrencyObserved;
-  coordinator.events = state.events || [];
-  coordinator.budgetUsed = state.budgetUsed || 0;
-  coordinator.budgetExceeded = state.budgetExceeded || false;
+  if (children.length < 2) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      mode: 'sequential',
+      reason: children.length === 0
+        ? (reason || 'No eligible children')
+        : `Only ${children.length} eligible child - sequential preferred`
+    };
+  }
 
-  return coordinator;
+  // 3. Load coordinator state to prevent duplicate starts (FR-5)
+  const statePath = getStatePath(repoRoot, parentSdKey);
+  const state = loadState(statePath);
+
+  const notStarted = children.filter(c => {
+    const s = state.children[c.id];
+    return !s || s.status === 'pending';
+  });
+
+  if (notStarted.length < 2) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      mode: 'sequential',
+      reason: notStarted.length === 0
+        ? 'All eligible children already started or completed'
+        : `Only ${notStarted.length} unstarted child - sequential preferred`
+    };
+  }
+
+  // 4. Apply concurrency cap (FR-6) with deterministic sort by ID
+  const toStartCandidates = notStarted
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .slice(0, maxConcurrency);
+
+  // 5. Provision worktrees and build AEF-enriched prompts
+  const toStart = [];
+
+  for (const child of toStartCandidates) {
+    const sdKey = child.sd_key || child.id;
+    const branch = `feat/${sdKey}`.substring(0, 100);
+
+    // FR-3: Provision or reuse worktree
+    let worktreePath;
+    const priorState = state.children[child.id];
+
+    if (priorState?.worktreePath && fs.existsSync(priorState.worktreePath)) {
+      worktreePath = priorState.worktreePath;
+    } else {
+      try {
+        const wt = createWorktree({ sdKey, branch });
+        worktreePath = wt.path;
+      } catch (err) {
+        // Worktree may already exist on the same branch
+        const fallbackPath = path.join(repoRoot, '.worktrees', sdKey);
+        if (fs.existsSync(fallbackPath)) {
+          worktreePath = fallbackPath;
+        } else {
+          console.warn(
+            `[parallel-team-spawner] Worktree failed for ${sdKey}: ${err.message}`
+          );
+          continue;
+        }
+      }
+    }
+
+    // FR-4: AEF prompt enrichment with DYNAMIC KNOWLEDGE
+    let aefPreamble = '';
+    try {
+      const { promptPreamble } = await compose({
+        agentCode: 'orchestrator-child',
+        domain: child.sd_type || 'general',
+        sessionId: `parallel-${parentSdKey}-${child.id}`,
+        maxPromptTokens: 1200
+      });
+      aefPreamble = promptPreamble || '';
+    } catch { /* AEF failure is non-fatal */ }
+
+    const prompt = buildChildPrompt({
+      aefPreamble,
+      childSdId: child.id,
+      childSdKey: sdKey,
+      childSdType: child.sd_type,
+      childTitle: child.title,
+      orchestratorSdId: parentSdKey,
+      worktreePath
+    });
+
+    toStart.push({
+      sdKey,
+      sdType: child.sd_type || 'feature',
+      childSdId: child.id,
+      orchestratorSdId: parentSdId,
+      worktreePath,
+      prompt,
+      agentDefinitionPath: AGENT_DEFINITION_PATH,
+      idempotencyKey: `${parentSdId}:${child.id}`
+    });
+
+    // Update coordinator state
+    state.children[child.id] = {
+      sdKey,
+      status: 'started',
+      startedAt: new Date().toISOString(),
+      worktreePath
+    };
+  }
+
+  // If fewer than 2 provisioned, fall back to sequential
+  if (toStart.length < 2) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      mode: 'sequential',
+      reason: `Only ${toStart.length} child could be provisioned - sequential preferred`
+    };
+  }
+
+  // 6. Persist state atomically (FR-5, TR-2)
+  state.updatedAt = new Date().toISOString();
+  state.orchestratorSdId = parentSdId;
+  state.orchestratorSdKey = parentSdKey;
+  atomicWriteJSON(statePath, state);
+
+  const teamName = `orch-${parentSdKey}`.substring(0, 50);
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    mode: 'parallel',
+    orchestratorSdId: parentSdId,
+    teamName,
+    coordinatorStatePath: statePath,
+    totalChildren: children.length,
+    readyCount: toStart.length,
+    toStart,
+    dagErrors: dagErrors?.length > 0 ? dagErrors : undefined,
+    reason: `${toStart.length} children ready for parallel execution`
+  };
 }
 
-export default {
-  planParallelExecution,
-  onChildComplete,
-  buildTeammatePrompt,
-  getCoordinatorState
-};
+// ─── State Update Helpers ───
+
+/**
+ * Mark a child as completed in coordinator state.
+ * Called when a teammate reports child SD completion.
+ * @param {string} statePath - Coordinator state file path
+ * @param {string} childSdId - UUID of completed child
+ * @param {'completed'|'failed'} status
+ */
+export function markChildCompleted(statePath, childSdId, status = 'completed') {
+  const state = loadState(statePath);
+  if (state.children[childSdId]) {
+    state.children[childSdId].status = status;
+    state.children[childSdId].completedAt = new Date().toISOString();
+  }
+  state.updatedAt = new Date().toISOString();
+  atomicWriteJSON(statePath, state);
+}
+
+/**
+ * Get coordinator state summary.
+ * @param {string} statePath
+ * @returns {Object}
+ */
+export function getCoordinatorState(statePath) {
+  return loadState(statePath);
+}
+
+export default { planParallelExecution, markChildCompleted, getCoordinatorState };
