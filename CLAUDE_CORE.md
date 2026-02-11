@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-09 9:04:45 AM
+**Generated**: 2026-02-11 9:11:45 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -200,48 +200,36 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Claude Code Plan Mode Integration
+## Mandatory Agent Invocation Rules
 
-**Status**: ACTIVE | **Version**: 1.0.0
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
 
-### Overview
-Claude Code's Plan Mode integrates with LEO Protocol to provide:
-- **Automatic Permission Bundling** - Reduces prompts by 70-80%
-- **Intelligent Plan Generation** - SD-type aware action plans
-- **Phase Transition Automation** - Activates at phase boundaries
+### Task Type -> Required Agent
 
-### SD Type Profiles
-| SD Type | Workflow | Sub-Agents | PR Size Target |
-|---------|----------|------------|----------------|
-| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
-| `enhancement` | standard | VALIDATION | 75 (max 200) |
-| `bug` | fast | RCA | 50 (max 100) |
-| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
-| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
-| `security` | careful | SECURITY, RISK | 50 (max 150) |
-| `documentation` | light | DOCMON | no limit |
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
 
-### Permission Bundling by Phase
-| Phase | Pre-approved Actions |
-|-------|---------------------|
-| LEAD | SD queue commands, handoff scripts, git status |
-| PLAN | PRD generation, sub-agent orchestration, git branches |
-| EXEC | Tests, builds, git commit/push, handoff scripts |
-| VERIFY | Verification scripts, handoff scripts |
-| FINAL | Merge operations, archive commands |
+### Why This Exists
 
-### Automatic Activation
-- **Session start**: If SD detected on current branch
-- **Phase boundaries**: Before each handoff execution
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
 
-### Configuration
-```json
-// .claude/leo-plan-mode-config.json
-{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
-```
+### How to Apply
 
-### Module Location
-`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## 🤖 Built-in Agent Integration
 
@@ -285,63 +273,48 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
-## Mandatory Agent Invocation Rules
+## Claude Code Plan Mode Integration
 
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+**Status**: ACTIVE | **Version**: 1.0.0
 
-### Task Type -> Required Agent
+### Overview
+Claude Code's Plan Mode integrates with LEO Protocol to provide:
+- **Automatic Permission Bundling** - Reduces prompts by 70-80%
+- **Intelligent Plan Generation** - SD-type aware action plans
+- **Phase Transition Automation** - Activates at phase boundaries
 
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+### SD Type Profiles
+| SD Type | Workflow | Sub-Agents | PR Size Target |
+|---------|----------|------------|----------------|
+| `feature` | full | RISK, VALIDATION, STORIES | 100 (max 400) |
+| `enhancement` | standard | VALIDATION | 75 (max 200) |
+| `bug` | fast | RCA | 50 (max 100) |
+| `infrastructure` | careful | RISK, GITHUB, REGRESSION | 50 (max 150) |
+| `refactor` | careful | REGRESSION, VALIDATION | 100 (max 300) |
+| `security` | careful | SECURITY, RISK | 50 (max 150) |
+| `documentation` | light | DOCMON | no limit |
 
-### Why This Exists
+### Permission Bundling by Phase
+| Phase | Pre-approved Actions |
+|-------|---------------------|
+| LEAD | SD queue commands, handoff scripts, git status |
+| PLAN | PRD generation, sub-agent orchestration, git branches |
+| EXEC | Tests, builds, git commit/push, handoff scripts |
+| VERIFY | Verification scripts, handoff scripts |
+| FINAL | Merge operations, archive commands |
 
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
+### Automatic Activation
+- **Session start**: If SD detected on current branch
+- **Phase boundaries**: Before each handoff execution
 
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+### Configuration
+```json
+// .claude/leo-plan-mode-config.json
+{ "leo_plan_mode": { "enabled": true, "permission_pre_approval": true } }
 ```
 
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
+### Module Location
+`scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
 ## Work Tracking Policy
 
@@ -374,6 +347,33 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
 
 ## Execution Philosophy
 
@@ -445,47 +445,6 @@ Before marking any stage/feature as complete:
 
 **BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
-
 ## 🎯 Skill Integration (Claude Code Skills)
 
 ## Skill Integration (Claude Code Skills)
@@ -528,6 +487,47 @@ If immediate resolution is truly impossible:
 - **Project**: .claude/skills/ (project-specific)
 - **Index**: ~/.claude/skills/SKILL-INDEX.md
 - **Total**: 54 skills covering all 14 sub-agents
+
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -574,6 +574,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -606,38 +638,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1436,18 +1436,7 @@ Task tool with subagent_type="validation-agent":
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
-**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
-
-**Key Improvements**:
-- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
-- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
-
-**Action Items**:
-- [ ] Create reusable SD lookup utility
-- [ ] Add E2E test CI job for risk-recalibration
-
-### 2. PLAN_TO_EXEC Handoff Retrospective: Refactor design.js (sub-agent) [QUALITY]
+### 1. PLAN_TO_EXEC Handoff Retrospective: Refactor design.js (sub-agent) [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 1/20/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1458,18 +1447,18 @@ Task tool with subagent_type="validation-agent":
 - [ ] Owner: Eng Lead | By 2026-02-01: Add eslint rule to flag files >500 LOC with war...
 - [ ] Owner: DevOps | Next SD: Add CI check for import cycle detection using madge or ...
 
-### 3. Implement Adaptive Design & Architecture Streams for PLAN Phase - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/10/2026 | **Score**: 100
+### 2. LEAD_TO_PLAN Handoff Retrospective: LEO Protocol Validation Hardening - Comprehensive Gap Fix [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/21/2026 | **Score**: 100
 
 **Key Improvements**:
-- Schema field documentation: validation_details vs metadata.gate2_validation caused 2 failures
-- Column naming inconsistency: category vs deliverable_type, title vs deliverable_name
+- Migration 20260123_retrospective_auto_archive_trigger.sql needs manual execution in Supabase SQL Edi...
+- SD had 0% progress despite 5/6 deliverables being verified as complete - need better progress tracki...
 
 **Action Items**:
-- [ ] Create schema field reference document mapping validation field names to actual ...
-- [ ] Add pre-handoff checklist to PLAN phase that validates exploration_summary, PRD ...
+- [ ] Execute migration: Run database/migrations/20260123_retrospective_auto_archive_t...
+- [ ] Verify migration: SELECT run_retrospective_maintenance() should return archived_...
 
-### 4. LEO-001 Comprehensive Retrospective [QUALITY]
+### 3. LEO-001 Comprehensive Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 1/17/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1480,16 +1469,27 @@ Task tool with subagent_type="validation-agent":
 - [ ] Document plugin discovery protocol - add 'Check for official Claude Code plugins...
 - [ ] Create systematic quality gate gap analysis tool to audit all handoff validators...
 
-### 5. LEAD_TO_PLAN Handoff Retrospective: LEO Protocol Validation Hardening - Comprehensive Gap Fix [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/21/2026 | **Score**: 100
+### 4. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
+**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
 
 **Key Improvements**:
-- Migration 20260123_retrospective_auto_archive_trigger.sql needs manual execution in Supabase SQL Edi...
-- SD had 0% progress despite 5/6 deliverables being verified as complete - need better progress tracki...
+- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
+- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
 
 **Action Items**:
-- [ ] Execute migration: Run database/migrations/20260123_retrospective_auto_archive_t...
-- [ ] Verify migration: SELECT run_retrospective_maintenance() should return archived_...
+- [ ] Create reusable SD lookup utility
+- [ ] Add E2E test CI job for risk-recalibration
+
+### 5. PLAN_TO_EXEC Handoff Retrospective: Phase 2: Risk Classification [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/22/2026 | **Score**: 100
+
+**Key Improvements**:
+- Classification rules are hardcoded - consider database-driven rule configuration for runtime updates
+- No audit trail for classification decisions - add logging for compliance and debugging
+
+**Action Items**:
+- [ ] Integrate RiskClassifier with AI Quality Judge canAutoApply() scoring flow
+- [ ] Add classification decision audit logging to evidence accumulation pipeline
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1694,7 +1694,7 @@ Constitutional vetting of proposals using AEGIS framework. Routes feedback throu
 
 ---
 
-*Generated from database: 2026-02-09*
+*Generated from database: 2026-02-11*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
