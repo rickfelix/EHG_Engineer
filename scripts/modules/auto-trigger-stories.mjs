@@ -26,15 +26,14 @@
 
 import { randomUUID } from 'crypto';
 import { isPersonaStoryRoleEnabled } from '../lib/persona-extractor.js';
-import OpenAI from 'openai';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 
 // ============================================
 // LLM Configuration for Story Generation (v1.2.0)
-// Uses GPT 5.2 for high-quality generation
+// Uses factory-resolved model with opus tier for PLAN phase
 // ============================================
 
 const LLM_CONFIG = {
-  model: 'gpt-5.2',  // More capable model for generation
   temperature: 0.7,   // Some creativity for varied stories
   maxTokens: 16000,   // Large enough for 10-15 detailed stories
   enabled: process.env.LLM_STORY_GENERATION !== 'false'  // Enabled by default
@@ -97,21 +96,27 @@ function generateE2ETestPath(sdId, sdType, storyNumber, storyTitle) {
 }
 
 /**
- * Initialize OpenAI client for story generation
+ * Get LLM client from factory for story generation
+ * Uses opus tier in PLAN phase per phase-model-routing.json
  */
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('   ⚠️  OPENAI_API_KEY not set - falling back to template generation');
+async function getStoriesLLMClient() {
+  if (!LLM_CONFIG.enabled) {
+    console.warn('   ⚠️  LLM story generation disabled - falling back to template generation');
     return null;
   }
-  // ROOT CAUSE FIX (2026-01-02): Add 45s timeout to prevent indefinite hangs
-  // Previous behavior: no timeout → requests could hang for 600+ seconds
-  // With timeout: fail-fast and allow retry logic to handle it
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    timeout: 45000,  // 45 second timeout per request
-    maxRetries: 0    // Disable SDK's internal retries, use our retry-executor instead
-  });
+
+  try {
+    // Factory resolves to opus tier for STORIES in PLAN phase
+    const client = await getLLMClient({
+      purpose: 'story-generation',
+      subAgent: 'STORIES',
+      phase: 'PLAN'
+    });
+    return client;
+  } catch (error) {
+    console.warn(`   ⚠️  LLM client unavailable: ${error.message} - falling back to template generation`);
+    return null;
+  }
 }
 
 /**
@@ -157,13 +162,13 @@ INVEST principles: Independent, Negotiable, Valuable, Estimable, Small, Testable
  * @returns {Promise<Array>} Generated user stories
  */
 async function generateStoriesWithLLM(supabase, sd, prd, options = {}) {
-  const openai = getOpenAIClient();
-  if (!openai || !LLM_CONFIG.enabled) {
+  const llmClient = await getStoriesLLMClient();
+  if (!llmClient) {
     console.log('   ℹ️  LLM generation disabled - using template generation');
     return null; // Fall back to template generation
   }
 
-  console.log('   🤖 Using GPT 5.2 for high-quality story generation...');
+  console.log('   🤖 Using factory-resolved LLM (opus tier) for high-quality story generation...');
 
   // Build comprehensive context
   const context = await buildGenerationContext(supabase, sd, prd);
@@ -233,10 +238,9 @@ Return ONLY valid JSON array, no markdown formatting.`;
 
   try {
     const startTime = Date.now();
-    const response = await openai.chat.completions.create({
-      model: LLM_CONFIG.model,
+    const response = await llmClient.chat.completions.create({
       temperature: LLM_CONFIG.temperature,
-      max_completion_tokens: LLM_CONFIG.maxTokens,  // GPT 5.x uses max_completion_tokens
+      max_completion_tokens: LLM_CONFIG.maxTokens,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
