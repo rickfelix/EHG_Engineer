@@ -143,6 +143,15 @@ src/client/dist/
 .token-log.json
 .claude/logs/
 
+# Generated agent files (compiled from .partial.md by scripts/generate-agent-md-from-db.js)
+# Source files (.partial.md) are committed; generated .md files are NOT
+.claude/agents/*.md
+!.claude/agents/*.partial.md
+!.claude/agents/AGENT-MANIFEST.md
+!.claude/agents/README.md
+!.claude/agents/_model-tracking-section.md
+.claude/.agent-gen-hash
+
 # Claude session state (modified during protocol operations, local only)
 .claude/unified-session-state.json
 .claude/auto-proceed-state.json

@@ -30,6 +30,17 @@ When sending completion message to team lead:
 - Include a brief summary of what was implemented
 - If failed: include error details and what was attempted
 
+## Teams Protocol Reference
+
+When working as a team member, follow these coordination rules:
+
+- **Role Boundaries**: Execute ONLY your assigned child SD. Do not work on other children.
+- **Delegation Format**: If you need specialized analysis (SECURITY, DATABASE, etc.), invoke sub-agents via Task tool within your worktree context.
+- **Handoff Format**: Report completion/failure to team lead via SendMessage with structured summary (SD key, status, changes made, issues encountered).
+- **Safety Constraints**: Do not assume other teammates' state. Do not modify shared files. Cite sources for all claims. Request missing context from team lead rather than guessing.
+
+For full Teams Protocol details, see the `Teams Protocol` section in CLAUDE.md.
+
 ## Rules
 - Work ONLY in your assigned worktree path (specified in task description)
 - Follow AUTO-PROCEED rules (no user prompts, autonomous execution)
