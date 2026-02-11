@@ -1749,61 +1749,167 @@ The consensus architecture balances these risks: structured enough for downstrea
 
 ---
 
-## Stage 10: Technical Review
+## Stage 10: Naming / Brand
+
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-10.js`
+**Phase**: THE IDENTITY (Stages 10-12)
+**Type**: Passive validation + **active `computeDerived()`** (weighted scoring + ranking)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `brandGenome.archetype` | string | minLength: 1 | Yes |
+| `brandGenome.values` | array | minItems: 1 | Yes |
+| `brandGenome.tone` | string | minLength: 1 | Yes |
+| `brandGenome.audience` | string | minLength: 1 | Yes |
+| `brandGenome.differentiators` | array | minItems: 1 | Yes |
+| `scoringCriteria[]` | array | minItems: 1, weights sum to 100 | Yes |
+| `scoringCriteria[].name` | string | minLength: 1 | Yes |
+| `scoringCriteria[].weight` | number | 0-100 | Yes |
+| `candidates[]` | array | minItems: 5 | Yes |
+| `candidates[].name` | string | minLength: 1 | Yes |
+| `candidates[].rationale` | string | minLength: 1 | Yes |
+| `candidates[].scores` | object | Score per criterion (0-100) | Yes |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `candidates[].weighted_score` | number | Weighted average of scores × criteria weights |
+| `ranked_candidates` | array | Candidates sorted by weighted_score descending |
+
+**Processing**:
+- `validate(data)`: Validates brand genome (5 keys), criteria weights sum to 100, min 5 candidates with scores per criterion
+- `computeDerived(data)`: Computes weighted scores, sorts into ranked_candidates
+- **No `analysisSteps`** -- brand genome, criteria, and candidates must be provided externally
+- **No AI generation** -- no name generation, no brand archetype suggestion
+- **No domain availability checking**
+- **No trademark checking**
+- **No visual identity** (colors, fonts, design style)
+- **No cultural style selection**
+
+**CLI Strengths**: Clean weighted scoring (weights sum to 100), minimum 5 candidates forces breadth, per-criterion scores allow nuanced ranking, brand genome captures strategic identity (archetype, tone, values, audience, differentiators).
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `Stage10TechnicalReview.tsx` (technical assessment), `Stage10Narrative.tsx` (brand positioning), `Stage10Viewer.tsx` (naming output), `Stage10TechnicalValidator.tsx` (blocker detection), `useTechnicalReview.ts` (hook)
+
+**IMPORTANT: Stage mapping divergence.** The GUI's Stage 10 is "Technical Review" -- a fundamentally different stage than the CLI's "Naming / Brand". The GUI combines technical feasibility assessment with brand narrative, while the CLI separates these concerns.
+
+**GUI Stage 10 has THREE sub-components**:
+
+**A. Technical Review** (Stage10TechnicalReview.tsx):
+- 6 assessment categories: Architecture, Security, Scalability, Data, Infrastructure, Performance
+- Each category scored 0-10, total max 60, displayed as percentage
+- 19 validation rules across 4 domains (Architecture AR-001 to AR-005, Security SE-001 to SE-005, Scalability SC-001 to SC-005, Maintainability MA-001 to MA-004)
+- 10 artifact types (system_architecture, database_schema, api_specification, security_plan, deployment_plan, testing_strategy, performance_requirements, integration_map, data_flow_diagram, infrastructure_requirements)
+- Readiness status: blocked / incomplete / needs_review / conditionally_ready / ready / approved
+
+**B. Strategic Narrative** (Stage10Narrative.tsx):
+- Vision statement, mission statement, value proposition, target audience, market position
+- Brand voice, cultural style (5 predefined design aesthetics), strategic narrative (AI-generatable)
+- Key messages[] and differentiators[] (dynamic arrays)
+- 5 cultural styles: California Modern, Tech Forward, Classic Professional, Playful Creative, Eco Sustainable
+- Each style has color palette (4 colors) and characteristics badges
+- 3 tabs: Narrative, Positioning, Cultural Style
+
+**C. Stage10Viewer (naming output)**:
+- Name candidates with: score (0-100), domain availability, trademark status, pros/cons
+- Visual identity: colors, fonts, visual style
+- Brand guidelines by category with rationale
+- Composite score, confidence, unified decision (ADVANCE/REVISE/REJECT)
+
+**D. Technical Validator** (Stage10TechnicalValidator.tsx):
+- TECH-001 recursion scenarios: blockers → Stage 8, timeline impact → Stage 7, cost impact → Stage 5, feasibility → Stage 3
+- Chairman override required for critical blockers
+
+**Database**: `technical_reviews`, `technical_artifacts`, `chairman_technical_overrides`
+
+**Prior stage inputs**: All Stages 1-9 data passed as props
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Stage name | Naming / Brand | Technical Review |
+| Primary purpose | Brand identity + name selection | Technical feasibility + brand narrative |
+| Brand genome | 5-key object (archetype, values, tone, audience, differentiators) | Split across Narrative component (vision, mission, brand voice, cultural style) |
+| Name candidates | 5+ with weighted multi-criteria scoring | Name candidates in viewer with domain/trademark checks |
+| Scoring | User-defined criteria with weights summing to 100 | 6 technical categories (0-10 each) |
+| Technical assessment | None | 6 categories, 19 rules, 10 artifact types |
+| Cultural/design style | None | 5 predefined styles with color palettes |
+| Domain checking | None | Domain availability status |
+| Trademark checking | None | Trademark status (available/pending/conflict/unknown) |
+| Visual identity | None | Colors, fonts, visual style |
+| AI generation | None | Strategic narrative generation |
+| Recursion | None | TECH-001 back to Stages 3-8 |
+| Gate type | None | None (no blocker) |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-10-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-10-claude.md`
+- OpenAI: `docs/plans/responses/stage-10-openai.md`
+- AntiGravity: `docs/plans/responses/stage-10-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
+
+---
+
+## Stage 11: Go-To-Market
 
 *Analysis pending*
 
 ---
 
-## Stage 11: Strategic Naming
+## Stage 12: Sales Logic
 
 *Analysis pending*
 
 ---
 
-## Stage 12: Adaptive Naming
+## Stage 13: Product Roadmap
 
 *Analysis pending*
 
 ---
 
-## Stage 13: Exit Design
+## Stage 14: Technical Architecture
 
 *Analysis pending*
 
 ---
 
-## Stage 14: Dev Preparation
+## Stage 15: Resource Planning
 
 *Analysis pending*
 
 ---
 
-## Stage 15: Pricing Strategy
+## Stage 16: Financial Projections
 
 *Analysis pending*
 
 ---
 
-## Stage 16: AI CEO Agent
+## Stage 17: Pre-Build Checklist
 
 *Analysis pending*
 
 ---
 
-## Stage 17: GTM Strategy
+## Stage 18: Sprint Planning
 
 *Analysis pending*
 
 ---
 
-## Stage 18: Documentation
-
-*Analysis pending*
-
----
-
-## Stage 19: Integration
+## Stage 19: Build Execution
 
 *Analysis pending*
 
@@ -1815,30 +1921,30 @@ The consensus architecture balances these risks: structured enough for downstrea
 
 ---
 
-## Stage 21: Launch Preparation
+## Stage 21: Integration Testing
 
 *Analysis pending*
 
 ---
 
-## Stage 22: Market Entry
+## Stage 22: Release Readiness
 
 *Analysis pending*
 
 ---
 
-## Stage 23: Growth Gate
+## Stage 23: Launch Execution
 
 *Analysis pending*
 
 ---
 
-## Stage 24: Scale Operations
+## Stage 24: Metrics & Learning
 
 *Analysis pending*
 
 ---
 
-## Stage 25: Portfolio Review
+## Stage 25: Venture Review
 
 *Analysis pending*
