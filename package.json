@@ -227,7 +227,6 @@
     "sd:new": "node scripts/create-sd.js",
     "sd:from-feedback": "node scripts/sd-from-feedback.js",
     "gap:analyze:verbose": "node scripts/retroactive-gap-analysis.js --verbose",
-    "git:recover": "node scripts/git-commit-recovery.js",
     "leo:continuous": "node scripts/leo-continuous.js",
     "leo:checkpoint": "node scripts/lib/leo-checkpoint.js",
     "baseline:list": "node scripts/baseline.js list",
