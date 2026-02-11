@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T13:23:36.495Z
+**Generated**: 2026-02-11T14:23:09.756Z
 **Rows**: 35
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (31 total)
+## Columns (33 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -49,6 +49,8 @@
 | compliance_score | `integer(32)` | YES | - | Self-scoring rubric result (0-100 scale). PASS: ≥90, WARN: 70-89, FAIL: <70 |
 | compliance_verdict | `text` | YES | - | Rubric verdict: PASS (can complete), WARN (user review), FAIL (must refine/escalate) |
 | compliance_details | `jsonb` | YES | - | Full rubric results including category scores, criteria results, and evidence |
+| routing_tier | `integer(32)` | YES | - | - |
+| routing_threshold_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -57,6 +59,7 @@
 
 ### Foreign Keys
 - `quick_fixes_escalated_to_sd_id_fkey`: escalated_to_sd_id → strategic_directives_v2(id)
+- `quick_fixes_routing_threshold_id_fkey`: routing_threshold_id → work_item_thresholds(id)
 
 ### Check Constraints
 - `actual_loc_reasonable`: CHECK (((actual_loc IS NULL) OR (actual_loc <= 200)))
