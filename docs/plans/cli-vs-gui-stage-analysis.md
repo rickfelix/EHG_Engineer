@@ -742,9 +742,170 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ---
 
-## Stage 5: Kill Gate Decision
+## Stage 5: Profitability (Kill Gate #2)
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-05.js`
+**Type**: Passive validation + **active `computeDerived()`** (first stage with real computation)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `initialInvestment` | number | min: 0.01 | Yes |
+| `year1.revenue` | number | min: 0 | Yes |
+| `year1.cogs` | number | min: 0 | Yes |
+| `year1.opex` | number | min: 0 | Yes |
+| `year2.revenue` | number | min: 0 | Yes |
+| `year2.cogs` | number | min: 0 | Yes |
+| `year2.opex` | number | min: 0 | Yes |
+| `year3.revenue` | number | min: 0 | Yes |
+| `year3.cogs` | number | min: 0 | Yes |
+| `year3.opex` | number | min: 0 | Yes |
+
+**Schema (Derived)**:
+| Field | Calculation |
+|-------|-------------|
+| `grossProfitY1-3` | `revenue - cogs` per year |
+| `netProfitY1-3` | `grossProfit - opex` per year |
+| `breakEvenMonth` | `ceil(initialInvestment / (netProfitY1 / 12))` or null if Y1 net <= 0 |
+| `roi3y` | `(totalNetProfit - initialInvestment) / initialInvestment` |
+| `decision` | `'pass'` or `'kill'` |
+| `blockProgression` | `true` if killed |
+| `reasons` | Array of structured kill reasons |
+
+**Kill Gate Logic** (`evaluateKillGate()`):
+- Kill if `roi3y < 0.5` (50% 3-year ROI threshold)
+- Kill if `breakEvenMonth === null` (Y1 net profit non-positive)
+- Kill if `breakEvenMonth > 24` (break-even too slow)
+- Constants: `ROI_THRESHOLD = 0.5`, `MAX_BREAKEVEN_MONTHS = 24`
+- Exported as pure function for testability
+
+**Processing**:
+- `validate(data)`: Checks all 10 input fields are valid numbers
+- `computeDerived(data)`: Calculates all derived fields + runs kill gate
+- **No `analysisSteps`** -- data must come from elsewhere (no financial model generation)
+- **No unit economics** -- no CAC, LTV, churn, or payback period
+- **No scenario analysis** -- single deterministic projection
+- **No AI involvement** -- purely mathematical
+
+**Critical observation**: The CLI has a strong kill gate but no way to generate the input data. There is no `analysisStep` to build the 3-year financial model from Stage 4's competitive intel. All 10 input numbers must be provided externally.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `EHG/src/components/stages/Stage5ProfitabilityForecasting.tsx` (v1), `EHG/src/components/stages/v2/Stage05ProfitabilityForecasting.tsx` (v2), `EHG/src/hooks/useProfitabilityForecasting.ts`, `EHG/src/services/recursionEngine.ts`, `EHG/src/components/ventures/Stage5ROIValidator.tsx`
+
+**GUI Stage 5 -- "Profitability Forecasting"** (AI-powered + local fallback):
+
+**Revenue Assumptions** (input):
+| Field | Type | Description |
+|-------|------|-------------|
+| `pricingModel` | string | Pricing strategy |
+| `monthlyPrice` | number | Unit price |
+| `marketSize` | number | TAM |
+| `targetPenetration` | number | % of market |
+| `growthRate` | number | Monthly growth % |
+| `churnRate` | number | Monthly churn % |
+| `conversionRate` | number | Lead-to-customer % |
+
+**Cost Structure** (input):
+| Field | Type | Description |
+|-------|------|-------------|
+| `fixedCosts` | number | Monthly fixed |
+| `variableCostPerUnit` | number | Per-customer |
+| `marketingBudget` | number | Monthly marketing |
+| `developmentCosts` | number | Monthly dev |
+| `operationalCosts` | number | Monthly ops |
+| `customerAcquisitionCost` | number | CAC |
+
+**Financial Metrics** (computed):
+| Metric | Description |
+|--------|-------------|
+| `cac` | Customer Acquisition Cost |
+| `ltv` | Lifetime Value (price / churn rate) |
+| `ltvCacRatio` | Key health metric |
+| `paybackPeriod` | Months to recover CAC |
+| `monthlyChurnRate` | % |
+| `averageOrderValue` | Per-transaction |
+| `projectedRoi` | % |
+| `grossMargin` | % |
+| `breakEvenMonth` | Month number or null |
+
+**Profitability Score** (weighted 0-100):
+| Component | Weight | Scoring |
+|-----------|--------|---------|
+| LTV:CAC ratio | 40% | >=3: 40pts, >=2: 30pts, >=1.5: 20pts, else 10pts |
+| Payback period | 30% | <=6mo: 30pts, <=12mo: 25pts, <=18mo: 15pts, else 5pts |
+| Gross margin | 20% | >=80%: 20pts, >=60%: 15pts, >=40%: 10pts, else 5pts |
+| Break-even timing | 10% | 10pts default |
+
+**Kill Gate**: ROI >= 15% to pass (much lower than CLI's 50%)
+- If ROI < 15%: triggers FIN-001 recursion (routes back to Stage 3)
+- FIN-001 is auto-executed (no Chairman approval needed)
+- 3+ recursions on same stage → escalation to Chairman
+
+**Recursion Engine** (8 scenarios total, FIN-001 for Stage 5):
+- `FIN-001`: ROI Below 15% → Stage 5→3 (Critical, auto-execute)
+- Loop prevention: tracks `recursion_count_for_stage` per venture
+
+**Scenario Analysis** (3 scenarios):
+| Scenario | Revenue Modifier | Cost Modifier |
+|----------|-----------------|---------------|
+| Optimistic | 1.5x | 0.85x |
+| Realistic | 1.0x | 1.0x |
+| Pessimistic | 0.7x | 1.2x |
+
+**Local Fallback Calculations**:
+- S-curve customer adoption with monthly growth
+- 2% monthly operating cost inflation
+- LTV = price / (churn_rate / 100)
+- 36-month projection horizon
+
+**Validation Rules**:
+- Market size > 0, Pricing > 0
+- Growth rate 0-100%, Churn rate 0-100%
+- CAC >= 0, CAC <= pricing × 24 months (warning)
+- Churn > 20% triggers sustainability warning
+
+**AI Integration**: Calls `profitability-forecasting` edge function, falls back to local calculations
+
+**UI Components**: 4 tabs (Assumptions, Projections chart, Metrics KPIs, Scenarios)
+
+**Database**:
+- Writes: recursion_events (if triggered)
+- Reads: ventures (projectedRevenue, projectedROI, fundingRequired)
+
+**Stage 5 Completion**: ROI >= 15% OR Chairman override with justification
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Input model | 10 annual aggregates (investment + 3 years × revenue/cogs/opex) | Detailed assumptions (pricing, growth, churn, CAC, market size, etc.) |
+| Projection horizon | 3 years (annual) | 36 months (monthly) |
+| Unit economics | None | CAC, LTV, LTV:CAC, payback period, churn |
+| ROI threshold | 50% (3-year cumulative) | 15% (projected) |
+| Break-even threshold | 24 months max | No explicit threshold |
+| Scenario analysis | None | 3 scenarios (optimistic/realistic/pessimistic) |
+| Scoring | Binary pass/kill | Weighted profitability score (0-100) |
+| Kill behavior | Hard block (`blockProgression: true`) | Recursion to Stage 3 (FIN-001) |
+| Override | None | Chairman override with justification |
+| AI | None | Edge function + local fallback |
+| Data generation | None (passive input) | AI-powered + local S-curve model |
+| Validation | Basic numeric checks | Business logic warnings (churn >20%, CAC limits) |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-05-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-05-claude.md`
+- OpenAI: `docs/plans/responses/stage-05-openai.md`
+- AntiGravity: `docs/plans/responses/stage-05-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
