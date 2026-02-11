@@ -668,7 +668,77 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength: VERY HIGH** -- All three respondents agree on fundamentals with minor tactical differences.
+
+#### Unanimous Agreement (3/3)
+
+1. **Competitor discovery is the #1 gap (Importance 5/5)**: All three rate the CLI's lack of active competitor research as critically blocking. Stage 4 is currently a passive container that validates structure but cannot discover or research competitors. Without this capability, Stage 5's financial projections are ungrounded.
+
+2. **ELIMINATE the feature comparison matrix**: All three agree the GUI's weighted 6-feature coverage matrix is a product management tool, not a financial gate input. Stage 5's kill gate (ROI/break-even) does not consume feature-level data. The CLI's SWOT analysis per competitor is sufficient for qualitative competitive positioning.
+
+3. **ELIMINATE standalone differentiation/defensibility scoring**: All agree the GUI's differentiation score (0-10) and defensibility grade (A-F) are redundant given Stage 3's `competitiveBarrier` metric (0-100) already quantifies defensibility. Don't duplicate it in Stage 4.
+
+4. **Pricing model per competitor is essential for Stage 5**: All three rate this as importance 5/5 or equivalent. Stage 5 cannot build realistic revenue projections without knowing competitor pricing structures (freemium vs enterprise vs subscription).
+
+5. **Stage 3 -> Stage 4 pipeline must be explicit**: All agree Stage 4 should consume Stage 3's structured competitor entities as its starting point, then enrich them rather than discovering from scratch.
+
+6. **ELIMINATE persona-to-competitor mapping**: All agree this is a GUI-specific feature chain. Stage 4 should focus on the competitor, not the customer.
+
+7. **Preserve CLI superiorities**: Deterministic validation, SWOT structure, duplicate name detection, synchronous pipeline, hard-coded data integrity.
+
+#### Tactical Disagreements
+
+| Dimension | Claude | OpenAI (GPT 5.3) | AntiGravity (Gemini) |
+|-----------|--------|-------------------|----------------------|
+| **Blue Ocean handling** | `minItems: 0` for competitors (allow empty) + `blueOcean: true` flag | Explicit edge-case handling branch | Keep `minItems: 1` (search harder before declaring Blue Ocean) |
+| **Scoring approach** | `competitiveIntensity` (0-100) -- single deterministic metric measuring market crowdedness | `pricing_pressure_index` + `defensibility_risk_index` + `intel_confidence` (three 0-1 indices) | **No scoring at all** -- only `confidence_score` on data quality. Stage 3 and 5 handle all scoring. |
+| **Market share representation** | `marketShareRange` enum (dominant/significant/moderate/niche/unknown) -- honest classification | `market_concentration_signal` (fragmented/moderate/concentrated) -- aggregate, not per-competitor | `market_size_estimate` as global SAM string -- single market-level field |
+| **Competitor pricing detail** | `pricingModel` enum + `pricingSummary` derived aggregate | `pricing_model` + `price_band` (low/mid/high) + per-competitor `confidence` | `pricing_model` enum + `pricing_tiers` array (e.g., "$10/mo", "$99/year") |
+| **Stage 5 handoff** | `pricingSummary` (dominant model, price range, avg count) | Explicit `stage5_handoff` artifact with normalized assumptions payload | No explicit handoff -- Stage 5 reads Stage 4 data directly |
+| **Discovery mechanism** | Single LLM call (3-layer pipeline: Stage 3 handoff + AI enrichment + deterministic validation) | Two-tier pipeline (consume seed set + targeted enrichment with graceful failure) | Live web search via `analysisStep` (browser_search tool per competitor) |
+| **URL importance** | Low (2/5) -- citations, not analytical data | Optional field | Critical (5/5) -- required for verification |
+| **Light feature comparison** | Not needed (SWOT covers it) | Yes -- `feature_parity`, `switching_cost_signal`, `price_pressure_signal` as simple enums | Not needed (differentiation goes in strengths) |
+
+#### Consensus Recommendation
+
+**Schema changes (agreed by all):**
+- Add `pricingModel` per competitor (enum: freemium/subscription/one-time/usage-based/tiered/enterprise/unknown)
+- Add `url` per competitor (optional, for provenance)
+- Add `confidence` metadata (quality signal for Stage 5)
+- Preserve existing SWOT structure (CLI superiority)
+
+**Processing changes (agreed by all):**
+- Add `analysisStep` that loads Stage 3 competitors and enriches them via LLM
+- Add `computeDerived()` logic for at least one competitive pressure metric
+- Handle Blue Ocean edge case (0 valid competitors after research)
+
+**Arbitrated decisions:**
+- **Scoring**: Use Claude's `competitiveIntensity` (0-100) as the single derived metric. OpenAI's three-index approach is more granular but adds complexity that Stage 5 may not consume distinctly. AntiGravity's "no scoring" is too minimal -- Stage 5 needs some quantified competitive signal.
+- **Market share**: Use Claude's `marketShareRange` enum per competitor (honest classification). AntiGravity's global market size field is useful but different data. OpenAI's aggregate concentration signal can be derived from the per-competitor data.
+- **Blue Ocean**: Use Claude's `minItems: 0` approach. AntiGravity's "search harder" philosophy is sound but the schema must still handle the case where no competitors exist. Allow 0 with explicit `blueOcean: true` flag.
+- **Stage 5 handoff**: Use OpenAI's explicit `stage5_handoff` artifact pattern. This creates a clean contract rather than forcing Stage 5 to parse raw Stage 4 data.
+- **Discovery**: Use Claude's single LLM call approach. AntiGravity's live web search is ideal but adds infrastructure complexity. The CLI's synchronous pipeline is simpler and more reliable than browser-based search.
+- **Pricing detail**: Merge Claude's enum with AntiGravity's `pricing_tiers` array. Both are useful -- the enum classifies the model, the tiers capture actual price points.
+- **Light feature comparison**: Skip OpenAI's feature_parity/switching_cost/price_pressure signals. These overlap with SWOT strengths/weaknesses and the competitiveIntensity metric. Keep it simple.
+
+#### What to Build (Priority Order)
+
+1. **P0**: `analysisStep` for competitor research enrichment (loads Stage 3 competitors, enriches via LLM)
+2. **P0**: Schema additions -- `pricingModel`, `pricingTiers`, `url`, `confidence` per competitor
+3. **P0**: `minItems: 0` for Blue Ocean support + `blueOcean` derived flag
+4. **P1**: `computeDerived()` with `competitiveIntensity` (0-100) deterministic formula
+5. **P1**: `stage5Handoff` derived artifact (pricing summary, competitive pressure, confidence)
+6. **P1**: `provenance` tracking (which data from Stage 3, which from Stage 4 enrichment)
+7. **P2**: `marketShareRange` per competitor (honest bucket classification)
+
+#### What NOT to Build
+
+- Feature comparison matrix (any form)
+- Differentiation score (Stage 3's `competitiveBarrier` handles it)
+- Defensibility grade (letter-grade presentation of existing metric)
+- Market position label (cosmetic string derived from score)
+- Persona-to-competitor mapping (GUI-specific feature chain)
+- Agent polling infrastructure (CLI's synchronous pipeline is superior)
 
 ---
 
