@@ -7,13 +7,25 @@
  * Call OpenAI API with retry logic and rate limit handling
  * Note: gpt-5-mini doesn't support function/tool calling, so we use json_object mode
  *
- * @param {Object} openai - OpenAI client instance
- * @param {string} model - Model name to use
- * @param {Array} messages - Array of message objects
- * @param {number} retries - Number of retries (default 3)
+ * Supports two calling patterns:
+ *   callOpenAI(client, model, messages)  - explicit model
+ *   callOpenAI(client, messages)         - model from client.defaultModel
+ *
+ * @param {Object} openai - OpenAI client instance or factory adapter with .chat.completions.create()
+ * @param {string|Array} modelOrMessages - Model name or messages array (if 2-arg call)
+ * @param {Array} [messages] - Array of message objects (if 3-arg call)
+ * @param {number} [retries=3] - Number of retries
  * @returns {Promise<Object>} API response
  */
-export async function callOpenAI(openai, model, messages, retries = 3) {
+export async function callOpenAI(openai, modelOrMessages, messages, retries = 3) {
+  // Support 2-arg call: callOpenAI(client, messages)
+  let model;
+  if (Array.isArray(modelOrMessages)) {
+    messages = modelOrMessages;
+    model = openai.defaultModel;
+  } else {
+    model = modelOrMessages;
+  }
   const timeoutMs = parseInt(process.env.AI_API_TIMEOUT_MS) || 60000; // Default 60s timeout
   const DEBUG = process.env.AI_DEBUG === 'true';
 
