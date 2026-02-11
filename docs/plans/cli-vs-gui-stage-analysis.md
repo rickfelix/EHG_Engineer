@@ -1009,25 +1009,136 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ---
 
-## Stage 6: Business Model Canvas
+## Stage 6: Risk Matrix
+
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-06.js`
+**Type**: Passive validation + **active `computeDerived()`** (computes risk scores)
+**Phase**: THE ENGINE (Stages 6-9 in CLI, 6-10 in GUI)
+
+**Schema**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `risks` | array | minItems: 1 | Yes |
+| `risks[].id` | string | minLength: 1 | Yes |
+| `risks[].category` | enum | Market/Product/Technical/Legal-Compliance/Financial/Operational | Yes |
+| `risks[].description` | string | minLength: 10 | Yes |
+| `risks[].severity` | integer | 1-5 | Yes |
+| `risks[].probability` | integer | 1-5 | Yes |
+| `risks[].impact` | integer | 1-5 | Yes |
+| `risks[].score` | integer | Derived: severity * probability * impact | Derived |
+| `risks[].mitigation` | string | minLength: 10 | Yes |
+| `risks[].owner` | string | minLength: 1 | Yes |
+| `risks[].status` | enum | open/mitigated/accepted/closed | Yes |
+| `risks[].review_date` | string | minLength: 1 | Yes |
+| `risks[].residual_severity` | integer | 1-5 | Optional |
+| `risks[].residual_probability` | integer | 1-5 | Optional |
+| `risks[].residual_impact` | integer | 1-5 | Optional |
+| `risks[].residual_score` | integer | Derived: residual_severity * residual_probability * residual_impact | Derived |
+
+**Risk Categories** (6): Market, Product, Technical, Legal/Compliance, Financial, Operational
+
+**Processing**:
+- `validate(data)`: Validates array of risks, each with all required fields, validates enums and ranges, validates optional residual fields if present
+- `computeDerived(data)`: Computes `score = severity * probability * impact` per risk, plus `residual_score` if residual fields present
+- **No `analysisSteps`** -- risks must be provided externally
+- **No kill gate** -- information-gathering stage
+- **No aggregate metrics** -- individual risk scores only, no overall risk assessment
+
+**Critical observation**: The CLI's risk matrix is structurally complete -- it has categories, severity/probability/impact scoring, mitigation tracking, and residual risk. But like earlier stages, it has no `analysisStep` to generate risks. All risk data must come from elsewhere.
+
+**CLI Strengths**: 6 risk categories (vs GUI's 4), 3-factor scoring model (severity × probability × impact = 1-125 range vs GUI's 2-factor), residual risk tracking (post-mitigation scoring), mitigation owner assignment, risk status lifecycle (open → mitigated → accepted → closed), review date tracking.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `EHG/src/components/stages/v2/Stage06RiskEvaluation.tsx` (223 lines), `EHG/src/hooks/useVentureArtifacts.ts`, `EHG/src/config/venture-workflow.ts`
+
+**GUI Stage 6 -- "Risk Evaluation"**:
+
+**Risk Data Structure**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier |
+| `name` | string | Risk name |
+| `description` | string | Risk description |
+| `category` | enum | market/financial/technical/operational (4 categories) |
+| `severity` | enum | high/medium/low |
+| `probability` | number | 0-100% |
+| `impact` | number | 0-100% |
+| `mitigation` | string | Mitigation strategy |
+
+**Risk Scoring**: probability × impact (2-factor, 0-10000 range)
+
+**Sample Risks** (pre-populated):
+- Market Adoption Risk (severity: high)
+- Funding Gap (severity: medium)
+- Technical Complexity (severity: medium)
+- Team Scaling (severity: low)
+
+**UI Components**:
+- Overall Risk Assessment card with score badge
+- Risk category grid (4 columns) showing count by category
+- Accordion with detailed risk cards
+- High-risk warning alert
+
+**Gate Type**: None (`gateType: 'none'`)
+**Artifact Type**: `risk_matrix` (stored in `venture_artifacts` table with versioning)
+**Completion**: Manual via `onComplete()` callback
+
+**Database**:
+- Writes: `venture_artifacts` (versioned artifact), `ventures.metadata.risks`
+- Reads: Venture data from previous stages
+
+**Stage numbering note**: Both CLI and GUI agree Stage 6 = Risk assessment. However, the GUI's `venture-workflow.ts` SSOT has naming conflicts with actual component implementations for Stages 7-10.
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Risk categories | 6 (Market, Product, Technical, Legal/Compliance, Financial, Operational) | 4 (market, financial, technical, operational) |
+| Scoring model | 3-factor (severity × probability × impact, 1-125) | 2-factor (probability × impact, 0-10000) |
+| Severity scale | Integer 1-5 | Enum high/medium/low |
+| Probability scale | Integer 1-5 | 0-100% |
+| Impact scale | Integer 1-5 | 0-100% |
+| Residual risk | Yes (post-mitigation scoring) | No |
+| Risk status lifecycle | open/mitigated/accepted/closed | No |
+| Mitigation owner | Yes (required field) | No |
+| Review date | Yes (required field) | No |
+| Pre-populated risks | No | Yes (4 sample risks) |
+| Risk generation | None (passive) | None (manual entry with samples) |
+| Aggregate assessment | None | Overall risk score badge |
+| Artifact versioning | No | Yes (venture_artifacts table) |
+| Kill gate | No | No |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-06-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-06-claude.md`
+- OpenAI: `docs/plans/responses/stage-06-openai.md`
+- AntiGravity: `docs/plans/responses/stage-06-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
+
+---
+
+## Stage 7: Pricing
 
 *Analysis pending*
 
 ---
 
-## Stage 7: Revenue Architecture
+## Stage 8: Business Model Canvas
 
 *Analysis pending*
 
 ---
 
-## Stage 8: Technology Blueprint
-
-*Analysis pending*
-
----
-
-## Stage 9: Brand Genome
+## Stage 9: Exit Strategy
 
 *Analysis pending*
 
