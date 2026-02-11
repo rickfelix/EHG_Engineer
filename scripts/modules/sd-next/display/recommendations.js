@@ -20,11 +20,11 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
   console.log(`${colors.bold}${colors.green}RECOMMENDED ACTIONS:${colors.reset}\n`);
 
-  // Check for "working on" SD first
-  const workingOn = await getWorkingOnSD(supabase);
+  // Check for "working on" SD first (cross-reference with session claims)
+  const workingOn = await getWorkingOnSD(supabase, sessionContext);
 
   if (workingOn) {
-    await displayWorkingOnSD(supabase, workingOn);
+    await displayWorkingOnSD(supabase, workingOn, sessionContext);
   }
 
   // Find ready SDs from baseline (skip SDs claimed by other sessions)
@@ -35,7 +35,7 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
     displayVerificationNeeded(needsVerificationSDs);
   }
 
-  if (readySDs.length > 0 && !workingOn) {
+  if (readySDs.length > 0 && (!workingOn || workingOn._claimedByOther)) {
     await displayStartRecommendation(supabase, readySDs[0]);
   }
 
@@ -54,7 +54,7 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
   displayBeginWorkInstructions();
 
   // Return structured action data (PAT-AUTO-PROCEED-002 CAPA)
-  if (workingOn) {
+  if (workingOn && !workingOn._claimedByOther) {
     const sdId = workingOn.sd_key || workingOn.id;
     return { action: 'continue', sd_id: sdId, reason: `SD ${sdId} is marked as working on (${workingOn.progress_percentage || 0}% complete)` };
   }
@@ -72,9 +72,9 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
 }
 
 /**
- * Get SD marked as "working on"
+ * Get SD marked as "working on", cross-referenced with session claims
  */
-async function getWorkingOnSD(supabase) {
+async function getWorkingOnSD(supabase, sessionContext = {}) {
   const { data: workingOn } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, title, progress_percentage')
@@ -83,14 +83,46 @@ async function getWorkingOnSD(supabase) {
     .lt('progress_percentage', 100)
     .single();
 
+  if (!workingOn) return null;
+
+  // Cross-reference with session claims to detect multi-session conflicts
+  const { claimedSDs, currentSession } = sessionContext;
+  if (claimedSDs) {
+    const sdId = workingOn.sd_key || workingOn.id;
+    const claimingSessionId = claimedSDs.get(sdId) || claimedSDs.get(workingOn.id);
+    const currentSessionId = currentSession?.session_id;
+
+    if (claimingSessionId && claimingSessionId !== currentSessionId) {
+      workingOn._claimedByOther = true;
+      workingOn._claimingSessionId = claimingSessionId;
+    }
+  }
+
   return workingOn;
 }
 
 /**
- * Display "working on" SD with duration estimate
+ * Display "working on" SD with duration estimate and claim status
  */
-async function displayWorkingOnSD(supabase, workingOn) {
+async function displayWorkingOnSD(supabase, workingOn, sessionContext = {}) {
   const sdId = workingOn.sd_key || workingOn.id;
+
+  // Show CLAIMED warning if another session owns this SD
+  if (workingOn._claimedByOther) {
+    const { activeSessions = [] } = sessionContext;
+    const claimingSession = activeSessions.find(s => s.session_id === workingOn._claimingSessionId);
+    const shortId = (workingOn._claimingSessionId || '').substring(0, 20) + '...';
+    const heartbeatAge = claimingSession?.heartbeat_age_human || 'unknown';
+    const hostname = claimingSession?.hostname || 'unknown';
+
+    console.log(`${colors.bgRed}${colors.bold} CLAIMED ${colors.reset} ${sdId}`);
+    console.log(`  ${workingOn.title}`);
+    console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}`);
+    console.log(`  ${colors.red}Claimed by session ${shortId} (${heartbeatAge}) on ${hostname}${colors.reset}`);
+    console.log(`  ${colors.yellow}Pick a different SD or wait for the session to release.${colors.reset}\n`);
+    return;
+  }
+
   console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${sdId}`);
   console.log(`  ${workingOn.title}`);
   console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}`);
