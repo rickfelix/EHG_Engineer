@@ -28,6 +28,7 @@ import {
   getArtifacts,
   getStatus as getPhase0Status
 } from './modules/phase-0/leo-integration.js';
+import { routeWorkItem } from '../lib/utils/work-item-router.js';
 import {
   parsePlanFile,
   formatFilesAsScope,
@@ -788,24 +789,46 @@ async function createSD(options) {
     forceCreate = false
   } = options;
 
-  // QF-CLAIM-CONFLICT-UX-001: Detect Quick-Fix prefix and redirect to proper workflow
-  // This prevents QF-* named items from going through full SD workflow accidentally
+  // QF-CLAIM-CONFLICT-UX-001 + SD-LEO-ENH-IMPLEMENT-TIERED-QUICK-001:
+  // Detect Quick-Fix prefix and redirect via Unified Work-Item Router
   if (sdKey && sdKey.startsWith('QF-') && !forceCreate) {
+    // Use router to determine if this should be a QF or SD
+    const routingDecision = await routeWorkItem({
+      estimatedLoc: 0, // Unknown at SD creation time - use type/description signals
+      type: type || 'bug',
+      description: title,
+      entryPoint: 'leo-create-sd',
+    }, supabase);
+
     console.log('\n' + '═'.repeat(60));
     console.log('⚠️  QUICK-FIX PREFIX DETECTED');
     console.log('═'.repeat(60));
     console.log(`   SD Key: ${sdKey}`);
+    console.log(`   Router Decision: ${routingDecision.tierLabel}`);
     console.log('');
-    console.log('   This SD key has a QF- prefix, indicating a Quick-Fix.');
-    console.log('   Quick-Fixes should use the streamlined workflow:');
-    console.log('');
-    console.log('   node scripts/create-quick-fix.js --title "' + title + '" --type ' + (type || 'bug'));
-    console.log('');
-    console.log('   Quick-Fix benefits:');
-    console.log('   • No LEAD approval required');
-    console.log('   • No PRD creation');
-    console.log('   • Streamlined implementation path');
-    console.log('   • Ideal for changes ≤50 LOC');
+
+    if (routingDecision.tier <= 2) {
+      console.log('   This SD key has a QF- prefix and the router confirms Quick-Fix scope.');
+      console.log('   Quick-Fixes should use the streamlined workflow:');
+      console.log('');
+      console.log('   node scripts/create-quick-fix.js --title "' + title + '" --type ' + (type || 'bug'));
+      console.log('');
+      console.log(`   Tier ${routingDecision.tier} benefits:`);
+      console.log('   • No LEAD approval required');
+      console.log('   • No PRD creation');
+      if (routingDecision.tier === 1) {
+        console.log('   • Auto-approve (skip compliance rubric)');
+        console.log(`   • Ideal for changes ≤${routingDecision.tier1MaxLoc} LOC`);
+      } else {
+        console.log('   • Compliance rubric required (min score: 70)');
+        console.log(`   • Ideal for changes ≤${routingDecision.tier2MaxLoc} LOC`);
+      }
+    } else {
+      console.log('   This SD key has a QF- prefix but risk keywords detected:');
+      console.log(`   Escalation: ${routingDecision.escalationReason}`);
+      console.log('   Consider using a full SD workflow instead.');
+    }
+
     console.log('');
     console.log('   To proceed as Strategic Directive anyway, add --force flag.');
     console.log('═'.repeat(60));
