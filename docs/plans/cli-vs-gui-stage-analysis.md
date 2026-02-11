@@ -905,7 +905,107 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength: VERY HIGH** -- All three respondents agree on fundamentals. This is the most aligned stage so far.
+
+#### Unanimous Agreement (3/3)
+
+1. **Financial model generation is the #1 gap (Importance 5/5)**: All three rate the CLI's lack of an `analysisStep` to generate the 10 input numbers as critically blocking. Without it, "Stage 5 is dead code" (AntiGravity), "Stage 5 is not autonomous" (OpenAI). The kill gate logic is solid but has no data to evaluate.
+
+2. **Stage 4 consumption is mandatory (Importance 5/5)**: All three agree Stage 5 must consume Stage 4's `stage5Handoff` artifact to ground financial projections in competitive reality. Disconnected stages produce garbage-in results.
+
+3. **Unit economics are required**: All three agree the CLI needs CAC, LTV, LTV:CAC, and payback period. AntiGravity calls them "the physics of the business" and rates it 5/5 Critical. OpenAI and Claude rate 4/5 High. The minimum set is consistent: CAC, LTV, LTV:CAC ratio, payback months, churn rate.
+
+4. **CLI's 50% ROI threshold is too aggressive**: All three agree it must be lowered. None endorse the current threshold. AntiGravity: "1.5x MOIC is an aggressive target for a mature business or a PE firm."
+
+5. **ELIMINATE monthly projections**: All three agree annual granularity is sufficient for the kill gate. OpenAI explicitly marks this ELIMINATE. Claude and AntiGravity note that monthly adds false precision at this stage.
+
+6. **Keep hard block over recursion**: All three agree recursion is problematic for autonomous pipelines. AntiGravity: "Recursive loops are dangerous in a CLI/Agentic environment without a human brake." OpenAI: "Hard block + structured remediation, not unbounded recursion."
+
+7. **ELIMINATE GUI AI UX features**: Polling, progress bars, skip buttons, tabbed results -- none of this is needed in the CLI pipeline.
+
+8. **Preserve CLI's pure function kill gate**: All three praise `evaluateKillGate()` as a superior pattern -- deterministic, testable, auditable.
+
+9. **Add scenario analysis (lightweight)**: All three want some form of scenario testing, but all agree full monthly simulation is overkill. Apply pessimistic/optimistic multipliers to the base case and classify robustness.
+
+#### Key Disagreement: ROI Threshold Value
+
+| Respondent | Recommended Threshold | Formula | Notes |
+|------------|----------------------|---------|-------|
+| Claude | **30%** | Keep current formula, single threshold | Conservative middle ground |
+| OpenAI (GPT 5.3) | **25% with bands** | 25%+ = pass, 15-25% = conditional, <15% = kill | Introduces a "conditional" band requiring strong unit economics |
+| AntiGravity | **15%** | Keep current formula | Matches GUI's existing threshold, "standard for investable" |
+
+**Arbitration**: Use **25% with OpenAI's banded approach**. Rationale:
+- 15% (AntiGravity) is too lenient -- it's closer to a savings account return spread over 3 years. Ventures need to compensate for high failure rates.
+- 30% (Claude) is reasonable but a single hard cliff creates false precision at the boundary.
+- 25% with bands (OpenAI) is the best design: clear pass at 25%+, conditional zone at 15-25% that requires corroboration from unit economics, definitive kill below 15%. This gives the kill gate nuance without recursion complexity.
+
+#### Key Disagreement: Unit Economics as Gate Inputs
+
+| Respondent | Unit Economics Role | Kill on UE Failure? |
+|------------|-------------------|---------------------|
+| Claude | Intermediate calculations stored for Stage 6, NOT gate inputs | No -- gate only evaluates roi3y + breakEvenMonth |
+| OpenAI (GPT 5.3) | Minimal gate set with thresholds | Yes -- `ltvCacRatio >= 2`, `paybackMonths <= 18` |
+| AntiGravity | Full gate inputs | Yes -- `ltvCacRatio >= 1.5`, `paybackMonths <= 18`, `grossMargin >= 20%` |
+
+**Arbitration**: Use **OpenAI's approach -- unit economics as supplementary gate inputs**. Rationale:
+- Claude's position that unit economics are "intermediate, not gate inputs" is technically clean but misses the point: a venture with a 25% ROI but 0.5 LTV:CAC ratio is fundamentally broken. The aggregate numbers might look fine while the unit economics scream failure.
+- AntiGravity's thresholds are slightly too aggressive (1.5 LTV:CAC minimum is very low).
+- OpenAI's `ltvCacRatio >= 2` and `paybackMonths <= 18` are reasonable supplementary gates that catch cases where aggregate ROI passes but unit economics fail.
+
+**Implementation**: Kill gate evaluates roi3y + breakEvenMonth (primary), PLUS ltvCacRatio and paybackMonths as supplementary checks. In the 15-25% conditional band, strong unit economics (LTV:CAC >= 3, payback <= 12) can save the venture from a kill.
+
+#### Key Disagreement: Kill Behavior Nuance
+
+| Respondent | Kill Behavior | Recovery Mechanism |
+|------------|--------------|-------------------|
+| Claude | Hard block, no recovery | `lowConfidenceKill` flag for future human review |
+| OpenAI (GPT 5.3) | Hard block + structured remediation | `remediationRoute` + max 1 auto-retry, then escalate |
+| AntiGravity | Hard block + "Pivot" option | Manual pivot command or override |
+
+**Arbitration**: Use **Claude's hard block with OpenAI's `remediationRoute` metadata**. Emit the remediation suggestion (which stage to revisit and why) but don't auto-execute it. This gives humans actionable guidance without autonomous loop risk. No automatic retries.
+
+#### Consensus Recommendation
+
+**Kill Gate v2.0:**
+- Primary: `roi3y >= 0.25` AND `breakEvenMonth <= 24` AND `breakEvenMonth !== null`
+- Supplementary: `ltvCacRatio >= 2` AND `paybackMonths <= 18`
+- Conditional band: `0.15 <= roi3y < 0.25` passes ONLY IF supplementary metrics are strong (LTV:CAC >= 3, payback <= 12)
+- Below 0.15 ROI: unconditional kill
+
+**Schema changes (agreed by all):**
+- Add `analysisStep` for LLM-based financial model generation consuming Stage 4 + Stage 3
+- Add unit economics (CAC, LTV, LTV:CAC, churn, payback, gross margin) as derived fields
+- Add lightweight scenario spread (pessimistic/optimistic ROI with robustness classification)
+- Add `assumptions` object capturing the inputs used to generate projections
+- Add `stage4Context` carrying through pricing and competitive data
+- Add `remediationRoute` in kill reasons (suggested stage to revisit)
+
+**Processing changes (agreed by all):**
+- Add `analysisStep` that generates financial projections from venture + competitive intel
+- Enhance `computeDerived()` to calculate unit economics + scenario spread
+- Enhance `evaluateKillGate()` with supplementary unit economics checks + banded ROI
+- Add business logic validation warnings (churn >20%, negative margins, unrealistic growth)
+
+#### What to Build (Priority Order)
+
+1. **P0**: `analysisStep` for financial model generation (LLM call consuming Stage 4 handoff + Stage 3 market data)
+2. **P0**: Stage 4 `stage5Handoff` consumption (wire it into the analysisStep)
+3. **P0**: Calibrate ROI threshold from 50% to 25% with banded decision logic
+4. **P1**: Unit economics derived fields + supplementary kill checks (LTV:CAC >= 2, payback <= 18)
+5. **P1**: Business logic validation warnings
+6. **P1**: Lightweight scenario spread (pessimistic/optimistic multipliers + robustness flag)
+7. **P2**: Provenance tracking (data source, Stage 4 confidence carry-through)
+8. **P2**: `remediationRoute` in kill reasons
+
+#### What NOT to Build
+
+- Monthly projections (annual is sufficient for gate)
+- Recursion to Stage 3 (hard block is correct for autonomous pipelines)
+- GUI's weighted profitability score (binary pass/kill with structured reasons is superior)
+- Chairman override at Stage 5 (existing DFE + Chairman Preference Store handles this)
+- S-curve customer adoption model (adds complexity without improving gate accuracy)
+- AI-powered GUI forecasting workflow (polling, skip button, tabbed results)
 
 ---
 
