@@ -21,9 +21,6 @@ import dotenv from 'dotenv';
 // LEO v4.3.3: Import IntensityDetector for refactoring SDs
 import { detectIntensityForSD } from './intensity-detector.js';
 
-// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
-import { getOpenAIModel } from '../../lib/config/model-config.js';
-
 dotenv.config();
 
 // Valid SD types (must match database CHECK constraint)
@@ -67,8 +64,7 @@ const EXPECTED_JSON_SCHEMA = `{
 
 export class SDTypeClassifier {
   constructor() {
-    this.model = getOpenAIModel('classification'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config
-    this.llmClient = null; // Initialized lazily on first use
+    this.llmClient = null; // Initialized lazily via getLLMClient()
   }
 
   /**
@@ -81,7 +77,7 @@ export class SDTypeClassifier {
           purpose: 'sd-type-classification',
           phase: 'LEAD'
         });
-      } catch (error) {
+      } catch (_error) {
         console.warn('LLM client unavailable - AI classification will fall back to keyword detection');
         return null;
       }

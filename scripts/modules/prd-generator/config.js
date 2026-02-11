@@ -5,13 +5,11 @@
  * LLM-based PRD content generation configuration
  */
 
-import { getOpenAIModel } from '../../../lib/config/model-config.js';
-
 /**
  * LLM PRD Generation Configuration
+ * Model selection handled by LLM Client Factory (getLLMClient)
  */
 export const LLM_PRD_CONFIG = {
-  model: getOpenAIModel('generation'),
   temperature: 0.6,   // Slightly lower for more structured PRD content
   maxTokens: 32000,   // Extended for comprehensive PRD generation
   enabled: process.env.LLM_PRD_GENERATION !== 'false'  // Enabled by default
