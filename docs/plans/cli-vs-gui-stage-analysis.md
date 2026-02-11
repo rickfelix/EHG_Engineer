@@ -1209,7 +1209,118 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ## Stage 7: Pricing
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-07.js`
+**Type**: Passive validation + **active `computeDerived()`** (unit economics formulas)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `currency` | string | minLength: 1 | Yes |
+| `tiers` | array | minItems: 1 | Yes |
+| `tiers[].name` | string | minLength: 1 | Yes |
+| `tiers[].price` | number | min: 0 | Yes |
+| `tiers[].billing_period` | enum | monthly/quarterly/annual | Yes |
+| `tiers[].included_units` | string | -- | No |
+| `tiers[].target_segment` | string | minLength: 1 | Yes |
+| `gross_margin_pct` | number | 0-100 | Yes |
+| `churn_rate_monthly` | number | 0-100 | Yes |
+| `cac` | number | min: 0 | Yes |
+| `arpa` | number | min: 0 | Yes |
+
+**Schema (Derived)**:
+| Field | Formula | Notes |
+|-------|---------|-------|
+| `ltv` | `(ARPA * gross_margin_pct/100) / churn_rate_monthly_decimal` | null if churn = 0 |
+| `cac_ltv_ratio` | `CAC / LTV` | null if LTV = 0 or churn = 0 |
+| `payback_months` | `CAC / (ARPA * gross_margin_pct/100)` | null if gross profit = 0 |
+| `warnings` | Business logic warnings | High churn (>30%), zero churn, zero gross profit |
+
+**Processing**:
+- `validate(data)`: Validates all input fields, tiers array, enum values, numeric bounds
+- `computeDerived(data)`: Calculates LTV, CAC:LTV ratio, payback months; handles zero-churn edge case gracefully (returns null + warning instead of dividing by zero)
+- **No `analysisSteps`** -- pricing data must be provided externally
+- **No pricing model selection** -- just tier structure
+- **No competitor pricing analysis**
+- **No discount policies**
+
+**CLI Strengths**: Clean unit economics formulas, zero-churn edge case handling, high-churn warning (>30%), billing period flexibility (monthly/quarterly/annual).
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `EHG/src/components/stages/v2/Stage7PricingStrategy.tsx` (1,041 lines), `EHG/src/hooks/usePricingStrategy.ts`
+
+**GUI Stage 7 -- "Pricing Strategy"** (comprehensive pricing design):
+
+**7 Pricing Models**: freemium, subscription_flat, subscription_tiered, usage_based, per_seat, transaction_fee, hybrid
+
+**Tier Structure** (per tier):
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | e.g., "Starter", "Pro", "Enterprise" |
+| `description` | string | Tier description |
+| `price` | number | Base price USD |
+| `billingCycle` | enum | monthly/yearly/one_time |
+| `features` | string[] | Feature list |
+| `limits` | Record<string, number> | Usage limits |
+| `isPopular` | boolean | Visual prominence flag |
+| `cta` | string | CTA button text |
+
+**Discount Policies**: percentage/fixed/volume/promotional with conditions, validity dates, max uses
+
+**Competitor Pricing Analysis**: name, lowest/highest tier, pricing model, notes per competitor
+
+**Value Metrics**: primary metric, secondary metrics, price anchor
+
+**Projections**: target ACV, expected ARPU, conversion rate (0-20%), churn rate (0-20%)
+
+**9 Auto-Generated Recommendations**:
+1. Missing tiers warning
+2. Freemium without free tier
+3. No popular tier marked
+4. No competitors added
+5. Low conversion rate (<1%)
+6. High churn rate (>10%)
+7. Missing primary value metric
+8. Price >30% above competitors
+9. Price >30% below competitors
+
+**Completion**: At least 1 tier required. No minimum score.
+
+**Database**: `pricing_strategies`, `pricing_competitive_analysis`, `chairman_pricing_overrides` tables + `venture_artifacts` (type: pricing_model)
+
+**Inputs from prior stages**: Stage 4 competitive data, Stage 5 financial model, Stage 6 risk matrix
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Pricing model selection | None | 7 models with rationale |
+| Tier richness | name, price, billing, units, segment | name, description, price, billing, features[], limits{}, isPopular, CTA |
+| Billing periods | monthly/quarterly/annual | monthly/yearly/one_time |
+| Discount policies | None | 4 types with conditions |
+| Competitor analysis | None | Per-competitor pricing benchmarks |
+| Value metrics | None | Primary/secondary metrics, price anchor |
+| Unit economics | Yes (LTV, CAC:LTV, payback) | Projections (ACV, ARPU, conversion, churn) |
+| Edge cases | Zero-churn handling | Freemium without free tier |
+| Recommendations | Warnings only (churn >30%) | 9 auto-generated recommendations |
+| Pricing generation | None (passive) | None (manual entry with AI hooks) |
+| Chairman override | None | Override table with rationale |
+| Prior stage consumption | None | Stages 4-6 data as props |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-07-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-07-claude.md`
+- OpenAI: `docs/plans/responses/stage-07-openai.md`
+- AntiGravity: `docs/plans/responses/stage-07-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
