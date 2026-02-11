@@ -14,6 +14,7 @@ export const colors = {
   cyan: '\x1b[36m',
   red: '\x1b[31m',
   white: '\x1b[37m',
+  bgRed: '\x1b[41m',
   bgGreen: '\x1b[42m',
   bgYellow: '\x1b[43m',
   bgBlue: '\x1b[44m',
