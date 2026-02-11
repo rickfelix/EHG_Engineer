@@ -222,8 +222,6 @@
     "sd:hierarchy": "node scripts/lib/sd-hierarchy-mapper.js",
     "sd:new": "node scripts/create-sd.js",
     "sd:from-feedback": "node scripts/sd-from-feedback.js",
-    "gap:analyze": "node scripts/retroactive-gap-analysis.js",
-    "gap:analyze:batch": "node scripts/retroactive-gap-analysis.js --all --limit 10",
     "gap:analyze:verbose": "node scripts/retroactive-gap-analysis.js --verbose",
     "git:recover": "node scripts/git-commit-recovery.js",
     "leo:continuous": "node scripts/leo-continuous.js",
