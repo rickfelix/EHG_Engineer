@@ -1122,7 +1122,88 @@ Coverage levels per (feature, competitor): none / basic / advanced / superior (0
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength: VERY HIGH** -- All three respondents agree on every fundamental. Stage 6 is remarkably well-aligned.
+
+#### Unanimous Agreement (3/3)
+
+1. **Risk generation `analysisStep` is the #1 gap (Importance 5/5)**: All three rate autonomous risk generation as critically missing. Neither CLI nor GUI generates risks automatically. The CLI must add an `analysisStep` that produces 10-15 venture-specific risks from Stages 1-5 output.
+
+2. **Stage 5 seeding is mandatory (Importance 5/5)**: All three agree financial risks from Stage 5 unit economics must be auto-seeded deterministically. Specific triggers are consistent across all responses: churn >10%, gross margin <40%, LTV:CAC <3, extended payback period.
+
+3. **Aggregate risk metrics are needed (Importance 4/5)**: All three agree Stage 6 must produce summary signals for downstream consumption. All propose similar outputs: overall risk index/score, critical risk count, category distribution, top risk categories/risks.
+
+4. **Preserve CLI's 6 risk categories**: All three agree the CLI's expanded taxonomy (adding Product, Legal/Compliance) is superior to the GUI's 4 categories.
+
+5. **Preserve CLI's residual risk tracking**: All three agree this is a CLI strength. AntiGravity rates it 5/5 Critical ("crucial for showing value of mitigations"), Claude and OpenAI keep it optional but valuable.
+
+6. **Add `source` field per risk**: All three recommend tracking whether each risk was LLM-generated, auto-seeded from Stage 5, or manually added. Enables provenance tracking.
+
+7. **Preserve CLI's governance fields**: Owner, status, and review_date are CLI strengths. All agree they should be kept (some suggest making optional vs required).
+
+#### Key Disagreement: Scoring Model (2-factor vs 3-factor)
+
+| Respondent | Scoring Model | Rationale |
+|------------|--------------|-----------|
+| Claude | **2-factor** (probability × consequence) | Severity and impact are too correlated; merge into "consequence". Cleaner 1-25 range. Better LLM consistency. |
+| AntiGravity | **2-factor** (probability × impact) | Same reasoning -- "Severity overlaps with Impact". Cites ISO 31000 standard. |
+| OpenAI (GPT 5.3) | **3-factor** (keep severity × probability × impact) | Argues severity, probability, and impact are separable with proper rubrics. Adds LLM normalization layer: qualitative labels → deterministic mapping to 1-5. |
+
+**Arbitration: Use 2-factor model (probability × consequence).** Two of three recommend it. The 3-factor model's theoretical advantage (separating severity from impact) doesn't hold in practice -- both humans and LLMs score them nearly identically. ISO 31000 uses 2-factor. The 1-25 range is easier to threshold. OpenAI's normalization approach (qualitative labels → integer mapping) is good practice regardless of factor count and should be adopted.
+
+#### Key Disagreement: Risk Name Field
+
+| Respondent | Name Field? | Rationale |
+|------------|------------|-----------|
+| Claude | No -- description is sufficient | Pure UI concern. Adds no analytical value. |
+| AntiGravity | No -- not mentioned | Not part of recommended schema. |
+| OpenAI (GPT 5.3) | Yes -- add `name` field | Improves readability/searchability of risk artifacts. |
+
+**Arbitration: Add `name` field (optional).** OpenAI is right that a short name improves usability when referencing risks in downstream stages (e.g., Stage 9 Exit Strategy referencing "Margin Pressure" is cleaner than quoting a 10+ word description). Low cost, reasonable benefit. Make it optional.
+
+#### Key Disagreement: Stage 9 Quality Gate Enhancement
+
+| Respondent | Stage 9 Gate | Enhancement |
+|------------|-------------|-------------|
+| Claude | Raise `minItems` to 10 at Stage 6 | Enforce early to avoid Stage 9 rejection. |
+| AntiGravity | Keep `minItems: 10` with soft warn at Stage 6 | Hard gate at Stage 9, not Stage 6. |
+| OpenAI (GPT 5.3) | Keep count floor + add quality checks | Category coverage (4/6), mitigation completeness, high-confidence risk count. |
+
+**Arbitration: Use OpenAI's quality-enhanced gate at Stage 9.** Keep `minItems: 1` at Stage 6 (the `analysisStep` will produce 10+, but don't hard-gate at generation time). Stage 9's Reality Gate should evolve from pure count to: count >= 10 AND category coverage >= 4 of 6 AND mitigation coverage > 80%.
+
+#### Consensus Recommendation
+
+**Schema changes (agreed by all):**
+- Add `analysisStep` for LLM-based risk generation consuming Stages 1-5
+- Add deterministic risk seeding from Stage 5 unit economics
+- Add aggregate summary metrics (overall score, distribution, top risks)
+- Add `source` field per risk (generated/seeded/manual)
+- Simplify to 2-factor scoring (probability × consequence, 1-25 range)
+- Add `name` field (optional) per risk
+- Preserve 6 categories, residual risk, owner, status, review_date
+
+**Processing changes (agreed by all):**
+- Add `analysisStep` that generates 10-15 risks from venture context
+- Enhance `computeDerived()` with aggregate metrics
+- Add Stage 5 metric-triggered risk seeding rules
+- Add LLM scoring normalization (qualitative → quantitative mapping)
+
+#### What to Build (Priority Order)
+
+1. **P0**: `analysisStep` for risk generation (LLM generates 10-15 risks from Stages 1-5 context)
+2. **P0**: Deterministic risk seeding from Stage 5 unit economics (churn, margin, LTV:CAC thresholds)
+3. **P1**: Aggregate metrics in `computeDerived()` (overall risk score, distribution, top risks)
+4. **P1**: Simplify to 2-factor scoring (probability × consequence = 1-25)
+5. **P1**: Add `source` and `source_ref` fields for provenance
+6. **P2**: Add optional `name` field per risk
+7. **P2**: LLM scoring normalization (qualitative labels → integer mapping)
+8. **P3**: Enhance Stage 9 Reality Gate quality checks (category coverage, mitigation completeness)
+
+#### What NOT to Build
+
+- Pre-populated sample risks (GUI pattern replaced by LLM generation)
+- GUI-style risk badge/card UI (CLI produces structured data, not display widgets)
+- Artifact versioning at Stage 6 level (handle at platform persistence layer)
+- Required review dates at Stage 6 (premature; keep optional with sensible defaults)
 
 ---
 
