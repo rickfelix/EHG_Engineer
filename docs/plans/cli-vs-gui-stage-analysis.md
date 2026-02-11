@@ -570,7 +570,105 @@
 
 ## Stage 4: Competitive Intel
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-04.js`
+**Type**: Passive validation (NO analysisSteps)
+
+**Schema**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `competitors` | array | minItems: 1 | Yes |
+| `competitors[].name` | string | minLength: 1, unique (case-insensitive) | Yes |
+| `competitors[].position` | string | minLength: 1 | Yes |
+| `competitors[].threat` | enum | H / M / L | Yes |
+| `competitors[].strengths` | array of strings | minItems: 1 | Yes |
+| `competitors[].weaknesses` | array of strings | minItems: 1 | Yes |
+| `competitors[].swot.strengths` | array of strings | minItems: 1 | Yes |
+| `competitors[].swot.weaknesses` | array of strings | minItems: 1 | Yes |
+| `competitors[].swot.opportunities` | array of strings | minItems: 1 | Yes |
+| `competitors[].swot.threats` | array of strings | minItems: 1 | Yes |
+
+**Processing**:
+- `validate(data)`: Checks competitors array non-empty, validates each card's fields, detects duplicate names (case-insensitive)
+- `computeDerived(data)`: No-op (returns data unchanged)
+- No `analysisSteps` -- purely passive
+- No scoring or derived metrics
+
+**Critical observation**: Like Stages 1-3, Stage 4 is a passive container. It validates competitor card structure but has zero capability to discover competitors, research their positioning, or generate SWOT analyses. All data must come from elsewhere.
+
+**No kill gate at Stage 4.** This is an information-gathering stage between two kill gates (3 and 5).
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: EHG frontend code (`src/components/stages/Stage4CompetitiveIntelligence.tsx` [v1], `src/components/stages/v2/Stage04CompetitiveIntelligence.tsx` [v2], competitive intelligence services, edge function `competitive-intelligence`)
+
+**GUI Stage 4 -- "Competitive Intelligence"** (hybrid: manual entry + AI agent):
+
+**Manual competitor entry** (per competitor):
+| Field | Type | Required |
+|-------|------|----------|
+| Company name | text | Yes |
+| Website URL | text | No |
+| Market segment | text | No |
+| Market share estimate | percentage | No |
+| Pricing model | dropdown (Freemium/Subscription/One-time/Usage-based/Tiered/Enterprise) | No |
+| Additional notes | textarea | No |
+| Strengths | array | No |
+| Weaknesses | array | No |
+
+**Feature comparison framework** (6 default features):
+| Feature | Category | Weight |
+|---------|----------|--------|
+| user_interface | core | 3 |
+| performance | core | 3 |
+| pricing | core | 2 |
+| integration | advanced | 2 |
+| analytics | advanced | 2 |
+| unique_feature | moat | 4 |
+
+Coverage levels per (feature, competitor): none / basic / advanced / superior (0-3 scale)
+
+**AI-Powered Analysis** (active, via edge function):
+- 5 API endpoints at `/api/agent-execution/`
+- Start -> Poll (3-second intervals) -> Results across 6 tabs: Overview, Competitors, Market, Features, Pricing, SWOT
+- "Skip Agent Execution" button after 10 seconds
+- Fallback: synthetic analysis if edge function unavailable
+
+**Scoring**:
+| Metric | Scale | Calculation |
+|--------|-------|-------------|
+| Differentiation Score | 0-10 | Weighted feature coverage comparison vs best competitor |
+| Defensibility Grade | A-F | A (8+), B (6-8), C (4-6), D (2-4), F (<2) |
+| Market Position | String | Challenger (>=6), Follower (4-6), Niche Player (<4) |
+
+**Edge cases handled**:
+- Blue Ocean (0 competitors found) -- shows "Blue Ocean Opportunity" alert
+- Partial extraction (AI ran but structured parsing failed) -- shows raw text with warning
+- Quality metadata: confidence_score (0-100%), extraction_method, quality_issues, validation_warnings
+
+**Persona mapping**: Links Stage 3 customer personas to competitors with fit scores (80% if segment matches, 60% otherwise)
+
+**Stage 5 integration**: Passes `competitiveData` to Stage 5 for pricing assumptions, market size, CAC/LTV calculations
+
+**Completion requirements**: At least 1 competitor + differentiation score calculated. No minimum score enforced.
+
+**Database tables**:
+- Writes: `competitors` (per-venture), `feature_coverage`, `market_defense_strategies`, `agent_executions` (tracking)
+- Reads: `ventures`, `customer_intelligence` (Stage 3 personas)
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-04-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-04-claude.md`
+- OpenAI: `docs/plans/responses/stage-04-openai.md`
+- AntiGravity: `docs/plans/responses/stage-04-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
