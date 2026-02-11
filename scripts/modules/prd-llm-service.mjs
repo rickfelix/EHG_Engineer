@@ -9,7 +9,7 @@
  * @version 1.0.0
  */
 
-import OpenAI from 'openai';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 import {
   formatArrayField,
   formatRisks,
@@ -24,7 +24,6 @@ import {
 // =============================================================================
 
 export const LLM_PRD_CONFIG = {
-  model: 'gpt-4o',  // Production model
   temperature: 0.6,   // Lower for structured PRD content
   maxTokens: 32000,   // Extended for comprehensive PRD generation
   enabled: process.env.LLM_PRD_GENERATION !== 'false'
@@ -74,23 +73,33 @@ export const PRD_QUALITY_RUBRIC_CRITERIA = `
 // LLM CLIENT
 // =============================================================================
 
-let openaiClient = null;
-
 /**
- * Get or create OpenAI client
+ * Get LLM client from factory for PRD generation
+ * Uses factory-resolved model for PLAN phase
  */
-export function getOpenAIClient() {
-  if (!openaiClient && process.env.OPENAI_API_KEY) {
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+async function getPRDLLMClient() {
+  if (!LLM_PRD_CONFIG.enabled) {
+    return null;
   }
-  return openaiClient;
+
+  try {
+    const client = await getLLMClient({
+      purpose: 'prd-generation',
+      subAgent: 'PRD',
+      phase: 'PLAN'
+    });
+    return client;
+  } catch (error) {
+    console.warn(`⚠️ LLM client unavailable: ${error.message}`);
+    return null;
+  }
 }
 
 /**
  * Check if LLM generation is available
  */
 export function isLLMAvailable() {
-  return LLM_PRD_CONFIG.enabled && !!process.env.OPENAI_API_KEY;
+  return LLM_PRD_CONFIG.enabled;
 }
 
 // =============================================================================
@@ -105,13 +114,13 @@ export function isLLMAvailable() {
  */
 export async function generatePRDContentWithLLM(sd, context = {}) {
   if (!isLLMAvailable()) {
-    console.log('⚠️ LLM PRD generation disabled or no API key');
+    console.log('⚠️ LLM PRD generation disabled');
     return null;
   }
 
-  const openai = getOpenAIClient();
-  if (!openai) {
-    console.log('⚠️ OpenAI client not available');
+  const llmClient = await getPRDLLMClient();
+  if (!llmClient) {
+    console.log('⚠️ LLM client not available');
     return null;
   }
 
@@ -169,8 +178,7 @@ Generate a JSON object with these fields:
 
   try {
     console.log('🤖 Generating PRD content with LLM...');
-    const response = await openai.chat.completions.create({
-      model: LLM_PRD_CONFIG.model,
+    const response = await llmClient.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -361,7 +369,6 @@ Return the PRD as a valid JSON object following the schema in the system prompt.
 export default {
   LLM_PRD_CONFIG,
   PRD_QUALITY_RUBRIC_CRITERIA,
-  getOpenAIClient,
   isLLMAvailable,
   generatePRDContentWithLLM,
   buildPRDGenerationContext
