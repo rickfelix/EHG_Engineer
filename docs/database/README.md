@@ -1,177 +1,137 @@
-# Database Documentation
+# Migration Documentation
 
-This directory contains database schema documentation, RLS policies, and database architecture guides.
+This directory contains documentation about data migrations, system migrations, and architectural transitions.
 
 ## Purpose
 
-Database documentation includes:
-- **Schema diagrams**: Entity relationship diagrams
-- **Table documentation**: Column descriptions and constraints
-- **RLS policies**: Row-level security policy documentation
-- **Database patterns**: Best practices and design patterns
-- **Performance guidelines**: Indexing and query optimization
+Migration documentation captures:
+- **Data migrations**: Moving data between systems or schemas
+- **System migrations**: Platform or infrastructure changes
+- **Architecture transitions**: Major refactoring efforts
+- **Protocol upgrades**: LEO Protocol version migrations
 
-## Contents
+## Difference from /database/migrations/
 
-### Schema Documentation
-- Table schemas and relationships
-- Column types and constraints
-- Foreign key relationships
-- Index definitions
+| Directory | Purpose |
+|-----------|---------|
+| `/database/migrations/` | SQL migration files (executable code) |
+| `/docs/migrations/` | Migration documentation and guides |
 
-### RLS Policies
-- Policy definitions per table
-- Access control patterns
-- Service role bypass scenarios
-- Policy testing strategies
+## File Types
 
-### Architecture
-- Database design decisions
-- Normalization rationale
-- Partitioning strategies
-- Scaling considerations
-
-## Database Overview
-
-### Core Tables
-
-**Strategic Directives**:
-- `strategic_directives` - Main SD records
-- `sd_phase_handoffs` - Inter-phase handoffs
-- `sd_user_stories` - User story decomposition
-- `sd_deliverables` - Expected deliverables
-
-**Venture Management**:
-- `ventures` - Venture/project records
-- `venture_stages` - Stage progression tracking
-
-**Testing & Quality**:
-- `e2e_test_records` - E2E test results
-- `retrospectives` - Implementation retrospectives
-
-**LEO Protocol**:
-- `leo_protocol_versions` - Protocol version tracking
-- `leo_protocol_sections` - CLAUDE.md content sections
-
-**Session Management**:
-- `claude_sessions` - Active Claude Code sessions
-- `v_active_sessions` - Enhanced session view with heartbeat monitoring
-
-### Enhanced Views
-
-#### v_active_sessions
-
-Provides real-time session monitoring with heartbeat-based staleness detection (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001).
-
-**New Computed Fields**:
-- `heartbeat_age_seconds`: Seconds since last heartbeat
-- `heartbeat_age_minutes`: Minutes since last heartbeat
-- `heartbeat_age_human`: Human-readable age ("30s ago", "2m ago", "1h ago")
-- `seconds_until_stale`: Countdown to 5-minute stale threshold
-- `computed_status`: Session status based on heartbeat:
-  - `active`: Has SD claim and heartbeat <300s
-  - `stale`: Heartbeat >300s (5 minutes)
-  - `idle`: No SD claim
-  - `released`: Session released
-- `claim_duration_minutes`: How long SD has been claimed
-
-**Stale Detection**:
-Sessions with no heartbeat for >300 seconds (5 minutes) are automatically marked as `stale`.
-
-**Usage**:
-```sql
--- Find stale sessions
-SELECT session_id, sd_id, heartbeat_age_human, seconds_until_stale
-FROM v_active_sessions
-WHERE computed_status = 'stale';
-
--- Monitor session health
-SELECT session_id, sd_id, heartbeat_age_seconds, computed_status
-FROM v_active_sessions
-WHERE computed_status != 'released'
-ORDER BY heartbeat_age_seconds DESC;
+### Migration Guides
+```
+{SYSTEM}_{TYPE}_MIGRATION_GUIDE.md
 ```
 
-See: [Heartbeat Manager Reference](../reference/heartbeat-manager.md)
+Step-by-step instructions for performing migrations:
+- Pre-migration checklist
+- Migration steps
+- Validation procedures
+- Rollback instructions
 
-## Common Queries
-
-### Check RLS Policies
-```sql
-SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual
-FROM pg_policies
-WHERE schemaname = 'public'
-ORDER BY tablename, policyname;
+### Migration Summaries
+```
+{SYSTEM}_MIGRATION_SUMMARY.md
 ```
 
-### View Table Structure
-```sql
-\d+ table_name
+Post-migration documentation:
+- What was migrated
+- Issues encountered
+- Lessons learned
+- Remaining work
+
+### Migration Plans
+```
+{SYSTEM}_MIGRATION_PLAN.md
 ```
 
-### Check Indexes
-```sql
-SELECT * FROM pg_indexes
-WHERE schemaname = 'public'
-ORDER BY tablename, indexname;
+Upcoming migration planning:
+- Scope and objectives
+- Timeline and milestones
+- Risk assessment
+- Resource requirements
+
+## Common Migration Types
+
+### Database Schema Migrations
+- Adding/removing columns
+- Restructuring relationships
+- Data type changes
+- Index optimizations
+
+### Data Migrations
+- Moving data between tables
+- Transforming data formats
+- Consolidating duplicate data
+- Archiving historical data
+
+### System Migrations
+- Framework upgrades
+- Platform changes
+- Infrastructure transitions
+- Service consolidations
+
+### Protocol Migrations
+- LEO Protocol version upgrades
+- Workflow process changes
+- Tool and agent updates
+
+## Migration Template
+
+```markdown
+# [System] Migration Guide
+
+**Version**: [From] → [To]
+**Date**: YYYY-MM-DD
+**Owner**: [Name/Team]
+**Status**: [Planned/In Progress/Complete]
+
+## Overview
+[Brief description of migration]
+
+## Pre-Migration Checklist
+- [ ] Backup current system
+- [ ] Test migration in staging
+- [ ] Communication sent to stakeholders
+- [ ] Rollback plan documented
+
+## Migration Steps
+1. [Step 1]
+2. [Step 2]
+...
+
+## Validation
+- [ ] Data integrity verified
+- [ ] Functionality tested
+- [ ] Performance acceptable
+- [ ] No errors in logs
+
+## Rollback Procedure
+[How to undo migration if needed]
+
+## Post-Migration Tasks
+- [ ] Update documentation
+- [ ] Monitor for issues
+- [ ] Retrospective scheduled
 ```
 
 ## Best Practices
 
-1. **Always use RLS**: Every table should have RLS policies
-2. **Service role for admin**: Use service role key for bypass operations
-3. **Index foreign keys**: Add indexes to all foreign key columns
-4. **Validate constraints**: Use CHECK constraints for data integrity
-5. **Document policies**: Add comments to all RLS policies
-
-## RLS Bypass Pattern
-
-For operations requiring RLS bypass:
-```javascript
-// Use service role key
-const supabase = createClient(url, SERVICE_ROLE_KEY);
-
-// Or use RPC function
-const { data } = await supabase.rpc('function_with_security_definer');
-```
-
-## Migrations
-
-Database schema changes are managed via migrations in `/database/migrations/`.
-
-See `/database/migrations/README.md` for migration guidelines.
-
-### Recent Migrations
-
-- **2026-01-30**: [Multi-Session Pessimistic Locking](migrations/multi-session-pessimistic-locking.md) - Database-level single active claim constraint, heartbeat monitoring, and automatic is_working_on synchronization (SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001)
-- **2026-01-30**: [Baseline Constraint Fixes](migrations/baseline-constraint-fixes-2026-01-30.md) - Fixed sub-agent verdict constraints, risk assessment phase constraints, and added metadata column to retrospectives (BL-INF-2337A-D)
-
-### Manual Migrations
-
-Critical hotfixes and function updates that bypass the normal migration system are documented in `/database/manual-updates/`.
-
-**When to use manual migrations**:
-- Updating existing PL/pgSQL functions (CREATE OR REPLACE FUNCTION)
-- Fixing triggers that require immediate application
-- Critical production hotfixes
-- Complex data transformations requiring human verification
-
-See [Manual Migrations README](../../database/manual-updates/README.md) for execution guidelines and migration index.
+1. **Always test in staging first**
+2. **Create backup before migration**
+3. **Document rollback procedures**
+4. **Validate data after migration**
+5. **Monitor system after changes**
+6. **Create retrospective for large migrations**
 
 ## Related Documentation
 
-- `/database/migrations/` - Schema migration files
-- `/docs/reference/database-agent-patterns.md` - Database agent patterns
-- `/docs/reference/database-migration-validation.md` - Migration validation
-- `/docs/reference/unified-handoff-system.md` - Handoff table documentation
-
-## Supabase Dashboard
-
-Access live database:
-- **Project**: dedlbzhpgkmetvhbkyzq (EHG_Engineer)
-- **Dashboard**: https://app.supabase.com/project/dedlbzhpgkmetvhbkyzq
+- `/database/migrations/` - Actual SQL migration files
+- `/docs/reference/database-migration-validation.md` - Validation patterns
+- `/docs/summaries/implementations/` - Migration completion summaries
 
 ---
 
-*Part of LEO Protocol v4.3.3 - Database-First Architecture*
+*Part of LEO Protocol v4.3.3 - Migration Management*
 *Updated: 2025-12-29*

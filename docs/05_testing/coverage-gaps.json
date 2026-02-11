@@ -1,0 +1,462 @@
+{
+  "metadata": {
+    "generated_at": "2026-01-05T00:00:00Z",
+    "application": "EHG_Engineer",
+    "port": 3000,
+    "total_endpoints": 73,
+    "covered_endpoints": 18,
+    "coverage_percentage": 25,
+    "critical_gaps": 26,
+    "medium_gaps": 15,
+    "low_gaps": 10
+  },
+  "coverage_by_group": [
+    {
+      "group": "Marketing Distribution",
+      "coverage": 100,
+      "status": "EXCELLENT",
+      "priority": "CRITICAL",
+      "test_file": "tests/e2e/api/marketing-distribution.spec.ts",
+      "endpoints_covered": 6,
+      "endpoints_total": 6
+    },
+    {
+      "group": "SDIP (Directive Lab)",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 7
+    },
+    {
+      "group": "Backlog APIs",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 4
+    },
+    {
+      "group": "Venture Management",
+      "coverage": 40,
+      "status": "PARTIAL",
+      "priority": "CRITICAL",
+      "test_file": "tests/uat/ventures.spec.js",
+      "endpoints_covered": 2,
+      "endpoints_total": 6
+    },
+    {
+      "group": "Competitor Analysis & Discovery",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 7
+    },
+    {
+      "group": "Naming Engine",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 2
+    },
+    {
+      "group": "Financial Engine",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 5
+    },
+    {
+      "group": "Content Forge",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 4
+    },
+    {
+      "group": "Testing Campaign",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 6
+    },
+    {
+      "group": "Story Management",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 5
+    },
+    {
+      "group": "Calibration & Quality",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 7
+    },
+    {
+      "group": "Venture-Scoped APIs",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 3
+    },
+    {
+      "group": "WebSocket Real-Time",
+      "coverage": 0,
+      "status": "MISSING",
+      "priority": "CRITICAL",
+      "test_file": null,
+      "endpoints_covered": 0,
+      "endpoints_total": 6
+    },
+    {
+      "group": "PRD Management",
+      "coverage": 40,
+      "status": "PARTIAL",
+      "priority": "MEDIUM",
+      "test_file": "tests/e2e/prd-management.spec.ts",
+      "endpoints_covered": 2,
+      "endpoints_total": 3
+    },
+    {
+      "group": "Strategic Directives",
+      "coverage": 35,
+      "status": "PARTIAL",
+      "priority": "MEDIUM",
+      "test_file": "tests/e2e/strategic-directives-crud.spec.ts",
+      "endpoints_covered": 2,
+      "endpoints_total": 2
+    }
+  ],
+  "critical_gaps": [
+    {
+      "endpoint": "POST /api/sdip/submit",
+      "description": "Chairman idea submission (7-step flow)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-SDIP-001"]
+    },
+    {
+      "endpoint": "PUT /api/sdip/submissions/:id/step/:stepNumber",
+      "description": "Step-by-step data updates",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-SDIP-002", "US-SDIP-003", "US-SDIP-004"]
+    },
+    {
+      "endpoint": "POST /api/sdip/create-strategic-directive",
+      "description": "Convert submission to SD",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 0.5,
+      "user_stories": ["US-SDIP-005"]
+    },
+    {
+      "endpoint": "GET /api/backlog/strategic-directives",
+      "description": "Backlog filtering (tier, page, priority)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-BACKLOG-001"]
+    },
+    {
+      "endpoint": "GET /api/backlog/strategic-directives-with-items",
+      "description": "SDs with backlog items (optimized query)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-BACKLOG-002"]
+    },
+    {
+      "endpoint": "GET /api/strategic-directives/:sd_id/backlog-summary",
+      "description": "AI-generated backlog summary",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-BACKLOG-003"]
+    },
+    {
+      "endpoint": "POST /api/ventures",
+      "description": "Create venture (raw_chairman_intent capture)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-VENTURE-001"]
+    },
+    {
+      "endpoint": "GET /api/ventures/:id/artifacts",
+      "description": "Stage artifacts (25-stage lifecycle)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-VENTURE-002"]
+    },
+    {
+      "endpoint": "POST /api/ventures/:id/artifacts",
+      "description": "Create/update artifacts",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-VENTURE-003"]
+    },
+    {
+      "endpoint": "PATCH /api/ventures/:id/stage",
+      "description": "Update lifecycle stage (1-25)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 0.5,
+      "user_stories": ["US-VENTURE-004"]
+    },
+    {
+      "endpoint": "POST /api/competitor-analysis",
+      "description": "Real-time competitor intelligence",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 2.0,
+      "user_stories": ["US-COMPETITOR-001"]
+    },
+    {
+      "endpoint": "POST /api/discovery/scan",
+      "description": "AI opportunity discovery",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-DISCOVERY-001"]
+    },
+    {
+      "endpoint": "POST /api/discovery/decision",
+      "description": "Chairman approve/reject blueprint",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-DISCOVERY-002"]
+    },
+    {
+      "endpoint": "POST /api/v2/naming-engine/generate",
+      "description": "LLM-powered name generation",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-NAMING-001"]
+    },
+    {
+      "endpoint": "POST /api/v2/financial-engine/project",
+      "description": "Create financial projection",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 2.0,
+      "user_stories": ["US-FINANCIAL-001"]
+    },
+    {
+      "endpoint": "POST /api/v2/financial-engine/:id/scenario",
+      "description": "Create scenario analysis",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-FINANCIAL-002"]
+    },
+    {
+      "endpoint": "POST /api/v2/content-forge/generate",
+      "description": "LLM content generation",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-CONTENT-001"]
+    },
+    {
+      "endpoint": "POST /api/v2/content-forge/compliance-check",
+      "description": "Brand compliance validation",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-CONTENT-002"]
+    },
+    {
+      "endpoint": "POST /api/testing/campaign/start",
+      "description": "Start testing campaign",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-TESTING-001"]
+    },
+    {
+      "endpoint": "GET /api/testing/campaign/status",
+      "description": "Real-time campaign status",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 0.5,
+      "user_stories": ["US-TESTING-002"]
+    },
+    {
+      "endpoint": "POST /api/testing/campaign/stop",
+      "description": "Stop running campaign",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 0.5,
+      "user_stories": ["US-TESTING-003"]
+    },
+    {
+      "endpoint": "POST /api/stories/generate",
+      "description": "Generate stories from PRD",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-STORY-001"]
+    },
+    {
+      "endpoint": "POST /api/stories/verify",
+      "description": "CI webhook (story verification)",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-STORY-002"]
+    },
+    {
+      "endpoint": "GET /api/stories/gate",
+      "description": "Release gate status",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 0.5,
+      "user_stories": ["US-STORY-003"]
+    },
+    {
+      "endpoint": "GET /api/calibration/venture/:venture_id",
+      "description": "EVA calibration scores",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.5,
+      "user_stories": ["US-CALIBRATION-001"]
+    },
+    {
+      "endpoint": "POST /api/calibration/compute",
+      "description": "60/40 Truth Delta calculation",
+      "priority": "CRITICAL",
+      "estimated_effort_hours": 1.0,
+      "user_stories": ["US-CALIBRATION-002"]
+    }
+  ],
+  "quick_wins": [
+    {
+      "name": "SDIP Complete Flow",
+      "test_file_suggestion": "tests/e2e/sdip/chairman-submission-flow.spec.ts",
+      "estimated_effort_hours": 3.0,
+      "impact": "HIGH",
+      "roi": 5.0,
+      "priority": 1,
+      "endpoints": [
+        "POST /api/sdip/submit",
+        "PUT /api/sdip/submissions/:id/step/:stepNumber",
+        "POST /api/sdip/create-strategic-directive"
+      ]
+    },
+    {
+      "name": "Venture Artifacts Lifecycle",
+      "test_file_suggestion": "tests/e2e/ventures/artifact-management.spec.ts",
+      "estimated_effort_hours": 2.0,
+      "impact": "HIGH",
+      "roi": 5.0,
+      "priority": 2,
+      "endpoints": [
+        "GET /api/ventures/:id/artifacts",
+        "POST /api/ventures/:id/artifacts",
+        "PATCH /api/ventures/:id/stage"
+      ]
+    },
+    {
+      "name": "Story Release Gate",
+      "test_file_suggestion": "tests/e2e/stories/release-gate.spec.ts",
+      "estimated_effort_hours": 2.0,
+      "impact": "HIGH",
+      "roi": 4.5,
+      "priority": 3,
+      "endpoints": [
+        "POST /api/stories/generate",
+        "POST /api/stories/verify",
+        "GET /api/stories/gate"
+      ]
+    },
+    {
+      "name": "AI Engines Smoke Tests",
+      "test_file_suggestion": "tests/e2e/ai-engines/smoke-tests.spec.ts",
+      "estimated_effort_hours": 2.0,
+      "impact": "MEDIUM",
+      "roi": 4.0,
+      "priority": 4,
+      "endpoints": [
+        "POST /api/v2/naming-engine/generate",
+        "POST /api/v2/financial-engine/project",
+        "POST /api/v2/content-forge/generate"
+      ]
+    },
+    {
+      "name": "Calibration Threshold",
+      "test_file_suggestion": "tests/e2e/calibration/threshold-calculation.spec.ts",
+      "estimated_effort_hours": 1.5,
+      "impact": "MEDIUM",
+      "roi": 4.0,
+      "priority": 5,
+      "endpoints": [
+        "GET /api/calibration/venture/:venture_id",
+        "POST /api/calibration/compute",
+        "GET /api/calibration/threshold/:sd_id"
+      ]
+    }
+  ],
+  "implementation_roadmap": {
+    "sprint_1": {
+      "name": "Core Business Logic",
+      "duration_weeks": 2,
+      "estimated_hours": 12,
+      "coverage_gain": 25,
+      "target_coverage": 50,
+      "test_files": [
+        "tests/e2e/sdip/chairman-submission-flow.spec.ts",
+        "tests/e2e/ventures/artifact-management.spec.ts",
+        "tests/e2e/ai-engines/naming-engine.spec.ts",
+        "tests/e2e/ai-engines/financial-engine.spec.ts",
+        "tests/e2e/ai-engines/content-forge.spec.ts"
+      ]
+    },
+    "sprint_2": {
+      "name": "Integration & Discovery",
+      "duration_weeks": 2,
+      "estimated_hours": 10,
+      "coverage_gain": 15,
+      "target_coverage": 65,
+      "test_files": [
+        "tests/e2e/discovery/competitor-analysis.spec.ts",
+        "tests/e2e/testing/campaign-orchestration.spec.ts",
+        "tests/e2e/stories/release-gate.spec.ts"
+      ]
+    },
+    "sprint_3": {
+      "name": "Quality & Security",
+      "duration_weeks": 2,
+      "estimated_hours": 8,
+      "coverage_gain": 15,
+      "target_coverage": 80,
+      "test_files": [
+        "tests/e2e/calibration/truth-delta.spec.ts",
+        "tests/e2e/ventures/venture-scoped-apis.spec.ts",
+        "tests/e2e/realtime/websocket-updates.spec.ts"
+      ]
+    }
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "Approve SDIP flow test implementation (highest ROI)",
+      "Create user stories for Sprint 1 gaps",
+      "Set up CI pipeline for E2E tests",
+      "Allocate 3-4 hours per week for test development"
+    ],
+    "testing_strategy": [
+      "Use Playwright request fixture for API-first testing",
+      "Follow marketing-distribution.spec.ts as model",
+      "Implement serial execution for dependent tests",
+      "Add proper setup/teardown in beforeAll/afterAll",
+      "Store test results in database for tracking"
+    ],
+    "success_metrics": [
+      "Target: ≥90% CRITICAL endpoint coverage",
+      "Target: <2% test flakiness rate",
+      "Target: <10 minute full suite execution",
+      "Target: ≥95% pass rate in CI"
+    ]
+  }
+}
