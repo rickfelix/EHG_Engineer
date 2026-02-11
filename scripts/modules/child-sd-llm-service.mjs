@@ -21,7 +21,7 @@
  * @version 2.0.0
  */
 
-import OpenAI from 'openai';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { createClient } from '@supabase/supabase-js';
 
 // =============================================================================
@@ -80,26 +80,15 @@ export const STRATEGIC_FIELDS_RUBRIC = `
 `;
 
 // =============================================================================
-// LLM CLIENT
+// LLM CLIENT (Factory-based)
 // =============================================================================
-
-let openaiClient = null;
-
-/**
- * Get or create OpenAI client
- */
-export function getOpenAIClient() {
-  if (!openaiClient && process.env.OPENAI_API_KEY) {
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return openaiClient;
-}
 
 /**
  * Check if LLM generation is available
+ * Note: Factory handles client availability internally
  */
 export function isLLMAvailable() {
-  return CHILD_SD_LLM_CONFIG.enabled && !!process.env.OPENAI_API_KEY;
+  return CHILD_SD_LLM_CONFIG.enabled;
 }
 
 // =============================================================================
@@ -308,13 +297,18 @@ export async function generateStrategicFieldsWithLLM(childContext, parentContext
   const { fetchEnhancedContext = true } = options;
 
   if (!isLLMAvailable()) {
-    console.log('⚠️ Child SD LLM generation disabled or no API key');
+    console.log('⚠️ Child SD LLM generation disabled');
     return null;
   }
 
-  const openai = getOpenAIClient();
-  if (!openai) {
-    console.log('⚠️ OpenAI client not available');
+  // Get LLM client from factory (handles authentication and model selection)
+  const llmClient = await getLLMClient({
+    purpose: 'child-sd-strategic-fields',
+    phase: 'LEAD'
+  });
+
+  if (!llmClient) {
+    console.log('⚠️ LLM client not available');
     return null;
   }
 
@@ -416,8 +410,7 @@ CRITICAL: This is a "${sdType.toUpperCase()}" SD. Generate content SPECIFIC to "
   try {
     console.log(`🤖 Generating strategic fields for: ${childContext.title}...`);
 
-    const response = await openai.chat.completions.create({
-      model: CHILD_SD_LLM_CONFIG.model,
+    const response = await llmClient.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -787,7 +780,6 @@ export async function batchEnrichChildSDs(childSDs, parentSD) {
 export default {
   CHILD_SD_LLM_CONFIG,
   STRATEGIC_FIELDS_RUBRIC,
-  getOpenAIClient,
   isLLMAvailable,
   generateStrategicFieldsWithLLM,
   buildChildSDContext,
