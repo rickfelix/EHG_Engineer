@@ -3,6 +3,7 @@ node_modules/
 .env.local
 *.log
 verification-packages/
+.worktrees/
 
 # Backup files (git already provides versioning)
 *.backup
