@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T14:23:09.756Z
+**Generated**: 2026-02-11T15:20:53.824Z
 **Rows**: 620
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -44,6 +44,14 @@
   ```sql
   CREATE INDEX idx_connection_selection_log_service ON public.connection_selection_log USING btree (service_name, created_at DESC)
   ```
+
+## RLS Policies
+
+### 1. service_role_full_access (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

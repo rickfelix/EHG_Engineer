@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T14:23:09.756Z
-**Tables**: 460
+**Generated**: 2026-02-11T15:20:53.824Z
+**Tables**: 457
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (460)
+## All Tables (457)
 
 ### LEO Protocol
 
@@ -438,8 +438,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [telemetry_analysis_runs](tables/telemetry_analysis_runs.md)
 - [telemetry_thresholds](tables/telemetry_thresholds.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
-- [test_default](tables/test_default.md)
-- [test_minimal](tables/test_minimal.md)
 - [test_plans](tables/test_plans.md)
 - [test_results](tables/test_results.md)
 - [test_runs](tables/test_runs.md)
@@ -494,7 +492,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_tool_quotas](tables/venture_tool_quotas.md)
 - [ventures](tables/ventures.md)
 - [vertical_complexity_multipliers](tables/vertical_complexity_multipliers.md)
-- [view_definitions_backup_20260124](tables/view_definitions_backup_20260124.md)
 - [voice_cached_responses](tables/voice_cached_responses.md)
 - [voice_conversations](tables/voice_conversations.md)
 - [voice_function_calls](tables/voice_function_calls.md)
