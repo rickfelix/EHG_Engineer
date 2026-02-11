@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T16:34:40.900Z
-**Rows**: 0
+**Generated**: 2026-02-11T17:09:45.342Z
+**Rows**: 19
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -26,7 +26,7 @@
 | created_by | `text` | **NO** | `'gap-detector'::text` | - |
 | total_requirements | `integer(32)` | **NO** | - | Total number of requirements in PRD (functional + non-functional + technical) |
 | matched_requirements | `integer(32)` | **NO** | - | Number of requirements verified in implementation |
-| coverage_score | `numeric(5,2)` | **NO** | - | Percentage of requirements matched (0-100). Formula: (matched / total) * 100 |
+| coverage_score | `numeric(5,2)` | YES | - | Percentage of requirements matched (0-100). NULL when no PRD exists for the SD. |
 | gap_findings | `jsonb` | **NO** | `'[]'::jsonb` | JSONB array of gap findings with requirement_id, gap_type, severity, root_cause, evidence, and corrective_sd_key |
 | false_positive_count | `integer(32)` | **NO** | `0` | Number of findings marked as false positives after human review |
 | corrective_sds_created | `ARRAY` | YES | `ARRAY[]::text[]` | Array of SD keys created to address gaps found in this analysis |
