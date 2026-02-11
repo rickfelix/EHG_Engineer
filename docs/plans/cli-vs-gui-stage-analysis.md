@@ -1663,7 +1663,89 @@ provenance: { dataSource, model, stagesConsumed[] } (new, derived)
 
 ### Synthesis
 
-*Pending external AI responses*
+**Agreement: 3/3 on all major decisions.** Stage 9 produced the strongest consensus yet -- all three respondents converge on the same architecture with only minor differences in enum values and valuation detail level.
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Consensus |
+|----------|--------|--------|-------------|-----------|
+| Add `analysisStep` consuming Stages 1-8 | Yes (P0) | Yes (priority 1) | Yes (most critical gap) | **Add single analysisStep synthesizing exit strategy from all prior stages** |
+| Exit type enum (replace freeform) | Yes, 5 values | Yes, 6 values + `other` | Yes, 6 values | **Add exit type enum** (see divergence below for values) |
+| Add buyer_type to target_acquirers | Yes, 4 values | Yes, 4 + `other` | Yes, 4 values | **Add buyer_type enum** |
+| Lightweight valuation only | Revenue multiple only | Revenue multiple primary, comps secondary | Revenue multiple only | **Revenue multiple with range, no DCF** |
+| ELIMINATE exit readiness checklist | Defer to BUILD | Defer to BUILD, keep light signals | Defer to BUILD | **Readiness is execution, not evaluation** |
+| PRESERVE CLI Reality Gate | Superior to exit grade | Keep as primary, add optional score | CLI superior | **Keep explicit blockers + next_actions** |
+| ELIMINATE dedicated DB tables | Stage artifact sufficient | Over-engineering | Not mentioned (implicit agree) | **No new tables** |
+| ELIMINATE exit grading (A-F) | Reality Gate is better | Grade is opaque for automation | Fuzzy grade inferior | **No letter grades** |
+| ELIMINATE improvement plans | Execution tool | Not mentioned | Not mentioned | **Deferred to BUILD** |
+| BMC-to-exit content mapping | 7-block mapping table | Explicit mapping in analysis output | 4-block mapping | **analysisStep must map BMC blocks to exit components** |
+| No dependency conflicts with Stages 1-8 | Minor gap (Stage 4 competitor scale) | No conflicts if lightweight valuation | No conflict | **No blocking conflicts** |
+
+#### Divergence Points
+
+| Topic | Claude | OpenAI | AntiGravity | Resolution |
+|-------|--------|--------|-------------|------------|
+| **Exit type values** | 5 (drop strategic_sale, it's acquisition + buyer_type) | 6 + `other` (uses orderly_winddown instead of liquidation) | 6 (keeps GUI's full list) | **5 values: acquisition, ipo, merger, mbo, liquidation.** Claude's reasoning is correct: strategic_sale is redundant with acquisition + buyer_type=strategic. OpenAI's `other` is unnecessary -- these 5 cover the standard taxonomy. |
+| **Buyer type values** | 4: strategic, financial, competitor, pe | 4 + `other` | 4: strategic, financial, competitor, private_equity | **4 values: strategic, financial, competitor, pe.** No `other` needed -- PE and financial cover the non-strategic categories. |
+| **Valuation detail** | Single estimate (base × multiple = value) | Range (low/base/high) + assumptions | Range (conservative/aggressive multiple) | **Range approach wins.** Low/base/high is more honest than a single number at blueprint stage. Avoids the anchoring bias Claude warned about. |
+| **Milestone enrichment** | Add optional `category` (financial/product/market/team) | Add `dependencies[]` only | Keep simple | **Add category only.** Dependencies are execution-phase; at blueprint, milestones are independent planning artifacts. Category provides useful grouping. |
+| **Reality Gate additions** | No changes | Add optional readiness_score (0-100) | Add exit_thesis quality check | **No additions.** The Reality Gate checks Phase 2 completeness, not exit quality. Adding scores or quality checks blurs its purpose. Keep it pure. |
+| **Contrarian focus** | Valuation false precision / anchoring bias | Over-modeled mini-M&A system | AI hallucination of acquirers (suggests "Google" for everything) | **All three raise valid risks.** Claude's anchoring bias concern is addressed by using ranges. AntiGravity's hallucination risk is addressed by requiring rationale + human review. OpenAI's over-engineering warning validates the "keep it light" consensus. |
+
+#### Stage 9 Consensus Schema
+
+```
+exit_thesis: string (minLength: 20, required)
+exit_horizon_months: integer (1-120, required)
+exit_paths[]: array (minItems: 1)
+  .type: enum [acquisition, ipo, merger, mbo, liquidation] (required)
+  .description: string (required)
+  .probability_pct: number (0-100)
+target_acquirers[]: array (minItems: 3)
+  .name: string (required)
+  .rationale: string (required)
+  .fit_score: integer (1-5, required)
+  .buyer_type: enum [strategic, financial, competitor, pe] (NEW)
+milestones[]: array (minItems: 1)
+  .date: string (required)
+  .success_criteria: string (required)
+  .category: enum [financial, product, market, team] (NEW, optional)
+valuation_estimate: object (NEW)
+  .method: string (default: revenue_multiple)
+  .revenue_base: number
+  .multiple_low: number
+  .multiple_base: number
+  .multiple_high: number
+  .estimated_range: { low, base, high } (derived)
+  .rationale: string
+reality_gate: object (derived, UNCHANGED)
+provenance: object (derived, NEW -- tracks analysisStep source)
+```
+
+**Changes from CLI v1**: (1) exit_paths.type freeform → 5-value enum, (2) buyer_type added to acquirers, (3) milestone category added, (4) valuation_estimate added with range, (5) provenance tracking added, (6) Reality Gate preserved unchanged.
+
+**Eliminated from GUI**: exit readiness checklist, A-F grading, 4 AI functions (replaced by single analysisStep), 4 dedicated DB tables, improvement plans, outreach tracking, strategic_sale exit type (redundant).
+
+#### BMC-to-Exit Mapping (for analysisStep prompt)
+
+| BMC Block | Exit Strategy Application |
+|-----------|--------------------------|
+| Revenue Streams | Valuation method selection (recurring → revenue multiple) |
+| Key Partnerships | Potential acquirer targets (partners who might acquire) |
+| Cost Structure | Profitability profile (high margin → PE interest) |
+| Customer Segments | Buyer audience (who wants access to these users?) |
+| Value Propositions | IP/technology value for acquirers |
+| Key Resources | Assets of interest (tech, talent, data) |
+| Channels | Distribution value for strategic acquirers |
+
+#### Contrarian Synthesis
+
+All three raised legitimate risks that reinforce the "keep it light" consensus:
+- **False precision** (Claude): Revenue multiples on pre-revenue ventures are educated guesses. Ranges mitigate this.
+- **Over-engineering** (OpenAI): Stage 9 should optimize for decision quality at phase transition, not simulation completeness.
+- **AI hallucination** (AntiGravity): Acquirer suggestions like "Google" for everything are a real risk. Rationale + fit_score + human review are the defense.
+
+The consensus architecture balances these risks: structured enough for downstream parsing (enums, ranges), honest enough to avoid false precision (ranges not point estimates), and light enough to avoid mini-M&A theater.
 
 ---
 
