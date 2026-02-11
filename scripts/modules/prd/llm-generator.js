@@ -7,15 +7,15 @@
  * Part of SD-LEO-REFACTOR-PRD-001
  */
 
-import OpenAI from 'openai';
-import { getOpenAIModel } from '../../../lib/config/model-config.js';
+import { getLLMClient } from '../../../lib/llm/client-factory.js';
 import { buildPRDGenerationContext } from './context-builder.js';
 
 /**
  * LLM Configuration for PRD Generation
+ * NOTE: This file is legacy - scripts/prd/llm-generator.js is the active version.
+ * Model selection handled by LLM Client Factory (getLLMClient).
  */
 export const LLM_PRD_CONFIG = {
-  model: getOpenAIModel('generation'),
   temperature: 0.6,   // Slightly lower for more structured PRD content
   maxTokens: 32000,   // Extended for comprehensive PRD generation
   enabled: process.env.LLM_PRD_GENERATION !== 'false'  // Enabled by default
@@ -167,24 +167,17 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     return null;
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.warn('   ⚠️  OPENAI_API_KEY not set, falling back to template PRD');
-    return null;
-  }
-
-  const openai = new OpenAI({ apiKey: openaiKey });
+  const llmClient = getLLMClient({ purpose: 'generation', phase: 'PLAN' });
   const sdType = sd.sd_type || 'feature';
 
-  console.log('   🤖 Generating PRD content with GPT...');
+  console.log('   🤖 Generating PRD content with LLM...');
   console.log(`   📋 SD Type: ${sdType}`);
 
   try {
     const systemPrompt = buildSystemPrompt(sdType);
     const userPrompt = buildPRDGenerationContext(sd, context);
 
-    const response = await openai.chat.completions.create({
-      model: LLM_PRD_CONFIG.model,
+    const response = await llmClient.chat.completions.create({
       temperature: LLM_PRD_CONFIG.temperature,
       max_completion_tokens: LLM_PRD_CONFIG.maxTokens,
       messages: [
