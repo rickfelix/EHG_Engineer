@@ -3,7 +3,7 @@
  * Agent Reconciliation Audit
  * SD-LEO-INFRA-BRIDGE-AGENT-SYSTEMS-001 (FR-3)
  *
- * Compares Claude Code agents (.claude/agents/*.partial.md) against LEO database
+ * Compares Claude Code agents (.claude/agents/*.partial) against LEO database
  * sub-agents (leo_sub_agents table) and outputs a gap analysis report.
  *
  * Usage:
@@ -76,8 +76,8 @@ async function fetchAuditData(supabase) {
 
 function getClaudeAgents() {
   return fs.readdirSync(AGENTS_DIR)
-    .filter(f => f.endsWith('.partial.md'))
-    .map(f => f.replace('.partial.md', ''))
+    .filter(f => f.endsWith('.partial'))
+    .map(f => f.replace('.partial', ''))
     .sort();
 }
 

@@ -3,7 +3,7 @@
  * Agent Prompt Compiler - Bridge Agent Systems
  * SD-LEO-INFRA-BRIDGE-AGENT-SYSTEMS-001
  *
- * Compiles .claude/agents/*.partial.md into .claude/agents/*.md by injecting
+ * Compiles .claude/agents/*.partial into .claude/agents/*.md by injecting
  * curated knowledge blocks from the LEO database (issue_patterns, triggers,
  * agent capabilities) while preserving base agent instructions.
  *
@@ -177,18 +177,21 @@ function composeKnowledgeBlock(agentCode, data, categoryMappings) {
 // ─── Agent File Compilation ──────────────────────────────────────────────────
 
 function findInjectionPoint(content) {
-  // Find the "## Model Usage Tracking" section, then find the NEXT heading (# or ##) after it.
-  // Inject right before that next heading.
-  const trackingStart = content.indexOf('## Model Usage Tracking');
-  if (trackingStart !== -1) {
-    // Find the next markdown heading (any level) after the tracking section
-    // Look for \n# or \n## (but not inside code blocks)
-    const afterTracking = content.substring(trackingStart + 25);
-    const headingMatch = afterTracking.match(/\n(#{1,3} [^\n])/);
-    if (headingMatch) {
-      const offset = trackingStart + 25 + headingMatch.index + 1; // +1 to skip the \n
-      return offset;
+  // Claude Code loads agent .md files starting from the first H1 heading (# ...).
+  // Content before the H1 (like ## sections) is NOT included in the agent's system prompt.
+  // Therefore, inject AFTER the first H1 heading line so the institutional memory
+  // falls within the agent body that Claude Code actually delivers.
+
+  // Strategy: Find the first H1 heading, then inject after its line (before the next \n\n)
+  const h1Match = content.match(/\n(# [^\n]+)\n/);
+  if (h1Match) {
+    const h1End = h1Match.index + h1Match[0].length;
+    // Find the next blank line or paragraph break after the H1
+    const nextBlank = content.indexOf('\n\n', h1End);
+    if (nextBlank !== -1) {
+      return nextBlank + 2; // After the blank line
     }
+    return h1End; // Right after the H1 line
   }
 
   // Fallback: inject after YAML frontmatter
@@ -227,7 +230,7 @@ function computeInputHash(partialsDir, data) {
 
   // Hash all partial file contents (sorted for determinism)
   const partials = fs.readdirSync(partialsDir)
-    .filter(f => f.endsWith('.partial.md'))
+    .filter(f => f.endsWith('.partial'))
     .sort();
 
   for (const f of partials) {
@@ -329,11 +332,11 @@ async function main() {
 
   // Find all partial files
   const partialFiles = fs.readdirSync(AGENTS_DIR)
-    .filter(f => f.endsWith('.partial.md'))
+    .filter(f => f.endsWith('.partial'))
     .sort();
 
   if (partialFiles.length === 0) {
-    console.error('❌ No .partial.md files found in', AGENTS_DIR);
+    console.error('❌ No .partial files found in', AGENTS_DIR);
     process.exit(1);
   }
 
@@ -342,7 +345,7 @@ async function main() {
   const results = { success: [], failed: [], skipped: [] };
 
   for (const partialFile of partialFiles) {
-    const agentName = partialFile.replace('.partial.md', '');
+    const agentName = partialFile.replace('.partial', '');
     const agentCode = AGENT_CODE_MAP[agentName];
 
     if (!agentCode) {
