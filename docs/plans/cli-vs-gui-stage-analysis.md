@@ -269,7 +269,87 @@
 
 ### Synthesis
 
-*Pending external AI responses*
+#### Strong Consensus (All 3 Agree)
+
+1. **CLI Stage 2 needs active analysis capability -- this is the #1 gap.** All three independently identified the passive container as the critical blocker. Without Stage 2 generating analysis, Stage 3's kill gate starts blind. Unanimous CLOSE verdict.
+
+2. **Adopt 0-100 integer score scale.** All three reject the GUI's 0-10 decimal scale. Reasoning: matches Stage 3's expected input, avoids lossy conversion, provides better granularity. No dissent.
+
+3. **Align Stage 2 categories directly to Stage 3's 6 kill gate metrics.** All three independently arrived at the same conclusion: replace the GUI's 5 generic categories (quality, viability, originality, market, feasibility) with Stage 3's 6 specific metrics (marketFit, customerNeed, momentum, revenuePotential, competitiveBarrier, executionFeasibility). This transforms Stage 2 into a "pre-flight check" for Stage 3.
+
+4. **ELIMINATE the GUI's recommendation logic (advance/revise/reject/fast-track).** All three agree the Decision Filter Engine is superior. Claude: "would duplicate existing infrastructure." OpenAI: "informational only, not required for deterministic gating." AntiGravity: "DFE is superior and centrally managed."
+
+5. **ELIMINATE non-deterministic scoring.** All three reject the GUI's randomized category scores (min=4, max=10). The CLI should enforce deterministic computation. AntiGravity: "Randomness hurts regression testing and 'The Truth' phase reliability."
+
+6. **Do NOT replicate the 4-agent ensemble.** All three agree the GUI's multi-agent architecture is unnecessary overhead. The 4 agents all use GPT-4 -- it's prompt engineering disguised as multi-agent. A single structured call achieves the same analytical coverage.
+
+7. **Preserve Decision Filter Engine as the gating authority.** All three identify it as a CLI superiority over GUI's hardcoded thresholds. It supports chairman preferences, is configurable, and is centrally managed.
+
+8. **Preserve Devil's Advocate as a separate adversarial layer.** All three agree the CLI's decoupled adversarial review is architecturally superior to the GUI's all-in-one approach.
+
+#### Key Disagreements
+
+| Topic | Claude | OpenAI | AntiGravity |
+|-------|--------|--------|-------------|
+| **Number of analysisSteps** | 3 steps (market_analysis, technical_feasibility, strategic_fit) | 1 step with structured sub-prompts + optional consistency check | 1 step with "MoA" multi-persona prompt |
+| **Devil's Advocate at Stage 2** | **Yes** -- wire DA to challenge Stage 2 output (P1 priority) | **Conditional** -- only when confidence low or scores near thresholds | **No** -- rely on existing DA at Stage 3 gate; Stage 2 stays "optimistic/realistic" |
+| **SWOT completeness** | ADAPT -- add weaknesses only (keep strengths/risks, skip opportunities) | **CLOSE** -- full SWOT + immediate/strategic actions needed for Stage 4 | ADAPT -- include suggestions but not full SWOT |
+| **Chairman override at Stage 2** | ADAPT (wire existing Chairman Preference Store) | **ELIMINATE** at Stage 2 (Stage 3/5 gates enforce governance) | Not explicitly addressed |
+| **Provenance tracking** | Not mentioned | **Yes** -- promptHash, modelVersion, temperature, seed for reproducibility | Not mentioned |
+| **Schema structure** | Array of analyses (one per analysisStep), each with dimensionScores | Single flat schema with evidence packs, stage3MetricDraft, critiques array | Object with analysis (3 text fields), metrics (6 scores), suggestions array |
+| **Recommendation field** | ELIMINATE entirely | ADAPT -- optional informational label | ELIMINATE (use DFE) |
+| **inputContext block** | Not in schema (wired via Stage 0->1 pipeline) | **Yes** -- explicit ideaBriefRef, problemStatement, keyAssumptions, archetype | Not in schema |
+
+#### Unique Contributions
+
+**Claude found**:
+- Detailed mapping of which analysisStep covers which Stage 3 metric (market_analysis -> marketFit/customerNeed/momentum; technical_feasibility -> executionFeasibility; strategic_fit -> revenuePotential/competitiveBarrier)
+- LLM client factory integration point (`getLLMClient({ purpose: 'stage-analysis', phase: 'stage-02' })`) for routing through existing infrastructure
+- Backward compatibility path: v1 `critiques` is a subset of v2 `analyses`, enabling migration without breaking existing data
+- Confidence score is ELIMINATE -- it's a trivially derived metric (`0.7 + score * 0.0025`) with no independent signal
+
+**OpenAI found**:
+- **Provenance block** (`promptHash`, `modelVersion`, `temperature`, `seed`) -- critical for reproducibility and audit trail in "The Truth" phase. Neither Claude nor AntiGravity mentioned this.
+- **Evidence packs** organized by domain (market, customer, competitive, execution) -- separates the raw evidence from the scores, making it easier for Stage 3 to validate
+- **inputContext** as an explicit schema field -- captures what data from Stage 0/1 was used as input, creating a complete audit chain
+- Optional "consistency check" second pass after initial analysis -- lightweight quality gate before Stage 3
+
+**AntiGravity found**:
+- **"MoA" (Mixture of Agents) pattern** -- single LLM call with explicit persona delineation in the system prompt. Most cost-effective way to maintain perspective diversity.
+- **Stage 2 as "Pre-flight Check" framing** -- reframes Stage 2's purpose as hypothesis generation for Stage 3 validation, not independent judgment. This is the clearest articulation of the Stage 2->3 relationship.
+- **`low_score` DFE trigger** -- specific integration point for wiring Stage 2 metrics into the Decision Filter Engine's existing trigger system
+- **Explicit GUI-to-CLI category mapping** (Market->marketFit, Viability->revenuePotential, Originality->competitiveBarrier, Feasibility->executionFeasibility, Quality->momentum) -- most concrete mapping proposal
+
+#### Resolved Recommendations (Post-Triangulation)
+
+**Architecture**:
+- Single LLM call with multi-persona prompt (AntiGravity's MoA pattern, endorsed by OpenAI's "single orchestration step"). Claude's 3-step approach is valid but over-engineers for Draft Idea level input.
+- Devil's Advocate NOT at Stage 2 (AntiGravity's argument is most compelling: keep Stage 2 optimistic/realistic, DA provides pessimistic check at Stage 3).
+- Decision Filter Engine remains the gating authority (unanimous).
+
+**Schema** (merged best of all three):
+1. `analysis` object with 3 text perspectives: strategic, technical, tactical (AntiGravity's structure)
+2. `metrics` object with 6 Stage-3-aligned scores: marketFit, customerNeed, momentum, revenuePotential, competitiveBarrier, executionFeasibility (unanimous)
+3. `evidence` object organized by domain: market, customer, competitive, execution (OpenAI's contribution)
+4. `suggestions` array with type (immediate/strategic) + text (AntiGravity's structure, OpenAI agrees)
+5. `compositeScore` derived as average of 6 metrics (unanimous)
+6. `provenance` block for reproducibility (OpenAI's contribution -- valuable for "The Truth" phase)
+7. `inputContext` referencing Stage 0/1 data used (OpenAI's contribution)
+
+**Implementation priority**:
+1. Add single `analysisStep` to Stage 2 DB template with MoA multi-persona prompt
+2. Update schema to produce 6 Stage-3-aligned metric scores (0-100 integer)
+3. Add evidence packs organized by domain
+4. Add provenance tracking for reproducibility
+5. Wire metrics into Decision Filter Engine's `low_score` trigger
+6. Wire Stage 0 -> Stage 1 -> Stage 2 context pipeline
+
+**What to NOT build**:
+- Multi-agent ensemble (unanimous: unnecessary overhead)
+- Recommendation enum (unanimous: DFE handles this)
+- Non-deterministic scoring (unanimous: enforce determinism)
+- Confidence score (Claude: trivially derived, no signal)
+- Chairman override at Stage 2 (OpenAI: rely on Stage 3/5 gates)
 
 ---
 
