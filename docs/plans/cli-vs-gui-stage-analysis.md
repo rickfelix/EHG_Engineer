@@ -2120,7 +2120,103 @@ The consensus handles all three: 8 channels with $0 allowed (constraint without 
 
 ## Stage 12: Sales Logic
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-12.js`
+**Phase**: THE IDENTITY (Stages 10-12) -- **final stage of THE IDENTITY phase**
+**Type**: Passive validation + **active `computeDerived()`** (Reality Gate evaluation)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `sales_model` | enum | self-serve/inside-sales/enterprise/hybrid/marketplace/channel | Yes |
+| `sales_cycle_days` | number | min: 1 | Yes |
+| `deal_stages[]` | array | minItems: 3 | Yes |
+| `deal_stages[].name` | string | minLength: 1 | Yes |
+| `deal_stages[].description` | string | minLength: 1 | Yes |
+| `deal_stages[].avg_duration_days` | number | min: 0 | No |
+| `funnel_stages[]` | array | minItems: 4 | Yes |
+| `funnel_stages[].name` | string | minLength: 1 | Yes |
+| `funnel_stages[].metric` | string | minLength: 1 | Yes |
+| `funnel_stages[].target_value` | number | min: 0 | Yes |
+| `customer_journey[]` | array | minItems: 5 | Yes |
+| `customer_journey[].step` | string | minLength: 1 | Yes |
+| `customer_journey[].funnel_stage` | string | minLength: 1 | Yes |
+| `customer_journey[].touchpoint` | string | minLength: 1 | Yes |
+
+**Schema (Derived -- Reality Gate)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `reality_gate.pass` | boolean | All Phase 3 prerequisites met |
+| `reality_gate.rationale` | string | Summary of pass/fail |
+| `reality_gate.blockers` | string[] | Specific items preventing passage |
+| `reality_gate.required_next_actions` | string[] | Steps to resolve blockers |
+
+**Reality Gate Requirements** (Phase 3 → Phase 4 transition):
+- Stage 10: >= 5 scored naming candidates
+- Stage 11: exactly 3 tiers and 8 channels
+- Stage 12: >= 4 funnel stages with metrics, >= 5 journey steps
+
+**Processing**:
+- `validate(data)`: Validates sales_model enum, deal stages, funnel stages, customer journey
+- `computeDerived(data, prerequisites)`: Evaluates Reality Gate using Stages 10-12 data
+- `evaluateRealityGate({ stage10, stage11, stage12 })`: Pure exported function checking all prerequisites
+- **No `analysisSteps`** -- sales logic must be provided externally
+- **No conversion rates** per deal stage (just duration)
+- **No LTV/CAC tracking** (cross-stage only)
+- **No success metrics** with frequency/owner
+
+**CLI Strengths**: 6-value sales_model enum (forces model choice), clean deal pipeline (stages with durations), funnel stages with quantitative metrics, customer journey mapped to funnel stages, Reality Gate as pure function (Phase 3→4 transition check), imports Stage 10/11 constants for cross-stage validation.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `Stage12SalesSuccessLogic.tsx` (active per SSOT), `Stage12Viewer.tsx` (shows adaptive naming output -- different purpose)
+
+**Active component** (Stage12SalesSuccessLogic.tsx):
+- Sales pipeline: 5 default stages (Lead → Qualified → Demo/Trial → Proposal → Closed Won), each with conversionRate, avgTimeInStage, actions, description
+- Success metrics: user-defined with name, target, frequency (daily/weekly/monthly/quarterly), owner
+- Customer journey milestones: stage, milestone, triggerAction, successCriteria
+- Key metrics: salesCycle, avgDealSize, targetLtv, targetCac, calculated LTV:CAC ratio
+- No sales model enum
+- No Reality Gate
+
+**Stage12Viewer** (different purpose -- adaptive naming):
+- Brand variants with variant_type, confidence_delta, domain/trademark status
+- Market test results
+- ADVANCE/REVISE/REJECT decision
+- Not aligned with sales logic
+
+**Additional Stage 12 components** (not SSOT-active):
+- Stage12Resources.tsx: team/budget/technical resource planning
+- Stage12TechnicalImplementation.tsx: tech stack documentation
+- Stage12AdaptiveNaming.tsx: brand variant management
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Sales model | 6-value enum (self-serve, enterprise, etc.) | None (no model classification) |
+| Deal/pipeline stages | min 3, name + description + duration | 5 default with conversion rates + actions |
+| Funnel stages | min 4, name + metric + target_value | Not integrated (separate ROI dashboard) |
+| Customer journey | min 5 steps mapped to funnel stages | Milestones with triggerAction + successCriteria |
+| Sales metrics | None (via funnel target_values) | salesCycle, avgDealSize, targetLtv, targetCac, LTV:CAC |
+| Success metrics | None | User-defined with frequency + owner |
+| Conversion rates | None | Per pipeline stage |
+| Reality Gate | Explicit Phase 3→4 check (Stages 10-12) | None (gateType: none) |
+| Brand variants | None | Adaptive naming with market testing |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-12-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-12-claude.md`
+- OpenAI: `docs/plans/responses/stage-12-openai.md`
+- AntiGravity: `docs/plans/responses/stage-12-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
