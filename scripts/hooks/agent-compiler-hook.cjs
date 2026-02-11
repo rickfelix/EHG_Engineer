@@ -17,10 +17,10 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const AGENTS_DIR = path.join(ROOT, '.claude', 'agents');
 
 // Quick check: do generated .md files exist?
-const partials = fs.readdirSync(AGENTS_DIR).filter(f => f.endsWith('.partial.md'));
+const partials = fs.readdirSync(AGENTS_DIR).filter(f => f.endsWith('.partial'));
 const generated = fs.readdirSync(AGENTS_DIR).filter(f =>
   f.endsWith('.md') &&
-  !f.endsWith('.partial.md') &&
+  !f.endsWith('.partial') &&
   !['AGENT-MANIFEST.md', 'README.md', '_model-tracking-section.md'].includes(f)
 );
 
