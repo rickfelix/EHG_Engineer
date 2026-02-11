@@ -12,7 +12,7 @@
   "supabase": {
     "project_id": "dedlbzhpgkmetvhbkyzq",
     "url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
-    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.qLi6T3hkLqkLQbfV1iaxe0Tzqrj0UC_vFiHi7EWffKA",
+    "anon_key": "${SUPABASE_ANON_KEY}",
     "migration_note": "Migrated from liapbndqlqxdcgpwntbv via SD-ARCH-EHG-006 (2025-11-30)"
   },
   "environment": "development",
