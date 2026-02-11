@@ -233,3 +233,35 @@ const TEMPLATE = {
 | Valuation estimate | Naming/branding budget can be proportional to venture value. A $100M exit justifies more branding investment. | BUILD phase has quantitative targets. "Ship MVP by Q3 to hit $5M ARR for 10x exit." | Creates a financial anchor for all downstream decisions. |
 | Reality Gate | Phase 3 begins only if THE ENGINE is complete. Naming a venture with incomplete risk analysis or BMC is premature. | BUILD phase can trust that evaluation was thorough. | The Reality Gate is the pipeline's quality checkpoint for THE ENGINE phase. It ensures all planning stages are substantive before moving to execution. |
 | Buyer type classification | If target buyer is PE, naming should maximize financial metrics visibility. If strategic, naming should highlight technology/IP. | BUILD phases can prioritize features that matter to target buyer type. | Buyer type influences decisions from branding through product development. |
+
+### 12. Dependency Conflicts (with Stages 1-8 decisions)
+
+**No blocking dependency conflicts identified.** Stage 9's design is well-supported by prior consensus:
+
+| Dependency | Status | Notes |
+|-----------|--------|-------|
+| Stage 5 → 9 (Financial model for valuation) | **OK** | Stage 5 consensus includes ROI, unit economics (CAC, LTV, churn, payback). Revenue base for valuation estimate comes from Stage 7 ARPA, not Stage 5 directly. No gap. |
+| Stage 6 → 9 (Risk count for Reality Gate) | **OK** | Stage 6 consensus: 10-15 risks generated via analysisStep. Reality Gate requires >= 10. Aligned. |
+| Stage 7 → 9 (Pricing for valuation) | **OK** | Stage 7 consensus includes ARPA, LTV, payback. Revenue multiple valuation can derive from ARPA × estimated customer count. No missing fields. |
+| Stage 8 → 9 (BMC for content generation) | **OK** | Stage 8 consensus: 9 blocks with priority + evidence per item. Rich enough for BMC-to-exit mapping. |
+| Stage 4 → 9 (Competitors as potential acquirers) | **Minor gap** | Stage 4 consensus adds competitor fields (name, pricingModel, url, confidence) but no "size" or "acquisition history" field. The analysisStep can infer acquirer suitability from competitor data + LLM knowledge, but explicit competitor scale data would strengthen acquirer identification. **Not blocking** -- the LLM can compensate. |
+
+**One potential forward dependency concern**: Stage 9's `valuation_estimate` introduces a revenue multiple. If Stage 10+ (Naming/Branding) or Stage 13+ (BUILD) later needs a different valuation method (e.g., for fundraising), this creates a precedent that may need revisiting. However, at the BLUEPRINT phase this is acceptable -- execution-stage valuation refinement is expected.
+
+### 13. Contrarian Take
+
+**Arguing AGAINST adding valuation estimates at Stage 9:**
+
+The most obvious recommendation is adding `valuation_estimate` with revenue multiples. Here's why this could be wrong:
+
+1. **False precision at the wrong time.** A pre-revenue venture in Stage 9 has no real revenue base. Estimating "$5M ARR × 8x = $40M exit" gives a veneer of quantitative rigor to what is fundamentally a guess. Revenue multiples require actual revenue data, and at the BLUEPRINT phase, the venture hasn't built anything yet. We'd be multiplying projections by industry averages -- two unreliable numbers producing a confidently wrong answer.
+
+2. **Anchoring bias.** Once a "$40M exit" number exists in the system, every downstream decision gets anchored to it. Stage 10 branding investment, Stage 13+ feature prioritization, even the founder's own expectations. A bad anchor is worse than no anchor, because it distorts decisions with false confidence.
+
+3. **The CLI works fine without it.** The current CLI has exit_thesis + exit_paths + probability_pct + target_acquirers with fit_score. This is qualitative but honest. "We'll likely be acquired by a strategic buyer in 3-5 years" is more useful at the evaluation stage than "$40M exit via 8x revenue multiple" -- because the former acknowledges uncertainty while the latter pretends to resolve it.
+
+4. **What could go wrong**: Users treat the valuation estimate as a commitment rather than a rough directional indicator. Ventures that "fail" valuation expectations get killed prematurely, or worse, ventures with inflated valuations get over-invested.
+
+**Counter-argument to the counter**: Revenue multiples are industry-standard for early-stage evaluation, and even rough estimates help calibrate expectations. The `rationale` field exists precisely to caveat the estimate. But the risk of false precision is real, and the CLI's current qualitative approach may be more honest for BLUEPRINT-stage ventures.
+
+**Verdict**: Include valuation estimate but mark it clearly as "directional estimate" in the schema description, and ensure the analysisStep prompt includes explicit caveats about the estimate's reliability at pre-revenue stage.
