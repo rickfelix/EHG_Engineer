@@ -1,4 +1,4 @@
-# leo_audit_config Table
+# work_item_thresholds Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -19,46 +19,50 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| enabled | `boolean` | **NO** | `true` | Master switch for audit execution |
-| schedule_cron | `text` | **NO** | - | Cron expression for audit schedule (e.g., "0 2 * * 1" for Mondays at 2 AM) |
-| timezone | `text` | **NO** | `'UTC'::text` | Timezone for cron schedule interpretation |
-| stale_after_days | `integer(32)` | **NO** | `14` | Days before SD marked as stale/abandoned |
-| warn_after_days | `integer(32)` | **NO** | `7` | Days before warning about stale SD |
-| max_findings_per_sd | `integer(32)` | **NO** | `25` | Maximum findings to report per SD |
+| tier1_max_loc | `integer(32)` | **NO** | `30` | - |
+| tier2_max_loc | `integer(32)` | **NO** | `75` | - |
+| is_active | `boolean` | **NO** | `false` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| created_by | `text` | YES | - | - |
+| change_reason | `text` | YES | - | - |
+| supersedes_id | `uuid` | YES | - | - |
 
 ## Constraints
 
 ### Primary Key
-- `leo_audit_config_pkey`: PRIMARY KEY (id)
+- `work_item_thresholds_pkey`: PRIMARY KEY (id)
+
+### Foreign Keys
+- `work_item_thresholds_supersedes_id_fkey`: supersedes_id → work_item_thresholds(id)
 
 ## Indexes
 
-- `leo_audit_config_pkey`
+- `idx_work_item_thresholds_active`
   ```sql
-  CREATE UNIQUE INDEX leo_audit_config_pkey ON public.leo_audit_config USING btree (id)
+  CREATE INDEX idx_work_item_thresholds_active ON public.work_item_thresholds USING btree (is_active, created_at DESC)
+  ```
+- `idx_work_item_thresholds_single_active`
+  ```sql
+  CREATE UNIQUE INDEX idx_work_item_thresholds_single_active ON public.work_item_thresholds USING btree (is_active) WHERE (is_active = true)
+  ```
+- `work_item_thresholds_pkey`
+  ```sql
+  CREATE UNIQUE INDEX work_item_thresholds_pkey ON public.work_item_thresholds USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. leo_audit_config_authenticated_select (SELECT)
+### 1. authenticated_read_work_item_thresholds (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. leo_audit_config_service_role_all (ALL)
+### 2. service_role_all_work_item_thresholds (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
-
-## Triggers
-
-### trigger_leo_audit_config_updated_at
-
-- **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION update_leo_audit_config_updated_at()`
 
 ---
 
