@@ -12,7 +12,8 @@
       "session_init",
       "work_item_routing",
       "skill_intent_detection",
-      "common_commands"
+      "common_commands",
+      "teams_protocol"
     ]
   },
   "CLAUDE_CORE.md": {

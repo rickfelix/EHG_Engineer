@@ -731,8 +731,43 @@ LEO Protocol includes intelligent slash commands that interconnect based on work
 LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /learn → /leo next
 ```
 
+## Teams Protocol
+
+When coordinating multiple sub-agents (e.g., in orchestrator SDs with parallel children), follow these team coordination rules:
+
+### When to Use Teams
+- Orchestrator SDs with 3+ children that can execute in parallel
+- Complex SDs requiring concurrent work across different domains (e.g., DATABASE + API + TESTING)
+- Batch processing scenarios where multiple independent SDs are ready
+
+### Role Boundaries
+- **Team Lead**: Orchestrates children, assigns tasks, collects results. Does NOT implement.
+- **Teammates**: Execute assigned child SDs through full LEAD-PLAN-EXEC workflow. Work ONLY on their assigned SD.
+- **Sub-agents**: Provide domain expertise within a teammates workflow (SECURITY, DATABASE, etc.)
+
+### Handoff Format
+When teammates report results to the team lead:
+1. **SD Key**: Which child SD was completed
+2. **Status**: succeeded / failed / blocked
+3. **Summary**: Brief description of what was implemented (2-3 sentences)
+4. **Issues**: Any errors, blockers, or concerns encountered
+
+### Safety Constraints
+- **No assumptions**: Do not assume other teammates state or progress
+- **Cite sources**: Reference specific files, commits, or DB records
+- **Request context**: Ask team lead for missing information rather than guessing
+- **Worktree isolation**: Each teammate works in its own git worktree
+- **No shared file edits**: Teammates must not modify files outside their worktree
+
+### One-Command Setup
+After cloning the repository, ensure generated agent files exist:
+
+npm run agents:compile
+
+This generates all agent .md files from .partial.md sources with injected LEO database knowledge.
+
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-11 9:11:45 AM
+**Last Generated**: 2026-02-11 12:58:34 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

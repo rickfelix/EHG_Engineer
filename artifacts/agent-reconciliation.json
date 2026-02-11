@@ -1,0 +1,338 @@
+{
+  "generated_at": "2026-02-11T17:53:07.200Z",
+  "summary": {
+    "total_claude_agents": 17,
+    "total_leo_agents": 31,
+    "matched": 16,
+    "partial": 1,
+    "missing_in_claude": 14,
+    "missing_in_leo": 0
+  },
+  "entries": [
+    {
+      "leo_code": "ANALYTICS",
+      "claude_agent": null,
+      "leo_name": "Analytics Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 11,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "API",
+      "claude_agent": "api-agent",
+      "leo_name": "API Architecture Sub-Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 17,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "AUDIT",
+      "claude_agent": null,
+      "leo_name": "Self-Audit Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 0,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "No active trigger phrases",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "CRM",
+      "claude_agent": null,
+      "leo_name": "CRM Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 8,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "DATABASE",
+      "claude_agent": "database-agent",
+      "leo_name": "Principal Database Architect",
+      "gap_status": "MATCHED",
+      "trigger_count": 57,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "DEPENDENCY",
+      "claude_agent": "dependency-agent",
+      "leo_name": "Dependency Management Sub-Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 22,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "DESIGN",
+      "claude_agent": "design-agent",
+      "leo_name": "Senior Design Sub-Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 44,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "DOCMON",
+      "claude_agent": "docmon-agent",
+      "leo_name": "Information Architecture Lead",
+      "gap_status": "MATCHED",
+      "trigger_count": 14,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "FINANCIAL",
+      "claude_agent": null,
+      "leo_name": "Financial Modeling Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 12,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "GITHUB",
+      "claude_agent": "github-agent",
+      "leo_name": "DevOps Platform Architect",
+      "gap_status": "MATCHED",
+      "trigger_count": 9,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "JUDGE",
+      "claude_agent": null,
+      "leo_name": "Constitutional Judge",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 26,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "LAUNCH",
+      "claude_agent": null,
+      "leo_name": "Launch Orchestration Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 10,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "MARKETING",
+      "claude_agent": null,
+      "leo_name": "Marketing & GTM Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 11,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "MONITORING",
+      "claude_agent": null,
+      "leo_name": "Monitoring Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 11,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "ORCHESTRATOR_CHILD",
+      "claude_agent": "orchestrator-child-agent",
+      "leo_name": "Orchestrator Child Agent",
+      "gap_status": "PARTIAL",
+      "trigger_count": 0,
+      "config_registered": true,
+      "notes": [
+        "No active trigger phrases"
+      ]
+    },
+    {
+      "leo_code": "PERFORMANCE",
+      "claude_agent": "performance-agent",
+      "leo_name": "Performance Engineering Lead",
+      "gap_status": "MATCHED",
+      "trigger_count": 1,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "PRICING",
+      "claude_agent": null,
+      "leo_name": "Pricing Strategy Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 10,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "PRIORITIZATION_PLANNER",
+      "claude_agent": null,
+      "leo_name": "Prioritization Planner",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 0,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "No active trigger phrases",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "QUICKFIX",
+      "claude_agent": null,
+      "leo_name": "Quick-Fix Orchestrator (\"LEO Lite\" Field Medic)",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 0,
+      "config_registered": true,
+      "notes": [
+        "No Claude Code agent file exists",
+        "No active trigger phrases"
+      ]
+    },
+    {
+      "leo_code": "RCA",
+      "claude_agent": "rca-agent",
+      "leo_name": "Root Cause Analysis Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 22,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "REGRESSION",
+      "claude_agent": "regression-agent",
+      "leo_name": "Regression Validator Sub-Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 27,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "RETRO",
+      "claude_agent": "retro-agent",
+      "leo_name": "Continuous Improvement Coach",
+      "gap_status": "MATCHED",
+      "trigger_count": 29,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "RISK",
+      "claude_agent": "risk-agent",
+      "leo_name": "Risk Assessment Sub-Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 62,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "SALES",
+      "claude_agent": null,
+      "leo_name": "Sales Process Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 10,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "SECURITY",
+      "claude_agent": "security-agent",
+      "leo_name": "Chief Security Architect",
+      "gap_status": "MATCHED",
+      "trigger_count": 3,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "STORIES",
+      "claude_agent": "stories-agent",
+      "leo_name": "User Story Context Engineering Sub-Agent",
+      "gap_status": "MATCHED",
+      "trigger_count": 7,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "TESTING",
+      "claude_agent": "testing-agent",
+      "leo_name": "QA Engineering Director",
+      "gap_status": "MATCHED",
+      "trigger_count": 14,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "UAT",
+      "claude_agent": "uat-agent",
+      "leo_name": "UAT Test Executor",
+      "gap_status": "MATCHED",
+      "trigger_count": 10,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "VALIDATION",
+      "claude_agent": "validation-agent",
+      "leo_name": "Principal Systems Analyst",
+      "gap_status": "MATCHED",
+      "trigger_count": 5,
+      "config_registered": true,
+      "notes": []
+    },
+    {
+      "leo_code": "VALUATION",
+      "claude_agent": null,
+      "leo_name": "Exit Valuation Sub-Agent",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 11,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    },
+    {
+      "leo_code": "VETTING",
+      "claude_agent": null,
+      "leo_name": "Vetting Engine",
+      "gap_status": "MISSING_IN_CLAUDE",
+      "trigger_count": 14,
+      "config_registered": false,
+      "notes": [
+        "No Claude Code agent file exists",
+        "Config issues: Missing from defaults; Missing from phaseOverrides; Missing from categoryMappings"
+      ]
+    }
+  ]
+}

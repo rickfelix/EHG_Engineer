@@ -69,6 +69,7 @@ function generateRouter(data, _fileMapping) {
   const workItemRouting = sections.find(s => s.section_type === 'work_item_routing');
   const skillIntentDetection = sections.find(s => s.section_type === 'skill_intent_detection');
   const commonCommands = sections.find(s => s.section_type === 'common_commands');
+  const teamsProtocol = sections.find(s => s.section_type === 'teams_protocol');
 
   // ARCHITECTURE DECISION (2026-01-24): Keywords from code file, not database
   const triggerReference = generateKeywordQuickReference();
@@ -99,6 +100,8 @@ ${workItemRouting ? formatSection(workItemRouting) : ''}
 ${skillIntentDetection ? formatSection(skillIntentDetection) : ''}
 
 ${commonCommands ? commonCommands.content : ''}
+
+${teamsProtocol ? formatSection(teamsProtocol) : ''}
 
 ## DYNAMICALLY GENERATED FROM DATABASE
 **Last Generated**: ${today} ${time}
