@@ -15,7 +15,7 @@
  * @version 1.2.0 - LEO v4.3.3 Refactoring Enhancement
  */
 
-import OpenAI from 'openai';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 // LEO v4.3.3: Import IntensityDetector for refactoring SDs
@@ -68,13 +68,25 @@ const EXPECTED_JSON_SCHEMA = `{
 export class SDTypeClassifier {
   constructor() {
     this.model = getOpenAIModel('classification'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config
+    this.llmClient = null; // Initialized lazily on first use
+  }
 
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn('OPENAI_API_KEY not found - AI classification will fall back to keyword detection');
-      this.openai = null;
-    } else {
-      this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  /**
+   * Get LLM client from factory (lazy initialization)
+   */
+  async getLLMClient() {
+    if (!this.llmClient) {
+      try {
+        this.llmClient = await getLLMClient({
+          purpose: 'sd-type-classification',
+          phase: 'LEAD'
+        });
+      } catch (error) {
+        console.warn('LLM client unavailable - AI classification will fall back to keyword detection');
+        return null;
+      }
     }
+    return this.llmClient;
   }
 
   /**
@@ -88,13 +100,16 @@ export class SDTypeClassifier {
    * @returns {Promise<Object>} Classification result
    */
   async classify(sd) {
-    // If OpenAI not available, fall back to keyword detection
-    if (!this.openai) {
+    // Get LLM client from factory
+    const llmClient = await this.getLLMClient();
+
+    // If LLM client not available, fall back to keyword detection
+    if (!llmClient) {
       return this.keywordFallback(sd);
     }
 
     try {
-      const result = await this.callOpenAI(sd);
+      const result = await this.callOpenAI(sd, llmClient);
       return this.processResult(result, sd);
     } catch (error) {
       console.error('AI classification failed, falling back to keywords:', error.message);
@@ -103,9 +118,9 @@ export class SDTypeClassifier {
   }
 
   /**
-   * Call OpenAI GPT 5.2 with JSON response mode
+   * Call LLM with JSON response mode via factory
    */
-  async callOpenAI(sd) {
+  async callOpenAI(sd, llmClient) {
     const systemPrompt = `You are an expert at classifying Strategic Directives (SDs) in a software development lifecycle.
 
 **SD Type Definitions:**
@@ -181,8 +196,7 @@ NO additional text, explanations, or markdown - ONLY the JSON object.`;
 
 Analyze the SD carefully and classify it based on what is actually being BUILT or CHANGED.`;
 
-    const response = await this.openai.chat.completions.create({
-      model: this.model,
+    const response = await llmClient.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }

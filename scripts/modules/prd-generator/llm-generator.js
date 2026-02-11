@@ -5,7 +5,7 @@
  * Uses GPT 5.2 to generate actual PRD content instead of placeholder text
  */
 
-import OpenAI from 'openai';
+import { getLLMClient } from '../../../lib/llm/client-factory.js';
 import { LLM_PRD_CONFIG, buildSystemPrompt } from './config.js';
 import { buildPRDGenerationContext } from './context-builder.js';
 
@@ -22,13 +22,16 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     return null;
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.warn('   \u26a0\ufe0f  OPENAI_API_KEY not set, falling back to template PRD');
+  // Get LLM client from factory (handles authentication and model selection)
+  const llmClient = await getLLMClient({
+    purpose: 'prd-generation',
+    phase: 'PLAN'
+  });
+
+  if (!llmClient) {
+    console.warn('   \u26a0\ufe0f  LLM client unavailable, falling back to template PRD');
     return null;
   }
-
-  const openai = new OpenAI({ apiKey: openaiKey });
   const sdType = sd.sd_type || 'feature';
 
   console.log('   \ud83e\udd16 Generating PRD content with GPT 5.2...');
@@ -38,8 +41,7 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     const systemPrompt = buildSystemPrompt(sdType);
     const userPrompt = buildPRDGenerationContext(sd, context);
 
-    const response = await openai.chat.completions.create({
-      model: LLM_PRD_CONFIG.model,
+    const response = await llmClient.chat.completions.create({
       temperature: LLM_PRD_CONFIG.temperature,
       max_completion_tokens: LLM_PRD_CONFIG.maxTokens,
       messages: [
