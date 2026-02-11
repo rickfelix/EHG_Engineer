@@ -2368,7 +2368,97 @@ const TEMPLATE = {
 
 ## Stage 13: Product Roadmap
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-13.js`
+**Phase**: THE BLUEPRINT (Stages 13-16) -- **first stage of Phase 4**
+**Type**: Passive validation + **active `computeDerived()`** (Kill Gate evaluation)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `vision_statement` | string | minLength: 20 | Yes |
+| `milestones[]` | array | minItems: 3 | Yes |
+| `milestones[].name` | string | minLength: 1 | Yes |
+| `milestones[].date` | string | minLength: 1 | Yes |
+| `milestones[].deliverables[]` | array | minItems: 1 | Yes |
+| `milestones[].dependencies[]` | array | -- | No |
+| `phases[]` | array | minItems: 1 | Yes |
+| `phases[].name` | string | minLength: 1 | Yes |
+| `phases[].start_date` | string | minLength: 1 | Yes |
+| `phases[].end_date` | string | minLength: 1 | Yes |
+
+**Schema (Derived -- Kill Gate)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `timeline_months` | number | Computed from earliest to latest milestone date |
+| `milestone_count` | number | Count of milestones |
+| `decision` | enum | `pass` or `kill` |
+| `blockProgression` | boolean | true if kill gate triggered |
+| `reasons[]` | array | Specific kill reasons with type, message, threshold, actual |
+
+**Kill Gate Criteria** (deterministic, any failure = kill):
+- < 3 milestones → `insufficient_milestones`
+- Any milestone missing deliverables → `milestone_missing_deliverables`
+- Timeline < 3 months → `timeline_too_short`
+
+**Processing**:
+- `validate(data)`: Schema validation of all input fields
+- `computeDerived(data)`: Calculates timeline_months from milestone dates, runs kill gate
+- `evaluateKillGate({ milestone_count, milestones, timeline_months })`: Pure exported function
+- **No `analysisSteps`** -- roadmap must be provided externally
+- **No feature prioritization** (no priority field on milestones/deliverables)
+- **No resource estimation** per milestone (no effort, team, cost)
+- **No tech stack alignment** (no connection to technical constraints)
+- **No sales model consumption** (no connection to Stage 12 sales identity)
+
+**CLI Strengths**: Clean milestone/phase structure, deterministic kill gate as pure function, exported constants for cross-stage use, date-based timeline computation.
+
+**CLI Gaps**: Very lightweight for a BLUEPRINT stage. No feature backlog, no prioritization framework, no dependency graph beyond simple array, no connection to prior Identity stages (brand, GTM, sales model don't inform the roadmap), no resource or cost estimation.
+
+### GUI Implementation (Ground Truth)
+
+**No GUI Stage 13 component exists.** The GUI was built only through Stage 12 (THE IDENTITY phase). No React/TSX components for Product Roadmap were found.
+
+The original GUI design documents (database migrations) envisioned stages 13-16 as:
+- Stage 13: "Tech Stack Interrogation" (with AI interrogation)
+- Stage 14: "Data Model & Architecture" (ERD/data model builder)
+- Stage 15: "Epic/Story Breakdown" (INVEST validation)
+- Stage 16: "Schema Completeness Checklist" (decision gate)
+
+This is a **completely different stage mapping** from the CLI:
+- CLI Stage 13: Product Roadmap
+- CLI Stage 14: Technical Architecture
+- CLI Stage 15: Resource Planning
+- CLI Stage 16: Financial Projections
+
+The GUI's planned Blueprint was developer-centric (tech stack → data model → stories → schema). The CLI's Blueprint is business-centric (product roadmap → architecture → resources → financials). The CLI mapping is authoritative.
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Implementation | Backend template (203 lines) | **None** (not built) |
+| Vision statement | Required (min 20 chars) | N/A |
+| Milestones | min 3 with name/date/deliverables | N/A |
+| Phases | min 1 with date ranges | N/A |
+| Feature prioritization | None | N/A |
+| Resource estimation | None | N/A |
+| Kill Gate | Deterministic (milestone count, completeness, timeline) | N/A |
+| Stage 12 consumption | None | N/A |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-13-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-13-claude.md`
+- OpenAI: `docs/plans/responses/stage-13-openai.md`
+- AntiGravity: `docs/plans/responses/stage-13-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
