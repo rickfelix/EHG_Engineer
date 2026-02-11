@@ -54,22 +54,26 @@ async function generateCheckpointPlan(sdId, options = {}) {
     // ============================================
     console.log('📋 Step 1: Fetching SD and user stories...');
 
-    const { data: sd, error: sdError } = await supabase
-      .from('strategic_directives_v2')
-      .select('*')
-      .eq('id', sdId)
-      .single();
+    // SD-LEO-ID-NORMALIZE-001: Support both UUID (id) and human-readable (sd_key) lookups
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+    const sdQuery = isUUID
+      ? supabase.from('strategic_directives_v2').select('*').eq('id', sdId).single()
+      : supabase.from('strategic_directives_v2').select('*').eq('sd_key', sdId).single();
+
+    const { data: sd, error: sdError } = await sdQuery;
 
     if (sdError || !sd) {
-      throw new Error(`Failed to fetch SD: ${sdError?.message || 'SD not found'}`);
+      throw new Error(`Failed to fetch SD: ${sdError?.message || 'SD not found'} (looked up by ${isUUID ? 'id' : 'sd_key'})`);
     }
 
     console.log(`   ✓ SD: ${sd.title}`);
 
+    // Use the UUID id for user_stories FK lookup (sd_id is UUID FK)
+    const sdUuid = sd.id;
     const { data: userStories, error: storiesError } = await supabase
       .from('user_stories')
       .select('*')
-      .eq('sd_id', sdId)
+      .eq('sd_id', sdUuid)
       .order('story_key');
 
     if (storiesError) {
@@ -149,7 +153,7 @@ async function generateCheckpointPlan(sdId, options = {}) {
         checkpoint_plan: checkpointPlan,
         updated_at: new Date().toISOString()
       })
-      .eq('id', sdId);
+      .eq('id', sdUuid);
 
     if (updateError) {
       throw new Error(`Failed to store checkpoint plan: ${updateError.message}`);
@@ -281,7 +285,10 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Cross-platform entry point (Windows file:///C:/ vs process.argv C:\)
+const isMain = import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
+if (isMain) {
   main();
 }
 

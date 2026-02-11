@@ -197,6 +197,7 @@
     "gate:health": "node scripts/gate-health-check.js",
     "gate:health:dry": "node scripts/gate-health-check.js --dry-run",
     "gate:health:refresh": "node scripts/gate-health-check.js --refresh",
+    "git:recover": "node scripts/git-commit-recovery.js",
     "sd:next": "node scripts/sd-next.js",
     "sd:start": "node scripts/sd-start.js",
     "sd:baseline": "node scripts/sd-baseline.js",

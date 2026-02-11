@@ -174,6 +174,22 @@ PREOF
         throw new Error('No PR number provided for merge');
       }
 
+      // Branch validation guard: verify we're on the expected branch
+      // Prevents cross-session contamination where another session switched our branch
+      if (this.context.expectedBranch) {
+        const { stdout: currentBranch } = await execAsync(
+          `cd "${this.repoPath}" && git rev-parse --abbrev-ref HEAD`,
+          { timeout: 5000 }
+        );
+        const actual = currentBranch.trim();
+        if (actual !== this.context.expectedBranch) {
+          throw new Error(
+            `Branch mismatch detected! Expected '${this.context.expectedBranch}' but found '${actual}'. ` +
+            'Another session may have switched the branch. Aborting merge to prevent contamination.'
+          );
+        }
+      }
+
       console.log(`   [1/3] Merging PR #${prNumber}...`);
 
       // Merge PR using gh CLI
@@ -186,16 +202,32 @@ PREOF
       result.merged = true;
       console.log(`   ✅ PR #${prNumber} merged successfully`);
 
-      // Sync local main
-      console.log('   [2/3] Syncing local main branch...');
+      // Sync local main ref WITHOUT changing working directory (multi-session safe)
+      // SAFETY: git fetch origin main:main updates the local main ref
+      // without running git checkout, so other sessions aren't disrupted
+      console.log('   [2/3] Syncing local main ref (multi-session safe)...');
       try {
         await execAsync(
-          `cd "${this.repoPath}" && git checkout main && git pull origin main`,
+          `cd "${this.repoPath}" && git fetch origin main:main`,
           { timeout: 30000 }
         );
-        console.log('   ✅ Local main synced');
+        console.log('   ✅ Local main ref synced (no checkout)');
       } catch (syncError) {
-        console.log(`   ⚠️  Local sync warning: ${syncError.message.substring(0, 100)}`);
+        // git fetch origin main:main fails if we're ON main (can't update checked-out branch)
+        // In that case, fall back to git pull which is safe since we're already on main
+        const currentBranch = await execAsync(
+          `cd "${this.repoPath}" && git rev-parse --abbrev-ref HEAD`,
+          { timeout: 5000 }
+        );
+        if (currentBranch.stdout.trim() === 'main') {
+          await execAsync(
+            `cd "${this.repoPath}" && git pull origin main`,
+            { timeout: 30000 }
+          );
+          console.log('   ✅ Local main synced (already on main, used git pull)');
+        } else {
+          console.log(`   ⚠️  Local sync warning: ${syncError.message.substring(0, 100)}`);
+        }
       }
 
       console.log('   [3/3] Merge complete');
