@@ -1,203 +1,271 @@
-# Testing and QA Documentation
+# UAT System - Quick Start Guide
 
-This directory contains testing strategies, QA workflows, test scenarios, and quality assurance documentation for the EHG Engineer project.
+## Overview
 
-## Metadata
-- **Category**: Testing
-- **Status**: Approved
-- **Last Updated**: 2025-10-24
+A simple, database-backed User Acceptance Testing system for the EHG application with two cooperating agents:
 
----
+- **UAT Wizard**: One-question-at-a-time test guide for human testers
+- **UAT Lead**: Database writer, gate keeper, and defect creator
 
-## Directory Contents
+All UAT data is stored in EHG_Engineering database, keeping the EHG app clean.
 
-### Development Workflows
+## 🚀 5-Minute Getting Started
 
-| File | Description |
-|------|-------------|
-| `22_iterative_dev_loop.md` | Iterative development loop and testing cycles |
-| `25_quality_assurance.md` | Quality assurance standards and processes |
-| `testing_qa.md` | General testing and QA guidelines |
+### Prerequisites
 
-### Vision QA Workflows
+1. **EHG App Running**: Ensure the EHG application is running at `http://localhost:5173`
+2. **Database Access**: Ensure Supabase credentials are in `.env`
+3. **Node/TypeScript**: Node.js 18+ with TypeScript installed
 
-| File | Description |
-|------|-------------|
-| `exec-vision-qa-workflow.md` | EXEC phase vision QA workflow integration |
+### Step 1: Initialize Database (One-time setup)
 
-**Related Vision QA Files** (in `04_features/`):
-- `lead-vision-qa-workflow.md` - LEAD phase vision QA
-- `plan-vision-qa-workflow.md` - PLAN phase vision QA
-
-### Test Scenarios
-
-| File | Description |
-|------|-------------|
-| `VOICE_FUNCTION_TEST_SCENARIOS.md` | Voice function test scenarios and validation |
-| `TESTING_REPORT_STAGES_1_20.md` | Testing report for stages 1-20 |
-
-### UI/UX Testing
-
-| File | Description |
-|------|-------------|
-| `DIRECTIVE_LAB_UI_IMPROVEMENTS.md` | Directive Lab UI testing and improvements |
-
----
-
-## Testing Strategy Overview
-
-### Development Phases
-
-The testing documentation is organized by LEO Protocol phases:
-
-1. **LEAD Phase**
-   - Vision QA workflow (`04_features/lead-vision-qa-workflow.md`)
-   - Strategic validation
-
-2. **PLAN Phase**
-   - Vision QA workflow (`04_features/plan-vision-qa-workflow.md`)
-   - PRD validation
-   - Test strategy planning
-
-3. **EXEC Phase**
-   - Vision QA workflow (`exec-vision-qa-workflow.md`)
-   - Implementation testing
-   - Dual test requirement (unit + E2E)
-
-### Testing Types
-
-**Iterative Development** (`22_iterative_dev_loop.md`)
-- Development cycle testing
-- Continuous integration testing
-- Fast feedback loops
-
-**Quality Assurance** (`25_quality_assurance.md`)
-- QA standards
-- Quality gates
-- Acceptance criteria validation
-
-**Specialized Testing**:
-- Voice functions (`VOICE_FUNCTION_TEST_SCENARIOS.md`)
-- UI/UX validation (`DIRECTIVE_LAB_UI_IMPROVEMENTS.md`)
-- Stage-based testing (`TESTING_REPORT_STAGES_1_20.md`)
-
----
-
-## Testing Best Practices
-
-### Dual Test Requirement (LEO Protocol v4.2.x)
-
-All features MUST have:
-1. **Unit Tests** - Component-level testing
-2. **E2E Tests** - End-to-end Playwright tests
-
-See `CLAUDE_EXEC.md` for dual test requirements.
-
-### Playwright Integration
-
-**E2E Testing Framework**:
-- Playwright MCP integration
-- Visual regression testing
-- User journey validation
-
-See `/docs/03_protocols_and_standards/LEO_v4.2_PLAYWRIGHT_TESTING_INTEGRATION.md`
-
-### Test Coverage Requirements
-
-**Minimum Coverage Targets**:
-- Unit tests: 80% code coverage
-- E2E tests: All critical user journeys
-- Visual QA: All public-facing UI components
-
----
-
-## Related Documentation
-
-### Testing Tools & Frameworks
-- `/docs/reference/qa-director-guide.md` - QA Engineering Director v2.0
-- `/docs/03_protocols_and_standards/LEO_v4.2_PLAYWRIGHT_TESTING_INTEGRATION.md` - Playwright setup
-
-### Protocol References
-- `/CLAUDE_EXEC.md` - EXEC phase testing requirements
-- `/CLAUDE_PLAN.md` - PLAN phase test strategy
-- `/docs/03_protocols_and_standards/` - Testing protocols
-
-### Feature Testing
-- `/docs/04_features/` - Feature-specific test requirements
-- `/docs/02_api/` - API testing documentation
-
----
-
-## Quick Reference
-
-### Running Tests
-
-**Unit Tests**:
 ```bash
-npm run test
-npm run test:coverage
+# From EHG_Engineering directory
+cd /mnt/c/_EHG/EHG_Engineer
+
+# Apply migrations to create UAT tables
+psql $DATABASE_URL -f database/migrations/uat-simple-tracking.sql
+
+# Or use Supabase dashboard:
+# 1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq
+# 2. Navigate to SQL Editor
+# 3. Paste and run the migration SQL
 ```
 
-**E2E Tests** (Playwright):
+### Step 2: Compile TypeScript Files
+
 ```bash
-npx playwright test
-npx playwright test --ui  # Interactive mode
+# Compile the UAT scripts
+npx tsc scripts/uat-wizard.ts --outDir dist/scripts --module commonjs --target es2020
+npx tsc scripts/uat-lead.ts --outDir dist/scripts --module commonjs --target es2020
+npx tsc api/uat/handlers.ts --outDir dist/api/uat --module commonjs --target es2020
 ```
 
-**Specific Test File**:
+### Step 3: Start UAT Lead (Terminal 1)
+
 ```bash
-npx playwright test tests/e2e/feature-name.spec.ts
+# Start the UAT Lead agent
+node dist/scripts/uat-lead.js
+
+# Select option 1 to create a new run
+# Enter environment details:
+# - Environment URL: http://localhost:5173
+# - App version: 1.0.0
+# - Browser: Chrome
+# - Role: Admin
+
+# Note the Run ID (e.g., abc123-def456-...)
+# Keep this terminal open
 ```
 
-### Test Organization
+### Step 4: Start UAT Wizard (Terminal 2)
+
+```bash
+# Export the run ID from UAT Lead
+export UAT_RUN_ID=abc123-def456-...
+
+# Start the UAT Wizard
+node dist/scripts/uat-wizard.js
+
+# Select mode:
+# - 1 = Guided (step-by-step questions)
+# - 2 = Quick (rapid pass/fail entry)
+
+# Select test section or press Enter for all tests
+```
+
+### Step 5: Execute Tests
+
+#### Quick Mode Flow:
+```
+Test: TEST-AUTH-001
+Title: Standard Login
+Section: Authentication
+====================
+Steps:
+1. Go to: http://localhost:5173/login
+2. Enter valid credentials
+3. Click "Sign In"
+4. Verify: Dashboard loads
+
+Result? (p=PASS, f=FAIL, b=BLOCKED, n=NA): p
+
+[UAT-RESULT]
+run_id=abc123-def456-...
+case_id=TEST-AUTH-001
+status=PASS
+[/UAT-RESULT]
+
+Progress: 1/61 (2%)
+```
+
+#### Guided Mode Flow:
+```
+Test: TEST-AUTH-002
+Title: Invalid Credentials
+====================
+
+Did you navigate to the correct page? (y/n): y
+Did you complete the test steps? (y/n): y
+Did the test PASS? (y/n): n
+Current page URL: http://localhost:5173/login
+Page heading/title: Login - EHG
+Error message (if any): Invalid username or password
+What went wrong? (brief): Login failed as expected with invalid creds
+```
+
+### Step 6: Monitor Progress (Terminal 1 - UAT Lead)
+
+Copy the `[UAT-RESULT]` payload from Wizard and paste into Lead terminal. The Lead will:
+
+1. **Log the result**: `✓ TEST-AUTH-001: PASS | Run: 1/1 (100%) [GREEN]`
+2. **Create defects** (for failures): `→ Created defect: xyz789...`
+3. **Update gate status**: GREEN/YELLOW/RED based on pass rate
+
+Or select option 3 in UAT Lead to enter payload processing mode for automatic handling.
+
+### Step 7: Check Status
+
+In UAT Lead terminal, use commands:
+
+```bash
+Lead> status
+
+=== Run Status ===
+Run ID: abc123-def456-...
+Executed: 5
+Passed: 4
+Failed: 1
+Blocked: 0
+Pass Rate: 80.0%
+Critical Defects: 0
+Gate Status: RED
+Rationale: Pass rate below 85% threshold
+
+Lead> defects
+
+=== Open Defects (1) ===
+Major (1):
+  - TEST-AUTH-002: Invalid credentials test failed
+
+Lead> close
+
+=== UAT Run Complete ===
+Gate Status: RED - NO-GO
+Recommendation: NO-GO - Improve pass rate and fix defects
+```
+
+## 📊 Gate Rules
+
+- **GREEN (GO)**: Pass rate ≥85% AND no critical defects
+- **YELLOW (GO with conditions)**: Pass rate ≥85% BUT has critical defects
+- **RED (NO-GO)**: Pass rate <85%
+
+Pass rate = PASS / (PASS + FAIL + BLOCKED), excluding NA tests
+
+## 🔧 Advanced Usage
+
+### Export Results
+
+```bash
+Lead> export
+Format? (json/csv): csv
+✓ Exported to uat-results-abc123-def456.csv
+```
+
+### Resume Testing Session
+
+```bash
+# Terminal 1 - UAT Lead
+node dist/scripts/uat-lead.js
+# Select option 2: Resume run
+# Enter Run ID: abc123-def456-...
+
+# Terminal 2 - UAT Wizard
+export UAT_RUN_ID=abc123-def456-...
+node dist/scripts/uat-wizard.js
+```
+
+### Direct Database Queries
+
+```sql
+-- View current run status
+SELECT * FROM v_uat_run_stats WHERE run_id = 'abc123-def456-...';
+
+-- Get gate status
+SELECT * FROM uat_gate_status('abc123-def456-...');
+
+-- View all defects
+SELECT * FROM uat_defects WHERE run_id = 'abc123-def456-...';
+```
+
+## 📁 File Structure
 
 ```
-tests/
-├── unit/              # Unit tests
-│   └── components/    # Component tests
-├── e2e/               # E2E tests
-│   └── *.spec.ts      # Playwright specs
-└── fixtures/          # Test fixtures and data
+EHG_Engineer/
+├── database/migrations/
+│   └── uat-simple-tracking.sql      # Database schema
+├── api/uat/
+│   └── handlers.ts                  # TypeScript server utilities
+├── scripts/
+│   ├── uat-wizard.ts               # Wizard agent
+│   └── uat-lead.ts                 # Lead agent
+├── docs/uat/
+│   └── README.md                   # This file
+└── dist/                           # Compiled JavaScript (generated)
 ```
 
+## 🐛 Troubleshooting
+
+### Database Connection Issues
+- Check `.env` has correct Supabase credentials
+- Verify `SUPABASE_SERVICE_ROLE_KEY` for write operations
+
+### TypeScript Compilation Errors
+```bash
+# Install missing dependencies
+npm install @supabase/supabase-js chalk readline
+npm install --save-dev @types/node typescript
+```
+
+### Payload Not Processing
+- Ensure you include both `[UAT-RESULT]` and `[/UAT-RESULT]` tags
+- Check all required fields: run_id, case_id, status
+- Verify Run ID matches between Wizard and Lead
+
+### Tests Not Loading
+- Verify seed data was inserted (61 test cases)
+- Check database connection
+- Try specifying a section: AUTH, DASH, VENT, etc.
+
+## 📈 Optional: UAT Dashboard
+
+A visual dashboard is available at:
+```
+http://localhost:3000/uat-dashboard
+```
+
+Features:
+- Real-time run progress
+- Pass rate gauge with gate indicator
+- Defect list by severity
+- Test execution timeline
+- Export controls
+
+## 🎯 Tips for Effective UAT
+
+1. **Start Small**: Test a single section first (e.g., AUTH)
+2. **Use Quick Mode**: For experienced testers or re-runs
+3. **Capture Evidence**: Always note URLs and error messages for failures
+4. **Batch Similar Tests**: Group by section for efficiency
+5. **Review Defects**: Check suspected files are accurate
+
+## 📚 Further Resources
+
+- UAT Script: `/docs/EHG_UAT_Script.md`
+- Database Schema: `/database/migrations/uat-simple-tracking.sql`
+- API Documentation: `/api/uat/handlers.ts`
+
 ---
 
-## Testing Tiers
-
-### Tier 1: Critical Path Testing
-- Authentication flows
-- Core venture workflows
-- Data integrity operations
-
-### Tier 2: Feature Testing
-- New feature validation
-- UI component testing
-- Integration testing
-
-### Tier 3: Edge Cases
-- Error handling
-- Performance testing
-- Accessibility testing
-
----
-
-## Navigation
-
-- **Parent**: [Documentation Home](../01_architecture/README.md)
-- **Next**: [06 Deployment](../06_deployment/README.md)
-- **Previous**: [04 Features](../04_features/README.md)
-
----
-
-## Contributing
-
-When adding new testing documentation:
-1. Follow [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md)
-2. Include metadata headers
-3. Link to related test files
-4. Document test scenarios and expected outcomes
-5. Update this README with new files
-
----
-
-**Note**: For comprehensive testing guidelines, see QA Engineering Director v2.0 guide in `/docs/reference/qa-director-guide.md`
+**Support**: For issues or questions, contact the EHG Engineering team.

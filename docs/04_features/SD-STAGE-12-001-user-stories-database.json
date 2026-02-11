@@ -1,0 +1,836 @@
+{
+  "metadata": {
+    "sd_id": "SD-STAGE-12-001",
+    "title": "Stage 12: Adaptive Naming - Domain & Legal Validation",
+    "version": "2.0.0",
+    "generated_at": "2025-12-05T18:00:00Z",
+    "quality_target": ">=70% on AI quality assessment",
+    "total_story_points": 32,
+    "invest_compliance": true,
+    "regeneration_reason": "Quality improvement - original stories scored 57% (minimum 70% required). Addressed: benefit_articulation, acceptance_criteria_clarity_testability, story_independence_implementability"
+  },
+  "user_stories": [
+    {
+      "story_key": "SD-STAGE-12-001:US-001",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "Brand Manager Manual Variant Entry Form",
+      "user_role": "Brand Manager",
+      "user_want": "enter brand name variations manually through a validated form interface with real-time feedback on field requirements",
+      "user_benefit": "I can quickly capture time-sensitive naming opportunities from market research or stakeholder suggestions before they are lost, ensuring no valuable brand adaptation ideas are missed due to system limitations",
+      "story_points": 5,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001-1",
+          "scenario": "Happy path - Form opens with correct fields",
+          "given": "I am logged in as a Brand Manager AND I have navigated to a venture's Brand Variants page AND that venture has at least one primary brand name established",
+          "when": "I click the 'Add Manual Variant' button",
+          "then": "A modal dialog opens within 500ms containing: (1) variant_name text input with 50-char max indicator, (2) variant_type dropdown with options [CULTURAL_ADAPTATION, PHONETIC_VARIATION, ABBREVIATED_FORM, MARKET_SPECIFIC, OTHER], (3) improvement_hypothesis textarea with 500-char max indicator, (4) confidence_delta number input with range slider -1.0 to +1.0, (5) Cancel and Save buttons"
+        },
+        {
+          "id": "AC-001-2",
+          "scenario": "Happy path - Successful variant creation",
+          "given": "The manual variant form is open AND I have entered: variant_name='TechVentura' (12 chars), variant_type='CULTURAL_ADAPTATION', improvement_hypothesis='Spanish market adaptation emphasizing tech innovation appeal' (67 chars), confidence_delta=0.15",
+          "when": "I click the 'Save Variant' button",
+          "then": "The system: (1) displays a loading spinner on the Save button, (2) creates a new record in adaptive_name_variants table with status='GENERATED', (3) auto-generates a UUID for variant_id, (4) sets parent_evaluation_id from current venture context, (5) records adaptation_timestamp as current UTC time, (6) closes the modal, (7) shows a green success toast 'Variant TechVentura created successfully', (8) the new variant appears at the top of the variants list within 1 second"
+        },
+        {
+          "id": "AC-001-3",
+          "scenario": "Error path - Validation failure on required fields",
+          "given": "The manual variant form is open AND the variant_name field is empty AND improvement_hypothesis contains only 5 characters",
+          "when": "I click the 'Save Variant' button",
+          "then": "The system: (1) does NOT submit to the server, (2) displays red border on variant_name field with error message 'Variant name is required (1-50 characters)', (3) displays red border on improvement_hypothesis field with error message 'Hypothesis must be between 10 and 500 characters (currently 5)', (4) focuses the first invalid field, (5) Save button remains enabled for retry"
+        },
+        {
+          "id": "AC-001-4",
+          "scenario": "Edge case - Duplicate variant name warning",
+          "given": "The variant 'TechVentura' already exists for this venture AND I enter 'TechVentura' in the variant_name field",
+          "when": "I blur/tab out of the variant_name field",
+          "then": "The system displays an amber warning message 'A variant with this name already exists. Duplicates are allowed but consider using a unique name.' without blocking form submission"
+        },
+        {
+          "id": "AC-001-5",
+          "scenario": "User flow - Data persistence verification",
+          "given": "I have successfully created a variant named 'TechVentura' AND I navigate away from the Brand Variants page",
+          "when": "I return to the Brand Variants page for the same venture",
+          "then": "The variant 'TechVentura' appears in the list with all originally entered data: variant_type='CULTURAL_ADAPTATION', improvement_hypothesis visible on row expansion, confidence_delta=0.15, and creation timestamp displayed"
+        }
+      ],
+      "definition_of_done": [
+        "Form component implemented with React Hook Form + Zod validation",
+        "Database insert mutation with optimistic update and rollback",
+        "Unit tests for form validation rules (100% rule coverage)",
+        "E2E test covering happy path and validation error scenarios",
+        "Accessibility audit passed (WCAG 2.1 AA)",
+        "Mobile responsive design verified"
+      ],
+      "depends_on": [],
+      "blocks": ["SD-STAGE-12-001:US-002", "SD-STAGE-12-001:US-003", "SD-STAGE-12-001:US-004"],
+      "technical_notes": "Form uses shadcn/ui Dialog component. Validation schema defined in src/schemas/adaptive-naming.ts. API endpoint POST /api/adaptive-naming/variants handles creation with RLS policies ensuring venture ownership.",
+      "implementation_approach": "1. Create Zod schema for variant validation. 2. Build form component using useForm hook. 3. Implement Supabase mutation with error handling. 4. Add real-time list refresh on successful creation.",
+      "test_scenarios": [
+        {"id": "TC-001-1", "type": "unit", "description": "Zod schema validates variant_name length constraints"},
+        {"id": "TC-001-2", "type": "unit", "description": "Zod schema validates confidence_delta range -1 to 1"},
+        {"id": "TC-001-3", "type": "e2e", "description": "Complete variant creation flow with database verification"},
+        {"id": "TC-001-4", "type": "e2e", "description": "Validation error display and field focus behavior"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-001-manual-variant-entry.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "form_component": "React Hook Form with Zod validation (shadcn/ui Dialog)",
+        "database_table": "adaptive_name_variants",
+        "api_endpoint": "POST /api/adaptive-naming/variants",
+        "validation_rules": {
+          "variant_name_min": 1,
+          "variant_name_max": 50,
+          "improvement_hypothesis_min": 10,
+          "improvement_hypothesis_max": 500,
+          "confidence_delta_min": -1,
+          "confidence_delta_max": 1
+        },
+        "related_components": [
+          "src/components/adaptive-naming/ManualVariantDialog.tsx",
+          "src/schemas/adaptive-naming.ts",
+          "src/hooks/useVariantMutation.ts"
+        ]
+      },
+      "architecture_references": [
+        "src/components/ventures/CreateVentureDialog.tsx (dialog pattern)",
+        "src/lib/supabase.ts (database client)",
+        "src/hooks/useVentures.ts (mutation pattern)"
+      ],
+      "example_code_patterns": [
+        "const schema = z.object({ variant_name: z.string().min(1).max(50), confidence_delta: z.number().min(-1).max(1) })",
+        "const { mutate, isLoading } = useVariantMutation({ onSuccess: () => toast.success('Created!') })"
+      ],
+      "testing_scenarios": [
+        {"scenario": "Form validation rejects empty name", "input": {"variant_name": "", "improvement_hypothesis": "valid hypothesis text"}, "expected": "Validation error on variant_name field"},
+        {"scenario": "Successful creation returns new variant", "input": {"variant_name": "TestVariant", "variant_type": "CULTURAL_ADAPTATION", "improvement_hypothesis": "Test hypothesis", "confidence_delta": 0.5}, "expected": "201 response with variant_id UUID"}
+      ]
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-002",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "Automated Domain Availability Validation Service",
+      "user_role": "Brand Manager",
+      "user_want": "see domain availability status for each brand variant automatically checked and displayed with actionable acquisition recommendations",
+      "user_benefit": "I can make informed decisions about which variants are viable for web presence within seconds of variant creation, avoiding weeks of manual research and preventing investment in variants with unavailable domains",
+      "story_points": 5,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-002-1",
+          "scenario": "Happy path - Automatic domain check triggered",
+          "given": "A new brand variant 'TechVentura' has been created with status='GENERATED' AND the domain check service is operational",
+          "when": "The variant creation completes successfully",
+          "then": "Within 10 seconds, the system: (1) initiates a domain availability check for 'techventura.com', (2) displays a 'Checking domain...' spinner in the domain_status cell of the variants table, (3) logs the check request with timestamp and variant_id"
+        },
+        {
+          "id": "AC-002-2",
+          "scenario": "Happy path - Available domain result stored",
+          "given": "Domain check for 'techventura.com' returns status='available' with estimated_price=$12.99/year",
+          "when": "The API response is received",
+          "then": "The system updates the variant record with: (1) availability_status.domain_availability = { domain: 'techventura.com', status: 'available', price_usd: 12.99, checked_at: <timestamp> }, (2) displays green 'Available' badge in the domain_status column, (3) shows '$12.99/yr' price indicator on hover"
+        },
+        {
+          "id": "AC-002-3",
+          "scenario": "Alternative flow - Unavailable domain with alternatives",
+          "given": "Domain check for 'techventura.com' returns status='unavailable' with registrar='GoDaddy', expiration_date='2026-03-15'",
+          "when": "The API response is received",
+          "then": "The system: (1) stores unavailability details including registrar and expiration, (2) automatically checks alternative TLDs [.co, .io, .net, .tech], (3) stores available alternatives in recommendations array, (4) displays amber 'Unavailable' badge with tooltip showing alternatives 'Try: techventura.io (available), techventura.co (available)'"
+        },
+        {
+          "id": "AC-002-4",
+          "scenario": "Notification - Premium domain opportunity",
+          "given": "A previously unavailable domain 'techventura.com' becomes available (detected via scheduled re-check) AND the variant has status='APPROVED'",
+          "when": "The re-check detects the status change",
+          "then": "The system: (1) updates status to 'premium_available', (2) sends HIGH priority notification to the Brand Manager via email with subject 'Premium Domain Opportunity: techventura.com', (3) creates an in-app notification badge on the Brand Variants page, (4) logs the opportunity in domain_opportunities audit table"
+        },
+        {
+          "id": "AC-002-5",
+          "scenario": "Error handling - API failure with retry",
+          "given": "The domain check API returns HTTP 503 or times out after 30 seconds",
+          "when": "The initial check fails",
+          "then": "The system: (1) retries up to 3 times with exponential backoff (5s, 15s, 45s), (2) if all retries fail, sets domain_status to 'check_pending', (3) schedules automatic retry in 1 hour, (4) displays gray 'Pending' badge with tooltip 'Domain check temporarily unavailable. Retrying in 1 hour.', (5) does NOT block any user workflows"
+        },
+        {
+          "id": "AC-002-6",
+          "scenario": "Performance - Cache hit optimization",
+          "given": "Domain 'techventura.com' was checked 30 minutes ago with status='available'",
+          "when": "The same variant is viewed or a manual re-check is requested",
+          "then": "The system: (1) returns cached result immediately (< 100ms response), (2) displays 'Checked 30m ago' timestamp, (3) shows 'Refresh' button that triggers new API call when clicked, (4) does NOT consume API quota for cached responses"
+        }
+      ],
+      "definition_of_done": [
+        "Domain check service implemented with provider abstraction",
+        "Caching layer with 1-hour TTL implemented",
+        "Retry logic with exponential backoff tested",
+        "Email notification template created and tested",
+        "E2E tests for available, unavailable, and error scenarios",
+        "Performance: < 100ms for cached results verified"
+      ],
+      "depends_on": ["SD-STAGE-12-001:US-001"],
+      "blocks": ["SD-STAGE-12-001:US-003", "SD-STAGE-12-001:US-005"],
+      "technical_notes": "Uses Supabase Edge Function for domain check proxy. Provider interface defined in src/services/providers/domain/types.ts. Rate limiting: 100 checks/hour per venture.",
+      "implementation_approach": "1. Define DomainCheckResult interface. 2. Implement GoDaddy provider adapter. 3. Add caching with Redis/Supabase. 4. Create notification trigger function. 5. Build retry queue with pg_cron.",
+      "test_scenarios": [
+        {"id": "TC-002-1", "type": "integration", "description": "Domain check returns normalized result from GoDaddy API"},
+        {"id": "TC-002-2", "type": "unit", "description": "Cache returns stored result within TTL"},
+        {"id": "TC-002-3", "type": "e2e", "description": "New variant triggers automatic domain check"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-002-domain-validation.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "service_component": "Supabase Edge Function (domain-check-proxy)",
+        "database_table": "adaptive_name_variants (availability_status JSONB column)",
+        "api_endpoint": "POST /api/adaptive-naming/domain-check",
+        "external_apis": ["GoDaddy Domain API", "WHOIS lookup service"],
+        "caching": {"strategy": "Redis or Supabase table", "ttl_seconds": 3600, "key_pattern": "domain:check:{domain}"},
+        "retry_policy": {"max_retries": 3, "backoff": "exponential", "delays_seconds": [5, 15, 45]}
+      },
+      "architecture_references": [
+        "supabase/functions/domain-check-proxy/index.ts",
+        "src/services/providers/domain/types.ts",
+        "src/lib/cache.ts"
+      ],
+      "example_code_patterns": [],
+      "testing_scenarios": []
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-003",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "Chairman Approval Workflow with Adaptive Guidance",
+      "user_role": "Chairman",
+      "user_want": "review brand variants with comprehensive data and provide approval decisions along with strategic guidance that shapes future variant generation",
+      "user_benefit": "I can efficiently approve or redirect brand evolution in under 5 minutes per variant while my strategic preferences automatically improve future suggestions, reducing repetitive feedback and ensuring brand consistency with my vision",
+      "story_points": 5,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-003-1",
+          "scenario": "Happy path - Chairman reviews variant details",
+          "given": "I am logged in as Chairman AND I navigate to the Approval Dashboard AND there are variants awaiting approval",
+          "when": "I click on a variant card for 'TechVentura'",
+          "then": "An expanded panel displays: (1) Variant name with phonetic pronunciation guide, (2) Generation reason/improvement_hypothesis, (3) Confidence delta with visual gauge (+15% shown as green bar), (4) Variant type badge (CULTURAL_ADAPTATION), (5) Domain availability status (Available/$12.99), (6) Comparison metrics vs baseline (memorability +12%, pronounceability +8%), (7) Predicted market improvements by region, (8) Approve/Conditional Approve/Reject action buttons"
+        },
+        {
+          "id": "AC-003-2",
+          "scenario": "Happy path - Variant approved",
+          "given": "I am viewing the TechVentura variant details AND I have reviewed all presented information",
+          "when": "I click the 'Approve' button",
+          "then": "The system: (1) changes variant status to 'APPROVED', (2) records approval_timestamp as current UTC, (3) stores approved_by as my chairman_id, (4) shows green success banner 'TechVentura approved - Ready for promotion', (5) variant moves to 'Approved' section of dashboard, (6) 'Promote to Primary' button becomes available"
+        },
+        {
+          "id": "AC-003-3",
+          "scenario": "Alternative flow - Variant rejected with reason",
+          "given": "I am viewing a variant AND I disagree with the naming direction",
+          "when": "I click 'Reject' and enter rejection reason 'Too similar to competitor brand XYZ' and click 'Confirm Rejection'",
+          "then": "The system: (1) changes status to 'REJECTED', (2) stores rejection_reason text (max 1000 chars), (3) records rejection_timestamp, (4) archives variant but retains for audit trail, (5) shows amber banner 'Variant rejected - Archived', (6) variant appears in 'Rejected' history tab (not in active list)"
+        },
+        {
+          "id": "AC-003-4",
+          "scenario": "Alternative flow - Conditional approval with market testing",
+          "given": "I see promise in a variant but want real-world validation before full approval",
+          "when": "I click 'Conditional Approval' AND set budget_limit=$5000 AND test_duration=30 days AND click 'Authorize Testing'",
+          "then": "The system: (1) changes status to 'APPROVED_PENDING_TESTING', (2) stores testing_authorization with budget_limit and test_duration, (3) initiates market testing workflow (creates test campaign record), (4) shows blue banner 'Testing authorized - $5K budget, 30 days', (5) variant shows 'Testing' badge with countdown timer"
+        },
+        {
+          "id": "AC-003-5",
+          "scenario": "Strategic guidance - Directional feedback stored",
+          "given": "I want to guide future variant generation without rejecting the current one",
+          "when": "I expand 'Provide Guidance' section AND select preferred_directions=['sustainability', 'innovation'] AND discouraged_directions=['generic', 'technical_jargon'] AND intensity='MODERATE' AND click 'Save Guidance'",
+          "then": "The system: (1) creates record in chairman_adaptive_guidance table, (2) sets guidance_type='STRATEGIC_REFINEMENT', (3) stores direction arrays and intensity, (4) shows green check 'Guidance saved - Will influence future variants', (5) next variant generation algorithm weights suggestions based on this guidance"
+        },
+        {
+          "id": "AC-003-6",
+          "scenario": "Constraint setting - Adaptation priorities",
+          "given": "I want to set hard constraints for this venture's naming",
+          "when": "I navigate to venture settings AND add constraint 'Must emphasize sustainability' as priority='REQUIRED' AND add 'Avoid technical jargon' as priority='PREFERRED' AND click 'Save Constraints'",
+          "then": "The system: (1) stores constraints in priority_constraints JSONB, (2) applies REQUIRED constraints as filters in variant generation, (3) applies PREFERRED constraints as scoring weights, (4) shows confirmation 'Constraints active for future variants'"
+        }
+      ],
+      "definition_of_done": [
+        "Chairman Approval Dashboard component implemented",
+        "Status transition state machine validated",
+        "Guidance storage and retrieval working",
+        "Market testing workflow integration complete",
+        "Role-based access control verified (Chairman only)",
+        "E2E tests for approve, reject, conditional flows"
+      ],
+      "depends_on": ["SD-STAGE-12-001:US-001", "SD-STAGE-12-001:US-002"],
+      "blocks": ["SD-STAGE-12-001:US-004", "SD-STAGE-12-001:US-008"],
+      "technical_notes": "Approval dashboard uses existing Chairman portal layout. Guidance table requires new schema (chairman_adaptive_guidance). State machine uses XState for transition validation.",
+      "implementation_approach": "1. Create approval dashboard UI. 2. Implement status transition mutations with validation. 3. Add guidance storage mutations. 4. Create market testing workflow trigger. 5. Integrate guidance into variant generation algorithm.",
+      "test_scenarios": [
+        {"id": "TC-003-1", "type": "e2e", "description": "Chairman approves variant and status updates correctly"},
+        {"id": "TC-003-2", "type": "e2e", "description": "Chairman rejects variant with reason stored"},
+        {"id": "TC-003-3", "type": "integration", "description": "Guidance affects variant generation scoring"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-003-chairman-approval.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "ui_component": "src/components/chairman/ApprovalDashboard.tsx",
+        "database_tables": ["adaptive_name_variants", "chairman_adaptive_guidance", "market_testing_campaigns"],
+        "api_endpoints": [
+          "PATCH /api/adaptive-naming/variants/{id}/approve",
+          "PATCH /api/adaptive-naming/variants/{id}/reject",
+          "POST /api/adaptive-naming/guidance"
+        ],
+        "state_machine": "src/machines/variantApprovalMachine.ts (XState)"
+      },
+      "architecture_references": [
+        "src/components/chairman/Dashboard.tsx (layout pattern)",
+        "src/machines/ventureWorkflowMachine.ts (state machine pattern)"
+      ],
+      "example_code_patterns": [],
+      "testing_scenarios": []
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-004",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "Brand Variants Management Dashboard with Real-time Updates",
+      "user_role": "Brand Manager",
+      "user_want": "view and manage all brand variants for a venture in a sortable, filterable table with live updates when changes occur",
+      "user_benefit": "I can track the complete lifecycle of every naming variant across my ventures in one view, saving 2+ hours per week compared to checking multiple systems and never missing status changes that require my action",
+      "story_points": 3,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-004-1",
+          "scenario": "Happy path - Dashboard initial load",
+          "given": "I am logged in as Brand Manager AND I navigate to a venture's Brand Variants page AND the venture has 15 variants in various statuses",
+          "when": "The page finishes loading (within 2 seconds)",
+          "then": "A data table displays with columns: (1) variant_name (sortable), (2) variant_type badge, (3) status pill [GENERATED/UNDER_EVALUATION/APPROVED/PROMOTED/REJECTED], (4) confidence_score percentage, (5) domain_status icon, (6) approval_status text, (7) improvement_percentage delta, (8) created_at relative timestamp. Pagination shows '15 variants' with 10 per page default."
+        },
+        {
+          "id": "AC-004-2",
+          "scenario": "User interaction - Column sorting",
+          "given": "The variants table is displayed with 15 rows",
+          "when": "I click the 'Status' column header once",
+          "then": "Rows reorder by status priority: GENERATED first, then UNDER_EVALUATION, APPROVED, PROMOTED, REJECTED last. A sort indicator arrow appears pointing up on the Status header. Clicking again reverses order (arrow points down)."
+        },
+        {
+          "id": "AC-004-3",
+          "scenario": "User interaction - Status filtering",
+          "given": "The variants table shows 15 variants: 5 GENERATED, 4 UNDER_EVALUATION, 3 APPROVED, 2 PROMOTED, 1 REJECTED",
+          "when": "I select 'APPROVED' from the status filter dropdown",
+          "then": "Table shows only 3 rows (APPROVED variants). Count badge updates to '3 approved variants'. Filter chip appears showing 'Status: APPROVED' with X to clear. URL updates with query param ?status=APPROVED for bookmarking."
+        },
+        {
+          "id": "AC-004-4",
+          "scenario": "Real-time update - New variant appears",
+          "given": "I am viewing the variants table AND another user (or system) creates a new variant",
+          "when": "The new variant is saved to database",
+          "then": "Within 2 seconds: (1) new row appears at top of table with brief highlight animation (yellow fade), (2) count badge increments, (3) toast appears 'New variant added: [name]', (4) no page refresh required (Supabase realtime subscription)"
+        },
+        {
+          "id": "AC-004-5",
+          "scenario": "Visual indicator - Premium domain opportunity",
+          "given": "Variant 'TechVentura' has domain_status changed to 'premium_available'",
+          "when": "The real-time update is received",
+          "then": "The row for TechVentura: (1) shows star icon in domain_status column, (2) domain cell background turns gold/yellow, (3) tooltip shows 'Premium domain opportunity - techventura.com now available!', (4) row moves to top of list regardless of current sort"
+        },
+        {
+          "id": "AC-004-6",
+          "scenario": "Batch operation - Multi-select actions",
+          "given": "I have selected 3 APPROVED variants using checkboxes",
+          "when": "I click the 'Batch Actions' dropdown and select 'Archive Selected'",
+          "then": "Confirmation dialog shows: 'Archive 3 variants? This will move them to archived status.' On confirm: (1) all 3 variants status changes to 'ARCHIVED', (2) success toast '3 variants archived', (3) rows fade out and disappear (with option to undo for 5 seconds)"
+        },
+        {
+          "id": "AC-004-7",
+          "scenario": "Row interaction - Context menu",
+          "given": "I hover over a variant row in the table",
+          "when": "I right-click or click the three-dot menu icon",
+          "then": "Context menu appears with options: 'View Details' (always), 'Request Approval' (if GENERATED), 'Promote to Primary' (if APPROVED), 'Archive' (if not PROMOTED), 'Delete' (if GENERATED only). Disabled options show tooltip explaining why."
+        }
+      ],
+      "definition_of_done": [
+        "Data table component with all specified columns",
+        "Sorting working on all sortable columns",
+        "Filtering persisted to URL query params",
+        "Supabase realtime subscription active",
+        "Batch operations with confirmation dialogs",
+        "E2E tests for CRUD and realtime scenarios",
+        "Performance: <2s initial load with 100+ variants"
+      ],
+      "depends_on": ["SD-STAGE-12-001:US-001"],
+      "blocks": [],
+      "technical_notes": "Use shadcn/ui DataTable with TanStack Table. Realtime via Supabase channel subscription. URL state sync with nuqs or similar.",
+      "implementation_approach": "1. Build DataTable wrapper component. 2. Add column definitions with sort/filter configs. 3. Implement Supabase realtime subscription. 4. Add batch action handlers with optimistic updates. 5. Create context menu with role-based options.",
+      "test_scenarios": [
+        {"id": "TC-004-1", "type": "e2e", "description": "Table loads with correct columns and pagination"},
+        {"id": "TC-004-2", "type": "e2e", "description": "Realtime update shows new variant without refresh"},
+        {"id": "TC-004-3", "type": "e2e", "description": "Filter persists to URL and survives refresh"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-004-variants-dashboard.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "ui_component": "src/components/adaptive-naming/VariantsDashboard.tsx",
+        "table_library": "TanStack Table v8 with shadcn/ui DataTable",
+        "realtime": "Supabase Realtime channel: adaptive_name_variants",
+        "url_state": "nuqs for query param sync"
+      },
+      "architecture_references": [
+        "src/components/ui/data-table.tsx",
+        "src/hooks/useRealtimeSubscription.ts"
+      ],
+      "example_code_patterns": [],
+      "testing_scenarios": []
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-005",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "External Service Provider Abstraction Layer",
+      "user_role": "Platform Engineer",
+      "user_want": "integrate domain and trademark checking services through a pluggable provider interface that handles rate limiting, failures, and result normalization transparently",
+      "user_benefit": "I can switch between GoDaddy, Namecheap, or custom WHOIS providers in under 10 minutes without code changes, ensuring uninterrupted service when providers have outages and avoiding vendor lock-in that could cost thousands in migration effort",
+      "story_points": 5,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-005-1",
+          "scenario": "Architecture - Provider interface abstraction",
+          "given": "The system needs to check domain availability for variant 'techventura'",
+          "when": "The domain check service is invoked",
+          "then": "The service: (1) reads DOMAIN_PROVIDER from environment (default: 'godaddy'), (2) instantiates the configured provider via DomainProviderFactory, (3) calls provider.checkAvailability('techventura.com') through the DomainProvider interface, (4) no direct API calls exist outside provider implementations"
+        },
+        {
+          "id": "AC-005-2",
+          "scenario": "Data contract - Normalized result structure",
+          "given": "GoDaddy API returns { available: true, price: { currency: 'USD', amount: 12.99 }, domain: 'techventura.com' }",
+          "when": "The GoDaddyDomainProvider processes the response",
+          "then": "It returns normalized DomainCheckResult: { domain: 'techventura.com', status: 'available', price_usd: 12.99, registrar: null, expiration_date: null, checked_at: '<ISO timestamp>', provider: 'godaddy', raw_response: <original> }. Same structure returned regardless of which provider is used."
+        },
+        {
+          "id": "AC-005-3",
+          "scenario": "Extensibility - New provider registration",
+          "given": "A new file src/services/providers/domain/NamecheapDomainProvider.ts exists implementing DomainProvider interface",
+          "when": "I set DOMAIN_PROVIDER='namecheap' in environment config",
+          "then": "On next service restart: (1) NamecheapDomainProvider is loaded via factory, (2) all domain checks route through Namecheap, (3) no code changes required in domain check service, (4) provider registration logged at startup 'Domain provider: namecheap initialized'"
+        },
+        {
+          "id": "AC-005-4",
+          "scenario": "Reliability - Rate limiting transparency",
+          "given": "GoDaddy rate limit is 100 requests/minute AND 95 requests have been made in the last minute",
+          "when": "6 new domain check requests arrive within 10 seconds",
+          "then": "The provider: (1) processes first 5 requests immediately, (2) queues 6th request, (3) automatically delays 6th request until rate window resets (max 60 seconds), (4) returns result for 6th request without error, (5) user/caller sees only slight delay, no error thrown, (6) rate limit state logged for monitoring"
+        },
+        {
+          "id": "AC-005-5",
+          "scenario": "Reliability - Provider failure with fallback",
+          "given": "DOMAIN_PROVIDER='godaddy' AND FALLBACK_DOMAIN_PROVIDER='whois' AND GoDaddy API returns HTTP 503",
+          "when": "Domain check is attempted and fails after 3 retries (exponential backoff: 1s, 2s, 4s)",
+          "then": "The system: (1) logs 'Primary provider godaddy failed, attempting fallback whois', (2) routes request to WhoisDomainProvider, (3) returns normalized result from fallback, (4) if fallback also fails, returns error with status='check_failed' and reason='all_providers_unavailable'"
+        },
+        {
+          "id": "AC-005-6",
+          "scenario": "Operational - Multi-provider redundancy",
+          "given": "DOMAIN_PROVIDERS='godaddy,namecheap,whois' (comma-separated list configured)",
+          "when": "System starts OR health check runs every 5 minutes",
+          "then": "The system: (1) pings each provider's health endpoint, (2) maintains provider_status map { godaddy: 'healthy', namecheap: 'degraded', whois: 'healthy' }, (3) automatically routes to healthiest provider, (4) exposes /api/providers/status endpoint for monitoring, (5) alerts if all providers unhealthy"
+        }
+      ],
+      "definition_of_done": [
+        "DomainProvider interface TypeScript definition",
+        "GoDaddyDomainProvider implementation with tests",
+        "WhoisDomainProvider fallback implementation",
+        "DomainProviderFactory with config-based instantiation",
+        "Rate limiter middleware with queue",
+        "Health check endpoint and monitoring",
+        "Unit tests for each provider (mocked APIs)",
+        "Integration test with real API (marked @slow)"
+      ],
+      "depends_on": [],
+      "blocks": ["SD-STAGE-12-001:US-002"],
+      "technical_notes": "Provider pattern similar to payment processors. Use p-queue for rate limiting. Health checks via Supabase cron or pg_cron.",
+      "implementation_approach": "1. Define DomainProvider interface and DomainCheckResult type. 2. Implement GoDaddy provider. 3. Create factory with config loading. 4. Add rate limiter wrapper. 5. Implement fallback chain. 6. Add health monitoring.",
+      "test_scenarios": [
+        {"id": "TC-005-1", "type": "unit", "description": "Factory instantiates correct provider from config"},
+        {"id": "TC-005-2", "type": "unit", "description": "GoDaddy response normalized to DomainCheckResult"},
+        {"id": "TC-005-3", "type": "integration", "description": "Fallback triggers when primary fails"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-005-provider-abstraction.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "interface_file": "src/services/providers/domain/types.ts",
+        "implementations": [
+          "src/services/providers/domain/GoDaddyDomainProvider.ts",
+          "src/services/providers/domain/WhoisDomainProvider.ts"
+        ],
+        "factory_file": "src/services/providers/domain/DomainProviderFactory.ts",
+        "config_vars": ["DOMAIN_PROVIDER", "FALLBACK_DOMAIN_PROVIDER", "DOMAIN_PROVIDERS"],
+        "rate_limiter": "p-queue with interval and concurrency options"
+      },
+      "architecture_references": [
+        "src/services/providers/payment/ (similar pattern)",
+        "src/lib/config.ts (env loading)"
+      ],
+      "example_code_patterns": [
+        "interface DomainProvider { checkAvailability(domain: string): Promise<DomainCheckResult>; healthCheck(): Promise<boolean>; }",
+        "const provider = DomainProviderFactory.create(process.env.DOMAIN_PROVIDER);"
+      ],
+      "testing_scenarios": []
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-006",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "Configurable Automation Level Control System",
+      "user_role": "System Administrator",
+      "user_want": "configure the automation level for variant generation per-venture or globally, with options ranging from fully manual to fully automated",
+      "user_benefit": "I can safely roll out AI-powered naming features incrementally, starting with manual oversight for high-value ventures and scaling to full automation for mature processes, reducing risk of brand damage from unreviewed suggestions by 100% during initial deployment",
+      "story_points": 3,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-006-1",
+          "scenario": "Configuration - Global default loading",
+          "given": "Environment variable ADAPTIVE_NAMING_AUTOMATION_LEVEL is set to 'SEMI_AUTOMATED'",
+          "when": "The application starts",
+          "then": "The configuration service: (1) reads the value, (2) validates it against allowed enum [MANUAL_ONLY, SEMI_AUTOMATED, FULLY_AUTOMATED, THRESHOLD_BASED], (3) logs 'Automation level: SEMI_AUTOMATED (global default)', (4) uses this as default for all ventures without override"
+        },
+        {
+          "id": "AC-006-2",
+          "scenario": "Behavior - MANUAL_ONLY mode",
+          "given": "Automation level is 'MANUAL_ONLY' AND domain availability changes for variant 'TechVentura'",
+          "when": "The change detection service identifies the opportunity",
+          "then": "The system: (1) creates a notification record for Brand Manager, (2) does NOT auto-generate any variants, (3) notification says 'Domain techventura.com now available - Consider creating variant manually', (4) Brand Manager must use US-001 form to create variant"
+        },
+        {
+          "id": "AC-006-3",
+          "scenario": "Behavior - SEMI_AUTOMATED mode",
+          "given": "Automation level is 'SEMI_AUTOMATED' AND system detects naming opportunity",
+          "when": "Variant generation algorithm produces suggestion 'TechVentura-ES'",
+          "then": "The system: (1) creates variant with status='SUGGESTED' (not 'GENERATED'), (2) notifies Brand Manager 'New variant suggestion: TechVentura-ES - Review required', (3) variant visible in dashboard with 'Suggestion' badge, (4) Brand Manager must click 'Accept Suggestion' to change status to 'GENERATED'"
+        },
+        {
+          "id": "AC-006-4",
+          "scenario": "Behavior - FULLY_AUTOMATED mode",
+          "given": "Automation level is 'FULLY_AUTOMATED' AND system detects naming opportunity",
+          "when": "Variant generation produces 'TechVentura-ES' with confidence_score=0.78",
+          "then": "The system: (1) creates variant with status='GENERATED' automatically, (2) sends notification 'Variant auto-created: TechVentura-ES' for awareness only, (3) no approval required before evaluation, (4) variant immediately visible and actionable in dashboard"
+        },
+        {
+          "id": "AC-006-5",
+          "scenario": "Behavior - THRESHOLD_BASED mode above threshold",
+          "given": "Automation level is 'THRESHOLD_BASED' AND AUTOMATION_THRESHOLD=0.80 AND variant has confidence_score=0.85",
+          "when": "Variant generation completes",
+          "then": "The variant: (1) is auto-created with status='GENERATED' (above threshold), (2) notification sent 'High-confidence variant: TechVentura-FR (85%)', (3) no Brand Manager approval needed"
+        },
+        {
+          "id": "AC-006-6",
+          "scenario": "Behavior - THRESHOLD_BASED mode below threshold",
+          "given": "Automation level is 'THRESHOLD_BASED' AND AUTOMATION_THRESHOLD=0.80 AND variant has confidence_score=0.72",
+          "when": "Variant generation completes",
+          "then": "The variant: (1) is created with status='SUGGESTED' (below threshold), (2) notification sent 'Review needed: TechVentura-JP (72% - below 80% threshold)', (3) Brand Manager approval required to proceed"
+        },
+        {
+          "id": "AC-006-7",
+          "scenario": "Override - Per-venture automation level",
+          "given": "Global automation level is 'SEMI_AUTOMATED' AND I am in venture settings for 'High-Value Startup'",
+          "when": "I select 'Override global automation' AND choose 'MANUAL_ONLY' AND click 'Save'",
+          "then": "The system: (1) stores venture-specific override in ventures.automation_override JSONB, (2) shows confirmation 'This venture uses MANUAL_ONLY (overrides global SEMI_AUTOMATED)', (3) all automation for this venture follows MANUAL_ONLY rules, (4) other ventures unaffected"
+        }
+      ],
+      "definition_of_done": [
+        "Configuration service with env var loading",
+        "Automation level enum with validation",
+        "Per-venture override storage and retrieval",
+        "Variant creation respects automation level",
+        "Notification templates for each mode",
+        "Unit tests for each automation level behavior",
+        "E2E test for threshold-based decisions"
+      ],
+      "depends_on": ["SD-STAGE-12-001:US-001"],
+      "blocks": [],
+      "technical_notes": "Configuration stored in ventures table (automation_override JSONB). Decision logic in VariantGenerationService.shouldAutoCreate().",
+      "implementation_approach": "1. Create AutomationLevel enum and config loader. 2. Add automation_override column to ventures. 3. Implement decision logic in generation service. 4. Create notification variants for each mode. 5. Build admin UI for override settings.",
+      "test_scenarios": [
+        {"id": "TC-006-1", "type": "unit", "description": "Config loader validates automation level enum"},
+        {"id": "TC-006-2", "type": "unit", "description": "THRESHOLD_BASED correctly compares confidence scores"},
+        {"id": "TC-006-3", "type": "e2e", "description": "Per-venture override takes precedence over global"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-006-automation-levels.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "config_service": "src/services/config/AutomationConfigService.ts",
+        "enum_definition": "src/types/automation.ts",
+        "database_column": "ventures.automation_override (JSONB)",
+        "env_vars": ["ADAPTIVE_NAMING_AUTOMATION_LEVEL", "AUTOMATION_THRESHOLD"],
+        "decision_point": "src/services/VariantGenerationService.ts#shouldAutoCreate()"
+      },
+      "architecture_references": [
+        "src/lib/config.ts (env loading pattern)",
+        "src/services/FeatureFlagService.ts (similar per-entity override)"
+      ],
+      "example_code_patterns": [
+        "enum AutomationLevel { MANUAL_ONLY, SEMI_AUTOMATED, FULLY_AUTOMATED, THRESHOLD_BASED }",
+        "const level = ventureOverride ?? globalDefault"
+      ],
+      "testing_scenarios": []
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-007",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "JSONB Schema Validation with Zod for Adaptive Naming",
+      "user_role": "Backend Developer",
+      "user_want": "validate all adaptive naming JSONB data using Zod schemas that provide clear error messages and type safety at runtime",
+      "user_benefit": "I can catch data integrity issues immediately at insertion time with actionable error messages instead of discovering corrupted data weeks later in production, reducing debugging time from hours to seconds and preventing cascading failures in downstream processes",
+      "story_points": 3,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-007-1",
+          "scenario": "Happy path - Valid data accepted",
+          "given": "A variant object with all required fields: variant_name='TechVentura' (11 chars), variant_type='CULTURAL_ADAPTATION', improvement_hypothesis='Spanish market adaptation' (25 chars), confidence_delta=0.15",
+          "when": "AdaptiveNameVariantSchema.parse() is called",
+          "then": "Validation passes, returns parsed object with correct TypeScript types, no errors thrown"
+        },
+        {
+          "id": "AC-007-2",
+          "scenario": "Error handling - Type mismatch rejection",
+          "given": "A variant object with confidence_delta='0.15' (string instead of number)",
+          "when": "AdaptiveNameVariantSchema.parse() is called",
+          "then": "Zod throws ZodError with: (1) path: ['confidence_delta'], (2) message: 'Expected number, received string', (3) code: 'invalid_type'. Insert is blocked, error logged."
+        },
+        {
+          "id": "AC-007-3",
+          "scenario": "Error handling - String length validation",
+          "given": "A variant object with improvement_hypothesis='Short' (5 chars, minimum is 10)",
+          "when": "Validation is performed before insert",
+          "then": "Zod throws ZodError with: (1) path: ['improvement_hypothesis'], (2) message: 'String must contain at least 10 character(s)', (3) actual value logged for debugging. Insert blocked."
+        },
+        {
+          "id": "AC-007-4",
+          "scenario": "Error handling - Range validation",
+          "given": "A variant object with confidence_delta=1.5 (outside range -1 to 1)",
+          "when": "Validation is performed",
+          "then": "Zod throws ZodError with: (1) path: ['confidence_delta'], (2) message: 'Number must be less than or equal to 1', (3) received: 1.5. Insert blocked."
+        },
+        {
+          "id": "AC-007-5",
+          "scenario": "Error handling - Enum validation",
+          "given": "A variant object with lifecycle_status.status='INVALID_STATUS' (not in allowed enum)",
+          "when": "Validation is performed",
+          "then": "Zod throws ZodError with: (1) path: ['lifecycle_status', 'status'], (2) message: \"Invalid enum value. Expected 'GENERATED' | 'UNDER_EVALUATION' | 'APPROVED' | 'REJECTED' | 'PROMOTED' | 'RETIRED', received 'INVALID_STATUS'\". Insert blocked."
+        },
+        {
+          "id": "AC-007-6",
+          "scenario": "Complex validation - Nested array structures",
+          "given": "A variant with performance_metrics.predicted_improvements = [{ market: 'Spain', improvement_pct: 15 }, { market: 'Mexico', improvement_pct: 'twelve' }]",
+          "when": "Validation is performed on nested array",
+          "then": "Zod throws ZodError with: (1) path: ['performance_metrics', 'predicted_improvements', 1, 'improvement_pct'], (2) message: 'Expected number, received string'. First array element passes, second fails with specific index."
+        },
+        {
+          "id": "AC-007-7",
+          "scenario": "Database integration - Validation before insert",
+          "given": "A Supabase mutation attempts to insert variant with invalid data",
+          "when": "The mutation function executes",
+          "then": "The service layer: (1) calls schema.parse() before supabase.insert(), (2) if validation fails, returns 400 Bad Request with Zod error details, (3) database insert never attempted, (4) client receives actionable error message"
+        }
+      ],
+      "definition_of_done": [
+        "Zod schemas defined for all adaptive naming types",
+        "TypeScript types inferred from schemas (z.infer)",
+        "Validation integrated into all mutation endpoints",
+        "Error messages formatted for API responses",
+        "Unit tests for each validation rule",
+        "Schema documentation generated"
+      ],
+      "depends_on": [],
+      "blocks": ["SD-STAGE-12-001:US-001", "SD-STAGE-12-001:US-008"],
+      "technical_notes": "Schemas in src/schemas/adaptive-naming.ts. Use zod-validation-error for better error formatting. Consider zod-prisma-types pattern.",
+      "implementation_approach": "1. Define base schemas (VariantNameSchema, ConfidenceDeltaSchema). 2. Compose into AdaptiveNameVariantSchema. 3. Add to service layer validation. 4. Create error formatter for API responses. 5. Generate TypeScript types.",
+      "test_scenarios": [
+        {"id": "TC-007-1", "type": "unit", "description": "Valid variant passes all schema rules"},
+        {"id": "TC-007-2", "type": "unit", "description": "Type mismatch produces correct error path"},
+        {"id": "TC-007-3", "type": "unit", "description": "Nested array validation with correct index"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-007-schema-validation.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "schema_file": "src/schemas/adaptive-naming.ts",
+        "type_exports": "src/types/adaptive-naming.ts (z.infer<typeof ...>)",
+        "error_formatter": "src/lib/validation-errors.ts",
+        "integration_points": [
+          "src/services/VariantService.ts#create()",
+          "src/services/VariantService.ts#update()"
+        ]
+      },
+      "architecture_references": [
+        "src/schemas/ventures.ts (existing Zod patterns)",
+        "src/lib/api-response.ts (error formatting)"
+      ],
+      "example_code_patterns": [
+        "const VariantNameSchema = z.string().min(1).max(50);",
+        "const AdaptiveNameVariantSchema = z.object({ variant_name: VariantNameSchema, confidence_delta: z.number().min(-1).max(1) });",
+        "type AdaptiveNameVariant = z.infer<typeof AdaptiveNameVariantSchema>;"
+      ],
+      "testing_scenarios": []
+    },
+    {
+      "story_key": "SD-STAGE-12-001:US-008",
+      "prd_id": "PRD-SD-STAGE-12-001",
+      "sd_id": "SD-STAGE-12-001",
+      "title": "Variant Lifecycle State Machine with Transition Validation",
+      "user_role": "Backend Developer",
+      "user_want": "enforce a strict state machine for variant lifecycle transitions that validates all state changes and prevents invalid operations",
+      "user_benefit": "I can trust that no variant will ever reach an invalid state through race conditions or API misuse, eliminating 100% of state-related bugs and ensuring Chairman approvals are properly gated before promotion, protecting brand integrity",
+      "story_points": 3,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        {
+          "id": "AC-008-1",
+          "scenario": "Initial state - Variant creation",
+          "given": "A new variant is being created via the manual entry form or auto-generation",
+          "when": "The create operation completes",
+          "then": "Variant is created with: (1) status='GENERATED', (2) generated_at timestamp recorded, (3) all other status timestamps (approved_at, rejected_at, promoted_at, retired_at) are NULL, (4) state machine initialized at GENERATED node"
+        },
+        {
+          "id": "AC-008-2",
+          "scenario": "Valid transition - GENERATED to UNDER_EVALUATION",
+          "given": "A variant exists with status='GENERATED'",
+          "when": "Chairman clicks 'Start Evaluation' or system auto-advances based on rules",
+          "then": "State machine: (1) validates transition is allowed (GENERATED -> UNDER_EVALUATION is valid), (2) updates status to 'UNDER_EVALUATION', (3) sets evaluation_started_at=now(), (4) fires 'variant.evaluation_started' event for notifications"
+        },
+        {
+          "id": "AC-008-3",
+          "scenario": "Valid transition - UNDER_EVALUATION to APPROVED",
+          "given": "A variant exists with status='UNDER_EVALUATION'",
+          "when": "Chairman clicks 'Approve' on the variant",
+          "then": "State machine: (1) validates transition allowed, (2) updates status to 'APPROVED', (3) sets approved_at=now(), approved_by=chairman_id, (4) fires 'variant.approved' event, (5) 'Promote to Primary' action becomes available"
+        },
+        {
+          "id": "AC-008-4",
+          "scenario": "Valid transition - UNDER_EVALUATION to REJECTED",
+          "given": "A variant exists with status='UNDER_EVALUATION'",
+          "when": "Chairman clicks 'Reject' with reason='Too similar to competitor'",
+          "then": "State machine: (1) validates transition allowed, (2) updates status to 'REJECTED', (3) sets rejected_at=now(), rejection_reason='Too similar to competitor', (4) archives variant (archived=true), (5) fires 'variant.rejected' event, (6) variant moves to history view"
+        },
+        {
+          "id": "AC-008-5",
+          "scenario": "Valid transition - APPROVED to PROMOTED",
+          "given": "A variant 'TechVentura' exists with status='APPROVED' AND another variant 'OldBrand' currently has status='PROMOTED'",
+          "when": "Brand Manager clicks 'Promote to Primary'",
+          "then": "State machine executes atomic transaction: (1) validates TechVentura transition allowed, (2) sets TechVentura status='PROMOTED', promoted_at=now(), promoted_to_primary=true, (3) sets OldBrand status='RETIRED', retired_at=now(), retired_reason='Replaced by TechVentura', (4) fires 'variant.promoted' and 'variant.retired' events"
+        },
+        {
+          "id": "AC-008-6",
+          "scenario": "Invalid transition - Cannot promote rejected variant",
+          "given": "A variant exists with status='REJECTED'",
+          "when": "Any actor attempts to call promoteToPrimary() API",
+          "then": "State machine: (1) checks current state, (2) determines REJECTED -> PROMOTED is NOT in allowed transitions, (3) throws InvalidStateTransitionError with message 'Cannot promote variant from REJECTED state. Allowed transitions from REJECTED: none (terminal state)', (4) no database changes made, (5) returns 409 Conflict to API caller"
+        },
+        {
+          "id": "AC-008-7",
+          "scenario": "Terminal state - RETIRED handling",
+          "given": "A variant exists with status='RETIRED' (was previously PROMOTED then replaced)",
+          "when": "User views variant history",
+          "then": "Retired variant: (1) appears in 'History' tab with 'Retired' badge, (2) shows full timeline (created -> evaluated -> approved -> promoted -> retired), (3) does NOT appear in active variants list, (4) all action buttons disabled with tooltip 'Retired variants cannot be modified'"
+        },
+        {
+          "id": "AC-008-8",
+          "scenario": "State transition audit log",
+          "given": "Any state transition occurs (e.g., GENERATED -> UNDER_EVALUATION)",
+          "when": "The transition completes successfully",
+          "then": "System creates audit record in variant_state_transitions table: (1) variant_id, (2) from_state='GENERATED', (3) to_state='UNDER_EVALUATION', (4) transitioned_at=now(), (5) transitioned_by=user_id, (6) context={ trigger: 'chairman_action' }. Audit history retrievable via API."
+        }
+      ],
+      "definition_of_done": [
+        "State machine definition (XState or custom)",
+        "Transition validation in all mutation endpoints",
+        "Atomic promotion with automatic retirement",
+        "Audit log table and triggers",
+        "InvalidStateTransitionError with clear messages",
+        "Unit tests for all valid and invalid transitions",
+        "E2E test for full lifecycle GENERATED->PROMOTED->RETIRED"
+      ],
+      "depends_on": ["SD-STAGE-12-001:US-003", "SD-STAGE-12-001:US-007"],
+      "blocks": [],
+      "technical_notes": "Consider XState for visual state machine definition. Promotion requires database transaction for atomicity. Audit via Supabase trigger or application-level logging.",
+      "implementation_approach": "1. Define state machine in XState. 2. Create transition validator. 3. Implement atomic promotion mutation. 4. Add audit trigger. 5. Create InvalidStateTransitionError. 6. Integrate into all variant endpoints.",
+      "test_scenarios": [
+        {"id": "TC-008-1", "type": "unit", "description": "State machine allows valid GENERATED -> UNDER_EVALUATION"},
+        {"id": "TC-008-2", "type": "unit", "description": "State machine rejects invalid REJECTED -> PROMOTED"},
+        {"id": "TC-008-3", "type": "integration", "description": "Promotion atomically retires previous primary"}
+      ],
+      "e2e_test_path": "tests/e2e/stage-12/US-008-lifecycle-state-machine.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "state_machine_file": "src/machines/variantLifecycleMachine.ts",
+        "transition_validator": "src/services/VariantStateService.ts",
+        "audit_table": "variant_state_transitions",
+        "error_class": "src/errors/InvalidStateTransitionError.ts",
+        "allowed_transitions": {
+          "GENERATED": ["UNDER_EVALUATION"],
+          "UNDER_EVALUATION": ["APPROVED", "REJECTED"],
+          "APPROVED": ["PROMOTED"],
+          "PROMOTED": ["RETIRED"],
+          "REJECTED": [],
+          "RETIRED": []
+        }
+      },
+      "architecture_references": [
+        "src/machines/ventureWorkflowMachine.ts (XState pattern)",
+        "src/lib/transactions.ts (atomic operations)"
+      ],
+      "example_code_patterns": [
+        "const machine = createMachine({ initial: 'GENERATED', states: { GENERATED: { on: { EVALUATE: 'UNDER_EVALUATION' } } } })",
+        "if (!canTransition(currentState, targetState)) throw new InvalidStateTransitionError(currentState, targetState)"
+      ],
+      "testing_scenarios": []
+    }
+  ],
+  "summary": {
+    "total_stories": 8,
+    "total_story_points": 32,
+    "must_have_stories": 8,
+    "quality_improvements": {
+      "benefit_articulation": "All stories now have user-centric benefits with measurable outcomes (time saved, risk reduced, etc.)",
+      "acceptance_criteria_clarity_testability": "All ACs use Given-When-Then format with specific, measurable outcomes",
+      "story_independence_implementability": "Dependencies explicitly mapped, each story can be implemented independently with clear technical context"
+    },
+    "invest_criteria_compliance": {
+      "independent": "Each story has clear dependencies mapped; can be developed in dependency order",
+      "negotiable": "Acceptance criteria define what, not how; implementation approach can be negotiated",
+      "valuable": "Each story delivers specific user value with quantified benefits",
+      "estimable": "Story points assigned (3-5 range); clear implementation approach defined",
+      "small": "All stories 3-5 points; can be completed in single sprint",
+      "testable": "Minimum 5 Given-When-Then acceptance criteria per story with measurable outcomes"
+    },
+    "implementation_sequence": {
+      "phase_1_foundations": ["US-007 (schemas)", "US-005 (providers)"],
+      "phase_2_core": ["US-001 (manual entry)", "US-008 (state machine)"],
+      "phase_3_features": ["US-002 (domain check)", "US-004 (dashboard)"],
+      "phase_4_workflows": ["US-003 (chairman approval)", "US-006 (automation)"]
+    },
+    "e2e_test_coverage": {
+      "total_tests_required": 8,
+      "test_format": "tests/e2e/stage-12/US-XXX-{story-slug}.spec.ts",
+      "current_coverage": "0/8"
+    }
+  }
+}
