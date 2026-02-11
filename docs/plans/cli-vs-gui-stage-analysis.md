@@ -162,7 +162,114 @@
 
 ## Stage 2: AI Review
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-02.js`
+**Type**: Passive validation (NO analysisSteps)
+
+**Schema**:
+| Field | Type | Validation | Required | Derived |
+|-------|------|------------|----------|---------|
+| `critiques` | array | minItems: 1 | Yes | No |
+| `critiques[].model` | string | minLength: 1 | Yes | No |
+| `critiques[].summary` | string | minLength: 20 | Yes | No |
+| `critiques[].strengths` | array of strings | minItems: 1 | Yes | No |
+| `critiques[].risks` | array of strings | minItems: 1 | Yes | No |
+| `critiques[].score` | integer | 0-100 | Yes | No |
+| `compositeScore` | integer | 0-100 | -- | Yes (average of critique scores) |
+
+**Processing**:
+- `validate(data)`: Checks critiques array is non-empty, each critique has model, summary (>=20), strengths (>=1), risks (>=1), score (0-100)
+- `computeDerived(data)`: Calculates `compositeScore = Math.round(sum / count)` -- simple average of all critique scores
+- No `analysisSteps` defined -- template is purely passive
+- **Does NOT generate critiques** -- expects them to already exist in the venture artifacts
+
+**Critical observation**: The CLI Stage 2 template is a "dumb container." It validates and averages pre-existing critiques but has zero capability to generate AI analysis. The critiques must come from elsewhere (e.g., a DB `analysisStep` in `venture_stage_templates`, or manual insertion).
+
+**Score scale**: 0-100 (integer)
+
+**Orchestrator flow** (`eva-orchestrator.js` -> `processStage()`):
+1. Load venture context
+2. Load chairman preferences
+3. Execute template analysisSteps (empty for Stage 2 in hardcoded template)
+4. Merge artifact outputs (extracts cost, score, technologies, vendors, patterns)
+5. Run stage gates (no kill gate at Stage 2)
+6. Run Decision Filter Engine
+7. Persist artifacts
+8. Conditionally advance to Stage 3
+
+**Note**: The `venture_stage_templates` DB table CAN override the local JS template and define `analysisSteps` that would generate critiques. But the base JS template has none.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: Playwright screenshots (stage-2 desktop views) + EHG frontend code (`src/components/stages/Stage2AIReview.tsx`, `src/hooks/useAIReviewService.ts`, `supabase/functions/ai-review/index.ts`)
+
+**GUI Stage 2 -- "AI Review"** (active AI research):
+
+**4-Agent Ensemble** (all use GPT-4 backend despite symbolic frontend labels):
+| Agent ID | Display Name | Symbolic Model | Actual Model | Focus Area |
+|----------|-------------|----------------|--------------|------------|
+| LEAD | Strategic Lead | Gemini | GPT-4 | Market positioning, competitive landscape, strategic differentiation |
+| PLAN | Tactical Planner | Cursor | GPT-4 | Resource requirements, timeline feasibility, technical complexity, risk factors |
+| EXEC | Technical Executor | Claude | GPT-4 | Architecture requirements, development complexity, scalability, integration |
+| EVA | Quality Orchestrator | GPT-4 | GPT-4 | Synthesizes all analyses, identifies opportunities and risks |
+
+**Trigger mechanism**: Auto-triggers on component mount (`useEffect` -> `startReview()`). No button click required -- entering Stage 2 immediately starts AI analysis.
+
+**Backend**: Supabase edge function `ai-review` invoked via `supabase.functions.invoke("ai-review", { body: {...} })`
+
+**Output schema**:
+| Field | Type | Scale | Description |
+|-------|------|-------|-------------|
+| `overallScore` | decimal | 0-10 | Average of 5 category scores |
+| `categoryScores.quality` | decimal | 0-10 | Quality assessment |
+| `categoryScores.viability` | decimal | 0-10 | Business viability |
+| `categoryScores.originality` | decimal | 0-10 | Novelty/innovation |
+| `categoryScores.market` | decimal | 0-10 | Market opportunity |
+| `categoryScores.feasibility` | decimal | 0-10 | Execution feasibility |
+| `recommendation` | enum | -- | advance / revise / reject / fast-track |
+| `confidence` | decimal | 0-1 | Derived: `0.7 + (score/10) * 0.25`, max 0.95 |
+| `agentAnalysis` | object | -- | 4 text summaries (one per agent) |
+| `llmInsights.strengths` | array | -- | Max 3 strengths |
+| `llmInsights.weaknesses` | array | -- | Max 3 weaknesses |
+| `llmInsights.opportunities` | array | -- | Max 3 opportunities |
+| `llmInsights.risks` | array | -- | Max 3 risks |
+| `llmInsights.suggestions.immediate` | array | -- | Max 3 quick wins |
+| `llmInsights.suggestions.strategic` | array | -- | Max 3 strategic actions |
+
+**Recommendation thresholds** (hardcoded):
+- >= 8.5 -> fast-track
+- >= 7.0 -> advance
+- >= 5.0 -> revise
+- < 5.0 -> reject
+
+**Chairman override**: Full support via `chairman_overrides` table. Can override any recommendation with rationale, optional voice note URL and transcript.
+
+**Database tables**:
+- Writes: `ai_reviews` (full result), `chairman_overrides` (optional)
+- Reads: `user_company_access` (company scoping)
+
+**Category score calculation**: Uses `min=4, max=10` range with randomization -- **not purely deterministic**.
+
+**UI display**:
+- Progress bar during processing
+- Summary card with score/10 and color-coded recommendation badge
+- 5 category score grid
+- 3 tabs: Agent Analysis (accordion), AI Insights (SWOT cards), Next Steps (immediate + strategic)
+- Button varies by recommendation: "Fast Track", "Continue", "Revise & Continue", "Not Recommended" (disabled)
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-02-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-02-claude.md`
+- OpenAI: `docs/plans/responses/stage-02-openai.md`
+- AntiGravity: `docs/plans/responses/stage-02-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
