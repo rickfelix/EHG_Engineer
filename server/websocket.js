@@ -7,6 +7,7 @@
 import { WebSocketServer } from 'ws';
 import { dbLoader } from './config.js';
 import { dashboardState } from './state.js';
+import { verifyWebSocketToken } from './middleware/auth.js';
 
 let wss = null;
 let broadcastUpdateFn = null;
@@ -15,7 +16,23 @@ let broadcastUpdateFn = null;
  * Initialize WebSocket server
  */
 export function initializeWebSocket(server) {
-  wss = new WebSocketServer({ server });
+  wss = new WebSocketServer({
+    server,
+    // Verify JWT token during upgrade handshake (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-C)
+    verifyClient: async ({ req }, cb) => {
+      try {
+        const result = await verifyWebSocketToken(req);
+        if (result) {
+          req.wsUser = result.user;
+          cb(true);
+        } else {
+          cb(false, 1008, 'Authentication required');
+        }
+      } catch {
+        cb(false, 1008, 'Authentication failed');
+      }
+    }
+  });
 
   // Define broadcast function
   broadcastUpdateFn = (type, data) => {
@@ -28,9 +45,10 @@ export function initializeWebSocket(server) {
   };
 
   // WebSocket connection handling
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    ws.user = req.wsUser;
     global.wsClients.add(ws);
-    console.log('✨ New WebSocket client connected');
+    console.log(`✨ WebSocket client connected (user: ${ws.user?.email || 'unknown'})`);
 
     // Send initial state
     ws.send(JSON.stringify({
@@ -43,11 +61,34 @@ export function initializeWebSocket(server) {
         const msg = JSON.parse(message);
         console.log('📨 WebSocket message received:', msg.type, msg.data ? JSON.stringify(msg.data) : '');
 
+        // Validate mutation data before processing
         if (msg.type === 'setActiveSD') {
+          if (!msg.data?.sdId || typeof msg.data.sdId !== 'string') {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid sdId' }));
+            return;
+          }
           await handleSetActiveSD(ws, msg.data);
         } else if (msg.type === 'updateSDStatus') {
+          if (!msg.data?.sdId || !msg.data?.status) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid sdId or status' }));
+            return;
+          }
+          const validStatuses = ['draft', 'active', 'in_progress', 'planning', 'completed', 'blocked', 'cancelled'];
+          if (!validStatuses.includes(msg.data.status)) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid status value' }));
+            return;
+          }
           await handleUpdateSDStatus(ws, msg.data);
         } else if (msg.type === 'updateSDPriority') {
+          if (!msg.data?.sdId || !msg.data?.priority) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid sdId or priority' }));
+            return;
+          }
+          const validPriorities = ['critical', 'high', 'medium', 'low'];
+          if (!validPriorities.includes(msg.data.priority)) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid priority value' }));
+            return;
+          }
           await handleUpdateSDPriority(ws, msg.data);
         }
       } catch (error) {
