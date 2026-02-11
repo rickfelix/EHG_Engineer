@@ -4,10 +4,10 @@
 ## Metadata
 - **Category**: Guide
 - **Status**: Draft
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-20
-- **Tags**: database, api, testing, e2e
+- **Last Updated**: 2026-02-11
+- **Tags**: database, api, testing, e2e, gap-analysis, integration
 
 This guide documents all 140+ npm scripts available in EHG_Engineer.
 
@@ -97,6 +97,51 @@ npm run leo:artifacts:clean:full # Full cleanup
 npm run leo:artifacts:clean:verbose
 ```
 
+### Git Operations
+
+```bash
+npm run git:recover              # Scan reflog for orphaned commits (last 24h)
+npm run git:recover -- --hours 72    # Scan last 3 days
+npm run git:recover -- --recover <SHA>  # Recover specific orphaned commit
+```
+
+**Purpose**: Automated git commit recovery for multi-session environments.
+
+**Use Cases**:
+- **Cross-session contamination recovery**: When `/ship` in one session switched branches for another, leaving commits orphaned
+- **Interrupted work recovery**: Find commits from crashed sessions
+- **Branch deletion recovery**: Commits from accidentally deleted branches
+
+**How It Works**:
+- Scans `git reflog` for commits in the time window
+- Checks reachability via `git branch -a --contains` (includes remote branches)
+- Reports orphaned commits with: SHA, message, date, files changed
+- Recovery creates branch `recovery/<short-sha>-<timestamp>` from orphaned commit
+
+**See**: [Git Commit Recovery Guide](git-commit-recovery-guide.md) for detailed usage
+
+### Gap Analysis
+
+```bash
+npm run gap:analyze -- --sd SD-KEY       # Analyze single SD
+npm run gap:analyze -- --sd SD-KEY --verbose  # Detailed output with steps
+npm run gap:analyze:batch                # Analyze last 10 completed SDs
+npm run gap:analyze -- --all --limit 20  # Batch with custom limit
+npm run gap:analyze -- --sd SD-KEY --json    # JSON output
+npm run gap:analyze -- --sd SD-KEY --create-sds  # Auto-create corrective SDs
+```
+
+**Purpose**: Detect gaps between PRD requirements and actual implementation.
+
+**How It Works**:
+- Extracts functional requirements from `product_requirements_v2`
+- Identifies deliverables via git history (commit grep, branch diff, or date range)
+- Matches requirements to deliverables with confidence scoring
+- Classifies root causes: `prd_omission`, `scope_creep`, `technical_blocker`, `dependency_gap`, `protocol_bypass`
+- Stores results in `gap_analysis_results` table
+
+**Integration**: Runs automatically in `orchestrator-completion-hook.js` for completed orchestrator children.
+
 ---
 
 ## Strategic Directive Operations
@@ -163,6 +208,44 @@ npm run new-sd           # Interactive new SD wizard (legacy)
 npm run add-sd           # Add SD to database (legacy)
 npm run create-app-sd    # Create app-specific SD (legacy)
 ```
+
+### Gap Analysis
+
+**Purpose**: Detect integration gaps between PRD requirements and actual deliverables.
+
+```bash
+# Analyze single completed SD
+npm run gap:analyze -- --sd SD-LEO-FEAT-001
+
+# Batch analysis (last 10 completed SDs)
+npm run gap:analyze:batch
+
+# Batch analysis with custom limit
+npm run gap:analyze:batch -- --limit 5
+
+# Verbose output (shows analysis steps)
+npm run gap:analyze:verbose -- --sd SD-LEO-FEAT-001
+
+# JSON output (for automation)
+npm run gap:analyze -- --sd SD-LEO-FEAT-001 --json
+
+# Create corrective SDs for gaps found
+npm run gap:analyze -- --sd SD-LEO-FEAT-001 --create-sds
+```
+
+**Output Metrics**:
+- **Coverage Score**: % of requirements matched (0-100, or NULL if no PRD)
+- **Gaps Found**: Count of unmatched/partially matched requirements
+- **Severity Distribution**: Critical, High, Medium, Low
+- **Root Cause Categories**: protocol_bypass, scope_creep, technical_blocker, dependency_gap, prd_omission
+- **Corrective SDs**: Auto-created SDs for critical/high gaps
+
+**Use Cases**:
+- **Post-Completion Validation**: Automatic via orchestrator-completion-hook
+- **Retroactive Audit**: Analyze historical SDs to validate completeness
+- **Quality Metrics**: Track PRD → implementation alignment over time
+
+**See**: `docs/04_features/post-completion-integration-gap-detector.md` for full documentation.
 
 ---
 
