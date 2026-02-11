@@ -1,7 +1,7 @@
 ---
 name: rca-agent
 description: "MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triage, root cause determination, and CAPA generation. Trigger on keywords: root cause, 5 whys, diagnose, debug, investigate, why is this happening, what caused this, rca, defect analysis, recurring issue, keeps happening."
-tools: Bash, Read, Write, Task
+tools: Bash, Read, Write, Task, TeamCreate, TaskCreate, TaskUpdate, TaskList, TaskGet, SendMessage
 model: opus
 ---
 
