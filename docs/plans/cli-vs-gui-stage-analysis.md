@@ -2979,7 +2979,144 @@ const TEMPLATE = {
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength**: Very strong (3/3 on all major decisions, minor divergence on specifics)
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Confidence |
+|----------|:------:|:------:|:-----------:|:----------:|
+| Add `analysisStep` consuming Stages 12/13/14 | Y | Y | Y | High |
+| Architecture layers → team roles mapping | Y | Y | Y | High |
+| Phase-based staffing (not flat team) | Y | Y | Y | High |
+| Sales model → team composition ratios | Y | Y | Y | High |
+| Budget coherence checks (warnings, not hard blocks) | Y | Y | Y | High |
+| Severity enum for skill gaps | Y | Y | Y | High |
+| Hiring plan linked to roadmap phases/milestones | Y | Y | Y | High |
+| No upstream dependency conflicts | Y | Y | Y | High |
+
+#### Divergences Resolved
+
+**1. Generalist vs specialist role mapping**
+- Claude: Deterministic tech→role mapping (React→Frontend Engineer, PostgreSQL→DBA)
+- AntiGravity: Default to generalist roles. "Just because we use React doesn't mean we hire a React Developer." Early startups thrive on generalists.
+- OpenAI: Two-pass mapper: tech→capability→role package, with lean/growth/scale bundles
+- **Resolution: Phase-aware role bundling** (OpenAI's approach, incorporating AntiGravity's insight). Foundation phase → generalist roles (Product Engineer, Fullstack Developer). Growth phase → split into specialists (Frontend, Backend, DevOps). Scale phase → add deep specialists (DBA, Security, SRE). AntiGravity is right that early-stage ventures need generalists, but OpenAI's two-pass approach elegantly handles the transition from generalists to specialists across phases.
+
+**2. How to link hiring to roadmap**
+- Claude: `phase_ref` on hiring_plan items
+- AntiGravity: `trigger_milestone` linking to Stage 13 milestone name
+- OpenAI: `trigger_type` (phase_start/milestone_due/risk_threshold) + `trigger_ref` + optional `latest_start_date`
+- **Resolution**: Add `phase_ref` (simpler, maps to Stage 13 phases) as the primary link. Keep optional `timeline` for real-world calendar dates (OpenAI's pragmatic point about flexibility). Skip AntiGravity's milestone-level granularity (too precise for BLUEPRINT) and OpenAI's trigger_type complexity.
+
+**3. Skill gap mitigation structure**
+- Claude: Keep mitigation as free text
+- AntiGravity: Free text (user defines)
+- OpenAI: Add mitigation_type enum (hire/contract/upskill/de-scope/partner)
+- **Resolution: Keep free text** (2:1). The analysisStep can suggest mitigations in plain language. An enum adds schema complexity for minimal analytical value -- what matters is that the gap is identified and addressed, not how it's categorized.
+
+**4. Budget constraint formula**
+- Claude: Compare total_monthly_cost against Stage 5/11 economics, warning only
+- AntiGravity: Explicit rule: `(total_monthly_cost * runway_months) <= initialInvestment`
+- OpenAI: Graded checks (warning/risk/critical)
+- **Resolution**: Use AntiGravity's concrete formula as the primary check. Single-level warning (not graded -- over-engineering for a derived field). The formula is: if annual burn > implied budget from Stage 5 economics, warn.
+
+#### Contrarian Synthesis
+
+All three raised complementary cautions:
+- **Claude**: Phase-based staffing is "fiction at BLUEPRINT" → Mitigate by treating as rough guidance, not hiring commitment
+- **AntiGravity**: Architecture→team coupling is too tight; default to generalists → Adopted via phase-aware role bundling
+- **OpenAI**: Ship thin analysisStep first, tighten over time → Adopted: analysisStep generates recommendations, user overrides
+
+The synthesis follows the "generalists first, specialize later" principle: Foundation phase gets bundled generalist roles, later phases get specialized roles driven by architecture complexity.
+
+#### Consensus Schema (Stage 15 v2.0)
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-15',
+  slug: 'resource-planning',
+  title: 'Resource Planning',
+  version: '2.0.0',
+  schema: {
+    // === Updated: team_members with phase_ref ===
+    team_members: {
+      type: 'array', minItems: 2,
+      items: {
+        role: { type: 'string', required: true },
+        skills: { type: 'array', minItems: 1, required: true },
+        allocation_pct: { type: 'number', min: 1, max: 100, required: true },
+        cost_monthly: { type: 'number', min: 0 },
+        phase_ref: { type: 'string' },  // NEW: which phase this person joins
+      },
+    },
+
+    // === Updated: skill_gaps with severity enum + architecture_ref ===
+    skill_gaps: {
+      type: 'array',
+      items: {
+        skill: { type: 'string', required: true },
+        severity: { type: 'enum', values: ['critical', 'high', 'medium', 'low'], required: true },  // CHANGED
+        mitigation: { type: 'string', required: true },
+        architecture_ref: { type: 'string' },  // NEW: which Stage 14 layer/tech
+      },
+    },
+
+    // === Updated: hiring_plan with phase_ref + priority enum ===
+    hiring_plan: {
+      type: 'array',
+      items: {
+        role: { type: 'string', required: true },
+        phase_ref: { type: 'string' },  // NEW: replaces free-text timeline
+        timeline: { type: 'string' },  // KEPT: optional real-world date
+        priority: { type: 'enum', values: ['critical', 'high', 'medium', 'low'] },  // CHANGED
+        rationale: { type: 'string' },  // NEW
+      },
+    },
+
+    // === Existing derived (enhanced) ===
+    total_headcount: { type: 'number', derived: true },
+    total_monthly_cost: { type: 'number', derived: true },
+    unique_roles: { type: 'number', derived: true },
+    avg_allocation: { type: 'number', derived: true },
+
+    // === NEW: budget coherence (derived) ===
+    budget_coherence: {
+      type: 'object', derived: true,
+      properties: {
+        monthly_burn: { type: 'number' },
+        annual_burn: { type: 'number' },
+        warnings: { type: 'array' },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` for team generation (single LLM call consuming Stages 12/13/14; maps architecture to roles, phases to staffing curves, sales model to team ratios)
+2. **P0**: Wire architecture layers → team roles with phase-aware bundling (generalists for Foundation, specialists for Growth/Scale)
+3. **P1**: Add `phase_ref` to team_members and hiring_plan. Enables phase-based burn rate for Stage 16.
+4. **P1**: Add sales_model → team composition mapping (engineering vs sales/marketing ratios)
+5. **P1**: Change severity and priority to enums (critical/high/medium/low)
+6. **P2**: Add `budget_coherence` derived field (monthly_burn vs Stage 5 economics, warnings only)
+7. **P2**: Add `architecture_ref` to skill_gaps (links gaps to Stage 14 technologies)
+8. **P3**: Do NOT add mitigation_type enum (free text sufficient)
+9. **P3**: Do NOT add staffing_by_phase as separate structure (phase_ref on team_members handles this)
+10. **P3**: Do NOT add user story/epic breakdown (BUILD LOOP, Stages 17+)
+
+#### Cross-Stage Impact
+
+| Change | Stage 16 (Financial Projections) | Stage 17+ (BUILD LOOP) | Overall Pipeline |
+|--------|--------------------------------|----------------------|-----------------|
+| Phase-based staffing | Phase-variable burn rate → accurate runway. Foundation: $30K/mo, Growth: $80K/mo, Scale: $150K/mo | Team composition known before build starts | Investors see realistic cost curve |
+| Architecture → team mapping | Technology costs + team costs = total engineering cost | Build team matches architecture needs | No skills-tech mismatch |
+| Sales model → team ratio | Marketing vs engineering spend → complete P&L | Non-engineering roles planned | Investment proportional to model |
+| Budget coherence | Validates affordability before financial modeling | Build starts with validated budget | Prevents planning teams ventures can't afford |
+| Generalist→specialist curve | Cost ramp is realistic (starts lean, scales up) | Early team is cross-functional and agile | Matches startup reality |
 
 ---
 
