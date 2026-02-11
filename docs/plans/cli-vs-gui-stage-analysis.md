@@ -1940,7 +1940,98 @@ The consensus architecture handles this: the `decision.status = working_title` o
 
 ## Stage 11: Go-To-Market
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-11.js`
+**Phase**: THE IDENTITY (Stages 10-12)
+**Type**: Passive validation + **active `computeDerived()`** (budget/CAC aggregation)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `tiers[]` | array | exactItems: 3 | Yes |
+| `tiers[].name` | string | minLength: 1 | Yes |
+| `tiers[].description` | string | minLength: 1 | Yes |
+| `tiers[].tam` | number | min: 0 | No |
+| `tiers[].sam` | number | min: 0 | No |
+| `tiers[].som` | number | min: 0 | No |
+| `channels[]` | array | exactItems: 8 | Yes |
+| `channels[].name` | string | minLength: 1 | Yes |
+| `channels[].monthly_budget` | number | min: 0 | Yes |
+| `channels[].expected_cac` | number | min: 0 | Yes |
+| `channels[].primary_kpi` | string | minLength: 1 | Yes |
+| `launch_timeline[]` | array | minItems: 1 | Yes |
+| `launch_timeline[].milestone` | string | minLength: 1 | Yes |
+| `launch_timeline[].date` | string | minLength: 1 | Yes |
+| `launch_timeline[].owner` | string | | No |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_monthly_budget` | number | Sum of all channel budgets |
+| `avg_cac` | number | Average CAC across channels with CAC > 0 |
+
+**Predefined channel names** (12 available): Organic Search, Paid Search, Social Media, Content Marketing, Email Marketing, Partnerships, Events, Direct Sales, Referrals, PR/Media, Influencer Marketing, Community.
+
+**Processing**:
+- `validate(data)`: Validates exactly 3 tiers, exactly 8 channels with budget/CAC/KPI, launch timeline min 1
+- `computeDerived(data)`: Sums total budget, averages CAC (excluding zero-CAC channels)
+- **No `analysisSteps`** -- tiers, channels, and timeline must be provided externally
+- **No AI generation**
+- **No channel type classification** (paid/organic/earned/owned)
+- **No segment personas** or pain points
+- **No conversion rate estimates**
+- **No GTM metrics** beyond budget and CAC
+
+**CLI Strengths**: Exact 3-tier market segmentation (forces TAM/SAM/SOM thinking), exact 8-channel allocation (forces breadth), per-channel budget + CAC + KPI, derived budget/CAC aggregation, 12 predefined channel names.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `Stage11GtmStrategy.tsx` (active per SSOT), `Stage11Viewer.tsx` (output viewer). Note: GUI has multiple conflicting Stage 11 implementations (GtmStrategy, MvpDevelopment, Naming) but venture-workflow.ts routes to GtmStrategy.
+
+**Input component** (Stage11GtmStrategy.tsx):
+- Target markets: name, size, priority (primary/secondary/tertiary), characteristics
+- Acquisition channels: channel, strategy, budget, expectedCac, selected boolean
+- Default channels: Content Marketing, SEM, Social Media Ads, Email Marketing, Partnerships, SEO, Referral Program, Direct Sales
+- Launch timeline: milestone, targetDate, status (pending/in_progress/completed)
+- Launch date, gtmApproach field
+
+**Output viewer** (Stage11Viewer.tsx -- richer than input):
+- Marketing channels: channel, type (paid/organic/earned/owned), priority (primary/secondary/experimental), budget_allocation_pct, expected_cac, expected_reach, tactics[]
+- Target segments: name, persona, size, priority, pain_points[], acquisition_channels[], estimated_conversion_pct
+- Launch milestones: phase, name, target_date, objectives[], success_metrics[], status
+- GTM metrics: total_marketing_budget, expected_leads_first_quarter, target_conversion_rate, expected_customers_year_one, cac_target
+- Decision: ADVANCE / REVISE / REJECT
+- Key findings, red flags, composite score, confidence
+
+**Multiple implementations confusion**: Stage 11 has 6 component files (GtmStrategy, MvpDevelopment, Naming, legacy variants). SSOT routes to GtmStrategy.
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Market tiers | Exactly 3 with TAM/SAM/SOM | Variable count with priority enum |
+| Channel count | Exactly 8 | Variable (8 default, toggle-based) |
+| Channel metadata | budget + CAC + KPI | budget + CAC + strategy + type + priority + reach + tactics[] |
+| Channel types | None | paid/organic/earned/owned classification |
+| Segment depth | name + description | persona + pain_points[] + conversion_pct |
+| Launch timeline | milestone + date + owner | milestone + date + status + objectives[] + success_metrics[] |
+| GTM metrics | total_budget + avg_cac | budget + leads + conversion + customers + CAC target |
+| AI generation | None | None in input (viewer shows AI-processed output) |
+| Decision | None | ADVANCE/REVISE/REJECT |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-11-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-11-claude.md`
+- OpenAI: `docs/plans/responses/stage-11-openai.md`
+- AntiGravity: `docs/plans/responses/stage-11-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
