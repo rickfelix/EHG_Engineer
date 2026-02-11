@@ -2886,7 +2886,100 @@ const TEMPLATE = {
 
 ## Stage 15: Resource Planning
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-15.js`
+**Phase**: THE BLUEPRINT (Stages 13-16)
+**Type**: Passive validation + **active `computeDerived()`** (team totals)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `team_members[]` | array | minItems: 2 | Yes |
+| `team_members[].role` | string | minLength: 1 | Yes |
+| `team_members[].skills[]` | array | minItems: 1 | Yes |
+| `team_members[].allocation_pct` | number | 1-100 | Yes |
+| `team_members[].cost_monthly` | number | min: 0 | No |
+| `skill_gaps[]` | array | Optional | No |
+| `skill_gaps[].skill` | string | minLength: 1 | If present |
+| `skill_gaps[].severity` | string | minLength: 1 | If present |
+| `skill_gaps[].mitigation` | string | minLength: 1 | If present |
+| `hiring_plan[]` | array | Optional | No |
+| `hiring_plan[].role` | string | minLength: 1 | If present |
+| `hiring_plan[].timeline` | string | minLength: 1 | If present |
+| `hiring_plan[].priority` | string | minLength: 1 | If present |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_headcount` | number | Count of team members |
+| `total_monthly_cost` | number | Sum of all cost_monthly |
+| `unique_roles` | number | Distinct role count (must be ≥ 2) |
+| `avg_allocation` | number | Average allocation percentage |
+
+**Processing**:
+- `validate(data)`: Schema validation + unique roles check (≥ 2)
+- `computeDerived(data)`: Calculates headcount, cost, roles, allocation averages
+- **No `analysisSteps`** -- team composition must be provided externally
+- **No kill gate**
+- **No connection to Stage 13** (roadmap milestones don't inform team structure)
+- **No connection to Stage 14** (architecture layers don't drive role requirements)
+- **No phase-based staffing** (team is flat, not phased)
+- **No budget constraint** (no cap on total_monthly_cost)
+
+**CLI Strengths**: Clean team structure (role + skills + allocation + cost), skill gap analysis with severity and mitigation, hiring plan with timeline and priority, derived cost aggregation.
+
+**CLI Gaps**: Very generic -- same template regardless of venture complexity. No connection to architecture (Stage 14) or product roadmap (Stage 13). No phase-based resource ramp-up. No budget ceiling from Stage 5 economics.
+
+### GUI Implementation (Ground Truth)
+
+**SSOT Stage 15 = "Epic & User Story Breakdown"** (completely different scope)
+
+**Active component** (per SSOT): `Stage15EpicUserStoryBreakdown.tsx`
+- Epic hierarchy management
+- User stories: "As a... I want to... So that..."
+- Story points (Fibonacci: 1,2,3,5,8,13,21)
+- Priority: must-have/should-have/could-have/won't-have
+- Status: backlog/ready/in-progress/done
+
+**Advanced variant**: `Stage15UserStoryPack.tsx`
+- Full INVEST criteria (Independent, Negotiable, Valuable, Estimable, Small, Testable)
+- Epistemological classification: Fact/Assumption/Simulation/Unknown
+- Given-When-Then acceptance criteria
+- Breakdown analytics
+
+**Stage mapping divergence**: GUI Stage 15 is about breaking down features into user stories (execution planning). CLI Stage 15 is about team composition and resource allocation (staffing planning). These are completely different activities. The CLI mapping is authoritative.
+
+**Additional misplaced GUI Stage 15 components**:
+- `Stage15DeploymentPreparation.tsx` -- belongs in LAUNCH phase
+- `Stage15PricingStrategy.tsx` -- belongs in IDENTITY phase
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Stage purpose | Team staffing & resource allocation | Epic & user story breakdown |
+| Team members | role, skills, allocation, cost | Not applicable |
+| Skill gaps | severity + mitigation | Not applicable |
+| Hiring plan | role, timeline, priority | Not applicable |
+| User stories | Not applicable | Full INVEST story format |
+| Story points | Not applicable | Fibonacci estimation |
+| Phase-based staffing | None | Not applicable |
+| Architecture consumption | None | None |
+| Cost derivation | total_monthly_cost (sum) | total_story_points |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-15-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-15-claude.md`
+- OpenAI: `docs/plans/responses/stage-15-openai.md`
+- AntiGravity: `docs/plans/responses/stage-15-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
