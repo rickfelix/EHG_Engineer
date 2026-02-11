@@ -84,9 +84,9 @@ VALUES
    'Local Ollama instance via HTTP. Default port 11434.',
    '{"base_url": "http://localhost:11434", "timeout_ms": 30000}'::jsonb),
 
-  -- Anthropic: API key
-  ('anthropic', 'api_key', 1, 'ANTHROPIC_API_KEY', 'http',
-   'Anthropic API via HTTP with API key authentication.',
+  -- Anthropic: API key (deprecated - using OpenAI as cloud provider)
+  ('anthropic', 'api_key', 1, 'OPENAI_API_KEY', 'http',
+   'Cloud LLM API via HTTP with API key authentication.',
    '{"timeout_ms": 60000}'::jsonb)
 
 ON CONFLICT (service_name, method_name) DO NOTHING;

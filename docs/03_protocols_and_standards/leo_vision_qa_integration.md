@@ -392,7 +392,7 @@ docs/verification-packages/[SD-ID]/
    - Include GitHub repo and local path
 
 2. **API Keys Missing**
-   - Ensure OPENAI_API_KEY or ANTHROPIC_API_KEY set
+   - Ensure OPENAI_API_KEY set (or USE_LOCAL_LLM=true for Ollama)
    - Vision QA will fail without valid credentials
 
 3. **Cost Limit Exceeded**

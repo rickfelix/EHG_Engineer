@@ -106,10 +106,9 @@ The system automatically selects the most appropriate model based on your test g
 ### Environment Variables
 ```bash
 # AI Provider Configuration
-AI_PROVIDER=openai              # 'openai', 'anthropic', 'local'
+AI_PROVIDER=openai              # 'openai' or 'local'
 AI_MODEL=auto                   # 'auto' for automatic selection (recommended)
 OPENAI_API_KEY=your-key-here
-ANTHROPIC_API_KEY=your-key-here
 
 # Database Configuration
 NEXT_PUBLIC_SUPABASE_URL=your-url

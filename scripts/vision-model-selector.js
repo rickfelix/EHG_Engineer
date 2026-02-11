@@ -341,8 +341,6 @@ const agent = new VisionQAAgent({
   
   if (profile.provider === 'openai') {
     console.log('OPENAI_API_KEY=your-openai-api-key');
-  } else if (profile.provider === 'anthropic') {
-    console.log('ANTHROPIC_API_KEY=your-anthropic-api-key');
   }
   
   console.log('\n💡 Tips for this model:');

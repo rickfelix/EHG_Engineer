@@ -71,7 +71,7 @@ result in RLS policy violations on write operations.
 
 | Variable | Purpose | Example |
 |----------|---------|---------|
-| `ANTHROPIC_API_KEY` | Cloud Anthropic API access | `sk-ant-...` |
+| `OPENAI_API_KEY` | Cloud OpenAI API access | `sk-...` |
 | `USE_LOCAL_LLM` | Route haiku-tier calls to local Ollama | `true` / `false` |
 | `OLLAMA_BASE_URL` | Ollama server endpoint (if local) | `http://localhost:11434` |
 

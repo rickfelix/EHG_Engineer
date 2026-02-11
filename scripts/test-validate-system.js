@@ -234,14 +234,15 @@ async function validateLLM(results, options) {
 
   console.log('\n   LLM Integration\n');
 
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const localLLM = process.env.USE_LOCAL_LLM;
 
-  if (!anthropicKey) {
-    results.warn('LLM.credentials', 'ANTHROPIC_API_KEY not set');
+  if (!openaiKey && !localLLM) {
+    results.warn('LLM.credentials', 'No LLM configured (set OPENAI_API_KEY or USE_LOCAL_LLM=true)');
     return;
   }
 
-  results.pass('LLM.credentials', 'API key configured');
+  results.pass('LLM.credentials', localLLM ? 'Local LLM configured' : 'OpenAI API key configured');
 
   // Check LLM scripts can be loaded
   try {
