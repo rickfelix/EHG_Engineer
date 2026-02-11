@@ -15,11 +15,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
-
-// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
-import { getOpenAIModel } from '../../lib/config/model-config.js';
 
 // Import from decomposed modules
 import {
@@ -48,13 +45,8 @@ export class AIQualityEvaluator {
    */
   constructor(rubricConfig) {
     this.rubricConfig = rubricConfig;
-    this.model = getOpenAIModel('validation');
     this.temperature = 0.3;
-
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not found in environment');
-    }
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    this.llmClient = null; // Initialized lazily on first use
 
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -62,6 +54,19 @@ export class AIQualityEvaluator {
     );
 
     this.bandThresholds = BAND_THRESHOLDS;
+  }
+
+  /**
+   * Get LLM client from factory (lazy initialization)
+   */
+  async getLLMClient() {
+    if (!this.llmClient) {
+      this.llmClient = await getLLMClient({
+        purpose: 'quality-evaluation',
+        phase: 'EXEC'
+      });
+    }
+    return this.llmClient;
   }
 
   // Delegate to scoring module
@@ -116,7 +121,8 @@ export class AIQualityEvaluator {
       // Build and send prompt
       const messages = buildPrompt(content, this.rubricConfig, sd);
       const apiStart = Date.now();
-      const response = await callOpenAI(this.openai, this.model, messages);
+      const llmClient = await this.getLLMClient();
+      const response = await callOpenAI(llmClient, messages);
       const apiDuration = Date.now() - apiStart;
 
       // Parse scores
@@ -150,7 +156,7 @@ export class AIQualityEvaluator {
       await storeAssessment(
         this.supabase, this.rubricConfig, contentId, scores, weightedScore,
         feedback, duration, tokensUsed, cost, sd, threshold, contentHash,
-        band, confidence, meta.confidence_reasoning, this.model, this.temperature
+        band, confidence, meta.confidence_reasoning, 'factory-resolved', this.temperature
       );
 
       return {
@@ -193,7 +199,8 @@ export class AIQualityEvaluator {
 
   // Delegate to api module
   async callOpenAI(messages, retries = 3) {
-    return callOpenAI(this.openai, this.model, messages, retries);
+    const llmClient = await this.getLLMClient();
+    return callOpenAI(llmClient, messages, retries);
   }
 
   // Delegate to storage module
@@ -205,7 +212,7 @@ export class AIQualityEvaluator {
     return storeAssessment(
       this.supabase, this.rubricConfig, contentId, scores, weightedScore,
       feedback, duration, tokensUsed, cost, sd, threshold, contentHash,
-      band, confidence, confidenceReasoning, this.model, this.temperature
+      band, confidence, confidenceReasoning, 'factory-resolved', this.temperature
     );
   }
 }
