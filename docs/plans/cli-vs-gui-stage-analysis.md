@@ -2610,7 +2610,98 @@ const TEMPLATE = {
 
 ## Stage 14: Technical Architecture
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-14.js`
+**Phase**: THE BLUEPRINT (Stages 13-16)
+**Type**: Passive validation + **active `computeDerived()`** (layer count, component totals)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `architecture_summary` | string | minLength: 20 | Yes |
+| `layers` | object | Must have all 4 required layers | Yes |
+| `layers.{frontend,backend,data,infra}` | object | Each required layer | Yes |
+| `layers.*.technology` | string | minLength: 1 | Yes |
+| `layers.*.components[]` | array | minItems: 1 | Yes |
+| `layers.*.rationale` | string | minLength: 1 | Yes |
+| `integration_points[]` | array | minItems: 1 | Yes |
+| `integration_points[].name` | string | minLength: 1 | Yes |
+| `integration_points[].source_layer` | string | minLength: 1 | Yes |
+| `integration_points[].target_layer` | string | minLength: 1 | Yes |
+| `integration_points[].protocol` | string | minLength: 1 | Yes |
+| `constraints[]` | array | Optional | No |
+| `constraints[].name` | string | minLength: 1 | If present |
+| `constraints[].description` | string | minLength: 1 | If present |
+
+**Required Layers**: `['frontend', 'backend', 'data', 'infra']` -- all four mandatory.
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `layer_count` | number | Count of defined layers (target: 4) |
+| `total_components` | number | Sum of components across all layers |
+| `all_layers_defined` | boolean | True if all 4 required layers present |
+
+**Processing**:
+- `validate(data)`: Schema validation of all layers, integration points, constraints
+- `computeDerived(data)`: Counts layers and components, checks completeness
+- **No `analysisSteps`** -- architecture must be provided externally
+- **No kill gate** (unlike Stage 13)
+- **No connection to Stage 13** (product roadmap doesn't inform architecture)
+- **No security/compliance layer** (only frontend/backend/data/infra)
+- **No scalability/performance considerations**
+- **No cost estimation** for technology choices
+
+**CLI Strengths**: Clean 4-layer architecture model (forces all layers to be addressed), integration points with protocol specification, rationale required per layer (forces justification), exported constants for cross-stage use.
+
+**CLI Gaps**: Very generic -- same 4 layers for every venture regardless of sales model or product roadmap. No connection to Stage 13 deliverables (typed features don't map to architecture). No security/compliance layer despite enterprise sales model potentially requiring it. No scalability or performance architecture.
+
+### GUI Implementation (Ground Truth)
+
+**Component**: `Stage14DataModelArchitecture.tsx` (in ehg app: `src/components/stages/v2/`)
+**Additional**: `Stage14ERDBuilder.tsx` (Entity-Relationship Diagram visual builder)
+
+**Scope difference**: GUI Stage 14 is a **data model builder**, not a general technical architecture template. It focuses on database entities, fields, relationships, and data flows.
+
+**GUI Stage 14 features**:
+- Entity builder: name, description, fields[] (name, type, required, isPrimaryKey, isForeignKey, referencesEntity), rlsPolicy
+- Relationship modeling: one-to-one, one-to-many, many-to-many with descriptions
+- Data flows: name, source, destination, description, frequency
+- Architecture notes (free text)
+- Database choice
+- Schema version tracking
+- ERD builder component for visual entity-relationship diagrams
+
+**GUI is narrower but deeper**: Focuses exclusively on data modeling (entities, fields, foreign keys, RLS policies). CLI is broader but shallower (4 architecture layers with technology + components + rationale).
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Scope | Full technical architecture (4 layers) | Data model only (entities + relationships) |
+| Layers | frontend, backend, data, infra | Data layer only (deep) |
+| Entity modeling | None | Entities with typed fields, PKs, FKs, RLS |
+| ERD | None | Visual ERD builder |
+| Data flows | None (integration_points covers protocols) | Explicit data flow definitions |
+| Integration points | source/target layer + protocol | Implicit in relationships |
+| Technology rationale | Required per layer | Database choice only |
+| Constraints | Generic name/description | None |
+| Kill gate | None | None |
+| Stage 13 consumption | None | None |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-14-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-14-claude.md`
+- OpenAI: `docs/plans/responses/stage-14-openai.md`
+- AntiGravity: `docs/plans/responses/stage-14-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
