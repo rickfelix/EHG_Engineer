@@ -319,7 +319,7 @@ function VenturePage() {
 - ✅ Edge Function deployed: `intelligence-agents`
 - ✅ Service functions available: `executeSTA()`, `executeGCIA()`, `executeParallelIntelligence()`
 - ✅ Database tables created: `intelligence_analysis`, `sub_agent_execution_results`
-- ✅ API keys configured: OPENAI_API_KEY, ANTHROPIC_API_KEY
+- ✅ API keys configured: OPENAI_API_KEY
 - ✅ RLS policies active: Users can only access their ventures
 
 ---

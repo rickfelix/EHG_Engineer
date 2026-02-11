@@ -143,7 +143,7 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
         secrets_required: [
           'SUPABASE_URL',
           'SUPABASE_KEY',
-          'ANTHROPIC_API_KEY',
+          'OPENAI_API_KEY',
           'AWS_ACCESS_KEY_ID',
           'AWS_SECRET_ACCESS_KEY'
         ]

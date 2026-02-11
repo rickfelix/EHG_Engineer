@@ -510,7 +510,7 @@ export const STAGE_MODEL_POLICY = {
 * [ ] Add analytics and cost logging.
 * [ ] Implement `ChairmanOverrideControls` (voice optional).
 * [ ] Unit/integration/E2E tests in CI.
-* [ ] Docs: ENV (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, local LLM URL).
+* [ ] Docs: ENV (`OPENAI_API_KEY`, `GEMINI_API_KEY`, local LLM URL).
 
 ---
 

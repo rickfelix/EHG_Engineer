@@ -60,7 +60,7 @@ External AI predictions vs actual results:
 - ✅ `USE_LOCAL_LLM=true` added to `.env`
 - ✅ `lib/intelligent-impact-analyzer.js` updated to use OllamaAdapter
 - ✅ End-to-end tested: Successfully analyzed SD with 7 sub-agents identified
-- ✅ No ANTHROPIC_API_KEY required when local LLM enabled
+- ✅ No cloud API key required when local LLM enabled
 
 ---
 

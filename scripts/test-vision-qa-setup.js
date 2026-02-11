@@ -32,12 +32,11 @@ async function testSetup() {
     console.log('❌ OpenAI API Key: Missing');
   }
   
-  if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your-anthropic-api-key-here') {
-    console.log('✅ Anthropic API Key: Configured');
-    console.log(`   Key prefix: ${process.env.ANTHROPIC_API_KEY.substring(0, 10)}...`);
+  if (process.env.USE_LOCAL_LLM) {
+    console.log('✅ Local LLM: Configured (Ollama)');
     anthropicStatus = '✅';
   } else {
-    console.log('⚠️  Anthropic API Key: Missing (optional)');
+    console.log('⚠️  Local LLM: Not configured (optional, set USE_LOCAL_LLM=true)');
     anthropicStatus = '⚠️';
   }
   
@@ -72,19 +71,12 @@ async function testSetup() {
     }
   }
   
-  // 3. Test Anthropic connection
+  // 3. Test Local LLM connection
   if (anthropicStatus === '✅') {
     try {
-      console.log('\nTesting Anthropic connection...');
-      const anthropicClient = new MultimodalClient({
-        provider: 'anthropic',
-        model: 'claude-haiku-3', // Use cheapest model for testing
-        apiKey: process.env.ANTHROPIC_API_KEY
-      });
-      
-      const costEstimate = anthropicClient.estimateCost(10);
-      console.log('✅ Anthropic: Connection successful');
-      console.log(`   Available models: ${anthropicClient.getAvailableModels().join(', ')}`);
+      console.log('\nTesting Local LLM connection...');
+      console.log('✅ Local LLM: Ollama configured');
+      console.log(`   USE_LOCAL_LLM=${process.env.USE_LOCAL_LLM}`);
       console.log(`   Test cost estimate (10 iterations): $${costEstimate.estimatedTotal.toFixed(2)}`);
     } catch (_error) {
       console.log('❌ Anthropic: Connection failed');

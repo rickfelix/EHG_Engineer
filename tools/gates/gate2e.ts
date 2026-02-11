@@ -46,9 +46,7 @@ let _anthropicClient: Anthropic | null = null;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function _getAnthropicClient(): Anthropic {
   if (!_anthropicClient) {
-    _anthropicClient = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY
-    });
+    _anthropicClient = new Anthropic();
   }
   return _anthropicClient;
 }
