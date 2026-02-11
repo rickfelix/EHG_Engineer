@@ -1548,7 +1548,122 @@ provenance: { dataSource, model, stagesConsumed[] } (new, derived)
 
 ## Stage 9: Exit Strategy
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-09.js`
+**Type**: Passive validation + **active `computeDerived()`** (Reality Gate evaluation)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `exit_thesis` | string | minLength: 20 | Yes |
+| `exit_horizon_months` | integer | 1-120 | Yes |
+| `exit_paths[]` | array | minItems: 1 | Yes |
+| `exit_paths[].type` | string | minLength: 1 | Yes |
+| `exit_paths[].description` | string | minLength: 1 | Yes |
+| `exit_paths[].probability_pct` | number | 0-100 | No |
+| `target_acquirers[]` | array | minItems: 3 | Yes |
+| `target_acquirers[].name` | string | minLength: 1 | Yes |
+| `target_acquirers[].rationale` | string | minLength: 1 | Yes |
+| `target_acquirers[].fit_score` | integer | 1-5 | Yes |
+| `milestones[]` | array | minItems: 1 | Yes |
+| `milestones[].date` | string | minLength: 1 | Yes |
+| `milestones[].success_criteria` | string | minLength: 1 | Yes |
+
+**Schema (Derived -- Reality Gate)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `reality_gate.pass` | boolean | All Phase 2 prerequisites met |
+| `reality_gate.rationale` | string | Summary of pass/fail |
+| `reality_gate.blockers` | string[] | Specific items preventing passage |
+| `reality_gate.required_next_actions` | string[] | Steps to resolve blockers |
+
+**Reality Gate Requirements** (Phase 2 → Phase 3 transition):
+- Stage 06: >= 10 risks captured
+- Stage 07: >= 1 tier with non-null LTV and payback
+- Stage 08: All 9 BMC blocks populated with items
+
+**Processing**:
+- `validate(data)`: Validates all input fields
+- `computeDerived(data, prerequisites)`: Evaluates Reality Gate using Stages 6-8 data
+- `evaluateRealityGate({ stage06, stage07, stage08 })`: Pure function checking prerequisites
+- **No `analysisSteps`** -- exit strategy must be provided externally
+- **No valuation methods** -- no DCF, multiples, or comparable transactions
+- **No exit readiness checklist**
+- **No AI generation**
+
+**CLI Strengths**: Clean Reality Gate with explicit blockers and next actions, `evaluateRealityGate` is a pure exported function (testable), fit_score (1-5) per acquirer for ranking, probability_pct per exit path, milestone-based tracking.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `EHG/src/components/stages/v2/Stage9ExitStrategy.tsx` (1,043 lines), `EHG/src/hooks/useExitReadiness.ts` (404 lines), `EHG/src/components/stage-outputs/viewers/Stage9Viewer.tsx` (365 lines)
+
+**GUI Stage 9 -- "Exit-Oriented Design"** (comprehensive exit planning):
+
+**Exit Scenarios** (per scenario):
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | enum | acquisition/ipo/merger/strategic_sale/mbo/liquidation |
+| `buyerType` | enum | strategic/financial/competitor/private_equity |
+| `targetValuation` | number | Expected valuation amount |
+| `targetMultiple` | number | Revenue/EBITDA multiple |
+| `timeframeMonths` | number | Time to exit |
+| `probability` | number | 0-100% |
+| `keyRequirements` | string[] | What's needed for this path |
+| `risks` | string[] | Risks specific to this path |
+| `notes` | string | Additional context |
+
+**Valuation Targets** (per method):
+- 4 methods: revenue_multiple, ebitda_multiple, dcf, comparable_transactions
+- Each has: method, multiple, baseMetric, baseValue, estimatedValuation (derived), comparables[]
+
+**Exit Timeline**: milestone, targetDate, status (not_started/in_progress/completed), dependencies[], owner
+
+**Exit Readiness Checklist**: 6 categories (financials, legal, technical, operational, governance, documentation) as booleans
+
+**Exit Grading**: A-F based on checklist (50%), valid scenario (25%), avg probability (25%)
+
+**AI Features**:
+- `assessReadiness()` -- AI-powered readiness scoring
+- `generateImprovementPlan()` -- targeted improvement roadmap
+- `analyzeExitTiming()` -- market window analysis
+- `identifyBuyers()` -- AI buyer candidate identification
+
+**Database**: `exit_readiness_tracking`, `exit_improvement_plans`, `exit_opportunities`, `buyer_candidates` tables
+
+**Prior stage inputs**: Stage 6 risk, Stage 7 pricing, Stage 8 BMC -- consumed for readiness assessment
+
+**4 UI tabs**: Scenarios, Valuation, Timeline, Readiness
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Exit path types | Freeform string | 6 explicit types (acquisition, IPO, etc.) |
+| Buyer types | None (just name + rationale) | 4 types (strategic, financial, etc.) |
+| Valuation methods | None | 4 methods (revenue multiple, EBITDA, DCF, comps) |
+| Target acquirers | 3 min with fit_score (1-5) | Detailed buyer candidates with outreach tracking |
+| Exit readiness | None | 6-category checklist with A-F grading |
+| Milestones | date + success_criteria | date + status + dependencies + owner |
+| Reality Gate | Explicit (Stage 6/7/8 checks) | None (exit grade serves similar purpose) |
+| AI generation | None | 4 AI functions (readiness, plans, timing, buyers) |
+| Improvement plans | None | AI-generated improvement roadmaps |
+| Market timing | None | Market window analysis |
+| Prior stage consumption | Stage 6/7/8 via Reality Gate | Stage 6/7/8 via readiness assessment |
+| Database tables | None (stage template only) | 4 dedicated tables |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-09-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-09-claude.md`
+- OpenAI: `docs/plans/responses/stage-09-openai.md`
+- AntiGravity: `docs/plans/responses/stage-09-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
