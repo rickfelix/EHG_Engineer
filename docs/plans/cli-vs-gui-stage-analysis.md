@@ -3122,7 +3122,73 @@ const TEMPLATE = {
 
 ## Stage 16: Financial Projections
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-16.js`
+**Phase**: THE BLUEPRINT (Stages 13-16) -- **final stage before BUILD LOOP**
+**Type**: Passive validation + **active `computeDerived()`** (runway, break-even, promotion gate)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `initial_capital` | number | min: 0 | Yes |
+| `monthly_burn_rate` | number | min: 0 | Yes |
+| `revenue_projections[]` | array | minItems: 6 | Yes |
+| `revenue_projections[].month` | number | min: 1 | Yes |
+| `revenue_projections[].revenue` | number | min: 0 | Yes |
+| `revenue_projections[].costs` | number | min: 0 | Yes |
+| `funding_rounds[]` | array | Optional | No |
+| `funding_rounds[].round_name` | string | minLength: 1 | If present |
+| `funding_rounds[].target_amount` | number | min: 0 | If present |
+| `funding_rounds[].target_date` | string | - | If present |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `runway_months` | number | initial_capital / monthly_burn_rate |
+| `burn_rate` | number | Echo of monthly_burn_rate |
+| `break_even_month` | number/null | First month where cumulative profit >= 0 |
+| `total_projected_revenue` | number | Sum of all revenue_projections[].revenue |
+| `total_projected_costs` | number | Sum of all revenue_projections[].costs |
+| `promotion_gate` | object | Phase 4→5 gate (checks Stages 13-16 completeness) |
+
+**Promotion Gate** (Phase 4→5):
+| Prerequisite | Condition |
+|-------------|-----------|
+| Stage 13 | >= 3 milestones with deliverables, kill gate not triggered |
+| Stage 14 | All 4 required layers defined (frontend, backend, data, infra) |
+| Stage 15 | >= 2 team members with >= 2 unique roles |
+| Stage 16 | initial_capital > 0, revenue_projections >= 6 months |
+
+**Processing**:
+- `validate(data)`: Schema validation + monthly projection item validation
+- `computeDerived(data, prerequisites)`: Calculates runway, break-even, totals, promotion gate
+- **No `analysisStep`** -- all financial data must be provided externally
+- **Flat burn rate** -- single `monthly_burn_rate` number, not phase-variable
+- **No P&L structure** -- just month/revenue/costs per row (no COGS, gross margin, OpEx breakdown)
+- **No unit economics integration** -- no connection to Stage 5 CAC/LTV/payback
+- **No revenue model connection** -- no link to Stage 7 pricing or Stage 12 sales model
+- **No scenario analysis** -- single projection path (no base/optimistic/pessimistic)
+- **Simplistic break-even** -- first month cumulative profit >= 0 (no sensitivity)
+- **Basic funding rounds** -- name/amount/date only (no dilution, valuation, triggers, milestones)
+- **Structural promotion gate** -- checks data presence, NOT financial viability (could pass with runway = 1 month)
+
+### GUI Implementation (Ground Truth)
+
+**No GUI Stage 16 exists**. The GUI was primarily built through Stage 12. No financial projection components, P&L builders, or revenue modeling tools were found in the frontend codebase.
+
+The database schema has basic venture-level fields (`projected_revenue`, `projected_roi`, `funding_required`) but no stage-level financial projection structure.
+
+### Key Gaps
+
+1. **No analysisStep**: All financial data is user-entered. The LLM has pricing (Stage 7), unit economics (Stage 5), sales model (Stage 12), roadmap phases (Stage 13), architecture costs (Stage 14), and team costs (Stage 15) -- enough to generate projections.
+2. **Flat burn rate**: Stage 15 consensus adds phase-based staffing (phase_ref on team_members). Stage 16 ignores this -- uses a single burn rate for all phases.
+3. **No P&L structure**: revenue_projections is flat (month/revenue/costs). No COGS vs OpEx, no gross margin, no operating income.
+4. **No revenue model**: No connection to Stage 7 pricing or Stage 12 sales model → conversion funnel → revenue.
+5. **No scenario analysis**: Single projection path. No sensitivity to key assumptions.
+6. **Promotion gate checks structure, not viability**: A venture with 1-month runway passes the gate.
+7. **No unit economics coherence**: No validation that projections align with Stage 5 CAC/LTV/payback.
+8. **MIN_PROJECTION_MONTHS = 6**: May be too short for ventures with longer sales cycles or multi-year roadmaps.
 
 ---
 
