@@ -16,6 +16,7 @@ import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
 import { generateAndEmitSummary, createCollector } from '../session-summary/index.js';
 import { execSync } from 'child_process';
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../lib/pipeline-flow-verifier.js';
+import { runGapAnalysis } from '../../../lib/gap-detection/index.js';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -780,6 +781,56 @@ export async function executeOrchestratorCompletionHook(
   } catch (pfError) {
     console.warn(`   ⚠️  Pipeline flow verification failed (advisory): ${pfError.message}`);
     hookDetails.pipelineFlow = { status: 'error', error: pfError.message };
+  }
+
+  // Gap Analysis (SD-LEO-FEAT-INTEGRATION-GAP-DETECTOR-001)
+  // Non-blocking: runs inside try/catch, never blocks completion
+  console.log('\n   🔍 Running post-completion gap analysis...');
+  try {
+    // Get completed children to analyze
+    const { data: completedChildren } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key')
+      .eq('parent_sd_id', orchestratorId)
+      .eq('status', 'completed');
+
+    if (completedChildren && completedChildren.length > 0) {
+      const gapResults = [];
+      const GAP_ANALYSIS_TIMEOUT = 60000;
+      const gapStartTime = Date.now();
+
+      for (const child of completedChildren) {
+        if (Date.now() - gapStartTime > GAP_ANALYSIS_TIMEOUT) {
+          console.log(`   ⚠️  Gap analysis timeout after ${completedChildren.indexOf(child)}/${completedChildren.length} children`);
+          break;
+        }
+        try {
+          const result = await runGapAnalysis(child.sd_key, { analysisType: 'completion' });
+          gapResults.push({ sd_key: child.sd_key, coverage: result.coverage_score, gaps: result.gap_findings.length });
+        } catch (childGapErr) {
+          console.warn(`   ⚠️  Gap analysis failed for ${child.sd_key}: ${childGapErr.message}`);
+        }
+      }
+
+      hookDetails.gapAnalysis = {
+        status: 'completed',
+        children_analyzed: gapResults.length,
+        total_gaps: gapResults.reduce((sum, r) => sum + r.gaps, 0),
+        avg_coverage: gapResults.filter(r => r.coverage !== null).length > 0
+          ? Math.round(gapResults.filter(r => r.coverage !== null).reduce((sum, r) => sum + r.coverage, 0) / gapResults.filter(r => r.coverage !== null).length)
+          : null
+      };
+      console.log(`   ✅ Gap analysis: ${gapResults.length} children analyzed, ${hookDetails.gapAnalysis.total_gaps} gaps found`);
+      if (hookDetails.gapAnalysis.avg_coverage !== null) {
+        console.log(`      Average coverage: ${hookDetails.gapAnalysis.avg_coverage}%`);
+      }
+    } else {
+      console.log('   ℹ️  Gap analysis: No completed children to analyze');
+      hookDetails.gapAnalysis = { status: 'skipped', reason: 'no_completed_children' };
+    }
+  } catch (gapError) {
+    console.warn(`   ⚠️  Gap analysis failed (advisory): ${gapError.message}`);
+    hookDetails.gapAnalysis = { status: 'error', error: gapError.message };
   }
 
   if (autoProceedResult.autoProceed) {
