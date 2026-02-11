@@ -2,7 +2,7 @@
 name: orchestrator-child-agent
 description: "Teammate agent for parallel child SD execution within an orchestrator. Each teammate works in its own worktree, following the full LEO Protocol workflow for its assigned child SD."
 tools: Bash, Read, Write
-model: sonnet
+model: opus
 ---
 
 # Orchestrator Child SD Teammate
