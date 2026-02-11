@@ -503,6 +503,7 @@ async function main() {
     console.log('─────────────────────────────────────────────────────────────────');
 
     for (const result of results) {
+      if (!result.efficiencyScore) continue;
       const { beforeWords, afterWords, percentChange } = result.efficiencyScore;
       const pct = typeof percentChange === 'number' ? `${percentChange}%` : percentChange;
       console.log(`  ${result.filePath}: ${beforeWords} words → ${afterWords} words (${pct} change)`);
