@@ -2701,7 +2701,186 @@ const TEMPLATE = {
 
 ### Synthesis
 
-*Pending external AI responses*
+**Consensus strength**: Strong (3/3 on all core decisions, divergence only on extension approach)
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Confidence |
+|----------|:------:|:------:|:-----------:|:----------:|
+| Add `analysisStep` consuming Stages 12/13 | Y | Y | Y | High |
+| Map Stage 13 deliverable types → architecture layers | Y | Y | Y | High |
+| Keep 4 core layers as base model | Y | Y | Y | High |
+| Add security/compliance architecture section | Y | Y | Y | High |
+| Add scaling/performance consideration | Y | Y | Y | High |
+| Link integration points to Stage 13 deliverables | Y | Y | Y | High |
+| No full ERD/entity-level data modeling | Y | Y (lite) | Y (lite) | High |
+| No upstream dependency conflicts | Y | Y | Y | High |
+
+#### Divergences Resolved
+
+**1. How to extend beyond 4 layers** (additional layers vs overlays vs cross-cutting)
+- Claude: `additional_layers[]` array for conditional layers (mobile, platform, content)
+- AntiGravity: Rename frontend→client, add `cross_cutting` section for Security & DevOps
+- OpenAI: `capability_overlays` object (security, observability, delivery, mobile, ai_ml)
+- **Resolution**: Keep 4 mandatory layers (don't rename frontend -- 2:1 for keeping standard term). Add **cross-cutting concerns** for security and DevOps/observability (AntiGravity + OpenAI's shared insight: these apply to ALL layers, not a single layer). For genuinely new architectural layers (mobile, ML), use `additional_layers[]` (Claude's approach). This gives a clean three-tier model: mandatory layers + cross-cutting concerns + conditional layers.
+
+**2. Data modeling depth** (none vs schema-lite)
+- Claude: No entity-level modeling. Data architecture approach only (technology + pattern).
+- AntiGravity: "Schema-Lite" -- entities with name, description, relationships, complexity (low/med/high)
+- OpenAI: Blueprint-level -- core entities, relationships, data ownership, sensitivity class
+- **Resolution: Schema-Lite** (2:1). Claude's pure architecture-only approach leaves Stage 15 too blind about backend complexity. AntiGravity's insight is key: "5 simple entities vs 50 complex ones" drives resource estimation. Add lightweight `data_entities[]` with name, description, relationships[] (strings), complexity (low/med/high). Skip field-level detail, sensitivity class, retention flags (implementation detail).
+
+**3. Constraint categorization**
+- Claude: Don't categorize (generic is sufficient)
+- AntiGravity: Add category enum (budget/compliance/legacy/skillset/performance)
+- OpenAI: Add category + severity + affected_layers + mitigation_note
+- **Resolution: Add category only** (2:1 for categorization, but keep it simple). AntiGravity's 5-value enum is right-sized. Skip severity/affected_layers/mitigation (OpenAI over-engineers this). The category helps Stage 15 route constraints to appropriate resource decisions.
+
+**4. Rename frontend → client**
+- Claude: Keep "frontend"
+- AntiGravity: Rename to "client" (better for mobile/IoT)
+- OpenAI: Keep "frontend"
+- **Resolution: Keep "frontend"** (2:1). Standard web terminology. Mobile products add a `mobile` additional layer rather than redefining the base model.
+
+**5. Cost estimation**
+- Claude: Defer to Stage 16
+- AntiGravity: Add order-of-magnitude cost (Low/Med/High)
+- OpenAI: Defer (improved estimation in Stage 16)
+- **Resolution: Defer** (2:1). Stage 16 handles financial projections. Architecture rationale can mention cost-sensitive choices (e.g., "serverless to minimize fixed costs") but no dedicated cost fields.
+
+**6. Integration point enrichment scope**
+- Claude: Add `deliverable_ref` only
+- AntiGravity: Add `relates_to_milestone` ref
+- OpenAI: Add integration_type, source_deliverable_ref, contract_style, reliability, latency_class, failure_impact
+- **Resolution**: Add `deliverable_ref` (all agree) and `integration_type` enum (internal/external/partner -- OpenAI's useful addition). Skip reliability/latency/failure_impact (implementation detail, not BLUEPRINT).
+
+#### Contrarian Synthesis
+
+All three raised valid over-engineering concerns:
+- **Claude**: Security requirements and scaling strategy may lock in choices too early → Mitigate by keeping them high-level (capability descriptions, not technology specifications)
+- **AntiGravity**: "Implementation details like entities and protocols belong in Stage 17" → Mitigate with Schema-Lite (volume estimation, not specification)
+- **OpenAI**: "Heavy Stage 14 can become pseudo-implementation design" → Mitigate with "structured minimalism" -- traceability and risk-awareness, not low-level precision
+
+The synthesis follows the "structured minimalism" principle: enough architecture to inform Stage 15 resourcing and Stage 16 costing, but not so much that it becomes premature implementation design.
+
+#### Consensus Schema (Stage 14 v2.0)
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-14',
+  slug: 'technical-architecture',
+  title: 'Technical Architecture',
+  version: '2.0.0',
+  schema: {
+    // === Existing (unchanged) ===
+    architecture_summary: { type: 'string', minLength: 20, required: true },
+
+    // === Existing (unchanged) ===
+    layers: {
+      type: 'object', required: true,
+      properties: {
+        frontend: { technology, components[], rationale },
+        backend:  { technology, components[], rationale },
+        data:     { technology, components[], rationale },
+        infra:    { technology, components[], rationale },
+      },
+    },
+
+    // === NEW: additional layers (conditional on product roadmap) ===
+    additional_layers: {
+      type: 'array',
+      items: {
+        name: { type: 'string', required: true },  // e.g., "mobile", "ml_pipeline"
+        technology: { type: 'string', required: true },
+        components: { type: 'array', minItems: 1 },
+        rationale: { type: 'string', required: true },
+      },
+    },
+
+    // === NEW: cross-cutting concerns (apply to all layers) ===
+    security: {
+      type: 'object',
+      properties: {
+        auth_approach: { type: 'string', required: true },
+        authorization_model: { type: 'string' },  // e.g., "RBAC", "ABAC"
+        compliance_targets: { type: 'array' },  // e.g., ["SOC2", "GDPR"]
+        data_isolation: { type: 'string' },
+        rationale: { type: 'string' },
+      },
+    },
+
+    // === Updated: integration_points with deliverable_ref + type ===
+    integration_points: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        source_layer: { type: 'string', required: true },
+        target_layer: { type: 'string', required: true },
+        protocol: { type: 'string', required: true },
+        integration_type: { type: 'enum', values: ['internal', 'external', 'partner'] },  // NEW
+        deliverable_ref: { type: 'string' },  // NEW: Stage 13 deliverable reference
+      },
+    },
+
+    // === Updated: constraints with category ===
+    constraints: {
+      type: 'array',
+      items: {
+        name: { type: 'string', required: true },
+        description: { type: 'string', required: true },
+        category: { type: 'enum', values: ['budget', 'compliance', 'skillset', 'performance', 'legacy'] },  // NEW
+      },
+    },
+
+    // === NEW: lightweight data entity model (Schema-Lite) ===
+    data_entities: {
+      type: 'array',
+      items: {
+        name: { type: 'string', required: true },
+        description: { type: 'string' },
+        relationships: { type: 'array' },  // string refs to other entity names
+        complexity: { type: 'enum', values: ['low', 'medium', 'high'] },
+      },
+    },
+
+    // === NEW: scaling strategy ===
+    scaling_strategy: { type: 'string' },
+
+    // === Existing derived (unchanged) ===
+    layer_count: { type: 'number', derived: true },
+    total_components: { type: 'number', derived: true },
+    all_layers_defined: { type: 'boolean', derived: true },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` for architecture generation (single LLM call consuming Stages 7/8/12/13; maps deliverable types to architecture components, sales model to security profile)
+2. **P0**: Wire Stage 13 deliverable types → architecture layers (feature→frontend+backend, infrastructure→infra, integration→integration_points, content→CDN/CMS)
+3. **P1**: Add `security` object (auth_approach, authorization_model, compliance_targets, data_isolation). Driven by Stage 12 sales_model.
+4. **P1**: Add `data_entities[]` Schema-Lite (name, description, relationships, complexity). Enables Stage 15 backend resource estimation.
+5. **P1**: Add `additional_layers[]` for conditional layers (mobile, ML pipeline). AnalysisStep determines from Stage 13 deliverables.
+6. **P1**: Add `integration_type` enum + `deliverable_ref` to integration_points. Traceability to Stage 13.
+7. **P2**: Add `category` enum to constraints (budget/compliance/skillset/performance/legacy)
+8. **P2**: Add `scaling_strategy` field
+9. **P3**: Do NOT add full ERD / entity-field modeling (BUILD phase, Stages 17-22)
+10. **P3**: Do NOT rename frontend→client (standard terminology, 2:1)
+11. **P3**: Do NOT add cost estimation fields (Stage 16's job)
+12. **P3**: Do NOT add reliability/latency/failure_impact to integration points (implementation detail)
+
+#### Cross-Stage Impact
+
+| Change | Stage 15 (Resource Planning) | Stage 16 (Financial Projections) | Stage 17+ (BUILD LOOP) |
+|--------|----------------------------|---------------------------------|----------------------|
+| Technology selections | Team skills map to tech choices (React→frontend devs, PostgreSQL→DBA) | Technology licensing costs | Tech stack set; build implements |
+| Security profile | Security team/compliance skills needed | Compliance audit costs (SOC2 ~$50K) | Security architecture implemented |
+| Data entities (Schema-Lite) | Entity count × complexity = backend resource estimate | Database hosting costs scale with entity complexity | Entities become tables in build |
+| Constraint categories | "Skillset" → hire. "Budget" → limit choices. "Compliance" → audit resources. | Constraints translate to cost categories | Constraints become requirements |
+| Additional layers | Extra layers = extra specialized skills | Extra layer infrastructure costs | Additional build streams |
 
 ---
 
