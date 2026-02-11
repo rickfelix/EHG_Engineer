@@ -1383,7 +1383,114 @@ provenance: { dataSource, model, riskInfluence } (new, derived)
 
 ## Stage 8: Business Model Canvas
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-08.js`
+**Type**: Passive validation + **active `computeDerived()`** (cross-stage links only)
+
+**9 BMC Blocks** (all share identical item structure):
+| Block | Min Items | Description |
+|-------|:---------:|-------------|
+| `customerSegments` | 2 | Groups of people/organizations served |
+| `valuePropositions` | 2 | Unique value delivered to customers |
+| `channels` | 2 | How you reach and deliver value |
+| `customerRelationships` | 2 | How you acquire, retain, grow customers |
+| `revenueStreams` | 2 | How the company earns money |
+| `keyResources` | 2 | Assets needed to deliver value |
+| `keyActivities` | 2 | Critical actions to deliver value |
+| `keyPartnerships` | 1 | Strategic alliances and suppliers |
+| `costStructure` | 2 | Major costs of operating the model |
+
+**Item Schema** (per block):
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `text` | string | minLength: 1 | Yes |
+| `priority` | integer | 1-3 | Yes |
+| `evidence` | string | -- | No |
+
+**Processing**:
+- `validate(data)`: Validates all 9 blocks exist as objects, checks item arrays meet min counts, validates text/priority/evidence per item
+- `computeDerived(data)`: Returns static `cross_links` array: Stage 6 (Cost Structure ↔ Risk mitigations) and Stage 7 (Revenue Streams ↔ Pricing tiers)
+- **No `analysisSteps`** -- BMC content must be provided externally
+- **No completeness scoring** -- validation is pass/fail
+- **No recommendations engine**
+
+**CLI Strengths**: Clean schema design (all blocks share identical item structure), priority field (1-3) for item ranking, evidence field for traceability, low minItems threshold for keyPartnerships (1 vs 2 for others), static cross-links to related stages.
+
+### GUI Implementation (Ground Truth)
+
+**Sources**: `EHG/src/components/stages/v2/Stage8BusinessModelCanvas.tsx` (594 lines), `EHG/src/hooks/useVentureArtifacts.ts`, `EHG/src/components/stage-outputs/viewers/Stage8Viewer.tsx`
+
+**GUI Stage 8 -- "Business Model Canvas"** (interactive canvas editor):
+
+**9 BMC Blocks** (same 9 as CLI, different structure):
+| Block | Min Items | Unique Features |
+|-------|:---------:|-----------------|
+| Customer Segments | 1 | Indigo color, row-span 2 |
+| Value Propositions | 2 | Red color, center position, row-span 2 |
+| Channels | 1 | Cyan color |
+| Customer Relationships | 1 | Green color |
+| Revenue Streams | 1 | Emerald color, bottom row, col-span 2 |
+| Key Resources | 2 | Orange color |
+| Key Activities | 2 | Purple color |
+| Key Partnerships | 1 | Blue color, row-span 2 |
+| Cost Structure | 2 | Amber color, bottom row, col-span 2 |
+
+**Item Schema** (per block):
+```
+{ id: string, items: string[] }  // Simple string array -- no priority, no evidence
+```
+
+**Features**:
+- **5-column CSS grid layout**: Visual BMC canvas with proper spatial arrangement
+- **Per-block prompts**: 2-4 guiding questions per block (e.g., "What value do you deliver?")
+- **Completeness scoring**: 0-100% based on (filledItems / minItems) * weight
+- **Completion threshold**: 50% minimum to proceed, warning at 50-80%
+- **Real-time recommendations**: Block-specific ("Add X more items to [Block]") and cross-block ("Define customer segments for your value propositions")
+- **Draft saving**: Can save incomplete canvas as draft
+- **Artifact versioning**: Each save increments version, marks previous as not current
+
+**Prior stage inputs** (passed but UNUSED):
+- `pricingStrategy` (Stage 7) -- passed as prop but never consumed
+- `riskMatrix` (Stage 6) -- passed as prop but never consumed
+- `phase1Data` (Stages 1-5) -- passed as prop but never consumed
+
+**Database**: `venture_artifacts` table (artifact_type: 'business_model_canvas'), versioned with metadata
+
+**No AI generation**: Purely manual entry with static recommendation engine
+**No chairman overrides**: No governance layer in Stage 8
+**Viewer mismatch**: Stage8Viewer.tsx has different data structure (snake_case, separate revenue_streams array with type/pricing_model/estimated_pct) than the editor component (camelCase)
+
+### Key Differences Summary
+
+| Dimension | CLI | GUI |
+|-----------|-----|-----|
+| Block count | 9 (identical) | 9 (identical) |
+| Item structure | text + priority (1-3) + evidence | string[] (text only) |
+| Min items per block | 2 (except keyPartnerships: 1) | 1-2 (varies, generally lower) |
+| Completeness scoring | None (pass/fail validation) | 0-100% with 50% minimum threshold |
+| Recommendations | None | Real-time block-specific + cross-block |
+| Visual layout | None (data only) | 5-column CSS grid canvas |
+| Guiding prompts | None | 2-4 per block |
+| Draft support | None | Save incomplete as draft |
+| Prior stage consumption | None | Passed but unused (Stage 6, 7, Phase 1) |
+| AI generation | None (passive) | None (manual with static recs) |
+| Priority/ranking | Yes (priority 1-3 per item) | No |
+| Evidence tracking | Yes (evidence field per item) | No |
+| Cross-stage links | Static array (Stage 6, 7) | None explicit |
+
+### Triangulation
+
+**Prompt**: `docs/plans/prompts/stage-08-triangulation.md`
+
+**Responses**:
+- Claude: `docs/plans/responses/stage-08-claude.md`
+- OpenAI: `docs/plans/responses/stage-08-openai.md`
+- AntiGravity: `docs/plans/responses/stage-08-antigravity.md`
+
+### Synthesis
+
+*Pending external AI responses*
 
 ---
 
