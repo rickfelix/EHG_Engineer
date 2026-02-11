@@ -7,6 +7,7 @@
  */
 
 import { getLLMClient } from '../../lib/llm/client-factory.js';
+import { PROVIDER_TIMEOUT_LONG_MS } from '../../lib/sub-agents/vetting/provider-adapters.js';
 import { LLM_PRD_CONFIG, buildSystemPrompt } from './config.js';
 import {
   formatObjectives,
@@ -48,9 +49,11 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     const userPrompt = buildPRDGenerationContext(sd, context);
 
     // Use adapter interface .complete() instead of OpenAI SDK interface
+    // PRD generation produces 5-30K tokens and needs much longer than the 30s default
     const response = await llmClient.complete(systemPrompt, userPrompt, {
       temperature: LLM_PRD_CONFIG.temperature,
-      max_tokens: LLM_PRD_CONFIG.maxTokens
+      max_tokens: LLM_PRD_CONFIG.maxTokens,
+      timeout: PROVIDER_TIMEOUT_LONG_MS // 3 minutes - PRD generation is a long-form content task
     });
 
     // Parse adapter response format
