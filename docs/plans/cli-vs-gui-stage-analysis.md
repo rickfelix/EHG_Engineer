@@ -2031,7 +2031,90 @@ The consensus architecture handles this: the `decision.status = working_title` o
 
 ### Synthesis
 
-*Pending external AI responses*
+**Agreement: 3/3 on all critical decisions. One genuine debate on channel count rigidity.**
+
+#### Unanimous Decisions (3/3)
+
+| Decision | Claude | OpenAI | AntiGravity | Consensus |
+|----------|--------|--------|-------------|-----------|
+| Add `analysisStep` consuming Stages 1-10 | Yes (P0) | Yes (priority 1) | Yes (priority 2) | **Add single analysisStep generating tiers + channels + timeline from prior stages** |
+| Add channel_type classification | paid/organic/earned/owned (4 types) | paid/organic/earned/owned + priority | PAID/ORGANIC/EARNED/OWNED/PARTNER (5 types) | **Add channel_type enum: paid, organic, earned, owned** (4 values -- "partner" is a subset of "earned") |
+| Add persona + pain_points to tiers | Yes, defer conversion_pct | persona-lite + top 3 pain_points + value_claim | persona + pain_points + behavior | **Add persona (string) + pain_points[] to tiers. Stage 12 depends on these.** |
+| Keep exactly 3 tiers | Yes (forces TAM/SAM/SOM discipline) | Yes (good forcing function) | Yes (preserve rigidity) | **Keep exactItems: 3** |
+| Add CAC/LTV coherence check | Warnings (CAC < LTV, payback feasibility) | Critical gate (ltv_cac_ratio >= 3.0) | Hard warning (CAC > LTV/3) | **Add coherence warnings: CAC < LTV, payback feasibility. Warnings, not blockers.** |
+| Stage 10 brand → channel selection | Archetype/tone → channel voice/selection | Archetype/tone/audience → channel fit | Archetype → channel tactics | **Brand genome informs channel selection and messaging tone** |
+| Add milestone objectives | Add objectives but not status | Add objective + success_metric | Partial (deliverables) | **Add objectives[] per milestone. Do NOT add status tracking.** |
+| No blocking dependency conflicts | Minor (Stage 4 lacks explicit channels) | Schema normalization needed | Stage 5 vs 11 budget conflict (warning) | **No blocking conflicts. Budget top-down vs bottom-up divergence is expected and should be flagged.** |
+
+#### Divergence Points
+
+| Topic | Claude | OpenAI | AntiGravity | Resolution |
+|-------|--------|--------|-------------|------------|
+| **Channel count** | Relax to 5-12 | Relax to 5-10 with validation rules | KEEP exactly 8, allow $0 budget channels | **Keep exactly 8 but allow $0 budget channels.** AntiGravity makes the strongest argument: forced breadth is the EVA method. A $0 budget channel with a KPI is a "backlog channel" -- acknowledged but not funded yet. Claude's contrarian take actually supports this. The constraint moves from "must spend on 8" to "must consider 8." |
+| **Conversion rate** | Defer entirely (too speculative) | Add range (low/high, not exact) | Add est_conversion_rate (0-1) | **Add conversion_pct_range as optional (low/high).** OpenAI's range approach is the most honest. Not exact, not absent. Optional because early-stage ventures genuinely can't estimate this. |
+| **Funnel metrics depth** | total_budget, avg_cac, budget_allocation_pct, estimated_monthly_acquisitions, cac_to_ltv_ratio | Full funnel: leads_q1_range, conversion_pct_range, customers_year_one_range, payback_months | projected_monthly_leads, projected_monthly_customers, cac_payback_sanity_check | **Add derived funnel metrics: estimated_monthly_acquisitions (budget/CAC), cac_to_ltv_ratio (cross-stage). Add funnel_assumptions as analysisStep output (ranges, not point estimates). Label everything "estimated."** |
+| **Channel priority field** | Not mentioned | Add priority: primary/secondary/experimental | Not mentioned (but allows $0 budget) | **Do NOT add priority enum.** Budget allocation already implies priority. A channel with 30% of budget is "primary" by definition. Adding a priority label on top is redundant. |
+| **Tactics per channel** | Not in schema | Add tactics[] | Add tactics[] | **Add tactics[] (optional).** Both external respondents want it. Brief (1-2 bullet) tactical notes help the analysisStep output be actionable. |
+| **Decision output** | approved/revise only | ADVANCE/REVISE/REJECT + reason | Not mentioned | **Add decision: approved/revise only.** REJECT doesn't fit GTM -- you adjust strategy, you don't reject having a market. Following Stage 10 pattern. |
+| **Contrarian focus** | FOR keeping 8 channels (constraint breeds strategy) | Over-specifying creates false precision | CAC at IDENTITY phase is hallucination | **AntiGravity's CAC contrarian is the strongest.** Pre-revenue CAC estimates are speculative. But they force quantitative thinking about acquisition costs. Resolution: rename field to `target_cac` to signal it's aspirational, not measured. |
+
+#### Stage 11 Consensus Schema
+
+```
+tiers[]: array (exactItems: 3)
+  .name: string (required)
+  .description: string (required)
+  .persona: string (NEW)
+  .pain_points: array (NEW)
+  .tam: number
+  .sam: number
+  .som: number
+  .conversion_pct_range: { low, high } (NEW, optional)
+
+channels[]: array (exactItems: 8)
+  .name: string (required)
+  .channel_type: enum [paid, organic, earned, owned] (NEW)
+  .monthly_budget: number (required, min: 0 -- $0 allowed for backlog channels)
+  .target_cac: number (required, min: 0) -- RENAMED from expected_cac
+  .primary_kpi: string (required)
+  .tactics: array (NEW, optional)
+
+launch_timeline[]: array (minItems: 1)
+  .milestone: string (required)
+  .date: string (required)
+  .owner: string
+  .objectives: array (NEW)
+
+total_monthly_budget: number (derived)
+avg_cac: number (derived)
+budget_allocation: array (derived, NEW -- per-channel %)
+estimated_monthly_acquisitions: number (derived, NEW -- budget/CAC)
+cac_to_ltv_ratio: number (derived, NEW -- cross-stage with Stage 7)
+coherence_warnings: array (derived, NEW -- flags for unsustainable economics)
+
+funnel_assumptions: object (NEW, analysisStep output)
+  .leads_q1_range: { low, high }
+  .customers_year_one_range: { low, high }
+
+decision: object (NEW)
+  .status: enum [approved, revise]
+  .rationale: string
+
+provenance: object (derived, NEW)
+```
+
+**Changes from CLI v1**: (1) Added persona + pain_points to tiers, (2) Added channel_type enum, (3) Renamed expected_cac → target_cac, (4) Added tactics[], (5) Added milestone objectives, (6) Added funnel metrics + coherence warnings, (7) Added decision object, (8) Kept exactly 8 channels but allow $0 budget. All existing fields preserved.
+
+**Eliminated from GUI**: milestone status tracking, expected_reach, full persona documents, campaign-level operational metrics, REJECT decision option.
+
+#### Contrarian Synthesis
+
+Three distinct contrarian angles that form a coherent warning:
+- **Constraint is educational** (Claude): Keeping 8 channels forces founders to think broadly. The $0 budget allowance makes this practical.
+- **False precision risk** (OpenAI): Over-specifying creates the illusion of certainty. Ranges instead of point estimates mitigate this.
+- **CAC is hallucination** (AntiGravity): Pre-revenue CAC estimates are speculative. Renaming to `target_cac` acknowledges the aspiration while preserving the forcing function.
+
+The consensus handles all three: 8 channels with $0 allowed (constraint without waste), ranges for funnel metrics (honest uncertainty), and `target_cac` naming (aspiration, not measurement).
 
 ---
 
