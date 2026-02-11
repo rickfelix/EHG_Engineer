@@ -6,7 +6,7 @@
  * SD-LEO-REFACTOR-PRD-DB-002
  */
 
-import OpenAI from 'openai';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { LLM_PRD_CONFIG, buildSystemPrompt } from './config.js';
 import {
   formatObjectives,
@@ -30,16 +30,15 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     return null;
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.warn('   ⚠️  OPENAI_API_KEY not set, falling back to template PRD');
-    return null;
-  }
+  // Use LLM Client Factory instead of direct OpenAI SDK
+  const llmClient = getLLMClient({
+    purpose: 'content-generation',
+    phase: 'PLAN'
+  });
 
-  const openai = new OpenAI({ apiKey: openaiKey });
   const sdType = sd.sd_type || 'feature';
 
-  console.log('   🤖 Generating PRD content with GPT 5.2...');
+  console.log(`   🤖 Generating PRD content with ${llmClient.provider} ${llmClient.model}...`);
   console.log(`   📋 SD Type: ${sdType}`);
 
   try {
@@ -48,18 +47,15 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     // Build user prompt with context
     const userPrompt = buildPRDGenerationContext(sd, context);
 
-    const response = await openai.chat.completions.create({
-      model: LLM_PRD_CONFIG.model,
+    // Use adapter interface .complete() instead of OpenAI SDK interface
+    const response = await llmClient.complete(systemPrompt, userPrompt, {
       temperature: LLM_PRD_CONFIG.temperature,
-      max_completion_tokens: LLM_PRD_CONFIG.maxTokens,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
+      max_tokens: LLM_PRD_CONFIG.maxTokens
     });
 
-    const content = response.choices[0]?.message?.content;
-    const finishReason = response.choices[0]?.finish_reason;
+    // Parse adapter response format
+    const content = response.content;
+    const finishReason = null; // Adapter doesn't expose finish_reason
 
     if (!content) {
       console.warn('   ⚠️  LLM returned empty content');
