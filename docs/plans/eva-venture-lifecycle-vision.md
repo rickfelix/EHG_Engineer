@@ -1,8 +1,8 @@
 # EVA Venture Lifecycle: Definitive Vision
 
-> **Version**: 4.4
+> **Version**: 4.5
 > **Created**: 2026-02-12
-> **Status**: Draft (Revised + 25 Chairman Clarifications)
+> **Status**: Draft (Revised + 30 Chairman Clarifications)
 > **Supersedes**: `kb/ehg-review/00_unified_vision_2025.md`, `kb/ehg-review/01_vision_ehg_eva.md`, `docs/guides/workflow/25-stage-venture-lifecycle-overview.md`
 > **Companion**: Architecture Document (Step 2, forthcoming)
 > **Inputs**: Gemini vision diagrams, 25-stage CLI vs GUI gap analysis (PR #1117), CLI implementation review (`stages_v2.yaml`, Decision Filter Engine, Reality Gates, SD Bridge), brainstorming decisions (2026-02-11)
@@ -643,6 +643,76 @@ The second venture through the lifecycle should be faster and better-validated t
 
 ---
 
+## 12. Portfolio Intelligence
+
+The lifecycle operates at two levels: individual ventures progressing through 25 stages, and the portfolio as a whole learning and optimizing across all ventures. This section defines how multi-venture intelligence works.
+
+### Cross-Venture Knowledge Transfer
+
+Every stage outcome feeds a **portfolio knowledge base** that accelerates future ventures. This is fully automated -- the system gets smarter without Chairman involvement.
+
+| Knowledge Type | How It Transfers | Example |
+|---------------|-----------------|---------|
+| **Calibration data** | Stage 3/5 kill gate thresholds adjust based on actual outcomes at Stage 24 | If ventures passing at score 65 consistently succeed, threshold adjusts downward |
+| **Successful patterns** | Architecture, pricing, and GTM patterns from successful ventures seed future ones | SaaS venture #2 inherits proven architecture patterns from venture #1 |
+| **Failure signals** | Failed ventures contribute anti-patterns that future stages flag | "Marketplace pricing in B2B SaaS" flagged as risky based on prior failure |
+| **DFE preference learning** | Chairman decisions at DFE escalations tune future trigger thresholds | If Chairman always approves `novel_pattern` for fintech, threshold loosens |
+
+### Venture Templates
+
+Successful ventures automatically produce **reusable templates** for similar future ventures:
+
+- **What gets templated**: Scoring thresholds, architecture patterns, DFE trigger calibrations, pricing model parameters, GTM channel effectiveness
+- **When templates are created**: After a venture reaches Stage 25 with "continue" or "exit" decision
+- **How templates are applied**: EVA recommends applicable templates at Stage 1 based on venture domain similarity. The analysisStep consumes template data as additional context.
+- **No Chairman involvement**: Template creation and application are fully automated. The Chairman's Stage 1 approval of the venture implicitly accepts the template recommendation.
+
+### Portfolio Prioritization
+
+When multiple ventures need Chairman decisions simultaneously, the system ranks them by **expected value**:
+
+| Ranking Factor | Weight | Source |
+|---------------|:------:|--------|
+| Financial projections | High | Stage 16 P&L, Stage 24 actual revenue |
+| Market opportunity | Medium | Stage 4 TAM, Stage 5 unit economics |
+| Venture health score | Medium | Stage 25 5-dimension health assessment |
+| Stage maturity | Low | Later-stage ventures (closer to revenue) get slight priority |
+| Time in queue | Tiebreaker | FIFO among equally ranked ventures |
+
+The Chairman sees the highest-value decisions first. The ranking is fully automated and updates as venture data changes.
+
+### Resource Contention Management
+
+With unlimited concurrent ventures, shared resources (infrastructure, API limits, shared services) may contend:
+
+- **Default**: Ventures run in parallel. Most resources are venture-isolated.
+- **Contention detected**: System auto-schedules based on venture priority ranking. Higher-priority ventures get resources first; lower-priority ventures queue.
+- **DFE escalation**: Fires only if contention would materially delay a high-priority venture. Chairman can adjust priorities or allocate additional resources.
+- **No manual scheduling**: The system handles all resource orchestration autonomously.
+
+### Chairman Dashboard & Notifications
+
+The Chairman interacts with the portfolio through a **unified dashboard with smart notifications**:
+
+**Dashboard Views:**
+- **Decision Queue**: Pending decisions ranked by venture priority. Shows decision type, venture name, urgency, and recommended action.
+- **Health Heatmap**: All ventures at a glance, color-coded by health score across 5 dimensions.
+- **Event Feed**: Significant events (kills, launches, DFE escalations, Reality Gate outcomes).
+- **Portfolio Metrics**: Aggregate kill rate, success rate, average cycle time, total revenue.
+
+**Notification Strategy:**
+| Event Type | Notification | Timing |
+|-----------|:------------:|--------|
+| Blocking decision needed (Stages 10, 22, 25) | Immediate | As soon as venture reaches gate |
+| DFE escalation | Immediate | When trigger fires |
+| Reality Gate failure / auto-kill | Daily digest | Batched (informational, not blocking) |
+| Advisory checkpoints (Stages 3, 5, 16, 23) | Daily digest | Batched (non-blocking) |
+| Routine stage completions | Weekly summary | Aggregated across all ventures |
+
+The Chairman controls notification preferences per venture and globally. The default is to minimize interruptions while ensuring blocking decisions are never delayed.
+
+---
+
 ## Appendix A: Stage 0 (Pre-Lifecycle)
 
 Stage 0 is the ideation synthesis that feeds into Stage 1. It is not formally part of the 25-stage lifecycle but is the entry point. Stage 0 consumes:
@@ -727,7 +797,7 @@ Complete enumeration of all multi-value decisions and categorization fields:
 ---
 
 *Document revised as Step 1 of the 8-step vision & architecture plan.*
-*Version 4.4 revision: 25 Chairman clarification decisions applied. Decisions 1-18: kill gates, release, brand, ops cadence, roadmap, pivot model, retroactive kill authority, conditional resolution, expand scope, idea pipeline, concurrency, brand blocking, sprint cadence, decision queuing, ground truth grounding, Reality Gate failure recovery, post-launch operations. Decisions 19-25: AI-only operation, unlimited compute, billing automation, legal/compliance templates, data/analytics pipeline, infrastructure scaling, venture shutdown sequence.*
+*Version 4.5 revision: 30 Chairman clarification decisions applied. Decisions 1-18: kill gates, release, brand, ops cadence, roadmap, pivot model, retroactive kill authority, conditional resolution, expand scope, idea pipeline, concurrency, brand blocking, sprint cadence, decision queuing, ground truth grounding, Reality Gate failure recovery, post-launch operations. Decisions 19-25: AI-only operation, unlimited compute, billing automation, legal/compliance templates, data/analytics pipeline, infrastructure scaling, venture shutdown sequence. Decisions 26-30: cross-venture knowledge transfer, portfolio prioritization, resource contention management, venture templates, Chairman dashboard and notifications.*
 *Primary evidence base: 25-stage CLI vs GUI gap analysis (PR #1117, 5,335 lines)*
 *CLI implementation review: stages_v2.yaml, Decision Filter Engine, Reality Gates, SD Bridge*
 *Brainstorming decisions: 2026-02-11 session (12 points captured in `docs/plans/vision-architecture-next-steps.md`)*
