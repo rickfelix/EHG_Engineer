@@ -4,7 +4,7 @@
 > **Created**: 2026-02-12
 > **Status**: Draft (Revised + 34 Chairman Clarifications)
 > **Supersedes**: `kb/ehg-review/00_unified_vision_2025.md`, `kb/ehg-review/01_vision_ehg_eva.md`, `docs/guides/workflow/25-stage-venture-lifecycle-overview.md`
-> **Companion**: Architecture Document (Step 2, forthcoming)
+> **Companion**: [Architecture Document](eva-platform-architecture.md) (Step 2, complete)
 > **Inputs**: Gemini vision diagrams, 25-stage CLI vs GUI gap analysis (PR #1117), CLI implementation review (`stages_v2.yaml`, Decision Filter Engine, Reality Gates, SD Bridge), brainstorming decisions (2026-02-11)
 
 ---
@@ -611,8 +611,8 @@ After launch (Stage 23), ventures enter the recurring ops loop (24-25). Between 
 | **Infrastructure monitoring** | Existing inbox/feedback system surfaces issues. LEO generates SDs for remediation. | Fully automated |
 | **Infrastructure scaling** | Auto-scale within pre-configured bounds. DFE `cost_threshold` trigger fires for significant cost jumps (e.g., 10x increase). Below threshold, fully autonomous. | Fully automated (DFE gate) |
 | **Feature enhancements** | Stage 24 declining metrics → LEO enhancement SDs. Stage 25 "expand" → new scope SDs. | Fully automated |
-| **Billing & payments** | Stripe (or equivalent) configured at Stage 20 Launch Prep. Subscriptions, invoicing, tax compliance, and dunning automated. Chairman involved only for pricing model changes (routed via DFE `strategic_pivot`). | Fully automated |
-| **Legal & compliance** | Pre-built template library (ToS, privacy policy, GDPR/CCPA, cookie banners) auto-configured per venture at Stage 20. Novel situations (new jurisdictions, regulated industries) escalate to Chairman via DFE. | Automated + DFE |
+| **Billing & payments** | Stripe (or equivalent) configured at Stage 23 (Launch Execution). Subscriptions, invoicing, tax compliance, and dunning automated. Chairman involved only for pricing model changes (routed via DFE `strategic_pivot`). | Fully automated |
+| **Legal & compliance** | Pre-built template library (ToS, privacy policy, GDPR/CCPA, cookie banners) auto-configured per venture at Stage 23 (Launch Execution). Novel situations (new jurisdictions, regulated industries) escalate to Chairman via DFE. | Automated + DFE |
 | **Data & analytics** | Auto-collect AARRR metrics, auto-analyze trends, auto-generate insights. DFE escalates anomalies (retention cliff, revenue decline). EVA auto-adjusts (A/B tests, funnel optimization) without approval. | Fully automated (DFE alerts) |
 
 ### Needs Deep Research (Step 6)
@@ -762,7 +762,7 @@ Four cross-cutting mechanisms are integrated into the lifecycle:
 | Nugget | Purpose | Stages |
 |--------|---------|--------|
 | **Assumptions vs Reality** | Track early assumptions, compare to actual outcomes | 2, 3, 5, 23, 24, 25 |
-| **Token Budget Profiles** | Treat compute as capital with explicit budgets | 5 (profile selection) |
+| **Token Budget Profiles** | Track compute usage for awareness and anomaly detection (not as a constraint — see Unlimited Compute in Section 2) | 5 (profile selection) |
 | **Four Buckets** | Classify outputs as Fact / Assumption / Simulation / Unknown | 3, 5, 16 (epistemic gates) |
 | **Crew Tournament** | Multi-agent competition for brand messaging | 11 (pilot) |
 

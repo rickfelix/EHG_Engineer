@@ -699,7 +699,7 @@ Every state change is logged:
 | **Return Path (LEO → Stages)** | SD completion → stage progress sync | P0 |
 | **Chairman Dashboard** | Decision queue + health heatmap + event feed | P1 |
 | **Chairman Notification Service** | Push + digest notification batching | P1 |
-| **Shared Services Abstraction** | Common service interface (load context, execute, emit) | P1 |
+| **Shared Services Abstraction** | Common service interface (load context, execute, emit) | P3 |
 | **Portfolio Knowledge Base** | Cross-venture learning extraction and application | P2 |
 | **Venture Template System** | Auto-generate and apply templates | P2 |
 | **Inter-Venture Dependency Manager** | Dependency graph with auto-blocking | P2 |
