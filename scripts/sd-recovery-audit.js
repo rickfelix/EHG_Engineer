@@ -286,7 +286,7 @@ function analyzeQualityGates(sd, result) {
   });
 
   // Gate 2: PRD exists before PLAN-TO-EXEC
-  const planToExecExists = handoffTypes.includes('PLAN-TO-EXEC');
+  const _planToExecExists = handoffTypes.includes('PLAN-TO-EXEC');
   gates.push({
     name: 'GATE_PRD_EXISTS',
     description: 'PRD created before PLAN-TO-EXEC',
@@ -664,7 +664,7 @@ function displayLimboAnalysis(analysis) {
   console.log('');
 }
 
-function displayRemediationOptions(analysis, auditResult) {
+function displayRemediationOptions(analysis, _auditResult) {
   console.log(`${c.bold}${c.white}REMEDIATION OPTIONS${c.reset}`);
   console.log(`${c.dim}${'─'.repeat(50)}${c.reset}`);
 
@@ -713,7 +713,7 @@ async function executeRemediation(supabase, sd, analysis, auditResult, forceMode
   }
 }
 
-async function executeFullRecovery(supabase, sd, auditResult, forceMode) {
+async function executeFullRecovery(supabase, sd, auditResult, _forceMode) {
   const handoffs = auditResult.handoffs;
 
   // Determine recovery point
@@ -755,7 +755,7 @@ async function executeFullRecovery(supabase, sd, auditResult, forceMode) {
   console.log('    2. Follow normal LEO Protocol workflow');
 }
 
-async function executeBackfill(supabase, sd, auditResult, forceMode) {
+async function executeBackfill(supabase, sd, auditResult, _forceMode) {
   const existingHandoffs = auditResult.handoffs.map(h => h.transition_type);
   const expectedSequence = auditResult.expectedSequence;
 
@@ -813,7 +813,7 @@ async function executeBackfill(supabase, sd, auditResult, forceMode) {
   console.log(`${PASS} Backfill complete and logged`);
 }
 
-async function executeMinorRemediation(supabase, sd, auditResult, forceMode) {
+async function executeMinorRemediation(supabase, sd, auditResult, _forceMode) {
   const failedGates = auditResult.qualityGates.filter(g => g.required && !g.passed);
 
   console.log(`${INFO} Addressing ${failedGates.length} failed gate(s)...`);

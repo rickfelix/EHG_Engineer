@@ -164,7 +164,7 @@ export class EvidenceSystem {
       }
 
       return [...cached, ...(data || [])];
-    } catch (err) {
+    } catch (_err) {
       return cached;
     }
   }

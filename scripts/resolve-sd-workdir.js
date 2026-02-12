@@ -152,7 +152,7 @@ function createWorktree(sdKey, repoRoot) {
   }
 
   // Look for an existing feature branch
-  const branchPrefix = `feat/${sdKey}`;
+  const _branchPrefix = `feat/${sdKey}`;
   let branch = null;
 
   try {

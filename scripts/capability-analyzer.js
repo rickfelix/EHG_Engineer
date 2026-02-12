@@ -17,10 +17,10 @@ import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import {
-  CAPABILITY_TYPES,
+  _CAPABILITY_TYPES,
   CAPABILITY_CATEGORIES,
   calculatePlane1Score,
-  isValidCapabilityType,
+  _isValidCapabilityType,
   getCapabilityType,
 } from '../lib/capabilities/capability-taxonomy.js';
 
@@ -175,11 +175,11 @@ async function scanCodebase(rootPath = EHG_ROOT) {
                 }
               }
             }
-          } catch (e) {
+          } catch (_e) {
             // Skip unreadable files
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Pattern didn't match anything
       }
     }
@@ -250,7 +250,7 @@ async function analyzeDependencies(capabilities) {
         if (deps.length > 0) {
           dependencyMap.set(cap.capability_key, deps);
         }
-      } catch (e) {
+      } catch (_e) {
         // Skip files that can't be read
       }
     }
@@ -437,7 +437,7 @@ function generateReport(capabilities) {
 async function syncToDatabase(client, capabilities) {
   console.log('\n💾 Syncing capabilities to database...');
 
-  let inserted = 0;
+  let _inserted = 0;
   let updated = 0;
 
   for (const cap of capabilities) {
@@ -473,7 +473,7 @@ async function syncToDatabase(client, capabilities) {
         // These will be properly registered when an SD delivers them
         console.log(`   Detected but not registered: ${cap.capability_key} (${cap.capability_type})`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Skip errors
     }
   }

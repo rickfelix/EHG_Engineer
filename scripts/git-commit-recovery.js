@@ -38,7 +38,7 @@ function exec(cmd) {
   }
 }
 
-function getAllBranchTips() {
+function _getAllBranchTips() {
   const output = exec('git for-each-ref --format="%(objectname)" refs/heads/ refs/remotes/');
   return new Set(output.split('\n').filter(Boolean));
 }

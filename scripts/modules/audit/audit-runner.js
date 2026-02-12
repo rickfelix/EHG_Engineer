@@ -133,7 +133,7 @@ const DETECTION_RULES = {
     id: 'MISSING_PRD',
     name: 'Missing Product Requirements Document',
     severity: 'high',
-    evaluate: async (sd, _config, context) => {
+    evaluate: async (sd, _config, _context) => {
       // Infrastructure and documentation SDs don't require PRD
       const prdExempt = ['infrastructure', 'documentation'];
       if (prdExempt.includes(sd.sd_type)) return { triggered: false };
@@ -163,7 +163,7 @@ const DETECTION_RULES = {
     id: 'MISSING_RETROSPECTIVE',
     name: 'Missing Retrospective',
     severity: 'medium',
-    evaluate: async (sd, _config, context) => {
+    evaluate: async (sd, _config, _context) => {
       if (sd.status !== 'completed') return { triggered: false };
 
       const { data: retro } = await supabase
@@ -245,7 +245,7 @@ const DETECTION_RULES = {
     id: 'INCOMPLETE_HANDOFF_CHAIN',
     name: 'Incomplete Handoff Chain',
     severity: 'medium',
-    evaluate: async (sd, _config, context) => {
+    evaluate: async (sd, _config, _context) => {
       if (sd.status === 'draft' || sd.status === 'cancelled') return { triggered: false };
 
       const { data: handoffs } = await supabase
@@ -311,7 +311,7 @@ async function detectArtifact(sd, checklist) {
 /**
  * Generate Checklist Findings
  */
-async function evaluateChecklists(sd, checklists, runId) {
+async function evaluateChecklists(sd, checklists, _runId) {
   const findings = [];
 
   for (const checklist of checklists) {

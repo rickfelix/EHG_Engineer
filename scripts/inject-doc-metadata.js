@@ -135,7 +135,7 @@ function getLastModified(filePath) {
   try {
     const stat = fs.statSync(filePath);
     return stat.mtime.toISOString().split('T')[0];
-  } catch (e) {
+  } catch (_e) {
     return new Date().toISOString().split('T')[0];
   }
 }

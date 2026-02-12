@@ -64,7 +64,7 @@ const SUB_CATEGORIZATION_THRESHOLD = 50;
 function getCommitSha() {
   try {
     return execSync('git rev-parse HEAD', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
-  } catch (e) {
+  } catch (_e) {
     return 'unknown';
   }
 }
@@ -88,7 +88,7 @@ function countMdFiles(dir, results = []) {
         });
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
   return results;
 }
 
@@ -113,13 +113,13 @@ function runValidationScript(scriptName) {
           try {
             const candidate = jsonStr.substring(0, lastBrace + 1);
             return JSON.parse(candidate);
-          } catch (e) {
+          } catch (_e) {
             lastBrace = jsonStr.lastIndexOf('}', lastBrace - 1);
           }
         }
         // Try parsing the whole thing
         return JSON.parse(jsonStr);
-      } catch (e) {
+      } catch (_e) {
         return null;
       }
     }
@@ -136,12 +136,12 @@ function runValidationScript(scriptName) {
           try {
             const candidate = jsonStr.substring(0, lastBrace + 1);
             return JSON.parse(candidate);
-          } catch (e) {
+          } catch (_e) {
             lastBrace = jsonStr.lastIndexOf('}', lastBrace - 1);
           }
         }
         return JSON.parse(jsonStr);
-      } catch (e) {
+      } catch (_e) {
         return null;
       }
     }
@@ -219,7 +219,7 @@ function calculateFreshnessScore() {
       } else {
         stale++;
       }
-    } catch (e) {
+    } catch (_e) {
       stale++;
     }
   }
@@ -296,12 +296,12 @@ function calculateSubCategorizationScore() {
       const items = fs.readdirSync(dir, { withFileTypes: true });
       for (const item of items) {
         if (item.name === 'node_modules' || item.name === '.git') continue;
-        const fullPath = path.join(dir, item.name);
+        const _fullPath = path.join(dir, item.name);
         if (item.isFile() && item.name.endsWith('.md')) {
           count++;
         }
       }
-    } catch (e) { /* skip */ }
+    } catch (_e) { /* skip */ }
     return count;
   }
 
@@ -310,7 +310,7 @@ function calculateSubCategorizationScore() {
     try {
       const items = fs.readdirSync(dir, { withFileTypes: true });
       return items.some(item => item.isDirectory() && !item.name.startsWith('.'));
-    } catch (e) {
+    } catch (_e) {
       return false;
     }
   }

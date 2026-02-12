@@ -250,7 +250,7 @@ async function updateGrade4Feedback() {
     console.log(`   Title: ${updates.title}`);
 
     try {
-      const { data, error } = await supabase
+      const { _data, error } = await supabase
         .from('strategic_directives_v2')
         .update({
           title: updates.title,

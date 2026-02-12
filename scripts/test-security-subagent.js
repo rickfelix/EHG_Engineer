@@ -7,6 +7,7 @@
 import SecuritySubAgent from '../lib/agents/security-sub-agent';
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 async function testSecurity() {
   const agent = new SecuritySubAgent();
@@ -107,7 +108,6 @@ async function testSecurity() {
     console.log('7. Checking dependencies...');
     const packagePath = path.join(basePath, 'package.json');
     if (fs.existsSync(packagePath)) {
-      import { execSync } from 'child_process';
       try {
         const auditOutput = execSync('npm audit --json', { 
           cwd: basePath,

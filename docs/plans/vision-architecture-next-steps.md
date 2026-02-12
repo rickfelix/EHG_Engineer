@@ -2,7 +2,7 @@
 
 > **Created**: 2026-02-11
 > **Context**: Brainstorming session following completion of the 25-stage CLI vs GUI gap analysis (PR #1117)
-> **Status**: Steps 1-4 complete, Step 6 partially complete (OpenClaw research done, marketing make-vs-buy pending), Step 7 analysis complete (implementation pending), Step 8 functional spec complete (visual/UX pending), Step 5 not started
+> **Status**: Steps 1-4 complete, Step 5 skipped, Step 6 partially complete (OpenClaw research done, marketing make-vs-buy pending), Step 7 analysis complete (implementation pending), Step 8 functional spec complete (visual/UX pending)
 
 ---
 
@@ -14,7 +14,7 @@
 | **2** | **Define architecture** | Architecture doc: shared services model, EVA orchestration, layered scheduling, recurring ops loop | **COMPLETE** (v1.5, 16 sections, PRs #1128-#1132) |
 | **3** | **Evaluate stages against vision + architecture** | Per-stage alignment analysis. Also identifies which stages need deep research (point #10) | **COMPLETE** (25-stage triangulation, 5,335 lines, PR #1117. Findings in architecture v1.4 Section 8) |
 | **4** | **Distill corrective measures + enhancements per phase** | Priority list per phase from audit material | **COMPLETE** (embedded in architecture v1.4 Section 8 target schemas + v1.5 Section 13 Phase A-E sequence) |
-| **5** | **Data mining: Todoist + YouTube** | Process existing ideas from integrations, categorize into stages | Not started |
+| **5** | **Data mining: Todoist + YouTube** | Process existing ideas from integrations, categorize into stages | **SKIPPED** (Chairman decision: existing vision has sufficient clarity, data sources contain too much noise to justify effort) |
 | **6** | **Deep research on specific topics** | Triangulated research on make-vs-buy marketing (#9) and any other topics surfaced in Step 3 | **PARTIAL** (OpenClaw platform research done → 8 decisions in v4.7/v1.5. Marketing make-vs-buy still pending) |
 | **7** | **Triangulate enhanced stage designs** | Multi-AI triangulation on updated stages (same method as gap analysis) | **ANALYSIS COMPLETE** (75 response files, consensus in architecture v1.4 Section 8. Stage template implementation is Phase A item #3) |
 | **8** | **Dashboard redesign spec** | Add portfolio health + decisions queue + activity feed to existing lightweight dashboard | **FUNCTIONAL SPEC COMPLETE** (vision v4.7 + architecture v1.5 Phase C. Visual/UX wireframes pending) |

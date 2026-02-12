@@ -184,7 +184,7 @@ function findMdFiles(dir, results = []) {
         results.push(fullPath);
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
   return results;
 }
 
@@ -205,7 +205,7 @@ function parseMetadata(content) {
   return metadata;
 }
 
-function fixMetadataInContent(content, filePath, dryRun) {
+function fixMetadataInContent(content, filePath, _dryRun) {
   const changes = [];
 
   // Fix Category
@@ -333,7 +333,7 @@ function main() {
 
   console.log('');
   console.log('─'.repeat(50));
-  console.log(`📊 Summary:`);
+  console.log('📊 Summary:');
   console.log(`   Files checked: ${files.length}`);
   console.log(`   Files with fixes: ${totalFixed}`);
   console.log(`   Total changes: ${totalChanges}`);

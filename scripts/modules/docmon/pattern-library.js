@@ -188,7 +188,7 @@ export function fuzzySimilarity(str1, str2) {
 /**
  * Check if a match is a false positive based on pattern library
  */
-export function isFalsePositive(file1, file2, matchType) {
+export function isFalsePositive(file1, file2, _matchType) {
   // If files have same normalized name after removing patterns, check if difference
   // is ONLY in the patterns we remove
   const name1 = file1.name || file1;

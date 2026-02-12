@@ -136,7 +136,7 @@ function countFilesInDir(dir) {
         count += countFilesInDir(path.join(dir, item.name));
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
   return count;
 }
 
@@ -268,7 +268,7 @@ function removeEmptyDirs(dir) {
     if (remaining.length === 0) {
       fs.rmdirSync(dir);
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
 }
 
 function executePlan(plan, dryRun) {

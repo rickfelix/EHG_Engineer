@@ -22,7 +22,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import glob from 'glob';
-import { parseTestFile, parseTestFiles, generateSummary } from './lib/test-parser.js';
+import { _parseTestFile, parseTestFiles, generateSummary } from './lib/test-parser.js';
 import { registerAllTests, getRegistrationStats } from './lib/test-registrar.js';
 
 const __filename = fileURLToPath(import.meta.url);

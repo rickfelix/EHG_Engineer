@@ -13,8 +13,8 @@ import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { KickbackManager, KICKBACK_STATUS } from '../lib/tasks/kickback-manager.js';
 import { CorrectionManager, TASK_STATUS, CORRECTION_TYPE } from '../lib/tasks/correction-manager.js';
-import { WallManager, WALL_STATUS } from '../lib/tasks/wall-manager.js';
-import { selectTrack, TRACK_CONFIG } from '../lib/tasks/track-selector.js';
+import { WallManager, _WALL_STATUS } from '../lib/tasks/wall-manager.js';
+import { _selectTrack, TRACK_CONFIG } from '../lib/tasks/track-selector.js';
 
 dotenv.config();
 

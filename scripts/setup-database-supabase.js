@@ -5,7 +5,7 @@
  * This script provides the SQL and instructions for setting up the database
  */
 
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 import { exec  } from 'child_process';
 import dotenv from 'dotenv';

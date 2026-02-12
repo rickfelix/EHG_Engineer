@@ -13,7 +13,7 @@
  *   node scripts/validate-session-state.js --json   # JSON output
  */
 
-import { validateState, initializeFromDb, updateExecutionContext } from './modules/handoff/auto-proceed-state.js';
+import { validateState, _initializeFromDb, updateExecutionContext } from './modules/handoff/auto-proceed-state.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';

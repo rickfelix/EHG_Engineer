@@ -160,7 +160,7 @@ function checkStructuralSignals(sd) {
  * @param {Array} userStories - User stories (NOT used as primary signal)
  * @returns {Object} - Decomposition assessment
  */
-function assessDecompositionNeed(sd, userStories) {
+function assessDecompositionNeed(sd, _userStories) {
   const assessment = {
     // Mandatory: Children are explicitly defined and MUST be created
     mustDecompose: false,

@@ -7,7 +7,7 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function checkSession() {
-  const { data, error } = await supabase
+  const { data, _error } = await supabase
     .from('claude_sessions')
     .select('metadata')
     .eq('status', 'active')

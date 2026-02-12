@@ -5,8 +5,8 @@
  * Per LEO Protocol v3.1.5
  */
 
-import { createClient  } from '@supabase/supabase-js';
-import fs from 'fs';.promises;
+import { _createClient  } from '@supabase/supabase-js';
+import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();

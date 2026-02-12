@@ -208,7 +208,7 @@ function mapErrorToType(error) {
  * @returns {string} Human-readable recovery guidance
  */
 function generateRecoveryGuidance(error) {
-  const status = error.status || error.statusCode || error.response?.status;
+  const _status = error.status || error.statusCode || error.response?.status;
   const errorType = mapErrorToType(error);
 
   const guidance = {

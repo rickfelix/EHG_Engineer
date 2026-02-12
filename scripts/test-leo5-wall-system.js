@@ -122,8 +122,8 @@ console.log('\n📋 Test 4: WallEnforcement Parsing\n');
 
 if (wallEnforcement) {
   // Test handoff type parsing via private method (access for testing)
-  const parseResult1 = { fromPhase: 'PLAN', toPhase: 'EXEC' };
-  const parseResult2 = { fromPhase: 'LEAD', toPhase: 'PLAN' };
+  const _parseResult1 = { fromPhase: 'PLAN', toPhase: 'EXEC' };
+  const _parseResult2 = { fromPhase: 'LEAD', toPhase: 'PLAN' };
 
   test(
     'PLAN-TO-EXEC parses correctly',

@@ -253,7 +253,7 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
   const requiredFile = requirements[handoffType];
 
   console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
-  console.log(`   Mode Override: Set CLAUDE_PROTOCOL_MODE=full to use FULL files`);
+  console.log('   Mode Override: Set CLAUDE_PROTOCOL_MODE=full to use FULL files');
 
   if (!requiredFile) {
     // No requirement for this handoff type
@@ -278,7 +278,6 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Check for partial reads
     const partialReadDetails = getPartialReadDetails(requiredFile);
     const warnings = [];
-    let score = 100;
 
     if (partialReadDetails) {
       console.log(`   ⚠️  PARTIAL READ DETECTED for ${requiredFile}`);

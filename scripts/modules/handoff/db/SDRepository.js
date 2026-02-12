@@ -11,7 +11,7 @@
  * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id references (column dropped 2026-01-24)
  */
 
-import { normalizeSDId, normalizeSDIdWithDetails } from '../../sd-id-normalizer.js';
+import { normalizeSDIdWithDetails } from '../../sd-id-normalizer.js';
 
 export class SDRepository {
   constructor(supabase) {

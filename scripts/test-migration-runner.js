@@ -42,8 +42,8 @@ function updateImportsInFile(filePath, oldPath, newPath) {
   const originalContent = content;
 
   // Calculate relative path changes
-  const oldDir = path.dirname(oldPath);
-  const newDir = path.dirname(newPath);
+  const _oldDir = path.dirname(oldPath);
+  const _newDir = path.dirname(newPath);
 
   // Common import patterns to update
   const importPatterns = [

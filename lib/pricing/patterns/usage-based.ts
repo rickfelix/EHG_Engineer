@@ -92,10 +92,12 @@ export class UsageBasedPricing {
   /**
    * Report usage to Stripe
    */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   async reportUsage(
     _subscriptionItemId: string,
     _report: UsageReport
   ): Promise<{ success: boolean; usageRecordId?: string }> {
+    /* eslint-enable @typescript-eslint/no-unused-vars */
     // In production, this would call:
     // stripe.subscriptionItems.createUsageRecord(subscriptionItemId, {...})
 

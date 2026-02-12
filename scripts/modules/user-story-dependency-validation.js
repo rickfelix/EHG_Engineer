@@ -128,7 +128,7 @@ export function detectCircularDependencies(graph) {
   const cycles = [];
   const visited = new Set();
   const recursionStack = new Set();
-  const pathStack = [];
+  const _pathStack = [];
 
   function dfs(nodeId, path) {
     visited.add(nodeId);
@@ -182,7 +182,7 @@ export function getTopologicalOrder(graph) {
   }
 
   // Calculate in-degrees
-  for (const [nodeId, deps] of edges) {
+  for (const [_nodeId, deps] of edges) {
     for (const dep of deps) {
       if (inDegree.has(dep)) {
         // This node depends on dep, so dep must come first
@@ -238,7 +238,7 @@ export function getTopologicalOrder(graph) {
  * @param {Object} options - Validation options
  * @returns {Object} Validation result
  */
-export function validateStoryDependencies(stories, options = {}) {
+export function validateStoryDependencies(stories, _options = {}) {
   const result = {
     valid: true,
     passed: true,
@@ -264,7 +264,7 @@ export function validateStoryDependencies(stories, options = {}) {
   const graph = buildDependencyGraph(stories);
 
   // Count stories with dependencies
-  for (const [storyId, deps] of graph.edges) {
+  for (const [_storyId, deps] of graph.edges) {
     if (deps.size > 0) {
       result.details.stories_with_dependencies++;
       result.details.total_dependencies += deps.size;

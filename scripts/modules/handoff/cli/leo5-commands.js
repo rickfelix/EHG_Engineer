@@ -15,12 +15,11 @@
 
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { WallManager, WALL_STATUS } from '../../../../lib/tasks/wall-manager.js';
+import { WallManager } from '../../../../lib/tasks/wall-manager.js';
 import { WallEnforcement } from '../../../../lib/tasks/wall-enforcement.js';
 import { KickbackManager, KICKBACK_STATUS } from '../../../../lib/tasks/kickback-manager.js';
-import { CorrectionManager, TASK_STATUS, CORRECTION_TYPE } from '../../../../lib/tasks/correction-manager.js';
-import { SubAgentOrchestrator, SUBAGENT_STATUS } from '../../../../lib/tasks/subagent-orchestrator.js';
-import { selectTrack } from '../../../../lib/tasks/track-selector.js';
+import { CorrectionManager, CORRECTION_TYPE } from '../../../../lib/tasks/correction-manager.js';
+import { SubAgentOrchestrator } from '../../../../lib/tasks/subagent-orchestrator.js';
 
 dotenv.config();
 
@@ -29,7 +28,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Initialize managers
-const wallManager = new WallManager(supabase);
+const _wallManager = new WallManager(supabase);
 const wallEnforcement = new WallEnforcement(supabase);
 const kickbackManager = new KickbackManager(supabase);
 const correctionManager = new CorrectionManager(supabase);

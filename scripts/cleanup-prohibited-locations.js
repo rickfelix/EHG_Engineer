@@ -47,8 +47,8 @@ const SPECIAL_MAPPINGS = {
 
 // File placement rubric
 function classifyFile(relativePath, content) {
-  const lowerPath = relativePath.toLowerCase();
-  const lowerContent = content.toLowerCase().substring(0, 1000);
+  const _lowerPath = relativePath.toLowerCase();
+  const _lowerContent = content.toLowerCase().substring(0, 1000);
 
   // Check special mappings first
   for (const [prefix, target] of Object.entries(SPECIAL_MAPPINGS)) {
@@ -149,7 +149,7 @@ function findMdFilesRecursive(dir, relativeTo) {
         });
       }
     }
-  } catch (error) {
+  } catch (_error) {
     // Skip directories we can't read
   }
 
@@ -235,7 +235,7 @@ function cleanEmptyDirsRecursive(dir) {
     if (remaining.length === 0) {
       fs.rmdirSync(dir);
     }
-  } catch (error) {
+  } catch (_error) {
     // Skip errors
   }
 }

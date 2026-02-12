@@ -17,7 +17,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import readline from 'readline';
+import _readline from 'readline';
 
 import {
   buildGraph,
@@ -30,9 +30,9 @@ import {
 import {
   calculatePriorityScore,
   calculateOKRImpact,
-  rankSDs,
+  _rankSDs,
   assignTrack,
-  printScoreSummary,
+  _printScoreSummary,
 } from './lib/priority-scorer.js';
 
 dotenv.config();
@@ -300,7 +300,7 @@ class IntelligentBaselineGenerator {
                           content.match(/```\s*([\s\S]*?)\s*```/) ||
                           [null, content];
         result = JSON.parse(jsonMatch[1] || content);
-      } catch (parseError) {
+      } catch (_parseError) {
         console.log(`${colors.yellow}Warning: Could not parse GPT response as JSON${colors.reset}`);
         console.log(`${colors.dim}${content.substring(0, 500)}...${colors.reset}`);
 

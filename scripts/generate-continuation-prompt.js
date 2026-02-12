@@ -21,7 +21,7 @@ import {
   generateContinuationPrompt,
   writeContinuationPrompt,
   generateMinimalPrompt,
-  getPromptFilePath
+  _getPromptFilePath
 } from './modules/handoff/continuation-prompt-generator.js';
 
 import {

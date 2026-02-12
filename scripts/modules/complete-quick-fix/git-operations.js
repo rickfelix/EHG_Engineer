@@ -162,7 +162,7 @@ export function analyzeGitDiff(testDir, qfDescription = '') {
 export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, filesChanged, prUrl, testsPass, prompt) {
   console.log('\n🔄 Git Commit & Push\n');
 
-  let { commitSha, branchName } = gitInfo;
+  let { commitSha } = gitInfo;
 
   try {
     const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();

@@ -41,7 +41,7 @@ const DEFAULT_THRESHOLD = 95;
 function getCommitSha() {
   try {
     return execSync('git rev-parse HEAD', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
-  } catch (e) {
+  } catch (_e) {
     return 'unknown';
   }
 }
@@ -83,7 +83,7 @@ function findMdFilesRecursive(dir, results) {
         });
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
 }
 
 function isExternalLink(href) {
@@ -116,7 +116,7 @@ function extractAnchors(content) {
   return anchors;
 }
 
-function validateLink(sourceFile, href, fileAnchors) {
+function validateLink(sourceFile, href, _fileAnchors) {
   // Skip external links
   if (isExternalLink(href)) {
     return { valid: true, type: 'external' };
@@ -412,7 +412,7 @@ function generateReport(results) {
 function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
-  const verbose = args.includes('--verbose');
+  const _verbose = args.includes('--verbose');
   const fix = args.includes('--fix');
   const apply = args.includes('--apply');
   const ciMode = args.includes('--ci');

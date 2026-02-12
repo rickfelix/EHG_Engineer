@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 
 const projectDir = process.env.CLAUDE_PROJECT_DIR || 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer';
 const stateFile = path.join(projectDir, '.claude', 'session-state.md');
-const hookInput = process.env.CLAUDE_TOOL_INPUT || '';
+const _hookInput = process.env.CLAUDE_TOOL_INPUT || '';
 
 // Only update state file periodically (not every single edit)
 // Check if state file was updated in last 5 minutes
@@ -26,20 +26,20 @@ try {
       process.exit(0);
     }
   }
-} catch (e) {
+} catch (_e) {
   // Continue with update
 }
 
 // Get current git status
-let gitStatus = '';
+let _gitStatus = '';
 let currentBranch = '';
-let recentCommits = '';
+let _recentCommits = '';
 
 try {
-  gitStatus = execSync('git status --porcelain', { cwd: projectDir, encoding: 'utf8' }).trim();
+  _gitStatus = execSync('git status --porcelain', { cwd: projectDir, encoding: 'utf8' }).trim();
   currentBranch = execSync('git branch --show-current', { cwd: projectDir, encoding: 'utf8' }).trim();
-  recentCommits = execSync('git log -3 --oneline', { cwd: projectDir, encoding: 'utf8' }).trim();
-} catch (e) {
+  _recentCommits = execSync('git log -3 --oneline', { cwd: projectDir, encoding: 'utf8' }).trim();
+} catch (_e) {
   // Ignore git errors
 }
 

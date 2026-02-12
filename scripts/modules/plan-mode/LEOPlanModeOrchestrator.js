@@ -11,7 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getPermissionsForPhase, getCombinedPermissions } from './phase-permissions.js';
 import { getPlanTemplate, getPlanFilename } from './plan-templates.js';
-import { loadSDContext, getRecommendedSubAgents, SD_TYPE_PROFILES } from './sd-context-loader.js';
+import { loadSDContext } from './sd-context-loader.js';
 import { generateIntelligentPlan, getPlanFilename as getIntelligentFilename } from './intelligent-plan-templates.js';
 
 const __filename = fileURLToPath(import.meta.url);

@@ -14,9 +14,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { HardHaltAdapter, getHardHaltAdapter } from '../lib/governance/aegis/adapters/HardHaltAdapter.js';
-import { ManifestoModeAdapter, getManifestoModeAdapter } from '../lib/governance/aegis/adapters/ManifestoModeAdapter.js';
-import { DoctrineAdapter, getDoctrineAdapter } from '../lib/governance/aegis/adapters/DoctrineAdapter.js';
+import { _HardHaltAdapter, getHardHaltAdapter } from '../lib/governance/aegis/adapters/HardHaltAdapter.js';
+import { _ManifestoModeAdapter, getManifestoModeAdapter } from '../lib/governance/aegis/adapters/ManifestoModeAdapter.js';
+import { _DoctrineAdapter, getDoctrineAdapter } from '../lib/governance/aegis/adapters/DoctrineAdapter.js';
 
 // Test results tracking
 const results = { passed: 0, failed: 0 };

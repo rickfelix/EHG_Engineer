@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 
 async function setupDatabase() {
@@ -23,14 +23,14 @@ async function setupDatabase() {
     
     // Read the schema file
     const schemaPath = path.join(process.cwd(), 'database', 'schema', '001_initial_schema.sql');
-    const schemaSQL = await fs.readFile(schemaPath, 'utf-8');
+    const _schemaSQL = await fs.readFile(schemaPath, 'utf-8');
     
     console.log('📄 Schema file loaded successfully');
     console.log('⚙️ Note: Database schema creation via API may be limited');
     console.log('📋 If this fails, please execute the SQL manually in Supabase dashboard\n');
     
     // Try to verify if tables already exist
-    const { data: existingTables, error: checkError } = await supabase
+    const { data: _existingTables, error: checkError } = await supabase
       .from('strategic_directives_v2')
       .select('id')
       .limit(1);

@@ -6,8 +6,11 @@
  */
 
 import fsModule from 'fs';
-const fs = fsModule.promises;
-import path from 'path';
+const _fs = fsModule.promises;
+import _path from 'path';
+import IntelligentBaseSubAgent from '../lib/agents/intelligent-base-sub-agent';
+import BaseSubAgent from '../lib/agents/base-sub-agent';
+import EXECCoordinationTool from '../lib/agents/exec-coordination-tool';
 
 async function testCoordinationWithImprovedAgents() {
   console.log(`
@@ -68,7 +71,6 @@ async function testCoordinationWithImprovedAgents() {
     console.log('\n🧠 Step 2: Testing Intelligent Base Functionality');
     console.log('─'.repeat(50));
     
-    import IntelligentBaseSubAgent from '../lib/agents/intelligent-base-sub-agent';
     const testAgent = new IntelligentBaseSubAgent('Test', '🧪');
     
     // Test codebase profiling
@@ -86,7 +88,6 @@ async function testCoordinationWithImprovedAgents() {
     console.log('\n📊 Step 3: Testing Standardized Output Format');
     console.log('─'.repeat(50));
     
-    import BaseSubAgent from '../lib/agents/base-sub-agent';
     const standardAgent = new BaseSubAgent('Standard', '📏');
     
     // Add test findings
@@ -129,7 +130,6 @@ async function testCoordinationWithImprovedAgents() {
     console.log('─'.repeat(50));
     
     // Check if coordination tool exists and has required methods
-    import EXECCoordinationTool from '../lib/agents/exec-coordination-tool';
     const coordinator = new EXECCoordinationTool();
     
     const requiredMethods = [
@@ -175,7 +175,7 @@ async function testCoordinationWithImprovedAgents() {
         
         // Check if extends proper base class
         if (instance.calculateScore && instance.deduplicateFindings) {
-          console.log(`   ✓ Has standardized methods`);
+          console.log('   ✓ Has standardized methods');
         }
         
       } catch (_error) {

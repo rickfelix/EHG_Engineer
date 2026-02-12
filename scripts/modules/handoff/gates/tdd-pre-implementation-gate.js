@@ -168,19 +168,19 @@ export async function validateTddPreImplementation(context) {
   // Build result
   if (!testFilesFound) {
     issues.push(
-      `No test files found in handoff deliverables. ` +
-      `Expected: test files matching *.test.{js,ts} or *.spec.{js,ts}. ` +
-      `Fix: Invoke TESTING sub-agent with "Mode: pre-implementation" before writing code, ` +
-      `then include test file paths in the handoff deliverables manifest.`
+      'No test files found in handoff deliverables. ' +
+      'Expected: test files matching *.test.{js,ts} or *.spec.{js,ts}. ' +
+      'Fix: Invoke TESTING sub-agent with "Mode: pre-implementation" before writing code, ' +
+      'then include test file paths in the handoff deliverables manifest.'
     );
   }
 
   if (!preImplRunFound) {
     issues.push(
-      `No pre-implementation test run reference found. ` +
-      `Expected: Evidence of tests failing before implementation (e.g., "3 failed, 0 passed"). ` +
-      `Fix: Run tests after generating skeletons but before writing production code, ` +
-      `and include the output in the handoff notes under "TDD Evidence".`
+      'No pre-implementation test run reference found. ' +
+      'Expected: Evidence of tests failing before implementation (e.g., "3 failed, 0 passed"). ' +
+      'Fix: Run tests after generating skeletons but before writing production code, ' +
+      'and include the output in the handoff notes under "TDD Evidence".'
     );
   }
 

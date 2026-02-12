@@ -15,14 +15,10 @@ import ResultBuilder from '../ResultBuilder.js';
 import { validatorRegistry } from './ValidatorRegistry.js';
 import { shouldSkipCodeValidation } from '../../../../lib/utils/sd-type-validation.js';
 import {
-  getValidatorRequirement,
-  isValidatorNonApplicable,
   createSkippedResult,
   isSkippedResult,
   ValidatorStatus,
-  RequirementLevel,
-  SkipReasonCode,
-  POLICY_VERSION
+  SkipReasonCode
 } from './sd-type-applicability-policy.js';
 
 // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Gate telemetry
@@ -32,7 +28,7 @@ import { startSpan, endSpan } from '../../../../lib/telemetry/workflow-timer.js'
 import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
 
 // SD-LEO-INFRA-HARDENING-001: Gate result schema validation
-import { validateGateResult, validateGateResultsBatch } from './gate-result-schema.js';
+import { validateGateResult } from './gate-result-schema.js';
 
 // SD-LEO-INFRA-OIV-001: Operational Integration Verification
 import { OIVGate, OIV_GATE_WEIGHT } from './oiv/index.js';

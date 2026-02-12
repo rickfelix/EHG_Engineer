@@ -71,7 +71,7 @@ function assertFalse(condition, message = '') {
   }
 }
 
-function assertThrows(fn, expectedType, message = '') {
+function _assertThrows(fn, expectedType, message = '') {
   try {
     fn();
     throw new Error(`${message} Expected error to be thrown`);

@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
+import fs from 'fs';
+import path from 'path';
+import yaml from 'js-yaml';
+import glob from 'glob';
+import { fileURLToPath } from 'url';
 
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 
 // Load stages data
@@ -39,7 +44,7 @@ stages.forEach(stage => {
   
   // Check for SOP
   const sopPattern = `../docs/workflow/sop/${padded}-*.md`;
-  import sopFiles from 'glob';.sync(path.join(__dirname, sopPattern));
+  const sopFiles = glob.sync(path.join(__dirname, sopPattern));
   if (sopFiles.length === 0) {
     missing.push(`SOP for stage ${stage.id}`);
   }
@@ -91,7 +96,7 @@ if (missing.length > 0) {
   console.log('\n✅ All required files present');
 }
 
-console.log(`\n=== Summary ===`);
+console.log('\n=== Summary ===');
 console.log(`Stages: ${stages.length}/40`);
 console.log(`Errors: ${errors.length}`);
 console.log(`Warnings: ${warnings.length}`);

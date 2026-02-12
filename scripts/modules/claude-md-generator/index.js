@@ -255,7 +255,7 @@ class CLAUDEMDGeneratorV3 {
       console.log(`DB Snapshot Hash: ${this.manifest.db_snapshot_hash}`);
       console.log(`Git Commit: ${this.manifest.git_commit}`);
       console.log(`Files Generated: ${Object.keys(this.manifest.files).length}`);
-      console.log(`Manifest: claude-generation-manifest.json`);
+      console.log('Manifest: claude-generation-manifest.json');
 
       return this.manifest;
 
@@ -301,7 +301,7 @@ class CLAUDEMDGeneratorV3 {
   writeManifest() {
     const manifestPath = path.join(this.baseDir, 'claude-generation-manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify(this.manifest, null, 2));
-    console.log(`\nManifest written: claude-generation-manifest.json`);
+    console.log('\nManifest written: claude-generation-manifest.json');
   }
 }
 

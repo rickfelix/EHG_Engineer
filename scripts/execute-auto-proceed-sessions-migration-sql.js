@@ -21,7 +21,7 @@ const __dirname = path.dirname(__filename);
 // Load environment
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-async function executeSql(sql) {
+async function _executeSql(sql) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -47,7 +47,7 @@ async function executeSql(sql) {
   return await response.json();
 }
 
-async function query(tableName, select = '*', filters = {}) {
+async function _query(tableName, select = '*', filters = {}) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -72,7 +72,7 @@ async function query(tableName, select = '*', filters = {}) {
   return await response.json();
 }
 
-async function rpc(functionName, params = {}) {
+async function _rpc(functionName, params = {}) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

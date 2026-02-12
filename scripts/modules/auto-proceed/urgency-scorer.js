@@ -78,7 +78,7 @@ export function bandToNumeric(band) {
 export function calculateUrgencyScore({
   sd,
   patterns = [],
-  retrospectives = [],
+  _retrospectives = [],
   learningUpdate = null
 }) {
   let score = 0.5; // Base score (medium priority)

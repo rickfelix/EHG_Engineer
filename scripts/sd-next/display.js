@@ -8,7 +8,7 @@ import { getPhaseAwareStatus, isActionableForLead } from './status-helpers.js';
 import { parseDependencies, checkDependenciesResolved } from './dependency-utils.js';
 import { supabase } from './data-loaders.js';
 import { getEstimatedDuration, formatEstimateShort } from '../lib/duration-estimator.js';
-import { checkDependencyStatus } from '../child-sd-preflight.js';
+import { _checkDependencyStatus } from '../child-sd-preflight.js';
 
 /**
  * Display active sessions
@@ -292,7 +292,7 @@ export function displaySDItemSimple(item, prefix, nextIndent, childItems, allIte
 /**
  * Display recommendations section
  */
-export async function displayRecommendations(baselineItems, actuals, conflicts = [], context = {}) {
+export async function displayRecommendations(baselineItems, actuals, conflicts = [], _context = {}) {
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
   console.log(`${colors.bold}${colors.green}RECOMMENDED ACTIONS:${colors.reset}\n`);
 

@@ -18,11 +18,11 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { processFeedbackEndToEnd, getPipelineTrace, getPipelineHealth } from '../lib/data-plane/pipeline.js';
-import { FeedbackToProposalWorker } from '../lib/data-plane/workers/feedback-to-proposal.js';
+import { _FeedbackToProposalWorker } from '../lib/data-plane/workers/feedback-to-proposal.js';
 import { EVENT_TYPES } from '../lib/data-plane/events.js';
 
 // Test configuration
-const TEST_TIMEOUT_MS = 60000; // 60 seconds
+const _TEST_TIMEOUT_MS = 60000; // 60 seconds
 const LATENCY_THRESHOLD_MS = 500;
 
 // Colors for console output
@@ -130,7 +130,7 @@ async function runSmokeTest() {
       return results;
     }
 
-    const { correlationId, proposalId, executionJobId } = pipelineResult;
+    const { correlationId, _proposalId, _executionJobId } = pipelineResult;
     results.latencies = pipelineResult.latencies;
 
     // =========================================================================

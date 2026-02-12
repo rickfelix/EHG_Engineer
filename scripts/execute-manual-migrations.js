@@ -108,7 +108,7 @@ async function executeMigration(filename) {
         .map(s => s.trim())
         .filter(s => s.length > 0 && !s.startsWith('--'));
 
-      let executed = 0;
+      let _executed = 0;
       for (const statement of statements) {
         if (statement.toLowerCase().startsWith('select')) {
           // Skip SELECT statements (they're usually for verification)
@@ -118,10 +118,10 @@ async function executeMigration(filename) {
 
         try {
           // Use Supabase's query method for DDL
-          const { error } = await supabase.from('_migrations_log').select('*').limit(0);
+          const { _error } = await supabase.from('_migrations_log').select('*').limit(0);
           // Note: This is a workaround - in practice, you'd need psql or Supabase CLI
 
-          executed++;
+          _executed++;
         } catch {
           // Continue anyway
         }

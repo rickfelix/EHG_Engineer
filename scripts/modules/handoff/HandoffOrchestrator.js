@@ -18,8 +18,7 @@ import { ContentBuilder } from './content/ContentBuilder.js';
 import ResultBuilder from './ResultBuilder.js';
 import {
   resolveAutoProceed,
-  createHandoffMetadata,
-  RESOLUTION_SOURCES
+  createHandoffMetadata
 } from './auto-proceed-resolver.js';
 
 export class HandoffOrchestrator {

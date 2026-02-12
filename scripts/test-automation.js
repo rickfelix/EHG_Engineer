@@ -26,7 +26,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync, spawn } from 'child_process';
+import { execSync, _spawn } from 'child_process';
 import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);

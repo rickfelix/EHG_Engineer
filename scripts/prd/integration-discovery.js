@@ -15,7 +15,7 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+// crypto import removed - unused
 
 /** Feature flag for enabling/disabling integration discovery */
 const INTEGRATION_DISCOVERY_ENABLED = process.env.GATE_INTEGRATION_CONTRACT_ENABLED !== 'false';
@@ -123,7 +123,7 @@ export function scanBarrelExports(repoRoot, scopePaths = ['lib', 'scripts']) {
           });
         }
       }
-    } catch (err) {
+    } catch (_err) {
       // Continue scanning other paths
     }
   }
@@ -324,7 +324,7 @@ export function scanConsumers(repoRoot, targetFiles = []) {
     try {
       // Search for imports of this file
       const baseName = path.basename(targetFile, path.extname(targetFile));
-      const dirName = path.dirname(targetFile);
+      const _dirName = path.dirname(targetFile);
 
       const output = execSync(
         `git grep -l -E "from\\s+['\"].*${baseName}['\"]" -- "lib" "scripts" "src" 2>/dev/null || echo ""`,

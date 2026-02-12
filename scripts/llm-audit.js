@@ -83,7 +83,7 @@ function runGrep(pattern) {
     const cmd = `grep -rn "${pattern}" --include="*.js" --include="*.mjs" --include="*.ts" --include="*.tsx" "${rootDir}" 2>/dev/null || true`;
     const output = execSync(cmd, { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 });
     return output.trim().split('\n').filter(line => line.trim());
-  } catch (error) {
+  } catch (_error) {
     return [];
   }
 }

@@ -8,7 +8,7 @@
  * @module dual-generation.test
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,12 +18,7 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '../../../..');
 
 // Import core-protocol-gate functions
-import coreProtocolGate, {
-  validateSdStartGate,
-  validatePostCompactionGate,
-  validateSessionStartGate,
-  getProtocolGateState
-} from './core-protocol-gate.js';
+import coreProtocolGate from './core-protocol-gate.js';
 
 // Import protocol-file-read-gate default export
 import protocolFileReadGate from './protocol-file-read-gate.js';
@@ -349,7 +344,7 @@ describe('Dual Generation - Manifest File', () => {
     const content = fs.readFileSync(manifestPath, 'utf8');
     const manifest = JSON.parse(content);
 
-    for (const [filename, fileInfo] of Object.entries(manifest.files)) {
+    for (const [_filename, fileInfo] of Object.entries(manifest.files)) {
       expect(fileInfo.content_hash).toBeDefined();
       expect(typeof fileInfo.content_hash).toBe('string');
       expect(fileInfo.content_hash.length).toBe(16);
@@ -360,7 +355,7 @@ describe('Dual Generation - Manifest File', () => {
     const content = fs.readFileSync(manifestPath, 'utf8');
     const manifest = JSON.parse(content);
 
-    for (const [filename, fileInfo] of Object.entries(manifest.files)) {
+    for (const [_filename, fileInfo] of Object.entries(manifest.files)) {
       expect(fileInfo.estimated_tokens).toBeDefined();
       expect(typeof fileInfo.estimated_tokens).toBe('number');
       expect(fileInfo.estimated_tokens).toBeGreaterThan(0);

@@ -22,7 +22,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const DOCS_DIR = path.join(ROOT_DIR, 'docs');
+const _DOCS_DIR = path.join(ROOT_DIR, 'docs');
 
 // Canonical files and what they should contain
 const CANONICAL_FILES = {
@@ -105,7 +105,7 @@ function findMdFilesRecursive(dir, results) {
         });
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
 }
 
 function classifyFile(file, content) {
@@ -169,7 +169,7 @@ function generateConsolidationPlan(files) {
 
 function main() {
   const dryRun = process.argv.includes('--dry-run');
-  const verbose = process.argv.includes('--verbose');
+  const _verbose = process.argv.includes('--verbose');
 
   console.log('🧪 Testing Documentation Consolidation');
   console.log('='.repeat(50));
@@ -216,7 +216,7 @@ function main() {
 
   // Target structure
   console.log('\n🎯 Target Canonical Files (6 total):');
-  for (const [canonical, config] of Object.entries(CANONICAL_FILES)) {
+  for (const [canonical, _config] of Object.entries(CANONICAL_FILES)) {
     const exists = fs.existsSync(path.join(ROOT_DIR, canonical));
     const status = exists ? '✓' : '○';
     console.log(`   ${status} ${canonical}`);

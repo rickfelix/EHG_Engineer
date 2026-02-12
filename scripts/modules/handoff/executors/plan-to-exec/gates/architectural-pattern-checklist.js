@@ -155,7 +155,7 @@ function extractPrdText(prd) {
 export function createArchitecturalPatternChecklistGate(prdRepo, sd, supabase) {
   return {
     name: 'GATE_ARCHITECTURAL_PATTERN_CHECKLIST',
-    validator: async (ctx) => {
+    validator: async (_ctx) => {
       console.log('\n📐 ARCHITECTURAL PATTERN CHECKLIST GATE');
       console.log('-'.repeat(50));
 
@@ -257,7 +257,7 @@ export function createArchitecturalPatternChecklistGate(prdRepo, sd, supabase) {
       if (result.missing.length > 0) {
         warnings.push(
           `Missing architectural pattern coverage: ${result.missing.join(', ')}. ` +
-          `Consider addressing these in the PRD before implementation.`
+          'Consider addressing these in the PRD before implementation.'
         );
       }
 

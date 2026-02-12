@@ -92,7 +92,7 @@ async function runMigration() {
       sql_text: 'SELECT 1'
     });
     rpcAvailable = !rpcError;
-  } catch (e) {
+  } catch (_e) {
     rpcAvailable = false;
   }
 

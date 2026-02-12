@@ -5,7 +5,7 @@
  * Reads configuration from .env.project-registration file
  */
 
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 import encryption from '../lib/security/encryption';
 import { fileURLToPath } from 'url';
@@ -73,8 +73,8 @@ class EnvProjectRegistration {
       const archivePath = path.join(__dirname, `../.env.project-${config.PROJECT_NAME}-${timestamp}`);
       await fs.rename(this.envPath, archivePath);
       console.log(`📁 Registration file archived to: .env.project-${config.PROJECT_NAME}-${timestamp}`);
-      console.log(`\n💡 To register another project, copy the template again:`);
-      console.log(`   cp .env.project-template .env.project-registration`);
+      console.log('\n💡 To register another project, copy the template again:');
+      console.log('   cp .env.project-template .env.project-registration');
 
     } catch (error) {
       console.error('❌ Registration failed:', error.message);

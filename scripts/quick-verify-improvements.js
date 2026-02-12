@@ -6,6 +6,7 @@
 
 import SecuritySubAgentV3 from '../lib/agents/security-sub-agent-v3';
 import PerformanceSubAgentV2 from '../lib/agents/performance-sub-agent-v2';
+import BaseSubAgent from '../lib/agents/base-sub-agent';
 
 async function quickVerify() {
   console.log('\n🚀 QUICK IMPROVEMENT VERIFICATION\n');
@@ -43,11 +44,10 @@ async function quickVerify() {
   console.log(`   Framework detected: ${secAgent.codebaseProfile.framework || 'None'}`);
   console.log(`   Database detected: ${secAgent.codebaseProfile.database || 'None'}`);
   console.log(`   Security libs: ${secAgent.codebaseProfile.securityLibraries.join(', ') || 'None'}`);
-  console.log(`   ✅ Intelligent profiling working\n`);
+  console.log('   ✅ Intelligent profiling working\n');
   
   // Test 3: Standardized output
   console.log('3️⃣ Standardized Output Test:');
-  import BaseSubAgent from '../lib/agents/base-sub-agent';
   const testAgent = new BaseSubAgent('Test', '🧪');
   
   testAgent.addFinding({
@@ -66,7 +66,7 @@ async function quickVerify() {
   
   console.log(`   Required fields present: ${hasRequiredFields ? '✅' : '❌'}`);
   console.log(`   Severity categories: ${Object.keys(output.findingsBySeverity).length}`);
-  console.log(`   ✅ Standardized format confirmed\n`);
+  console.log('   ✅ Standardized format confirmed\n');
   
   // Test 4: Deduplication
   console.log('4️⃣ Deduplication Test:');

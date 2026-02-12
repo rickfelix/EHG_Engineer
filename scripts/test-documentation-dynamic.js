@@ -7,6 +7,8 @@
 
 import path from 'path';
 import fs from 'fs';
+import DynamicDocumentationSubAgent from '../lib/agents/documentation-sub-agent-dynamic';
+import DocumentationSubAgent from '../lib/agents/documentation-sub-agent';
 
 // Parse command-line arguments
 const targetPath = process.argv[2] || process.cwd();
@@ -22,7 +24,6 @@ if (!fs.existsSync(targetPath)) {
 
 // Check if we can load the dynamic agent
 try {
-  import DynamicDocumentationSubAgent from '../lib/agents/documentation-sub-agent-dynamic';
   const agent = new DynamicDocumentationSubAgent();
   
   console.log('✅ Dynamic agent loaded successfully');
@@ -47,7 +48,6 @@ try {
       
       // Fall back to the original hardcoded version
       console.log('\n⚠️ Falling back to original Documentation Sub-Agent...');
-      import DocumentationSubAgent from '../lib/agents/documentation-sub-agent';
       const fallbackAgent = new DocumentationSubAgent();
       
       fallbackAgent.execute({ path: targetPath })
@@ -70,7 +70,6 @@ try {
   console.log('\n🔧 Using original Documentation Sub-Agent instead...');
   
   // Use the original non-dynamic version
-  import DocumentationSubAgent from '../lib/agents/documentation-sub-agent';
   const agent = new DocumentationSubAgent();
   
   agent.execute({ path: targetPath })

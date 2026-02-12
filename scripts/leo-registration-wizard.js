@@ -7,7 +7,7 @@
  * in a proper terminal environment with clear step-by-step instructions.
  */
 
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -161,7 +161,7 @@ This wizard will guide you through registering a new project with LEO Protocol.
     const tmpDir = path.dirname(templatePath);
     try {
       await fs.mkdir(tmpDir, { recursive: true });
-    } catch (error) {
+    } catch (_error) {
       // Directory already exists or other error - continue
     }
 
@@ -218,7 +218,7 @@ AFTER REGISTRATION:
 🔄 After registration, come back here and I can help you verify 
    everything worked correctly.
 `);
-    } catch (error) {
+    } catch (_error) {
       console.log(`
 ⚠️  Couldn't create template file, but that's okay!
    

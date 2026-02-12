@@ -117,7 +117,7 @@ function loadConfig(configPath) {
     const content = fs.readFileSync(configPath, 'utf8');
     const config = JSON.parse(content);
     return { ...DEFAULT_CONFIG, ...config };
-  } catch (error) {
+  } catch (_error) {
     console.error(`Warning: Could not load config from ${configPath}, using defaults`);
     return DEFAULT_CONFIG;
   }
@@ -247,7 +247,7 @@ function detectDuplicates(files, config, verbose) {
   let comparisonsCount = 0;
 
   // Compare all pairs
-  let skippedSiblings = 0;
+  let _skippedSiblings = 0;
   for (let i = 0; i < fileData.length; i++) {
     for (let j = i + 1; j < fileData.length; j++) {
       comparisonsCount++;
@@ -259,7 +259,7 @@ function detectDuplicates(files, config, verbose) {
 
       // Skip sibling files in template directories (schema docs, etc.)
       if (config.skip_sibling_schema_docs && areSiblingTemplateFiles(file1.path, file2.path)) {
-        skippedSiblings++;
+        _skippedSiblings++;
         continue;
       }
 

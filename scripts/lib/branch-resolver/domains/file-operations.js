@@ -41,7 +41,7 @@ export function readFileFromBranch(repoPath, branch, filePath) {
     result.success = true;
     result.content = content;
 
-  } catch (error) {
+  } catch (_error) {
     result.error = `File not found on branch: ${filePath}`;
   }
 
@@ -70,7 +70,7 @@ export function listFilesFromBranch(repoPath, branch, pattern) {
     const regex = new RegExp(pattern);
     return allFiles.split('\n').filter(f => f && regex.test(f));
 
-  } catch (error) {
+  } catch (_error) {
     return [];
   }
 }

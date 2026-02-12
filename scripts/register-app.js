@@ -6,7 +6,7 @@
  * Interactive wizard to register new applications
  */
 
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 import { exec  } from 'child_process';
 import { promisify  } from 'util';
@@ -77,7 +77,7 @@ class AppRegistration {
         throw new Error('Not authenticated');
       }
       return true;
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ GitHub CLI not authenticated. Run: gh auth login');
       return false;
     }
@@ -87,7 +87,7 @@ class AppRegistration {
     try {
       await execAsync('supabase --version');
       return true;
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Supabase CLI not found. Database sync will be limited.');
       return false;
     }
@@ -171,7 +171,7 @@ class AppRegistration {
     // Check prerequisites
     console.log('🔍 Checking prerequisites...');
     const hasGH = await this.checkGitHubCLI();
-    const hasSupabase = await this.checkSupabaseCLI();
+    const _hasSupabase = await this.checkSupabaseCLI();
     
     if (!hasGH) {
       console.error('\n❌ GitHub CLI is required. Please authenticate first.');

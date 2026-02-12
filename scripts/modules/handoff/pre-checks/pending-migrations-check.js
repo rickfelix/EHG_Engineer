@@ -16,7 +16,7 @@
  */
 
 import { existsSync } from 'fs';
-import { readdir, readFile } from 'fs/promises';
+import { readdir } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
@@ -418,7 +418,7 @@ async function executeDirectMigrations(supabase, pendingInfo) {
       // execution script which connects via SUPABASE_POOLER_URL instead.
       const scriptPath = path.join(PROJECT_ROOT, 'scripts', 'execute-manual-migrations.js');
       if (existsSync(scriptPath)) {
-        const { stdout: migOut, stderr: migErr } = await execAsync(
+        const { stderr: migErr } = await execAsync(
           `node "${scriptPath}" --file "${filePath}"`,
           { cwd: PROJECT_ROOT, timeout: 60000 }
         );

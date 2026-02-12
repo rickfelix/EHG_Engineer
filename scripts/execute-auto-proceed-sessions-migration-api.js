@@ -83,7 +83,7 @@ async function executeMigration() {
       }
 
       // Execute via RPC
-      const { data, error } = await supabase.rpc('exec_sql', { sql: stmt + ';' });
+      const { _data, error } = await supabase.rpc('exec_sql', { sql: stmt + ';' });
 
       if (error) {
         // Try direct execution if exec_sql doesn't exist
@@ -102,7 +102,7 @@ async function executeMigration() {
 
     // Verification: Check table exists
     console.log('🔍 Verifying table creation...');
-    const { data: tableCheck, error: tableError } = await supabase
+    const { data: _tableCheck, error: tableError } = await supabase
       .from('auto_proceed_sessions')
       .select('*')
       .limit(0);

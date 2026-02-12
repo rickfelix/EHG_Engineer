@@ -6,7 +6,7 @@
  * Switch between different application contexts
  */
 
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 import { createClient  } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -33,7 +33,7 @@ class ContextSwitcher {
     try {
       const context = await fs.readFile(this.contextPath, 'utf8');
       return context.trim();
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }
@@ -84,7 +84,7 @@ class ContextSwitcher {
       let envContent = '';
       try {
         envContent = await fs.readFile(this.envPath, 'utf8');
-      } catch (error) {
+      } catch (_error) {
         // .env doesn't exist, create new content
       }
       

@@ -138,7 +138,7 @@ async function main() {
 
   // Insert each section
   for (const section of sections) {
-    const { target_file, ...sectionData } = section;
+    const { target_file, ..._sectionData } = section;
 
     // Check if section already exists
     const { data: existing } = await supabase
@@ -181,7 +181,7 @@ async function main() {
       if (error) {
         console.error(`  Error inserting: ${error.message}`);
       } else {
-        console.log(`  Added successfully`);
+        console.log('  Added successfully');
       }
     }
   }

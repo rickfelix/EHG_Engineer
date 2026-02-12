@@ -1,12 +1,4 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import fs from 'fs';
-import path from 'path';
 #!/usr/bin/env node
-
-
-
-
 
 /**
  * Fix Version Detection and CLAUDE.md Accuracy
@@ -17,6 +9,9 @@ import path from 'path';
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Fix 1: Update version detector to only look at actual protocol files
 function fixVersionDetector() {
@@ -261,7 +256,7 @@ async function main() {
   
   // Run the update script to ensure latest version
   console.log('\n🔄 Running CLAUDE.md update script...');
-  import './update-claude-md-version.js';
+  await import('./update-claude-md-version.js');
   
   console.log('\n✅ All fixes complete!');
   console.log('\n📋 Summary:');

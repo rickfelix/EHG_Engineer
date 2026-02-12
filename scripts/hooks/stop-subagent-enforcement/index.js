@@ -35,13 +35,13 @@ import {
 } from './type-aware-validator.js';
 import { detectBiasesForType } from './bias-detector.js';
 import { validateSubAgents, handleValidationResults } from './sub-agent-validator.js';
-import { REQUIREMENTS } from './config.js';
+import { _REQUIREMENTS } from './config.js';
 
 // Import continuation state management (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
 import {
   checkContinuationNeeded,
   writeState as writeContinuationState,
-  markIncomplete
+  _markIncomplete
 } from '../../modules/handoff/continuation-state.js';
 import { writeContinuationPrompt } from '../../modules/handoff/continuation-prompt-generator.js';
 

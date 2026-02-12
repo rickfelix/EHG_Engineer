@@ -20,7 +20,7 @@ import { createEvidencePackGenerator } from '../lib/evidence-pack-generator.js';
 
 import { PHASES, PHASE_REQUIREMENTS } from './constants.js';
 import { SessionDecisionLogger } from './session-decision-logger.js';
-import { validateRequirement, enforcePhaseGate } from './validation.js';
+import { _validateRequirement, enforcePhaseGate } from './validation.js';
 import { executePhase } from './phase-execution.js';
 import { generatePRD } from './prd-generation.js';
 import {

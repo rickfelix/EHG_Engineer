@@ -47,7 +47,7 @@ function findFilesRecursive(dir, results) {
         });
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
 }
 
 function convertToKebabCase(filename) {
@@ -103,7 +103,7 @@ function findCrossReferences(files) {
         if (content.includes(file.name) || content.includes(file.relativePath)) {
           refsToThisFile.push(mdFile.relativePath);
         }
-      } catch (e) { /* skip */ }
+      } catch (_e) { /* skip */ }
     }
 
     if (refsToThisFile.length > 0) {
@@ -145,7 +145,7 @@ function updateCrossReferences(oldPath, newPath, dryRun) {
           fs.writeFileSync(mdFile.path, newContent, 'utf8');
         }
       }
-    } catch (e) { /* skip */ }
+    } catch (_e) { /* skip */ }
   }
 
   return updateCount;
@@ -190,7 +190,7 @@ function main() {
   console.log('📝 Numeric-Prefix File Renaming');
   console.log('='.repeat(50));
   console.log(`Mode: ${dryRun ? 'DRY RUN (no changes)' : 'EXECUTE'}`);
-  console.log(`Pattern: ^\\d+[a-z]?_.*\\.md$`);
+  console.log('Pattern: ^\\d+[a-z]?_.*\\.md$');
   console.log('');
 
   // Find numeric-prefixed files

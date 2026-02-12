@@ -99,7 +99,7 @@ export function extractPathsFromStory(story) {
  * @param {Object} options - Validation options
  * @returns {Object} { exists: boolean, resolvedPath: string, format: string, warnings: string[] }
  */
-export async function validateFileExists(filePath, appPath, options = {}) {
+export async function validateFileExists(filePath, appPath, _options = {}) {
   const result = {
     originalPath: filePath,
     exists: false,

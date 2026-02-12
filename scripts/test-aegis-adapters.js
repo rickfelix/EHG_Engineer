@@ -13,7 +13,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { ConstitutionAdapter } from '../lib/governance/aegis/adapters/ConstitutionAdapter.js';
-import { FourOathsAdapter, getFourOathsAdapter } from '../lib/governance/aegis/adapters/FourOathsAdapter.js';
+import { _FourOathsAdapter, getFourOathsAdapter } from '../lib/governance/aegis/adapters/FourOathsAdapter.js';
 
 // Test results tracking
 const results = { passed: 0, failed: 0 };
