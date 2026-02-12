@@ -1,4 +1,4 @@
-# EVA Venture Lifecycle — Stage 2 "AI Review" — CLI vs GUI Gap Analysis
+# EVA Venture Lifecycle -- Stage 2 "AI Review" -- CLI vs GUI Gap Analysis
 
 ## Context
 
@@ -13,16 +13,16 @@ This is Stage 2 of a 25-stage venture lifecycle. The stages are grouped into pha
 
 ## Pipeline Context
 
-**What comes BEFORE Stage 2** — Stage 1 (Draft Idea):
-- CLI: 3 required fields (description, valueProp, targetMarket). Passive validation only. Produces `idea_brief` artifact. Has rich Stage 0 synthesis upstream (8 modules: problem-reframing, moat-architecture, archetypes, build-cost-estimation, time-horizon, chairman-constraints, cross-reference, portfolio-evaluation) but Stage 0→1 data pipeline is not yet wired.
+**What comes BEFORE Stage 2** -- Stage 1 (Draft Idea):
+- CLI: 3 required fields (description, valueProp, targetMarket). Passive validation only. Produces `idea_brief` artifact. Has rich Stage 0 synthesis upstream (8 modules: problem-reframing, moat-architecture, archetypes, build-cost-estimation, time-horizon, chairman-constraints, cross-reference, portfolio-evaluation) but Stage 0->1 data pipeline is not yet wired.
 - GUI: 12+ fields including Problem Statement, Category, Key Assumptions, Tags, Strategic Focus Areas, Venture Archetype. Has "Enhance with AI" button.
 - **Stage 1 triangulation consensus**: Add problemStatement (required), keyAssumptions (optional), wire Stage 0 output, add archetype field, add provenance tracking.
 
-**What comes AFTER Stage 2** — Stage 3 (Market Validation & RAT):
+**What comes AFTER Stage 2** -- Stage 3 (Market Validation & RAT):
 - 6 validation metrics: marketFit, customerNeed, momentum, revenuePotential, competitiveBarrier, executionFeasibility (each 0-100)
-- **KILL GATE**: overall < 70 OR any single metric < 40 → KILL the venture
+- **KILL GATE**: overall < 70 OR any single metric < 40 -> KILL the venture
 - Stage 3 needs structured market/customer/competitive data to score these 6 metrics
-- Stage 3 is purely deterministic — it computes scores and applies the kill gate formula
+- Stage 3 is purely deterministic -- it computes scores and applies the kill gate formula
 
 **What Stage 4 (Competitive Intel) needs**:
 - Detailed competitive landscape analysis
@@ -31,22 +31,22 @@ This is Stage 2 of a 25-stage venture lifecycle. The stages are grouped into pha
 
 ## CLI Stage 2 Implementation (Ground Truth)
 
-**Template**: `lib/eva/stage-templates/stage-02.js` — Passive validation only
+**Template**: `lib/eva/stage-templates/stage-02.js` -- Passive validation only
 
 **Schema**:
-- `critiques` (array, minItems: 1) — each critique contains:
-  - `model` (string, required) — which AI model produced this critique
-  - `summary` (string, minLength: 20, required) — critique summary
-  - `strengths` (array of strings, minItems: 1, required) — venture strengths identified
-  - `risks` (array of strings, minItems: 1, required) — venture risks identified
-  - `score` (integer, 0-100, required) — overall score from this model
-- `compositeScore` (integer, 0-100, derived) — `Math.round(average of all critique scores)`
+- `critiques` (array, minItems: 1) -- each critique contains:
+  - `model` (string, required) -- which AI model produced this critique
+  - `summary` (string, minLength: 20, required) -- critique summary
+  - `strengths` (array of strings, minItems: 1, required) -- venture strengths identified
+  - `risks` (array of strings, minItems: 1, required) -- venture risks identified
+  - `score` (integer, 0-100, required) -- overall score from this model
+- `compositeScore` (integer, 0-100, derived) -- `Math.round(average of all critique scores)`
 
 **Processing**:
-- `validate(data)` — checks critiques array structure and constraints
-- `computeDerived(data)` — calculates compositeScore as simple average
-- **NO `analysisSteps`** — the template does NOT generate any AI analysis
-- The template is a "dumb container" — it expects critiques to already exist
+- `validate(data)` -- checks critiques array structure and constraints
+- `computeDerived(data)` -- calculates compositeScore as simple average
+- **NO `analysisSteps`** -- the template does NOT generate any AI analysis
+- The template is a "dumb container" -- it expects critiques to already exist
 
 **Infrastructure applied to all stages** (including Stage 2):
 - Decision Filter Engine: deterministic risk evaluation (cost, tech, score, patterns, constraint drift)
@@ -74,13 +74,13 @@ This is Stage 2 of a 25-stage venture lifecycle. The stages are grouped into pha
 | EXEC | Technical Executor | Architecture requirements, development complexity, scalability, integration |
 | EVA | Quality Orchestrator | Synthesizes all agent outputs, identifies opportunities and risks |
 
-**Trigger**: Auto-triggers on component mount. No button click required — entering Stage 2 immediately starts AI analysis.
+**Trigger**: Auto-triggers on component mount. No button click required -- entering Stage 2 immediately starts AI analysis.
 
 **Output**:
-- `overallScore` (0-10 decimal) — average of 5 category scores
+- `overallScore` (0-10 decimal) -- average of 5 category scores
 - `categoryScores`: quality, viability, originality, market, feasibility (each 0-10)
 - `recommendation`: advance (>=7.0), revise (>=5.0), reject (<5.0), fast-track (>=8.5)
-- `confidence` (0-1) — derived from overall score
+- `confidence` (0-1) -- derived from overall score
 - `agentAnalysis`: 4 text summaries (one per agent, 2-3 sentences each)
 - `llmInsights`: strengths (max 3), weaknesses (max 3), opportunities (max 3), risks (max 3), suggestions.immediate (max 3), suggestions.strategic (max 3)
 
@@ -107,9 +107,9 @@ This is Stage 2 of a 25-stage venture lifecycle. The stages are grouped into pha
 
 Analyze the gap between CLI and GUI for Stage 2, considering:
 
-1. **Gap identification**: The CLI has zero active analysis capability at Stage 2 — it's the biggest gap across all stages so far. For each specific capability the GUI has, assess whether it matters for downstream stages (especially Stage 3's kill gate).
+1. **Gap identification**: The CLI has zero active analysis capability at Stage 2 -- it's the biggest gap across all stages so far. For each specific capability the GUI has, assess whether it matters for downstream stages (especially Stage 3's kill gate).
 
-2. **Architecture decision — single model vs multi-agent**: The GUI uses a 4-agent ensemble (all GPT-4), producing 4 perspective-specific summaries. But the CLI already has a Devil's Advocate (GPT-4o adversarial review) in its infrastructure. Should the CLI replicate the multi-agent approach, use a single comprehensive LLM call, use Devil's Advocate differently, or take another approach entirely?
+2. **Architecture decision -- single model vs multi-agent**: The GUI uses a 4-agent ensemble (all GPT-4), producing 4 perspective-specific summaries. But the CLI already has a Devil's Advocate (GPT-4o adversarial review) in its infrastructure. Should the CLI replicate the multi-agent approach, use a single comprehensive LLM call, leverage Devil's Advocate differently, or take another approach entirely?
 
 3. **Score scale reconciliation**: The CLI uses 0-100 integer scale; the GUI uses 0-10 decimal. Stage 3 (kill gate) expects 0-100 integers. Which scale should the CLI adopt, and how should this affect the critique schema?
 
@@ -130,7 +130,7 @@ Please structure your response as:
 
 ### 2. Architecture Recommendation
 - Single model vs multi-agent decision with justification
-- How to use existing CLI infrastructure (Devil's Advocate, Decision Filter Engine)
+- How to leverage existing CLI infrastructure (Devil's Advocate, Decision Filter Engine)
 
 ### 3. Score Scale & Category Alignment
 - Recommended score scale
