@@ -1,10 +1,11 @@
 # EVA Platform Architecture: Shared Services Model
 
-> **Version**: 1.0
+> **Version**: 1.1
 > **Created**: 2026-02-12
 > **Status**: Draft
 > **Companion**: [EVA Venture Lifecycle Vision v4.6](eva-venture-lifecycle-vision.md) (34 Chairman decisions)
 > **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11)
+> **v1.1 Changes**: Chairman Decision Interface (Section 9), resequenced implementation phases (Section 11), Saga Management for multi-step operations (Section 13)
 
 ---
 
@@ -624,6 +625,90 @@ The Chairman Dashboard is a **read-only monitoring interface** with a decision q
 | Advisory checkpoints (Stages 3, 5, 16, 23) | Dashboard + Digest | Daily batch |
 | Routine stage completions | Dashboard + Summary | Weekly batch |
 
+### Chairman Decision Interface
+
+The Chairman Dashboard is the **primary decision interface**. While the CLI remains authoritative for venture progression (stage advancement, configuration), Chairman decisions at blocking gates are submitted through the dashboard.
+
+**Decision Presentation Flow:**
+
+```
+CEO Service reaches blocking stage (10, 22, 25) or DFE escalates
+    │
+    ▼
+Write to chairman_decisions table:
+    {
+      venture_id, stage, decision_type,
+      context: { stage_output, dfe_triggers, mitigations, recommended_action },
+      status: 'pending'
+    }
+    │
+    ▼
+Notification Service fires:
+    Push notification → Chairman's device (immediate for blocking)
+    Dashboard decision queue updates (real-time via Supabase Realtime subscription)
+    │
+    ▼
+Chairman opens Dashboard → Decision Queue → Decision Detail view:
+    - Full stage output (synthesized, not raw data)
+    - DFE trigger explanation (if escalation)
+    - Recommended action with confidence reasoning
+    - Action buttons: Approve / Reject / Modify / Override
+    │
+    ▼
+Chairman submits decision:
+    UPDATE chairman_decisions SET decision = 'proceed', notes = '...', decided_at = now()
+    │
+    ▼
+Supabase Realtime broadcasts change → EVA event bus receives "chairman.approval"
+    │
+    ▼
+CEO Service resumes venture progression
+```
+
+**Decision Types by Stage:**
+
+| Stage | Decision Type | Chairman Sees | Chairman Actions |
+|:-----:|--------------|---------------|------------------|
+| **10** | Brand approval | Full brand package (name, voice, visual direction, narrative) | Approve / Revise (with notes) / Reject |
+| **22** | Release decision | BUILD LOOP synthesis, technical readiness, business review | Release / Hold (with reason) / Cancel |
+| **25** | Venture future | Complete journey synthesis, financials, health score | Continue / Pivot / Expand / Sunset / Exit |
+| **DFE** | Escalation | Trigger details, context, mitigations if available | Proceed / Block / Modify thresholds |
+
+**Detection Mechanism:**
+
+The system detects Chairman decisions via **Supabase Realtime subscriptions** on the `chairman_decisions` table. When `decision` changes from NULL to a value, the event bus emits `chairman.approval` or `chairman.rejection`. This avoids polling and gives sub-second response times.
+
+```sql
+-- New table for Chairman preference overrides (referenced in Section 6)
+CREATE TABLE chairman_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope TEXT CHECK (scope IN ('global', 'venture')) NOT NULL,
+  venture_id UUID REFERENCES ventures(id),
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (scope, venture_id, key)
+);
+```
+
+**CLI Fallback:**
+
+For power-user scenarios or API-driven decisions, a CLI command provides equivalent functionality:
+
+```bash
+# List pending decisions
+eva decisions list
+
+# View decision detail
+eva decisions view <decision_id>
+
+# Submit decision
+eva decisions approve <decision_id> --notes "Ship it"
+eva decisions reject <decision_id> --notes "Revise brand voice"
+```
+
+The CLI writes to the same `chairman_decisions` table, triggering the same Realtime subscription → event bus flow.
+
 ---
 
 ## 10. Security & Governance
@@ -693,44 +778,96 @@ Every state change is logged:
 
 | Component | Purpose | Priority |
 |-----------|---------|:--------:|
-| **EVA Master Scheduler** | Portfolio-level scheduling, priority queue processing | P0 |
 | **Decision Filter Engine** | Pure function evaluating 6 triggers per stage | P0 |
 | **Reality Gate Evaluator** | 5 phase-boundary hard gates | P0 |
+| **Chairman Decision API** | Minimal decision submission (table + Realtime + CLI) | P0 |
+| **Chairman Preferences Store** | Per-venture and global DFE threshold overrides | P0 |
+| **CEO Service analysisStep executor** | Stage orchestration for Stages 2-25 | P0 |
+| **CLI Task Dispatcher** | Manual "run next stage for venture X" command | P0 |
 | **Return Path (LEO → Stages)** | SD completion → stage progress sync | P0 |
+| **Saga Coordinator** | Multi-step operation management (wire dormant state machines) | P0 |
+| **EVA Master Scheduler** | Portfolio-level scheduling, priority queue processing | P1 |
 | **Chairman Dashboard** | Decision queue + health heatmap + event feed | P1 |
 | **Chairman Notification Service** | Push + digest notification batching | P1 |
-| **Shared Services Abstraction** | Common service interface (load context, execute, emit) | P3 |
 | **Portfolio Knowledge Base** | Cross-venture learning extraction and application | P2 |
 | **Venture Template System** | Auto-generate and apply templates | P2 |
 | **Inter-Venture Dependency Manager** | Dependency graph with auto-blocking | P2 |
+| **Shared Services Abstraction** | Common service interface (load context, execute, emit) | P3 |
 | **Expand-vs-Spinoff Evaluator** | DFE-based scope assessment at Stage 25 | P3 |
 
 ### Implementation Sequence
 
+The sequence is ordered so that **each phase produces a testable end-to-end capability**. Phase A can shepherd a single venture through all 25 stages manually. Phase B automates scheduling and the Chairman experience. Phase C adds multi-venture intelligence. Phase D optimizes.
+
 ```
-Phase A: Core Execution Loop
+Phase A: First Venture End-to-End (P0)
+  Goal: One venture can complete all 25 stages via CLI commands.
+
   1. Decision Filter Engine (pure function)
   2. Reality Gate Evaluator (5 gates)
-  3. CEO Service analysisStep executor (Stages 2-25)
-  4. Return Path (LEO SD completion → stage progress)
-  5. Wire event bus handlers (connect dormant infrastructure)
+  3. Chairman Decision API (chairman_decisions table + Realtime subscription + CLI)
+     └── Unblocks Stages 10, 22, 25 — without this, Phase A deadlocks
+  4. Chairman Preferences Store (chairman_preferences table + DFE integration)
+  5. CEO Service analysisStep executor (Stages 2-25)
+  6. CLI Task Dispatcher ("eva run <venture_id> [--stage N]")
+     └── Manual trigger for testing — replaced by scheduler in Phase B
+  7. Return Path (LEO SD completion → stage progress)
+  8. Saga Coordinator (wire evaStateMachines.ts for SD execution + retry sagas)
+     └── See Section 13 for saga types
+  9. Wire event bus handlers (connect dormant infrastructure)
 
-Phase B: Chairman Interface
-  6. Chairman Dashboard (decision queue + health heatmap)
-  7. Notification service (immediate + daily digest + weekly)
-  8. DFE escalation presentation (context + mitigations)
+  Test: Create a venture, run "eva run <id>" repeatedly. Venture progresses
+  through all 25 stages. Chairman submits decisions via CLI at Stages 10, 22, 25.
+  SD Bridge creates LEO SDs at Stage 18, return path advances to Stage 20.
 
-Phase C: Portfolio Intelligence
-  9. EVA Master Scheduler (priority queue + cadence management)
-  10. Cross-venture knowledge base
-  11. Venture template system
-  12. Inter-venture dependency manager
+Phase B: Automated Scheduling + Chairman Dashboard (P1)
+  Goal: Ventures progress automatically. Chairman uses dashboard instead of CLI.
 
-Phase D: Optimization
-  13. Shared services abstraction layer
-  14. Expand-vs-spinoff evaluator
-  15. Advanced portfolio optimization (resource contention, priority re-ranking)
+  10. EVA Master Scheduler (priority queue + cadence management)
+      └── Replaces manual "eva run" — ventures auto-advance when unblocked
+  11. Chairman Dashboard (decision queue + health heatmap + event feed)
+  12. Notification service (immediate + daily digest + weekly)
+  13. DFE escalation presentation (context + mitigations in dashboard)
+
+  Test: Create 3 ventures. Scheduler auto-advances them. Chairman receives
+  notifications, reviews decisions in dashboard, ventures unblock automatically.
+
+Phase C: Portfolio Intelligence (P2)
+  14. Cross-venture knowledge base
+  15. Venture template system
+  16. Inter-venture dependency manager
+
+Phase D: Optimization (P3)
+  17. Shared services abstraction layer
+  18. Expand-vs-spinoff evaluator
+  19. Advanced portfolio optimization (resource contention, priority re-ranking)
 ```
+
+### Phase A Validation: The First Venture Test
+
+Phase A is complete when this scenario passes:
+
+```
+1. Chairman creates venture idea via CLI → Stage 1 artifact written
+2. "eva run <id>" → CEO Service runs Stages 2-9 automatically
+   - DFE evaluates at each stage (AUTO_PROCEED for all)
+   - Reality Gates pass at phase boundaries
+   - Kill gates at 3 and 5 auto-resolve
+3. Stage 10 blocks → Chairman decision created
+4. "eva decisions approve <id>" → Venture unblocks, continues to Stage 12
+5. Stages 13-17 auto-advance
+6. Stage 18 → SD Bridge creates LEO SDs
+7. (LEO executes SDs externally)
+8. Return path receives SD completion → Stage 19 updates
+9. Stages 20-21 auto-advance
+10. Stage 22 blocks → Chairman decides "release"
+11. Stage 23 auto-advances (launch)
+12. Stage 24 auto-advances (metrics)
+13. Stage 25 blocks → Chairman decides "continue"
+14. Venture enters ops cycle (Stage 24 version 2)
+```
+
+If any step fails, the phase is not complete.
 
 ---
 
@@ -782,6 +919,144 @@ Portfolio knowledge base updated with shutdown learnings
 
 ---
 
+## 13. Saga Management for Multi-Step Operations
+
+### Why Sagas Are Needed
+
+The shared services model (Section 2) follows a stateless pattern: load context, execute, write result, emit event. This works for individual analysisSteps (single invocation, completes in minutes). But three operations span multiple steps that can take hours or days and can fail mid-sequence:
+
+| Operation | Steps | Duration | Failure Mode |
+|-----------|:-----:|----------|-------------|
+| SD Execution (Stage 18→19) | SD Bridge → LEO executes N SDs → Return Path | Hours to days | Individual SDs fail, LEO blocked, partial completion |
+| Reality Gate Retry | Identify failure → re-run analysisStep (up to 3x) → re-evaluate gate | Minutes to hours | All retries exhausted → auto-kill |
+| Venture Retirement | Notify → Export → Teardown → Archive → Retrospective | Hours | Step 3 (teardown) fails, leaving orphaned infrastructure |
+
+Without saga management, these operations have no durable state between steps. If the CEO Service crashes mid-sequence, the operation is lost. The dormant `evaStateMachines.ts` infrastructure provides the foundation — it needs to be connected as the saga coordinator.
+
+### Saga Architecture
+
+```
+Operation starts (e.g., SD Bridge fires at Stage 18)
+    │
+    ▼
+Saga Coordinator creates saga record:
+    INSERT INTO eva_sagas (venture_id, saga_type, current_step, status, context)
+    VALUES ($1, 'sd_execution', 'bridge_create', 'active', {...})
+    │
+    ▼
+Each step:
+    1. Read saga state from DB
+    2. Execute step (create SDs, wait for completion, update stage)
+    3. Write updated state + advance to next step
+    4. If step fails → retry with backoff, or mark saga as 'failed'
+    │
+    ▼
+Saga completes:
+    UPDATE eva_sagas SET status = 'completed', completed_at = now()
+    Emit event: "saga.completed" with results
+```
+
+The Saga Coordinator is stateless — it reads saga state from the database on every invocation. If the process crashes, the next invocation picks up from the last persisted step.
+
+### Three Saga Types
+
+#### 1. SD Execution Saga (Stage 18 → 19)
+
+```
+Steps:
+  1. bridge_create    → SD Bridge creates orchestrator + N child SDs in LEO
+  2. await_completion → Subscribe to "sd.completed" events per child SD
+                        Track: completed_count / total_count
+                        Timeout: configurable per venture (default 7 days)
+  3. collect_results  → Gather test results, code metrics, issues from all SDs
+  4. update_stage     → Write results to venture_artifacts (Stage 19)
+                        Evaluate sprint_completion (complete/partial/blocked)
+  5. advance          → If complete, advance to Stage 20
+
+Failure handling:
+  - Individual SD fails → Record in saga context, continue waiting for others
+  - All SDs complete but some failed → sprint_completion = 'partial'
+  - Timeout → sprint_completion = 'blocked', DFE escalation
+  - Saga coordinator crash → Picks up from last step on restart
+```
+
+#### 2. Reality Gate Retry Saga
+
+```
+Steps:
+  1. identify_failure → Parse Reality Gate failure (which check, which data)
+  2. map_stages       → Determine which upstream stage(s) are responsible
+  3. retry_analysis   → Re-run analysisStep with failure context injected
+                        ("Previous output failed because X; regenerate addressing this")
+  4. re_evaluate      → Run Reality Gate again on new output
+  5. decide           → Pass → advance venture; Fail → loop to step 3 (max 3 attempts)
+  6. exhaust          → If 3 retries fail → auto-kill venture (killed_at_reality_gate)
+
+State tracked:
+  - retry_count (0, 1, 2, 3)
+  - prior_failure_reasons (array, injected into each retry prompt)
+  - versions_created (each retry creates a new artifact version)
+```
+
+#### 3. Venture Retirement Saga (Decision #25)
+
+```
+Steps:
+  1. notify_users     → Send advance notice to active users (email, in-app)
+                        Wait: configurable notification period (default 30 days for sunset)
+  2. export_data      → Package user data for download, generate export URLs
+  3. teardown_infra   → Decommission cloud resources in reverse dependency order
+                        Sub-steps tracked individually (DB, storage, compute, DNS)
+  4. archive_code     → Archive repository to cold storage, generate archive reference
+  5. retrospective    → Run automated post-mortem analysis
+                        Write results to portfolio knowledge base
+
+Failure handling:
+  - Step 1 failure → Retry (notification is idempotent)
+  - Step 2 failure → Retry (export is idempotent)
+  - Step 3 failure → PAUSE saga, alert Chairman (infrastructure can't be left half-torn-down)
+  - Step 4/5 failure → Retry (archive and retrospective are idempotent)
+
+For kill gates (Stages 3, 5) and Reality Gate kills:
+  - Skip steps 1-2 (no users yet)
+  - Execute steps 3-5 only
+```
+
+### Saga State Table
+
+```sql
+CREATE TABLE eva_sagas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  venture_id UUID REFERENCES ventures(id) NOT NULL,
+  saga_type TEXT CHECK (saga_type IN ('sd_execution', 'reality_gate_retry', 'venture_retirement')) NOT NULL,
+  current_step TEXT NOT NULL,
+  status TEXT CHECK (status IN ('active', 'paused', 'completed', 'failed')) NOT NULL DEFAULT 'active',
+  context JSONB NOT NULL DEFAULT '{}',
+  retry_count INT DEFAULT 0,
+  max_retries INT DEFAULT 3,
+  started_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  timeout_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_eva_sagas_active ON eva_sagas (venture_id, saga_type) WHERE status = 'active';
+```
+
+### Connection to Dormant Infrastructure
+
+The dormant `evaStateMachines.ts` already implements state machine transitions with event-driven advancement. The Saga Coordinator wraps this with:
+
+1. **Durable state** — Saga records in `eva_sagas` table (state machines are currently in-memory only)
+2. **Timeout management** — `timeout_at` column + EVA scheduler checks for expired sagas
+3. **Failure routing** — Failed steps route to retry logic or DFE escalation
+4. **Crash recovery** — On startup, query `eva_sagas WHERE status = 'active'` and resume all in-progress sagas
+
+The circuit breaker (`evaCircuitBreaker.ts`) integrates at the step level: if a service invocation within a saga step fails repeatedly, the circuit opens and the saga pauses rather than burning through retries.
+
+---
+
 *Architecture document as Step 2 of the 8-step vision & architecture plan.*
 *Informed by: EVA Venture Lifecycle Vision v4.6 (34 Chairman decisions), existing EHG database schema (689 ventures, 25 stages configured), EVA orchestration infrastructure (event bus, task contracts, state machines, circuit breakers), LEO Protocol SD Bridge implementation.*
 *Steps 1 and 2 run in parallel -- vision defines "what," architecture defines "how."*
+*v1.1: Added Chairman Decision Interface (Section 9) defining how the Chairman submits decisions at blocking gates. Resequenced implementation phases (Section 11) so Phase A produces a testable end-to-end single-venture flow including Chairman decisions and CLI task dispatcher. Added Saga Management (Section 13) for multi-step operations (SD execution, Reality Gate retries, venture retirement) using dormant evaStateMachines.ts infrastructure.*
