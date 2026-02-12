@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-12T04:11:56.320Z
-**Rows**: 149
+**Generated**: 2026-02-12T05:02:16.883Z
+**Rows**: 150
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (24 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -42,6 +42,8 @@
 | source | `character varying(50)` | YES | `'retrospective'::character varying` | Origin of pattern: retrospective (default), feedback_cluster, or manual |
 | source_feedback_ids | `jsonb` | YES | `'[]'::jsonb` | Array of feedback UUIDs that contributed to this pattern (for feedback_cluster source) |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
+| dedup_fingerprint | `text` | YES | - | - |
+| data_quality_status | `text` | YES | - | - |
 
 ## Constraints
 
@@ -69,6 +71,10 @@
 - `idx_issue_patterns_category`
   ```sql
   CREATE INDEX idx_issue_patterns_category ON public.issue_patterns USING btree (category)
+  ```
+- `idx_issue_patterns_dedup_auto`
+  ```sql
+  CREATE UNIQUE INDEX idx_issue_patterns_dedup_auto ON public.issue_patterns USING btree (dedup_fingerprint) WHERE ((source)::text = ANY ((ARRAY['auto_rca'::character varying, 'retrospective'::character varying])::text[]))
   ```
 - `idx_issue_patterns_first_seen`
   ```sql
@@ -147,6 +153,26 @@
 - **Using**: `true`
 
 ## Triggers
+
+### trg_normalize_category
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION trigger_normalize_issue_pattern_category()`
+
+### trg_normalize_category
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION trigger_normalize_issue_pattern_category()`
+
+### trg_set_dedup_fingerprint
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION trigger_set_dedup_fingerprint()`
+
+### trg_set_dedup_fingerprint
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION trigger_set_dedup_fingerprint()`
 
 ### trigger_update_issue_patterns_updated_at
 

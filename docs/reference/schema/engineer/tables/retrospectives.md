@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-12T04:11:56.320Z
+**Generated**: 2026-02-12T05:02:16.883Z
 **Rows**: 922
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (82 total)
+## Columns (83 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -101,6 +101,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | Flexible JSONB storage for retrospective metadata. Added 2026-01-30 per RCA BL-INF-2337C for consistency with other core tables. |
 | learning_extracted_at | `timestamp with time zone` | YES | - | Timestamp when patterns were extracted. NULL = not yet processed. |
 | future_enhancements | `jsonb` | YES | `'[]'::jsonb` | Array of future enhancement opportunities identified during SD implementation. |
+| orphaned_sd_id | `text` | YES | - | - |
 
 ## Constraints
 
@@ -251,16 +252,6 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_retrospective_timestamp()`
-
-### trg_extract_protocol_improvements
-
-- **Timing**: AFTER INSERT
-- **Action**: `EXECUTE FUNCTION extract_protocol_improvements_from_retro()`
-
-### trg_extract_protocol_improvements
-
-- **Timing**: AFTER UPDATE
-- **Action**: `EXECUTE FUNCTION extract_protocol_improvements_from_retro()`
 
 ### trg_validate_retrospective_coverage
 

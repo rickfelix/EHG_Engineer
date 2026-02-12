@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-12T04:11:56.320Z
+**Generated**: 2026-02-12T05:02:16.883Z
 **Rows**: 82
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (34 total)
+## Columns (37 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -52,6 +52,9 @@
 | rolled_back_at | `timestamp with time zone` | YES | - | Timestamp when improvement was rolled back. NULL if not rolled back. |
 | rolled_back_by | `character varying` | YES | - | Identifier of who/what initiated the rollback. Required when rolling back. |
 | source_id | `uuid` | YES | - | - |
+| measured_at | `timestamp with time zone` | YES | - | - |
+| delta | `numeric` | YES | - | - |
+| measurement_status | `text` | YES | `'pending'::text` | - |
 
 ## Constraints
 
@@ -66,6 +69,7 @@
 - `must_have_db_target`: CHECK (((target_table IS NOT NULL) AND (payload IS NOT NULL)))
 - `protocol_improvement_queue_effectiveness_score_check`: CHECK (((effectiveness_score >= 0) AND (effectiveness_score <= 100)))
 - `protocol_improvement_queue_improvement_type_check`: CHECK ((improvement_type = ANY (ARRAY['VALIDATION_RULE'::text, 'CHECKLIST_ITEM'::text, 'SKILL_UPDATE'::text, 'PROTOCOL_SECTION'::text, 'SUB_AGENT_CONFIG'::text])))
+- `protocol_improvement_queue_measurement_status_check`: CHECK ((measurement_status = ANY (ARRAY['pending'::text, 'measured'::text, 'inconclusive'::text, 'skipped'::text])))
 - `protocol_improvement_queue_risk_tier_check`: CHECK (((risk_tier)::text = ANY ((ARRAY['IMMUTABLE'::character varying, 'GOVERNED'::character varying, 'AUTO'::character varying])::text[])))
 - `protocol_improvement_queue_rollback_window_check`: CHECK (((rollback_window_hours >= 1) AND (rollback_window_hours <= 720)))
 - `protocol_improvement_queue_source_type_check`: CHECK ((source_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
