@@ -1,8 +1,8 @@
 # EVA Venture Lifecycle: Definitive Vision
 
-> **Version**: 4.3
+> **Version**: 4.4
 > **Created**: 2026-02-12
-> **Status**: Draft (Revised + 18 Chairman Clarifications)
+> **Status**: Draft (Revised + 25 Chairman Clarifications)
 > **Supersedes**: `kb/ehg-review/00_unified_vision_2025.md`, `kb/ehg-review/01_vision_ehg_eva.md`, `docs/guides/workflow/25-stage-venture-lifecycle-overview.md`
 > **Companion**: Architecture Document (Step 2, forthcoming)
 > **Inputs**: Gemini vision diagrams, 25-stage CLI vs GUI gap analysis (PR #1117), CLI implementation review (`stages_v2.yaml`, Decision Filter Engine, Reality Gates, SD Bridge), brainstorming decisions (2026-02-11)
@@ -52,13 +52,17 @@ Kill gates (Stages 3, 5) are fully automated. The Decision Filter Engine escalat
 
 ### The Chairman Governance Model
 
-One human (the Chairman) governs the entire portfolio. AI agents handle analysis, generation, and execution. The Chairman's role is strategic, not operational:
+**AI-only operation.** The Chairman is the only human in the entire system. There are no employees, operators, contractors, or manual reviewers. All analysis, generation, execution, support, billing, legal compliance, and infrastructure management are performed by AI agents. The Chairman's role is strategic, not operational:
 
 - **Reviews decisions, not data**. The Chairman never enters data into forms. EVA generates all stage artifacts. The Chairman reviews synthesized outputs and decides at gates.
 - **Override authority, not approval authority**. Gates resolve automatically. The Chairman intervenes when override is warranted, not when approval is routine.
 - **Ultimate kill authority**. The Chairman can kill any venture at any stage, at any time, regardless of gate outcomes. Automated gates are a convenience, not a constraint on the Chairman's authority.
 - **Time commitment**: Under normal operation, the Chairman touches a venture at 3 mandatory blocking stages (10, 22, 25) plus DFE escalations. Kill gates (3, 5) are fully automated -- the Decision Filter Engine is the only path to Chairman involvement there. Everything else runs without asking.
 - **Decision queue as rate limiter**. Ventures block on pending Chairman decisions. The Chairman's review cadence determines portfolio throughput. This is deliberate -- authority over speed.
+
+### Unlimited Compute
+
+Compute is not a constraint. The cost of AI processing, cloud infrastructure, and LLM calls is trivial compared to the value of ventures that succeed. The system does not optimize for token savings or impose per-venture compute budgets. If a stage needs more analysis, it runs more analysis. If infrastructure needs scaling, it scales. The only compute-related gate is the DFE's `cost_threshold` trigger, which alerts the Chairman to significant cost jumps -- not to constrain spending, but to maintain awareness.
 
 ### CLI as Authoritative Interface
 
@@ -280,7 +284,7 @@ Gates use multi-value decision enums, not booleans. A gate never just says "pass
 | **12** | Sales Identity | Define sales model and process | Sales logic generation, wired to Stage 7 pricing + Stage 11 channels, conversion rate estimates on funnel stages, Economy Check in Reality Gate | Fully automated |
 | **13** | Product Roadmap | Define what to build and when | Roadmap generation from Stages 1-12, priority (now/next/later) per milestone, deliverable types enum | Fully automated |
 | **14** | Technical Architecture | System design | Architecture generation, 4 core layers + additional_layers + cross-cutting (security), Schema-Lite data entities | Fully automated |
-| **15** | Resource Planning | Team and hiring plan | Team generation from Stages 12-14, phase-aware role bundling (generalists → specialists), budget coherence checks | Fully automated |
+| **15** | Resource Planning | AI agent allocation and compute budget | Agent capability mapping from Stages 12-14, service/tool requirements per build phase, budget coherence checks | Fully automated |
 | **16** | Financial Projections | Full financial model | "Startup Standard" P&L, phase-variable costs from Stage 15, sensitivity analysis, viability warnings, promotion gate | Automated (advisory checkpoint) |
 | **17** | Pre-Build Checklist | Readiness verification | Checklist generation from Blueprint stages, `build_readiness`: go/conditional_go/no_go, priority + source_stage_ref per item | Fully automated |
 | **18** | Sprint Planning | Define implementation work | Items generated from Stage 13 "now" deliverables, SD Bridge to LEO Protocol, capacity/budget checks | Fully automated |
@@ -429,11 +433,20 @@ When Stage 25 produces a `pivot` decision, the venture re-enters the lifecycle a
 
 ### How Ventures Exit the Lifecycle
 
-Ventures exit via the Stage 25 `venture_decision`:
-- **sunset**: Graceful wind-down. Archive data, release resources.
-- **exit**: Triggers exit execution workflow (exit strategy from Stage 9 becomes actionable).
+Ventures exit via the Stage 25 `venture_decision`, kill gates (Stages 3, 5), or Reality Gate failures. All exit paths trigger an **automated graceful shutdown sequence**:
 
-Ventures can also be killed at Stages 3 or 5 if fundamentals don't hold.
+1. **User notification** -- Active users receive advance notice with timeline
+2. **Data export** -- User data exported and made available for download
+3. **Infrastructure teardown** -- Cloud resources decommissioned in dependency order
+4. **Code archive** -- Codebase archived to version-controlled storage
+5. **Post-mortem retrospective** -- Automated analysis of venture performance, lessons captured for future ventures
+
+The Chairman's decision to kill, sunset, or exit is the only human input. The shutdown sequence itself is fully automated. For kill gates and Reality Gate failures, the sequence runs immediately after the automated kill decision.
+
+Exit paths:
+- **sunset**: Full graceful shutdown sequence (notification period for active users)
+- **exit**: Triggers exit execution workflow (exit strategy from Stage 9 becomes actionable). Shutdown deferred until transaction completes.
+- **killed** (Stages 3, 5, or Reality Gate): Abbreviated shutdown (no users yet, skip notification/export steps)
 
 ---
 
@@ -574,9 +587,13 @@ After launch (Stage 23), ventures enter the recurring ops loop (24-25). Between 
 | Operational Area | How It's Handled | Automation Level |
 |-----------------|-----------------|:----------------:|
 | **Bug fixes** | Stage 24 metrics identify issues. LEO Protocol auto-generates SDs for fixes. | Fully automated |
-| **Customer support** | AI-driven support automation. Minimize human involvement. | Fully automated |
+| **Customer support** | AI-driven support automation. No human support agents. | Fully automated |
 | **Infrastructure monitoring** | Existing inbox/feedback system surfaces issues. LEO generates SDs for remediation. | Fully automated |
+| **Infrastructure scaling** | Auto-scale within pre-configured bounds. DFE `cost_threshold` trigger fires for significant cost jumps (e.g., 10x increase). Below threshold, fully autonomous. | Fully automated (DFE gate) |
 | **Feature enhancements** | Stage 24 declining metrics → LEO enhancement SDs. Stage 25 "expand" → new scope SDs. | Fully automated |
+| **Billing & payments** | Stripe (or equivalent) configured at Stage 20 Launch Prep. Subscriptions, invoicing, tax compliance, and dunning automated. Chairman involved only for pricing model changes (routed via DFE `strategic_pivot`). | Fully automated |
+| **Legal & compliance** | Pre-built template library (ToS, privacy policy, GDPR/CCPA, cookie banners) auto-configured per venture at Stage 20. Novel situations (new jurisdictions, regulated industries) escalate to Chairman via DFE. | Automated + DFE |
+| **Data & analytics** | Auto-collect AARRR metrics, auto-analyze trends, auto-generate insights. DFE escalates anomalies (retention cliff, revenue decline). EVA auto-adjusts (A/B tests, funnel optimization) without approval. | Fully automated (DFE alerts) |
 
 ### Needs Deep Research (Step 6)
 
@@ -600,7 +617,7 @@ Post-launch operations follow the same philosophy as the lifecycle itself: **the
 | **Market** | Is there demand and competitive positioning? | TAM confirmation, competitive gap, channel traction |
 | **Technical** | Is the implementation sound? | QA pass rate, technical debt ratio, security posture |
 | **Financial** | Do the economics work? | Unit economics (CAC, LTV, LTV:CAC), burn rate, revenue trajectory |
-| **Team** | Are resources allocated correctly? | Role coverage, phase-appropriate staffing, capability utilization |
+| **Operations** | Are AI agents performing effectively? | Agent task completion rate, automation coverage, DFE escalation frequency |
 
 ### Lifecycle Effectiveness
 
@@ -710,7 +727,7 @@ Complete enumeration of all multi-value decisions and categorization fields:
 ---
 
 *Document revised as Step 1 of the 8-step vision & architecture plan.*
-*Version 4.3 revision: 18 Chairman clarification decisions applied (kill gates, release, brand, ops cadence, roadmap, pivot model, retroactive kill authority, conditional resolution, expand scope, idea pipeline, concurrency, brand blocking, sprint cadence, decision queuing, ground truth grounding, Reality Gate failure recovery, post-launch operations).*
+*Version 4.4 revision: 25 Chairman clarification decisions applied. Decisions 1-18: kill gates, release, brand, ops cadence, roadmap, pivot model, retroactive kill authority, conditional resolution, expand scope, idea pipeline, concurrency, brand blocking, sprint cadence, decision queuing, ground truth grounding, Reality Gate failure recovery, post-launch operations. Decisions 19-25: AI-only operation, unlimited compute, billing automation, legal/compliance templates, data/analytics pipeline, infrastructure scaling, venture shutdown sequence.*
 *Primary evidence base: 25-stage CLI vs GUI gap analysis (PR #1117, 5,335 lines)*
 *CLI implementation review: stages_v2.yaml, Decision Filter Engine, Reality Gates, SD Bridge*
 *Brainstorming decisions: 2026-02-11 session (12 points captured in `docs/plans/vision-architecture-next-steps.md`)*
