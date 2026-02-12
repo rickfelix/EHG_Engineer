@@ -2,7 +2,7 @@
 
 > **Created**: 2026-02-11
 > **Context**: Brainstorming session following completion of the 25-stage CLI vs GUI gap analysis (PR #1117)
-> **Status**: Plan confirmed, Step 1 not yet started
+> **Status**: Steps 1-2 complete, Step 3 next
 
 ---
 
@@ -10,8 +10,8 @@
 
 | Step | What | Deliverable | Status |
 |:----:|------|-------------|:------:|
-| **1** | **Rewrite vision** | Definitive vision doc. Inputs: Gemini diagrams, gap analysis, all decisions from this brainstorm | Pending |
-| **2** | **Define architecture** | Architecture doc: shared services model, EVA orchestration, layered scheduling, recurring ops loop | Pending |
+| **1** | **Rewrite vision** | Definitive vision doc. Inputs: Gemini diagrams, gap analysis, all decisions from this brainstorm | **COMPLETE** (v4.6, 34 decisions, PRs #1122-#1125) |
+| **2** | **Define architecture** | Architecture doc: shared services model, EVA orchestration, layered scheduling, recurring ops loop | **COMPLETE** (v1.0, 12 sections) |
 | **3** | **Evaluate stages against vision + architecture** | Per-stage alignment analysis. Also identifies which stages need deep research (point #10) | Pending |
 | **4** | **Distill corrective measures + enhancements per phase** | Priority list per phase from audit material | Pending |
 | **5** | **Data mining: Todoist + YouTube** | Process existing ideas from integrations, categorize into stages | Pending |
