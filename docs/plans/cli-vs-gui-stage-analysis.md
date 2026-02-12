@@ -4477,6 +4477,158 @@ const TEMPLATE = {
 6. **target_date is not validated**: Free string, not a date format.
 7. **No deployment readiness distinct from release readiness**: The promotion gate checks structural completion but doesn't assess deployment readiness (infrastructure, rollback plan, etc.).
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (3/3)
+
+1. **Fix promotion gate stale contracts (CRITICAL BLOCKER)**: All three identify this as the highest priority. The gate currently checks `quality_gate_passed` (boolean) and `all_passing` (boolean) which have been replaced by `quality_decision` and `review_decision` per Stages 20-21 consensus. The gate will produce incorrect results. Must update to use decision-based enums.
+
+2. **Add analysisStep synthesizing the entire BUILD LOOP (Stages 17-21)**: All agree Stage 22 should generate a Build Loop closeout synthesis. The analysisStep looks back at all prior BUILD LOOP stages and produces: sprint summary (planned vs delivered), quality assessment, integration status, and release recommendation.
+
+3. **Add explicit release_decision (release/hold/cancel)**: All agree the promotion gate (structural) and release decision (human judgment) are distinct. "All items approved" ≠ "go for launch." AG's contrarian captures this perfectly: "Stage 21 is Technical review. Stage 22 is Business review."
+
+4. **Change release item category to enum**: All agree free text creates inconsistency. All propose 5-6 category values.
+
+5. **Add sprint summary derived from Stages 18-21**: All agree Stage 23+ needs a clear record of what the sprint accomplished. Planned vs completed items, quality metrics, key achievements, known issues.
+
+6. **Validate target_date as ISO date (YYYY-MM-DD)**: All agree free string is insufficient. Simple date validation.
+
+7. **Do NOT port GUI deployment mechanics**: All agree the CLI should not replicate the GUI's 14 pre-deployment checks, 8-step deployment workflow, or blue-green/canary configuration. CLI is a venture lifecycle tool, not a CI/CD pipeline. AG: "Don't reimplement Terraform."
+
+8. **No hard dependency conflicts beyond stale gate**: All confirm only the promotion gate contracts need updating.
+
+#### Majority Agreement (2/3)
+
+1. **Sprint retrospective format**: Claude + OpenAI use went_well/went_poorly/action_items lists. AG uses numeric ratings (velocity_rating/quality_rating/process_rating 1-5) + key_learnings. **Resolution**: Lists (Claude/OpenAI approach). Numeric 1-5 ratings are arbitrary and hard to calibrate across ventures. "What went well / what went poorly / action items" is the universally understood retrospective format. AG's key_learnings is captured by action_items.
+
+2. **Promotion gate conditional handling**: Claude allows conditional states with warnings (don't block). OpenAI allows conditional_pass through if no critical defects. AG's self-healing fallback to old schema. **Resolution**: Allow conditional states with warnings, not blockers. Conditional QA (Stage 20) or conditional review (Stage 21) should produce warnings in the promotion gate, not blockers. This lets ventures proceed with documented risk. But require release_decision = 'release' for the gate to pass -- the human makes the final call. Skip AG's self-healing fallback (this is a schema migration, not a runtime compatibility issue).
+
+3. **target_date naming**: Claude renames to target_release_date. OpenAI renames to release_target_date. AG keeps target_date. **Resolution**: Keep `target_date` (AG + implicit simplicity). Just validate as ISO date. The field name is clear enough in the context of release readiness.
+
+#### Divergence Resolutions
+
+**Release category values**: Claude = feature/bugfix/infrastructure/documentation/configuration (5). OpenAI = code/quality/documentation/operations/go_to_market/stakeholder_communication (6). AG = feature/fix/infrastructure/documentation/chore/configuration (6). **Resolution**: feature/bugfix/infrastructure/documentation/configuration (Claude's 5). "Code" (OpenAI) is too generic -- releases contain code, that's obvious. "Chore" (AG) maps to infrastructure or configuration. "Go_to_market" and "stakeholder_communication" (OpenAI) are marketing concerns, not release items. Keep the taxonomy aligned with SD types.
+
+**Retrospective depth**: Claude = 3 simple lists (went_well/went_poorly/action_items). OpenAI = 3 lists + velocity_snapshot + quality_trend_note. AG = 3 numeric ratings + key_learnings. **Resolution**: Claude's 3 lists. The sprint_summary derived field already captures velocity (planned vs delivered) and quality (quality_decision summary). Adding velocity_snapshot and quality_trend_note (OpenAI) to the retrospective duplicates what sprint_summary already provides. Keep retrospective focused on qualitative human reflection; keep quantitative data in sprint_summary.
+
+**Deployment prerequisites**: AG suggests adding a deployment_prerequisites list of strings as a compromise. OpenAI suggests stack-agnostic readiness checks (rollback owner, monitoring owner). Claude says skip entirely (Stage 23's scope). **Resolution**: Skip. Stage 22 is release readiness (is the build good enough?). Stage 23 is launch preparation (is the infrastructure ready?). Adding deployment prerequisites to Stage 22 blurs the boundary.
+
+**AG's contrarian -- "Keep Stage 22 check-based"**: AG argues adding retrospective and analysisStep bloats the release process. "If Stage 21 said 'Approve', why does Stage 22 ask 'Are you sure?'" **Resolution**: AG answers their own contrarian: "Stage 21 is Technical review. Stage 22 is Business review." The analysisStep isn't asking "are you sure?" -- it's synthesizing the BUILD LOOP into a business-level release decision. This is the right separation.
+
+#### Recommended Stage 22 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-22',
+  slug: 'release-readiness',
+  title: 'Release Readiness',
+  version: '2.0.0',
+  schema: {
+    // === Updated: release items with category enum ===
+    release_items: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        category: { type: 'enum', values: ['feature', 'bugfix', 'infrastructure', 'documentation', 'configuration'], required: true },  // CHANGED
+        status: { type: 'enum', values: ['pending', 'approved', 'rejected'], required: true },
+        approver: { type: 'string' },
+      },
+    },
+
+    // === Existing (updated) ===
+    release_notes: { type: 'string', minLength: 10, required: true },
+    target_date: { type: 'string', format: 'date', required: true },  // CHANGED: validated as YYYY-MM-DD
+
+    // === NEW: release decision (human judgment) ===
+    release_decision: {
+      type: 'object',
+      properties: {
+        decision: { type: 'enum', values: ['release', 'hold', 'cancel'], required: true },
+        rationale: { type: 'string', required: true },
+        approver: { type: 'string' },
+      },
+    },
+
+    // === NEW: sprint retrospective (optional) ===
+    sprint_retrospective: {
+      type: 'object',
+      properties: {
+        went_well: { type: 'array', items: { type: 'string' } },
+        went_poorly: { type: 'array', items: { type: 'string' } },
+        action_items: { type: 'array', items: { type: 'string' } },
+      },
+    },
+
+    // === Existing derived (updated) ===
+    total_items: { type: 'number', derived: true },
+    approved_items: { type: 'number', derived: true },
+
+    // === NEW: sprint summary (derived from Stages 18-21) ===
+    sprint_summary: {
+      type: 'object', derived: true,
+      properties: {
+        sprint_goal: { type: 'string' },
+        items_planned: { type: 'number' },
+        items_completed: { type: 'number' },
+        story_points_planned: { type: 'number' },
+        story_points_delivered: { type: 'number' },
+        quality_assessment: { type: 'string' },
+        integration_status: { type: 'string' },
+        key_issues: { type: 'array' },
+        layer_progress: { type: 'object' },
+      },
+    },
+
+    // === Updated: promotion gate with new contracts + warnings ===
+    promotion_gate: {
+      type: 'object', derived: true,
+      properties: {
+        pass: { type: 'boolean' },
+        rationale: { type: 'string' },
+        blockers: { type: 'array' },
+        warnings: { type: 'array' },  // NEW: conditional states flagged as warnings
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+**Updated promotion gate logic**:
+- Stage 17: build_readiness = go or conditional_go (updated from readiness_pct)
+- Stage 18: ≥ 1 sprint item (unchanged)
+- Stage 19: sprint_completion.decision ≠ 'blocked' (partial = warning, complete = OK)
+- Stage 20: quality_decision ≠ 'fail' (conditional_pass = warning, pass = OK)
+- Stage 21: review_decision ≠ 'reject' (conditional = warning, approve = OK)
+- Stage 22: release_decision.decision = 'release' (hold/cancel = blocker)
+- Gate passes when: 0 blockers. Warnings are flagged but don't block.
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Update promotion gate to use new decision-based contracts. Replace quality_gate_passed → quality_decision, all_passing → review_decision. Add warnings for conditional states. **This is a correctness bug, not a preference.**
+2. **P0**: Add `analysisStep` synthesizing BUILD LOOP (Stages 17-21). Sprint summary, quality assessment, integration status, release recommendation.
+3. **P0**: Add `release_decision` (release/hold/cancel). Human judgment separate from mechanical gate. Both must align for Phase 5→6.
+4. **P1**: Add `sprint_summary` derived field. Planned vs completed, story points, quality/integration summaries, key issues.
+5. **P1**: Change release item category to enum: feature/bugfix/infrastructure/documentation/configuration.
+6. **P2**: Add `sprint_retrospective` (went_well/went_poorly/action_items). Optional, not required for promotion gate.
+7. **P2**: Validate target_date as ISO date (YYYY-MM-DD).
+8. **P3**: Do NOT add deployment readiness checks (Stage 23's scope).
+9. **P3**: Do NOT add chairman approval (GUI-specific governance).
+10. **P3**: Do NOT add deployment execution tracking (operational, not lifecycle).
+
+#### Cross-Stage Impact
+
+| Change | Stages 17-21 (BUILD LOOP) | Stage 23+ (LAUNCH & LEARN) | Overall Pipeline |
+|--------|--------------------------|--------------------------|-----------------|
+| Updated promotion gate | All BUILD LOOP decisions properly consumed. Conditional states produce warnings. | Stage 23 starts only when gate passes + release_decision = release. | Phase transition is reliable and aligned with consensus. |
+| Sprint summary | Stages 18-21 data aggregated. Planned vs delivered visible. | Stage 23 knows exactly what was built, tested, and reviewed. | Traceability from plan to delivery to launch. |
+| Release decision | BUILD LOOP quality signals inform human judgment. | Stage 23 knows if release is go/hold/cancel. | Business decision separate from technical gate. |
+| Sprint retrospective | BUILD LOOP learnings captured. Action items available for next sprint. | Stage 23+ benefits from known issues and action items. | Iterative improvement across sprints. |
+
 ---
 
 ## Stage 23: Launch Execution
