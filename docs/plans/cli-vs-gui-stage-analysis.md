@@ -4215,7 +4215,66 @@ const TEMPLATE = {
 
 ## Stage 21: Integration Testing
 
-*Analysis pending*
+**Phase**: THE BUILD LOOP (Stages 17-22)
+
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-21.js`
+
+**Input fields**:
+- `integrations[]` (min 1): name, source (required), target (required), status (enum: pass/fail/skip/pending), error_message (optional)
+- `environment` (required string): the environment where integration testing was performed
+
+**Derived fields**:
+- `total_integrations`: count of integrations
+- `passing_integrations`: count where status = 'pass'
+- `failing_integrations`: array of failed integrations (name, source, target, error_message)
+- `pass_rate`: passing / total × 100
+- `all_passing`: boolean (no failures AND at least 1 integration)
+
+**Validation**:
+- Standard field validation (strings, enums, array lengths)
+- INTEGRATION_STATUSES: ['pass', 'fail', 'skip', 'pending']
+
+**Key properties**:
+- No analysisStep (integrations are entirely user-provided)
+- Very narrow scope: only tracks integration point status (source → target connectivity)
+- No connection to Stage 20 QA results or Stage 19 build output
+- No review/approval workflow
+- No severity on failures (all failures weighted equally)
+- No architecture layer reference (despite Stage 14 defining integration points)
+- Environment is a free-text string, not an enum
+- No distinction between API integrations, data integrations, service integrations, etc.
+- Overlaps with Stage 20: if Stage 20 has integration test suites, Stage 21 integration points are testing the same things differently
+
+### GUI Implementation (Ground Truth)
+
+**GUI Stage 21 = "QA & UAT"** -- completely different scope from CLI's "Integration Testing."
+
+**Configuration**: `venture-workflow.ts` → Stage 21 "QA & UAT"
+**Component**: `Stage21QaUat.tsx`
+
+**GUI features**:
+- **Test Case Management**: Create/edit/track test cases with categories (Authentication, Core Features, Data Validation, UI, Performance, Security, Integration, Edge Cases), status (not_run/passed/failed/blocked), severity, steps, expected/actual results
+- **Bug Tracking**: severity (critical/high/medium/low), status (open/in_progress/resolved/won't_fix), repro steps, resolution notes
+- **UAT Feedback**: tester sentiment (positive/neutral/negative), action items, resolutions
+- **Automated Scoring**: QA Score (pass rate × 100), UAT Score (positive feedback 50% + resolved actions 50%), Overall Readiness (QA 60% + UAT 40%)
+- **Sign-Off Workflow**: pending/approved/rejected with sign-off notes
+- **Test Coverage Dashboard**: component/story/API coverage, 7-day trends, 80% threshold
+- **Test Suite Management**: organize tests into suites by feature area, execute runs
+
+**Major scope divergence**: CLI Stage 21 tracks integration point connectivity (source → target → pass/fail). GUI Stage 21 is a full QA + UAT management platform with test cases, bug tracking, user acceptance feedback, automated scoring, and sign-off. The GUI's Stage 21 is essentially what the CLI's Stages 20 + 21 do combined, plus UAT.
+
+### Key Gaps
+
+1. **No analysisStep**: Stage 20 has quality_decision and test results. Stage 14 has architecture layers with integration points. Stage 21 should derive integration points from these.
+2. **No connection to Stage 20 QA**: Integration testing happens in isolation from QA results. If Stage 20 already has integration test suites, Stage 21 is redundant.
+3. **Overlap with Stage 20**: Stage 20 has test_suites with type:integration. Stage 21 has integration points. These test the same things. Is Stage 21 needed as a separate stage?
+4. **No severity on failures**: A failed payment gateway integration is weighted the same as a failed analytics integration. No way to prioritize remediation.
+5. **No architecture layer reference**: Stage 14 defines integration points between layers. Stage 21 should reference these.
+6. **Environment is free text**: Should be an enum (development/staging/production) or at least validated.
+7. **No review/approval decision**: Stage 21 has no gate or decision for Stage 22. Just all_passing boolean.
+8. **No UAT component**: GUI has full UAT feedback collection. CLI has nothing for user acceptance testing.
 
 ---
 
