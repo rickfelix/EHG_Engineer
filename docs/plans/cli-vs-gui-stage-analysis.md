@@ -4413,7 +4413,69 @@ const TEMPLATE = {
 
 ## Stage 22: Release Readiness
 
-*Analysis pending*
+**Phase**: THE BUILD LOOP (Stages 17-22) -- LAST stage of this phase
+
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-22.js`
+
+**Input fields**:
+- `release_items[]` (min 1): name, category (free text), status (enum: pending/approved/rejected), approver (optional)
+- `release_notes` (string, min 10 chars, required)
+- `target_date` (string, required)
+
+**Derived fields**:
+- `total_items`, `approved_items`, `all_approved` (boolean)
+- `promotion_gate`: Phase 5→6 (BUILD LOOP → LAUNCH & LEARN) gate evaluation
+
+**Promotion Gate** (`evaluatePromotionGate()` pure function):
+- Stage 17: all checklist categories present + readiness ≥ 80%
+- Stage 18: ≥ 1 sprint item with valid SD bridge payload
+- Stage 19: completion_pct ≥ 80% + no blocked tasks
+- Stage 20: quality_gate_passed (100% pass rate + ≥ 60% coverage)
+- Stage 21: all_passing (all integrations pass)
+- Stage 22: all release items approved
+
+**Key properties**:
+- No analysisStep (release items are entirely user-provided)
+- Promotion gate references OLD Stage 20/21 contracts (quality_gate_passed boolean and all_passing boolean) which have been replaced by quality_decision and review_decision per consensus
+- Release item category is free text (not an enum)
+- No sprint review / retrospective component (despite being the last BUILD LOOP stage)
+- No deployment configuration or execution tracking
+- No connection to Stage 19's sprint_completion or SD execution summary
+- target_date is a free-text string, not validated as a date
+- The promotion gate is the most important feature -- it gates BUILD LOOP → LAUNCH & LEARN
+
+### GUI Implementation (Ground Truth)
+
+**GUI Stage 22 = "Deployment"** -- focused on actual deployment execution.
+
+**Configuration**: `venture-workflow.ts` → Stage 22 "Deployment" (promotion gate)
+**Component**: `Stage22Deployment.tsx`
+
+**GUI features**:
+- **Pre-deployment Checks** (14 items, 4 categories):
+  - Prerequisites (4): tests passing, QA sign-off, security scan, performance benchmarks
+  - Infrastructure (4): production env ready, DB migrations prepared, SSL certs valid, DNS configured
+  - Operations (4): monitoring, logging, rollback plan, on-call schedule (optional)
+  - Communication (2, optional): stakeholders notified, change log prepared
+- **Deployment Configuration**: type (blue-green/rolling/canary/recreate), target environment, version, rollback version, health check URL, monitoring dashboard
+- **Deployment Execution** (8 steps): pre-deployment backup → maintenance mode → DB migrations → deploy → health checks → disable maintenance → smoke test → monitor metrics
+- **Chairman Approval**: explicit checkbox + approval notes (required for production)
+- **Post-deployment Notes**: text area for observations and follow-ups
+- **Promotion Gate**: all required checks pass + chairman approval
+
+**Scope divergence**: CLI = release readiness checklist (approval tracking). GUI = full deployment execution platform. CLI focuses on "are we ready?" while GUI focuses on "execute the deployment." The CLI's scope is more appropriate for a venture lifecycle tool -- deployment execution details vary by technology stack.
+
+### Key Gaps
+
+1. **No analysisStep**: Stage 21 has review_decision and Stage 19/20 have completion/quality decisions. Stage 22 should consume all prior BUILD LOOP stage outputs.
+2. **Promotion gate references stale contracts**: Uses quality_gate_passed (boolean) and all_passing from Stages 20-21. Per consensus, these are now quality_decision (pass/conditional_pass/fail) and review_decision (approve/conditional/reject). The gate logic must be updated.
+3. **No sprint review / retrospective**: Stage 22 is the last BUILD LOOP stage. There's no retrospective component: what went well, what didn't, lessons learned. This is essential for iterative improvement.
+4. **Release item category is free text**: Should be an enum per established pattern.
+5. **No connection to Sprint execution data**: Stage 19's sprint_completion, layer_progress, and SD execution summary are ignored. Stage 22 should summarize the entire sprint.
+6. **target_date is not validated**: Free string, not a date format.
+7. **No deployment readiness distinct from release readiness**: The promotion gate checks structural completion but doesn't assess deployment readiness (infrastructure, rollback plan, etc.).
 
 ---
 
