@@ -4633,7 +4633,76 @@ const TEMPLATE = {
 
 ## Stage 23: Launch Execution
 
-*Analysis pending*
+### Ground Truth
+
+**CLI Implementation** (`lib/eva/stage-templates/stage-23.js`):
+
+Stage 23 is the first LAUNCH & LEARN stage and contains a **Kill Gate** (Go/No-Go decision). It follows Stage 22's Phase 5→6 Promotion Gate.
+
+**Input fields**:
+- `go_decision`: enum (`go` | `no-go`) -- required
+- `incident_response_plan`: string, min 10 chars -- required
+- `monitoring_setup`: string, min 10 chars -- required
+- `rollback_plan`: string, min 10 chars -- required
+- `launch_tasks[]`: array, min 1 item -- each has `name` (string, required), `status` (free text string, required), `owner` (string, optional)
+- `launch_date`: string (free text, no validation) -- required
+
+**Derived fields**:
+- `decision`: `pass` | `kill` -- from evaluateKillGate()
+- `blockProgression`: boolean -- true when decision = kill
+- `reasons[]`: array of { type, message } explaining kill reasons
+
+**evaluateKillGate()**: Pure function that checks:
+- go_decision must be `go`
+- If go: incident_response_plan, monitoring_setup, and rollback_plan must each be present and ≥10 chars
+- Any missing = kill reason added
+- decision = kill if any reasons, pass if none
+
+**Key observations**:
+- No analysisStep (continues the BUILD LOOP pattern gap -- now this should be Stage 22's release readiness flowing into launch context)
+- Kill gate is presence-based only (are the plans there?) -- no quality assessment
+- launch_tasks status is free text (not enum)
+- launch_date is free text (no ISO validation)
+- No launch type (soft launch, beta, GA, etc.)
+- No success criteria or launch metrics
+- No post-launch monitoring plan beyond the string field
+- No stakeholder approval mechanism
+
+**GUI Implementation** (`v2/Stage23ProductionLaunch.tsx`):
+
+GUI Stage 23 = "Production Launch" -- a comprehensive launch orchestration platform.
+
+**Structured Launch Criteria** (12 defaults across 4 categories):
+- Technical (4): critical bugs resolved, performance targets met, security audit passed, scalability verified
+- Quality (2): QA sign-off, UAT acceptance
+- Operations (3): monitoring operational, on-call staffed, runbooks documented
+- Business (3): legal review, marketing materials, customer support trained
+- Each criterion: id, category, name, description, weight (1-5), met status, notes, blocker flag
+
+**Launch Metrics** (5 defaults):
+- DAU (Day 1), Conversion Rate, Error Rate, Uptime SLA, Customer Satisfaction
+- Each: target value, current value, unit, status (on_track/at_risk/blocked)
+
+**Launch Configuration**: launchDate, launchTime, launchType (soft/beta/hard/GA), launchAudience, marketingReady, supportReady
+
+**Operational Plans**: rollbackTriggers, successCriteria, postLaunchPlan, launchNotes
+
+**Chairman Approval**: chairmanApproval (boolean) + approvalNotes -- required for GO
+
+**Kill Gate**: weighted score ≥80% threshold + no unresolved blockers + chairman approval. killGateStatus: pending/go/no_go/killed
+
+**Key Differences**:
+
+| Aspect | CLI | GUI |
+|--------|-----|-----|
+| Kill gate logic | Presence-based (3 plans exist) | Weighted scoring (80% threshold) + blocker check + chairman |
+| Launch criteria | None (just go_decision) | 12 structured criteria with weights |
+| Launch metrics | None | 5 target metrics with tracking |
+| Launch type | None | soft/beta/hard/GA enum |
+| Operational plans | 3 text blobs | Structured triggers + criteria + plan |
+| Stakeholder approval | None | Chairman approval required |
+| Post-launch | None | postLaunchPlan, launch notes |
+| analysisStep | None | N/A (GUI doesn't use this pattern) |
 
 ---
 
