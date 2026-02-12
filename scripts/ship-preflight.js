@@ -24,6 +24,7 @@ import { execSync } from 'child_process';
 import { ShippingPreflightVerifier } from './modules/shipping/ShippingPreflightVerifier.js';
 import { SDGitStateReconciler } from './modules/shipping/SDGitStateReconciler.js';
 import { MultiRepoCoordinator } from './modules/shipping/MultiRepoCoordinator.js';
+import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 
 // Parse command line arguments
 function parseArgs() {
@@ -142,8 +143,25 @@ async function main() {
   console.log(`\n  SD: ${sdId}`);
   console.log(`  Time: ${new Date().toISOString()}`);
 
+  // FR-4: Resolve worktree for this SD (read-only, ship mode)
+  let worktreeResult = null;
+  try {
+    const repoRoot = execSync('git rev-parse --show-toplevel', {
+      encoding: 'utf8', stdio: 'pipe'
+    }).trim();
+    worktreeResult = await resolveWorkdir(sdId, 'ship', repoRoot);
+    if (worktreeResult?.success && worktreeResult.worktree?.exists) {
+      console.log(`  Worktree: ${worktreeResult.cwd}`);
+      console.log(`  Branch: ${worktreeResult.worktree.branch || 'unknown'}`);
+      console.log(`  Resolved via: ${worktreeResult.source}`);
+    }
+  } catch {
+    // Worktree resolution is optional for preflight
+  }
+
   const results = {
     sdId,
+    worktree: worktreeResult?.worktree || null,
     branchVerification: null,
     stateReconciliation: null,
     multiRepoCoordination: null,
