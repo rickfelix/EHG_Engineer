@@ -1,12 +1,13 @@
 # EVA Platform Architecture: Shared Services Model
 
-> **Version**: 1.2
+> **Version**: 1.3
 > **Created**: 2026-02-12
 > **Status**: Draft
 > **Companion**: [EVA Venture Lifecycle Vision v4.6](eva-venture-lifecycle-vision.md) (34 Chairman decisions)
-> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`)
+> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`), CLI-vs-GUI triangulation analysis (Stages 1-25)
 > **v1.1 Changes**: Chairman Decision Interface (Section 9), resequenced implementation phases (Section 11), Saga Management for multi-step operations (Section 13)
 > **v1.2 Changes**: Stage 0 Venture Ideation Pipeline (Section 14) documenting existing implementation, Service Registry updated, Phase A test scenario extended to start from Stage 0, Chairman Review interactivity gap identified
+> **v1.3 Changes**: Codebase reconciliation — 10 components previously listed as "Needs Building" already exist and are production-ready. Inventory corrected, Phase A resequenced to reflect actual state. Added Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, and State Machine to inventory. Cross-referenced against CLI-vs-GUI triangulation analysis (Stages 1-25).
 
 ---
 
@@ -88,7 +89,7 @@ No service maintains state between invocations. A CEO Service invocation for Ven
 | Service | Domain | Key Responsibilities | Existing Infrastructure |
 |---------|--------|---------------------|------------------------|
 | **Stage 0 Pipeline** | Venture ideation | 3 entry paths (competitor teardown, blueprint browse, discovery mode), 8-component synthesis engine, evaluation profiles, financial modeling, venture nursery | `lib/eva/stage-zero/` (fully implemented), 15+ database tables |
-| **CEO Service** | Strategy & coordination | Stage orchestration, analysisStep execution (Stages 1-25), cross-stage synthesis, advisory generation | `ai_ceo_agents` table, `useAICEOAgent.ts` hook, Supabase function |
+| **CEO Service** | Strategy & coordination | Stage orchestration, analysisStep execution (Stages 1-25), cross-stage synthesis, advisory generation | `lib/eva/eva-orchestrator.js` (`processStage()`, `run()`), `ai_ceo_agents` table, stage templates (1-25), DFE + Reality Gates + Devil's Advocate integrated |
 | **LEO Service** | Engineering execution | SD creation, PRD generation, code implementation, QA, deployment | Full LEO Protocol (EHG_Engineer), SD Bridge at Stage 18 |
 | **Finance Service** | Financial analysis | Unit economics (Stage 5), P&L (Stage 16), token budget management, cost tracking | `venture_token_budgets`, `venture_phase_budgets`, `venture_budget_transactions` |
 | **Marketing Service** | GTM & growth | GTM strategy (Stage 11), channel analysis, growth optimization (Stage 25 expand) | TBD (flagged for deep research in Step 6) |
@@ -776,6 +777,16 @@ Every state change is logged:
 
 | Component | Table/Code | Status |
 |-----------|-----------|:------:|
+| **EVA Orchestrator (CEO Service)** | `lib/eva/eva-orchestrator.js` — `processStage()` loads context, runs stage templates, evaluates DFE + reality gates + devil's advocate, persists artifacts, advances stages. `run()` for multi-stage execution. | Production |
+| **Decision Filter Engine** | `lib/eva/decision-filter-engine.js` — Pure function with 6 triggers (cost_threshold, new_tech_vendor, strategic_pivot, low_score, novel_pattern, constraint_drift). Returns `{ auto_proceed, triggers, recommendation }`. Conservative defaults force PRESENT_TO_CHAIRMAN on missing preferences. | Production |
+| **Reality Gate Evaluator** | `lib/eva/reality-gates.js` — 5 phase boundaries (5→6, 9→10, 12→13, 16→17, 20→21). Checks artifact existence, quality score thresholds, URL reachability. Pure dependency injection. Profile threshold overrides supported. | Production |
+| **Chairman Preferences Store** | `lib/eva/chairman-preference-store.js` — Full CRUD with scoped resolution (venture-specific → global fallback). Batch `getPreferences()` uses 2 queries max. Decision-to-preference audit linking. | Production |
+| **Devil's Advocate** | `lib/eva/devils-advocate.js` — Model-isolated adversarial review using GPT-4o (OpenAI Adapter). Invoked at kill gates (3, 5, 13, 23) and promotion gates (16, 17, 22). Returns structured counter-arguments, risks, alternatives. Graceful fallback when API unavailable. | Production |
+| **Constraint Drift Detector** | `lib/eva/constraint-drift-detector.js` — Detects when later stage outputs contradict Stage 1 baseline assumptions. Compares across 4 categories (market, competitor, product, timing). Severity: NONE/LOW/MEDIUM/HIGH. Feeds DFE via `buildFilterEnginePayload()`. | Production |
+| **Saga Coordinator** | `lib/eva/saga-coordinator.js` — Compensation pattern for multi-step operations. Registers steps with action + compensate functions. On failure, compensates completed steps in reverse order. Persists to `eva_saga_log` table. | Production |
+| **Orchestrator Tracer** | `lib/eva/observability.js` — Structured tracing with `startSpan()`/`endSpan()` for timed operations. Events emitted to `eva_events` table. Full traces persisted to `eva_trace_log`. Parent trace correlation for cross-operation linking. | Production |
+| **Orchestrator State Machine** | `lib/eva/orchestrator-state-machine.js` — Formalized states (idle/processing/blocked/failed). Atomic `acquireProcessingLock()` prevents concurrent `processStage()` calls. Lock safety via `orchestrator_lock_id` column. | Production |
+| **Cross-Venture Learning** | `lib/eva/cross-venture-learning.js` — Analyzes patterns across 5+ ventures: kill-stage frequency rankings, failed assumption patterns, successful patterns. Output structured for DFE threshold calibration. | Production |
 | **Stage 0 Ideation Pipeline** | `lib/eva/stage-zero/` (3 entry paths, 8 synthesis components, profiles, forecasting, nursery) | Production |
 | **Stage 0 Evaluation Profiles** | `evaluation_profiles` table, `profile-service.js` | Production |
 | **Stage 0 Counterfactual Engine** | `counterfactual-engine.js`, `counterfactual_scores` table | Production |
@@ -788,9 +799,11 @@ Every state change is logged:
 | Artifact storage | `venture_artifacts` | Production |
 | Token budgets | `venture_token_budgets` | Production |
 | SD Bridge (Stage 18 → LEO) | `lib/eva/lifecycle-sd-bridge.js` | Production |
-| Stage templates | `lib/eva/stage-templates/` | Production |
+| Stage templates | `lib/eva/stage-templates/` (Stages 1-25) | Production |
 | Chairman RLS | `fn_is_chairman()` | Production |
 | Venture context manager | `lib/eva/venture-context-manager.js` | Production |
+| CLI service ports | `lib/eva/services/` — Brand Genome CRUD, Competitive Intelligence (research sessions), Venture Research. CLI-compatible ports of frontend services. | Production |
+| CLI venture scripts | `scripts/eva-venture-new.js`, `eva-idea-evaluate.js`, `eva-idea-status.js`, `eva-idea-sync.js`, `eva-first-pulse.js` | Production |
 
 ### Exists but Dormant (Needs Wiring)
 
@@ -811,45 +824,64 @@ Every state change is logged:
 | Component | Purpose | Priority |
 |-----------|---------|:--------:|
 | **Stage 0 Interactive Chairman Review** | Wire `conductChairmanReview()` to `chairman_decisions` table + Dashboard (currently programmatic passthrough) | P0 |
-| **Decision Filter Engine** | Pure function evaluating 6 triggers per stage | P0 |
-| **Reality Gate Evaluator** | 5 phase-boundary hard gates | P0 |
-| **Chairman Decision API** | Minimal decision submission (table + Realtime + CLI) | P0 |
-| **Chairman Preferences Store** | Per-venture and global DFE threshold overrides | P0 |
-| **CEO Service analysisStep executor** | Stage orchestration for Stages 2-25 | P0 |
-| **CLI Task Dispatcher** | Manual "run next stage for venture X" command | P0 |
-| **Return Path (LEO → Stages)** | SD completion → stage progress sync | P0 |
-| **Saga Coordinator** | Multi-step operation management (wire dormant state machines) | P0 |
+| **Chairman Decision API** | Decision submission endpoints (table already exists; need Realtime subscription wiring + CLI `eva decisions approve/reject` command) | P0 |
+| **CLI Task Dispatcher** | Unified `eva run <venture_id> [--stage N]` command (partial: individual scripts exist for new/evaluate/status/sync but no unified runner) | P0 |
+| **Return Path (LEO → Stages)** | SD completion → stage progress sync (SD Bridge sends work out; no return event handler yet) | P0 |
+| **Stage template gap-fill** | Stages 2-25 templates exist but many are passive containers (validate-only). Triangulation analysis identified Stages 2, 4, 7, 8, 11, 12 as needing active `analysisSteps`. | P0 |
+| **Event bus handler wiring** | Connect dormant event bus infrastructure to service invocations (bus publishes events; nothing currently listens) | P0 |
 | **EVA Master Scheduler** | Portfolio-level scheduling, priority queue processing | P1 |
 | **Chairman Dashboard** | Decision queue + health heatmap + event feed | P1 |
 | **Chairman Notification Service** | Push + digest notification batching | P1 |
-| **Portfolio Knowledge Base** | Cross-venture learning extraction and application | P2 |
-| **Venture Template System** | Auto-generate and apply templates | P2 |
-| **Inter-Venture Dependency Manager** | Dependency graph with auto-blocking | P2 |
+| **Venture Template System** | Auto-generate and apply templates from successful ventures (cross-venture-learning.js provides the pattern analysis; template extraction + application layer needed) | P2 |
+| **Inter-Venture Dependency Manager** | Dependency graph with auto-blocking (`venture_dependencies` table schema defined; manager code needed) | P2 |
 | **Shared Services Abstraction** | Common service interface (load context, execute, emit) | P3 |
 | **Expand-vs-Spinoff Evaluator** | DFE-based scope assessment at Stage 25 | P3 |
+
+**Removed from v1.2 list** (already implemented):
+- ~~Decision Filter Engine~~ → `lib/eva/decision-filter-engine.js` (6 triggers, pure function)
+- ~~Reality Gate Evaluator~~ → `lib/eva/reality-gates.js` (5 boundaries)
+- ~~Chairman Preferences Store~~ → `lib/eva/chairman-preference-store.js` (CRUD + scoped resolution)
+- ~~CEO Service analysisStep executor~~ → `lib/eva/eva-orchestrator.js` (`processStage()` + `run()`)
+- ~~Saga Coordinator~~ → `lib/eva/saga-coordinator.js` (compensation pattern)
+- ~~Portfolio Knowledge Base~~ → `lib/eva/cross-venture-learning.js` (kill frequency, failed assumptions, success patterns)
 
 ### Implementation Sequence
 
 The sequence is ordered so that **each phase produces a testable end-to-end capability**. Phase A can shepherd a single venture through all 25 stages manually. Phase B automates scheduling and the Chairman experience. Phase C adds multi-venture intelligence. Phase D optimizes.
 
+**v1.3 resequencing note**: The v1.2 sequence listed 10 items in Phase A. Codebase reconciliation revealed that 5 of those 10 already exist (DFE, Reality Gates, Chairman Preferences, CEO Service executor, Saga Coordinator). Phase A now focuses on the **integration gaps** — wiring existing components together and filling the remaining holes.
+
 ```
 Phase A: First Venture End-to-End (P0)
   Goal: One venture can progress from ideation (Stage 0) through all 25 stages via CLI commands.
 
+  ALREADY BUILT (not work items — just context):
+  ✅ Decision Filter Engine (lib/eva/decision-filter-engine.js)
+  ✅ Reality Gate Evaluator (lib/eva/reality-gates.js)
+  ✅ Chairman Preferences Store (lib/eva/chairman-preference-store.js)
+  ✅ CEO Service / EVA Orchestrator (lib/eva/eva-orchestrator.js — processStage + run)
+  ✅ Saga Coordinator (lib/eva/saga-coordinator.js — compensation pattern)
+  ✅ Devil's Advocate (lib/eva/devils-advocate.js — GPT-4o adversarial at 7 gates)
+  ✅ Constraint Drift Detector (lib/eva/constraint-drift-detector.js)
+  ✅ Orchestrator Tracer (lib/eva/observability.js)
+  ✅ Orchestrator State Machine (lib/eva/orchestrator-state-machine.js)
+  ✅ Cross-Venture Learning (lib/eva/cross-venture-learning.js)
+
+  REMAINING WORK:
   1. Stage 0 Interactive Chairman Review (wire conductChairmanReview → chairman_decisions)
      └── Stage 0 pipeline already built (Section 14); only the interactive review is missing
-  2. Decision Filter Engine (pure function)
-  3. Reality Gate Evaluator (5 gates)
-  4. Chairman Decision API (chairman_decisions table + Realtime subscription + CLI)
+  2. Chairman Decision API (chairman_decisions table + Realtime subscription + CLI)
+     └── Table exists; need CLI commands (eva decisions list/approve/reject) + Realtime wiring
      └── Unblocks Stages 0, 10, 22, 25 — without this, Phase A deadlocks
-  5. Chairman Preferences Store (chairman_preferences table + DFE integration)
-  6. CEO Service analysisStep executor (Stages 2-25)
-  7. CLI Task Dispatcher ("eva run <venture_id> [--stage N]" + "eva ideate [--path ...]")
-     └── Manual trigger for testing — replaced by scheduler in Phase B
-  8. Return Path (LEO SD completion → stage progress)
-  9. Saga Coordinator (wire evaStateMachines.ts for SD execution + retry sagas)
-     └── See Section 13 for saga types
-  10. Wire event bus handlers (connect dormant infrastructure)
+  3. Stage template gap-fill (add active analysisSteps to passive templates)
+     └── Stages 2, 4, 7, 8, 11, 12 identified by triangulation as needing active analysis
+     └── Stage templates 1-25 exist as containers; ~6 need LLM-driven analysisSteps
+  4. CLI Task Dispatcher (unified "eva run <venture_id> [--stage N]" command)
+     └── Individual scripts exist; need unified orchestration entry point
+  5. Return Path (LEO SD completion → stage progress)
+     └── SD Bridge sends work out; need event handler for "sd.completed" → stage update
+  6. Wire event bus handlers (connect dormant infrastructure)
+     └── Event bus publishes; nothing currently subscribes
 
   Test: Chairman initiates venture via "eva ideate --path competitor_teardown --urls ...",
   Stage 0 runs synthesis + forecast, Chairman reviews and approves via CLI,
@@ -860,24 +892,23 @@ Phase A: First Venture End-to-End (P0)
 Phase B: Automated Scheduling + Chairman Dashboard (P1)
   Goal: Ventures progress automatically. Chairman uses dashboard instead of CLI.
 
-  10. EVA Master Scheduler (priority queue + cadence management)
-      └── Replaces manual "eva run" — ventures auto-advance when unblocked
-  11. Chairman Dashboard (decision queue + health heatmap + event feed)
-  12. Notification service (immediate + daily digest + weekly)
-  13. DFE escalation presentation (context + mitigations in dashboard)
+  7. EVA Master Scheduler (priority queue + cadence management)
+     └── Replaces manual "eva run" — ventures auto-advance when unblocked
+  8. Chairman Dashboard (decision queue + health heatmap + event feed)
+  9. Notification service (immediate + daily digest + weekly)
+  10. DFE escalation presentation (context + mitigations in dashboard)
 
   Test: Create 3 ventures. Scheduler auto-advances them. Chairman receives
   notifications, reviews decisions in dashboard, ventures unblock automatically.
 
 Phase C: Portfolio Intelligence (P2)
-  14. Cross-venture knowledge base
-  15. Venture template system
-  16. Inter-venture dependency manager
+  11. Venture template system (extraction + application — cross-venture-learning.js provides analysis)
+  12. Inter-venture dependency manager (venture_dependencies schema defined; manager code needed)
 
 Phase D: Optimization (P3)
-  17. Shared services abstraction layer
-  18. Expand-vs-spinoff evaluator
-  19. Advanced portfolio optimization (resource contention, priority re-ranking)
+  13. Shared services abstraction layer
+  14. Expand-vs-spinoff evaluator
+  15. Advanced portfolio optimization (resource contention, priority re-ranking)
 ```
 
 ### Phase A Validation: The First Venture Test
@@ -974,6 +1005,8 @@ The shared services model (Section 2) follows a stateless pattern: load context,
 | Venture Retirement | Notify → Export → Teardown → Archive → Retrospective | Hours | Step 3 (teardown) fails, leaving orphaned infrastructure |
 
 Without saga management, these operations have no durable state between steps. If the CEO Service crashes mid-sequence, the operation is lost. The dormant `evaStateMachines.ts` infrastructure provides the foundation — it needs to be connected as the saga coordinator.
+
+**Current implementation status** (v1.3): `lib/eva/saga-coordinator.js` implements a **compensation pattern** saga — it registers steps with action + compensate functions, executes them sequentially, and compensates in reverse order on failure. It persists to `eva_saga_log` and is integrated into the EVA Orchestrator. However, the **long-running process sagas** described below (SD execution over days, venture retirement over weeks) require the **durable state** extension — storing saga state in `eva_sagas` table with timeout management and crash recovery. The compensation saga handles single-session atomicity; durable sagas handle cross-session durability.
 
 ### Saga Architecture
 
@@ -1316,3 +1349,4 @@ When approved, `persistVentureBrief()` writes to both:
 *Steps 1 and 2 run in parallel -- vision defines "what," architecture defines "how."*
 *v1.1: Added Chairman Decision Interface (Section 9) defining how the Chairman submits decisions at blocking gates. Resequenced implementation phases (Section 11) so Phase A produces a testable end-to-end single-venture flow including Chairman decisions and CLI task dispatcher. Added Saga Management (Section 13) for multi-step operations (SD execution, Reality Gate retries, venture retirement) using dormant evaStateMachines.ts infrastructure.*
 *v1.2: Added Stage 0 Venture Ideation Pipeline (Section 14) documenting the fully-implemented pre-lifecycle module. Updated Service Registry to include Stage 0 Pipeline. Extended Phase A test scenario to start from Stage 0 ideation. Identified Chairman Review interactivity gap: `conductChairmanReview()` is currently a non-interactive passthrough — wiring to `chairman_decisions` table is P0 item #1. Added Stage 0 as fourth mandatory Chairman blocking gate (alongside Stages 10, 22, 25). Documented 15+ existing database tables, 8 synthesis components, 3 entry paths, 4 discovery strategies, evaluation profile system, counterfactual engine, stage-of-death predictor, gate signal service, and venture nursery.*
+*v1.3: Codebase reconciliation against `lib/eva/` and CLI-vs-GUI triangulation analysis (Stages 1-25). Discovered 10 components listed as "Needs Building" that already exist in production: Decision Filter Engine, Reality Gate Evaluator, Chairman Preferences Store, CEO Service (EVA Orchestrator), Saga Coordinator, Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, Orchestrator State Machine, and Cross-Venture Learning. Corrected Section 11 inventory: "Exists and Active" grew from 15 to 27 entries; "Needs Building" shrunk from 17 to 13 items. Added CLI service ports and venture scripts. Phase A resequenced from 10 items to 6 remaining work items (5 were already built). Added "Stage template gap-fill" as new P0 item based on triangulation finding that ~6 stage templates are passive containers needing active analysisSteps. Phase C reduced from 3 to 2 items (cross-venture learning already built).*
