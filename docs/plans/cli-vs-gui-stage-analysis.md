@@ -5152,3 +5152,184 @@ GUI Stage 25 = "Optimization & Scale" / "Scale Planning" -- forward-looking stra
 | Venture decision | None (missing!) | ADVANCE/REVISE/REJECT (in viewer) |
 | Next steps | action/owner/timeline | Scale initiatives with investment |
 | analysisStep | None | N/A |
+
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (all 3 respondents)
+
+1. **venture_decision is the single most important addition (5/5)**: All three rate this as the highest-priority gap -- not just for Stage 25, but for the entire 25-stage pipeline. Without an explicit venture decision, the lifecycle produces no verdict. AntiGravity calls it "the Garbage Collector" -- without it, ventures stay in "Zombie Mode" forever. OpenAI emphasizes it must be machine-readable for automation. Claude calls it "the capstone that gives the pipeline meaning."
+
+2. **analysisStep is critical (5/5)**: All agree Stage 25 must synthesize the entire venture journey. This is the most complex analysisStep in the pipeline -- consuming Stages 1 (vision), 5/16 (projections), 13 (roadmap), 20-22 (quality/review/release), 23 (launch), and 24 (metrics). Claude proposes 5-part synthesis (journey summary, financial truth, drift analysis, health assessment, decision recommendation). OpenAI proposes deterministic stage-group assessment. AntiGravity proposes Vision Fidelity Score + Financial Variance + Market Alignment + Venture Grade.
+
+3. **Financial comparison is essential (4/5)**: All agree Stage 25 must compare Stage 5/16 financial projections against Stage 24 actual revenue metrics. This is the "accountability feature" (AntiGravity) -- did the venture perform as projected? Claude and OpenAI both propose revenue/margin variance + trajectory assessment.
+
+4. **Initiative status must be enum**: All agree free text status should become enum. Values align closely: Claude proposes planned/in_progress/completed/abandoned/deferred. OpenAI proposes planned/in_progress/completed/abandoned. AntiGravity proposes proposed/in_progress/completed/deferred/cancelled.
+
+5. **Drift detection should be enhanced via analysisStep**: All agree the word-overlap heuristic is insufficient for a final review. All propose using the analysisStep LLM call for semantic comparison. Claude proposes keeping word-overlap as a fast heuristic alongside semantic assessment. OpenAI proposes keeping it as a "deterministic baseline." AntiGravity proposes it can remain as fallback.
+
+6. **Do NOT import GUI's scale planning**: All agree detailed scale planning (infrastructure capacity, hiring roadmap, market expansion) does NOT belong in Stage 25. This is a retrospective review, not a forward-looking planning stage. Scale planning belongs in the next iteration's BUILD LOOP.
+
+#### Majority Agreement (2 of 3)
+
+1. **Venture health score (all 3, but weight differs)**: All propose a health score, but weights differ. Claude: product/market/technical/financial/team (equal weight, 0-100 each). OpenAI: market(30)/financial(25)/execution(20)/alignment(15)/team(10). AntiGravity: team(20)/technical(30)/business(50). **Resolution**: Use 5 dimensions matching the review categories (product/market/technical/financial/team) with equal weighting. The analysisStep computes the score; users can adjust. Add a banded assessment (critical/fragile/viable/strong) per OpenAI to prevent false precision.
+
+2. **Next steps enhancement (all 3, details vary)**: All propose adding priority. Claude adds category. OpenAI adds success_signal + timeframe enum. AntiGravity adds target_date (ISO) + dependency. **Resolution**: Add priority (critical/high/medium/low) and category (product/market/technical/financial/team). Keep timeline as text (too varied for date validation). Skip success_signal and dependency -- these add complexity without proportional value for a final review stage.
+
+3. **Lightweight forward-looking section (OpenAI only)**: OpenAI proposes scale_readiness + expansion_candidates. Claude and AntiGravity explicitly say "Stage 25 is retrospective, not prospective." **Resolution**: Skip. The venture_decision (expand/continue) signals WHETHER to scale. The HOW belongs in the next iteration's Stage 13 (Product Roadmap).
+
+#### Divergence Resolutions
+
+1. **Venture decision values**: Claude proposes 5 (continue/pivot/expand/sunset/exit). OpenAI proposes same 5. AntiGravity proposes 5 different values (SCALE/MAINTAIN/PIVOT/EXIT/SHUTDOWN). **Resolution**: Use Claude/OpenAI's 5 values: **continue, pivot, expand, sunset, exit**. "Continue" = AntiGravity's MAINTAIN (healthy, keep going). "Expand" = AntiGravity's SCALE. "Sunset" = AntiGravity's SHUTDOWN. Lowercase to match CLI convention. Add confidence (high/medium/low) and rationale as both Claude and OpenAI propose.
+
+2. **Venture decision structure**: Claude proposes decision + rationale + confidence + key_factors (as object). OpenAI proposes decision + confidence (0-1 numeric) + rationale[] + preconditions[]. AntiGravity proposes simple enum field + separate health_score. **Resolution**: Use structured object with decision (enum), rationale (string), confidence (enum: high/medium/low), key_factors[] (array of strings). Keep confidence as enum (not 0-1 numeric) -- false precision on a human judgment call. Skip preconditions (they're implicit in next_steps).
+
+3. **Whether to remove detectDrift()**: AntiGravity proposes removing the local function entirely. Claude proposes keeping it as a fast heuristic alongside semantic analysis. OpenAI proposes keeping it as a "deterministic baseline." **Resolution**: Keep detectDrift() as the deterministic baseline. Enhance drift_check with semantic assessment from analysisStep. The word-overlap function provides reproducible, testable output without LLM dependency. The semantic assessment provides nuanced interpretation. Both have value.
+
+4. **Health score computation**: All three propose different weights and dimensions. **Resolution**: Make the health score derived via analysisStep rather than hardcoded weights. The analysisStep has access to all data and can produce contextually appropriate scores. Store the 5-dimension breakdown (product/market/technical/financial/team, each 0-100) plus overall and band. Let the LLM assess -- hardcoded weights are arbitrary and won't suit all ventures equally.
+
+#### Recommended Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-25',
+  slug: 'venture-review',
+  title: 'Venture Review',
+  version: '2.0.0',
+  schema: {
+    // === Existing (unchanged) ===
+    review_summary: { type: 'string', minLength: 20, required: true },
+    current_vision: { type: 'string', minLength: 10, required: true },
+    drift_justification: { type: 'string' },  // Required if drift_detected
+
+    // === Updated: initiatives with status enum ===
+    initiatives: {
+      type: 'object', required: true,
+      properties: {
+        product: { type: 'array', minItems: 1, items: {
+          title: { type: 'string', required: true },
+          status: { type: 'enum', values: ['planned', 'in_progress', 'completed', 'abandoned', 'deferred'], required: true },
+          outcome: { type: 'string', required: true },
+        }},
+        market: { /* same structure */ },
+        technical: { /* same structure */ },
+        financial: { /* same structure */ },
+        team: { /* same structure */ },
+      },
+    },
+
+    // === NEW: venture decision (THE capstone output) ===
+    venture_decision: {
+      type: 'object', required: true,
+      properties: {
+        decision: { type: 'enum', values: ['continue', 'pivot', 'expand', 'sunset', 'exit'], required: true },
+        rationale: { type: 'string', required: true },
+        confidence: { type: 'enum', values: ['high', 'medium', 'low'], required: true },
+        key_factors: { type: 'array', items: { type: 'string' } },
+      },
+    },
+
+    // === Updated: next steps with priority + category ===
+    next_steps: {
+      type: 'array', minItems: 1,
+      items: {
+        action: { type: 'string', required: true },
+        owner: { type: 'string', required: true },
+        timeline: { type: 'string', required: true },
+        priority: { type: 'enum', values: ['critical', 'high', 'medium', 'low'] },
+        category: { type: 'enum', values: ['product', 'market', 'technical', 'financial', 'team'] },
+      },
+    },
+
+    // === Existing derived (unchanged) ===
+    total_initiatives: { type: 'number', derived: true },
+    all_categories_reviewed: { type: 'boolean', derived: true },
+    drift_detected: { type: 'boolean', derived: true },
+
+    // === Updated: drift check with semantic analysis ===
+    drift_check: {
+      type: 'object', derived: true,
+      properties: {
+        word_overlap_pct: { type: 'number' },
+        word_overlap_drift: { type: 'boolean' },
+        semantic_drift: { type: 'enum', values: ['aligned', 'moderate_drift', 'major_drift'] },
+        rationale: { type: 'string' },
+        original_vision: { type: 'string' },
+        current_vision: { type: 'string' },
+      },
+    },
+
+    // === NEW: venture health (5-dimension assessment) ===
+    venture_health: {
+      type: 'object', derived: true,
+      properties: {
+        product: { type: 'number', min: 0, max: 100 },
+        market: { type: 'number', min: 0, max: 100 },
+        technical: { type: 'number', min: 0, max: 100 },
+        financial: { type: 'number', min: 0, max: 100 },
+        team: { type: 'number', min: 0, max: 100 },
+        overall: { type: 'number', min: 0, max: 100 },
+        band: { type: 'enum', values: ['critical', 'fragile', 'viable', 'strong'] },
+      },
+    },
+
+    // === NEW: financial comparison (projected vs actual) ===
+    financial_comparison: {
+      type: 'object', derived: true,
+      properties: {
+        projection_source: { type: 'string' },
+        revenue_variance_pct: { type: 'number' },
+        unit_economics_assessment: { type: 'string' },
+        financial_trajectory: { type: 'enum', values: ['improving', 'flat', 'declining'] },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change
+
+1. **P0**: Add `venture_decision` (continue/pivot/expand/sunset/exit with rationale and confidence). THE most important output of the entire 25-stage lifecycle.
+2. **P0**: Add `analysisStep` synthesizing the full venture journey -- journey summary, financial comparison, drift analysis, health assessment, decision recommendation. The capstone synthesis.
+3. **P1**: Add `financial_comparison` derived field. Stage 5/16 projections vs Stage 24 actuals. Revenue variance, trajectory, unit economics assessment.
+4. **P1**: Add `venture_health` derived field. 5-dimension score (product/market/technical/financial/team) with overall and band (critical/fragile/viable/strong).
+5. **P1**: Change initiative status to enum (planned/in_progress/completed/abandoned/deferred).
+6. **P2**: Enhance drift detection with semantic assessment from analysisStep. Keep detectDrift() as deterministic baseline.
+7. **P2**: Add priority + category to next_steps.
+8. **P3**: Do NOT add scale planning (belongs in next iteration's BUILD LOOP).
+9. **P3**: Do NOT add scale_readiness assessment (the venture_decision addresses this).
+
+#### Cross-Stage Impact
+
+| Change | Stages 1-24 (All Prior) | Future Iterations | Overall Pipeline |
+|--------|------------------------|-------------------|-----------------|
+| Venture decision | Every gate, metric, and learning across 24 stages feeds into this decision. | Determines next action: continue → new BUILD LOOP. Pivot → revisit ENGINE/IDENTITY. Expand → scale. Exit → lifecycle complete. | The pipeline finally produces a definitive outcome. |
+| Financial comparison | Consumes Stage 5 (profitability) and Stage 16 (financial projections) and Stage 24 (actuals). | Future iterations improve projection accuracy using past variance data. | Projection → measurement → comparison → accountability. |
+| Venture health | Consumes data from Stages 3, 14, 15, 20, 21, 24 across 5 dimensions. | Health trends across iterations show venture trajectory. | Quantified venture state at review time. |
+| Drift analysis | Compares Stage 1 (origin) with Stage 25 (current). | Drift patterns inform whether pivots were intentional or accidental. | Vision accountability across the entire lifecycle. |
+
+---
+
+## Analysis Complete
+
+All 25 stages of the EVA Venture Lifecycle have been analyzed through three-AI triangulation (Claude Opus 4.6, OpenAI GPT 5.3, Google Gemini). Each stage has:
+- CLI ground truth (from `lib/eva/stage-templates/stage-XX.js`)
+- GUI ground truth (from EHG frontend components)
+- Three independent gap analyses
+- Consensus synthesis with recommended schema
+
+### Key Architectural Patterns Established
+
+1. **Every stage gets an analysisStep** (Stages 2-25): LLM-driven synthesis consuming prior stage data. This is the single most important pattern -- it transforms the CLI from a passive data collection tool into an active analytical engine.
+
+2. **Decision-based gates replace boolean gates**: quality_decision (pass/conditional_pass/fail), review_decision (approve/conditional/reject), sprint_completion (complete/partial/blocked), release_decision (release/hold/cancel), venture_decision (continue/pivot/expand/sunset/exit).
+
+3. **Enum standardization**: Free-text fields systematically replaced with enums where aggregation matters (severity, status, category, priority, decision). Free text preserved where narrative matters (rationale, description, plans).
+
+4. **Cross-stage contracts**: Each stage explicitly defines what it produces for downstream consumption. The success_criteria (Stage 23) → success_criteria_evaluation (Stage 24) → venture_decision (Stage 25) chain is the clearest example.
+
+5. **CLI superiority preserved**: Pure function gates, deterministic derivation, lean schema, text-based workflow compatibility, stack-agnostic approach. The GUI's operational complexity (deployment checks, weighted scoring, chairman approval) is consistently rejected.
