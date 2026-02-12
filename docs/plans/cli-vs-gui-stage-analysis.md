@@ -3440,6 +3440,134 @@ const TEMPLATE = {
 6. **No Stage 16 financial readiness**: The checklist doesn't include "can we afford this?" -- the promotion gate results from Stage 16.
 7. **No acceptance criteria**: An item is either "complete" or not, but no definition of what "complete" means for each item.
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Unanimous Consensus (3:0)
+
+| Decision | Claude | OpenAI | AntiGravity | Notes |
+|----------|:------:|:------:|:-----------:|-------|
+| Add analysisStep | 5 Critical | 5 Critical | 5 Critical | "Execution Generator" (AntiGravity) -- translates noun-based Blueprint into verb-based Readiness tasks. Consumes Stages 13/14/15/16. |
+| Prior-stage seeding by category | 5 Critical | 5 Critical | 5 Critical | Each category mapped: architecture←Stage 14 layers, team←Stage 15 members/gaps/hiring, tooling←Stage 14 technologies, environment←Stage 14 infra, dependencies←Stage 14 integration points. |
+| Go/no-go decision gate | 4 High | 5 Critical | 5 Critical | Three-state: go / conditional_go / no_go. All three agree on the pattern. |
+| source_stage_ref on items | Yes | Yes | Yes | Every generated item references which prior stage artifact it came from. Traceability from plan to readiness. |
+| Blocker severity enum | Yes | Yes | Yes | Adopt Stage 15 pattern: critical/high/medium/low. Enables go/no-go logic. |
+| Financial readiness from Stage 16 | Yes | Yes | Yes | Surface promotion gate results and viability warnings. AntiGravity: add critical item if runway < 3 months. |
+| Item priority | Yes | Yes | Yes | All agree items need priority. Levels differ (see below). |
+
+#### Majority Decisions (2:1)
+
+| Decision | For | Against | Resolution |
+|----------|-----|---------|------------|
+| 4-level priority (critical/high/medium/low) | AntiGravity + OpenAI | Claude (2 levels: critical/non_critical) | **Adopt 4 levels** for consistency with blocker severity enum and prior stage patterns (Stage 15). The go/no-go gate focuses on "critical" items, but 4 levels give useful granularity for sprint sequencing in Stage 18. |
+| Keep 5 categories (no new ones) | Claude + AntiGravity | OpenAI (add security_readiness + financial_readiness = 7) | **Keep 5 categories**. Security items seeded into architecture/environment per Stage 14 cross-cutting consensus. Financial readiness surfaced as items/blockers within dependencies, not a separate category. Rationale: Every new category weakens the "cover all 5" requirement and fragments readiness tracking. |
+| Skip acceptance criteria per item | Claude + AntiGravity (implied) | OpenAI (add acceptance_criteria) | **Skip acceptance criteria**. Over-engineering for a checklist stage. "Complete" means "set up and functional." Items needing detailed AC should become Stage 18 sprint tasks, not checklist items. |
+| Skip deadline per item | Claude | AntiGravity + OpenAI (optional deadline) | **Split decision, skip deadline**. Claude's argument wins: Stage 13 phases already provide timeline context. Items inherit urgency from their phase and priority level. Per-item dates add maintenance burden with little analytical value at this stage. |
+
+#### Divergence Resolutions
+
+**Go/no-go threshold**: Claude: all critical items complete + no critical blockers + promotion gate passed. AntiGravity: 100% of critical items. OpenAI: critical >= 90% + weighted >= 80% + no critical blockers. **Resolution**: **100% critical items complete + no critical blockers + Stage 16 promotion gate not failed** = GO. **>= 80% critical items complete + critical blockers have mitigations** = CONDITIONAL_GO. **Otherwise** = NO_GO. Simpler than OpenAI's weighted approach, stricter than "just 80%." The conditional path handles the common "start building while finishing last few items" pattern.
+
+**Item description field**: AntiGravity adds description (context from Blueprint). Claude and OpenAI don't propose it explicitly. **Resolution**: Add description field. Generated items benefit from context ("Set up React project per Stage 14 frontend layer architecture"). Keeps items self-documenting.
+
+**owner vs owner_role**: AntiGravity maps owner to Stage 15 role names. Claude and OpenAI keep generic owner string. **Resolution**: Keep `owner` as string (existing). The analysisStep should populate it with suggested owners based on Stage 15 team roles, but the field remains a simple string.
+
+**Contrarian themes convergence**: All three raise the same core risk -- "generated items become bureaucratic overhead." AntiGravity: "50 items → mark_all_complete --force." OpenAI: "rigid gates block learning." Claude: "most important items are the ones users ADD." **Resolution**: Keep generated list focused on **critical items only** by default. Non-critical items as suggestions, not requirements. The go/no-go gate cares only about critical items. This keeps the checklist actionable, not administrative.
+
+#### Recommended Stage 17 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-17',
+  slug: 'pre-build-checklist',
+  title: 'Pre-Build Checklist',
+  version: '2.0.0',
+  schema: {
+    checklist: {
+      type: 'object', required: true,
+      properties: {
+        // 5 categories (unchanged), each: array of items
+        architecture: { type: 'array', minItems: 1 },
+        team_readiness: { type: 'array', minItems: 1 },
+        tooling: { type: 'array', minItems: 1 },
+        environment: { type: 'array', minItems: 1 },
+        dependencies: { type: 'array', minItems: 1 },
+      },
+      // Item schema (enhanced)
+      itemSchema: {
+        name: { type: 'string', required: true },
+        description: { type: 'string' },  // NEW: context from Blueprint
+        status: { type: 'enum', values: ['not_started', 'in_progress', 'complete', 'blocked'], required: true },
+        priority: { type: 'enum', values: ['critical', 'high', 'medium', 'low'] },  // NEW
+        owner: { type: 'string' },
+        source_stage_ref: { type: 'string' },  // NEW: e.g., "stage-14.layers.frontend"
+        notes: { type: 'string' },
+      },
+    },
+
+    // === Updated: blockers with severity enum ===
+    blockers: {
+      type: 'array',
+      items: {
+        description: { type: 'string', required: true },
+        severity: { type: 'enum', values: ['critical', 'high', 'medium', 'low'], required: true },  // CHANGED
+        mitigation: { type: 'string', required: true },
+        source_stage_ref: { type: 'string' },  // NEW
+      },
+    },
+
+    // === Existing derived (unchanged) ===
+    total_items: { type: 'number', derived: true },
+    completed_items: { type: 'number', derived: true },
+    readiness_pct: { type: 'number', derived: true },
+    all_categories_present: { type: 'boolean', derived: true },
+    blocker_count: { type: 'number', derived: true },
+
+    // === NEW: critical items tracking ===
+    critical_items_total: { type: 'number', derived: true },
+    critical_items_complete: { type: 'number', derived: true },
+    critical_readiness_pct: { type: 'number', derived: true },
+
+    // === NEW: build readiness decision ===
+    build_readiness: {
+      type: 'object', derived: true,
+      properties: {
+        decision: { type: 'enum', values: ['go', 'conditional_go', 'no_go'] },
+        rationale: { type: 'string' },
+        conditions: { type: 'array' },  // For conditional_go
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` consuming Stages 13/14/15/16. Generate items per category: architecture from Stage 14 layers, team from Stage 15 members/gaps/hiring, tooling from Stage 14 technologies, environment from Stage 14 infra, dependencies from Stage 14 integration points. Each item has description, priority, source_stage_ref, suggested owner. Focus on critical items.
+2. **P0**: Add `priority` (critical/high/medium/low) and `source_stage_ref` to checklist items. Enables go/no-go logic and traceability.
+3. **P1**: Add `build_readiness` decision (go/conditional_go/no_go). GO = 100% critical items complete + no critical blockers + Stage 16 promotion gate passed. CONDITIONAL = >=80% critical + mitigations. NO_GO = otherwise.
+4. **P1**: Change blocker severity to enum (critical/high/medium/low). Per Stage 15 pattern.
+5. **P1**: Add `critical_items_total`, `critical_items_complete`, `critical_readiness_pct` derived fields. Go/no-go based on critical readiness, not overall.
+6. **P2**: Add `description` field to checklist items. Generated items include Blueprint context.
+7. **P2**: Surface Stage 16 financial readiness as items/blockers (runway < 3 months → critical blocker, viability warnings → dependency items).
+8. **P3**: Do NOT add acceptance criteria per item (over-engineering for checklist).
+9. **P3**: Do NOT add deadline per item (phases handle timing).
+10. **P3**: Do NOT add security_readiness or financial_readiness categories (seed into existing 5).
+11. **P3**: Do NOT add is_auto_generated flag (source_stage_ref already indicates generated items).
+
+#### Cross-Stage Impact
+
+| Change | Stage 18 (Sprint Planning) | Stage 19+ (Build/QA) | Overall Pipeline |
+|--------|--------------------------|---------------------|-----------------|
+| Generated checklist from Blueprint | Sprint 1 backlog includes setup tasks. Incomplete items carry forward. | Build starts with verified infrastructure. | Plan → readiness → sprint is traceable. |
+| Build readiness gate | Sprint planning knows: go (full speed), conditional_go (setup + build), no_go (return to Blueprint). | Prevents "started building before ready" failures. | Final quality gate before execution. |
+| Priority on items | Stage 18 sequences: critical setup first, then features. | Critical path is explicit. | Sprint velocity not killed by missing setup. |
+| Source stage references | Sprint tasks trace to architecture/team/financial decisions. | Build artifacts trace to Blueprint. | Full plan-to-execution traceability. |
+
 ---
 
 ## Stage 18: Sprint Planning
