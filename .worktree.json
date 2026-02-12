@@ -1,7 +1,6 @@
 {
-  "sdKey": "SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-C",
-  "expectedBranch": "feat/SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-C-architectural-pattern-checklist-gate",
-  "createdAt": "2026-02-09T00:28:11.418Z",
-  "hostname": "Legion-Laptop",
+  "sdKey": "SD-LEO-FIX-REMEDIATE-LEARNING-PIPELINE-001",
+  "expectedBranch": "feat/SD-LEO-FIX-REMEDIATE-LEARNING-PIPELINE-001",
+  "createdAt": "2026-02-12T04:13:31.340Z",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
