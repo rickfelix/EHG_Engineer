@@ -13,10 +13,12 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { claimSD, isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
+import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 
 dotenv.config();
 
@@ -161,6 +163,17 @@ async function main() {
     process.exit(1);
   }
 
+  // 4.5. Resolve worktree (creates if needed in claim mode)
+  let worktreeInfo = null;
+  try {
+    const repoRoot = execSync('git rev-parse --show-toplevel', {
+      encoding: 'utf8', stdio: 'pipe'
+    }).trim();
+    worktreeInfo = await resolveWorkdir(effectiveId, 'claim', repoRoot);
+  } catch {
+    // Worktree resolution is optional - don't block SD start
+  }
+
   // 5. Display SD info
   console.log(`\n${colors.green}✓ SD claimed successfully${colors.reset}`);
   console.log(`\n${colors.bold}SD: ${effectiveId}${colors.reset}`);
@@ -170,6 +183,14 @@ async function main() {
   console.log(`Progress: ${sd.progress_percentage || 0}%`);
   console.log(`Type: ${sd.sd_type || 'feature'}`);
   console.log(`is_working_on: ${colors.green}true${colors.reset}`);
+
+  // 5.1. Show worktree info
+  if (worktreeInfo?.success && worktreeInfo.worktree?.exists) {
+    console.log(`\n${colors.bold}Worktree:${colors.reset}`);
+    console.log(`   Path:   ${colors.cyan}${worktreeInfo.cwd}${colors.reset}`);
+    console.log(`   Branch: ${worktreeInfo.worktree.branch || 'unknown'}`);
+    console.log(`   Source: ${worktreeInfo.source}${worktreeInfo.worktree.created ? ' (newly created)' : ''}`);
+  }
 
   // 5.5. Show duration estimate
   try {
