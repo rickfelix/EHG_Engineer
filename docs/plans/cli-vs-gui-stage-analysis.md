@@ -3190,6 +3190,186 @@ The database schema has basic venture-level fields (`projected_revenue`, `projec
 7. **No unit economics coherence**: No validation that projections align with Stage 5 CAC/LTV/payback.
 8. **MIN_PROJECTION_MONTHS = 6**: May be too short for ventures with longer sales cycles or multi-year roadmaps.
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Unanimous Consensus (3:0)
+
+| Decision | Claude | OpenAI | AntiGravity | Notes |
+|----------|:------:|:------:|:-----------:|-------|
+| Add analysisStep | 5 Critical | 5 Critical | 5 Critical | Strongest consensus of any stage. All three emphasize this is the synthesis stage -- it consumes 7 prior stages (5, 7, 11, 12, 13, 14, 15). |
+| Phase-variable burn rate | 5 Critical | 5 Critical | 5 Critical | "Stage 15's phase_ref is meaningless without this" (AntiGravity). Replace flat monthly_burn_rate with phase-based costs derived from Stage 15. |
+| Revenue driver model from prior stages | 4 High | 4 High | 4 High | All agree: Marketing Spend / CAC = New Customers × Price. All agree: user override must be available. |
+| Unit economics coherence checks | 4 High | 5 Critical | 3 Medium | All: warnings, not blockers. Compare projections against Stage 5 LTV:CAC, payback, margins. Severity tiers. |
+| Promotion gate viability checks | 4 High | 5 Critical | 5 Critical | "Can approve a venture that is bankrupt on paper" (AntiGravity). Gate must check financial viability, not just data presence. |
+| Funding rounds need triggers | 2 Low | 4 High | 3 Medium | Validate rounds against cash flow curve. Flag when runway runs out before planned raise. |
+| Keep monthly_burn_rate as derived | Yes | Yes | Yes | Becomes weighted average or fallback. Primary: phase-based costs. |
+
+#### Majority Decisions (2:1)
+
+| Decision | For | Against | Resolution |
+|----------|-----|---------|------------|
+| Lightweight P&L structure | AntiGravity + OpenAI | Claude (cost categories only) | **Adopt lightweight P&L**. Revenue → COGS → Gross Profit → OpEx (R&D/S&M/G&A) → Net Income. All three want more than flat month/revenue/costs; two want proper P&L line items. This enables margin verification against Stage 5 and cost driver visibility. Keep it "Startup Standard" not GAAP. |
+| Cash balance tracking per month | AntiGravity + OpenAI | Claude (not proposed) | **Add cash_balance_end per projection month + min_cash_low_point derived**. Essential for the viability gate ("Does cash ever go negative?"). AntiGravity: "If negative → Bankrupt." |
+| Single base case vs 3 scenarios | Claude (sensitivity) + AntiGravity (defer) | OpenAI (3 scenarios) | **Single base case + sensitivity-derived ranges**. Two respondents argue against full scenario sets. Claude's sensitivity approach (±ranges on conversion, churn, hiring pace → derived runway_range and break_even_range) gives decision-makers the range without tripling complexity. AntiGravity: "CLI can simulate scenarios by modifying inputs and re-running." |
+
+#### Divergence Resolutions
+
+**P&L depth**: AntiGravity wants "Startup Standard" (Revenue/COGS/Gross Profit/OpEx R&D-S&M-G&A/Net Income). OpenAI wants similar + Net Cash Flow + Cumulative Cash. Claude wants just cost categories. **Resolution**: Adopt AntiGravity's "Startup Standard" P&L with cash_balance_end from the cumulative cash tracking. This is the minimum structure that enables margin verification (Stage 5), cost driver analysis, and cash flow viability.
+
+**Promotion gate thresholds**: AntiGravity: runway >= 6 + cash never negative (hard checks). OpenAI: runway >= 9-12 months or funded to milestone (with override). Claude: warnings only, never block on viability. **Resolution**: Viability checks as **strong warnings with severity** (not hard blockers). The most critical: `cash_goes_negative_without_funding` should be `critical` severity. Rationale: the user may have a signed term sheet or personal savings not captured in prior stages. But "you're bankrupt in month 4" must be impossible to miss.
+
+**Funding round structure**: AntiGravity: month_index (when cash arrives). OpenAI: trigger_type + trigger_value + linked_milestone_id. Claude: runway_trigger_months + milestone_ref. **Resolution**: `month_index` (which projection month funds arrive) + `trigger_type` (runway_threshold or milestone) + `milestone_ref` (Stage 13 link). Keep it lean -- no valuation, no dilution, no cap table.
+
+**Key assumptions transparency**: Only Claude proposes `key_assumptions[]` explicitly. **Resolution**: Include it. Every generated number should reference its source stage and confidence level. This is the single best defense against the "false precision" concern all three raise.
+
+**Revenue model automation danger**: AntiGravity's contrarian is the strongest: "Building a model on a guess on a guess creates false precision." AntiGravity then rebuts itself: "Automate to expose the absurdity of bad assumptions." **Resolution**: Generate baseline revenue from driver model, but label everything as "model-derived estimates" and make easily overridable. The key_assumptions array makes the guess-chain visible.
+
+#### Recommended Stage 16 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-16',
+  slug: 'financial-projections',
+  title: 'Financial Projections',
+  version: '2.0.0',
+  schema: {
+    // === Existing (unchanged) ===
+    initial_capital: { type: 'number', min: 0, required: true },
+
+    // === Updated: projections with "Startup Standard" P&L + cash tracking ===
+    projections: {
+      type: 'array', minItems: 6,
+      items: {
+        month: { type: 'number', min: 1, required: true },
+        phase_ref: { type: 'string' },  // NEW: Stage 13 phase
+
+        // Income
+        revenue: { type: 'number', min: 0, required: true },
+
+        // Cost structure (Startup Standard P&L)
+        cogs: { type: 'number', min: 0 },               // NEW: cost of goods sold
+        opex_rnd: { type: 'number', min: 0 },            // NEW: R&D (engineering team from Stage 15)
+        opex_sm: { type: 'number', min: 0 },             // NEW: Sales & Marketing (Stage 11 + sales team)
+        opex_ga: { type: 'number', min: 0 },             // NEW: General & Admin (founders, legal, ops)
+
+        // Derived per-row
+        gross_profit: { type: 'number', derived: true },  // revenue - cogs
+        total_expenses: { type: 'number', derived: true }, // cogs + opex_rnd + opex_sm + opex_ga
+        net_income: { type: 'number', derived: true },     // revenue - total_expenses
+        cash_balance_end: { type: 'number', derived: true }, // cumulative cash position
+      },
+    },
+
+    // === Updated: funding_rounds with triggers ===
+    funding_rounds: {
+      type: 'array',
+      items: {
+        round_name: { type: 'string', required: true },
+        target_amount: { type: 'number', min: 0, required: true },
+        month_index: { type: 'number' },    // NEW: which projection month funds arrive
+        trigger_type: { type: 'enum', values: ['runway_threshold', 'milestone', 'date'] },  // NEW
+        milestone_ref: { type: 'string' },  // NEW: Stage 13 milestone link
+      },
+    },
+
+    // === NEW: sensitivity variables (single base case + ranges) ===
+    sensitivity: {
+      type: 'object',
+      properties: {
+        conversion_rate_delta: { type: 'number' },        // ±%
+        churn_rate_delta: { type: 'number' },              // ±%
+        hiring_pace_delta_months: { type: 'number' },      // ±months
+      },
+    },
+
+    // === NEW: key assumptions (transparency) ===
+    key_assumptions: {
+      type: 'array',
+      items: {
+        assumption: { type: 'string', required: true },
+        source_stage: { type: 'number' },
+        confidence: { type: 'enum', values: ['high', 'medium', 'low'] },
+      },
+    },
+
+    // === Existing derived (enhanced) ===
+    monthly_burn_rate: { type: 'number', derived: true },   // CHANGED: now derived weighted average
+    runway_months: { type: 'number', derived: true },
+    break_even_month: { type: 'number', nullable: true, derived: true },
+    total_projected_revenue: { type: 'number', derived: true },
+    total_projected_costs: { type: 'number', derived: true },
+
+    // === NEW: cash flow derived ===
+    min_cash_low_point: { type: 'number', derived: true },  // Lowest cash_balance_end in projections
+
+    // === NEW: derived ranges from sensitivity ===
+    runway_range: {
+      type: 'object', derived: true,
+      properties: {
+        optimistic: { type: 'number' },
+        base: { type: 'number' },
+        pessimistic: { type: 'number' },
+      },
+    },
+
+    // === NEW: coherence checks ===
+    coherence_checks: {
+      type: 'array', derived: true,
+      items: {
+        check_name: { type: 'string' },
+        expected: { type: 'string' },
+        projected: { type: 'string' },
+        severity: { type: 'enum', values: ['ok', 'warning', 'risk', 'critical'] },
+      },
+    },
+
+    // === Updated: promotion_gate with viability warnings ===
+    promotion_gate: {
+      type: 'object', derived: true,
+      properties: {
+        pass: { type: 'boolean' },
+        rationale: { type: 'string' },
+        blockers: { type: 'array' },              // Structural (hard block, existing)
+        viability_warnings: { type: 'array' },     // NEW: financial viability (severity-ranked)
+        required_next_actions: { type: 'array' },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` for financial model generation (single LLM call consuming Stages 5/7/11/12/13/14/15; generates phase-based costs from Stage 15 team data, driver-based revenue from pricing × funnel × conversion, P&L line items, cash flow)
+2. **P0**: Replace flat projections with "Startup Standard" P&L structure (revenue, COGS, OpEx R&D/S&M/G&A, net_income, cash_balance_end). Derive from Stage 15 team costs → OpEx R&D, Stage 11 GTM → OpEx S&M, Stage 14 infra → COGS.
+3. **P0**: Phase-variable costs derived from Stage 15 `phase_ref` groupings. monthly_burn_rate becomes derived weighted average.
+4. **P1**: Add `coherence_checks[]` validating projections against Stage 5 unit economics (LTV:CAC divergence, payback mismatch, margin consistency, growth rate sanity). Warnings with severity tiers.
+5. **P1**: Add `key_assumptions[]` with source_stage reference and confidence. Every generated number traceable.
+6. **P1**: Add viability warnings to promotion gate (cash_goes_negative, runway_inadequate, break_even_unreachable). Severity-ranked warnings, not hard blockers.
+7. **P2**: Add `sensitivity` variables + derived `runway_range`. ±ranges on conversion, churn, hiring pace.
+8. **P2**: Add funding round triggers (`month_index`, `trigger_type`, `milestone_ref`). Validate cash doesn't go negative before planned raise.
+9. **P2**: Add `min_cash_low_point` derived field (lowest cash_balance_end). If negative without funding bridge, critical warning.
+10. **P3**: Do NOT add full scenario modeling (3 separate projection arrays). Sensitivity ranges achieve the goal.
+11. **P3**: Do NOT add GAAP P&L / depreciation / tax modeling. "Startup Standard" is sufficient.
+12. **P3**: Do NOT add cap table / dilution / valuation. Fundraising execution, not BLUEPRINT.
+13. **P3**: Do NOT add cash flow statement separate from projections. cash_balance_end per month captures it.
+
+#### Cross-Stage Impact
+
+| Change | Stage 17 (Pre-Build Checklist) | Stage 18+ (BUILD LOOP) | Promotion Gate |
+|--------|-------------------------------|----------------------|----------------|
+| Startup Standard P&L | Budget per category known (R&D: 60%, S&M: 25%, G&A: 10%, COGS: 5%) | Spend tracking against P&L categories | Margin viability visible |
+| Phase-variable costs | Phase budget allocated. Foundation: $39K/mo, Growth: $90K/mo | Sprint budgets grounded in phase costs | Viability uses real phase costs |
+| Revenue driver model | Revenue targets per phase. Measurable milestones. | Feature prioritization tied to revenue impact | Break-even path based on structured model |
+| Cash balance tracking | Build starts with funded plan (or flagged gaps) | Cash monitoring against plan during build | "Does cash go negative?" gate check |
+| Coherence checks | Build starts with validated financial assumptions | Assumption tracking throughout | Internal contradictions caught before build |
+| Key assumptions | Build team knows what to validate first | Assumption invalidation triggers re-planning | Transparent gate rationale |
+
 ---
 
 ## Stage 17: Pre-Build Checklist
