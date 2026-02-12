@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-12T00:25:05.664Z
-**Rows**: 7,963
+**Generated**: 2026-02-12T04:11:56.320Z
+**Rows**: 7,968
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (26 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -44,6 +44,7 @@
 | pid_validated_at | `timestamp with time zone` | YES | - | - |
 | terminal_identity | `text` | YES | - | Computed identity from machine_id:terminal_id for uniqueness. Part of FR-1. |
 | current_branch | `text` | YES | - | Current git branch, updated by heartbeat. Used for multi-session ship safety. |
+| worktree_path | `text` | YES | - | Absolute path to git worktree for this session's claimed SD. Populated at claim time by resolve-sd-workdir.js. NULL if no worktree exists. |
 
 ## Constraints
 
@@ -94,6 +95,10 @@
 - `idx_claude_sessions_unique_terminal_active`
   ```sql
   CREATE UNIQUE INDEX idx_claude_sessions_unique_terminal_active ON public.claude_sessions USING btree (terminal_identity) WHERE ((terminal_identity IS NOT NULL) AND (terminal_identity <> ':'::text) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
+  ```
+- `idx_claude_sessions_worktree_path`
+  ```sql
+  CREATE INDEX idx_claude_sessions_worktree_path ON public.claude_sessions USING btree (worktree_path) WHERE (worktree_path IS NOT NULL)
   ```
 
 ## RLS Policies
