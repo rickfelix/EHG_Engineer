@@ -3787,7 +3787,221 @@ const TEMPLATE = {
 
 ## Stage 19: Build Execution
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-19.js`
+**Phase**: THE BUILD LOOP (Stages 17-22)
+**Type**: Passive validation + **active `computeDerived()`** (completion tracking)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `tasks[]` | array | minItems: 1 | Yes |
+| `tasks[].name` | string | minLength: 1 | Yes |
+| `tasks[].status` | enum | todo/in_progress/done/blocked | Yes |
+| `tasks[].assignee` | string | - | No |
+| `tasks[].sprint_item_ref` | string | - | No |
+| `issues[]` | array | Optional | No |
+| `issues[].description` | string | minLength: 1 | If present |
+| `issues[].severity` | string | Free text | If present |
+| `issues[].status` | string | Free text | If present |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_tasks` | number | Count of all tasks |
+| `completed_tasks` | number | Tasks with status = 'done' |
+| `blocked_tasks` | number | Tasks with status = 'blocked' |
+| `completion_pct` | number | completed / total × 100 |
+| `tasks_by_status` | object | Count per status (todo/in_progress/done/blocked) |
+
+**Processing**:
+- `validate(data)`: Schema validation + per-task name/status checks
+- `computeDerived(data)`: Calculates completion stats and status distribution
+- **No `analysisStep`** -- all tasks are user-provided
+- **sprint_item_ref exists** but is optional and not validated against Stage 18 items
+- **No SD execution tracking** -- doesn't track which SD Bridge payloads are executing
+- **No architecture layer reference** -- tasks not linked to Stage 14 layers
+- **Issue severity and status are free text** -- not enums
+- **No completion gate** -- no threshold for proceeding to Stage 20 (QA)
+- **Very thin schema** -- essentially a minimal task board
+
+### GUI Implementation (Ground Truth)
+
+**GUI Stage 19 = "Integration & API Layer"** -- completely different scope from CLI's "Build Execution."
+
+**Components found**:
+- `stages/v2/Stage19IntegrationApiLayer.tsx` -- API endpoint management (CRUD)
+- `stages/v2/Stage19Integration.tsx` -- Integration views
+- `stages/v2/Stage19IntegrationVerification.tsx` -- Integration contract verification
+- `stages/Stage19IntegrationVerification.tsx` -- Legacy verification
+- `stage-outputs/viewers/Stage19Viewer.tsx` -- Output viewer with iteration cycles, impact metrics, decisions
+
+**GUI Features** (different scope than CLI):
+- API endpoint management (GET/POST/PUT/PATCH/DELETE)
+- External integrations configuration
+- API configuration (base URL, version, documentation)
+- Strategy cards (rate limiting, error handling, versioning)
+- Iteration cycles with impact metrics (baseline → current → target)
+- Decision badges (ADVANCE/REVISE/REJECT)
+- Composite score and confidence ring
+- Timeline view with cycle history
+
+**Major scope divergence**: CLI Stage 19 is a generic task tracker. GUI Stage 19 is specifically about building the API/integration layer. These are fundamentally different stages.
+
+### Key Gaps
+
+1. **No analysisStep**: Stage 18 has sprint items with SD Bridge payloads. Stage 19 should derive tasks from sprint items, decomposing each into executable tasks.
+2. **sprint_item_ref disconnected**: The field exists but isn't enforced or validated. No structural link from tasks back to Stage 18 items.
+3. **No SD execution tracking**: Stage 18's SD Bridge generates SD payloads. Stage 19 should track which SDs are being executed, their status, and results.
+4. **Issue severity/status are free text**: Should be enums per established pattern (severity: critical/high/medium/low, status: open/in_progress/resolved/wontfix).
+5. **No completion gate**: When is the sprint "done enough" for QA? No threshold on completion_pct.
+6. **Very thin schema**: Only name/status/assignee per task. No story points, no architecture layer, no estimated effort.
+7. **No architecture layer tracking**: Can't tell which Stage 14 layers are being built.
+
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (3/3)
+
+1. **Add analysisStep with 1:1 sprint item → task mapping**: All three agree Stage 18 sprint items should automatically become Stage 19 tasks. No decomposition into subtasks -- sprint items are already scoped in Stage 18. The analysisStep is an "initializer/synchronizer" (AG), not an analyzer. 1 Sprint Item = 1 Task.
+
+2. **Issue severity/status must become enums**: Free text makes programmatic gating impossible. All agree on severity: critical/high/medium/low. All agree on status: open/in_progress/resolved/wontfix.
+
+3. **Add completion gate for Stage 20 readiness**: No respondent accepts "sprint at 20% done flows to QA." All agree: no unresolved critical issues = hard gate. Completion percentage = soft signal.
+
+4. **Add architecture_layer_ref on tasks**: Low-cost field inherited from Stage 14 via Stage 18. Enables per-layer progress tracking. All agree this is derived, not user-entered.
+
+5. **SD execution tracking needed**: Stage 18's SD Bridge generates payloads; Stage 19 must close the loop by tracking SD status. All agree Stage 19 is a read-only status dashboard, not an execution engine.
+
+6. **Add issue type enum**: bug/blocker/tech_debt at minimum. Enables Stage 22 Sprint Review to assess debt accumulation and Stage 20 to focus on bugs vs blockers.
+
+7. **Keep tasks high-level**: Don't encourage 50 sub-tasks per sprint item. One Sprint Item = One Tracking Line (AG). Don't replicate execution logic already in LEO (OpenAI). Stage 19 is lightweight aggregation (Claude).
+
+#### Majority Agreement (2/3)
+
+1. **story_points on tasks** (Claude + OpenAI yes, AntiGravity no): Claude and OpenAI carry story_points from Stage 18 for weighted layer progress. AG argues "keep Stage 19 operational, not analytical." **Resolution**: Include story_points. It's zero-effort (carried from Stage 18), enables weighted layer progress, and helps Stage 22 Sprint Review compare planned vs actual.
+
+2. **priority on tasks** (Claude + OpenAI yes, AntiGravity implicit): Claude and OpenAI add priority enum. AG doesn't explicitly include but agrees critical issues must gate. **Resolution**: Include priority (inherited from Stage 18 item priority). Enables "all critical tasks done" check in completion gate.
+
+3. **sd_ref on tasks** (Claude + OpenAI yes, AntiGravity as separate sd_tracker array): All want SD tracking, but AG proposes a separate sd_tracker array with process-level detail (leo_process_id, artifacts_generated). **Resolution**: SD status belongs on the task, not in a separate array. Each task gets sd_ref linking to Stage 18's SD Bridge payload. sd_execution_summary is a derived aggregate. Keeping it on-task is simpler and avoids synchronization between two arrays.
+
+4. **Layer progress as derived field** (Claude + OpenAI explicit, AG agrees but simpler): All support per-layer progress. OpenAI adds layers_at_risk concept. Claude derives from tasks grouped by architecture_layer_ref. **Resolution**: Simple derived layer_progress object. Tasks grouped by architecture_layer_ref, completion percentage per layer. Skip layers_at_risk (over-engineering at this stage).
+
+#### Divergence Resolutions
+
+**Completion gate approach**: Claude proposes decision-based (complete/partial/blocked with ready_for_qa). OpenAI wants hard thresholds (≥80% completion, ≤20% blocked). AG wants soft % + hard on critical issues. **Resolution**: Adopt Claude's decision-based approach. complete/partial/blocked is more expressive than a numeric threshold. Decision logic: COMPLETE = all tasks done + no critical/high issues. PARTIAL = all critical tasks done + no critical issues (allows partial QA). BLOCKED = critical tasks blocked or critical issues unresolved. Don't hard-code ≥80% -- a sprint with 5 of 10 non-critical tasks done but all 3 critical tasks complete should still allow QA on the critical path.
+
+**Issue status values**: Claude = open/in_progress/resolved/wontfix. AG adds duplicate. OpenAI adds blocked/deferred. **Resolution**: Keep Claude's four values. "Duplicate" is a resolution reason, not a status (mark as wontfix with note). "Blocked" is a task status, not an issue status. "Deferred" is wontfix for this sprint.
+
+**Separate SD tracker vs on-task SD fields**: AG proposes a separate sd_tracker array with leo_process_id, last_update, artifacts_generated. Claude and OpenAI put SD ref on tasks. **Resolution**: SD tracking on tasks, not separate array. In practice, task.status mirrors sd.status. Separate arrays create sync problems. The sd_execution_summary derived field aggregates SD status across all tasks.
+
+**source_type field**: OpenAI proposes source_type (sprint_item vs unplanned) to distinguish planned from ad-hoc tasks. Others use sprint_item_ref presence/absence. **Resolution**: Skip source_type. If sprint_item_ref is populated, the task came from Stage 18. If not, it's manually added. Simpler -- don't add a field when an existing field's presence/absence carries the same information.
+
+**Effort tracking**: OpenAI wants estimated/actual_effort_hours. Others don't. **Resolution**: Skip. This is project management creep. Story points (from Stage 18) provide sufficient effort signal. Actual hours tracking belongs in time-tracking tools, not a venture lifecycle stage.
+
+**Task enrichment -- story_points**: AG argues "keep Stage 19 operational, don't copy Stage 18 analytical fields." **Resolution**: Override. story_points are carried (not re-entered), enable weighted layer progress, and cost nothing. The field exists in Stage 18; carrying it to Stage 19 is mechanical, not analytical.
+
+#### Recommended Stage 19 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-19',
+  slug: 'build-execution',
+  title: 'Build Execution',
+  version: '2.0.0',
+  schema: {
+    // === Updated: tasks with enrichment ===
+    tasks: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        status: { type: 'enum', values: ['todo', 'in_progress', 'done', 'blocked'], required: true },
+        assignee: { type: 'string' },
+        priority: { type: 'enum', values: ['critical', 'high', 'medium', 'low'] },  // NEW: from Stage 18
+        sprint_item_ref: { type: 'string' },       // EXISTING (strengthened)
+        sd_ref: { type: 'string' },                // NEW: SD Bridge payload reference
+        architecture_layer_ref: { type: 'string' }, // NEW: from Stage 14
+        story_points: { type: 'number' },           // NEW: from Stage 18
+      },
+    },
+
+    // === Updated: issues with enums + type ===
+    issues: {
+      type: 'array',
+      items: {
+        description: { type: 'string', required: true },
+        severity: { type: 'enum', values: ['critical', 'high', 'medium', 'low'], required: true },  // CHANGED
+        status: { type: 'enum', values: ['open', 'in_progress', 'resolved', 'wontfix'], required: true },  // CHANGED
+        type: { type: 'enum', values: ['bug', 'blocker', 'tech_debt', 'risk'] },  // NEW
+        task_ref: { type: 'string' },  // NEW: which task this relates to
+      },
+    },
+
+    // === Existing derived (unchanged) ===
+    total_tasks: { type: 'number', derived: true },
+    completed_tasks: { type: 'number', derived: true },
+    blocked_tasks: { type: 'number', derived: true },
+    completion_pct: { type: 'number', derived: true },
+    tasks_by_status: { type: 'object', derived: true },
+
+    // === NEW: layer progress ===
+    layer_progress: { type: 'object', derived: true },
+    // Computed from tasks grouped by architecture_layer_ref
+    // e.g., { frontend: { total: 3, done: 2, pct: 67 }, backend: { total: 5, done: 2, pct: 40 } }
+
+    // === NEW: SD execution summary ===
+    sd_execution_summary: {
+      type: 'object', derived: true,
+      properties: {
+        total_sds: { type: 'number' },
+        sds_by_status: { type: 'object' },   // { todo: N, in_progress: N, done: N, blocked: N }
+        blocked_sds: { type: 'array' },       // SD refs that are blocked
+      },
+    },
+
+    // === NEW: sprint completion decision ===
+    sprint_completion: {
+      type: 'object', derived: true,
+      properties: {
+        decision: { type: 'enum', values: ['complete', 'partial', 'blocked'] },
+        rationale: { type: 'string' },
+        critical_tasks_done: { type: 'boolean' },
+        critical_issues_open: { type: 'number' },
+        ready_for_qa: { type: 'boolean' },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` initializing tasks from Stage 18 sprint items. 1:1 mapping: each item → one task with sprint_item_ref, sd_ref, assignee (from suggested_assignee_role), architecture_layer_ref (from architecture_layers[0]), priority, story_points.
+2. **P0**: Add `sprint_completion` decision gate. complete/partial/blocked based on critical task completion and critical issue count. Determines ready_for_qa for Stage 20.
+3. **P1**: Change issue severity/status to enums. severity: critical/high/medium/low. status: open/in_progress/resolved/wontfix. Add issue type: bug/blocker/tech_debt/risk. Add task_ref.
+4. **P1**: Add `priority`, `sd_ref`, `architecture_layer_ref`, `story_points` to tasks. Inherited from Stage 18 items. Zero user effort for generated tasks.
+5. **P2**: Add `layer_progress` derived field. Completion per architecture layer from tasks. Enables resource reallocation visibility and Stage 22 Sprint Review.
+6. **P2**: Add `sd_execution_summary` derived field. Aggregates SD status from task status. Total SDs, status breakdown, blocked list.
+7. **P3**: Do NOT add sub-task decomposition (Sprint items already scoped in Stage 18).
+8. **P3**: Do NOT add source_type field (sprint_item_ref presence/absence is sufficient).
+9. **P3**: Do NOT add effort hours tracking (story points are sufficient; hours belong in time-tracking tools).
+10. **P3**: Do NOT add separate sd_tracker array (SD status lives on tasks, not parallel structure).
+11. **P3**: Do NOT add API endpoint tracking (GUI's scope, not CLI's).
+12. **P3**: Do NOT add iteration cycles / ADVANCE/REVISE decisions (review logic is Stage 22).
+
+#### Cross-Stage Impact
+
+| Change | Stage 20 (QA) | Stage 22 (Sprint Review) | SD Bridge (LEO Protocol) |
+|--------|--------------|------------------------|-----------------------|
+| Tasks from sprint items | QA tests against defined tasks with clear success criteria from Stage 18. | Sprint review compares planned items vs completed tasks. | SD execution maps to venture-level task status. |
+| Sprint completion gate | QA starts only when ready_for_qa = true. Partial → partial QA scope. | Review has clear "what got done" signal. | Blocked SDs surface as blocked tasks. |
+| Layer progress | QA tests per architecture layer (frontend built → test frontend). | Review sees balanced/imbalanced layer progress. | Layer-aware SD prioritization possible. |
+| Issue type enum | QA focuses on bugs. Blockers escalated. | Sprint review assesses tech_debt accumulation. | Tech debt tracked for future sprint planning. |
 
 ---
 
