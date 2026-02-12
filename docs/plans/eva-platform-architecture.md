@@ -1,13 +1,14 @@
 # EVA Platform Architecture: Shared Services Model
 
-> **Version**: 1.3
+> **Version**: 1.4
 > **Created**: 2026-02-12
 > **Status**: Draft
 > **Companion**: [EVA Venture Lifecycle Vision v4.6](eva-venture-lifecycle-vision.md) (34 Chairman decisions)
-> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`), CLI-vs-GUI triangulation analysis (Stages 1-25)
-> **v1.1 Changes**: Chairman Decision Interface (Section 9), resequenced implementation phases (Section 11), Saga Management for multi-step operations (Section 13)
-> **v1.2 Changes**: Stage 0 Venture Ideation Pipeline (Section 14) documenting existing implementation, Service Registry updated, Phase A test scenario extended to start from Stage 0, Chairman Review interactivity gap identified
-> **v1.3 Changes**: Codebase reconciliation — 10 components previously listed as "Needs Building" already exist and are production-ready. Inventory corrected, Phase A resequenced to reflect actual state. Added Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, and State Machine to inventory. Cross-referenced against CLI-vs-GUI triangulation analysis (Stages 1-25).
+> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`), CLI-vs-GUI triangulation analysis (Stages 1-25), 25-stage codebase-vs-triangulation audit (2026-02-12)
+> **v1.1 Changes**: Chairman Decision Interface (Section 11), resequenced implementation phases (Section 13), Saga Management for multi-step operations (Section 15)
+> **v1.2 Changes**: Stage 0 Venture Ideation Pipeline (Section 16) documenting existing implementation, Service Registry updated, Phase A test scenario extended to start from Stage 0, Chairman Review interactivity gap identified
+> **v1.3 Changes**: Codebase reconciliation — 10 components previously listed as "Needs Building" already exist and are production-ready. Inventory corrected, Phase A resequenced to reflect actual state.
+> **v1.4 Changes**: Added Architectural Principles (Section 7) defining 5 binding design constraints derived from multi-AI triangulation consensus (Claude Opus 4.6 + OpenAI GPT 5.3 + AntiGravity/Gemini). Added 25-Stage Lifecycle Specifications (Section 8) with full target schemas, gate definitions, cross-stage contracts, and enum definitions per stage. Corrected "~6 passive stages" claim to "all 25 stages need active analysisSteps." Sections 7-14 renumbered to 9-16.
 
 ---
 
@@ -460,7 +461,627 @@ The DFE reads venture-specific thresholds first, falling back to global defaults
 
 ---
 
-## 7. LEO Protocol Integration
+## 7. Architectural Principles
+
+> Five binding design constraints derived from multi-AI triangulation consensus (Claude Opus 4.6, OpenAI GPT 5.3, AntiGravity/Gemini). These principles apply uniformly across all 25 stages and govern all stage template evolution.
+
+### 7.1 Active Analysis
+
+**Every stage (2–25) SHALL include an `analysisStep` that generates content via LLM.**
+
+The triangulation audit found that all 25 CLI stage templates are passive containers — they accept data, validate it, and compute derived fields, but none generate analytical content. This is the single largest architectural gap.
+
+- **Pattern**: Each `analysisStep` consumes upstream stage artifacts and produces structured analytical output using the LLM Client Factory (`getLLMClient()`).
+- **Stage 1 exception**: Stage 1 is the initial human input stage. It does not generate analysis but hydrates fields from Stage 0 output.
+- **MoA pattern**: Where multiple analytical perspectives are needed (e.g., Stage 2), use a single LLM call with multi-persona prompt ("Mixture of Agents") rather than multiple sequential calls.
+- **Advisory, not synthetic**: analysisSteps produce analytical scaffolds and recommendations. They do not fabricate evidence or generate test results.
+
+### 7.2 Decision-Based Gates
+
+**All gate outcomes SHALL use enum decisions, not boolean flags.**
+
+Boolean gates (`quality_gate_passed: true/false`) lose context and prevent nuanced routing. The target architecture replaces all booleans with decision enums:
+
+| Gate Type | Decision Values | Stages |
+|-----------|----------------|--------|
+| Kill Gate | `pass / revise / kill` | 3, 5, 13, 23 |
+| Reality Gate | `pass / conditional / fail` | 9, 12 |
+| Promotion Gate | `release / hold / cancel` | 16, 22 |
+| Quality Decision | `pass / conditional_pass / fail` | 20 |
+| Review Decision | `approve / conditional / reject` | 21 |
+| Build Readiness | `go / conditional_go / no_go` | 17 |
+| Sprint Completion | `complete / continue / blocked` | 19 |
+| Venture Decision | `continue / pivot / expand / sunset / exit` | 25 |
+
+Every decision object includes: `decision` (enum), `rationale` (string), and optionally `confidence` and `key_factors`.
+
+### 7.3 Enum Standardization
+
+**All categorical fields SHALL use defined enums, not free text.**
+
+Free text creates fragmentation ("Pricing" vs "Cost" vs "Monetization"), prevents aggregation, and breaks deterministic routing.
+
+**Cross-stage enum families**:
+
+| Family | Values | Used At |
+|--------|--------|---------|
+| Severity | `critical / high / medium / low` | Stages 15, 17, 19, 20 |
+| Task Status | `pending / in_progress / done / blocked` | Stages 19, 23 |
+| Defect Status | `open / in_progress / resolved / wontfix` | Stage 20 |
+| Initiative Status | `planned / in_progress / completed / abandoned / deferred` | Stage 25 |
+| Learning Category | `product / market / technical / financial / process` | Stage 24 |
+| Test Type | `unit / integration / e2e` | Stage 20 |
+
+**Stage-specific enums** (see Section 8 for complete definitions): exit_type (Stage 9), buyer_type (Stage 9), archetype (Stage 1), launch_type (Stage 23), naming_strategy (Stage 10), channel_type (Stage 11), constraint_category (Stage 14), release_category (Stage 22), pricing_model (Stages 4, 7), milestone_priority (Stage 13).
+
+### 7.4 Cross-Stage Contracts
+
+**Stages SHALL declare explicit producer/consumer relationships via typed artifact schemas.**
+
+Each stage consumes artifacts from upstream stages and produces artifacts for downstream stages. These contracts are the pipeline's integrity mechanism — without them, stages operate in isolation.
+
+```
+Stage 0 ──→ Stage 1:  venture synthesis (hydration)
+Stage 1 ──→ Stage 2:  problemStatement, archetype, keyAssumptions
+Stage 2 ──→ Stage 3:  6 metric pre-scores (0-100), evidence packs
+Stage 3 ──→ Stage 4:  competitor entities (name, positioning, threat level)
+Stage 4 ──→ Stage 5:  stage5Handoff (pricing models, competitive positioning)
+Stage 5 ──→ Stage 6:  unit economics, financial projections
+Stages 1-8 → Stage 9:  full venture context for exit strategy synthesis
+Stage 13 ──→ Stage 18: "now" milestones as sprint items
+Stage 14 ──→ Stage 18: architecture context for SD enrichment
+Stage 17 ──→ Stage 18: build readiness gate pass
+Stage 18 ──→ Stage 19: sprint items initialize tasks
+Stage 19 ──→ Stage 20: ready_for_qa flag + task references
+Stage 20 ──→ Stage 21: quality_decision + defect data
+Stage 21 ──→ Stage 22: review_decision + integration status
+Stage 22 ──→ Stage 23: promotion_gate pass + release_decision
+Stage 23 ──→ Stage 24: success_criteria for evaluation
+Stages 5,16,24 → 25:  financial comparison (projected vs actual)
+```
+
+### 7.5 CLI Superiority
+
+**The CLI implementation is authoritative. GUI-specific patterns SHALL NOT be ported.**
+
+The triangulation analysis consistently found the CLI's architectural patterns superior across all 25 stages:
+
+- **Pure function gates**: Kill gates are deterministic `evaluateKillGate()` functions — testable, auditable, no side effects. Do not replace with weighted scoring UI.
+- **Deterministic derivation**: `computeDerived()` produces reproducible output from the same input. Do not add randomized scoring.
+- **Decision Filter Engine over hardcoded thresholds**: The DFE is configurable, supports Chairman preferences, and is centrally managed. Do not replicate the GUI's per-stage hardcoded overrides.
+- **Devil's Advocate as separate adversarial layer**: The CLI's decoupled DA review is architecturally superior to the GUI's all-in-one analysis.
+- **Lean schema**: Capture analytical substance, not UX artifacts (tags, progress bars, wizard state, completeness indicators).
+
+---
+
+## 8. 25-Stage Lifecycle Specifications
+
+> Target specifications for all 25 stages, organized by phase. Each stage defines its purpose, gate behavior, target schema v2.0, analysisStep requirements, and cross-stage contracts. These are prescriptive blueprints — the plan to achieve the vision.
+>
+> **Schema notation**: Fields marked (NEW) do not exist in current templates. Fields marked (CHANGED) exist but need modification. All others are existing and unchanged.
+
+### 8.1 Phase 1: THE TRUTH (Stages 1–5)
+
+*Purpose: Establish whether the venture idea has merit. Two kill gates (Stages 3, 5) filter out non-viable ventures before significant resources are invested.*
+
+#### Stage 1: Draft Idea
+
+**Template**: `stage-01.js` | **Gate**: None (entry point) | **analysisStep**: None (Stage 0 hydration only)
+
+**Target Schema v2.0**:
+- `description` (string, ≥50 chars, required)
+- `problemStatement` (string, ≥20 chars, required) — NEW, feeds Stage 3 `customerNeed`
+- `valueProp` (string, ≥20 chars, required)
+- `targetMarket` (string, ≥10 chars, required)
+- `archetype` (enum: `saas|marketplace|deeptech|hardware|services|media|fintech`, required) — NEW, drives Stage 3 scoring weights
+- `keyAssumptions[]` (array of strings, optional) — NEW, validated at Stage 3/5
+- `moatStrategy` (string, optional) — from Stage 0
+- `successCriteria[]` (array, optional) — NEW, consumed by Stage 23
+- `sourceProvenance` (per-field: `stage0|user|ai_refine`, derived) — NEW, audit trail
+
+**Contracts**: Stage 0 synthesis → hydration | → Stage 2 (context), Stage 3 (assumptions), Stage 23 (criteria)
+
+#### Stage 2: Idea Validation
+
+**Template**: `stage-02.js` | **Gate**: None (pre-flight for Stage 3) | **analysisStep**: MoA multi-persona analysis
+
+**Target Schema v2.0**:
+- `analysis` (object: strategic, technical, tactical text perspectives) — NEW
+- `metrics` (object: 6 scores aligned to Stage 3, each 0-100 integer) — NEW
+  - `marketFit`, `customerNeed`, `momentum`, `revenuePotential`, `competitiveBarrier`, `executionFeasibility`
+- `evidence` (object: market, customer, competitive, execution domains) — NEW
+- `suggestions[]` (array: type `immediate|strategic` + text) — NEW
+- `compositeScore` (number, derived: average of 6 metrics)
+- `provenance` (object: promptHash, modelVersion, temperature, seed) — NEW
+
+**analysisStep**: Single LLM call with MoA prompt consuming Stage 1 data. Produces 6 metric pre-scores and evidence packs. Does NOT make gate decisions — feeds Stage 3.
+
+**Contracts**: Stage 1 → context | → Stage 3 (6 pre-scores, evidence)
+
+#### Stage 3: Individual Validation — KILL GATE
+
+**Template**: `stage-03.js` | **Gate**: Kill Gate (`blockProgression: true`) | **analysisStep**: Deterministic + AI hybrid scoring
+
+**Target Schema v2.0**:
+- 6 metrics (0-100 integer): `marketFit`, `customerNeed`, `momentum`, `revenuePotential`, `competitiveBarrier`, `executionFeasibility` — CHANGED (scale from 0-10 decimal to 0-100 integer)
+- `overallScore` (number, derived: weighted average)
+- 3 rollup dimensions (derived, for governance readability): Market, Technical, Financial
+- `competitorEntities[]` (array: name, positioning, threat_level) — NEW, for Stage 4
+- `confidenceScores` (per-metric confidence) — NEW
+
+**Kill Gate Logic**:
+- **Pass**: `overallScore ≥ 70 AND all metrics ≥ 50`
+- **Revise**: `overallScore ≥ 50 AND < 70 AND no metric < 50` — routes back for Stage 2 re-analysis (via DFE)
+- **Kill**: `overallScore < 50 OR any metric < 50`
+
+**Score Generation**: 50% deterministic (from Stage 0/1/2 data) + 50% AI calibration (capped at ±15 per metric). DA challenges fused result separately.
+
+**Contracts**: Stage 2 → pre-scores + evidence | → Stage 4 (competitor entities), Stage 5 (market validation)
+
+#### Stage 4: Competitive Intel
+
+**Template**: `stage-04.js` | **Gate**: None | **analysisStep**: Competitive landscape analysis
+
+**Target Schema v2.0**:
+- `competitors[]` (array, minItems: 3)
+  - `name`, `description`, `strengths[]`, `weaknesses[]` (existing)
+  - `pricingModel` (enum: `freemium|subscription|one_time|usage_based|marketplace_commission|hybrid`) — NEW
+  - `marketPosition` (string) — NEW
+- `blueOceanAnalysis` (object, optional) — minItems: 0 when no direct competitors exist
+- `stage5Handoff` (object) — NEW, structured artifact for Stage 5
+  - `pricingLandscape`, `competitivePositioning`, `marketGaps`
+
+**analysisStep**: Consumes Stage 3 competitor entities + Stage 1 venture context. Generates competitive landscape, pricing analysis, and Stage 5 handoff artifact.
+
+**Contracts**: Stage 3 → competitor entities | → Stage 5 (stage5Handoff), Stage 7 (pricing context)
+
+#### Stage 5: Profitability Kill Gate — KILL GATE
+
+**Template**: `stage-05.js` | **Gate**: Kill Gate (`blockProgression: true`) | **analysisStep**: Financial model generation
+
+**Target Schema v2.0**:
+- `projections` (existing: revenue, costs, breakEvenMonth, roi3y)
+- `unitEconomics` (object) — NEW
+  - `cac`, `ltv`, `ltvCacRatio` (derived), `churnRate`, `paybackMonths`, `grossMargin`
+- `scenarioAnalysis` (object) — NEW: pessimistic/optimistic multipliers + robustness classification
+- `assumptions` (object) — NEW: inputs used to generate projections
+- `stage4Context` (object) — NEW: pricing + competitive data carried forward
+- `remediationRoute` (string) — NEW: suggested stage to revisit on kill
+
+**Kill Gate Logic** (banded):
+- **Pass**: `roi3y ≥ 0.25 AND breakEvenMonth ≤ 24 AND ltvCacRatio ≥ 2 AND paybackMonths ≤ 18`
+- **Conditional** (15-25% band): `0.15 ≤ roi3y < 0.25` passes ONLY IF supplementary metrics are strong (`ltvCacRatio ≥ 3`, `paybackMonths ≤ 12`)
+- **Kill**: `roi3y < 0.15 OR breakEvenMonth > 24 OR breakEvenMonth === null`
+
+**analysisStep**: Consumes Stage 4 handoff + Stage 3 market data. Generates financial projections and unit economics. Annual granularity only (no monthly).
+
+**Contracts**: Stage 4 → stage5Handoff | → Stage 6 (unit economics), Stage 9 (financial profile), Stage 16 (projection baseline)
+
+### 8.2 Phase 2: THE ENGINE (Stages 6–9)
+
+*Purpose: Design the business engine — risk profile, revenue model, business model, and exit strategy. Reality Gate at Stage 9 validates Phase 2 completeness before entering Phase 3.*
+
+#### Stage 6: Risk Assessment
+
+**Template**: `stage-06.js` | **Gate**: None | **analysisStep**: Risk identification from Stages 1-5
+
+**Target Schema v2.0**:
+- `risks[]` (array, minItems: 3)
+  - `description`, `category` (existing)
+  - `probability` (integer, 1-5) — CHANGED from 3-factor to 2-factor
+  - `consequence` (integer, 1-5) — CHANGED from 3-factor to 2-factor
+  - `riskScore` (derived: probability × consequence, 1-25)
+  - `source` (enum: `stage0|stage1|stage2|stage3|stage4|stage5|manual`) — NEW
+  - `mitigationStrategy` (string)
+- Aggregate metrics (derived): `averageRiskScore`, `maxRiskScore`, `highRiskCount` (score ≥ 15)
+
+**analysisStep**: Consumes Stage 5 unit economics + Stages 1-4 venture data. Identifies risks with source attribution.
+
+**Contracts**: Stages 1-5 → venture context | → Stage 9 (risk profile), Stage 15 (risk baseline)
+
+#### Stage 7: Revenue Architecture
+
+**Template**: `stage-07.js` | **Gate**: None | **analysisStep**: Revenue model synthesis
+
+**Target Schema v2.0**:
+- `pricingModel` (enum: `freemium|subscription|one_time|usage_based|marketplace_commission|hybrid`) — NEW
+- `primaryValueMetric` (string) — NEW: what the customer pays for
+- `priceAnchor` (object: amount, currency, period) — NEW
+- `competitiveContext` (object: position vs Stage 4 competitors) — NEW
+- `positioningDecision` (object: strategy, rationale) — NEW
+- `revenueStreams[]`, `pricingTiers[]` (existing, enhanced with enums)
+
+**analysisStep**: Consumes Stages 4-6 (competitive intel, profitability, risk). Generates pricing strategy with competitive positioning.
+
+**Contracts**: Stages 4-6 → competitive + financial context | → Stage 8 (revenue streams for BMC), Stage 9 (valuation basis)
+
+#### Stage 8: Business Model Canvas
+
+**Template**: `stage-08.js` | **Gate**: None | **analysisStep**: 9-block BMC generation
+
+**Target Schema v2.0**:
+- 9 BMC blocks: `keyPartners`, `keyActivities`, `keyResources`, `valuePropositions`, `customerRelationships`, `channels`, `customerSegments`, `costStructure`, `revenueStreams`
+- Each block item: `text` (string), `priority` (enum: `critical|high|medium|low`), `evidence` (string, source reference) — CHANGED
+- `crossBlockWarnings[]` (array, derived) — NEW: validation of inter-block consistency
+
+**analysisStep**: Consumes Stages 1-7 to generate a complete 9-block BMC. Each block cites evidence from upstream stages.
+
+**Contracts**: Stages 1-7 → full venture context | → Stage 9 (BMC-to-exit mapping)
+
+#### Stage 9: Exit Strategy — REALITY GATE
+
+**Template**: `stage-09.js` | **Gate**: Reality Gate (Phase 2→3 boundary) | **analysisStep**: Exit strategy synthesis from Stages 1-8
+
+**Target Schema v2.0**:
+- `exitThesis` (string, ≥20 chars, required)
+- `exitHorizonMonths` (integer, 1-120, required)
+- `exitPaths[]` (array, minItems: 1)
+  - `type` (enum: `acquisition|ipo|merger|mbo|liquidation`) — CHANGED from free text
+  - `description`, `probabilityPct` (0-100)
+- `targetAcquirers[]` (array, minItems: 3)
+  - `name`, `rationale`, `fitScore` (1-5)
+  - `buyerType` (enum: `strategic|financial|competitor|pe`) — NEW
+- `milestones[]` (array)
+  - `date`, `successCriteria`
+  - `category` (enum: `financial|product|market|team`) — NEW
+- `valuationEstimate` (object) — NEW
+  - `method` (default: revenue_multiple), `revenueBase`, `multipleLow`, `multipleBase`, `multipleHigh`
+  - `estimatedRange` (derived: {low, base, high})
+
+**Reality Gate**: Checks Phase 2 completeness — all required stages (6-9) have validated artifacts. Blockers + next_actions structure. No scoring.
+
+**Contracts**: Stages 1-8 → full context (BMC-to-exit mapping) | → Stage 25 (exit thesis for final review)
+
+### 8.3 Phase 3: THE IDENTITY (Stages 10–12)
+
+*Purpose: Establish the venture's market identity — brand, go-to-market strategy, and pipeline viability. Reality Gate at Stage 12 validates commercial readiness before entering Phase 4.*
+
+#### Stage 10: Naming / Brand
+
+**Template**: `stage-10.js` | **Gate**: None (Chairman review point) | **analysisStep**: Brand analysis + candidate generation
+
+**Target Schema v2.0**:
+- `brandGenome` (object: archetype, values[], tone, audience, differentiators[]) — existing
+- `scoringCriteria[]` (existing, weights sum to 100)
+- `candidates[]` (array, minItems: 5, scored per criterion 0-100) — existing
+- `narrativeExtension` (object, optional) — NEW
+  - `vision` (string), `mission` (string), `brandVoice` (string)
+- `namingStrategy` (enum: `descriptive|abstract|acronym|founder|metaphorical`) — NEW
+- `decision` (object) — NEW
+  - `selectedName` (string), `workingTitle` (boolean), `rationale` (string)
+  - `availabilityChecks` (object: domain, trademark, social — placeholder for async verification)
+
+**analysisStep**: Consumes Stages 1-9 venture context. Generates candidate names with scoring rationale and brand narrative.
+
+**Contracts**: Stages 1-9 → venture identity context | → Stage 11 (brand for GTM), Stage 25 (drift baseline)
+
+#### Stage 11: Go-to-Market
+
+**Template**: `stage-11.js` | **Gate**: None | **analysisStep**: Channel + tier strategy
+
+**Target Schema v2.0**:
+- `customerTiers[]` (array, exactly 3 tiers)
+  - `name`, `description`, `size`, `budget` (existing)
+  - `persona` (string) — NEW
+  - `painPoints[]` (array) — NEW
+  - `targetCac` (number, allow 0) — CHANGED from `expectedCac`
+- `channels[]` (array, exactly 8 channels)
+  - `name`, `description`, `budget` (existing, allow $0)
+  - `channelType` (enum: `paid|organic|earned|owned`) — NEW
+  - `primaryTier` (string, references tier name)
+
+**analysisStep**: Consumes Stages 1-10 context. Generates channel strategy per tier with budget allocation.
+
+**Contracts**: Stages 1-10 → brand + market context | → Stage 12 (channel data for pipeline), Stage 22 (GTM for release)
+
+#### Stage 12: Pipeline Viability — REALITY GATE
+
+**Template**: `stage-12.js` | **Gate**: Reality Gate (Phase 3→4 boundary) | **analysisStep**: Pipeline + economy validation
+
+**Target Schema v2.0**:
+- `deals[]` (array, minItems: 3)
+  - `name`, `value`, `stage`, `probability` (existing)
+  - `mappedFunnelStage` (string) — NEW, links to funnel position
+- `funnel` (object: stages with names + counts)
+  - `conversionRateEstimate` (number, per stage) — NEW
+- Economy Check fields (derived): total pipeline value, weighted pipeline, average deal size
+
+**Reality Gate**: Checks Phase 3 completeness (Stages 10-12 validated) + Economy Check. Validates weighted pipeline supports financial projections from Stage 5.
+
+**Contracts**: Stages 10-11 → brand + GTM data | → Stage 13 (market context for roadmap)
+
+### 8.4 Phase 4: THE BLUEPRINT (Stages 13–16)
+
+*Purpose: Translate the validated venture into an execution plan — roadmap, architecture, risk register, and financial projections. Promotion Gate at Stage 16 gates entry to the BUILD LOOP. No GUI exists for Phase 4; CLI is authoritative.*
+
+#### Stage 13: Product Roadmap — KILL GATE
+
+**Template**: `stage-13.js` | **Gate**: Kill Gate | **analysisStep**: Roadmap generation from Stages 1-12
+
+**Target Schema v2.0**:
+- `milestones[]` (array, minItems: 1)
+  - `title`, `description`, `targetDate` (existing)
+  - `priority` (enum: `now|next|later`) — NEW, drives Stage 18 sprint planning
+  - `deliverables[]` (array)
+    - `name`, `description` (existing)
+    - `type` (enum: `feature|infrastructure|integration|documentation`) — NEW
+  - `outcomes[]` (array of strings) — NEW, measurable success criteria per milestone
+  - `dependencies[]` (array of milestone references, optional)
+
+**Kill Gate**: Validates roadmap feasibility — at least one "now" milestone with deliverables, realistic dates, outcomes defined.
+
+**Contracts**: Stages 1-12 → full venture context | → Stage 14 (deliverables for architecture), Stage 18 ("now" milestones as sprint items)
+
+#### Stage 14: Technical Architecture
+
+**Template**: `stage-14.js` | **Gate**: None | **analysisStep**: Architecture synthesis from Stage 13
+
+**Target Schema v2.0**:
+- `layers[]` (array: presentation, api, business_logic, data, infrastructure) — existing
+  - `additionalLayers[]` (array, optional) — NEW, for domain-specific layers
+- `constraints[]` (array)
+  - `description`, `impact` (existing)
+  - `category` (enum: `performance|security|scalability|compliance|budget|timeline`) — NEW
+- `security` (object) — NEW, cross-cutting concern
+  - `authStrategy`, `dataClassification`, `complianceRequirements[]`
+- `dataEntities[]` (array) — NEW, Schema-Lite
+  - `name`, `description`, `relationships[]`, `estimatedVolume`
+- `techStack` (object, existing)
+
+**analysisStep**: Consumes Stage 13 deliverables + Stage 6 risks. Generates architecture layers, constraints, and security requirements.
+
+**Contracts**: Stage 13 → deliverables | → Stage 15 (architecture risks), Stage 18 (architecture context for SDs)
+
+#### Stage 15: Risk Register
+
+**Template**: `stage-15.js` | **Gate**: None | **analysisStep**: Risk identification from Stages 13-14
+
+**Target Schema v2.0**:
+- `risks[]` (array, minItems: 1)
+  - `title`, `description`, `owner` (existing)
+  - `severity` (enum: `critical|high|medium|low`) — CHANGED from free text
+  - `priority` (enum: `immediate|short_term|long_term`) — CHANGED from free text
+  - `phaseRef` (string) — NEW, links risk to roadmap phase
+  - `mitigationPlan`, `contingencyPlan` (existing)
+- `budgetCoherence` (object, derived) — NEW
+  - Validates risk mitigation costs align with Stage 16 financial projections
+
+**analysisStep**: Consumes Stages 13-14. Identifies execution risks with severity and priority classification.
+
+**Contracts**: Stages 6, 13-14 → risk context + architecture | → Stage 16 (risk costs), Stage 17 (blockers)
+
+#### Stage 16: Financial Projections — PROMOTION GATE
+
+**Template**: `stage-16.js` | **Gate**: Promotion Gate (Phase 4→5 boundary) | **analysisStep**: Detailed financial modeling
+
+**Target Schema v2.0**:
+- `phases[]` (array, one per roadmap phase from Stage 13)
+  - `phaseName`, `duration`
+  - `costs` (object: personnel, infrastructure, marketing, other) — CHANGED from flat monthly burn
+  - `revenue` (object: projected per pricing model from Stage 7)
+- `pnl` (object, Startup Standard P&L) — NEW
+  - Revenue, COGS, Gross Margin, OpEx (R&D, S&M, G&A), EBITDA, Net Income
+- `cashBalanceEnd` (number, derived) — NEW, running cash position
+- `viabilityWarnings[]` (array, derived) — NEW
+  - Triggered when: cash < 3 months runway, burn rate exceeds plan, margins below Stage 5 projections
+
+**Promotion Gate**: Validates financial viability — positive cash trajectory, manageable burn, margins aligned with Stage 5 kill gate projections.
+
+**Contracts**: Stages 5, 7, 13-15 → projections + costs | → Stage 17 (financial readiness), Stage 25 (projection baseline for comparison)
+
+### 8.5 Phase 5: THE BUILD LOOP (Stages 17–22)
+
+*Purpose: Execute the plan — sprint planning, implementation, QA, review, and release. Promotion Gate at Stage 22 gates entry to LAUNCH. This phase cycles: ventures may loop through Stages 17-22 multiple times (one loop per sprint).*
+
+#### Stage 17: Build Readiness
+
+**Template**: `stage-17.js` | **Gate**: None (readiness assessment) | **analysisStep**: Readiness synthesis from Stages 13-16
+
+**Target Schema v2.0**:
+- `readinessItems[]` (array)
+  - `name`, `description`, `status` (existing)
+  - `priority` (enum: `critical|high|medium|low`) — NEW
+- `blockers[]` (array)
+  - `description`, `owner` (existing)
+  - `severity` (enum: `critical|high|medium|low`) — NEW
+- `buildReadiness` (object) — NEW, decision
+  - `decision` (enum: `go|conditional_go|no_go`)
+  - `rationale` (string)
+  - `conditions[]` (array, required if conditional_go)
+
+**analysisStep**: Consumes Stages 13-16. Assesses build readiness against roadmap, architecture, risks, and financials.
+
+**Contracts**: Stages 13-16 → blueprint context | → Stage 18 (readiness gate pass)
+
+#### Stage 18: Sprint Planning
+
+**Template**: `stage-18.js` | **Gate**: Stage 17 readiness must pass | **analysisStep**: Sprint item generation
+
+**Target Schema v2.0**:
+- `sprintGoal` (string, required)
+- `sprintItems[]` (array, minItems: 1)
+  - `title`, `description`, `type`, `estimatedLoc`, `acceptanceCriteria` (existing)
+  - `architectureLayer` (string, from Stage 14) — enriched via SD Bridge
+  - `milestoneRef` (string, references Stage 13 "now" milestone)
+- `sdBridgeOutput` (object, derived) — SD Bridge creates orchestrator + child SDs
+
+**analysisStep**: Consumes Stage 13 "now" deliverables filtered by Stage 17 readiness gate. Generates sprint items with architecture context from Stage 14.
+
+**SD Bridge** (`lib/eva/lifecycle-sd-bridge.js`): Converts sprint items to LEO Strategic Directives — 1 orchestrator SD + N child SDs per sprint.
+
+**Contracts**: Stages 13-14, 17 → roadmap + architecture + readiness | → Stage 19 (sprint items as tasks), LEO (SD Bridge)
+
+#### Stage 19: Sprint Execution
+
+**Template**: `stage-19.js` | **Gate**: None (progress tracking) | **analysisStep**: Progress synthesis
+
+**Target Schema v2.0**:
+- `tasks[]` (array, initialized from Stage 18 sprint items)
+  - `name`, `description`, `assignee` (existing)
+  - `status` (enum: `pending|in_progress|done|blocked`) — CHANGED from free text
+- `issues[]` (array)
+  - `description` (existing)
+  - `severity` (enum: `critical|high|medium|low`) — CHANGED from free text
+  - `status` (enum: `open|in_progress|resolved|wontfix`) — CHANGED from free text
+- `sprintCompletion` (object) — NEW, decision
+  - `decision` (enum: `complete|continue|blocked`)
+  - `readyForQa` (boolean, gates Stage 20)
+  - `rationale` (string)
+
+**Contracts**: Stage 18 → sprint items | → Stage 20 (ready_for_qa + task refs)
+
+#### Stage 20: Quality Assurance
+
+**Template**: `stage-20.js` | **Gate**: Stage 19 `readyForQa` must be true | **analysisStep**: QA plan generation
+
+**Target Schema v2.0**:
+- `testSuites[]` (array, minItems: 1)
+  - `name`, `totalTests`, `passingTests`, `coveragePct` (existing)
+  - `type` (enum: `unit|integration|e2e`) — NEW
+  - `taskRefs[]` (array, optional) — NEW, Stage 19 tasks covered
+- `knownDefects[]` (array)
+  - `description` (existing)
+  - `severity` (enum: `critical|high|medium|low`) — CHANGED from free text
+  - `status` (enum: `open|in_progress|resolved|wontfix`) — CHANGED from free text
+  - `testSuiteRef` (string, optional) — NEW
+- `totalFailures` (number, derived) — CHANGED: renamed from `criticalFailures`
+- `overallPassRate` (number, derived: ≥95% threshold)
+- `coveragePct` (number, derived: ≥60% threshold)
+- `qualityDecision` (object) — NEW, replaces `quality_gate_passed` boolean
+  - `decision` (enum: `pass|conditional_pass|fail`)
+  - `rationale` (string)
+
+**Contracts**: Stage 19 → ready_for_qa + tasks | → Stage 21 (quality_decision + defects)
+
+#### Stage 21: Build Review
+
+**Template**: `stage-21.js` | **Gate**: None (review checkpoint) | **analysisStep**: Integration + review synthesis
+
+**Target Schema v2.0**:
+- `integrations[]` (array)
+  - `name`, `status` (existing)
+  - `severity` (enum: `critical|high|medium|low`) — NEW, per integration
+  - `environment` (enum: `development|staging|production`) — NEW
+- `reviewDecision` (object) — NEW
+  - `decision` (enum: `approve|conditional|reject`)
+  - `rationale` (string)
+  - `conditions[]` (array, required if conditional)
+
+**analysisStep**: Consumes Stage 20 quality data + integration status. Produces technical review assessment. Stage 21 is "Technical review" — assesses whether the build is sound. Stage 22 is "Business review" — assesses whether to release.
+
+**Contracts**: Stage 20 → quality_decision + defects | → Stage 22 (review_decision + integration status)
+
+#### Stage 22: Release Readiness — PROMOTION GATE
+
+**Template**: `stage-22.js` | **Gate**: Promotion Gate (Phase 5→6 boundary) | **analysisStep**: BUILD LOOP closeout synthesis
+
+> **P0 FIX**: Current promotion gate references stale boolean contracts (`quality_gate_passed`, `all_passing`). Must update to reference `qualityDecision.decision` (Stage 20) and `reviewDecision.decision` (Stage 21).
+
+**Target Schema v2.0**:
+- `releaseItems[]` (array, minItems: 1)
+  - `name`, `status` (enum: `pending|approved|rejected`), `approver` (existing)
+  - `category` (enum: `feature|bugfix|infrastructure|documentation|configuration`) — CHANGED from free text
+- `releaseNotes` (string, required), `targetDate` (string, ISO date format) — existing, enhanced
+- `releaseDecision` (object) — NEW
+  - `decision` (enum: `release|hold|cancel`)
+  - `rationale` (string), `approver` (string)
+- `sprintRetrospective` (object, optional) — NEW
+  - `wentWell[]`, `wentPoorly[]`, `actionItems[]` (arrays of strings)
+- `sprintSummary` (object, derived) — NEW
+  - `sprintGoal`, `itemsPlanned`, `itemsCompleted`, `qualityAssessment`, `integrationStatus`
+
+**Promotion Gate**: Requires `qualityDecision.decision ∈ {pass, conditional_pass}` AND `reviewDecision.decision ∈ {approve, conditional}` AND `releaseDecision.decision = 'release'`. Conditional states produce warnings, not blockers — the human `releaseDecision` is the final call.
+
+**Contracts**: Stages 17-21 → full BUILD LOOP data | → Stage 23 (promotion gate pass + release decision)
+
+### 8.6 Phase 6: LAUNCH & LEARN (Stages 23–25)
+
+*Purpose: Launch the venture and learn from real-world performance. Kill Gate at Stage 23 prevents premature launch. Stage 25 produces the capstone venture decision — the single most important output of the entire 25-stage lifecycle.*
+
+#### Stage 23: Launch Execution — KILL GATE
+
+**Template**: `stage-23.js` | **Gate**: Kill Gate | **analysisStep**: Launch readiness brief
+
+**Target Schema v2.0**:
+- `launchType` (enum: `soft_launch|beta|general_availability`) — NEW, affects Stage 24 interpretation
+- `goDecision` (enum: `go|no-go`, required) — existing
+- `launchTasks[]` (array, minItems: 1)
+  - `name`, `owner` (existing)
+  - `status` (enum: `pending|in_progress|done|blocked`) — CHANGED from free text
+- `plannedLaunchDate` (string, ISO date, required) — CHANGED: validated format
+- `actualLaunchDate` (string, ISO date, optional)
+- `successCriteria[]` (array, minItems: 1) — NEW, contract with Stage 24
+  - `metric` (string), `target` (string), `measurementWindow` (string)
+  - `priority` (enum: `primary|secondary`)
+- `rollbackTriggers[]` (array) — NEW
+  - `condition` (string), `action` (string)
+- `incidentResponsePlan`, `monitoringSetup`, `rollbackPlan` (string, existing)
+
+**Kill Gate**: Validates upstream signals — Stage 22 `promotionGate = pass` AND `releaseDecision = 'release'` as hard prerequisites. Plus: all launch tasks not blocked, success criteria defined, go_decision = 'go'.
+
+**Contracts**: Stage 22 → promotion gate + release decision | → Stage 24 (success_criteria for evaluation)
+
+#### Stage 24: Metrics & Learning
+
+**Template**: `stage-24.js` | **Gate**: None (measurement stage) | **analysisStep**: Launch scorecard generation
+
+**Target Schema v2.0**:
+- `aarrr` (object: acquisition, activation, retention, revenue, referral — each array of metrics) — existing
+  - Per metric: `name`, `value`, `target` (existing)
+  - `trendWindowDays` (number, optional), `previousValue` (number) — NEW, for trend calculation
+  - `trendDirection` (enum: `up|flat|down`, derived) — NEW
+  - `criterionRef` (string, optional) — NEW, links to Stage 23 success criterion
+- `funnels[]` (array) — existing, enhanced
+  - Steps: `name` (string), `count` (number) — CHANGED from untyped
+  - `conversionRates[]` (derived)
+- `learnings[]` (array) — existing, enhanced
+  - `category` (enum: `product|market|technical|financial|process`) — NEW
+  - `impactLevel` (enum: `high|medium|low`, optional) — NEW
+- `launchOutcome` (object, derived) — NEW
+  - `assessment` (enum: `success|partial|failure|indeterminate`)
+  - `criteriaMetRate` (number: % of Stage 23 criteria met)
+
+**analysisStep**: Evaluates Stage 23 success criteria against AARRR metrics. Produces launch scorecard with per-criterion assessment. Interprets metrics in context of `launchType` (beta expectations ≠ GA expectations).
+
+**Contracts**: Stage 23 → success criteria + launch type | → Stage 25 (metrics + learnings for venture review)
+
+#### Stage 25: Venture Review
+
+**Template**: `stage-25.js` | **Gate**: None (capstone review) | **analysisStep**: Full venture journey synthesis
+
+**Target Schema v2.0**:
+- `reviewSummary` (string, ≥20 chars, required), `currentVision` (string, required) — existing
+- `initiatives` (object: product, market, technical, financial, team categories) — existing
+  - Per item: `title`, `outcome` (existing)
+  - `status` (enum: `planned|in_progress|completed|abandoned|deferred`) — CHANGED from free text
+- `ventureDecision` (object, required) — NEW, THE capstone output
+  - `decision` (enum: `continue|pivot|expand|sunset|exit`)
+  - `rationale` (string, required)
+  - `confidence` (enum: `high|medium|low`)
+  - `keyFactors[]` (array of strings)
+- `nextSteps[]` (array, minItems: 1) — existing, enhanced
+  - `action`, `owner`, `timeline` (existing)
+  - `priority` (enum: `critical|high|medium|low`) — NEW
+  - `category` (enum: `product|market|technical|financial|team`) — NEW
+- `ventureHealth` (object, derived) — NEW, 5-dimension assessment
+  - `product`, `market`, `technical`, `financial`, `team` (each 0-100)
+  - `overall` (0-100), `band` (enum: `critical|fragile|viable|strong`)
+- `financialComparison` (object, derived) — NEW
+  - `projectionSource` (string: "Stage 5" or "Stage 16")
+  - `revenueVariancePct` (number), `unitEconomicsAssessment` (string)
+  - `financialTrajectory` (enum: `improving|flat|declining`)
+- `driftCheck` (object, derived) — existing, enhanced
+  - `wordOverlapPct`, `wordOverlapDrift` (existing)
+  - `semanticDrift` (enum: `aligned|moderate_drift|major_drift`) — NEW
+  - `rationale` (string) — NEW
+
+**analysisStep**: The most complex in the pipeline. Consumes Stages 1 (origin vision), 5/16 (projections), 13 (roadmap), 20-22 (quality/review/release), 23 (launch), 24 (metrics). Produces: journey summary, financial comparison, drift analysis, venture health assessment, and decision recommendation.
+
+**Contracts**: All prior stages → full venture journey | → Cross-Venture Learning (patterns for other ventures), Next iteration (venture_decision determines path: continue → new BUILD LOOP, pivot → revisit ENGINE/IDENTITY, expand → scale, exit → lifecycle complete)
+
+---
+
+## 9. LEO Protocol Integration
 
 ### The SD Bridge (Stage 18 → LEO)
 
@@ -525,7 +1146,7 @@ The return path writes these into `venture_artifacts` for the relevant stage, en
 
 ---
 
-## 8. Portfolio Intelligence (Architecture)
+## 10. Portfolio Intelligence (Architecture)
 
 ### Cross-Venture Knowledge Base (Decision #26)
 
@@ -604,7 +1225,7 @@ ORDER BY priority_score DESC;
 
 ---
 
-## 9. Chairman Dashboard (Architecture)
+## 11. Chairman Dashboard (Architecture)
 
 ### Views
 
@@ -738,7 +1359,7 @@ The CLI writes to the same `chairman_decisions` table, triggering the same Realt
 
 ---
 
-## 10. Security & Governance
+## 12. Security & Governance
 
 ### Chairman RLS Policies
 
@@ -771,7 +1392,7 @@ Every state change is logged:
 
 ---
 
-## 11. What Already Exists vs. What Needs Building
+## 13. What Already Exists vs. What Needs Building
 
 ### Exists and Active
 
@@ -827,7 +1448,7 @@ Every state change is logged:
 | **Chairman Decision API** | Decision submission endpoints (table already exists; need Realtime subscription wiring + CLI `eva decisions approve/reject` command) | P0 |
 | **CLI Task Dispatcher** | Unified `eva run <venture_id> [--stage N]` command (partial: individual scripts exist for new/evaluate/status/sync but no unified runner) | P0 |
 | **Return Path (LEO → Stages)** | SD completion → stage progress sync (SD Bridge sends work out; no return event handler yet) | P0 |
-| **Stage template gap-fill** | Stages 2-25 templates exist but many are passive containers (validate-only). Triangulation analysis identified Stages 2, 4, 7, 8, 11, 12 as needing active `analysisSteps`. | P0 |
+| **Stage template gap-fill** | All 25 stage templates are passive containers (validate-only). Triangulation analysis confirmed ALL stages (2-25) need active `analysisSteps` (see Section 7.1, Section 8). | P0 |
 | **Event bus handler wiring** | Connect dormant event bus infrastructure to service invocations (bus publishes events; nothing currently listens) | P0 |
 | **EVA Master Scheduler** | Portfolio-level scheduling, priority queue processing | P1 |
 | **Chairman Dashboard** | Decision queue + health heatmap + event feed | P1 |
@@ -869,13 +1490,13 @@ Phase A: First Venture End-to-End (P0)
 
   REMAINING WORK:
   1. Stage 0 Interactive Chairman Review (wire conductChairmanReview → chairman_decisions)
-     └── Stage 0 pipeline already built (Section 14); only the interactive review is missing
+     └── Stage 0 pipeline already built (Section 16); only the interactive review is missing
   2. Chairman Decision API (chairman_decisions table + Realtime subscription + CLI)
      └── Table exists; need CLI commands (eva decisions list/approve/reject) + Realtime wiring
      └── Unblocks Stages 0, 10, 22, 25 — without this, Phase A deadlocks
-  3. Stage template gap-fill (add active analysisSteps to passive templates)
-     └── Stages 2, 4, 7, 8, 11, 12 identified by triangulation as needing active analysis
-     └── Stage templates 1-25 exist as containers; ~6 need LLM-driven analysisSteps
+  3. Stage template gap-fill (add active analysisSteps to ALL passive templates)
+     └── All 25 stage templates need active analysisSteps (see Section 7.1, Section 8)
+     └── Stage templates 1-25 exist as containers; ALL need LLM-driven analysisSteps
   4. CLI Task Dispatcher (unified "eva run <venture_id> [--stage N]" command)
      └── Individual scripts exist; need unified orchestration entry point
   5. Return Path (LEO SD completion → stage progress)
@@ -944,7 +1565,7 @@ If any step fails, the phase is not complete.
 
 ---
 
-## 12. Post-Launch Operations Architecture
+## 14. Post-Launch Operations Architecture
 
 ### Event-Driven Operations Model
 
@@ -992,7 +1613,7 @@ Portfolio knowledge base updated with shutdown learnings
 
 ---
 
-## 13. Saga Management for Multi-Step Operations
+## 15. Saga Management for Multi-Step Operations
 
 ### Why Sagas Are Needed
 
@@ -1131,7 +1752,7 @@ The circuit breaker (`evaCircuitBreaker.ts`) integrates at the step level: if a 
 
 ---
 
-## 14. Stage 0: Venture Ideation Pipeline
+## 16. Stage 0: Venture Ideation Pipeline
 
 ### Overview
 
@@ -1289,13 +1910,13 @@ Synthesis feedback (`recordSynthesisFeedback()`) records outcomes (approved/park
 - `blocked` / `nursery` → park in Venture Nursery
 - The Chairman never actually sees the brief or makes a decision
 
-**Target architecture** (see Section 9, Chairman Decision Interface):
+**Target architecture** (see Section 11, Chairman Decision Interface):
 - `conductChairmanReview()` writes to `chairman_decisions` table with full synthesis context
 - Chairman reviews in Dashboard (brief, synthesis scores, forecast, archetype, moat strategy)
 - Chairman submits: Approve / Park / Edit brief / Kill
 - Supabase Realtime broadcasts → event bus → `persistVentureBrief()` executes
 
-**Gap**: The only missing piece is the integration between `conductChairmanReview()` and `chairman_decisions`. The synthesis, scoring, and persistence are all built. This is listed as P0 item #1 in the implementation sequence (Section 11).
+**Gap**: The only missing piece is the integration between `conductChairmanReview()` and `chairman_decisions`. The synthesis, scoring, and persistence are all built. This is listed as P0 item #1 in the implementation sequence (Section 13).
 
 ### Stage 0 → Stage 1 Contract (VentureBrief)
 
@@ -1347,6 +1968,6 @@ When approved, `persistVentureBrief()` writes to both:
 *Architecture document as Step 2 of the 8-step vision & architecture plan.*
 *Informed by: EVA Venture Lifecycle Vision v4.6 (34 Chairman decisions), existing EHG database schema (689 ventures, 25 stages configured), EVA orchestration infrastructure (event bus, task contracts, state machines, circuit breakers), LEO Protocol SD Bridge implementation, Stage 0 CLI implementation (`lib/eva/stage-zero/`).*
 *Steps 1 and 2 run in parallel -- vision defines "what," architecture defines "how."*
-*v1.1: Added Chairman Decision Interface (Section 9) defining how the Chairman submits decisions at blocking gates. Resequenced implementation phases (Section 11) so Phase A produces a testable end-to-end single-venture flow including Chairman decisions and CLI task dispatcher. Added Saga Management (Section 13) for multi-step operations (SD execution, Reality Gate retries, venture retirement) using dormant evaStateMachines.ts infrastructure.*
-*v1.2: Added Stage 0 Venture Ideation Pipeline (Section 14) documenting the fully-implemented pre-lifecycle module. Updated Service Registry to include Stage 0 Pipeline. Extended Phase A test scenario to start from Stage 0 ideation. Identified Chairman Review interactivity gap: `conductChairmanReview()` is currently a non-interactive passthrough — wiring to `chairman_decisions` table is P0 item #1. Added Stage 0 as fourth mandatory Chairman blocking gate (alongside Stages 10, 22, 25). Documented 15+ existing database tables, 8 synthesis components, 3 entry paths, 4 discovery strategies, evaluation profile system, counterfactual engine, stage-of-death predictor, gate signal service, and venture nursery.*
-*v1.3: Codebase reconciliation against `lib/eva/` and CLI-vs-GUI triangulation analysis (Stages 1-25). Discovered 10 components listed as "Needs Building" that already exist in production: Decision Filter Engine, Reality Gate Evaluator, Chairman Preferences Store, CEO Service (EVA Orchestrator), Saga Coordinator, Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, Orchestrator State Machine, and Cross-Venture Learning. Corrected Section 11 inventory: "Exists and Active" grew from 15 to 27 entries; "Needs Building" shrunk from 17 to 13 items. Added CLI service ports and venture scripts. Phase A resequenced from 10 items to 6 remaining work items (5 were already built). Added "Stage template gap-fill" as new P0 item based on triangulation finding that ~6 stage templates are passive containers needing active analysisSteps. Phase C reduced from 3 to 2 items (cross-venture learning already built).*
+*v1.1: Added Chairman Decision Interface (Section 11) defining how the Chairman submits decisions at blocking gates. Resequenced implementation phases (Section 13) so Phase A produces a testable end-to-end single-venture flow including Chairman decisions and CLI task dispatcher. Added Saga Management (Section 15) for multi-step operations (SD execution, Reality Gate retries, venture retirement) using dormant evaStateMachines.ts infrastructure.*
+*v1.2: Added Stage 0 Venture Ideation Pipeline (Section 16) documenting the fully-implemented pre-lifecycle module. Updated Service Registry to include Stage 0 Pipeline. Extended Phase A test scenario to start from Stage 0 ideation. Identified Chairman Review interactivity gap: `conductChairmanReview()` is currently a non-interactive passthrough — wiring to `chairman_decisions` table is P0 item #1. Added Stage 0 as fourth mandatory Chairman blocking gate (alongside Stages 10, 22, 25). Documented 15+ existing database tables, 8 synthesis components, 3 entry paths, 4 discovery strategies, evaluation profile system, counterfactual engine, stage-of-death predictor, gate signal service, and venture nursery.*
+*v1.3: Codebase reconciliation against `lib/eva/` and CLI-vs-GUI triangulation analysis (Stages 1-25). Discovered 10 components listed as "Needs Building" that already exist in production: Decision Filter Engine, Reality Gate Evaluator, Chairman Preferences Store, CEO Service (EVA Orchestrator), Saga Coordinator, Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, Orchestrator State Machine, and Cross-Venture Learning. Corrected Section 13 inventory: "Exists and Active" grew from 15 to 27 entries; "Needs Building" shrunk from 17 to 13 items. Added CLI service ports and venture scripts. Phase A resequenced from 10 items to 6 remaining work items (5 were already built). Added "Stage template gap-fill" as new P0 item based on triangulation finding that all 25 stage templates are passive containers needing active analysisSteps. Phase C reduced from 3 to 2 items (cross-venture learning already built).*
