@@ -4076,6 +4076,141 @@ const TEMPLATE = {
 7. **No test-to-requirement traceability**: Can't tell which Stage 18 sprint items or Stage 19 tasks are covered by tests.
 8. **No security/performance/accessibility assessment**: GUI has extensive security checks and performance benchmarks. CLI has nothing. However, this may be appropriate -- the CLI is a venture lifecycle tool, not a security audit tool.
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (3/3)
+
+1. **Add analysisStep consuming Stage 18/19 data**: All three agree Stage 20 should scope QA from upstream data, not start from scratch. The analysisStep generates a QA plan scaffold (OpenAI), test plan (AG), or suggested test suites (Claude) -- all advisory, not synthetic results. Stage 20 remains evidence-driven.
+
+2. **Replace boolean quality_gate_passed with decision enum**: Universal agreement that pass/conditional_pass/fail replaces the current boolean. 100% pass rate is an anti-pattern. All agree: conditional_pass allows proceeding with documented failures while flagging for Stage 21 review.
+
+3. **Defect severity/status must become enums**: Consistent with Stage 19 pattern. All agree on severity: critical/high/medium/low. Status: open/in_progress/resolved/wontfix (with minor variations).
+
+4. **Fix critical_failures misleading name**: All agree this field incorrectly counts ALL failures as "critical." Rename to total_failures and add separate severity-aware metrics.
+
+5. **Enforce Stage 19 ready_for_qa gate**: All agree Stage 19's sprint_completion.ready_for_qa must gate Stage 20. All allow an override mechanism for emergency QA with logged rationale.
+
+6. **Add test type categorization**: All agree test_suites need a type field to distinguish unit from integration from e2e. This enables Stage 21 to assess testing breadth.
+
+7. **Add test-to-requirement traceability**: All agree test suites should reference Stage 18 sprint items or Stage 19 tasks. Derived: which tasks have zero test coverage. All agree this should be lightweight (arrays of refs), not a full test management system.
+
+8. **Don't port full GUI security/performance/accessibility**: All agree the CLI should NOT replicate the GUI's 15 security checks + 10 performance metrics + 6 accessibility checks. The CLI's scope is test-suite-based QA.
+
+#### Majority Agreement (2/3)
+
+1. **Security/performance as test suite types** (AG + OpenAI yes, Claude no): AG argues "treat them as Test Suite Types" -- a user can add `{ type: 'security', name: 'OWASP Scan' }`. OpenAI proposes optional nonfunctional types. Claude says these belong in LEO per-SD, not venture QA. **Resolution**: Keep 3 core types (unit/integration/e2e). Security and performance test results CAN be captured as test suites -- the schema doesn't prevent it. But don't add dedicated type values that imply Stage 20 is responsible for running security or performance tests. If a team runs an OWASP scan, they can record it as an integration test suite.
+
+2. **Pass rate threshold**: Claude says ≥95% for pass. AG says ≥95%. OpenAI wants per-type thresholds (unit ≥95%, integration ≥90%, e2e ≥85%, overall weighted ≥92%). **Resolution**: Single overall threshold (≥95%), not per-type. Per-type thresholds add complexity without clear benefit at the venture level. Keep it simple.
+
+3. **Coverage threshold**: Claude/AG keep ≥60% (existing MIN_COVERAGE_PCT). OpenAI raises to ≥70%. **Resolution**: Keep ≥60%. It's already a constant in the code. Raising it is a policy decision that can happen later, not a schema change.
+
+#### Divergence Resolutions
+
+**Defect status values**: Claude = open/in_progress/resolved/wontfix. AG = open/resolved/waived (3 values). OpenAI = open/in_progress/resolved/deferred. **Resolution**: Keep Claude's four values for consistency with Stage 19's issue status enum. "Waived" (AG) maps to "wontfix." "Deferred" (OpenAI) also maps to "wontfix" -- in a sprint context, deferred = won't fix this sprint.
+
+**Test type enum values**: Claude = 3 (unit/integration/e2e). AG = 6 (add performance/security/manual). OpenAI = 6 (add nonfunctional_security/nonfunctional_performance/nonfunctional_accessibility). **Resolution**: 3 core types. Adding 6 types implies Stage 20 owns security/performance QA, which it doesn't. Users who want to track a security scan can create a test suite with type:integration (since security scans test system integration with security controls). Don't encode organizational testing responsibilities into the type enum.
+
+**Backward compatibility for critical_failures rename**: OpenAI suggests keeping critical_failures as a deprecated alias. Claude and AG just rename. **Resolution**: Clean rename. This is a pre-1.0 venture lifecycle tool with no external consumers. Don't add backward-compatibility debt.
+
+**Override mechanism for ready_for_qa**: Claude says quality_decision can't be "pass" if not ready but no separate override field. AG logs a warning note. OpenAI adds force_qa + force_qa_reason + approved_by fields. **Resolution**: No separate override fields. If Stage 19's ready_for_qa is false, the quality_decision's rationale captures it. The user can still enter test data and the decision will reflect reality. Adding force_qa fields adds schema complexity for an edge case.
+
+**Contrarian resolution**: AG argues "100% gate is actually correct" with a middle ground of "explicit risk acceptance." This is a valuable counterpoint. **Resolution**: The conditional_pass decision IS explicit risk acceptance. All failures must be documented as known_defects to qualify for conditional_pass. This prevents "rotting test suites" (AG's concern) because every failure requires a severity assessment. If teams start marking everything as severity:low to game the system, that's visible in defects_by_severity and Stage 21 Review can catch it.
+
+#### Recommended Stage 20 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-20',
+  slug: 'quality-assurance',
+  title: 'Quality Assurance',
+  version: '2.0.0',
+  schema: {
+    // === Updated: test suites with type + traceability ===
+    test_suites: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        type: { type: 'enum', values: ['unit', 'integration', 'e2e'] },  // NEW
+        total_tests: { type: 'number', min: 0, required: true },
+        passing_tests: { type: 'number', min: 0, required: true },
+        coverage_pct: { type: 'number', min: 0, max: 100 },
+        task_refs: { type: 'array' },  // NEW: Stage 19 tasks covered (optional)
+      },
+    },
+
+    // === Updated: known defects with enums + references ===
+    known_defects: {
+      type: 'array',
+      items: {
+        description: { type: 'string', required: true },
+        severity: { type: 'enum', values: ['critical', 'high', 'medium', 'low'], required: true },  // CHANGED
+        status: { type: 'enum', values: ['open', 'in_progress', 'resolved', 'wontfix'], required: true },  // CHANGED
+        test_suite_ref: { type: 'string' },  // NEW
+        task_ref: { type: 'string' },        // NEW
+      },
+    },
+
+    // === Updated derived ===
+    overall_pass_rate: { type: 'number', derived: true },
+    coverage_pct: { type: 'number', derived: true },
+    total_tests: { type: 'number', derived: true },
+    total_passing: { type: 'number', derived: true },
+    total_failures: { type: 'number', derived: true },            // RENAMED from critical_failures
+    open_critical_defects: { type: 'number', derived: true },      // NEW
+    defects_by_severity: { type: 'object', derived: true },        // NEW
+
+    // === NEW: test coverage by task ===
+    uncovered_tasks: { type: 'array', derived: true },
+
+    // === NEW: quality decision (replaces quality_gate_passed boolean) ===
+    quality_decision: {
+      type: 'object', derived: true,
+      properties: {
+        decision: { type: 'enum', values: ['pass', 'conditional_pass', 'fail'] },
+        rationale: { type: 'string' },
+        overall_pass_rate: { type: 'number' },
+        coverage_adequate: { type: 'boolean' },
+        critical_defects_open: { type: 'number' },
+        ready_for_review: { type: 'boolean' },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+**Quality decision logic**:
+- **PASS**: overall_pass_rate ≥ 95% AND coverage_pct ≥ 60% AND open_critical_defects = 0 → ready_for_review = true
+- **CONDITIONAL_PASS**: overall_pass_rate ≥ 80% AND open_critical_defects = 0 AND all failures documented as known_defects → ready_for_review = true (Stage 21 reviews with caveats)
+- **FAIL**: overall_pass_rate < 80% OR open_critical_defects > 0 → ready_for_review = false
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` scoping QA from Stage 18/19. Readiness check (ready_for_qa), test scope from completed tasks, issue carry-forward from Stage 19, suggested test suites by architecture layer.
+2. **P0**: Replace `quality_gate_passed` boolean with `quality_decision` (pass/conditional_pass/fail). Calibrate thresholds: ≥95% pass, ≥60% coverage, 0 critical defects for pass.
+3. **P1**: Change known_defects severity/status to enums. severity: critical/high/medium/low. status: open/in_progress/resolved/wontfix. Add test_suite_ref, task_ref.
+4. **P1**: Rename `critical_failures` to `total_failures`. Add `open_critical_defects` and `defects_by_severity` derived fields.
+5. **P2**: Add test suite `type` field (unit/integration/e2e). Enables testing breadth assessment in Stage 21.
+6. **P2**: Add `task_refs` on test suites (optional). Derive `uncovered_tasks`. Enables coverage-by-task visibility.
+7. **P3**: Do NOT add security/performance/accessibility as dedicated type values (users can record these as integration suites).
+8. **P3**: Do NOT add per-type pass rate thresholds (single threshold is sufficient).
+9. **P3**: Do NOT add force_qa override fields (quality_decision rationale captures readiness context).
+10. **P3**: Do NOT add backward-compatibility aliases for renamed fields (pre-1.0 tool).
+
+#### Cross-Stage Impact
+
+| Change | Stage 19 (Build) | Stage 21 (Review) | Stage 22 (Sprint Review) |
+|--------|-----------------|------------------|------------------------|
+| analysisStep from Stage 19 | Stage 19's ready_for_qa gates Stage 20 entry. Build issues carry forward as known defects. | Review receives structured QA scope with traceability. | Sprint review sees build → QA flow. |
+| quality_decision (3-way) | N/A | Review has pass/conditional/fail signal. Conditional = review with caveats. | Sprint review compares quality across sprints. |
+| Test type categorization | N/A | Review can assess testing breadth (unit-only vs full stack). | Sprint review tracks testing maturity over time. |
+| Uncovered tasks | Stage 19 tasks are coverage targets. | Review flags untested tasks. | Sprint review sees coverage improvement. |
+| Defect severity enums | Consistent with Stage 19 issue enums. | Review assesses defect severity distribution. | Sprint review tracks defect trends. |
+
 ---
 
 ## Stage 21: Integration Testing
