@@ -4704,14 +4704,319 @@ GUI Stage 23 = "Production Launch" -- a comprehensive launch orchestration platf
 | Post-launch | None | postLaunchPlan, launch notes |
 | analysisStep | None | N/A (GUI doesn't use this pattern) |
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (all 3 respondents)
+
+1. **analysisStep is critical (5/5)**: All three rate the missing analysisStep as the highest priority. Stage 23 should synthesize Stage 22's "release packet" into a launch readiness brief. Claude emphasizes decision context for the kill gate; OpenAI emphasizes compact deterministic synthesis (not prose-heavy); AntiGravity frames it as the "Mission Briefing" before the Go command.
+
+2. **Kill gate must validate upstream signals**: All agree the presence-based gate is insufficient. The kill gate MUST check Stage 22's promotion_gate = pass and release_decision = 'release' as hard prerequisites. This is a pipeline integrity issue, not preference.
+
+3. **Success criteria are critical for Stage 24**: All rate this 5/5. Stage 23 must define measurable success criteria that Stage 24 can evaluate. This is the learning loop contract: define targets at launch, measure at Stage 24.
+
+4. **Launch type enum needed**: All agree on adding a launch type. Affects Stage 24 metric interpretation (beta ≠ GA expectations).
+
+5. **Launch task status must be enum**: Unanimous: pending/in_progress/done/blocked (or similar). Consistent with Stage 19's task status pattern.
+
+6. **launch_date needs ISO validation**: All agree. Claude and OpenAI both propose planned + actual dates. AntiGravity suggests ISO-8601.
+
+7. **Do NOT import GUI's weighted scoring**: All three explicitly reject the GUI's 12-criteria weighted scoring as over-engineered for a CLI venture tool. The CLI should use hard prerequisites + informational signals instead.
+
+#### Majority Agreement (2 of 3)
+
+1. **Readiness score (OpenAI + Claude, not AntiGravity)**: OpenAI proposes a hybrid gate with readiness score (0-100). Claude proposes a simpler score derived from upstream decisions (+30 for promotion gate, +20 for release decision, etc.). AntiGravity proposes a "No Red Flags" policy without scoring. **Resolution**: Skip the readiness score. The upstream decision validation (promotion gate + release decision + plans present) provides sufficient safety. A score adds calibration complexity without proportional benefit, as the contrarian arguments from OpenAI and AntiGravity both note.
+
+2. **Stakeholder approval (AntiGravity + OpenAI, not Claude)**: AntiGravity and OpenAI propose adding an approval object. Claude argues go_decision IS the approval. **Resolution**: Skip separate stakeholder approval. The go_decision enum is the human decision point. Adding a parallel approval object duplicates this for CLI ventures where the decision-maker and operator are typically the same person. For multi-stakeholder governance, the go_decision can be set by whoever has authority.
+
+3. **Structured post-launch ops (AntiGravity + OpenAI, not Claude)**: Both propose structured rollback triggers, monitoring URLs, etc. Claude argues text fields are adequate for human-readable plans. **Resolution**: Add structured rollback_triggers (condition/action pairs) as Claude proposed -- this is the one structured field worth adding because Stage 24 can reference trigger conditions. Keep incident_response_plan and monitoring_setup as text fields.
+
+#### Divergence Resolutions
+
+1. **Launch type values**: Claude proposes 3 (soft_launch/beta/general_availability), OpenAI proposes 4 (soft/beta/hard/ga), AntiGravity proposes 5 (soft/beta/canary/hard/ga). **Resolution**: 3 types per Claude. "Hard" is just GA with marketing push (not a lifecycle state). "Canary" is a deployment strategy, not a launch type. Keep it simple: soft_launch, beta, general_availability.
+
+2. **Kill gate outcome**: Claude proposes pass/kill (preserving existing pattern). OpenAI proposes pass/conditional_pass/kill. AntiGravity proposes pass/kill with "No Red Flags". **Resolution**: Keep pass/kill. Adding conditional_pass to a kill gate defeats the purpose. Kill gates are binary: go or don't go. Conditional states were appropriate for quality (Stage 20) and review (Stage 21), but the launch decision is definitive.
+
+3. **Launch task criticality**: AntiGravity proposes must_have/nice_to_have. OpenAI proposes critical boolean + blocker_reason. Claude proposes optional category. **Resolution**: Skip criticality. The task status enum (blocked = can't launch) already captures blocking state. Adding another dimension overcomplicates a simple checklist.
+
+#### Recommended Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-23',
+  slug: 'launch-execution',
+  title: 'Launch Execution',
+  version: '2.0.0',
+  schema: {
+    // === NEW: launch type ===
+    launch_type: { type: 'enum', values: ['soft_launch', 'beta', 'general_availability'], required: true },
+
+    // === Existing (unchanged) ===
+    go_decision: { type: 'enum', values: ['go', 'no-go'], required: true },
+    incident_response_plan: { type: 'string', minLength: 10, required: true },
+    monitoring_setup: { type: 'string', minLength: 10, required: true },
+    rollback_plan: { type: 'string', minLength: 10, required: true },
+
+    // === Updated: launch tasks with status enum ===
+    launch_tasks: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        status: { type: 'enum', values: ['pending', 'in_progress', 'done', 'blocked'], required: true },
+        owner: { type: 'string' },
+      },
+    },
+
+    // === Updated: dates with ISO validation ===
+    planned_launch_date: { type: 'string', format: 'date', required: true },
+    actual_launch_date: { type: 'string', format: 'date' },
+
+    // === NEW: success criteria (contract with Stage 24) ===
+    success_criteria: {
+      type: 'array', minItems: 1,
+      items: {
+        metric: { type: 'string', required: true },
+        target: { type: 'string', required: true },
+        measurement_window: { type: 'string', required: true },
+        priority: { type: 'enum', values: ['primary', 'secondary'] },
+      },
+    },
+
+    // === NEW: structured rollback triggers ===
+    rollback_triggers: {
+      type: 'array',
+      items: {
+        condition: { type: 'string', required: true },
+        action: { type: 'string', required: true },
+      },
+    },
+
+    // === Derived (updated) ===
+    decision: { type: 'enum', values: ['pass', 'kill'], derived: true },
+    blockProgression: { type: 'boolean', derived: true },
+    reasons: { type: 'array', derived: true },
+    warnings: { type: 'array', derived: true },
+    total_tasks: { type: 'number', derived: true },
+    completed_tasks: { type: 'number', derived: true },
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Kill Gate Update
+
+```javascript
+function evaluateKillGate({ go_decision, incident_response_plan, monitoring_setup, rollback_plan, stage22 }) {
+  const reasons = [];
+  const warnings = [];
+
+  // Hard prerequisite: Stage 22 must have passed
+  if (stage22) {
+    if (!stage22.promotion_gate?.pass) {
+      reasons.push({ type: 'promotion_gate_failed', message: 'Stage 22 promotion gate did not pass' });
+    }
+    if (stage22.release_decision?.decision !== 'release') {
+      reasons.push({ type: 'release_not_approved', message: `Release decision is "${stage22.release_decision?.decision}", not "release"` });
+    }
+    // Surface conditional warnings (informational only)
+    if (stage22.promotion_gate?.warnings?.length > 0) {
+      warnings.push(...stage22.promotion_gate.warnings.map(w => ({ type: 'upstream_warning', message: w })));
+    }
+  }
+
+  // Core decision
+  if (go_decision !== 'go') {
+    reasons.push({ type: 'no_go_decision', message: go_decision === 'no-go' ? 'Launch decision is no-go' : 'Go/no-go decision not set' });
+  }
+
+  // Operational readiness (presence checks -- preserved from current)
+  if (go_decision === 'go') {
+    if (!incident_response_plan || incident_response_plan.trim().length < 10) {
+      reasons.push({ type: 'missing_incident_response', message: 'Incident response plan required' });
+    }
+    if (!monitoring_setup || monitoring_setup.trim().length < 10) {
+      reasons.push({ type: 'missing_monitoring', message: 'Monitoring setup required' });
+    }
+    if (!rollback_plan || rollback_plan.trim().length < 10) {
+      reasons.push({ type: 'missing_rollback', message: 'Rollback plan required' });
+    }
+  }
+
+  const decision = reasons.length > 0 ? 'kill' : 'pass';
+  return { decision, blockProgression: decision === 'kill', reasons, warnings };
+}
+```
+
+#### Minimum Viable Change
+
+1. **P0**: Add `analysisStep` synthesizing Stage 22 release packet into launch readiness brief.
+2. **P0**: Enhance kill gate with upstream validation (promotion_gate pass + release_decision = release).
+3. **P0**: Add `success_criteria[]` as contract with Stage 24.
+4. **P1**: Add `launch_type` enum (soft_launch/beta/general_availability).
+5. **P1**: Change launch_tasks status to enum (pending/in_progress/done/blocked).
+6. **P2**: Rename launch_date to planned_launch_date + add actual_launch_date, ISO validation.
+7. **P2**: Add structured `rollback_triggers[]` (condition/action pairs).
+8. **P3**: Do NOT add weighted scoring (over-engineered for CLI).
+9. **P3**: Do NOT add separate stakeholder approval (go_decision is sufficient).
+10. **P3**: Do NOT add readiness score (upstream decisions provide sufficient safety).
+
+#### Cross-Stage Impact
+
+| Change | Stage 22 (Release Readiness) | Stage 24 (Metrics & Learning) | Overall Pipeline |
+|--------|------------------------------|-------------------------------|-----------------|
+| Kill gate consuming Stage 22 | promotion_gate and release_decision validated. Pipeline integrity preserved. | Stage 24 knows launch was properly gated. | Clean chain: promotion gate → release decision → kill gate. |
+| Success criteria | N/A | Stage 24 measures actual vs target. Learning loop closes. | Traceability from launch intent to outcome. |
+| Launch type | N/A | Metric interpretation in launch type context. Beta ≠ GA expectations. | Prevents false negatives on early-stage launches. |
+| analysisStep | Consumes Stage 22's release packet. | Stage 24 has launch brief for context. | Decision context flows through pipeline. |
+
 ---
 
 ## Stage 24: Metrics & Learning
 
-*Analysis pending*
+### Ground Truth
+
+**CLI Implementation** (`lib/eva/stage-templates/stage-24.js`):
+
+Stage 24 is the second LAUNCH & LEARN stage. It implements the **AARRR framework** (Pirate Metrics) for post-launch measurement and captures learnings.
+
+**Input fields**:
+- `aarrr`: object, required -- contains 5 categories:
+  - `acquisition[]`: metrics for user acquisition
+  - `activation[]`: metrics for user activation
+  - `retention[]`: metrics for user retention
+  - `revenue[]`: metrics for revenue
+  - `referral[]`: metrics for referral/virality
+  - Each metric: `name` (string, required), `value` (number, required), `target` (number, required), `trend_window_days` (number, optional)
+  - Min 1 metric per category
+- `funnels[]`: array, min 1 -- each has `name` (string, required), `steps[]` (array, min 2 items)
+- `learnings[]`: array -- each has `insight` (string, required), `action` (string, required), `category` (string, optional)
+
+**Derived fields**:
+- `total_metrics`: count across all AARRR categories
+- `categories_complete`: boolean -- all 5 categories have ≥1 metric
+- `funnel_count`: number of funnels defined
+- `metrics_on_target`: metrics where value ≥ target
+- `metrics_below_target`: metrics where value < target
+
+**Key observations**:
+- No analysisStep (should consume Stage 23 launch context + success criteria)
+- AARRR framework is strong and well-chosen for ventures
+- No connection to Stage 23's success criteria (if added per consensus)
+- Learning category is free text (not enum)
+- No trend analysis (trend_window_days exists but isn't used in derivation)
+- Funnels have steps but steps are untyped (just array items)
+- No metrics tracking over time (single snapshot, not time series)
+- No comparison against Stage 23's launch type context
+
+**GUI Implementation** (`v2/Stage24GrowthMetricsOptimization.tsx`):
+
+GUI Stage 24 = "Analytics & Feedback" / "Growth Metrics & Optimization" -- a comprehensive growth operations dashboard.
+
+**AARRR Pirate Metrics** (same framework as CLI):
+- Acquisition: Monthly New Users, CAC
+- Activation: Activation Rate, Time to First Value
+- Retention: WAU, Churn Rate
+- Revenue: MRR, ARPU
+- Referral: NPS, Referral Rate
+- Progress bars showing progress toward targets
+
+**Growth Dashboard**: MAU, user growth rate, revenue growth rate, NRR, gross margin, cohort analysis
+
+**Optimization Tools**: Experimentation platform (A/B tests), data analytics quality, performance improvements baseline vs current
+
+**Customer Lifecycle**: Journey mapping (Awareness → Trial → Adoption → Expansion), retention strategies with implementation status, expansion opportunities
+
+**Growth Levers**: Viral mechanics (viral coefficient, k-factor), scalable acquisition channels, product-led growth metrics
+
+**Key Differences**:
+
+| Aspect | CLI | GUI |
+|--------|-----|-----|
+| AARRR Framework | Core structure (5 categories) | Same framework + visual dashboard |
+| Funnels | Name + steps array | Journey mapping with touchpoints |
+| Learnings | Simple insight/action pairs | Embedded in optimization tools |
+| Growth metrics | Not included | MAU, NRR, gross margin, cohort analysis |
+| Experimentation | Not included | A/B testing platform tracking |
+| Customer lifecycle | Not included | Journey stages with satisfaction |
+| Time tracking | trend_window_days (unused) | Cohort analysis, trend lines |
+| analysisStep | None | N/A |
 
 ---
 
 ## Stage 25: Venture Review
 
-*Analysis pending*
+### Ground Truth
+
+**CLI Implementation** (`lib/eva/stage-templates/stage-25.js`):
+
+Stage 25 is the final stage of the entire 25-stage venture lifecycle. It provides a comprehensive venture review with **drift detection** comparing the current vision against Stage 1's original vision.
+
+**Input fields**:
+- `review_summary`: string, min 20 chars, required -- overall venture review narrative
+- `initiatives`: object, required -- 5 categories:
+  - `product[]`: product initiatives
+  - `market[]`: market initiatives
+  - `technical[]`: technical initiatives
+  - `financial[]`: financial initiatives
+  - `team[]`: team initiatives
+  - Each initiative: `title` (string, required), `status` (free text string, required), `outcome` (string, required)
+  - Min 1 initiative per category
+- `current_vision`: string, min 10 chars, required -- the venture's current vision/direction
+- `drift_justification`: string, optional -- explains why vision drifted (required if drift detected)
+- `next_steps[]`: array, min 1 -- each has `action` (string, required), `owner` (string, required), `timeline` (string, required)
+
+**Derived fields**:
+- `total_initiatives`: count across all 5 categories
+- `all_categories_reviewed`: boolean -- all 5 categories have ≥1 initiative
+- `drift_detected`: boolean -- from detectDrift()
+- `drift_check`: object -- { drift_detected, rationale, original_vision, current_vision }
+
+**detectDrift()**: Pure function that compares current_vision against Stage 1's original vision (venture_name + elevator_pitch):
+- Tokenizes both into words (>3 chars)
+- Calculates word overlap ratio
+- drift_detected = true if overlap < 30%
+- Returns rationale explaining the overlap percentage
+
+**Key observations**:
+- No analysisStep (should synthesize the entire 25-stage venture journey)
+- Drift detection is simple word overlap (not semantic)
+- Initiative status is free text (not enum)
+- next_steps timeline is free text (not date)
+- No connection to Stage 24 metrics (was the launch successful?)
+- No overall venture health score
+- No comparison against Stage 5 profitability projections or Stage 16 financial projections
+- No "venture decision" (continue/pivot/kill/exit) -- the most important output
+
+**GUI Implementation** (`v2/Stage25ScalePlanning.tsx`):
+
+GUI Stage 25 = "Optimization & Scale" / "Scale Planning" -- forward-looking strategic planning (fundamentally different scope from CLI's retrospective review).
+
+**Scale Readiness Assessment**: 4 dimensions (Infrastructure, Team, Operations, Financial) each scored. Overall readiness score.
+
+**Scaling Areas**:
+- Infrastructure: current/projected capacity, timeline, investment, bottlenecks
+- Team: headcount changes, key hires, skill gaps, training
+- Operations: process maturity, automation level, quality systems, compliance
+
+**Growth Projections**: 3 scenarios (conservative/base/optimistic), revenue stream evolution, resource planning, capacity planning with scaling triggers
+
+**Market Expansion**: Geographic expansion (regions, regulatory), product expansion, market penetration strategy
+
+**Scale Challenges**: Bottlenecks (technical debt, talent, support, compliance), scaling risks, success metrics (ARR, customer count, team size)
+
+**Stage25Viewer.tsx** (Output): Final review across all 25 stages with pass/fail, handoff items, completion metrics, unified decision (ADVANCE/REVISE/REJECT), confidence score
+
+**Key Differences**:
+
+| Aspect | CLI | GUI |
+|--------|-----|-----|
+| Focus | Retrospective review + drift detection | Forward-looking scale planning |
+| Categories | product/market/technical/financial/team | infrastructure/team/operations/financial |
+| Drift detection | Word overlap vs Stage 1 | None |
+| Vision tracking | current_vision vs original | None |
+| Growth projections | None | 3-scenario revenue forecasting |
+| Market expansion | None | Geographic + product expansion |
+| Venture decision | None (missing!) | ADVANCE/REVISE/REJECT (in viewer) |
+| Next steps | action/owner/timeline | Scale initiatives with investment |
+| analysisStep | None | N/A |
