@@ -418,6 +418,7 @@ Before marking any stage/feature as complete:
 - E2E testing is MANDATORY
 - 100% user story coverage required
 - Both unit tests AND E2E tests must pass
+- **TDD for applicable SD types**: For `feature` (mandatory) and `enhancement`/`bugfix`/`refactor` (recommended) SDs, invoke the TESTING sub-agent **before implementation** to generate failing tests from PRD acceptance criteria, then implement to make tests pass. See CLAUDE_EXEC.md "TDD Workflow (EXEC)" for the full sequence.
 
 ### Database-First (REQUIRED)
 **Zero markdown files.** Database tables are single source of truth:

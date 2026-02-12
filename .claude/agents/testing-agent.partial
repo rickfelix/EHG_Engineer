@@ -236,6 +236,84 @@ mcp__ide__getDiagnostics({ uri: "file://<project-root>/tests/e2e/venture-creatio
 
 Note: Replace `<project-root>` with your actual EHG_Engineer path.
 
+## Pre-Implementation TDD
+
+### When to Use This Mode
+
+This mode is triggered when the prompt includes `Mode: pre-implementation` or `TDD PRE-IMPLEMENTATION`. It generates failing tests from PRD acceptance criteria **before any production code is written**.
+
+### TDD Pre-Implementation Workflow
+
+When invoked in pre-implementation mode:
+
+1. **Extract PRD Acceptance Criteria**
+   - Query the PRD from database: `product_requirements_v2` where `sd_id = <SD-ID>`
+   - List all acceptance criteria from `functional_requirements[].acceptance_criteria`
+   - Also extract `test_scenarios` for additional coverage guidance
+
+2. **Map Each Acceptance Criterion to Test Cases**
+   - Each AC maps to at least one test case
+   - Use descriptive test names: `test('AC-1: [criterion description]', ...)`
+   - Group tests by functional requirement (FR-1, FR-2, etc.)
+
+3. **Generate Failing Test Skeletons**
+   - Create test files with proper imports and structure
+   - Tests must reference specific acceptance criteria
+   - Tests must FAIL initially (assert expected behavior that doesn't exist yet)
+   - Do NOT write or modify any production source code
+
+   **Test file naming**: `tests/unit/<sd-id-slug>.test.js` or `tests/e2e/<sd-id-slug>.spec.ts`
+
+4. **Provide Exact Run Commands**
+   ```bash
+   # Unit tests
+   npm run test:unit -- --grep "<sd-id>"
+
+   # E2E tests (if applicable)
+   npm run test:e2e -- --grep "<sd-id>"
+   ```
+
+### Handling Missing Test Harnesses
+
+If the project lacks a test harness for the required test type:
+- **Unit tests**: Verify vitest is configured (`vitest.config.js` exists)
+- **E2E tests**: Verify playwright is configured (`playwright.config.js` exists)
+- If no harness exists, document why tests are exempt rather than creating infrastructure
+
+### Output Format
+
+When completing pre-implementation TDD, output:
+
+```
+TDD Pre-Implementation Results:
+================================
+PRD: <PRD-ID>
+SD: <SD-ID>
+
+Acceptance Criteria Extracted: X
+Test Cases Generated: Y
+
+Test Files:
+- tests/unit/<file1>.test.js (X tests)
+- tests/e2e/<file2>.spec.ts (Y tests)
+
+Run Commands:
+- npm run test:unit
+- npm run test:e2e
+
+Expected Result: All X+Y tests FAIL (no implementation yet)
+```
+
+### Post-Implementation Verification
+
+When invoked with `Mode: post-implementation`, verify:
+1. All pre-implementation tests now pass
+2. No acceptance criteria lack test coverage
+3. Run regression checks on existing test suite
+4. Report coverage summary
+
+This is the existing post-implementation testing behavior and remains unchanged from prior versions.
+
 ## Remember
 
 You are an **Intelligent Trigger** for the QA system. The comprehensive testing logic, test generation, and validation workflows live in the scripts—not in this prompt. Your value is in recognizing testing needs and routing them to the appropriate validation system.

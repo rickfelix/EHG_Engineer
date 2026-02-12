@@ -260,6 +260,45 @@ Claude: "Found existing user preferences in the EHG app. Let me now run formal v
 node lib/sub-agent-executor.js VALIDATION <SD-ID>
 ```
 
+## Plan Mode (Optional Guardrail)
+
+### Read-Only Exploration with Claude Code Plan Mode
+
+During the LEAD phase, you may use Claude Code's native **Plan Mode** (`Shift+Tab+Tab`) to enforce read-only exploration. This prevents accidental file edits while you are reading files, assessing validators, and drafting your approach.
+
+**How to use:**
+1. Press `Shift+Tab+Tab` to enter Plan Mode
+2. Explore the codebase: read files, search code, run git status
+3. Draft your assessment and approach
+4. Exit Plan Mode before making any changes
+
+**What Plan Mode prevents:**
+- File writes (Edit, Write tools are blocked)
+- File creation (new files cannot be created)
+- Bash commands that modify state (git commit, npm install, etc.)
+
+**What Plan Mode allows:**
+- Reading files (Read tool)
+- Searching code (Grep, Glob tools)
+- Running read-only commands (git log, git status, npm run sd:next)
+- Exploring the codebase (Task tool with Explore agent)
+
+### Important: Plan Mode is Optional
+
+- Plan Mode is a **convenience guardrail**, not a mandatory step
+- Existing LEAD→PLAN handoff gates remain **authoritative** (no threshold changes)
+- The 9-question LEAD validation gate is unchanged
+- You can perform LEAD exploration without Plan Mode and the workflow is identical
+
+### When Plan Mode Adds Value
+
+| Scenario | Plan Mode Helpful? |
+|----------|--------------------|
+| Complex SD with many affected files | Yes - prevents accidental edits during discovery |
+| Simple/known scope SD | No - skip directly to validation |
+| Follow-up work (already explored) | No - context is already established |
+| Emergency/time-critical fixes | No - speed matters more |
+
 ## SD to Quick Fix Reverse Rubric (LEO v4.3.3)
 
 ## SD to Quick Fix Reverse Rubric

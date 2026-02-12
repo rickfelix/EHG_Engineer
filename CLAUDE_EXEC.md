@@ -928,6 +928,88 @@ npm run test:e2e
 - **SD-EVA-MEETING-002**: 67% E2E failure rate revealed only when tests finally executed
 - **Impact**: Testing enforcement prevents claiming "done" without proof
 
+## TDD Workflow (EXEC)
+
+### Pre-Implementation Testing via TESTING Sub-Agent
+
+For applicable SD types, EXEC begins by deriving failing tests from PRD acceptance criteria **before writing any production code**. This ensures implementation is driven by verifiable acceptance criteria rather than ad-hoc coding.
+
+### TDD Applicability by SD Type
+
+| SD Type | TDD Level | Required Evidence | Notes |
+|---------|-----------|-------------------|-------|
+| `feature` | **Mandatory** | Failing test output + passing test output | Full TDD cycle required |
+| `enhancement` | **Recommended** | Test output if tests written | Strongly encouraged, skip with justification |
+| `bugfix` | **Recommended** | Reproduction test + fix verification | Write test that reproduces bug first |
+| `fix` | Exempt | N/A | Small fixes, TDD overhead not justified |
+| `documentation` | Exempt | N/A | No production code changes |
+| `infrastructure` | Exempt | N/A | Unless SD explicitly requires tests |
+| `refactor` | **Recommended** | Before/after test parity | Verify existing tests pass before and after |
+| `security` | **Recommended** | Security test + verification | Test the vulnerability, then the fix |
+
+**Override**: Any SD can explicitly set `tdd_required: true` in metadata to force Mandatory level regardless of type.
+
+### TDD Sequence (When Applicable)
+
+Follow this ordered checklist for Mandatory/Recommended SD types:
+
+#### Step 1: Invoke TESTING Sub-Agent (Pre-Implementation)
+```
+Task tool with subagent_type="testing-agent":
+"TDD PRE-IMPLEMENTATION: Generate failing tests from PRD acceptance criteria for <SD-ID>.
+PRD ID: <PRD-ID>
+Mode: pre-implementation
+Extract acceptance criteria and create test skeletons that FAIL initially."
+```
+
+**Evidence to capture**: Copy the test run output showing failures (e.g., `3 failed, 0 passed`).
+
+#### Step 2: Confirm Tests Fail
+```bash
+# Run the generated tests to confirm they fail
+npm run test:unit    # For unit tests
+npm run test:e2e     # For E2E tests (if applicable)
+```
+
+The first test run MUST occur **before the first production code change**. If tests pass before implementation, they are not testing new behavior.
+
+#### Step 3: Implement to Pass
+Write production code targeting the failing tests. Each test that turns green confirms an acceptance criterion is met.
+
+#### Step 4: Run Tests to Green
+```bash
+npm run test:unit    # All tests should pass
+npm run test:e2e     # E2E tests should pass (if applicable)
+```
+
+**Evidence to capture**: Copy the test run output showing all passing (e.g., `3 passed, 0 failed`).
+
+#### Step 5: Invoke TESTING Sub-Agent (Post-Implementation)
+```
+Task tool with subagent_type="testing-agent":
+"TDD POST-IMPLEMENTATION: Verify test coverage and run regression checks for <SD-ID>.
+Mode: post-implementation
+Verify all PRD acceptance criteria are covered by passing tests."
+```
+
+This step is the existing post-implementation TESTING trigger and remains unchanged.
+
+### TDD Evidence in Handoff
+
+When creating the EXEC→PLAN handoff, include TDD evidence:
+
+```
+TDD Evidence:
+- Pre-implementation test run: [X tests failed, 0 passed] (before any code changes)
+- Post-implementation test run: [X tests passed, 0 failed] (all green)
+- Test files created/modified: [list of test file paths]
+- PRD acceptance criteria covered: [X/Y criteria have tests]
+```
+
+### Compatibility Note
+
+This TDD workflow is **additive** to the existing Dual Test Requirement below. The Dual Test Requirement (unit + E2E) remains mandatory for all EXEC→PLAN handoffs. TDD adds the **timing constraint**: tests should be written before production code for applicable SD types.
+
 ## ✅ EXEC UI Parity Verification Checklist
 
 **Added in LEO v4.3.3** - MANDATORY before marking implementation complete
