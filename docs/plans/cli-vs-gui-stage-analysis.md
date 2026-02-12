@@ -3572,7 +3572,86 @@ const TEMPLATE = {
 
 ## Stage 18: Sprint Planning
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-18.js`
+**Phase**: THE BUILD LOOP (Stages 17-22)
+**Type**: Passive validation + **active `computeDerived()`** (SD Bridge payloads)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `sprint_name` | string | minLength: 1 | Yes |
+| `sprint_duration_days` | number | 1-30 | Yes |
+| `sprint_goal` | string | minLength: 10 | Yes |
+| `items[]` | array | minItems: 1 | Yes |
+| `items[].title` | string | minLength: 1 | Yes |
+| `items[].description` | string | minLength: 1 | Yes |
+| `items[].priority` | enum | critical/high/medium/low | Yes |
+| `items[].type` | enum | feature/bugfix/enhancement/refactor/infra | Yes |
+| `items[].scope` | string | minLength: 1 | Yes |
+| `items[].success_criteria` | string | minLength: 1 | Yes |
+| `items[].dependencies[]` | array | Optional | No |
+| `items[].risks[]` | array | Optional | No |
+| `items[].target_application` | string | minLength: 1 | Yes |
+| `items[].story_points` | number | min: 1 | No |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_items` | number | Count of sprint items |
+| `total_story_points` | number | Sum of all story_points |
+| `sd_bridge_payloads[]` | array | SD draft payloads generated from items |
+
+**SD Bridge** (Lifecycle-to-SD Bridge):
+The key innovation of Stage 18. Each sprint item is transformed into an SD (Strategic Directive) draft payload containing: title, description, priority, type, scope, success_criteria, dependencies, risks, target_application. This bridges the EVA venture lifecycle into the LEO Protocol execution system.
+
+**Processing**:
+- `validate(data)`: Schema validation + per-item field checks
+- `computeDerived(data)`: Calculates totals + generates sd_bridge_payloads from items
+- **No `analysisStep`** -- all sprint items are user-provided
+- **No connection to Stage 13** -- items not derived from roadmap milestones/deliverables
+- **No connection to Stage 14** -- items not mapped to architecture layers
+- **No connection to Stage 17** -- doesn't check if pre-build checklist prerequisites are met
+- **No velocity/capacity planning** -- total_story_points calculated but not compared to team capacity
+- **No sprint goal alignment to roadmap** -- sprint_goal is free text, not validated against Stage 13 phases
+- **Single sprint only** -- plans one sprint at a time, no multi-sprint view
+
+### GUI Implementation (Ground Truth)
+
+**GUI Stage 18 exists**: "MVP Development Loop" -- broader scope than CLI's "Sprint Planning."
+
+**Components found**:
+- `stages/v2/Stage18MvpDevelopmentLoop.tsx` -- Main implementation
+- `stages/v2/Stage18MVPDevelopment.tsx` -- Alternative implementation
+- `stage-outputs/viewers/Stage18Viewer.tsx` -- Output viewer
+- `stages/Stage18DocumentationSync.tsx` -- Documentation sync
+
+**GUI Features** (beyond CLI scope):
+- Sprint management with dates (not just duration)
+- User stories ("As a / I want / So that" format)
+- Status tracking per item (backlog → in_progress → review → done)
+- Velocity and capacity calculation
+- MVP features with MoSCoW priority (must_have/should_have/nice_to_have)
+- Technical debt tracking
+- Progress visualization and burndown
+- Feedback collection and sentiment analysis
+
+**GUI Superiorities**:
+- MoSCoW prioritization on features
+- Status tracking per item (CLI items have no status -- they're all "planned")
+- Technical debt tracking (CLI has no tech debt concept)
+- Velocity/capacity planning
+
+### Key Gaps
+
+1. **No analysisStep**: Stage 13 roadmap has typed deliverables with now/next/later priority, Stage 14 has architecture decisions, Stage 15 has team with capacity. Sprint items should be derived from Phase 1 deliverables.
+2. **No roadmap-to-sprint derivation**: Stage 13 milestones and deliverables aren't consumed. Sprint items should come from the "now" priority deliverables of the current phase.
+3. **No capacity planning**: Stage 15 has team members with allocation_pct. Total capacity = sum(allocation × sprint_days). No comparison to total_story_points.
+4. **No Stage 17 readiness check**: Sprint planning should verify build_readiness = go or conditional_go.
+5. **No item status tracking**: CLI items are static (planned). GUI has backlog/in_progress/review/done.
+6. **No phase_ref on sprint**: Sprint should reference which Stage 13 phase it belongs to.
+7. **No budget tracking**: Stage 16 has cost_by_phase. Sprint should track spend against phase budget.
 
 ---
 
