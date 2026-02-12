@@ -3653,6 +3653,136 @@ The key innovation of Stage 18. Each sprint item is transformed into an SD (Stra
 6. **No phase_ref on sprint**: Sprint should reference which Stage 13 phase it belongs to.
 7. **No budget tracking**: Stage 16 has cost_by_phase. Sprint should track spend against phase budget.
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Unanimous Consensus (3:0)
+
+| Decision | Claude | OpenAI | AntiGravity | Notes |
+|----------|:------:|:------:|:-----------:|-------|
+| Add analysisStep | 5 Critical | 5 Critical | 5 Critical | Consumes Stages 13/14/15/16/17. Derives sprint items from roadmap deliverables. All three: strongest consensus. |
+| Roadmap-to-sprint derivation | 5 Critical | 5 Critical | 5 Critical | Stage 13 "now" deliverables → sprint items. Type mapping: feature→feature, infrastructure→infra, content→enhancement. |
+| Stage 17 readiness gate | 4 High | 5 Critical | 5 Critical | no_go blocks sprint. conditional_go allows with mitigations. All three agree on this pattern. |
+| Capacity planning as warning | 4 High | 4 High | 4 High | Compare story points to team capacity from Stage 15. Warning if over-committed. Not a hard blocker. |
+| Phase alignment (phase_ref) | 3 Medium | 4 High | Yes | Link sprint to Stage 13 phase. Sprint goal derived from phase/milestone objectives. |
+| SD Bridge is killer feature | Yes | Yes | Yes | Preserve and enhance. "Smart Context Injector" (AntiGravity). All three want architecture + team enrichment. |
+| Item status stays in Stage 19 | 2 Low | 2 Low | 2 Low | Stage 18 = planning. Status tracking (backlog→done) is execution = Stage 19. CLI is correct to omit. |
+| Budget tracking as warning | 3 Medium | 3 Medium | 3 Medium | Sprint cost from Stage 15 team × duration. Compare to Stage 16 phase budget. Warning, not blocker. |
+| Deliverable type → SD type mapping | Yes | Yes | Yes | feature→feature, infrastructure→infra, integration→feature, content→enhancement. |
+
+#### Majority Decisions (2:1)
+
+| Decision | For | Against | Resolution |
+|----------|-----|---------|------------|
+| Items as suggestions (not forced) | AntiGravity + OpenAI | Claude (derives directly) | **Suggested items, not forced.** analysisStep generates `suggested_items[]` from "now" deliverables. User reviews, selects, modifies, adds. Final `items[]` is user-owned. AntiGravity: "Make the connection Advisory Only." OpenAI: require `source_deliverable_ref` or `manual_justification`. |
+| phase_ref over milestone_ref | Claude + OpenAI | AntiGravity (milestone_ref) | **Use `phase_ref`** as primary link. Sprint goal derived from active milestone, but the structural reference is to the phase (consistent with Stages 15/16 phase_ref pattern). |
+
+#### Divergence Resolutions
+
+**Roadmap coupling strength**: AntiGravity's contrarian argues "don't couple Strategy (13-16) to Tactics (17-22)" because startups pivot. OpenAI says "suggested not forced" with explicit manual_justification for non-roadmap items. Claude derives directly. **Resolution**: Advisory connection. analysisStep generates `suggested_items[]` from Stage 13. User decides what enters the sprint. Items that come from the roadmap get `deliverable_ref`. Items added manually get `manual_justification`. Neither field is required -- both are optional. The sprint is user-owned, not roadmap-enslaved.
+
+**SD Bridge enrichment scope**: All three want architecture context and team suggestions. AG adds integration protocol details and milestone outcomes to success_criteria. OpenAI adds risk_flags from warnings. Claude adds technologies and suggested_assignee_role. **Resolution**: Enrich with architecture_layers + technologies (from Stage 14), suggested_assignee_role (from Stage 15 skill match), and deliverable_ref (from Stage 13). Keep it lean -- don't overstuff. Risk flags and integration protocols are nice-to-have but add payload bloat.
+
+**User stories format**: AntiGravity raises "As a/I want/So that" (3 Medium) but concludes "enforce better description rather than forcing strict UI fields." **Resolution**: Skip. The existing description + scope + success_criteria provides sufficient context for the SD Bridge. Formal user story format is a GUI presentation concern, not a data model requirement.
+
+**Readiness gate on conditional_go**: Claude adds incomplete Stage 17 critical items as type:infra sprint items. AG warns "Proceed with Caution." OpenAI requires blocker mitigation notes. **Resolution**: Adopt Claude's approach -- promote unresolved critical checklist items into sprint items as type:infra with priority:critical. This is concrete and actionable, not just a warning.
+
+#### Recommended Stage 18 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-18',
+  slug: 'sprint-planning',
+  title: 'Sprint Planning',
+  version: '2.0.0',
+  schema: {
+    // === Existing (enhanced) ===
+    sprint_name: { type: 'string', required: true },
+    sprint_duration_days: { type: 'number', min: 1, max: 30, required: true },
+    sprint_goal: { type: 'string', minLength: 10, required: true },
+    phase_ref: { type: 'string' },  // NEW: Stage 13 phase
+
+    items: {
+      type: 'array', minItems: 1,
+      items: {
+        title: { type: 'string', required: true },
+        description: { type: 'string', required: true },
+        priority: { type: 'enum', values: ['critical', 'high', 'medium', 'low'], required: true },
+        type: { type: 'enum', values: ['feature', 'bugfix', 'enhancement', 'refactor', 'infra'], required: true },
+        scope: { type: 'string', required: true },
+        success_criteria: { type: 'string', required: true },
+        dependencies: { type: 'array' },
+        risks: { type: 'array' },
+        target_application: { type: 'string', required: true },
+        story_points: { type: 'number', min: 1 },
+        deliverable_ref: { type: 'string' },         // NEW: Stage 13 deliverable (if derived)
+        architecture_layers: { type: 'array' },       // NEW: from Stage 14
+      },
+    },
+
+    // === Existing derived (unchanged) ===
+    total_items: { type: 'number', derived: true },
+    total_story_points: { type: 'number', derived: true },
+
+    // === Updated: SD Bridge with enrichment ===
+    sd_bridge_payloads: {
+      type: 'array', derived: true,
+      // Enhanced: each payload now includes architecture_layers, technologies,
+      // suggested_assignee_role, deliverable_ref (in addition to existing fields)
+    },
+
+    // === NEW: capacity check ===
+    capacity_check: {
+      type: 'object', derived: true,
+      properties: {
+        available_capacity: { type: 'number' },   // Team person-days from Stage 15
+        planned_points: { type: 'number' },
+        utilization_pct: { type: 'number' },
+        warning: { type: 'string', nullable: true },
+      },
+    },
+
+    // === NEW: sprint budget ===
+    sprint_budget: {
+      type: 'object', derived: true,
+      properties: {
+        estimated_cost: { type: 'number' },
+        phase_budget_remaining: { type: 'number' },
+        warning: { type: 'string', nullable: true },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Add `analysisStep` generating `suggested_items[]` from Stage 13 "now" deliverables in current phase. Map deliverable types → SD types. Generate sprint_goal from active milestone. User reviews/selects into items[].
+2. **P0**: Add Stage 17 readiness gate. no_go blocks sprint. conditional_go promotes unresolved critical checklist items into sprint as type:infra.
+3. **P1**: Add `phase_ref` on sprint. Link to Stage 13 phase. Sprint goal validated against phase objectives.
+4. **P1**: Enrich SD Bridge payloads with architecture_layers + technologies (Stage 14) and suggested_assignee_role (Stage 15 skill match).
+5. **P1**: Add `deliverable_ref` on items for roadmap traceability. Items added manually have no ref (both fields optional).
+6. **P2**: Add `capacity_check`. Team capacity from Stage 15 allocation × sprint duration. Warning if total_story_points > capacity × 1.2.
+7. **P2**: Add `sprint_budget`. Team cost × sprint duration vs Stage 16 phase budget. Warning if exceeds.
+8. **P3**: Do NOT add item status tracking (Stage 19's responsibility).
+9. **P3**: Do NOT add MoSCoW priority (critical/high/medium/low is sufficient).
+10. **P3**: Do NOT add user story format (description + scope + success_criteria is sufficient).
+11. **P3**: Do NOT add velocity tracking (no historical data on first sprint).
+12. **P3**: Do NOT add technical debt tracking (emerges during Stage 19+ build).
+
+#### Cross-Stage Impact
+
+| Change | Stage 19 (Build Execution) | Stage 20+ (QA/Review) | SD Bridge (LEO Protocol) |
+|--------|--------------------------|---------------------|------------------------|
+| Suggested items from roadmap | Build is roadmap-aligned. Items trace to deliverables. | QA validates against milestone outcomes. | SDs have roadmap provenance. |
+| Stage 17 readiness gate | Sprint starts on solid foundation. Setup items explicit. | Fewer "environment not ready" blockers during build. | SDs don't fail due to missing infrastructure. |
+| Enriched SD Bridge | Build agents know architecture context and suggested assignee. | QA knows architecture scope to test. | LEO Protocol gets architecture + team context per SD. |
+| Capacity/budget warnings | Sprint is right-sized. Risk context for Stage 19. | Realistic timelines for QA cycle. | SDs are feasible within team capacity. |
+
 ---
 
 ## Stage 19: Build Execution
