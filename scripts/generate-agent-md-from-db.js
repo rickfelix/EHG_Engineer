@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * Agent Prompt Compiler - Bridge Agent Systems
- * SD-LEO-INFRA-BRIDGE-AGENT-SYSTEMS-001
+ * Agent Prompt Compiler v2.0.0 - Database-Driven Agent System
+ * SD-LEO-INFRA-DATABASE-DRIVEN-DYNAMIC-001
  *
- * Compiles .claude/agents/*.partial into .claude/agents/*.md by injecting
- * curated knowledge blocks from the LEO database (issue_patterns, triggers,
- * agent capabilities) while preserving base agent instructions.
+ * Compiles .claude/agents/*.partial into .claude/agents/*.md by:
+ * 1. Reading agent metadata (tools, model, team_role) from DB
+ * 2. Generating YAML frontmatter from DB columns (not from .partial)
+ * 3. Injecting team collaboration protocol for team-capable agents
+ * 4. Injecting curated knowledge blocks from issue_patterns
+ * 5. Supporting DB-only agents (no .partial required if instructions column populated)
  *
  * Usage:
  *   node scripts/generate-agent-md-from-db.js              # Live DB mode
@@ -20,6 +23,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
+import { AGENT_CODE_MAP } from '../lib/constants/agent-mappings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,48 +36,38 @@ const AGENTS_DIR = path.join(__dirname, '..', '.claude', 'agents');
 const CONFIG_PATH = path.join(__dirname, '..', 'config', 'phase-model-routing.json');
 const HASH_FILE = path.join(__dirname, '..', '.claude', '.agent-gen-hash');
 const MAX_KNOWLEDGE_TOKENS = 500;
-const CHARS_PER_TOKEN = 4; // Conservative estimate
+const CHARS_PER_TOKEN = 4;
 const MAX_KNOWLEDGE_CHARS = MAX_KNOWLEDGE_TOKENS * CHARS_PER_TOKEN;
 
 // Required config registrations (FR-4)
 const REQUIRED_CONFIG_KEYS = ['RCA', 'ORCHESTRATOR_CHILD'];
 
-// Agent filename → LEO sub-agent code mapping
-const AGENT_CODE_MAP = {
-  'api-agent': 'API',
-  'database-agent': 'DATABASE',
-  'dependency-agent': 'DEPENDENCY',
-  'design-agent': 'DESIGN',
-  'docmon-agent': 'DOCMON',
-  'github-agent': 'GITHUB',
-  'orchestrator-child-agent': 'ORCHESTRATOR_CHILD',
-  'performance-agent': 'PERFORMANCE',
-  'rca-agent': 'RCA',
-  'regression-agent': 'REGRESSION',
-  'retro-agent': 'RETRO',
-  'risk-agent': 'RISK',
-  'security-agent': 'SECURITY',
-  'stories-agent': 'STORIES',
-  'testing-agent': 'TESTING',
-  'uat-agent': 'UAT',
-  'validation-agent': 'VALIDATION',
-};
+// Model name mapping for frontmatter
+const MODEL_TIER_MAP = { haiku: 'haiku', sonnet: 'sonnet', opus: 'opus' };
 
 const NOT_EXHAUSTIVE_DISCLAIMER = '> **NOT EXHAUSTIVE**: This section contains curated institutional knowledge compiled from the LEO database at generation time. It does NOT represent all available knowledge. When uncertain, query the database directly via `node scripts/execute-subagent.js --code <CODE> --sd-id <SD-ID>` or check `issue_patterns` and `leo_sub_agents` tables for the latest data.';
+
+const TEAM_COLLABORATION_PROTOCOL = `### Team Collaboration Protocol
+When spawned as a teammate in a team:
+1. **Claim your task**: Use TaskUpdate with status="in_progress" and owner=your-name
+2. **Do your work**: Use your specialist tools to investigate/implement
+3. **Report findings**: Use SendMessage to report to team lead AND relevant peers
+4. **Mark complete**: Use TaskUpdate with status="completed" when done
+5. **Check for more work**: Use TaskList to find additional available tasks
+6. **Coordinate**: Read team config at ~/.claude/teams/{team-name}/config.json to discover teammates`;
 
 // ─── Data Fetching ───────────────────────────────────────────────────────────
 
 async function fetchLiveData(supabase) {
-  // Fetch all active sub-agents
+  // Fetch all active sub-agents WITH new metadata columns
   const { data: agents, error: agentErr } = await supabase
     .from('leo_sub_agents')
-    .select('id, code, name, description, capabilities, metadata')
+    .select('id, code, name, description, capabilities, metadata, model_tier, allowed_tools, team_role, instructions, category_mappings')
     .eq('active', true)
     .order('code');
 
   if (agentErr) throw new Error(`Failed to fetch agents: ${agentErr.message}`);
 
-  // Build agent lookup by code
   const agentByCode = {};
   const agentIdToCode = {};
   for (const agent of agents) {
@@ -90,7 +84,6 @@ async function fetchLiveData(supabase) {
 
   if (trigErr) throw new Error(`Failed to fetch triggers: ${trigErr.message}`);
 
-  // Group triggers by agent code
   const triggersByCode = {};
   for (const t of triggers) {
     const code = agentIdToCode[t.sub_agent_id];
@@ -116,21 +109,45 @@ function loadSnapshot(snapshotPath) {
   return JSON.parse(raw);
 }
 
+// ─── Frontmatter Generation ─────────────────────────────────────────────────
+
+function generateFrontmatter(agentName, agent) {
+  const model = MODEL_TIER_MAP[agent.model_tier] || 'opus';
+  const tools = Array.isArray(agent.allowed_tools)
+    ? agent.allowed_tools.join(', ')
+    : 'Bash, Read, Write';
+  // Use first sentence/line of description for frontmatter (Claude Code shows this as tooltip)
+  const fullDesc = agent.description || '';
+  const firstLine = fullDesc.split(/\n/)[0].replace(/^#+\s*/, '').trim();
+  const description = firstLine.length > 300 ? firstLine.substring(0, 297) + '...' : firstLine;
+
+  return `---\nname: ${agentName}\ndescription: ${JSON.stringify(description)}\ntools: ${tools}\nmodel: ${model}\n---\n`;
+}
+
 // ─── Knowledge Block Composition ─────────────────────────────────────────────
 
-function composeKnowledgeBlock(agentCode, data, categoryMappings) {
+function getCategoryMappings(agentCode, data, configCategoryMappings) {
+  // Prefer DB-stored category_mappings, fall back to config file
+  const agent = data.agentByCode[agentCode];
+  if (agent?.category_mappings && Array.isArray(agent.category_mappings) && agent.category_mappings.length > 0) {
+    return agent.category_mappings;
+  }
+  return configCategoryMappings[agentCode] || [];
+}
+
+function composeKnowledgeBlock(agentCode, data, configCategoryMappings) {
   const sections = [];
   const agent = data.agentByCode[agentCode];
 
-  // 1. Trigger context (top priority triggers)
+  // 1. Trigger context
   const triggers = data.triggersByCode[agentCode] || [];
   if (triggers.length > 0) {
     const topTriggers = triggers.slice(0, 8).map(t => t.phrase);
     sections.push(`### Trigger Context\nThis agent activates on: ${topTriggers.join(', ')}${triggers.length > 8 ? ` (+${triggers.length - 8} more in database)` : ''}`);
   }
 
-  // 2. Relevant issue patterns (matched via categoryMappings)
-  const categories = categoryMappings[agentCode] || [];
+  // 2. Relevant issue patterns (from DB category_mappings first, config fallback)
+  const categories = getCategoryMappings(agentCode, data, configCategoryMappings);
   const relevantPatterns = data.patterns
     .filter(p => categories.includes(p.category))
     .slice(0, 3);
@@ -148,7 +165,7 @@ function composeKnowledgeBlock(agentCode, data, categoryMappings) {
     sections.push(`### Recent Issue Patterns\n${patternLines.join('\n')}`);
   }
 
-  // 3. Capabilities from DB (if different from static file)
+  // 3. Capabilities from DB
   if (agent && agent.capabilities) {
     const capsList = Array.isArray(agent.capabilities)
       ? agent.capabilities
@@ -159,14 +176,10 @@ function composeKnowledgeBlock(agentCode, data, categoryMappings) {
     }
   }
 
-  // Compose the full block
-  if (sections.length === 0) {
-    return null; // No knowledge to inject
-  }
+  if (sections.length === 0) return null;
 
   let block = `## Institutional Memory (Generated)\n\n${NOT_EXHAUSTIVE_DISCLAIMER}\n\n${sections.join('\n\n')}`;
 
-  // Enforce 500-token cap (TR-1)
   if (block.length > MAX_KNOWLEDGE_CHARS) {
     block = block.substring(0, MAX_KNOWLEDGE_CHARS - 50) + '\n\n*[Truncated to 500-token cap]*';
   }
@@ -174,53 +187,102 @@ function composeKnowledgeBlock(agentCode, data, categoryMappings) {
   return block;
 }
 
+// ─── Agent Body Extraction ───────────────────────────────────────────────────
+
+function stripYamlFrontmatter(content) {
+  // Remove YAML frontmatter (--- ... ---) from .partial content
+  // Handle both Unix (\n) and Windows (\r\n) line endings
+  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  if (match) {
+    return content.substring(match[0].length);
+  }
+  return content;
+}
+
 // ─── Agent File Compilation ──────────────────────────────────────────────────
 
 function findInjectionPoint(content) {
-  // Claude Code loads agent .md files starting from the first H1 heading (# ...).
-  // Content before the H1 (like ## sections) is NOT included in the agent's system prompt.
-  // Therefore, inject AFTER the first H1 heading line so the institutional memory
-  // falls within the agent body that Claude Code actually delivers.
-
-  // Strategy: Find the first H1 heading, then inject after its line (before the next \n\n)
+  // Inject after the first H1 heading's paragraph
   const h1Match = content.match(/\n(# [^\n]+)\n/);
   if (h1Match) {
     const h1End = h1Match.index + h1Match[0].length;
-    // Find the next blank line or paragraph break after the H1
     const nextBlank = content.indexOf('\n\n', h1End);
-    if (nextBlank !== -1) {
-      return nextBlank + 2; // After the blank line
-    }
-    return h1End; // Right after the H1 line
+    if (nextBlank !== -1) return nextBlank + 2;
+    return h1End;
   }
-
-  // Fallback: inject after YAML frontmatter
-  const frontmatterEnd = content.indexOf('---', 4); // Skip first ---
-  if (frontmatterEnd !== -1) {
-    const afterFrontmatter = content.indexOf('\n\n', frontmatterEnd);
-    return afterFrontmatter !== -1 ? afterFrontmatter + 2 : frontmatterEnd + 4;
-  }
-
-  return 0; // Beginning of file as last resort
+  return 0;
 }
 
-function compileAgent(partialPath, agentCode, data, categoryMappings) {
-  const content = fs.readFileSync(partialPath, 'utf8');
+function compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings) {
+  const rawContent = fs.readFileSync(partialPath, 'utf8');
+  const agent = data.agentByCode[agentCode];
+
+  // Strip old frontmatter — we generate it from DB now
+  const body = stripYamlFrontmatter(rawContent);
 
   // Remove any existing "Institutional Memory (Generated)" section
-  const cleaned = content.replace(/## Institutional Memory \(Generated\)[\s\S]*?(?=\n## [^I]|\n---\n|$)/, '');
+  const cleanedBody = body.replace(/## Institutional Memory \(Generated\)[\s\S]*?(?=\n## [^I]|\n---\n|$)/, '');
 
-  const knowledgeBlock = composeKnowledgeBlock(agentCode, data, categoryMappings);
+  // Generate new frontmatter from DB
+  const frontmatter = agent ? generateFrontmatter(agentName, agent) : '';
 
-  if (!knowledgeBlock) {
-    return cleaned; // No knowledge to inject, return as-is
+  // Compose knowledge block
+  const knowledgeBlock = composeKnowledgeBlock(agentCode, data, configCategoryMappings);
+
+  // Build team protocol section if agent has team tools
+  let teamProtocol = '';
+  if (agent?.allowed_tools && Array.isArray(agent.allowed_tools) && agent.allowed_tools.includes('SendMessage')) {
+    teamProtocol = `\n${TEAM_COLLABORATION_PROTOCOL}\n`;
   }
 
-  const injectionPoint = findInjectionPoint(cleaned);
-  const before = cleaned.substring(0, injectionPoint);
-  const after = cleaned.substring(injectionPoint);
+  // Assemble: frontmatter + body with injected knowledge + team protocol
+  let assembled = frontmatter + cleanedBody;
 
-  return `${before}${knowledgeBlock}\n\n${after}`;
+  // Inject knowledge block after H1
+  if (knowledgeBlock) {
+    const injectionPoint = findInjectionPoint(assembled);
+    const before = assembled.substring(0, injectionPoint);
+    const after = assembled.substring(injectionPoint);
+    assembled = `${before}${knowledgeBlock}\n\n${after}`;
+  }
+
+  // Inject team protocol at end if applicable
+  if (teamProtocol) {
+    assembled = assembled.trimEnd() + '\n\n' + teamProtocol;
+  }
+
+  return assembled;
+}
+
+function compileAgentFromDB(agentName, agentCode, data, configCategoryMappings) {
+  // DB-only agent: no .partial file, instructions come from DB
+  const agent = data.agentByCode[agentCode];
+  if (!agent?.instructions) {
+    throw new Error(`DB-only agent ${agentCode} has no instructions column`);
+  }
+
+  const frontmatter = generateFrontmatter(agentName, agent);
+  const knowledgeBlock = composeKnowledgeBlock(agentCode, data, configCategoryMappings);
+
+  let teamProtocol = '';
+  if (agent.allowed_tools && Array.isArray(agent.allowed_tools) && agent.allowed_tools.includes('SendMessage')) {
+    teamProtocol = `\n${TEAM_COLLABORATION_PROTOCOL}\n`;
+  }
+
+  let assembled = frontmatter + '\n' + agent.instructions;
+
+  if (knowledgeBlock) {
+    const injectionPoint = findInjectionPoint(assembled);
+    const before = assembled.substring(0, injectionPoint);
+    const after = assembled.substring(injectionPoint);
+    assembled = `${before}${knowledgeBlock}\n\n${after}`;
+  }
+
+  if (teamProtocol) {
+    assembled = assembled.trimEnd() + '\n\n' + teamProtocol;
+  }
+
+  return assembled;
 }
 
 // ─── Incremental Mode Support ────────────────────────────────────────────────
@@ -228,7 +290,6 @@ function compileAgent(partialPath, agentCode, data, categoryMappings) {
 function computeInputHash(partialsDir, data) {
   const hash = crypto.createHash('sha256');
 
-  // Hash all partial file contents (sorted for determinism)
   const partials = fs.readdirSync(partialsDir)
     .filter(f => f.endsWith('.partial'))
     .sort();
@@ -238,7 +299,7 @@ function computeInputHash(partialsDir, data) {
     hash.update(f + ':' + content);
   }
 
-  // Hash DB data snapshot
+  // Include DB metadata in hash for change detection
   hash.update(JSON.stringify(data.agentByCode, Object.keys(data.agentByCode).sort()));
   hash.update(JSON.stringify(data.triggersByCode, Object.keys(data.triggersByCode).sort()));
   hash.update(JSON.stringify(data.patterns));
@@ -253,19 +314,10 @@ function validateConfig(configPath) {
   const missing = [];
 
   for (const key of REQUIRED_CONFIG_KEYS) {
-    // Check defaults
-    if (!config.defaults?.[key]) {
-      missing.push(`defaults.${key}`);
-    }
-    // Check at least one phaseOverride
+    if (!config.defaults?.[key]) missing.push(`defaults.${key}`);
     const inAnyPhase = Object.values(config.phaseOverrides || {}).some(p => p[key]);
-    if (!inAnyPhase) {
-      missing.push(`phaseOverrides.*.${key}`);
-    }
-    // Check categoryMappings
-    if (!config.categoryMappings?.[key]) {
-      missing.push(`categoryMappings.${key}`);
-    }
+    if (!inAnyPhase) missing.push(`phaseOverrides.*.${key}`);
+    // categoryMappings check is optional now (DB is primary source)
   }
 
   return missing;
@@ -280,7 +332,7 @@ async function main() {
   const incremental = args.includes('--incremental');
   const dryRun = args.includes('--dry-run');
 
-  console.log('🔧 Agent Prompt Compiler v1.0.0');
+  console.log('🔧 Agent Prompt Compiler v2.0.0 (DB-driven)');
   console.log(`   Mode: ${snapshotPath ? 'snapshot' : 'live-db'}${incremental ? ' (incremental)' : ''}${dryRun ? ' (dry-run)' : ''}`);
 
   // FR-4: Validate required config registrations
@@ -290,7 +342,7 @@ async function main() {
     configMissing.forEach(m => console.error(`   - ${m}`));
     process.exit(1);
   }
-  console.log('   ✅ Config validation passed (RCA, ORCHESTRATOR_CHILD registered)');
+  console.log('   ✅ Config validation passed');
 
   // Fetch data
   let data;
@@ -314,9 +366,9 @@ async function main() {
   const patternCount = data.patterns.length;
   console.log(`   📊 Loaded: ${agentCount} agents, ${triggerCount} triggers, ${patternCount} patterns`);
 
-  // Load category mappings from config
+  // Load config category mappings (fallback for agents without DB mappings)
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  const categoryMappings = config.categoryMappings || {};
+  const configCategoryMappings = config.categoryMappings || {};
 
   // Incremental check
   if (incremental) {
@@ -335,15 +387,31 @@ async function main() {
     .filter(f => f.endsWith('.partial'))
     .sort();
 
-  if (partialFiles.length === 0) {
-    console.error('❌ No .partial files found in', AGENTS_DIR);
-    process.exit(1);
+  // Build reverse map: code → agent name (for DB-only agents)
+  const codeToName = {};
+  for (const [name, code] of Object.entries(AGENT_CODE_MAP)) {
+    codeToName[code] = name;
   }
 
-  console.log(`\n📝 Compiling ${partialFiles.length} agents...`);
+  // Find DB-only agents (have instructions but no .partial file)
+  const partialAgentNames = new Set(partialFiles.map(f => f.replace('.partial', '')));
+  const dbOnlyAgents = [];
+  for (const [code, agent] of Object.entries(data.agentByCode)) {
+    if (agent.instructions && !codeToName[code]) {
+      // Dynamic agent — generate name from code
+      const agentName = code.toLowerCase().replace(/_/g, '-') + '-agent';
+      if (!partialAgentNames.has(agentName)) {
+        dbOnlyAgents.push({ code, agentName });
+      }
+    }
+  }
 
-  const results = { success: [], failed: [], skipped: [] };
+  const totalCount = partialFiles.length + dbOnlyAgents.length;
+  console.log(`\n📝 Compiling ${totalCount} agents (${partialFiles.length} partial + ${dbOnlyAgents.length} DB-only)...`);
 
+  const results = { success: [], failed: [], skipped: [], dbOnly: [] };
+
+  // Compile .partial-based agents
   for (const partialFile of partialFiles) {
     const agentName = partialFile.replace('.partial', '');
     const agentCode = AGENT_CODE_MAP[agentName];
@@ -362,19 +430,41 @@ async function main() {
       const partialPath = path.join(AGENTS_DIR, partialFile);
       const outputPath = path.join(AGENTS_DIR, `${agentName}.md`);
 
-      const compiled = compileAgent(partialPath, agentCode, data, categoryMappings);
+      const compiled = compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings);
 
       if (!dryRun) {
         fs.writeFileSync(outputPath, compiled);
       }
 
       const hasKnowledge = compiled.includes('## Institutional Memory (Generated)');
+      const hasTeam = compiled.includes('### Team Collaboration Protocol');
       const sizeKB = (Buffer.byteLength(compiled) / 1024).toFixed(1);
-      console.log(`   ✅ ${agentName} → ${sizeKB}KB${hasKnowledge ? ' (with knowledge)' : ' (no matching data)'}`);
+      const flags = [hasKnowledge ? 'knowledge' : null, hasTeam ? 'team' : null].filter(Boolean).join('+');
+      console.log(`   ✅ ${agentName} → ${sizeKB}KB${flags ? ` (${flags})` : ''}`);
       results.success.push(agentName);
 
     } catch (err) {
       console.error(`   ❌ ${agentName}: ${err.message}`);
+      results.failed.push({ agent: agentName, error: err.message });
+    }
+  }
+
+  // Compile DB-only agents
+  for (const { code, agentName } of dbOnlyAgents) {
+    try {
+      const outputPath = path.join(AGENTS_DIR, `${agentName}.md`);
+      const compiled = compileAgentFromDB(agentName, code, data, configCategoryMappings);
+
+      if (!dryRun) {
+        fs.writeFileSync(outputPath, compiled);
+      }
+
+      const sizeKB = (Buffer.byteLength(compiled) / 1024).toFixed(1);
+      console.log(`   ✅ ${agentName} → ${sizeKB}KB (DB-only)`);
+      results.dbOnly.push(agentName);
+
+    } catch (err) {
+      console.error(`   ❌ ${agentName} (DB-only): ${err.message}`);
       results.failed.push({ agent: agentName, error: err.message });
     }
   }
@@ -386,7 +476,8 @@ async function main() {
   }
 
   // Summary
-  console.log(`\n📊 Summary: ${results.success.length} compiled, ${results.skipped.length} skipped, ${results.failed.length} failed`);
+  const total = results.success.length + results.dbOnly.length;
+  console.log(`\n📊 Summary: ${total} compiled (${results.dbOnly.length} DB-only), ${results.skipped.length} skipped, ${results.failed.length} failed`);
 
   if (results.failed.length > 0) {
     console.error('\n❌ Failed agents:');
@@ -406,4 +497,4 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
   });
 }
 
-export { main, composeKnowledgeBlock, compileAgent, fetchLiveData, AGENT_CODE_MAP };
+export { main, composeKnowledgeBlock, compileAgentFromPartial, compileAgentFromDB, fetchLiveData, AGENT_CODE_MAP, generateFrontmatter };
