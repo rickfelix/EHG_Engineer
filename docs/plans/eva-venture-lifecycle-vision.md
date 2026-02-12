@@ -1,8 +1,8 @@
 # EVA Venture Lifecycle: Definitive Vision
 
-> **Version**: 4.5
+> **Version**: 4.6
 > **Created**: 2026-02-12
-> **Status**: Draft (Revised + 30 Chairman Clarifications)
+> **Status**: Draft (Revised + 34 Chairman Clarifications)
 > **Supersedes**: `kb/ehg-review/00_unified_vision_2025.md`, `kb/ehg-review/01_vision_ehg_eva.md`, `docs/guides/workflow/25-stage-venture-lifecycle-overview.md`
 > **Companion**: Architecture Document (Step 2, forthcoming)
 > **Inputs**: Gemini vision diagrams, 25-stage CLI vs GUI gap analysis (PR #1117), CLI implementation review (`stages_v2.yaml`, Decision Filter Engine, Reality Gates, SD Bridge), brainstorming decisions (2026-02-11)
@@ -59,6 +59,7 @@ Kill gates (Stages 3, 5) are fully automated. The Decision Filter Engine escalat
 - **Ultimate kill authority**. The Chairman can kill any venture at any stage, at any time, regardless of gate outcomes. Automated gates are a convenience, not a constraint on the Chairman's authority.
 - **Time commitment**: Under normal operation, the Chairman touches a venture at 3 mandatory blocking stages (10, 22, 25) plus DFE escalations. Kill gates (3, 5) are fully automated -- the Decision Filter Engine is the only path to Chairman involvement there. Everything else runs without asking.
 - **Decision queue as rate limiter**. Ventures block on pending Chairman decisions. The Chairman's review cadence determines portfolio throughput. This is deliberate -- authority over speed.
+- **No timeout on decisions**. Ventures wait indefinitely for Chairman decisions. There is no auto-resolution, no delegation, and no timeout. If the Chairman is unavailable for a week, a month, or a year, ventures block. The Chairman's authority is absolute and not time-bounded.
 
 ### Unlimited Compute
 
@@ -328,6 +329,15 @@ Every stage defines:
 
 Stages never duplicate prior stage data. They consume it. Stage 4 doesn't re-analyze competitors from scratch -- it consumes Stage 3's competitor handoff and adds competitive intelligence. Stage 7 doesn't re-research pricing -- it consumes Stage 4's competitor pricing data and Stage 5's unit economics.
 
+### Immutable Stage Versioning
+
+Every stage output is **immutably versioned**. When a stage is re-run (pivot, Reality Gate retry, ops cycle iteration), the previous version is preserved — never overwritten. This enables:
+
+- **Assumptions vs Reality**: Stage 24 directly references the original Stage 5 financial projections by version, showing exactly how predictions compared to outcomes
+- **Pivot lineage**: Each pivot creates a new version chain. The Chairman Dashboard can show the full evolution of any stage's output across pivots.
+- **Audit trail**: Every decision, every gate outcome, every analysisStep output is traceable to its exact version. Supports due diligence (Design for Exit) and post-mortem analysis.
+- **Pattern extraction**: Cross-venture knowledge transfer (Decision #26) compares versioned outputs to identify which stage patterns correlate with venture success.
+
 ### The analysisStep Pattern
 
 Every stage from 2-25 follows the same pattern:
@@ -420,6 +430,16 @@ When Stage 25 produces a `pivot` decision, the venture re-enters the lifecycle a
 2. **Chairman confirms re-entry point**: The system recommends the earliest invalidated stage. Chairman confirms or adjusts.
 3. **Downstream stages regenerate**: All stages from the re-entry point forward are re-executed with the pivot context. Prior stage data is preserved where still valid.
 4. **Pivot is versioned**: The venture maintains a pivot history, enabling Assumptions vs Reality tracking across pivots.
+
+### How Expand Decisions Are Scoped
+
+When Stage 25 produces an `expand` decision, the system evaluates whether the new scope belongs in the current venture or warrants a new venture:
+
+1. **DFE evaluates scope significance**: Does the expansion introduce a new revenue model, target a new customer segment, or require >3 sprint cycles of work?
+2. **If significant**: DFE presents the Chairman with a recommendation — expand within the current venture OR spin off as a new venture entering Stage 1. The Chairman decides.
+3. **If not significant**: The expansion proceeds as new features within the current venture, generating LEO SDs via the SD Bridge.
+
+This prevents ventures from growing unwieldy while keeping the Chairman as the final authority on portfolio structure.
 
 ### How Ventures Enter the Lifecycle
 
@@ -681,6 +701,17 @@ When multiple ventures need Chairman decisions simultaneously, the system ranks 
 
 The Chairman sees the highest-value decisions first. The ranking is fully automated and updates as venture data changes.
 
+### Inter-Venture Dependencies
+
+Ventures can declare **explicit dependencies** on other ventures' stage completions:
+
+- **Declaration**: At Stage 1 or during Stage 13 (Roadmap), a venture declares it depends on another venture reaching a specific stage (e.g., "Platform API reaching Stage 23")
+- **Auto-blocking**: The dependent venture auto-blocks at the relevant stage until the dependency is met
+- **Priority boosting**: The portfolio prioritization system automatically boosts dependency-providing ventures to unblock the most downstream value
+- **Chairman visibility**: The dependency graph appears in the Chairman Dashboard, highlighting critical paths across the portfolio
+
+Example: If ventures B, C, and D all depend on venture A reaching Stage 23, venture A's priority score is automatically boosted based on the combined value of B+C+D. This ensures infrastructure/platform ventures don't languish while product ventures wait.
+
 ### Resource Contention Management
 
 With unlimited concurrent ventures, shared resources (infrastructure, API limits, shared services) may contend:
@@ -797,7 +828,7 @@ Complete enumeration of all multi-value decisions and categorization fields:
 ---
 
 *Document revised as Step 1 of the 8-step vision & architecture plan.*
-*Version 4.5 revision: 30 Chairman clarification decisions applied. Decisions 1-18: kill gates, release, brand, ops cadence, roadmap, pivot model, retroactive kill authority, conditional resolution, expand scope, idea pipeline, concurrency, brand blocking, sprint cadence, decision queuing, ground truth grounding, Reality Gate failure recovery, post-launch operations. Decisions 19-25: AI-only operation, unlimited compute, billing automation, legal/compliance templates, data/analytics pipeline, infrastructure scaling, venture shutdown sequence. Decisions 26-30: cross-venture knowledge transfer, portfolio prioritization, resource contention management, venture templates, Chairman dashboard and notifications.*
+*Version 4.6 revision: 34 Chairman clarification decisions applied. Decisions 1-18: kill gates, release, brand, ops cadence, roadmap, pivot model, retroactive kill authority, conditional resolution, expand scope, idea pipeline, concurrency, brand blocking, sprint cadence, decision queuing, ground truth grounding, Reality Gate failure recovery, post-launch operations. Decisions 19-25: AI-only operation, unlimited compute, billing automation, legal/compliance templates, data/analytics pipeline, infrastructure scaling, venture shutdown sequence. Decisions 26-30: cross-venture knowledge transfer, portfolio prioritization, resource contention management, venture templates, Chairman dashboard and notifications. Decisions 31-34: ventures wait indefinitely on Chairman decisions, inter-venture dependency graph, expand-vs-spinoff scoping via DFE, full immutable stage versioning.*
 *Primary evidence base: 25-stage CLI vs GUI gap analysis (PR #1117, 5,335 lines)*
 *CLI implementation review: stages_v2.yaml, Decision Filter Engine, Reality Gates, SD Bridge*
 *Brainstorming decisions: 2026-02-11 session (12 points captured in `docs/plans/vision-architecture-next-steps.md`)*
