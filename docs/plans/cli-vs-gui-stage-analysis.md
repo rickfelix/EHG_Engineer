@@ -3374,7 +3374,71 @@ const TEMPLATE = {
 
 ## Stage 17: Pre-Build Checklist
 
-*Analysis pending*
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-17.js`
+**Phase**: THE BUILD LOOP (Stages 17-22) -- **first stage of BUILD phase**
+**Type**: Passive validation + **active `computeDerived()`** (readiness percentage)
+
+**Schema (Input)**:
+| Field | Type | Validation | Required |
+|-------|------|------------|----------|
+| `checklist` | object | Must contain all 5 categories | Yes |
+| `checklist.architecture[]` | array | minItems: 1 | Yes |
+| `checklist.team_readiness[]` | array | minItems: 1 | Yes |
+| `checklist.tooling[]` | array | minItems: 1 | Yes |
+| `checklist.environment[]` | array | minItems: 1 | Yes |
+| `checklist.dependencies[]` | array | minItems: 1 | Yes |
+| Each item `.name` | string | minLength: 1 | Yes |
+| Each item `.status` | enum | not_started/in_progress/complete/blocked | Yes |
+| Each item `.owner` | string | - | No |
+| Each item `.notes` | string | - | No |
+| `blockers[]` | array | Optional | No |
+| `blockers[].description` | string | minLength: 1 | If present |
+| `blockers[].severity` | string | minLength: 1 (free text) | If present |
+| `blockers[].mitigation` | string | minLength: 1 | If present |
+
+**Schema (Derived)**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_items` | number | Count of all checklist items across categories |
+| `completed_items` | number | Items with status = 'complete' |
+| `readiness_pct` | number | completed / total × 100 |
+| `all_categories_present` | boolean | All 5 categories have ≥ 1 item |
+| `blocker_count` | number | Count of blockers |
+
+**5 Checklist Categories**:
+1. `architecture` -- architecture readiness
+2. `team_readiness` -- team availability/skills
+3. `tooling` -- development tools/CI/CD
+4. `environment` -- dev/staging/prod environments
+5. `dependencies` -- external dependencies/APIs
+
+**Processing**:
+- `validate(data)`: Schema validation + per-item name/status checks
+- `computeDerived(data)`: Calculates readiness percentage, category completeness
+- **No `analysisStep`** -- all checklist items are user-provided
+- **No connection to Stages 13-16** -- architecture items don't reference Stage 14 decisions
+- **No connection to Stage 16 promotion gate** -- no inheritance of Phase 4→5 gate results
+- **No go/no-go decision** -- readiness_pct is calculated but no threshold for proceeding
+- **No priority on items** -- all items treated equally
+- **No deadline/timeline** -- no target dates for completion
+- **Blocker severity is free text** -- not an enum like Stage 15 consensus established
+- **No acceptance criteria** -- no way to define "what does complete mean?"
+
+### GUI Implementation (Ground Truth)
+
+**No GUI Stage 17 exists**. No pre-build checklist, readiness assessment, or go/no-go components found in the frontend codebase.
+
+### Key Gaps
+
+1. **No analysisStep**: Stages 13-16 contain structured data that directly implies checklist items. Stage 14 architecture decisions → architecture readiness items. Stage 15 team composition → team readiness items. Stage 14 technology choices → tooling items. But all items must be manually entered.
+2. **No prior-stage seeding**: Each category should be pre-populated from BLUEPRINT outputs. Architecture items from Stage 14 layers/technologies, team items from Stage 15 members/skills, tooling from Stage 14 technology stack, dependencies from Stage 14 integration points.
+3. **No go/no-go threshold**: readiness_pct is calculated but there's no decision gate. When is the venture "ready to build"?
+4. **No priority on items**: Some items are blocking (can't start without CI/CD) while others are nice-to-have (documentation). No way to distinguish.
+5. **Blocker severity is free text**: Inconsistent with Stage 15's enum pattern (critical/high/medium/low).
+6. **No Stage 16 financial readiness**: The checklist doesn't include "can we afford this?" -- the promotion gate results from Stage 16.
+7. **No acceptance criteria**: An item is either "complete" or not, but no definition of what "complete" means for each item.
 
 ---
 
