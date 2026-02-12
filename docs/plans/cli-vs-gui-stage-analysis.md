@@ -4942,6 +4942,138 @@ GUI Stage 24 = "Analytics & Feedback" / "Growth Metrics & Optimization" -- a com
 | Time tracking | trend_window_days (unused) | Cohort analysis, trend lines |
 | analysisStep | None | N/A |
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (all 3 respondents)
+
+1. **analysisStep is critical (5/5)**: All three rate the missing analysisStep as the highest priority. Stage 24 must evaluate Stage 23's success criteria against AARRR metrics, producing a "Launch Scorecard" or "Launch Assessment". Claude emphasizes AARRR health per category; OpenAI emphasizes criteria_evaluation with confidence levels; AntiGravity frames it as the "Grader" of Stage 23's "Homework."
+
+2. **Success criteria evaluation is critical (5/5)**: Unanimous. Stage 23 defines success_criteria → Stage 24 must map them to actual AARRR metrics and compute a success rate. This closes the learning loop contract. Without it, targets set at Stage 23 are dead data.
+
+3. **Learning categories must be enum**: All agree free text should become enum. Prevents fragmentation ("Pricing" vs "Cost" vs "Monetization"). Enables cross-venture learning aggregation.
+
+4. **Funnel steps need structure**: All agree the current untyped steps must have at least name + count. Conversion rates should be derived. Without numbers, "it's just a diagram, not a metric" (AntiGravity).
+
+5. **Launch type context matters**: All agree Stage 23's launch_type must inform Stage 24's evaluation. A beta launch with low numbers is NOT a failure. The analysisStep must interpret metrics in launch type context.
+
+6. **AARRR is sufficient -- do NOT add growth metrics breadth**: All agree the CLI's AARRR framework already covers growth. NRR fits under Revenue. Viral coefficient fits under Referral. Adding separate growth metrics creates redundancy. The CLI should not become an ops BI platform.
+
+7. **Exclude experimentation tracking**: All agree A/B test management is operational. Learnings FROM experiments belong in the learnings array. The experiment infrastructure does not belong in Stage 24.
+
+#### Majority Agreement (2 of 3)
+
+1. **Trend data approach (OpenAI + AntiGravity, Claude removes)**: OpenAI and AntiGravity propose keeping trend_window_days and adding previous_value + trend_direction. Claude proposes removing trend_window_days as dead weight. **Resolution**: Keep trend_window_days and add previous_value + trend_direction (up/flat/down). This is lightweight and answers "is it getting better?" without full time-series. The field exists already -- make it useful rather than removing it.
+
+2. **Learning severity/impact (OpenAI + AntiGravity, not Claude)**: OpenAI proposes severity (low/medium/high). AntiGravity proposes impact_level. Claude uses category only. **Resolution**: Add optional impact_level (high/medium/low) to learnings. High-impact learnings should surface to Stage 25's venture review. Keep it optional to avoid data-entry fatigue.
+
+#### Divergence Resolutions
+
+1. **Learning category values**: Claude proposes 5 (product/market/technical/financial/process). OpenAI proposes 10 (including AARRR categories + go_to_market + operations + risk + unexpected). AntiGravity proposes 7 domain-specific (customer_need/product_usability/etc.). **Resolution**: Use Claude's 5 categories (product/market/technical/financial/process). These match Stage 25's review categories, enabling cross-stage alignment. AARRR-specific learnings can be captured via the category + related metric reference. 10 categories fragments the taxonomy; 7 domain categories are too specific for a general framework.
+
+2. **Success criteria matching strategy**: Claude proposes mapping via analysisStep LLM call. OpenAI proposes exact name match → alias map → insufficient_data fallback. AntiGravity proposes optional criterion_ref field for explicit linking. **Resolution**: Add optional `criterion_ref` to AARRR metrics for explicit linking (AntiGravity's approach). The analysisStep handles fuzzy matching for unlinked metrics. This gives users the option to explicitly link while providing automated fallback.
+
+3. **Launch assessment outcome values**: Claude proposes AARRR health (green/amber/red). OpenAI proposes continue/iterate/pivot_review/kill_review. AntiGravity proposes success/partial_success/failure/indeterminate. **Resolution**: Use launch_outcome (success/partial/failure/indeterminate) as the primary assessment -- simple, clear, directly consumable by Stage 25. The analysisStep can provide richer narrative context.
+
+#### Recommended Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-24',
+  slug: 'metrics-learning',
+  title: 'Metrics & Learning',
+  version: '2.0.0',
+  schema: {
+    // === Existing (enhanced) ===
+    aarrr: {
+      type: 'object', required: true,
+      properties: {
+        acquisition: { type: 'array', minItems: 1, items: METRIC_SCHEMA },
+        activation: { type: 'array', minItems: 1, items: METRIC_SCHEMA },
+        retention: { type: 'array', minItems: 1, items: METRIC_SCHEMA },
+        revenue: { type: 'array', minItems: 1, items: METRIC_SCHEMA },
+        referral: { type: 'array', minItems: 1, items: METRIC_SCHEMA },
+      },
+    },
+    // METRIC_SCHEMA = {
+    //   name: string, value: number, target: number,
+    //   trend_window_days: number (optional),
+    //   previous_value: number (optional),         // NEW: for trend calculation
+    //   criterion_ref: string (optional),           // NEW: explicit link to Stage 23 criterion
+    // }
+
+    // === Updated: funnels with typed steps ===
+    funnels: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        aarrr_category: { type: 'enum', values: AARRR_CATEGORIES },  // NEW
+        steps: {
+          type: 'array', minItems: 2,
+          items: {
+            name: { type: 'string', required: true },      // NEW
+            count: { type: 'number', required: true },      // NEW
+          },
+        },
+      },
+    },
+
+    // === Updated: learnings with category enum ===
+    learnings: {
+      type: 'array',
+      items: {
+        insight: { type: 'string', required: true },
+        action: { type: 'string', required: true },
+        category: { type: 'enum', values: ['product', 'market', 'technical', 'financial', 'process'], required: true },
+        impact_level: { type: 'enum', values: ['high', 'medium', 'low'] },  // NEW (optional)
+      },
+    },
+
+    // === Existing derived (unchanged) ===
+    total_metrics: { type: 'number', derived: true },
+    categories_complete: { type: 'boolean', derived: true },
+    funnel_count: { type: 'number', derived: true },
+    metrics_on_target: { type: 'number', derived: true },
+    metrics_below_target: { type: 'number', derived: true },
+
+    // === NEW: derived ===
+    success_criteria_evaluation: {
+      type: 'object', derived: true,
+      // criteria_results[]: { criterion, target, actual_metric, actual_value, met, gap_pct }
+      // criteria_met, criteria_missed, success_rate
+    },
+    launch_outcome: { type: 'enum', values: ['success', 'partial', 'failure', 'indeterminate'], derived: true },
+    launch_context: { type: 'object', derived: true },  // launch_type, dates from Stage 23
+    trend_summary: { type: 'object', derived: true },    // Per-metric trend_direction
+    funnel_conversions: { type: 'object', derived: true }, // Per-funnel overall + step conversion rates
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+#### Minimum Viable Change
+
+1. **P0**: Add `analysisStep` producing launch scorecard -- success criteria evaluation, AARRR assessment, launch_outcome, recommendation for Stage 25.
+2. **P0**: Add `success_criteria_evaluation` mapping Stage 23 criteria to AARRR metrics with success rate.
+3. **P1**: Change learning category to enum (product/market/technical/financial/process). Add optional impact_level.
+4. **P1**: Enhance funnel steps with name + count. Add aarrr_category to funnels. Derive conversion rates.
+5. **P1**: Add launch_context from Stage 23 (launch_type, dates). Contextualizes metric interpretation.
+6. **P2**: Add previous_value to metrics. Derive trend_direction (up/flat/down).
+7. **P2**: Add optional criterion_ref to AARRR metrics for explicit Stage 23 linking.
+8. **P3**: Do NOT add growth metrics breadth (AARRR is sufficient).
+9. **P3**: Do NOT add experimentation tracking (operational, not lifecycle).
+10. **P3**: Do NOT add full time-series (sprint iterations provide natural snapshots).
+
+#### Cross-Stage Impact
+
+| Change | Stage 23 (Launch Execution) | Stage 25 (Venture Review) | Overall Pipeline |
+|--------|----------------------------|---------------------------|-----------------|
+| Success criteria evaluation | Consumes Stage 23's criteria. Validates the launch hypothesis. | Stage 25 has quantified launch outcome, not raw metrics. | Learning loop closed: targets → measurement → verdict. |
+| Launch outcome | N/A | Stage 25 receives success/partial/failure/indeterminate. Directly informs venture_decision. | Reduces subjectivity in final review. |
+| Learning categories | N/A | Learnings align with Stage 25's review categories (product/market/technical/financial). | Cross-stage learning aggregation enabled. |
+| Trend data | N/A | Stage 25 knows if metrics are improving or declining. | Trajectory context for venture health assessment. |
+
 ---
 
 ## Stage 25: Venture Review
