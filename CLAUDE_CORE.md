@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-11 12:58:34 PM
+**Generated**: 2026-02-12 8:24:59 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -200,36 +200,47 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
+## 🤖 Built-in Agent Integration
 
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+## Built-in Agent Integration
 
-### Task Type -> Required Agent
+### Three-Layer Agent Architecture
 
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+LEO Protocol uses three complementary agent layers:
 
-### Why This Exists
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
 
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
+### Integration Principle
 
-### How to Apply
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
 
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Claude Code Plan Mode Integration
 
@@ -274,47 +285,64 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## 🤖 Built-in Agent Integration
+## Mandatory Agent Invocation Rules
 
-## Built-in Agent Integration
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
 
-### Three-Layer Agent Architecture
+### Task Type -> Required Agent
 
-LEO Protocol uses three complementary agent layers:
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
 
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+### Why This Exists
 
-### Integration Principle
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
 
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+### How to Apply
 
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
-### When to Use Each Layer
+## Sub-Agent Model Routing
 
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
 
-### Parallel Execution
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
 
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
 
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 ```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
 
-This is faster than sequential exploration and provides comprehensive coverage.
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+> **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
 ## Work Tracking Policy
 
@@ -347,33 +375,6 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
-
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -445,6 +446,47 @@ Before marking any stage/feature as complete:
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
 
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
+
 ## 🎯 Skill Integration (Claude Code Skills)
 
 ## Skill Integration (Claude Code Skills)
@@ -487,47 +529,6 @@ Before marking any stage/feature as complete:
 - **Project**: .claude/skills/ (project-specific)
 - **Index**: ~/.claude/skills/SKILL-INDEX.md
 - **Total**: 54 skills covering all 14 sub-agents
-
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1519,11 +1520,11 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ### Sub-Agents Without Keyword Triggers
 
+- **Self-Audit Agent** (`AUDIT`): Read-only audit capability for SD health checks. Evaluates strategic directives 
+- **Orchestrator Child Agent** (`ORCHESTRATOR_CHILD`): Teammate agent for parallel child SD execution within an orchestrator. Each team
 - **Prioritization Planner** (`PRIORITIZATION_PLANNER`): # Prioritization Planner Sub-Agent
 
 **Identity**: You are a Prioritization Plann
-- **Orchestrator Child Agent** (`ORCHESTRATOR_CHILD`): Teammate agent for parallel child SD execution within an orchestrator. Each team
-- **Self-Audit Agent** (`AUDIT`): Read-only audit capability for SD health checks. Evaluates strategic directives 
 - **Constitutional Judge** (`JUDGE`): Resolves conflicts between LEO agent recommendations using constitutional framew
 
 ### Keyword-Triggered Sub-Agents
@@ -1533,17 +1534,17 @@ MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triag
 
 **Trigger Keywords**: `5 whys`, `causal analysis`, `ci_pipeline_failure`, `fault tree`, `fishbone`, `five whys`, `get to the bottom`, `handoff_rejection`, `ishikawa`, `keeps happening`, `pattern detected`, `pattern_recurrence`, `performance_regression`, `quality_degradation`, `quality_gate_critical`, `recurring issue`, `root cause`, `root-cause`, `source of the issue`, `source of the problem`, `sub_agent_blocked`, `sub_agent_fail`, `test_regression`, `what caused this`, `why is this happening`, `debug`, `debugging`, `diagnose`, `diagnose defect`, `diagnostic`, `dig deeper`, `dig into`, `figure out why`, `find out why`, `find the cause`, `investigate`, `investigation`, `rca`, `trace`, `tracing`, `track down`, `understand why`, `what went wrong`
 
-#### Regression Validator Sub-Agent (`REGRESSION`)
-Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
-
-**Trigger Keywords**: `api signature`, `backward compatible`, `backwards compatible`, `before and after`, `breaking change`, `no behavior change`, `refactor safely`, `regression test`, `DRY violation`, `backward`, `backward compatibility`, `backwards`, `breaking`, `code smell`, `consolidate`, `extract component`, `extract function`, `extract method`, `interface`, `interface change`, `maintain`, `migration`, `move file`, `no functional change`, `preserve`, `public api`, `refactor`, `refactoring`, `regression`, `rename`, `reorganize`, `restructure`, `split file`, `technical debt`
-
 #### Information Architecture Lead (`DOCMON`)
 ## Information Architecture Lead v3.0.0 - Database-First Enforcement Edition
 
 **🆕 NEW in v3.0.0**: 
 
 **Trigger Keywords**: `DAILY_DOCMON_CHECK`, `EXEC_COMPLETION`, `EXEC_IMPLEMENTATION`, `FILE_CREATED`, `HANDOFF_ACCEPTED`, `HANDOFF_CREATED`, `LEAD_APPROVAL`, `LEAD_HANDOFF_CREATION`, `LEAD_SD_CREATION`, `PHASE_TRANSITION`, `PLAN_PRD_GENERATION`, `PLAN_VERIFICATION`, `RETRO_GENERATED`, `VIOLATION_DETECTED`, `add documentation`, `api documentation`, `document this`, `jsdoc`, `missing docs`, `readme update`, `tsdoc`, `update documentation`, `comment`, `comments`, `describe`, `docs`, `document`, `documentation`, `explain`, `guide`, `howto`, `readme`, `tutorial`
+
+#### Regression Validator Sub-Agent (`REGRESSION`)
+Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
+
+**Trigger Keywords**: `api signature`, `backward compatible`, `backwards compatible`, `before and after`, `breaking change`, `no behavior change`, `refactor safely`, `regression test`, `DRY violation`, `backward`, `backward compatibility`, `backwards`, `breaking`, `code smell`, `consolidate`, `extract component`, `extract function`, `extract method`, `interface`, `interface change`, `maintain`, `migration`, `move file`, `no functional change`, `preserve`, `public api`, `refactor`, `refactoring`, `regression`, `rename`, `reorganize`, `restructure`, `split file`, `technical debt`
 
 #### Quick-Fix Orchestrator ("LEO Lite" Field Medic) (`QUICKFIX`)
 Lightweight triage and resolution for small UAT-discovered issues (≤50 LOC). Acts as mini-orchestrat
@@ -1557,6 +1558,11 @@ Lightweight triage and resolution for small UAT-discovered issues (≤50 LOC). A
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `LEAD_APPROVAL_COMPLETE`, `PLAN_VERIFICATION_PASS`, `ci pipeline`, `code review`, `create pr`, `git merge`, `git rebase`, `github actions`, `github workflow`, `merge pr`, `pull request`, `actions`, `branch`, `cd`, `ci`, `commit`, `create pull request`, `create release`, `deploy`, `deployment ci pattern`, `gh pr create`, `git`, `github`, `github deploy`, `github status`, `merge`, `pipeline`, `pr`, `pull`, `push`, `release`, `workflow`
 
+#### Chief Security Architect (`SECURITY`)
+Former NSA security architect with 25 years experience securing systems from startup to enterprise s
+
+**Trigger Keywords**: `api key exposed`, `authentication bypass`, `csrf vulnerability`, `cve`, `exposed credential`, `hardcoded secret`, `owasp`, `penetration test`, `security audit`, `security vulnerability`, `sql injection`, `xss attack`, `access control`, `auth`, `authentication`, `authorization`, `credential`, `encrypt`, `encryption`, `hash`, `jwt`, `login`, `oauth`, `password`, `permission`, `role`, `secret`, `security`, `security auth pattern`, `token`, `vulnerability`
+
 #### UAT Test Executor (`UAT`)
 Interactive UAT test execution guide for manual testing workflows.
 
@@ -1564,15 +1570,12 @@ Interactive UAT test execution guide for manual testing workflows.
 
 **Trigger Keywords**: `acceptance criteria`, `click through`, `happy path`, `human test`, `manual test`, `test scenario`, `uat test`, `user acceptance test`, `user journey`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`, `acceptance`, `check`, `confirm`, `demo`, `execute test`, `manual`, `run uat`, `scenario`, `start testing`, `test execution`, `uat`, `uat testing`, `use case`, `user flow`, `validate`, `verify`, `workflow`
 
-#### Chief Security Architect (`SECURITY`)
-Former NSA security architect with 25 years experience securing systems from startup to enterprise s
+#### QA Engineering Director (`TESTING`)
+## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
 
-**Trigger Keywords**: `api key exposed`, `authentication bypass`, `csrf vulnerability`, `cve`, `exposed credential`, `hardcoded secret`, `owasp`, `penetration test`, `security audit`, `security vulnerability`, `sql injection`, `xss attack`, `access control`, `auth`, `authentication`, `authorization`, `credential`, `encrypt`, `encryption`, `hash`, `jwt`, `login`, `oauth`, `password`, `permission`, `role`, `secret`, `security`, `security auth pattern`, `token`, `vulnerability`
+**🆕 NEW in v2.4.0**: 7
 
-#### Launch Orchestration Sub-Agent (`LAUNCH`)
-Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
-
-**Trigger Keywords**: `deploy to production`, `go live checklist`, `launch checklist`, `production deployment`, `ready to launch`, `release to production`, `ship to prod`, `GA release`, `beta release`, `cutover`, `deploy`, `deployment`, `go live`, `go-live`, `golive`, `launch`, `prod`, `production`, `production launch`, `release`, `rollback`, `rollout`, `ship`
+**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add tests`, `create tests`, `e2e test`, `end to end test`, `integration test`, `vitest test`, `playwright test`, `spec file`, `test coverage`, `test file`, `test suite`, `unit test`, `vitest`, `write tests`, `assertion`, `build error`, `coverage`, `cypress`, `describe`, `dev server`, `expect`, `fixture`, `it`, `vitest`, `mock`, `npm run test:unit`, `playwright`, `playwright build`, `protected route`, `redirect to login`, `spy`, `stub`, `test`, `test infrastructure`, `test results`, `testing`, `testing evidence`, `testing test pattern`, `tests`, `unit tests`
 
 #### Principal Database Architect (`DATABASE`)
 ## Principal Database Architect v2.0.0 - Lessons Learned Edition
@@ -1588,19 +1591,17 @@ Handles production launch orchestration, go-live checklists, launch readiness, a
 
 **Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `action items`, `continuous improvement`, `learn from this`, `lessons learned`, `post-mortem`, `postmortem`, `retrospective`, `sprint retrospective`, `what did we learn`, `what went well`, `what went wrong`, `EXEC_QUALITY_ISSUE`, `EXEC_SPRINT_COMPLETE`, `HANDOFF_DELAY`, `HANDOFF_REJECTED`, `LEAD_PRE_APPROVAL_REVIEW`, `PATTERN_DETECTED`, `PHASE_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `SD_STATUS_BLOCKED`, `SD_STATUS_COMPLETED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `anti-pattern`, `capture this insight`, `capture this lesson`, `feedback`, `improve`, `improvement`, `insight`, `intelligent plan`, `learning`, `lesson`, `lesson learned`, `pattern`, `permission bundling`, `phase transition`, `plan file generation`, `plan mode`, `plan mode integration`, `reflect`, `remember this`, `retro`, `review`, `sd type profile`, `takeaway`, `workflow intensity`
 
-#### QA Engineering Director (`TESTING`)
-## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
-
-**🆕 NEW in v2.4.0**: 7
-
-**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add tests`, `create tests`, `e2e test`, `end to end test`, `integration test`, `vitest test`, `playwright test`, `spec file`, `test coverage`, `test file`, `test suite`, `unit test`, `vitest`, `write tests`, `assertion`, `build error`, `coverage`, `cypress`, `describe`, `dev server`, `expect`, `fixture`, `it`, `vitest`, `mock`, `npm run test:unit`, `playwright`, `playwright build`, `protected route`, `redirect to login`, `spy`, `stub`, `test`, `test infrastructure`, `test results`, `testing`, `testing evidence`, `testing test pattern`, `tests`, `unit tests`
-
 #### Performance Engineering Lead (`PERFORMANCE`)
 Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Mission**: Identify pe
 
 **Trigger Keywords**: `bottleneck`, `cpu usage`, `load time`, `memory leak`, `n+1 query`, `performance issue`, `performance optimization`, `response time`, `slow query`, `speed optimization`, `takes forever`, `too slow`, `cache`, `caching`, `fast`, `faster`, `latency`, `memoize`, `optimization`, `optimize`, `performance`, `profile`, `redis`, `slow`, `speed`, `throughput`
+
+#### Launch Orchestration Sub-Agent (`LAUNCH`)
+Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
+
+**Trigger Keywords**: `deploy to production`, `go live checklist`, `launch checklist`, `production deployment`, `ready to launch`, `release to production`, `ship to prod`, `GA release`, `beta release`, `cutover`, `deploy`, `deployment`, `go live`, `go-live`, `golive`, `launch`, `prod`, `production`, `production launch`, `release`, `rollback`, `rollout`, `ship`
 
 #### Monitoring Sub-Agent (`MONITORING`)
 Handles monitoring setup, alerting, SLA definition, health checks, and incident response.
@@ -1611,23 +1612,6 @@ Handles monitoring setup, alerting, SLA definition, health checks, and incident 
 Handles financial projections, P&L modeling, cash flow analysis, business model canvas financial sec
 
 **Trigger Keywords**: `burn rate`, `cash flow analysis`, `financial model`, `p&l statement`, `profit and loss`, `revenue projection`, `runway calculation`, `EBITDA`, `P&L`, `break even`, `budget`, `burn`, `cash flow`, `cost`, `ebitda`, `finance`, `financial`, `forecast`, `gross margin`, `margin`, `profit`, `projection`, `revenue`, `runway`
-
-#### Analytics Sub-Agent (`ANALYTICS`)
-Handles analytics setup, metrics definition, dashboard creation, and data-driven insights.
-
-**Trigger Keywords**: `analytics tracking`, `conversion tracking`, `funnel analysis`, `google analytics`, `kpi dashboard`, `metrics dashboard`, `mixpanel`, `user analytics`, `AARRR`, `KPI`, `analytics`, `churn rate`, `conversion`, `conversion rate`, `dashboard`, `engagement`, `funnel`, `kpi`, `metrics`, `report`, `retention`, `retention rate`, `tracking`, `user behavior`
-
-#### API Architecture Sub-Agent (`API`)
-## API Sub-Agent v1.0.0
-
-**Mission**: REST/GraphQL endpoint design, API architecture, versioning, an
-
-**Trigger Keywords**: `add endpoint`, `api design`, `api endpoint`, `api route`, `backend route`, `create endpoint`, `graphql api`, `openapi`, `rest api`, `swagger`, `API`, `GraphQL`, `HTTP method`, `OpenAPI`, `REST`, `RESTful`, `Swagger`, `api`, `controller`, `endpoint`, `graphql`, `handler`, `http`, `json`, `middleware`, `pagination`, `payload`, `request`, `response`, `rest`, `route`, `service`, `status code`, `versioning`
-
-#### Pricing Strategy Sub-Agent (`PRICING`)
-Handles pricing model development, unit economics, pricing tiers, sensitivity analysis, and competit
-
-**Trigger Keywords**: `cac ltv`, `pricing model`, `pricing page`, `pricing strategy`, `subscription pricing`, `tiered pricing`, `unit economics`, `CAC`, `LTV`, `arpu`, `arr`, `cac`, `freemium`, `ltv`, `mrr`, `plan`, `price`, `price point`, `pricing`, `revenue model`, `subscription`, `tier`
 
 #### Principal Systems Analyst (`VALIDATION`)
 ## Principal Systems Analyst v3.0.0 - Retrospective-Informed Edition
@@ -1643,6 +1627,33 @@ Handles pricing model development, unit economics, pricing tiers, sensitivity an
 
 **Trigger Keywords**: `architecture decision`, `high risk`, `pros and cons`, `risk analysis`, `risk assessment`, `risk mitigation`, `security risk`, `system design`, `tradeoff analysis`, `LEAD_PRE_APPROVAL`, `PLAN_PRD`, `a11y`, `access control`, `accessibility`, `advanced`, `alter`, `api`, `architecture`, `authentication`, `authorization`, `aws`, `bulk`, `cache`, `complex`, `complexity`, `component`, `constraint`, `contingency`, `create table`, `credential`, `dangerous`, `dashboard`, `database`, `decision`, `decrypt`, `design`, `encrypt`, `external`, `foreign key`, `integration`, `interface`, `large dataset`, `latency`, `microservice`, `migration`, `mitigation`, `mobile`, `openai`, `optimization`, `overhaul`, `performance`, `permission`, `postgres`, `real-time`, `redesign`, `refactor`, `responsive`, `restructure`, `risk`, `risky`, `rls`, `scalability`, `schema`, `security`, `sensitive`, `slow`, `sophisticated`, `sql`, `stripe`, `table`, `third-party`, `threat`, `tradeoff`, `twilio`, `ui`, `ux`, `webhook`, `websocket`
 
+#### API Architecture Sub-Agent (`API`)
+## API Sub-Agent v1.0.0
+
+**Mission**: REST/GraphQL endpoint design, API architecture, versioning, an
+
+**Trigger Keywords**: `add endpoint`, `api design`, `api endpoint`, `api route`, `backend route`, `create endpoint`, `graphql api`, `openapi`, `rest api`, `swagger`, `API`, `GraphQL`, `HTTP method`, `OpenAPI`, `REST`, `RESTful`, `Swagger`, `api`, `controller`, `endpoint`, `graphql`, `handler`, `http`, `json`, `middleware`, `pagination`, `payload`, `request`, `response`, `rest`, `route`, `service`, `status code`, `versioning`
+
+#### Analytics Sub-Agent (`ANALYTICS`)
+Handles analytics setup, metrics definition, dashboard creation, and data-driven insights.
+
+**Trigger Keywords**: `analytics tracking`, `conversion tracking`, `funnel analysis`, `google analytics`, `kpi dashboard`, `metrics dashboard`, `mixpanel`, `user analytics`, `AARRR`, `KPI`, `analytics`, `churn rate`, `conversion`, `conversion rate`, `dashboard`, `engagement`, `funnel`, `kpi`, `metrics`, `report`, `retention`, `retention rate`, `tracking`, `user behavior`
+
+#### Pricing Strategy Sub-Agent (`PRICING`)
+Handles pricing model development, unit economics, pricing tiers, sensitivity analysis, and competit
+
+**Trigger Keywords**: `cac ltv`, `pricing model`, `pricing page`, `pricing strategy`, `subscription pricing`, `tiered pricing`, `unit economics`, `CAC`, `LTV`, `arpu`, `arr`, `cac`, `freemium`, `ltv`, `mrr`, `plan`, `price`, `price point`, `pricing`, `revenue model`, `subscription`, `tier`
+
+#### Marketing & GTM Sub-Agent (`MARKETING`)
+Handles go-to-market strategy, marketing campaigns, channel selection, messaging, and brand position
+
+**Trigger Keywords**: `brand awareness`, `content marketing`, `go to market`, `gtm strategy`, `marketing campaign`, `marketing strategy`, `seo strategy`, `GTM`, `SEO`, `advertising`, `brand`, `campaign`, `channel strategy`, `content`, `go-to-market`, `lead generation`, `market`, `marketing`, `messaging`, `positioning`, `promotion`, `seo`, `social`
+
+#### Sales Process Sub-Agent (`SALES`)
+Handles sales playbook development, pipeline management, objection handling, and sales enablement.
+
+**Trigger Keywords**: `close deal`, `objection handling`, `sales cycle`, `sales pipeline`, `sales playbook`, `sales process`, `sales strategy`, `close`, `closing`, `deal`, `deal flow`, `demo`, `lead`, `opportunity`, `pipeline`, `prospect`, `quota`, `sales`, `sales enablement`, `sell`, `selling`
+
 #### Dependency Management Sub-Agent (`DEPENDENCY`)
 # Dependency Management Specialist Sub-Agent
 
@@ -1655,22 +1666,12 @@ Handles exit valuation modeling, comparable analysis, acquisition scenario plann
 
 **Trigger Keywords**: `acquisition target`, `company valuation`, `dcf analysis`, `exit strategy`, `fundraising round`, `series a`, `startup valuation`, `DCF`, `IPO`, `Series A`, `acquisition`, `comparable`, `equity`, `exit`, `funding`, `fundraising`, `investor`, `ipo`, `multiple`, `round`, `seed`, `series`, `valuation`
 
-#### Sales Process Sub-Agent (`SALES`)
-Handles sales playbook development, pipeline management, objection handling, and sales enablement.
-
-**Trigger Keywords**: `close deal`, `objection handling`, `sales cycle`, `sales pipeline`, `sales playbook`, `sales process`, `sales strategy`, `close`, `closing`, `deal`, `deal flow`, `demo`, `lead`, `opportunity`, `pipeline`, `prospect`, `quota`, `sales`, `sales enablement`, `sell`, `selling`
-
 #### Senior Design Sub-Agent (`DESIGN`)
 ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
 
 **🆕 NEW in v6.0.0**: Proactive learnin
 
 **Trigger Keywords**: `a11y`, `accessibility`, `component design`, `dark mode`, `design system`, `mobile layout`, `responsive design`, `shadcn`, `ui design`, `ux design`, `wcag`, `API endpoint`, `ARIA`, `CSS`, `Tailwind`, `UI`, `UX`, `WCAG`, `backend feature`, `business logic`, `button`, `card`, `component`, `controller`, `css`, `dashboard`, `database model`, `database table`, `design`, `desktop`, `dialog`, `feature implementation`, `form`, `frontend`, `interaction`, `interface`, `journey`, `layout`, `light mode`, `mobile`, `modal`, `navbar`, `navigation`, `new endpoint`, `new feature`, `new route`, `page`, `prototype`, `responsive`, `screen reader`, `service layer`, `sidebar`, `style`, `styling`, `tailwind`, `theme`, `ui`, `user experience`, `user flow`, `user-facing`, `ux`, `view`, `wireframe`
-
-#### Marketing & GTM Sub-Agent (`MARKETING`)
-Handles go-to-market strategy, marketing campaigns, channel selection, messaging, and brand position
-
-**Trigger Keywords**: `brand awareness`, `content marketing`, `go to market`, `gtm strategy`, `marketing campaign`, `marketing strategy`, `seo strategy`, `GTM`, `SEO`, `advertising`, `brand`, `campaign`, `channel strategy`, `content`, `go-to-market`, `lead generation`, `market`, `marketing`, `messaging`, `positioning`, `promotion`, `seo`, `social`
 
 #### CRM Sub-Agent (`CRM`)
 Handles customer relationship management, lead tracking, customer success metrics, and retention str
@@ -1695,7 +1696,7 @@ Constitutional vetting of proposals using AEGIS framework. Routes feedback throu
 
 ---
 
-*Generated from database: 2026-02-11*
+*Generated from database: 2026-02-12*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
