@@ -1615,13 +1615,13 @@ Phase C: Platform Capabilities — OpenClaw-Inspired (P2)
   variant promotion, cross-venture intelligence transfers weekly.
 
 Phase D: Portfolio Intelligence (P3)
-  16. Venture template system (extraction + application — cross-venture-learning.js provides analysis)
-  17. Inter-venture dependency manager (venture_dependencies schema defined; manager code needed)
+  18. Venture template system (extraction + application — cross-venture-learning.js provides analysis)
+  19. Inter-venture dependency manager (venture_dependencies schema defined; manager code needed)
 
 Phase E: Optimization (P4)
-  18. Shared services abstraction layer
-  19. Expand-vs-spinoff evaluator
-  20. Advanced portfolio optimization (resource contention, priority re-ranking)
+  20. Shared services abstraction layer
+  21. Expand-vs-spinoff evaluator
+  22. Advanced portfolio optimization (resource contention, priority re-ranking)
 ```
 
 ### Phase A Validation: The First Venture Test
