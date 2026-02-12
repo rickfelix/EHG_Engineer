@@ -3,10 +3,10 @@
 ## Metadata
 - **Category**: Guide
 - **Status**: Approved
-- **Version**: 1.0.0
-- **Author**: SD-LEO-INFRA-BRIDGE-AGENT-SYSTEMS-001
+- **Version**: 2.0.0
+- **Author**: SD-LEO-INFRA-DATABASE-DRIVEN-DYNAMIC-001
 - **Last Updated**: 2026-02-11
-- **Tags**: agents, teams, claude-code, collaboration, institutional-memory
+- **Tags**: agents, teams, claude-code, collaboration, institutional-memory, dynamic-agents, leaders
 
 ## Overview
 
@@ -18,11 +18,14 @@ This guide explains how agents work together in the EHG_Engineer system, coverin
 - **Claude Code Native Agents**: Spawned via Task tool, work independently
 - **LEO Database Sub-Agents**: Database-driven agents with institutional memory
 - **Agent Bridge**: Pre-compiled knowledge injected into all agents at session start
+- **Universal Leader Architecture**: All 31 compiled agents can spawn teams (as of 2026-02-11)
+- **Dynamic Agent Creation**: Agents can create new specialists at runtime
 
 **Collaboration Patterns**:
 - **Single-Agent**: One agent works alone on a focused task
 - **Multi-Agent Team**: Multiple agents work in parallel with shared context
 - **Team Lead Pattern**: One agent coordinates others, distributes knowledge
+- **On-Demand Team Spawning**: Any agent can assemble specialist help when needed
 
 ---
 
@@ -101,6 +104,126 @@ The error is: 'ERR_NO_PRD'. Perform 5-whys analysis."
 - The specific SD ID
 - The exact error message
 - Any relevant context (git state, database state)
+
+---
+
+## Universal Leader Architecture
+
+**As of 2026-02-11, all 31 compiled agents are leaders.** This means any agent can spawn specialist teams on-demand when their assigned task requires multi-domain expertise.
+
+### Why All Agents Are Leaders
+
+**Previous Architecture** (5 leaders, 26 teammates):
+- Only RCA, SECURITY, RISK, TESTING, ORCHESTRATOR_CHILD could spawn teams
+- Database agent investigating a connection timeout couldn't spawn API or Performance help
+- Led to incomplete analysis when problems spanned domains
+
+**Current Architecture** (31 leaders):
+- Every compiled agent has full team spawning capabilities
+- Database agent can spawn API specialist to investigate timeout in endpoint
+- Performance agent can spawn Database specialist to analyze query bottlenecks
+- Enables emergent collaboration without predefined team structures
+
+**Safeguard Against Recursion**:
+- Dynamic agents (created at runtime) are ALWAYS teammates, never leaders
+- Prevents unbounded cascading team creation
+- Depth limit = 1 (compiled leader → dynamic teammate)
+
+### Available Agents (All Leaders)
+
+All 31 agents have identical team tools. Key agents by domain:
+
+| Agent Code | Domain | When to Invoke |
+|------------|--------|----------------|
+| `rca-agent` | Root Cause Analysis | Recurring failures, 5-whys needed |
+| `database-agent` | Schema & Migrations | Database design, RLS, migrations |
+| `design-agent` | UI/UX & Accessibility | Component design, a11y validation |
+| `testing-agent` | QA & Testing | E2E test generation, coverage |
+| `security-agent` | Security & Auth | Vulnerability scanning, auth flows |
+| `performance-agent` | Performance | Load testing, bottleneck analysis |
+| `api-agent` | API Design | Endpoint design, REST/GraphQL |
+| `dependency-agent` | Dependencies | npm updates, CVE scanning |
+| `regression-agent` | Refactoring | Backward compatibility validation |
+| `github-agent` | CI/CD | GitHub Actions, pipeline validation |
+| `docmon-agent` | Documentation | Doc generation, info architecture |
+| `retro-agent` | Retrospectives | Lesson extraction, quality scoring |
+| `stories-agent` | User Stories | Acceptance criteria, user journeys |
+| `uat-agent` | UAT Testing | User acceptance test coordination |
+| `validation-agent` | Codebase Audit | Duplicate detection, implementation checks |
+| `risk-agent` | Risk Assessment | Risk analysis, mitigation strategies |
+| _(+15 more)_ | Various | Launch, Marketing, Sales, Finance, etc. |
+
+**Full roster**: Query `leo_sub_agents` table or see `.claude/agents/` directory.
+
+### Team Spawning Protocol (Injected in All Leaders)
+
+Every leader agent receives this protocol guidance:
+
+**When to spawn help** (use judgment — only when genuinely needed):
+- Problem spans multiple domains (e.g., DB issue affecting API and security)
+- Lack expertise to investigate a specific aspect
+- Parallel investigation would significantly speed up resolution
+
+**How to spawn help**:
+1. Use `TeamCreate` to create a team for the investigation
+2. Use `TaskCreate` to define tasks for each specialist needed
+3. Use the `Task` tool to spawn teammates with clear, scoped prompts
+4. Teammates report findings back via `SendMessage`
+5. Synthesize findings and report to whoever spawned you
+
+**Available team templates** (pre-built in database):
+- `rca-investigation` — RCA lead + DB specialist + API specialist
+- `security-audit` — Security lead + DB + API + Testing specialists
+- `performance-review` — Performance lead + DB + API specialists
+
+**When NOT to spawn help**:
+- You can handle the task yourself with your existing tools
+- The task is simple and well-scoped to your domain
+- Adding coordination overhead would slow things down
+
+### Example: Database Agent Spawns API Help
+
+**Scenario**: Database agent investigating connection timeout discovers the issue may be in the API layer.
+
+```
+[database-agent investigation]
+"Analyzed connection pool logs. All connections consumed by long-running queries.
+Traced to API endpoint /api/reports/generate - making 50+ sequential DB calls.
+
+This is an N+1 query problem in the API layer, outside my domain.
+Spawning API specialist to investigate endpoint design..."
+
+[database-agent creates team]
+TeamCreate: { team_name: "timeout-investigation" }
+
+[database-agent spawns API specialist]
+Task tool with subagent_type="api-agent" (teammate):
+"Investigate /api/reports/generate endpoint for N+1 query pattern.
+Database agent found 50+ sequential calls consuming connection pool.
+
+Context: SD-PERF-001, timeout occurs after 30s, affects all report types.
+
+Proven pattern PAT-PERF-003: N+1 queries in report generation (8x)
+Fix: Batch queries using JOIN instead of sequential SELECT."
+
+[api-agent reports findings]
+SendMessage to database-agent:
+"API investigation complete. Confirmed N+1 pattern in reports controller.
+Root cause: Sequelize findAll() in loop instead of single JOIN query.
+Recommendation: Refactor to use eager loading with include clause."
+
+[database-agent synthesizes]
+"Root cause determined: N+1 query pattern in /api/reports/generate.
+Database layer is correctly configured. Issue is in API implementation.
+Recommend: SD-PERF-001 ownership transfer to API team for refactoring."
+```
+
+**Key Points**:
+- Database agent recognized domain boundary
+- Spawned specialist instead of guessing
+- Provided task-specific context in spawn prompt
+- Received findings via SendMessage
+- Synthesized complete root cause analysis
 
 ---
 
@@ -260,6 +383,161 @@ This matches PAT-DB-012 in database. Recommend adding timestamps to:
 ```
 
 **Pattern Impossible in Single-Agent Spawning**: Traditional spawning doesn't allow mid-task communication. Teams enable **emergent collaboration**.
+
+---
+
+## Dynamic Agent Creation
+
+Agents can create new specialist agents **at runtime** when no existing agent fits the required expertise. This enables on-demand specialization for unique problems.
+
+### When to Create Dynamic Agents
+
+**Use dynamic agent creation when**:
+- Problem requires very specific expertise not covered by existing 31 agents
+- One-time specialist needed (e.g., "Redis Cache Specialist" for a Redis-specific investigation)
+- Existing agents are too general for the task
+- You need a temporary agent with narrowly scoped knowledge
+
+**Do NOT create dynamic agents when**:
+- An existing agent can handle the task (check `leo_sub_agents` roster first)
+- Task is simple enough to handle yourself
+- Generic expertise is sufficient
+
+### How to Create Dynamic Agents
+
+Dynamic agents are created via database insertion using `lib/team/agent-creator.js`:
+
+```javascript
+import { createDynamicAgent } from './lib/team/agent-creator.js';
+
+const result = await createDynamicAgent({
+  code: 'REDIS_SPECIALIST',                    // Unique identifier (required)
+  name: 'Redis Cache Specialist',              // Human-readable name (required)
+  description: 'Specialist in Redis caching patterns and optimization',  // (required)
+  instructions: `You are a Redis specialist. Focus on:
+                 - Cache invalidation strategies
+                 - Redis data structure optimization
+                 - Connection pooling and clustering
+                 - Memory management and eviction policies`,  // Full agent identity (required)
+  capabilities: ['cache_analysis', 'redis_optimization', 'connection_pooling'],  // (optional)
+  categoryMappings: ['performance', 'infrastructure']  // (optional)
+});
+
+// result: { agentCode: 'REDIS_SPECIALIST', compiled: true }
+```
+
+**What happens**:
+1. INSERT into `leo_sub_agents` table with all fields populated
+2. Compiler regenerates agent `.md` file entirely from database (no `.partial` needed)
+3. Agent is immediately spawnable via Task tool: `subagent_type="redis-specialist"`
+4. Agent file contains DB-sourced instructions + team protocol
+
+### Dynamic Agent Constraints
+
+**CRITICAL**: Dynamic agents are ALWAYS teammates, never leaders. This is enforced in `agent-creator.js`:
+
+```javascript
+// Safeguard: Dynamic agents can only be teammates
+if (teamRole !== 'teammate') {
+  console.warn('   ⚠️  Dynamic agents can only be teammates');
+  teamRole = 'teammate';
+}
+
+const TEAMMATE_TOOLS = ['Bash', 'Read', 'Write', 'SendMessage', 'TaskUpdate', 'TaskList', 'TaskGet'];
+// NOT included: TeamCreate, Task, TaskCreate (no team spawning)
+```
+
+**Why this matters**:
+- Prevents unbounded recursion (dynamic agent spawning another dynamic agent)
+- Limits depth to 1: compiled leader → dynamic teammate
+- Dynamic agents can execute tasks but cannot coordinate teams
+
+**Trust boundary**: Compiled agents (from `.partial` files) are leaders. Runtime-created agents are teammates.
+
+### Example: Creating and Using a Dynamic Agent
+
+**Scenario**: RCA agent investigating Redis timeout needs specialized help.
+
+```javascript
+// 1. RCA agent creates specialist
+const redis = await createDynamicAgent({
+  code: 'REDIS_TIMEOUT_SPECIALIST',
+  name: 'Redis Timeout Specialist',
+  description: 'Specialist for diagnosing Redis connection timeouts',
+  instructions: `You are a Redis timeout specialist. Analyze:
+  - Connection pool exhaustion
+  - Network latency to Redis server
+  - Slow commands blocking event loop
+  - Memory pressure causing evictions
+
+  Proven patterns from database:
+  - PAT-REDIS-001: Connection pool too small (12x)
+  - PAT-REDIS-004: KEYS command blocking event loop (8x)`,
+  capabilities: ['timeout_analysis', 'connection_pooling', 'command_profiling'],
+  categoryMappings: ['performance', 'infrastructure']
+});
+
+// 2. Compiler runs automatically, generates .claude/agents/redis-timeout-specialist.md
+
+// 3. RCA agent spawns the new specialist
+Task tool with subagent_type="redis-timeout-specialist":
+"Investigate Redis timeout in SD-PERF-005.
+Timeout occurs after 5 seconds when cache hit rate drops below 50%.
+Redis server: localhost:6379, connection pool size: 10.
+
+Analyze: connection pool, slow commands, network latency."
+
+// 4. Specialist reports findings
+[redis-timeout-specialist → rca-agent]
+SendMessage: "Timeout root cause identified:
+- Connection pool size (10) too small for traffic
+- KEYS * command found in cache warming code (blocking)
+- Recommendation: Increase pool to 50, replace KEYS with SCAN"
+
+// 5. RCA agent synthesizes
+"Root cause: Redis connection pool exhaustion + blocking KEYS command.
+CAPA: Increase pool size to 50, refactor cache warming to use SCAN.
+Pattern: PAT-REDIS-001 and PAT-REDIS-004 confirmed."
+```
+
+### Dynamic Agent Lifecycle
+
+**Creation**:
+- `createDynamicAgent()` → INSERT into `leo_sub_agents` table
+- Compiler triggered automatically (via migration or manual run)
+- Agent `.md` file generated from database columns
+
+**Usage**:
+- Spawned like any other agent: `Task tool with subagent_type="<code>"`
+- Has access to teammate tools only (Bash, Read, Write, SendMessage, TaskUpdate, TaskList, TaskGet)
+- Can report findings, update tasks, communicate with team
+
+**Cleanup**:
+- Dynamic agents persist in database unless explicitly deleted
+- Use for one-time investigations, then DELETE row from `leo_sub_agents`
+- Compiler regeneration removes orphaned `.md` files
+
+**Duplicate Protection**:
+```javascript
+// createDynamicAgent() checks for existing agent with same code
+const existing = await supabase.from('leo_sub_agents').select('code').eq('code', 'REDIS_SPECIALIST').single();
+if (existing.data) {
+  return { agentCode: 'REDIS_SPECIALIST', existing: true };
+}
+```
+
+### Dynamic vs Compiled Agents
+
+| Aspect | Compiled Agents | Dynamic Agents |
+|--------|----------------|----------------|
+| **Source** | `.partial.md` files + DB | Database only |
+| **Team Role** | Leader (can spawn teams) | Teammate (cannot spawn) |
+| **Tools** | Full set including TeamCreate, Task | Teammate set (no team tools) |
+| **Creation** | Pre-defined at build time | Runtime via `createDynamicAgent()` |
+| **Count** | 31 (fixed roster) | Unlimited (on-demand) |
+| **Lifespan** | Permanent | Temporary (delete after use) |
+| **Use Case** | General-purpose domains | Highly specific one-time tasks |
+| **Institutional Memory** | Pre-compiled knowledge blocks | No pre-compiled knowledge (query DB) |
 
 ---
 
@@ -566,6 +844,7 @@ cat .claude/logs/session-start.log
 
 ---
 
-*Guide Version: 1.0.0*
-*For SD-LEO-INFRA-BRIDGE-AGENT-SYSTEMS-001*
+*Guide Version: 2.0.0*
+*For SD-LEO-INFRA-DATABASE-DRIVEN-DYNAMIC-001*
 *LEO Protocol Version: 4.3.3*
+*Universal Leader Architecture: Active (2026-02-11)*
