@@ -1,12 +1,12 @@
-# cultural_design_styles Table
+# team_templates Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-12T00:25:05.664Z
-**Rows**: 4
-**RLS**: Enabled (4 policies)
+**Rows**: 3
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,53 +14,49 @@
 
 ---
 
-## Columns (8 total)
+## Columns (9 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| style_key | `character varying(30)` | **NO** | - | - |
-| display_name | `character varying(100)` | **NO** | - | - |
+| id | `character varying(50)` | **NO** | - | - |
+| name | `character varying(255)` | **NO** | - | - |
 | description | `text` | YES | - | - |
-| best_for | `ARRAY` | YES | - | - |
-| characteristics | `text` | YES | - | - |
-| variance_rules | `jsonb` | YES | - | - |
-| tailwind_tokens | `jsonb` | YES | - | - |
+| roles | `jsonb` | **NO** | - | Array of role definitions: [{agent_code, role_name, task_template, team_role}] |
+| task_structure | `jsonb` | **NO** | - | Array of task definitions: [{subject, description, assignee_role, blocked_by}] |
+| leader_agent_code | `character varying(20)` | YES | `'RCA'::character varying` | - |
+| active | `boolean` | YES | `true` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 
 ### Primary Key
-- `cultural_design_styles_pkey`: PRIMARY KEY (style_key)
+- `team_templates_pkey`: PRIMARY KEY (id)
 
 ## Indexes
 
-- `cultural_design_styles_pkey`
+- `team_templates_pkey`
   ```sql
-  CREATE UNIQUE INDEX cultural_design_styles_pkey ON public.cultural_design_styles USING btree (style_key)
+  CREATE UNIQUE INDEX team_templates_pkey ON public.team_templates USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. Allow insert for authenticated (INSERT)
+### 1. anon_read_team_templates (SELECT)
 
-- **Roles**: {authenticated}
-- **With Check**: `true`
+- **Roles**: {anon}
+- **Using**: `true`
 
-### 2. Allow update for authenticated (UPDATE)
+### 2. authenticated_read_team_templates (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
-- **With Check**: `true`
 
-### 3. cultural_design_styles_delete (DELETE)
+### 3. service_role_all_team_templates (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-
-### 4. cultural_design_styles_select (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

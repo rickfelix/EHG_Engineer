@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T17:09:45.342Z
-**Rows**: 30
+**Generated**: 2026-02-12T00:25:05.664Z
+**Rows**: 31
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,11 @@
 | domain_embedding | `USER-DEFINED` | YES | - | - |
 | embedding_generated_at | `timestamp with time zone` | YES | - | - |
 | embedding_model | `character varying(100)` | YES | `'text-embedding-3-small'::character varying` | - |
+| model_tier | `character varying(20)` | YES | `'opus'::character varying` | Default model tier for this agent (haiku/sonnet/opus). Used by compiler for frontmatter generation. |
+| allowed_tools | `jsonb` | YES | `'["Bash", "Read", "Write"]'::jsonb` | JSON array of tool names this agent can access. Compiler generates frontmatter tools: line from this. |
+| team_role | `character varying(20)` | YES | `'teammate'::character varying` | Role when participating in teams: leader (can create teams/tasks) or teammate (executes assigned tasks). |
+| instructions | `text` | YES | - | Full agent identity text. If populated AND no .partial file exists, compiler generates .md entirely from DB. |
+| category_mappings | `jsonb` | YES | `'[]'::jsonb` | JSON array of issue_patterns categories relevant to this agent. Used for knowledge block composition. |
 
 ## Constraints
 
@@ -44,6 +49,8 @@
 
 ### Check Constraints
 - `leo_sub_agents_activation_type_check`: CHECK ((activation_type = ANY (ARRAY['automatic'::text, 'manual'::text])))
+- `leo_sub_agents_model_tier_check`: CHECK (((model_tier)::text = ANY ((ARRAY['haiku'::character varying, 'sonnet'::character varying, 'opus'::character varying])::text[])))
+- `leo_sub_agents_team_role_check`: CHECK (((team_role)::text = ANY ((ARRAY['leader'::character varying, 'teammate'::character varying])::text[])))
 
 ## Indexes
 
