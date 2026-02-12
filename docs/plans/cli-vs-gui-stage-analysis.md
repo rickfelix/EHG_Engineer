@@ -4276,6 +4276,139 @@ const TEMPLATE = {
 7. **No review/approval decision**: Stage 21 has no gate or decision for Stage 22. Just all_passing boolean.
 8. **No UAT component**: GUI has full UAT feedback collection. CLI has nothing for user acceptance testing.
 
+### Triangulation Synthesis
+
+**Respondents**: Claude (Opus 4.6), OpenAI (GPT 5.3), AntiGravity (Google Gemini)
+
+#### Full Agreement (3/3)
+
+1. **Keep Stage 20 and 21 separate with clear boundary**: All three reject merging. The separation is: Stage 20 produces test evidence (execution), Stage 21 produces a review decision (synthesis). Stage 20 = "Did we test it?" Stage 21 = "Is it ready?" All agree Stage 21 should NOT re-run tests or duplicate Stage 20's integration test suites.
+
+2. **Add analysisStep seeding from Stage 14 architecture**: All three agree Stage 21 should auto-populate integration records from Stage 14's architecture integration points and cross-reference with Stage 20's integration test results. This is the bridge from architecture intent to build verification.
+
+3. **Replace all_passing with a review decision**: All agree a 3-way decision (approve/conditional/reject) replaces the binary boolean. This allows teams to conditionally proceed when non-critical integrations fail, without lying about test results.
+
+4. **Reference Stage 14 layers instead of free-text source/target**: All agree source_layer_ref and target_layer_ref should reference Stage 14 architecture layer names, not arbitrary strings. This enables traceability from architecture to verification.
+
+5. **Add severity/criticality on integrations**: All agree not all integration failures are equal. A payment gateway failure must block; a logging integration failure should not.
+
+6. **Current stage name "Integration Testing" is wrong**: All agree the name should change. Claude: "Build Review." AG: "Integration & Acceptance." OpenAI: "Integration Review." All reject the current name since Stage 20 already covers integration testing.
+
+7. **No hard dependency conflicts**: All confirm this approach aligns with established patterns and prior stage decisions.
+
+#### Majority Agreement (2/3)
+
+1. **UAT in Stage 21** (Claude + AG yes, OpenAI no): Claude adds lightweight uat_summary (conducted, testers, feedback, sign_off). AG adds uat_feedback array (tester, scenario, verdict, comments). OpenAI says "do not add UAT here, put in Stage 22/23." **Resolution**: Add lightweight optional UAT. The CLI has no UAT concept anywhere in the lifecycle. Stage 21 is the natural place -- it's the last checkpoint before Sprint Review. Keep it minimal: conducted boolean, feedback summary, blockers count, sign-off status. Not the GUI's full UAT platform.
+
+2. **Environment as enum** (Claude + OpenAI yes, AG no): Claude and OpenAI want enum (development/staging/production). AG says keep free text because "every venture has weird env names." **Resolution**: Enum. Three values covers 95% of cases. The CLI is a venture lifecycle tool, not a deployment tool. If a venture has "prod-eu" they can use "production" -- the environment field captures where testing happened, not deployment topology.
+
+3. **Severity values**: Claude says skip severity (most failures are critical). AG says criticality: high/medium/low (3 values). OpenAI says severity: critical/high/medium/low (4 values). **Resolution**: Use the established 4-level pattern (critical/high/medium/low) for consistency with Stages 19-20. Even though most integration failures are critical, having the field prevents non-critical failures from blocking the entire stage.
+
+#### Divergence Resolutions
+
+**Stage name**: Claude = "Build Review." AG = "Integration & Acceptance." OpenAI = "Integration Review." **Resolution**: "Build Review." Rationale: Stage 21's reconceived scope includes integration verification + quality assessment from Stage 20 + optional UAT + review decision. "Integration Review" (OpenAI) is too narrow -- it excludes the quality assessment and UAT components. "Integration & Acceptance" (AG) is more accurate but wordy. "Build Review" is the broadest accurate name: reviewing the entire build before Sprint Review. Stage 20 tests the build; Stage 21 reviews it.
+
+**Integration status values**: Claude = verified/failed/untested. AG = pass/fail/skipped/pending. OpenAI doesn't specify. **Resolution**: Use Claude's values: verified/failed/untested. These are review vocabulary, not test vocabulary. "Verified" means confirmed working (possibly from Stage 20 evidence). "Untested" explicitly captures gaps (no test evidence exists). This distinguishes Stage 21 from Stage 20's test execution.
+
+**UAT scope**: Claude = uat_summary object (conducted, testers, feedback_summary, blockers_found, sign_off). AG = uat_feedback array with per-scenario entries. OpenAI = no UAT. **Resolution**: Claude's uat_summary object. A single summary is sufficient for venture-level UAT tracking. Per-scenario entries (AG) create a mini test case manager inside Stage 21, which is Stage 20's job. The summary captures: was UAT done? What was the result? Any blockers?
+
+**Environment flexibility**: AG argues "every venture has weird env names" and wants free text. **Resolution**: Override. The environment field answers "where was this verified?" not "what's your deployment topology?" Three values (development/staging/production) are sufficient. Weird environment names are deployment details, not verification contexts.
+
+#### Recommended Stage 21 Consensus Schema
+
+```javascript
+const TEMPLATE = {
+  id: 'stage-21',
+  slug: 'build-review',
+  title: 'Build Review',
+  version: '2.0.0',
+  schema: {
+    // === Reconceived: integration verification from Stage 14 ===
+    integrations: {
+      type: 'array', minItems: 1,
+      items: {
+        name: { type: 'string', required: true },
+        source_layer: { type: 'string', required: true },   // CHANGED: Stage 14 layer ref
+        target_layer: { type: 'string', required: true },   // CHANGED: Stage 14 layer ref
+        severity: { type: 'enum', values: ['critical', 'high', 'medium', 'low'] },  // NEW
+        status: { type: 'enum', values: ['verified', 'failed', 'untested'], required: true },  // CHANGED
+        error_message: { type: 'string' },
+      },
+    },
+
+    // === CHANGED: environment enum ===
+    environment: {
+      type: 'enum',
+      values: ['development', 'staging', 'production'],
+      required: true,
+    },
+
+    // === NEW: lightweight UAT summary (optional) ===
+    uat_summary: {
+      type: 'object',
+      properties: {
+        conducted: { type: 'boolean' },
+        testers: { type: 'number' },
+        feedback_summary: { type: 'string' },
+        blockers_found: { type: 'number' },
+        sign_off: { type: 'enum', values: ['approved', 'rejected', 'pending'] },
+      },
+    },
+
+    // === Updated derived ===
+    total_integrations: { type: 'number', derived: true },
+    verified_integrations: { type: 'number', derived: true },   // RENAMED from passing
+    failed_integrations: { type: 'array', derived: true },
+    untested_integrations: { type: 'array', derived: true },    // NEW
+    pass_rate: { type: 'number', derived: true },
+
+    // === NEW: review decision (replaces all_passing) ===
+    review_decision: {
+      type: 'object', derived: true,
+      properties: {
+        decision: { type: 'enum', values: ['approve', 'conditional', 'reject'] },
+        rationale: { type: 'string' },
+        integration_status: { type: 'string' },
+        quality_assessment: { type: 'string' },   // Summary of Stage 20 quality_decision
+        open_blockers: { type: 'number' },
+        ready_for_sprint_review: { type: 'boolean' },
+      },
+    },
+
+    // === NEW ===
+    provenance: { type: 'object', derived: true },
+  },
+};
+```
+
+**Review decision logic**:
+- **APPROVE**: All critical integrations verified + Stage 20 quality_decision = pass + no open critical defects + (UAT sign_off = approved OR UAT not conducted) → ready_for_sprint_review = true
+- **CONDITIONAL**: Non-critical integration gaps OR Stage 20 quality_decision = conditional_pass OR open medium defects → ready_for_sprint_review = true (with caveats for Stage 22)
+- **REJECT**: Critical integration failures OR Stage 20 quality_decision = fail OR UAT blockers unresolved → ready_for_sprint_review = false
+
+#### Minimum Viable Change (Priority-Ordered)
+
+1. **P0**: Reconceive as "Build Review". Change slug from 'integration-testing' to 'build-review'. Stage reviews build quality holistically.
+2. **P0**: Add `analysisStep` consuming Stages 14, 19, 20. Derive integration verification from Stage 14 integration points. Cross-reference with Stage 20 test results. Summarize quality assessment.
+3. **P0**: Replace `all_passing` with `review_decision` (approve/conditional/reject). Determines ready_for_sprint_review for Stage 22.
+4. **P1**: Change source/target to source_layer/target_layer. Reference Stage 14 architecture layers.
+5. **P1**: Change integration status to verified/failed/untested. Review vocabulary, not test vocabulary.
+6. **P1**: Add severity on integrations (critical/high/medium/low). Prevents non-critical failures from blocking.
+7. **P1**: Change environment to enum (development/staging/production).
+8. **P2**: Add `uat_summary` optional section. Lightweight UAT: conducted, testers, feedback, blockers, sign-off.
+9. **P3**: Do NOT add full test case management (Stage 20's scope).
+10. **P3**: Do NOT add per-scenario UAT entries (summary is sufficient).
+11. **P3**: Do NOT add trend charts or scoring algorithms (GUI presentation concerns).
+
+#### Cross-Stage Impact
+
+| Change | Stage 14 (Architecture) | Stage 20 (QA) | Stage 22 (Sprint Review) |
+|--------|------------------------|--------------|------------------------|
+| Integration verification from Stage 14 | Architecture integration points become verification targets. | Stage 20's integration test evidence feeds Stage 21. | Sprint Review sees architecture → test → review traceability. |
+| Review decision | N/A | Stage 20's quality_decision feeds review_decision. | Sprint Review gates on ready_for_sprint_review. |
+| UAT summary | N/A | Stage 20 provides automated QA; Stage 21 adds human signal. | Sprint Review has both automated and human quality evidence. |
+| Severity on integrations | Stage 14 could pre-classify integration criticality. | Stage 20 integration suites map to Stage 21 integration records. | Sprint Review can focus on critical integration failures. |
+
 ---
 
 ## Stage 22: Release Readiness
