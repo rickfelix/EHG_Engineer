@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T15:28:08.227Z
-**Tables**: 457
+**Generated**: 2026-02-12T00:25:05.664Z
+**Tables**: 459
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (457)
+## All Tables (459)
 
 ### LEO Protocol
 
@@ -308,6 +308,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [financial_scenarios](tables/financial_scenarios.md)
 - [fit_gate_scores](tables/fit_gate_scores.md)
 - [folder_structure_snapshot](tables/folder_structure_snapshot.md)
+- [gap_analysis_results](tables/gap_analysis_results.md)
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
 - [github_operations](tables/github_operations.md)
 - [governance_audit_log](tables/governance_audit_log.md)
@@ -434,6 +435,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [system_health](tables/system_health.md)
 - [system_settings](tables/system_settings.md)
 - [task_hydration_log](tables/task_hydration_log.md)
+- [team_templates](tables/team_templates.md)
 - [tech_stack_references](tables/tech_stack_references.md)
 - [telemetry_analysis_runs](tables/telemetry_analysis_runs.md)
 - [telemetry_thresholds](tables/telemetry_thresholds.md)

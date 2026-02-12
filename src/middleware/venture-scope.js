@@ -88,10 +88,9 @@ export function requireChairmanForGlobal(req, res, next) {
     return next();
   }
 
-  // Check for Chairman role
-  const userRole = req.user?.role ||
-                   req.headers['x-user-role'] ||
-                   req.query.role;
+  // Check for Chairman role - ONLY from validated JWT claims (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-C)
+  // SECURITY: Never trust X-User-Role header or query params - they are client-controlled
+  const userRole = req.user?.role || req.user?.app_metadata?.role;
 
   const isChairman = userRole?.toLowerCase() === 'chairman' ||
                      userRole?.toLowerCase() === 'admin';

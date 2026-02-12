@@ -20,6 +20,8 @@ import http from 'http';
 import path from 'path';
 // fs removed - no longer used in main entry point
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import chokidar from 'chokidar';
 
 // Import configuration and services
@@ -60,6 +62,9 @@ import { bootstrapRCAMonitoring, registerRCAShutdownHandlers } from '../lib/rca-
 // Import EVA Error Handler
 import { createEvaErrorHandler } from '../lib/middleware/eva-error-handler.js';
 
+// Import Authentication Middleware (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-C)
+import { requireAuth, optionalAuth } from './middleware/auth.js';
+
 // Import Story Agent Bootstrap
 import StoryAgentBootstrap from '../src/agents/story-bootstrap.js';
 
@@ -91,30 +96,57 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
+// Security headers (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-E)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", 'ws://localhost:*', 'wss://localhost:*'],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow cross-origin API calls from frontend
+}));
+
+// Rate limiting (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-E)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute per IP
+  standardHeaders: true, // Return rate limit info in RateLimit-* headers
+  legacyHeaders: false,
+  message: { error: 'Too many requests', message: 'Rate limit exceeded. Try again later.', code: 'RATE_LIMITED' },
+});
+app.use('/api', apiLimiter);
+
 app.use(express.json());
 
 // =============================================================================
 // API ROUTES
 // =============================================================================
 
-// Mount route modules
-app.use('/api/sdip', sdipRoutes);
-app.use('/api/backlog', backlogRoutes);
-app.use('/api', dashboardRoutes);
-app.use('/api/feedback', feedbackRoutes);
-app.use('/api/discovery', discoveryRoutes);
-app.use('/api/blueprints', discoveryRoutes);  // Blueprint routes are in discovery
-app.use('/api/calibration', calibrationRoutes);
-app.use('/api/testing/campaign', testingCampaignRoutes);
-app.use('/api/ventures', venturesRoutes);
-app.use('/api/competitor-analysis', venturesRoutes);  // Competitor analysis in ventures
-app.use('/api/v2', v2ApiRoutes);
+// Mount route modules with authentication (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-C)
+// optionalAuth: allows unauthenticated reads, enriches if token present
+// requireAuth: blocks unauthenticated access (mutation-heavy routes)
+app.use('/api/sdip', requireAuth, sdipRoutes);
+app.use('/api/backlog', optionalAuth, backlogRoutes);
+app.use('/api/feedback', requireAuth, feedbackRoutes);
+app.use('/api/discovery', optionalAuth, discoveryRoutes);
+app.use('/api/blueprints', optionalAuth, discoveryRoutes);
+app.use('/api/calibration', optionalAuth, calibrationRoutes);
+app.use('/api/testing/campaign', requireAuth, testingCampaignRoutes);
+app.use('/api/ventures', optionalAuth, venturesRoutes);
+app.use('/api/competitor-analysis', optionalAuth, venturesRoutes);
+app.use('/api/v2', optionalAuth, v2ApiRoutes);
+// Dashboard routes: read-only, optional auth
+app.use('/api', optionalAuth, dashboardRoutes);
 
-// Story API Routes
-app.post('/api/stories/generate', storiesAPI.generate);
-app.get('/api/stories', storiesAPI.list);
-app.post('/api/stories/verify', storiesAPI.verify);
-app.get('/api/stories/gate', storiesAPI.releaseGate);
+// Story API Routes (with auth)
+app.post('/api/stories/generate', requireAuth, storiesAPI.generate);
+app.get('/api/stories', optionalAuth, storiesAPI.list);
+app.post('/api/stories/verify', requireAuth, storiesAPI.verify);
+app.get('/api/stories/gate', optionalAuth, storiesAPI.releaseGate);
 app.get('/api/stories/health', storiesAPI.health);
 
 // =============================================================================
@@ -232,12 +264,12 @@ async function startServer() {
   await bootstrapRCAMonitoring();
   registerRCAShutdownHandlers();
 
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '127.0.0.1', () => {
     console.log('\n=============================================================');
     console.log('🚀 EHG_Engineer Unified Application Server');
     console.log('=============================================================');
     console.log(`📍 Local:            http://localhost:${PORT}`);
-    console.log(`📍 Network:          http://0.0.0.0:${PORT}`);
+    console.log(`🔒 Bind:             127.0.0.1 (localhost only)`);
     console.log(`📊 Dashboard:        http://localhost:${PORT}/dashboard`);
     console.log('🎙️  EVA Voice:       http://localhost:8080/eva-assistant (EHG App) ✅');
     console.log('-------------------------------------------------------------');

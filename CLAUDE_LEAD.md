@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-11 9:11:45 AM
+**Generated**: 2026-02-12 8:24:59 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -49,6 +49,71 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
+
+## Baseline Issues Management
+
+## Baseline Issues System
+
+Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
+
+### LEAD Gate: BASELINE_DEBT_CHECK
+- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
+- **WARNS** if: Total open issues > 10 or stale non-critical > 5
+
+### Lifecycle
+| Status | Meaning |
+|--------|---------|
+| open | Issue identified, no owner assigned |
+| acknowledged | Issue reviewed, owner assigned |
+| in_progress | Remediation SD actively working |
+| resolved | Fixed and verified |
+| wont_fix | Accepted risk (requires LEAD approval + justification) |
+
+### Commands
+```bash
+npm run baseline:list          # Show all open issues
+npm run baseline:assign <key> <SD-ID>  # Assign ownership
+npm run baseline:resolve <key> # Mark resolved
+npm run baseline:summary       # Category summary
+```
+
+### Categories
+security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
+
+### Issue Key Format
+`BL-{CATEGORY}-{NNN}` where:
+- BL-SEC-001: Security baseline issue #1
+- BL-TST-001: Testing baseline issue #1
+- BL-PRF-001: Performance baseline issue #1
+- BL-DB-001: Database baseline issue #1
+- BL-DOC-001: Documentation baseline issue #1
+- BL-A11Y-001: Accessibility baseline issue #1
+- BL-CQ-001: Code quality baseline issue #1
+- BL-DEP-001: Dependency baseline issue #1
+- BL-INF-001: Infrastructure baseline issue #1
+
+### Functions
+- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
+- `generate_baseline_issue_key(p_category)`: Generates unique issue key
+
+## Migration Execution Protocol
+
+## ⚠️ CRITICAL: Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -137,71 +202,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
-
-## Baseline Issues Management
-
-## Baseline Issues System
-
-Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
-
-### LEAD Gate: BASELINE_DEBT_CHECK
-- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
-- **WARNS** if: Total open issues > 10 or stale non-critical > 5
-
-### Lifecycle
-| Status | Meaning |
-|--------|---------|
-| open | Issue identified, no owner assigned |
-| acknowledged | Issue reviewed, owner assigned |
-| in_progress | Remediation SD actively working |
-| resolved | Fixed and verified |
-| wont_fix | Accepted risk (requires LEAD approval + justification) |
-
-### Commands
-```bash
-npm run baseline:list          # Show all open issues
-npm run baseline:assign <key> <SD-ID>  # Assign ownership
-npm run baseline:resolve <key> # Mark resolved
-npm run baseline:summary       # Category summary
-```
-
-### Categories
-security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
-
-### Issue Key Format
-`BL-{CATEGORY}-{NNN}` where:
-- BL-SEC-001: Security baseline issue #1
-- BL-TST-001: Testing baseline issue #1
-- BL-PRF-001: Performance baseline issue #1
-- BL-DB-001: Database baseline issue #1
-- BL-DOC-001: Documentation baseline issue #1
-- BL-A11Y-001: Accessibility baseline issue #1
-- BL-CQ-001: Code quality baseline issue #1
-- BL-DEP-001: Dependency baseline issue #1
-- BL-INF-001: Infrastructure baseline issue #1
-
-### Functions
-- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
-- `generate_baseline_issue_key(p_category)`: Generates unique issue key
-
-## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -1380,6 +1380,7 @@ Parent completes automatically after last child, but LEAD should verify:
 
 Sequential LEAD approval allows learning from earlier children to inform later decisions.
 
+> **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
 ## SD Creation Anti-Pattern (PROHIBITED)
 
@@ -1578,7 +1579,7 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-02-11*
+*Generated from database: 2026-02-12*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
 

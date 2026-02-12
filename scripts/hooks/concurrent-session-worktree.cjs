@@ -116,7 +116,7 @@ function isInsideWorktree() {
 async function findConcurrentSessions(supabase, mySessionId, codebase, branch) {
   const { data, error } = await supabase
     .from('v_active_sessions')
-    .select('session_id, hostname, heartbeat_age_seconds, computed_status, sd_id, tty, pid')
+    .select('session_id, hostname, heartbeat_age_seconds, computed_status, sd_id, tty, pid, current_branch')
     .eq('codebase', codebase)
     .in('computed_status', ['active', 'idle']);
 
@@ -125,10 +125,22 @@ async function findConcurrentSessions(supabase, mySessionId, codebase, branch) {
     return [];
   }
 
-  // Filter out our own session and stale sessions
+  // Filter out our own session, stale sessions, and sessions on different branches
+  // Sessions on different branches of the same codebase are EXPECTED multi-instance work
+  // Only flag as concurrent when sessions share the SAME codebase AND SAME branch
   return (data || []).filter(s => {
     if (s.session_id === mySessionId) return false;
     if (s.heartbeat_age_seconds > STALENESS_WINDOW_S) return false;
+
+    // Branch-aware filtering: if both sessions have branch info,
+    // only flag as concurrent if they're on the same branch or main
+    if (branch && s.current_branch) {
+      const sameBranch = s.current_branch === branch;
+      const eitherOnMain = s.current_branch === 'main' || branch === 'main';
+      // Different non-main branches = not concurrent (expected multi-session work)
+      if (!sameBranch && !eitherOnMain) return false;
+    }
+
     return true;
   });
 }

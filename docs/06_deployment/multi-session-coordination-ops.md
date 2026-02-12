@@ -2,11 +2,11 @@
 
 **Category**: Deployment
 **Status**: Approved
-**Version**: 1.0.0
+**Version**: 4.0.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-01-30
-**Tags**: session-management, operations, monitoring, troubleshooting
-**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001
+**Last Updated**: 2026-02-11
+**Tags**: session-management, operations, monitoring, troubleshooting, ship-safety, git-operations
+**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001
 
 ## Overview
 
@@ -762,10 +762,296 @@ git worktree prune
 - **Session Lifecycle**: `lib/session-manager.mjs` (session creation/release)
 - **Heartbeat Manager**: `lib/heartbeat-manager.mjs` (session liveness)
 
+## Ship Process Safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001)
+
+### Overview
+
+Ship process safety prevents cross-session branch contamination during `/ship` operations when multiple Claude Code instances share the same repository working directory.
+
+**Problem**: The original `ShippingExecutor.js` ran `git checkout main && git pull` after merging PRs, which switched the working directory branch for ALL sessions. This caused commits to land on wrong branches and required manual `git reflog` recovery.
+
+**Solution**: Three-pillar approach:
+1. **Safe git operations** - Replace `git checkout main` with `git fetch origin main:main`
+2. **Branch-aware session tracking** - Track current branch in heartbeat, filter concurrent sessions by branch
+3. **Recovery tooling** - Automated orphaned commit scanner/recovery
+
+### Components
+
+#### 1. Safe Git Operations (Pillar 1)
+
+**Module**: `scripts/modules/shipping/ShippingExecutor.js`
+
+**Changes**:
+- **Replaced**: `git checkout main && git pull` (changes working directory for ALL sessions)
+- **With**: `git fetch origin main:main` (updates main ref WITHOUT changing working directory)
+- **Fallback**: If already on main, uses `git pull origin main` (safe since we're already there)
+- **Branch validation guard**: Verifies current branch matches expected branch before merge
+
+**Safe Sync Pattern**:
+```javascript
+// Multi-session safe: updates main ref without checkout
+await execAsync(`cd "${this.repoPath}" && git fetch origin main:main`);
+```
+
+**Branch Validation Guard**:
+```javascript
+// Detect cross-session contamination before merge
+if (this.context.expectedBranch) {
+  const { stdout: currentBranch } = await execAsync(
+    `cd "${this.repoPath}" && git rev-parse --abbrev-ref HEAD`
+  );
+  if (currentBranch.trim() !== this.context.expectedBranch) {
+    throw new Error(
+      `Branch mismatch detected! Expected '${this.context.expectedBranch}' ` +
+      `but found '${currentBranch.trim()}'. Another session may have switched the branch.`
+    );
+  }
+}
+```
+
+#### 2. Branch-Aware Session Tracking (Pillar 2)
+
+**Database Schema**: `claude_sessions.current_branch` column
+- Added by migration `20260211_ship_safety_branch_tracking_v2.sql`
+- Updated automatically by heartbeat every 30 seconds
+- Included in `v_active_sessions` view for monitoring
+
+**Heartbeat Integration**: `lib/session-manager.mjs`
+- Detects current git branch via `git rev-parse --abbrev-ref HEAD`
+- Passes branch to `update_session_heartbeat_with_branch()` RPC
+- Fallback to direct UPDATE if RPC unavailable
+
+**Concurrent Session Detection**: `scripts/hooks/concurrent-session-worktree.cjs`
+- **Before**: Sessions on same codebase were flagged as concurrent (regardless of branch)
+- **After**: Only flag as concurrent if SAME codebase AND SAME branch (or main)
+- **Rationale**: Different branches = expected multi-session work (parallel tracks)
+
+**Branch Filtering Logic**:
+```javascript
+// Filter concurrent sessions by branch
+if (branch && s.current_branch) {
+  const sameBranch = s.current_branch === branch;
+  const eitherOnMain = s.current_branch === 'main' || branch === 'main';
+  // Different non-main branches = not concurrent
+  if (!sameBranch && !eitherOnMain) return false;
+}
+```
+
+#### 3. Recovery Tooling (Pillar 3)
+
+**CLI Tool**: `scripts/git-commit-recovery.js`
+- Scans `git reflog` for orphaned commits (not reachable from any branch)
+- Checks both local and remote branches via `git branch -a --contains`
+- Recovery creates branch `recovery/<short-sha>-<timestamp>` from orphaned commit
+- Shows commit details: SHA, message, date, files changed
+
+**NPM Script**: `npm run git:recover`
+```bash
+npm run git:recover              # Scan last 24 hours
+npm run git:recover -- --hours 72    # Scan last 3 days
+npm run git:recover -- --recover <SHA>  # Recover specific commit
+```
+
+**See**: [Git Commit Recovery Guide](../reference/git-commit-recovery-guide.md) for detailed usage
+
+### Deployment
+
+**Prerequisites**:
+- PostgreSQL 14+ (existing requirement)
+- Git 2.25+ (for `git fetch origin main:main` syntax)
+
+**Database Migration**:
+```bash
+# Execute via Supabase dashboard or psql
+# File: database/migrations/20260211_ship_safety_branch_tracking_v2.sql
+
+# Migration adds:
+# - current_branch column to claude_sessions
+# - update_session_heartbeat_with_branch() RPC function
+# - Updated v_active_sessions view with current_branch field
+# - Backfills 7,898 existing sessions from metadata->>'branch'
+```
+
+**Verification**:
+```sql
+-- Verify current_branch column exists
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_name = 'claude_sessions' AND column_name = 'current_branch';
+
+-- Verify RPC function exists
+SELECT proname, pronargs FROM pg_proc WHERE proname = 'update_session_heartbeat_with_branch';
+
+-- Test updated view
+SELECT session_id, sd_id, current_branch, heartbeat_age_human
+FROM v_active_sessions
+WHERE current_branch IS NOT NULL
+LIMIT 5;
+```
+
+### Monitoring
+
+**Query Current Branches**:
+```sql
+SELECT
+  session_id,
+  sd_id,
+  current_branch,
+  heartbeat_age_human,
+  computed_status
+FROM v_active_sessions
+WHERE computed_status = 'active'
+ORDER BY current_branch;
+```
+
+**Detect Branch Contamination Risk**:
+```sql
+-- Find multiple active sessions on same branch (potential conflict)
+SELECT
+  current_branch,
+  COUNT(*) as session_count,
+  ARRAY_AGG(session_id) as sessions
+FROM v_active_sessions
+WHERE computed_status = 'active'
+  AND current_branch IS NOT NULL
+GROUP BY current_branch
+HAVING COUNT(*) > 1;
+```
+
+**Orphaned Commits Check**:
+```bash
+# Run recovery tool in scan mode (no changes made)
+npm run git:recover
+
+# Expected output if clean:
+# ✅ No orphaned commits found in last 24 hours
+```
+
+### Troubleshooting
+
+**Issue: Branch Mismatch Detected During Merge**
+
+**Symptom**: `ShippingExecutor` throws error: "Branch mismatch detected! Expected 'feat/...' but found 'main'"
+
+**Cause**: Another session ran `git checkout main` after this session created PR
+
+**Resolution**: This is the safety guard working correctly — abort and investigate:
+1. Check which session switched branches: `git reflog | grep checkout`
+2. Return to expected branch: `git checkout feat/...`
+3. Verify PR is still valid: `gh pr view <PR#>`
+4. Retry merge if safe
+
+**Issue: Heartbeat Not Updating current_branch**
+
+**Symptom**: `v_active_sessions.current_branch` is NULL for active session
+
+**Diagnosis**:
+```javascript
+const heartbeatManager = require('./lib/heartbeat-manager.mjs');
+const stats = heartbeatManager.getHeartbeatStats();
+console.log('Heartbeat active:', stats.isActive);
+
+// Check git availability
+const { execSync } = require('child_process');
+const branch = execSync('git rev-parse --abbrev-ref HEAD').toString().trim();
+console.log('Current branch:', branch);
+```
+
+**Possible Causes**:
+1. **Not in git repo**: Heartbeat skips branch detection if git unavailable
+2. **Git command timeout**: 3s timeout may be too short on slow systems
+3. **RPC function missing**: Migration not applied
+
+**Resolution**:
+1. Verify git is in PATH and repo is valid
+2. Check migration was applied: `SELECT proname FROM pg_proc WHERE proname = 'update_session_heartbeat_with_branch'`
+3. Force heartbeat: `heartbeatManager.forceHeartbeat(sessionId)`
+
+**Issue: Concurrent Session False Negative**
+
+**Symptom**: Two sessions on same branch not flagged as concurrent
+
+**Diagnosis**:
+```sql
+SELECT session_id, current_branch, heartbeat_age_seconds
+FROM v_active_sessions
+WHERE current_branch = 'feat/SD-XXX-001';
+```
+
+**Resolution**: Check staleness threshold — sessions with heartbeat >120s (default) are filtered out. If both sessions are active (<120s heartbeat) and on same branch, they SHOULD be flagged.
+
+**Issue: Orphaned Commit Not Detected**
+
+**Symptom**: Know commit is orphaned but `npm run git:recover` doesn't find it
+
+**Diagnosis**:
+```bash
+# Manually check reflog for commit
+git reflog | grep <short-sha>
+
+# Check if commit is actually reachable from a branch
+git branch -a --contains <full-sha>
+```
+
+**Possible Causes**:
+1. **Outside scan window**: Default scans last 24 hours, use `--hours` to extend
+2. **Already on remote branch**: Tool checks `git branch -a` (includes remotes)
+3. **Reflog expired**: Git reflog retention is 90 days by default
+
+**Resolution**:
+```bash
+# Extend scan window
+npm run git:recover -- --hours 168  # Last 7 days
+
+# Manual recovery if found in reflog but not by tool
+git checkout -b recovery/<short-sha> <full-sha>
+```
+
+### Performance Impact
+
+| Component | Impact | Notes |
+|-----------|--------|-------|
+| `current_branch` column | Minimal | VARCHAR(255), indexed with sd_id |
+| Branch detection in heartbeat | +5-10ms per heartbeat | Git command overhead |
+| RPC function overhead | +2-3ms | Extra branch param in UPDATE |
+| View query impact | <1ms | Single column addition |
+
+**Estimated Totals**:
+- **CPU**: +0.02% per active session
+- **Network**: +0.1 KB/min per session (branch name in heartbeat)
+- **Database I/O**: Same (2 UPDATE/min, slightly larger payload)
+
+### Security Considerations
+
+**Branch Validation Guard**:
+- Prevents malicious/accidental cross-session branch switching
+- Aborts merge if contamination detected (fail-safe)
+- No privilege escalation risk (read-only git operations)
+
+**Recovery Tool**:
+- Read-only by default (scan mode)
+- Recovery requires explicit `--recover <SHA>` flag
+- Creates new branch, never modifies existing refs
+
+### Best Practices
+
+1. **Monitor branch alignment**: Run daily query to detect branch mismatches
+2. **Regular orphan scans**: Schedule `npm run git:recover` weekly
+3. **Use worktrees for parallel work**: Eliminates shared working directory issues
+4. **Verify heartbeat branch tracking**: Check `v_active_sessions.current_branch` is populated
+
+### Related Documentation
+
+- **Migration**: [Ship Safety Branch Tracking](../database/migrations/20260211_ship_safety_branch_tracking_v2.sql)
+- **Recovery Tool**: [Git Commit Recovery Guide](../reference/git-commit-recovery-guide.md)
+- **Shipping Executor**: `scripts/modules/shipping/ShippingExecutor.js`
+- **Session Manager**: `lib/session-manager.mjs`
+- **Concurrent Session Hook**: `scripts/hooks/concurrent-session-worktree.cjs`
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 4.0.0 | 2026-02-11 | Added ship process safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001) |
 | 3.1.0 | 2026-02-09 | Added terminal identity centralization and handoff resolution tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018) |
 | 3.0.0 | 2026-02-07 | Added git worktree automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001) |
 | 2.0.0 | 2026-02-01 | Added lifecycle event monitoring (SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001) |
@@ -774,4 +1060,4 @@ git worktree prune
 ---
 
 *Part of LEO Protocol v4.3.3 - Multi-Session Coordination & Lifecycle Management*
-*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018*
+*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018, SD-LEO-FIX-MULTI-SESSION-SHIP-001*

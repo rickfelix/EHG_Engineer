@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-11T15:28:08.227Z
-**Rows**: 7,948
+**Generated**: 2026-02-12T00:25:05.664Z
+**Rows**: 7,963
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -43,6 +43,7 @@
 | stale_reason | `text` | YES | - | - |
 | pid_validated_at | `timestamp with time zone` | YES | - | - |
 | terminal_identity | `text` | YES | - | Computed identity from machine_id:terminal_id for uniqueness. Part of FR-1. |
+| current_branch | `text` | YES | - | Current git branch, updated by heartbeat. Used for multi-session ship safety. |
 
 ## Constraints
 

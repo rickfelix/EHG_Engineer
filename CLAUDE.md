@@ -731,8 +731,141 @@ LEO Protocol includes intelligent slash commands that interconnect based on work
 LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /learn → /leo next
 ```
 
+## Teams Protocol
+
+All LEO sub-agents are **universal leaders** — every agent can create and lead teams when a task requires cross-domain expertise. Team capabilities are injected at compile time via the agent compiler.
+
+### Architecture Overview
+
+```
+Agent receives task
+    │
+    ├── Can handle alone? → Execute directly
+    │
+    └── Needs cross-domain help? → Spawn a team:
+        │
+        ├── Option A: Use a pre-built team template
+        │   node scripts/spawn-team.js --template <id> --task "..."
+        │
+        ├── Option B: Spawn teammates manually via Task tool
+        │   TeamCreate → TaskCreate → Task (spawn agents)
+        │
+        └── Option C: Create a new specialist at runtime
+            createDynamicAgent({ code, name, instructions })
+```
+
+### When to Use Teams
+
+- **Cross-domain investigation**: Problem spans multiple domains (DB + API + Security)
+- **Parallel work**: Independent tasks that benefit from concurrent execution
+- **Orchestrator SDs**: 3+ children that can execute in parallel
+- **Complex SDs**: Require concurrent work across different specialties
+- **Specialist knowledge needed**: Agent lacks expertise in a specific aspect
+
+### Team Templates (Database-Driven)
+
+Pre-built templates in the `team_templates` table provide one-command team creation:
+
+| Template | Leader | Teammates | Use Case |
+|----------|--------|-----------|----------|
+| `rca-investigation` | RCA | DATABASE, API | Root cause analysis across layers |
+| `security-audit` | SECURITY | DATABASE, API, TESTING | Security audit with coverage |
+| `performance-review` | PERFORMANCE | DATABASE, API | Performance bottleneck analysis |
+
+**CLI usage**:
+```bash
+# List available templates
+node scripts/spawn-team.js --list
+
+# Spawn a team from template
+node scripts/spawn-team.js --template rca-investigation --task "Investigate connection timeout" --sd SD-PERF-001
+```
+
+**Programmatic usage** (from lib/team):
+```javascript
+import { buildTeamFromTemplate } from './lib/team/index.js';
+const { teamConfig, spawnPrompts, tasks } = await buildTeamFromTemplate({
+  templateId: 'rca-investigation',
+  taskContext: { description: 'Investigate...', sdId: 'SD-XXX-001' }
+});
+```
+
+### Knowledge Enrichment at Spawn Time
+
+When teammates are spawned, the knowledge enricher (`lib/team/knowledge-enricher.js`) automatically injects task-specific knowledge:
+
+1. **Agent Experience Factory (AEF)**: Category-based institutional knowledge (60% of token budget)
+2. **Semantic Search**: Task-description matching against `issue_patterns` table (40% of token budget)
+
+This means a DATABASE agent investigating "connection pooling" gets timeout-specific patterns ranked above generic DB patterns, without the spawner needing to know what patterns exist.
+
+### Dynamic Agent Creation
+
+When no existing agent fits the task, leaders can create new specialists at runtime:
+
+```javascript
+import { createDynamicAgent } from './lib/team/agent-creator.js';
+await createDynamicAgent({
+  code: 'REDIS_SPECIALIST',
+  name: 'Redis Cache Specialist',
+  description: 'Specialist in Redis caching patterns and optimization',
+  instructions: 'You are a Redis specialist. Analyze cache hit rates...',
+  capabilities: ['cache_analysis', 'redis_optimization'],
+  categoryMappings: ['performance', 'infrastructure']
+});
+```
+
+**Safeguards**:
+- Dynamic agents are **always teammates** (cannot create their own teams — depth limit = 1)
+- Dynamic agents get teammate tools only (Bash, Read, Write, SendMessage, TaskUpdate, TaskList, TaskGet)
+- Duplicate codes return the existing agent instead of creating a new one
+- The agent compiler generates a `.md` file from DB instructions (no `.partial` file needed)
+
+### Findings Feedback Loop
+
+After a team investigation completes, findings are captured for future teams:
+
+```javascript
+import { extractTeamFindings } from './lib/team/index.js';
+await extractTeamFindings({
+  teamName: 'rca-timeout-investigation',
+  findings: [{ agent: 'DATABASE', finding: 'Connection pool exhaustion', severity: 'high' }],
+  sdId: 'SD-PERF-001'
+});
+```
+
+This creates or updates `issue_patterns` records, which the knowledge enricher uses to seed future team members. Teams get smarter over time.
+
+### Role Boundaries
+
+- **Leader (any agent)**: Creates team, defines tasks, assigns work, synthesizes results. May also implement within their domain.
+- **Teammates**: Execute assigned tasks using specialist tools. Report findings via SendMessage. Check TaskList for additional work.
+- **Dynamic agents**: Always teammates. Created for specialized one-off tasks. Cannot spawn their own teams.
+
+### Handoff Format
+When teammates report results to the team lead:
+1. **SD Key**: Which child SD was completed (if applicable)
+2. **Status**: succeeded / failed / blocked
+3. **Summary**: Brief description of what was implemented (2-3 sentences)
+4. **Issues**: Any errors, blockers, or concerns encountered
+
+### Safety Constraints
+- **No assumptions**: Do not assume other teammates' state or progress
+- **Cite sources**: Reference specific files, commits, or DB records
+- **Request context**: Ask team lead for missing information rather than guessing
+- **Worktree isolation**: Each teammate works in its own git worktree
+- **No shared file edits**: Teammates must not modify files outside their worktree
+- **Depth limit**: Dynamic agents cannot spawn their own teams (prevents recursive team creation)
+
+### One-Command Setup
+After cloning the repository, ensure generated agent files exist:
+
+npm run agents:compile
+
+This generates all agent .md files from .partial.md sources + database metadata, with team collaboration and spawning protocols auto-injected.
+
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-11 9:11:45 AM
+**Last Generated**: 2026-02-12 8:24:59 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -854,7 +987,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-02-11*
+*Router generated from database: 2026-02-12*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 

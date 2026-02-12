@@ -156,7 +156,7 @@ The same key you added to `.env` needs to be added as a GitHub Secret so workflo
 
 ```bash
 gh secret set SUPABASE_SERVICE_ROLE_KEY
-# Paste: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUxMTkzNywiZXhwIjoyMDcyMDg3OTM3fQ.tYGfVTDQWQDje4ZPSl5UsprYK9J15Fa-XdGFVScrRZg
+# Paste your SUPABASE_SERVICE_ROLE_KEY value from .env (DO NOT commit real keys)
 ```
 
 **Immediate Impact**:
@@ -255,7 +255,7 @@ The service role key is in your local `.env` file, but GitHub workflows need it 
 ```bash
 # Add the service role key to GitHub
 gh secret set SUPABASE_SERVICE_ROLE_KEY
-# Paste: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUxMTkzNywiZXhwIjoyMDcyMDg3OTM3fQ.tYGfVTDQWQDje4ZPSl5UsprYK9J15Fa-XdGFVScrRZg
+# Paste your SUPABASE_SERVICE_ROLE_KEY value from .env (DO NOT commit real keys)
 # Press Enter
 
 # Verify

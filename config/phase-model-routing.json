@@ -22,7 +22,10 @@
       "DEPENDENCY": "opus",
       "PERFORMANCE": "opus",
       "UAT": "opus",
-      "SECURITY": "opus"
+      "SECURITY": "opus",
+      "RCA": "opus",
+      "REGRESSION": "opus",
+      "ORCHESTRATOR_CHILD": "sonnet"
     },
     "PLAN": {
       "_comment": "Planning phase - PRD quality determines EXEC success",
@@ -39,7 +42,10 @@
       "UAT": "opus",
       "SECURITY": "opus",
       "VALIDATION": "opus",
-      "STORIES": "opus"
+      "STORIES": "opus",
+      "RCA": "opus",
+      "REGRESSION": "opus",
+      "ORCHESTRATOR_CHILD": "sonnet"
     },
     "EXEC": {
       "_comment": "Execution phase - code quality is paramount",
@@ -56,7 +62,10 @@
       "UAT": "opus",
       "SECURITY": "opus",
       "VALIDATION": "opus",
-      "TESTING": "opus"
+      "TESTING": "opus",
+      "RCA": "opus",
+      "REGRESSION": "opus",
+      "ORCHESTRATOR_CHILD": "sonnet"
     }
   },
 
@@ -76,7 +85,10 @@
     "DEPENDENCY": "opus",
     "UAT": "opus",
     "VALIDATION": "opus",
-    "SECURITY": "opus"
+    "SECURITY": "opus",
+    "RCA": "opus",
+    "REGRESSION": "opus",
+    "ORCHESTRATOR_CHILD": "sonnet"
   },
 
   "categoryMappings": {
@@ -96,7 +108,9 @@
     "STORIES": ["protocol", "requirements"],
     "RISK": ["security", "protocol"],
     "QUICKFIX": ["code_structure", "testing", "build"],
-    "REGRESSION": ["refactoring", "testing", "code_structure"]
+    "REGRESSION": ["refactoring", "testing", "code_structure"],
+    "RCA": ["debugging", "infrastructure", "process", "cross_cutting"],
+    "ORCHESTRATOR_CHILD": ["protocol", "process", "code_structure"]
   },
 
   "tierDocumentation": {
