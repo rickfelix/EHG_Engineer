@@ -24,7 +24,7 @@ async function restartServer() {
     } else {
       console.log('ℹ️  No existing server processes found');
     }
-  } catch (error) {
+  } catch (_error) {
     console.log('ℹ️  No existing server processes found');
   }
 

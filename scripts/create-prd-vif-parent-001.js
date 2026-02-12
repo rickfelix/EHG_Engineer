@@ -380,8 +380,8 @@ Target: 70% reduction in idea-to-evaluation time (20min → 6min) while maintain
       progress: 50,
       created_by: 'PLAN (Claude Code)',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    sd_uuid: sdUuid, // FIX: Added for handoff validation
+      updated_at: new Date().toISOString(),
+      sd_uuid: sdUuid, // FIX: Added for handoff validation
     };
 
     // Insert PRD

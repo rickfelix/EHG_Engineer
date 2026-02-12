@@ -9,7 +9,6 @@
 import { OIVVerifier } from './OIVVerifier.js';
 import { validateGateResult } from '../gate-result-schema.js';
 import {
-  isValidatorNonApplicable,
   createSkippedResult,
   SkipReasonCode
 } from '../sd-type-applicability-policy.js';

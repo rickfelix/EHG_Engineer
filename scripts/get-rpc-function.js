@@ -56,7 +56,7 @@ async function getFunctionDef() {
       const content = fs.readFileSync(file, 'utf8');
       if (content.includes('get_progress_breakdown')) {
         console.log(`\n📄 ${path.basename(file)}:`);
-        console.log('='`.repeat(80));
+        console.log('='.repeat(80));
         
         // Extract function definition
         const funcMatch = content.match(/CREATE OR REPLACE FUNCTION get_progress_breakdown[\s\S]+?END;[\s\S]+?\$\$/);

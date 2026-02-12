@@ -5,7 +5,7 @@
  * Tests GitHub and Supabase connections for registered projects
  */
 
-import fs from 'fs';.promises;
+import fs from 'fs/promises';
 import path from 'path';
 import { exec  } from 'child_process';
 import { promisify  } from 'util';
@@ -37,15 +37,15 @@ class ConnectionTester {
       
       for (const appId in apps) {
         const app = apps[appId];
-        console.log(`\n═══════════════════════════════════════════════`);
+        console.log('\n═══════════════════════════════════════════════');
         console.log(`Testing: ${app.name} (${appId})`);
-        console.log(`═══════════════════════════════════════════════`);
+        console.log('═══════════════════════════════════════════════');
         
         await this.testGitHub(app);
         await this.testSupabase(app);
       }
       
-      console.log(`\n✅ Connection tests complete!\n`);
+      console.log('\n✅ Connection tests complete!\n');
       
     } catch (_error) {
       console.error('❌ Test failed:', error.message);
@@ -87,29 +87,29 @@ class ConnectionTester {
       const exists = await this.checkUrl(apiUrl);
       
       if (exists) {
-        console.log(`   ✅ Repository exists and is accessible`);
+        console.log('   ✅ Repository exists and is accessible');
         
         // Test 2: Check if we have git installed
         try {
           await execAsync('git --version');
-          console.log(`   ✅ Git is installed`);
+          console.log('   ✅ Git is installed');
           
           // Test 3: Check if we can list remote (if in a git repo)
           try {
             const { stdout } = await execAsync('git remote -v');
             if (stdout.includes(repoPath.split('/')[1])) {
-              console.log(`   ✅ Local repository connected to GitHub`);
+              console.log('   ✅ Local repository connected to GitHub');
             } else {
-              console.log(`   ⚠️  Local repository not connected to this GitHub repo`);
+              console.log('   ⚠️  Local repository not connected to this GitHub repo');
             }
           } catch {
-            console.log(`   ℹ️  Not in a git repository or no remote configured`);
+            console.log('   ℹ️  Not in a git repository or no remote configured');
           }
         } catch {
-          console.log(`   ⚠️  Git is not installed`);
+          console.log('   ⚠️  Git is not installed');
         }
       } else {
-        console.log(`   ❌ Repository not accessible (may be private or not exist)`);
+        console.log('   ❌ Repository not accessible (may be private or not exist)');
       }
     } catch (_error) {
       console.log(`   ❌ Could not verify repository: ${error.message}`);
@@ -124,7 +124,7 @@ class ConnectionTester {
         app.supabase_url === 'https://not-used.supabase.co' ||
         app.supabase_project_id === 'placeholder-project-id' ||
         app.supabase_project_id === 'not-used') {
-      console.log(`   ℹ️  Placeholder values detected - skipping Supabase test`);
+      console.log('   ℹ️  Placeholder values detected - skipping Supabase test');
       return;
     }
     
@@ -137,23 +137,23 @@ class ConnectionTester {
       try {
         const exists = await this.checkUrl(supabaseUrl);
         if (exists) {
-          console.log(`   ✅ Supabase project URL is accessible`);
+          console.log('   ✅ Supabase project URL is accessible');
           
           // Check if we have Supabase CLI
           try {
             await execAsync('supabase --version');
-            console.log(`   ✅ Supabase CLI is installed`);
+            console.log('   ✅ Supabase CLI is installed');
           } catch {
-            console.log(`   ⚠️  Supabase CLI not installed (optional)`);
+            console.log('   ⚠️  Supabase CLI not installed (optional)');
           }
         } else {
-          console.log(`   ⚠️  Supabase URL not responding (may require authentication)`);
+          console.log('   ⚠️  Supabase URL not responding (may require authentication)');
         }
       } catch (_error) {
         console.log(`   ⚠️  Could not verify Supabase: ${error.message}`);
       }
     } else {
-      console.log(`   ℹ️  No valid Supabase URL configured`);
+      console.log('   ℹ️  No valid Supabase URL configured');
     }
   }
 

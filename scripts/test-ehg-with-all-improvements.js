@@ -5,22 +5,22 @@
  * Tests the complete workflow with real code
  */
 
-import path from 'path';
+import _path from 'path';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 
 // Import all systems
-import { SharedIntelligenceHub, getInstance: getHub } from '../lib/agents/shared-intelligence-hub';
-import { IncrementalAnalyzer, getInstance: getAnalyzer } from '../lib/agents/incremental-analyzer';
+import { _SharedIntelligenceHub, getInstance as getHub } from '../lib/agents/shared-intelligence-hub';
+import { _IncrementalAnalyzer, getInstance as getAnalyzer } from '../lib/agents/incremental-analyzer';
 import AutoFixEngine from '../lib/agents/auto-fix-engine';
-import { LearningDatabase, getInstance: getDB } from '../lib/agents/learning-database';
+import { _LearningDatabase, getInstance as getDB } from '../lib/agents/learning-database';
 import PriorityEngine from '../lib/agents/priority-engine';
 
 // Import improved sub-agents
 import SecuritySubAgentV3 from '../lib/agents/security-sub-agent-v3';
 import PerformanceSubAgentV2 from '../lib/agents/performance-sub-agent-v2';
 import DesignSubAgent from '../lib/agents/design-sub-agent';
-import DatabaseSubAgent from '../lib/agents/database-sub-agent';
+import _DatabaseSubAgent from '../lib/agents/database-sub-agent';
 
 async function testOnEHGCodebase() {
   console.log('\n🚀 TESTING ALL IMPROVEMENTS ON EHG CODEBASE\n');
@@ -237,7 +237,7 @@ async function testOnEHGCodebase() {
   console.log(`   Total findings tracked: ${stats.totalFindings}`);
   console.log(`   Learned patterns: ${stats.learnedPatterns}`);
   console.log(`   False positive rate: ${stats.falsePositiveRate}`);
-  console.log(`   Common issues:`);
+  console.log('   Common issues:');
   stats.commonIssues.slice(0, 3).forEach(issue => {
     console.log(`   - ${issue.issue}: ${issue.count} occurrences`);
   });
@@ -245,7 +245,7 @@ async function testOnEHGCodebase() {
   // Get recommendations based on learning
   const recommendations = learningDB.getRecommendations(allFindings);
   if (recommendations.length > 0) {
-    console.log(`   Learning-based recommendations:`);
+    console.log('   Learning-based recommendations:');
     recommendations.slice(0, 2).forEach(rec => {
       console.log(`   - ${rec.title}: ${rec.description}`);
     });
@@ -291,19 +291,19 @@ async function testOnEHGCodebase() {
   console.log(`   Total effort: ${actionPlan.totalEffort} minutes`);
   
   if (actionPlan.immediate.length > 0) {
-    console.log(`\n   📋 Immediate Actions (< 10 min):`);
+    console.log('\n   📋 Immediate Actions (< 10 min):');
     actionPlan.immediate.forEach(task => {
       console.log(`   • ${task.type} in ${task.location}`);
       console.log(`     ${task.description}`);
       console.log(`     Effort: ${task.effort}, Impact: ${task.impact}`);
       if (task.autoFix) {
-        console.log(`     ✨ Auto-fix available`);
+        console.log('     ✨ Auto-fix available');
       }
     });
   }
   
   if (actionPlan.criticalPath.length > 0) {
-    console.log(`\n   🚨 Critical Path (blocks other fixes):`);
+    console.log('\n   🚨 Critical Path (blocks other fixes):');
     actionPlan.criticalPath.forEach(item => {
       console.log(`   • ${item.finding} (blocks ${item.blocks} other issues)`);
     });
@@ -312,7 +312,7 @@ async function testOnEHGCodebase() {
   // Get quick wins
   const quickWins = priorityEngine.getQuickWins(allFindings, 3);
   if (quickWins.length > 0) {
-    console.log(`\n   ⚡ Quick Wins (High ROI):`);
+    console.log('\n   ⚡ Quick Wins (High ROI):');
     quickWins.forEach(win => {
       console.log(`   • ${win.type} - ${win.effort} for ${win.impact}`);
       console.log(`     ROI: ${win.roi}x`);
@@ -340,7 +340,7 @@ async function testOnEHGCodebase() {
   console.log(`   ✅ Agent collaboration: ${collaborationOps.length} multi-agent concerns found`);
   console.log(`   ✅ Auto-fixes: ${fixes.length} ready to apply`);
   console.log(`   ✅ Learning: System getting smarter (${stats.analysisRuns} runs logged)`);
-  console.log(`   ✅ Prioritization: Clear action plan generated`);
+  console.log('   ✅ Prioritization: Clear action plan generated');
   
   if (criticalCount > 0) {
     console.log('\n⚠️  ACTION REQUIRED: ' + criticalCount + ' critical issues need immediate attention!');

@@ -121,6 +121,7 @@ export class TieredPricing {
   /**
    * Report usage to Stripe for metered billing
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async reportUsage(_record: UsageRecord): Promise<{ success: boolean; usageRecordId?: string }> {
     // In production, this would call Stripe usage_records API
     return {

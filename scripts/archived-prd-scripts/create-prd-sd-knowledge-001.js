@@ -43,9 +43,9 @@ const prd = {
     category: 'Infrastructure',
     priority: 'high',
 
-    executive_summary: `Implement automated knowledge retrieval pipeline to reduce PLAN→EXEC handoff time by 40-50% and increase PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating institutional knowledge flywheel with 578% ROI in 90 days.`,
+    executive_summary: 'Implement automated knowledge retrieval pipeline to reduce PLAN→EXEC handoff time by 40-50% and increase PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating institutional knowledge flywheel with 578% ROI in 90 days.',
 
-    business_context: // FIX: Renamed from problem_statement `Current PLAN phase spends 30-45 minutes per PRD on manual research, resulting in:
+    business_context: /* FIX: Renamed from problem_statement */ `Current PLAN phase spends 30-45 minutes per PRD on manual research, resulting in:
 - 70% PRD completeness (target: 85%)
 - 5-7 EXEC clarification questions per SD (high rework cost)
 - Lost institutional knowledge from past projects
@@ -54,8 +54,7 @@ const prd = {
 - 20% specifying deprecated technologies`,
 
     // FIX: objectives moved to metadata
-
-    // objectives: [
+    objectives: [
       'Reduce PLAN→EXEC handoff time from 45 min to ≤30 min (40-50% improvement)',
       'Increase PRD completeness score from 70% to ≥85%',
       'Reduce EXEC clarification questions from 7 to ≤3 per SD (57% reduction)',
@@ -65,7 +64,7 @@ const prd = {
     ],
 
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    user_stories: [
       {
         id: 'US-KR-001',
         title: 'As PLAN agent, I need to query retrospectives for similar past implementations',
@@ -170,7 +169,7 @@ const prd = {
     ],
 
   // FIX: Renamed from technical_architecture
-    system_architecture: // FIX: Renamed from technical_architecture `
+    system_architecture: `
 ## System Architecture
 
 ### Components
@@ -219,7 +218,7 @@ Log to prd_research_audit_log
 
     // FIX: database_changes moved to metadata
 
-    // database_changes: {
+    /* database_changes: {
       new_tables: [
         {
           name: 'tech_stack_references',
@@ -307,7 +306,7 @@ COMMENT ON COLUMN product_requirements_v2.research_confidence_score IS
 `
         }
       ]
-    },
+    }, */
 
     test_strategy: `
 ## Testing Tiers
@@ -361,18 +360,18 @@ COMMENT ON COLUMN product_requirements_v2.research_confidence_score IS
 
     // FIX: deployment_plan moved to metadata
 
-    // deployment_plan: `
+    /* deployment_plan: `
 ## Rollout Strategy
 
 ### Phase 1: Pilot (Days 1-14)
 - Enable for 3 low-risk SDs only
-- Feature flag: \`features.context7_enabled = false\` (local-only)
+- Feature flag: features.context7_enabled = false (local-only)
 - Monitor token usage, latency, confidence scores
 - Collect manual feedback from PLAN agent
 
 ### Phase 2: Limited Production (Days 15-45)
 - Enable Context7 for all new SDs
-- Feature flag: \`features.context7_enabled = true\`
+- Feature flag: features.context7_enabled = true
 - Maintain emergency kill switch
 - Weekly review of prd_research_audit_log
 
@@ -382,13 +381,13 @@ COMMENT ON COLUMN product_requirements_v2.research_confidence_score IS
 - Begin tracking 90-day outcome metrics (handoff time, clarifications, completeness)
 
 ## Monitoring KPIs
-Query \`prd_research_audit_log\` for:
-- PLAN→EXEC handoff time (target: 45 min → 25 min)
-- EXEC clarification count (target: 7 → 3 per SD)
-- PRD completeness score (target: 70% → 85%)
+Query prd_research_audit_log for:
+- PLAN to EXEC handoff time (target: 45 min to 25 min)
+- EXEC clarification count (target: 7 to 3 per SD)
+- PRD completeness score (target: 70% to 85%)
 - Circuit breaker trip frequency (target: <2/week)
 - Context7 query success rate (target: >80%)
-`,
+`, */
 
     risks: [
       {
@@ -416,7 +415,7 @@ Query \`prd_research_audit_log\` for:
 
     // FIX: success_metrics moved to metadata
 
-    // success_metrics: [
+    /* success_metrics: [
       {
         name: 'PLAN→EXEC Handoff Time',
         baseline: '45 min',
@@ -447,12 +446,12 @@ Query \`prd_research_audit_log\` for:
         target: '<2 per week',
         measurement: 'Query system_health state changes'
       }
-    ],
+    ], */
 
     created_by: 'PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

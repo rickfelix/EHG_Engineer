@@ -17,7 +17,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
-import { validateDecompositionGate, checkParentReadyForChildren } from './modules/decomposition-gate.js';
+import { validateDecompositionGate, _checkParentReadyForChildren } from './modules/decomposition-gate.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

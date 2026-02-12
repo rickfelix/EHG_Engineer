@@ -39,7 +39,7 @@ const PRD_REQUIRED_TYPES = [
 /**
  * SD types that do NOT require a PRD (database-first still applies but no PRD)
  */
-const PRD_EXEMPT_TYPES = [
+const _PRD_EXEMPT_TYPES = [
   'documentation',
   'docs',
   'infrastructure',

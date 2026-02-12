@@ -4,7 +4,6 @@
  */
 
 import { execSync } from 'child_process';
-import path from 'path';
 
 /**
  * Generate a branch name from SD ID and title

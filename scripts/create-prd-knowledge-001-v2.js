@@ -73,7 +73,7 @@ async function createPRD() {
     ],
 
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    user_stories: [
       {
         title: 'Retrospective Semantic Search',
         description: 'As PLAN agent, I need to query retrospectives for similar past implementations to inform PRD creation',
@@ -103,13 +103,13 @@ async function createPRD() {
 
     // FIX: database_changes moved to metadata
 
-    // database_changes: [
+    /* database_changes: [
       'CREATE TABLE tech_stack_references (cache for Context7 + retrospectives)',
       'CREATE TABLE prd_research_audit_log (telemetry for all operations)',
       'CREATE TABLE system_health (circuit breaker state tracking)',
       'ALTER TABLE user_stories ADD COLUMN implementation_context JSONB',
       'ALTER TABLE product_requirements_v2 ADD COLUMN research_confidence_score DECIMAL'
-    ]
+    ] */
   };
 
   // Get SD UUID for proper linkage (REQUIRED for handoffs)
@@ -133,7 +133,7 @@ async function createPRD() {
     version: '1.0.0',
     status: 'approved',
 
-    executive_summary: `Implement automated knowledge retrieval pipeline to reduce PLAN→EXEC handoff time by 40-50% and increase PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating institutional knowledge flywheel with 578% ROI in 90 days.`,
+    executive_summary: 'Implement automated knowledge retrieval pipeline to reduce PLAN→EXEC handoff time by 40-50% and increase PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating institutional knowledge flywheel with 578% ROI in 90 days.',
 
     functional_requirements: prdContent.functional_requirements,  // Array format (NOT string)
     technical_requirements: prdContent.technical_requirements,   // Array format (NOT string)

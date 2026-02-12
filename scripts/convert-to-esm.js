@@ -1,13 +1,14 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 #!/usr/bin/env node
 
 /**
  * Convert CommonJS scripts to ES Modules
  * Part of SD-LEO-001 implementation
  */
+
+import fs from 'fs/promises';
+import path from 'path';
+import { _fileURLToPath } from 'url';
+import { _dirname } from 'path';
 
 
 
@@ -103,7 +104,7 @@ async function main() {
       const result = await convertScript(scriptPath);
       results.push(result);
       console.log(`${result.changed ? '✅' : '⏭️'} ${result.file}: ${result.status}`);
-    } catch (error) {
+    } catch (_error) {
       console.log(`⏭️ ${script}: not found`);
     }
   }

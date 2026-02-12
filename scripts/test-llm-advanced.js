@@ -292,7 +292,7 @@ Provide your specialized analysis with 3-5 key findings and recommendations.`;
 
   const coordinatorPrompt = `Synthesize findings from specialized test analysis agents:
 
-${Object.entries(agentResults).map(([key, result]) =>
+${Object.entries(agentResults).map(([_key, result]) =>
   `### ${result.agent}\n${result.analysis || result.error}`
 ).join('\n\n')}
 

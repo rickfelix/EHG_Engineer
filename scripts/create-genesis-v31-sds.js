@@ -103,7 +103,7 @@ async function createGenesisSDs() {
     };
 
     try {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .upsert(record, { onConflict: 'id' })
         .select()

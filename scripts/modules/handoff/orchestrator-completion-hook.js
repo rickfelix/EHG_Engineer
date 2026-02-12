@@ -185,7 +185,7 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
  * @param {string} sessionStatus - Overall session status (SUCCESS, FAILED, CANCELLED)
  * @returns {Promise<{ json: object, digest: string, generation_time_ms: number } | null>}
  */
-export async function generateSessionSummary(supabase, orchestratorId, correlationId, sessionStatus = 'SUCCESS') {
+export async function generateSessionSummary(supabase, orchestratorId, correlationId, _sessionStatus = 'SUCCESS') {
   console.log('\n   📊 Generating session summary...');
 
   try {
@@ -395,7 +395,7 @@ const AUDIT_TIMEOUT_MS = 2000;
  */
 export async function runCompletenessAudit(supabase, orchestratorId, options = {}) {
   const startTime = Date.now();
-  const testPatterns = options.testPatterns || DEFAULT_TEST_PATTERNS;
+  const _testPatterns = options.testPatterns || DEFAULT_TEST_PATTERNS;
 
   const audit = {
     schema_version: AUDIT_SCHEMA_VERSION,
@@ -498,7 +498,7 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
       let hasTestFiles = false;
       const testFileMatches = [];
       try {
-        const sdKeyShort = child.sd_key?.replace(/^SD-/, '').toLowerCase().slice(0, 30) || '';
+        const _sdKeyShort = child.sd_key?.replace(/^SD-/, '').toLowerCase().slice(0, 30) || '';
         // Check for test files related to this child's commits
         const testFilesOutput = execSync(
           'git log --name-only --pretty=format: --diff-filter=A main...HEAD 2>/dev/null | sort -u',

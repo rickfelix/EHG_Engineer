@@ -11,7 +11,7 @@
  *   insights - Display historical learning metrics
  */
 
-import { buildLearningContext, formatContextForDisplay } from './context-builder.js';
+import { buildLearningContext } from './context-builder.js';
 import { reviewContext, formatReviewedContextForDisplay } from './reviewer.js';
 import { executeSDCreationWorkflow, executeApprovedImprovements, rollbackDecision } from './executor.js';
 import { buildInsightsReport, formatInsightsForDisplay } from './insights.js';

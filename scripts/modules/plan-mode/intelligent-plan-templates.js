@@ -12,7 +12,7 @@ import { getRecommendedSubAgents, getWorkflowIntensity } from './sd-context-load
  * Generate LEAD phase plan based on SD context
  */
 export function generateLeadPlan(sdContext) {
-  const { id, title, description, type, typeProfile, complexity, complexityProfile } = sdContext;
+  const { id, title, description, type, typeProfile, complexity } = sdContext;
   const intensity = getWorkflowIntensity(sdContext);
   const subAgents = getRecommendedSubAgents(sdContext);
 
@@ -56,7 +56,7 @@ ${complexity === 'complex' ? '- [ ] Consider decomposition into smaller SDs\n' :
   return sections.join('\n');
 }
 
-function generateLeadObjectives(type, typeProfile, intensity) {
+function generateLeadObjectives(type, _typeProfile, _intensity) {
   const objectives = {
     feature: `## Objective
 Validate the feature requirements and ensure readiness for PRD generation.
@@ -232,7 +232,7 @@ function generateLeadHandoff(type, typeProfile, intensity) {
 `;
 }
 
-function generateLeadCommands(type, intensity) {
+function generateLeadCommands(type, _intensity) {
   let commands = `## Commands
 \`\`\`bash
 npm run sd:status         # Check SD status
@@ -254,8 +254,8 @@ npm run sd:status         # Check SD status
  * Generate PLAN phase plan based on SD context
  */
 export function generatePlanPlan(sdContext) {
-  const { id, title, type, typeProfile, complexity, scope, keyChanges } = sdContext;
-  const intensity = getWorkflowIntensity(sdContext);
+  const { id, title, type, typeProfile, _complexity, scope, keyChanges } = sdContext;
+  const _intensity = getWorkflowIntensity(sdContext);
 
   const sections = [];
 
@@ -298,7 +298,7 @@ ${keyChanges.map(c => `- ${c}`).join('\n')}
   return sections.join('\n');
 }
 
-function generatePlanPRD(type, typeProfile, intensity) {
+function generatePlanPRD(type, typeProfile, _intensity) {
   if (!typeProfile?.requiresPRD) {
     return `## Planning (No PRD Required)
 - [ ] Document the approach briefly
@@ -402,8 +402,8 @@ node scripts/handoff.js plan-to-exec  # Transition to EXEC
  * Generate EXEC phase plan based on SD context
  */
 export function generateExecPlan(sdContext) {
-  const { id, title, type, typeProfile, complexity, keyChanges } = sdContext;
-  const intensity = getWorkflowIntensity(sdContext);
+  const { id, title, type, typeProfile, _complexity, keyChanges } = sdContext;
+  const _intensity = getWorkflowIntensity(sdContext);
 
   const sections = [];
 
@@ -432,7 +432,7 @@ export function generateExecPlan(sdContext) {
   return sections.join('\n');
 }
 
-function generateExecImplementation(type, typeProfile, keyChanges, intensity) {
+function generateExecImplementation(type, _typeProfile, keyChanges, _intensity) {
   let impl = '## Implementation\n\n';
 
   if (type === 'bug') {
@@ -522,7 +522,7 @@ ${testingLevel === 'comprehensive' ? '- [ ] Run E2E tests: `npm run test:e2e`\n-
 `;
 }
 
-function generateExecQuality(type, typeProfile) {
+function generateExecQuality(type, _typeProfile) {
   if (type === 'documentation') {
     return `## Quality
 - [ ] Spell check complete
@@ -539,7 +539,7 @@ function generateExecQuality(type, typeProfile) {
 `;
 }
 
-function generateExecCommit(type, typeProfile) {
+function generateExecCommit(type, _typeProfile) {
   const prefix = type === 'bug' ? 'fix' : type === 'documentation' ? 'docs' : 'feat';
 
   return `## Commit & PR
@@ -550,7 +550,7 @@ function generateExecCommit(type, typeProfile) {
 `;
 }
 
-function generateExecCommands(type) {
+function generateExecCommands(_type) {
   return `## Commands
 \`\`\`bash
 npm test                              # Run tests

@@ -33,13 +33,13 @@ const supabase = createClient(
   console.log(`   SD uuid_id: ${sdUuid}`);
 
 const prd = {
-  id: 'PRD-SUBAGENT-001' // FIX: Use id instead of prd_id,
+  id: 'PRD-SUBAGENT-001', // FIX: Use id instead of prd_id
   directive_id: 'SD-SUBAGENT-IMPROVE-001',
   title: 'Sub-Agent Performance Enhancement: Data-Driven Optimization Initiative',
   status: 'approved',
   version: '1.0',
 
-  executive_summary: `This PRD defines the technical approach for systematically improving all 13 LEO Protocol sub-agents based on data-driven retrospective analysis. Gap analysis identified 6 performance gaps across trigger accuracy (70-85% → >95%), result quality (75-90% → >90%), and context token efficiency (15K-30K → <10K per SD). Implementation follows 4-phase approach: Discovery (extract patterns from 17 retrospectives), Design (create enhancement specs for 13 sub-agents), Implementation (UPDATE database configurations), and Validation (measure improvements against baselines).`,
+  executive_summary: 'This PRD defines the technical approach for systematically improving all 13 LEO Protocol sub-agents based on data-driven retrospective analysis. Gap analysis identified 6 performance gaps across trigger accuracy (70-85% → >95%), result quality (75-90% → >90%), and context token efficiency (15K-30K → <10K per SD). Implementation follows 4-phase approach: Discovery (extract patterns from 17 retrospectives), Design (create enhancement specs for 13 sub-agents), Implementation (UPDATE database configurations), and Validation (measure improvements against baselines).',
 
   business_objectives: JSON.stringify([
     {
@@ -90,13 +90,13 @@ const prd = {
     phase_1_discovery: {
       duration: '2-3 hours',
       // FIX: objectives moved to metadata
-      // objectives: [
+      /* objectives: [
         'Extract patterns from 17 retrospective files',
         'Identify sub-agent performance issues (trigger failures, result quality, context inefficiency)',
         'Categorize findings by sub-agent code (TESTING, DATABASE, SECURITY, etc.)',
         'Generate baseline performance estimates',
         'Document gaps between current and target performance'
-      ],
+      ], */
       deliverables: [
         'Retrospective analysis script (analyze-retrospectives.js)',
         'Gap analysis report (JSON output with patterns, baselines, recommendations)',
@@ -113,12 +113,12 @@ const prd = {
       duration: '3-4 hours',
       // FIX: objectives moved to metadata
       // objectives: [
-        'Create enhancement specifications for all 13 sub-agents',
-        'Design improved personas with domain-specific context',
-        'Define new trigger keywords and patterns',
-        'Specify validation logic improvements',
-        'Design compression tier rules (TIER_1/2/3)'
-      ],
+      //   'Create enhancement specifications for all 13 sub-agents',
+      //   'Design improved personas with domain-specific context',
+      //   'Define new trigger keywords and patterns',
+      //   'Specify validation logic improvements',
+      //   'Design compression tier rules (TIER_1/2/3)'
+      // ],
       deliverables: [
         'Enhancement specs for 13 sub-agents (JSON format)',
         'Trigger keyword mappings (old vs new)',
@@ -136,12 +136,12 @@ const prd = {
       duration: '6.5 hours',
       // FIX: objectives moved to metadata
       // objectives: [
-        'Update all 13 sub-agents in leo_sub_agents table',
-        'Add new triggers to leo_sub_agent_triggers table',
-        'Update unified-handoff-system.js with enhanced trigger detection',
-        'Implement compression logic in sub-agent-compressor.js',
-        'Test UPDATE queries in transaction before committing'
-      ],
+      //   'Update all 13 sub-agents in leo_sub_agents table',
+      //   'Add new triggers to leo_sub_agent_triggers table',
+      //   'Update unified-handoff-system.js with enhanced trigger detection',
+      //   'Implement compression logic in sub-agent-compressor.js',
+      //   'Test UPDATE queries in transaction before committing'
+      // ],
       deliverables: [
         'Database UPDATE scripts for 13 sub-agents',
         'Enhanced unified-handoff-system.js with improved trigger detection',
@@ -161,12 +161,12 @@ const prd = {
       duration: '2-3 hours',
       // FIX: objectives moved to metadata
       // objectives: [
-        'Execute comprehensive testing suite',
-        'Measure trigger accuracy improvements',
-        'Measure result quality improvements',
-        'Measure token efficiency gains',
-        'Compare baseline vs enhanced performance'
-      ],
+      //   'Execute comprehensive testing suite',
+      //   'Measure trigger accuracy improvements',
+      //   'Measure result quality improvements',
+      //   'Measure token efficiency gains',
+      //   'Compare baseline vs enhanced performance'
+      // ],
       deliverables: [
         'Unit tests for trigger detection',
         'Integration tests for handoff workflows',
@@ -259,7 +259,7 @@ const prd = {
 
   // FIX: success_metrics moved to metadata
 
-  // success_metrics: JSON.stringify({
+  /* success_metrics: JSON.stringify({
     baseline: {
       trigger_accuracy: '70-85%',
       result_quality: '75-90%',
@@ -284,7 +284,7 @@ const prd = {
       execution_time: 'Measure wall-clock time from trigger to result storage',
       enforcement: 'Verify BLOCKING verdicts prevent handoff creation when conditions not met'
     }
-  }),
+  }), */
 
   testing_strategy: JSON.stringify({
     unit_tests: {
@@ -393,7 +393,7 @@ const prd = {
   ]),
 
   created_by: 'PLAN Agent (Technical Planning Agent)',
-  created_at: new Date().toISOString()
+  created_at: new Date().toISOString(),
   sd_uuid: sdUuid, // FIX: Added for handoff validation
 };
 

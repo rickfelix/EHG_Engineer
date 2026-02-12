@@ -25,7 +25,7 @@ import { getApplicableStreams, validateStreamCompletion } from '../modules/sd-ty
  * @param {Object} options - Options
  * @returns {Promise<Object>} Validation result
  */
-export async function validateGate15Coherence(sdId, supabase, options = {}) {
+export async function validateGate15Coherence(sdId, supabase, _options = {}) {
   console.log('\n🔗 GATE 1.5: Design-Architecture Coherence Check');
   console.log('='.repeat(60));
 

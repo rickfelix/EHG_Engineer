@@ -27,8 +27,6 @@ import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 import { transitionSdToPlan } from './state-transitions.js';
 import { displayPreHandoffWarnings } from './pre-handoff-warnings.js';
 import { createHandoffRetrospective } from './retrospective.js';
-import { autoGeneratePRDScript } from './prd-generation.js';
-import { autoApprovePRD } from '../../auto-approve-prd.js';
 
 // External verifier (will be lazy loaded)
 let LeadToPlanVerifier;

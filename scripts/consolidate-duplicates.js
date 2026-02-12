@@ -362,7 +362,7 @@ function main() {
     }
 
     if (c.uniqueContent.length > 0) {
-      console.log(`   ⚠️  Unique content found in duplicates:`);
+      console.log('   ⚠️  Unique content found in duplicates:');
       for (const uc of c.uniqueContent) {
         console.log(`      - ${uc.file}: ${uc.lines.length} unique lines`);
       }

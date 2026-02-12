@@ -13,7 +13,7 @@
 import { chromium } from 'playwright';
 
 // Domain imports
-import { BREAKPOINTS, WCAG_CRITERIA, OUTPUT_FILES } from './config.js';
+import { BREAKPOINTS, WCAG_CRITERIA, _OUTPUT_FILES } from './config.js';
 import {
   analyzeProcessFlow,
   analyzeConsistency,
@@ -23,7 +23,7 @@ import {
   testInteractions
 } from './analyzers.js';
 import { generateRecommendations } from './recommendations.js';
-import { saveReport, generateHTMLReport, generateMarkdownSummary } from './report-generators.js';
+import { saveReport, _generateHTMLReport, _generateMarkdownSummary } from './report-generators.js';
 
 /**
  * PlaywrightDesignAnalyzer class

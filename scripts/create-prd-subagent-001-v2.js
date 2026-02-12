@@ -41,11 +41,11 @@ const prd = {
   category: 'LEO Protocol Enhancement',
   priority: 'high',
 
-  executive_summary: `This PRD defines the technical approach for systematically improving all 13 LEO Protocol sub-agents based on data-driven retrospective analysis. Gap analysis identified 6 performance gaps across trigger accuracy (70-85% → >95%), result quality (75-90% → >90%), and context token efficiency (15K-30K → <10K per SD). Implementation follows 4-phase approach: Discovery (extract patterns from 17 retrospectives), Design (create enhancement specs for 13 sub-agents), Implementation (UPDATE database configurations), and Validation (measure improvements against baselines). CRITICAL ENHANCEMENTS: Infrastructure Discovery sub-agent (prevent 140h duplicate work), Testing enforcement (prevent 30-60 min gaps), CI/CD verification (prevent broken builds).`,
+  executive_summary: 'This PRD defines the technical approach for systematically improving all 13 LEO Protocol sub-agents based on data-driven retrospective analysis. Gap analysis identified 6 performance gaps across trigger accuracy (70-85% → >95%), result quality (75-90% → >90%), and context token efficiency (15K-30K → <10K per SD). Implementation follows 4-phase approach: Discovery (extract patterns from 17 retrospectives), Design (create enhancement specs for 13 sub-agents), Implementation (UPDATE database configurations), and Validation (measure improvements against baselines). CRITICAL ENHANCEMENTS: Infrastructure Discovery sub-agent (prevent 140h duplicate work), Testing enforcement (prevent 30-60 min gaps), CI/CD verification (prevent broken builds).',
 
-  business_context: `Sub-agents are specialists within the LEO Protocol that provide domain expertise (Security, Database, Testing, Performance, etc.). Current performance analysis reveals significant gaps: trigger detection accuracy 70-85% (false positives and missed activations), result quality scores 75-90% (inconsistent recommendations), context token usage 15K-30K per SD (causing bloat). Retrospectives from SD-UAT-002, SD-LEO-002, SD-BACKEND-001 document specific failures: missing infrastructure audits (140h waste), testing not enforced (30-60 min gaps), CI/CD verification missing. User demand is high (8/10) for systematic improvement. This initiative delivers exceptional ROI: Infrastructure Discovery alone prevents 50-140h duplicate work per SD (140:2 ratio).`,
+  business_context: 'Sub-agents are specialists within the LEO Protocol that provide domain expertise (Security, Database, Testing, Performance, etc.). Current performance analysis reveals significant gaps: trigger detection accuracy 70-85% (false positives and missed activations), result quality scores 75-90% (inconsistent recommendations), context token usage 15K-30K per SD (causing bloat). Retrospectives from SD-UAT-002, SD-LEO-002, SD-BACKEND-001 document specific failures: missing infrastructure audits (140h waste), testing not enforced (30-60 min gaps), CI/CD verification missing. User demand is high (8/10) for systematic improvement. This initiative delivers exceptional ROI: Infrastructure Discovery alone prevents 50-140h duplicate work per SD (140:2 ratio).',
 
-  technical_context: `LEO Protocol architecture: Database-first with 13 active sub-agents in leo_sub_agents table (DOCMON, UAT, GITHUB, RETRO, DESIGN, RESEARCH, STORIES, FINANCIAL_ANALYTICS, SECURITY, DATABASE, TESTING, PERFORMANCE, VALIDATION). Existing infrastructure: unified-handoff-system.js (trigger detection), sub-agent-compressor.js (result compression), sub_agent_execution_results table (performance tracking). Database Architect verification confirms schema supports all enhancements via UPDATE statements (zero migrations). Implementation approach: UPDATE-only to existing records, JSONB metadata for custom fields, new triggers in leo_sub_agent_triggers table, enhanced logic in existing scripts. Rollback strategy: Store original values, create revert script, test in transaction before commit.`,
+  technical_context: 'LEO Protocol architecture: Database-first with 13 active sub-agents in leo_sub_agents table (DOCMON, UAT, GITHUB, RETRO, DESIGN, RESEARCH, STORIES, FINANCIAL_ANALYTICS, SECURITY, DATABASE, TESTING, PERFORMANCE, VALIDATION). Existing infrastructure: unified-handoff-system.js (trigger detection), sub-agent-compressor.js (result compression), sub_agent_execution_results table (performance tracking). Database Architect verification confirms schema supports all enhancements via UPDATE statements (zero migrations). Implementation approach: UPDATE-only to existing records, JSONB metadata for custom fields, new triggers in leo_sub_agent_triggers table, enhanced logic in existing scripts. Rollback strategy: Store original values, create revert script, test in transaction before commit.',
 
   functional_requirements: [
     {
@@ -103,7 +103,7 @@ const prd = {
       phase: 'Discovery',
       duration: '2-3 hours',
       // FIX: objectives moved to metadata
-      // objectives: [
+      objectives: [
         'Parse 17 retrospective files for sub-agent performance patterns',
         'Extract mentions of trigger failures, result quality issues, context inefficiency',
         'Categorize findings by sub-agent code',
@@ -122,7 +122,7 @@ const prd = {
       phase: 'Design',
       duration: '3-4 hours',
       // FIX: objectives moved to metadata
-      // objectives: [
+      objectives: [
         'Create enhancement specifications for 13 sub-agents',
         'Design improved personas with domain-specific context',
         'Define new trigger keywords (20-30 additions)',
@@ -141,7 +141,7 @@ const prd = {
       phase: 'Implementation',
       duration: '6.5 hours',
       // FIX: objectives moved to metadata
-      // objectives: [
+      objectives: [
         'UPDATE all 13 sub-agents in leo_sub_agents table (descriptions, metadata)',
         'INSERT 20-30 new triggers in leo_sub_agent_triggers table',
         'Enhance unified-handoff-system.js trigger detection logic',
@@ -161,7 +161,7 @@ const prd = {
       phase: 'Validation',
       duration: '2-3 hours',
       // FIX: objectives moved to metadata
-      // objectives: [
+      objectives: [
         'Execute comprehensive testing suite (unit, integration, E2E)',
         'Measure trigger accuracy improvements (baseline vs enhanced)',
         'Measure result quality improvements',
@@ -229,7 +229,7 @@ const prd = {
     { name: 'sub-agent-compressor.js', type: 'CODE', status: 'AVAILABLE', notes: 'Found in lib/context/' }
   ],
 
-  implementation_approach: `4-Phase Approach: (1) Discovery: Extract patterns from 17 retrospectives using automated parsing script, identify gaps by sub-agent, calculate baseline metrics; (2) Design: Create enhancement specs for 13 sub-agents, design improved personas, define new triggers (20-30), specify compression tiers (TIER_1/2/3); (3) Implementation: UPDATE database records (zero migrations), enhance trigger detection in unified-handoff-system.js, implement compression in sub-agent-compressor.js, create rollback script; (4) Validation: Execute unit/integration/E2E tests, measure improvements, verify all acceptance criteria met. Priority order: Infrastructure Discovery (TOP ROI), Testing Enforcement, CI/CD Verification, then remaining 10 sub-agents. Total duration: 14-16.5 hours over 4 days (4h/day sessions).`,
+  implementation_approach: '4-Phase Approach: (1) Discovery: Extract patterns from 17 retrospectives using automated parsing script, identify gaps by sub-agent, calculate baseline metrics; (2) Design: Create enhancement specs for 13 sub-agents, design improved personas, define new triggers (20-30), specify compression tiers (TIER_1/2/3); (3) Implementation: UPDATE database records (zero migrations), enhance trigger detection in unified-handoff-system.js, implement compression in sub-agent-compressor.js, create rollback script; (4) Validation: Execute unit/integration/E2E tests, measure improvements, verify all acceptance criteria met. Priority order: Infrastructure Discovery (TOP ROI), Testing Enforcement, CI/CD Verification, then remaining 10 sub-agents. Total duration: 14-16.5 hours over 4 days (4h/day sessions).',
 
   plan_checklist: [
     { item: 'Query sd_backlog_map', status: 'completed' },
@@ -264,7 +264,7 @@ const prd = {
   created_by: 'PLAN Agent (Technical Planning Agent)',
   created_at: new Date().toISOString(),
   planned_start: new Date().toISOString(),
-  planned_end: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString() // +4 days
+  planned_end: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(), // +4 days
   sd_uuid: sdUuid, // FIX: Added for handoff validation
 };
 

@@ -65,7 +65,7 @@ async function createPRD() {
 /**
  * Print PRD summary
  */
-function printSummary(prdData) {
+function printSummary(_prdData) {
   printSeparator('PRD SUMMARY');
   console.log('   SD: SD-041C');
   console.log('   Title: AI-Powered Documentation Generator');

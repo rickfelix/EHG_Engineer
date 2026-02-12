@@ -39,7 +39,7 @@ const prdContent = {
     id: 'PRD-SD-UAT-2025-005',
     title: 'Cross-Browser Compatibility Standardization',
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    /* user_stories: [
       {
         id: 'US-BROWSER-001',
         title: 'Fix Browser-Specific CSS Issues',
@@ -140,7 +140,7 @@ const prdContent = {
           'Regular compatibility audits'
         ]
       }
-    ],
+    ], */
     technical_requirements: {
       css: [
         'Add CSS autoprefixer to build process',
@@ -173,12 +173,12 @@ const prdContent = {
     },
     // FIX: success_metrics moved to metadata
     // success_metrics: {
-      compatibility: 'Feature parity across all browsers',
-      testing: 'Consistent test results in Chrome/Firefox',
-      performance: 'Similar performance across browsers',
-      errors: 'Zero browser-specific errors',
-      coverage: '100% of features work in supported browsers'
-    }
+    //   compatibility: 'Feature parity across all browsers',
+    //   testing: 'Consistent test results in Chrome/Firefox',
+    //   performance: 'Similar performance across browsers',
+    //   errors: 'Zero browser-specific errors',
+    //   coverage: '100% of features work in supported browsers'
+    // }
   };
 
   const prd = {
@@ -204,8 +204,8 @@ const prdContent = {
     },
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {
@@ -217,7 +217,7 @@ const prdContent = {
       .single();
 
     if (existing) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .update(prd)
         .eq('directive_id', 'SD-UAT-2025-005')
@@ -227,7 +227,7 @@ const prdContent = {
       if (error) throw error;
       console.log('✅ PRD updated successfully!');
     } else {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .insert(prd)
         .select()

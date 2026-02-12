@@ -10,13 +10,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 
 /** Feature flag */
 const GATE_ENABLED = process.env.GATE_INTEGRATION_CONTRACT_ENABLED !== 'false';
-
-/** Timeout for verification operations */
-const VERIFY_TIMEOUT_MS = parseInt(process.env.INTEGRATION_CONTRACT_VERIFY_TIMEOUT_MS || '15000', 10);
 
 /**
  * Check if an SD type is code-producing (needs integration verification).

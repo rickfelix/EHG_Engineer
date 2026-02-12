@@ -9,7 +9,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { validatePRDForHandoff } from '../prd-quality-validation.js';
 import dotenv from 'dotenv';
 dotenv.config();
 

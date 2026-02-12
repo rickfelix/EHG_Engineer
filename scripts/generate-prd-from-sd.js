@@ -143,7 +143,7 @@ async function generatePRD(sdId) {
   // Generate content
   const items = payload.items || [];
   const contentMd = generatePRDMarkdown(payload);
-  const contentJson = {
+  const _contentJson = {
     sd_id: payload.sd_id,
     sd_title: payload.sd_title,
     metadata: {
@@ -207,8 +207,8 @@ ${extras}
       evidence_appendix: evidenceAppendix,  // New field
       backlog_items: payload.items || [],  // New field
       created_by: 'PLAN',
-      phase: 'planning'
-    sd_uuid: sdUuid, // FIX: Added for handoff validation
+      phase: 'planning',
+      sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select()
     .single();
@@ -233,14 +233,14 @@ ${extras}
       .single();
     
     if (updateError) {
-      console.error(`❌ Error updating PRD:`, updateError.message);
+      console.error('❌ Error updating PRD:', updateError.message);
       return null;
     }
     
     console.log(`✅ Updated PRD-${sdId}`);
     return updatedPrd;
   } else if (prdError) {
-    console.error(`❌ Error creating PRD:`, prdError.message);
+    console.error('❌ Error creating PRD:', prdError.message);
     return null;
   }
   

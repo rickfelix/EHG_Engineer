@@ -309,7 +309,7 @@ Examples:
   const autoDetect = args.includes('--auto');
   const preview = args.includes('--preview');
 
-  console.log(`\nPlan-to-Children Enricher`);
+  console.log('\nPlan-to-Children Enricher');
   console.log('='.repeat(50));
   console.log(`Plan: ${planPath}`);
   console.log(`Parent SD: ${parentSdId}`);

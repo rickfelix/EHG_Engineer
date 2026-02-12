@@ -84,7 +84,7 @@ const prdContent = {
     ],
 
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    user_stories: [
       {
         title: 'User Profile Management',
         description: 'As a user, I want to update my profile information so that my account details are current and accurate',

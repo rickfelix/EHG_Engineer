@@ -19,7 +19,7 @@ import {
   AegisEnforcer,
   AegisRuleLoader,
   AegisViolationRecorder,
-  AEGIS_CONSTITUTIONS
+  _AEGIS_CONSTITUTIONS
 } from '../lib/governance/aegis/index.js';
 
 // Test results tracking

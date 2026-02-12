@@ -45,12 +45,12 @@ function scanDir(dir, results = []) {
           if (lines > threshold) {
             results.push({ path: fullPath, lines });
           }
-        } catch (e) {
+        } catch (_e) {
           // Skip unreadable files
         }
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Skip unreadable directories
   }
   return results;

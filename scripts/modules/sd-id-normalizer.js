@@ -223,7 +223,7 @@ export async function safeSDUpdate(supabase, sdId, updateData) {
   };
 
   // Perform update with canonical ID
-  const { data, error, count } = await supabase
+  const { data, error, count: _count } = await supabase
     .from('strategic_directives_v2')
     .update(dataWithTimestamp)
     .eq('id', normalization.canonicalId)

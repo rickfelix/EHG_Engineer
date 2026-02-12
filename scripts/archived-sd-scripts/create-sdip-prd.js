@@ -4,7 +4,7 @@
  * PLAN Phase - Technical Requirements Definition
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 
@@ -371,8 +371,8 @@ const prdData = {
       complexity: 'high',
       innovation_level: 'high',
       chairman_priority: 'critical'
-    }
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    },
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

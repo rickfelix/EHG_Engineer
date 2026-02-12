@@ -37,7 +37,7 @@ async function executeMigration() {
     process.exit(1);
   }
 
-  const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+  const _migrationSql = fs.readFileSync(migrationPath, 'utf8');
 
   // Split into individual statements (separated by semicolons, but skip ones inside functions)
   // For simplicity, we'll execute key parts manually

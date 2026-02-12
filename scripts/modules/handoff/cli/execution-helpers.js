@@ -9,7 +9,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
-import { createTaskHydrator, selectTrack } from '../../../../lib/tasks/index.js';
+import { createTaskHydrator } from '../../../../lib/tasks/index.js';
 
 /**
  * Check bypass rate limits and log to audit

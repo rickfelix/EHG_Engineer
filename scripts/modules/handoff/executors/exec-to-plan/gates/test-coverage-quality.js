@@ -147,7 +147,7 @@ export function createTestCoverageQualityGate(_supabase) {
           max_score: 100,
           issues: [],
           warnings: [
-            `Coverage file not found: coverage/coverage-summary.json`,
+            'Coverage file not found: coverage/coverage-summary.json',
             'Generate coverage by running: npx vitest run --coverage'
           ],
           details: {
@@ -159,7 +159,7 @@ export function createTestCoverageQualityGate(_supabase) {
             evaluated_files_count: 0,
             zero_coverage_files: [],
             below_threshold_files: [],
-            summary: `Coverage file missing at coverage/coverage-summary.json. Run: npx vitest run --coverage`
+            summary: 'Coverage file missing at coverage/coverage-summary.json. Run: npx vitest run --coverage'
           }
         };
       }
@@ -248,7 +248,7 @@ export function createTestCoverageQualityGate(_supabase) {
       // 6. Handle no coverage matches
       if (evaluatedCount === 0 && codeChanges.codeFileCount > 0) {
         const sampleChanged = codeChanges.codeFiles.slice(0, 3);
-        console.log(`   ⚠️  No changed files matched coverage entries`);
+        console.log('   ⚠️  No changed files matched coverage entries');
         console.log(`   💡 Sample changed files: ${sampleChanged.join(', ')}`);
         console.log(`   💡 Coverage entries: ${coverageKeys.length} keys available`);
         return {
@@ -312,7 +312,7 @@ export function createTestCoverageQualityGate(_supabase) {
       }
 
       if (isBlocking) {
-        console.log(`   ❌ BLOCKING: Coverage issues detected`);
+        console.log('   ❌ BLOCKING: Coverage issues detected');
         for (const msg of messages) console.log(`      • ${msg}`);
         return {
           passed: false,
@@ -333,7 +333,7 @@ export function createTestCoverageQualityGate(_supabase) {
           }
         };
       } else {
-        console.log(`   ⚠️  ADVISORY: Coverage issues detected (non-blocking)`);
+        console.log('   ⚠️  ADVISORY: Coverage issues detected (non-blocking)');
         for (const msg of messages) console.log(`      • ${msg}`);
         return {
           passed: true,

@@ -325,7 +325,7 @@ function synthesizeRootCause(explorations, error) {
 /**
  * Apply "5 Whys" analysis
  */
-function applyFiveWhys(finding, error) {
+function applyFiveWhys(finding, _error) {
   const whys = [
     { why: 'Why did this error occur?', answer: finding.finding },
     { why: 'Why was this condition present?', answer: 'Under investigation' },
@@ -422,7 +422,7 @@ async function checkKnownPatterns(error) {
         return pattern;
       }
     }
-  } catch (err) {
+  } catch (_err) {
     // Ignore errors
   }
 
@@ -444,7 +444,7 @@ async function logAnalysis(analysis) {
       .eq('status', 'failed')
       .order('created_at', { ascending: false })
       .limit(1);
-  } catch (err) {
+  } catch (_err) {
     // Ignore logging errors
   }
 }
@@ -541,7 +541,7 @@ if (process.argv[1].endsWith('root-cause-resolver.js')) {
     }
 
     console.log('\nExplorations:');
-    for (const [key, exp] of Object.entries(analysis.explorations)) {
+    for (const [_key, exp] of Object.entries(analysis.explorations)) {
       console.log(`  ${exp.name}: ${exp.findings.length} findings`);
       for (const f of exp.findings.slice(0, 2)) {
         console.log(`    - ${f.finding}`);

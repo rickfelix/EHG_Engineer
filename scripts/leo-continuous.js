@@ -46,8 +46,8 @@ import { classifySD } from '../lib/testing/ui-touching-classifier.js';
 
 // Import continuation state management (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
 import {
-  readState as readContinuationState,
-  writeState as writeContinuationState,
+  readState as _readContinuationState,
+  writeState as _writeContinuationState,
   markComplete,
   addPendingCommands,
   removePendingCommand
@@ -57,7 +57,7 @@ import {
 import { spawn } from 'child_process';
 
 const { mapHierarchy, getDepthFirstOrder, getNextIncomplete, isHierarchyComplete, getHierarchyStats } = hierarchyMapper;
-const { checkpoint, reloadProtocol, validatePhase } = checkpointSystem;
+const { checkpoint, reloadProtocol, _validatePhase } = checkpointSystem;
 const { analyzeFailure, attemptFix, skipAndLog } = rootCauseResolver;
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
@@ -337,7 +337,7 @@ async function triggerPostCompletionSequence(sd) {
 /**
  * Get next parent SD from baseline
  */
-async function getNextParentSD(afterSdId = null) {
+async function getNextParentSD(_afterSdId = null) {
   // First, check for any SD marked as working_on
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data: workingOn } = await supabase
@@ -598,7 +598,7 @@ async function logExecution(parentSdId, childSdId, phase, status, errorMessage =
         error_message: errorMessage,
         duration_seconds: duration
       });
-  } catch (err) {
+  } catch (_err) {
     // Ignore logging errors
   }
 }

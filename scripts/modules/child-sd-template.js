@@ -104,7 +104,7 @@ export function inferSDType(title, scope = '', description = '') {
   // Find highest scoring type
   const sortedTypes = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   const [topType, topScore] = sortedTypes[0];
-  const [secondType, secondScore] = sortedTypes[1] || ['none', 0];
+  const [_secondType, secondScore] = sortedTypes[1] || ['none', 0];
 
   // Calculate confidence (difference between top two scores)
   const confidence = topScore > 0 ? Math.min(95, 60 + (topScore - secondScore) * 15) : 50;

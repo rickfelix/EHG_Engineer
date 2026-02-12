@@ -105,7 +105,7 @@ class ValidationResults {
 /**
  * Validate database connectivity
  */
-async function validateDatabase(results, options) {
+async function validateDatabase(results, _options) {
   console.log('\n   Database Connectivity\n');
 
   try {
@@ -141,7 +141,7 @@ async function validateDatabase(results, options) {
 /**
  * Validate script files exist
  */
-function validateScripts(results, options) {
+function validateScripts(results, _options) {
   console.log('\n   Script Files\n');
 
   const scripts = [
@@ -174,7 +174,7 @@ function validateScripts(results, options) {
 /**
  * Validate script execution
  */
-function validateExecution(results, options) {
+function validateExecution(results, _options) {
   console.log('\n   Script Execution\n');
 
   const tests = [
@@ -204,7 +204,7 @@ function validateExecution(results, options) {
 /**
  * Validate documentation
  */
-function validateDocumentation(results, options) {
+function validateDocumentation(results, _options) {
   console.log('\n   Documentation\n');
 
   const docs = [
@@ -246,9 +246,9 @@ async function validateLLM(results, options) {
 
   // Check LLM scripts can be loaded
   try {
-    const { help } = await import('./test-llm-core.js').catch(() => ({}));
+    const { _help } = await import('./test-llm-core.js').catch(() => ({}));
     results.pass('LLM.core', 'Module loads');
-  } catch (err) {
+  } catch (_err) {
     results.warn('LLM.core', 'Could not verify module');
   }
 }
@@ -256,7 +256,7 @@ async function validateLLM(results, options) {
 /**
  * Validate CI/CD integration
  */
-function validateCICD(results, options) {
+function validateCICD(results, _options) {
   console.log('\n   CI/CD Integration\n');
 
   const workflowPath = path.join(PROJECT_ROOT, '.github/workflows/test-coverage.yml');
@@ -277,7 +277,7 @@ function validateCICD(results, options) {
 /**
  * Generate validation report
  */
-function generateReport(results, options) {
+function generateReport(results, _options) {
   const summary = results.getSummary();
 
   const report = {

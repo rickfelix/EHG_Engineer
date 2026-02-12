@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import path from 'path';
+import _path from 'path';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
 
 // Load environment variables

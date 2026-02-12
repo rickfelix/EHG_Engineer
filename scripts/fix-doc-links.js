@@ -71,7 +71,7 @@ function findMdFilesRecursive(dir, results) {
         });
       }
     }
-  } catch (e) { /* skip */ }
+  } catch (_e) { /* skip */ }
 }
 
 function isExternalLink(href) {
@@ -313,7 +313,7 @@ function analyzeGitHistory() {
         }
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Git not available or error - skip this strategy
   }
 
@@ -476,8 +476,8 @@ function generateFixes(brokenLinks, files) {
       }
     } else if (link.type === 'directory') {
       // Check for README.md or suggest creating one
-      const readmePath = path.join(ROOT_DIR, link.targetPath, 'README.md');
-      const indexPath = path.join(ROOT_DIR, link.targetPath, 'index.md');
+      const _readmePath = path.join(ROOT_DIR, link.targetPath, 'README.md');
+      const _indexPath = path.join(ROOT_DIR, link.targetPath, 'index.md');
 
       // Look for any .md file in the directory
       const dirPath = path.join(ROOT_DIR, link.targetPath);
@@ -491,7 +491,7 @@ function generateFixes(brokenLinks, files) {
             fix.strategy = 'directory_first_file';
             fix.note = `Directory has ${dirFiles.length} .md files, linking to first one`;
           }
-        } catch (e) { /* skip */ }
+        } catch (_e) { /* skip */ }
       }
     }
 
@@ -536,7 +536,7 @@ function applyFixes(fixes, minConfidence = DEFAULT_MIN_CONFIDENCE, dryRun = fals
   }
 
   if (dryRun) {
-    console.log(`\n🔍 DRY RUN - No changes will be made\n`);
+    console.log('\n🔍 DRY RUN - No changes will be made\n');
   }
 
   // Apply changes to each file
@@ -606,7 +606,7 @@ function saveManifest(data) {
   console.log(`\n📝 Manifest saved: ${path.relative(ROOT_DIR, MANIFEST_PATH)}`);
 }
 
-function loadManifest() {
+function _loadManifest() {
   if (!fs.existsSync(MANIFEST_PATH)) {
     return null;
   }
@@ -635,13 +635,13 @@ function printSummary(fixes, patterns) {
   console.log('📊 FIX ANALYSIS SUMMARY');
   console.log('='.repeat(60));
 
-  console.log(`\n🎯 By Confidence Level:`);
+  console.log('\n🎯 By Confidence Level:');
   console.log(`   High (≥90%):    ${byConfidence.high.length} links - Auto-fix recommended`);
   console.log(`   Medium (70-89%): ${byConfidence.medium.length} links - Auto-fix with review`);
   console.log(`   Low (50-69%):   ${byConfidence.low.length} links - Manual review suggested`);
   console.log(`   No match (<50%): ${byConfidence.manual.length} links - Manual fix required`);
 
-  console.log(`\n🔧 By Strategy:`);
+  console.log('\n🔧 By Strategy:');
   for (const [strategy, count] of Object.entries(byStrategy)) {
     const label = {
       'git_rename': 'Git rename history',
@@ -655,7 +655,7 @@ function printSummary(fixes, patterns) {
   }
 
   if (patterns.length > 0) {
-    console.log(`\n🔄 Detected Patterns:`);
+    console.log('\n🔄 Detected Patterns:');
     for (const pattern of patterns) {
       console.log(`   ${pattern.oldPath}/ → ${pattern.newPath}/`);
       console.log(`      Affects ${pattern.affectedLinks} links (${pattern.confidence}% confidence)`);
@@ -690,12 +690,12 @@ function printManualReviewList(fixes) {
     for (const fix of fileFixes.slice(0, 5)) {
       console.log(`   ❌ [${fix.linkText.substring(0, 30)}...](${fix.originalHref})`);
       if (fix.candidates && fix.candidates.length > 0) {
-        console.log(`      Possible matches:`);
+        console.log('      Possible matches:');
         for (const c of fix.candidates.slice(0, 2)) {
           console.log(`        - ${c.path || c.anchor} (${c.confidence}%)`);
         }
       } else {
-        console.log(`      No candidates found - may be deleted`);
+        console.log('      No candidates found - may be deleted');
       }
     }
     if (fileFixes.length > 5) {
@@ -754,11 +754,11 @@ function main() {
       fixes: fixes
     });
 
-    console.log(`\n💡 Next steps:`);
+    console.log('\n💡 Next steps:');
     console.log(`   node scripts/fix-doc-links.js --apply              # Apply fixes ≥${DEFAULT_MIN_CONFIDENCE}% confidence`);
-    console.log(`   node scripts/fix-doc-links.js --apply --min-confidence=90  # Higher threshold`);
-    console.log(`   node scripts/fix-doc-links.js --dry-run --apply    # Preview changes`);
-    console.log(`   node scripts/fix-doc-links.js --report             # See manual review list`);
+    console.log('   node scripts/fix-doc-links.js --apply --min-confidence=90  # Higher threshold');
+    console.log('   node scripts/fix-doc-links.js --dry-run --apply    # Preview changes');
+    console.log('   node scripts/fix-doc-links.js --report             # See manual review list');
   }
 
   if (apply) {

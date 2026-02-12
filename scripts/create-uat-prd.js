@@ -39,7 +39,7 @@ const prdContent = {
     id: 'PRD-SD-UAT-2025-001',
     title: 'Critical UAT Test Suite Remediation',
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    /* user_stories: [
       {
         id: 'US-UAT-001',
         title: 'Fix Authentication System Failures',
@@ -134,7 +134,7 @@ const prdContent = {
           'Optimize parallel execution'
         ]
       }
-    ],
+    ], */
     technical_requirements: {
       authentication: [
         'Fix login form component initialization',
@@ -150,11 +150,11 @@ const prdContent = {
       ],
       // FIX: ui_components moved to metadata
       // ui_components: [
-        'Add proper loading states',
-        'Fix component lifecycle issues',
-        'Resolve race conditions in data loading',
-        'Implement error boundaries'
-      ],
+      //   'Add proper loading states',
+      //   'Fix component lifecycle issues',
+      //   'Resolve race conditions in data loading',
+      //   'Implement error boundaries'
+      // ],
       testing: [
         'Reorganize test structure',
         'Implement parallel execution',
@@ -164,12 +164,12 @@ const prdContent = {
     },
     // FIX: success_metrics moved to metadata
     // success_metrics: {
-      pass_rate: '>85% UAT test pass rate',
-      authentication: 'Zero auth-related failures',
-      ui_stability: '<5% UI element failures',
-      performance: 'Test execution <10 minutes',
-      coverage: 'Maintain >80% code coverage'
-    }
+    //   pass_rate: '>85% UAT test pass rate',
+    //   authentication: 'Zero auth-related failures',
+    //   ui_stability: '<5% UI element failures',
+    //   performance: 'Test execution <10 minutes',
+    //   coverage: 'Maintain >80% code coverage'
+    // }
   };
 
   const prd = {
@@ -188,8 +188,8 @@ const prdContent = {
     },
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

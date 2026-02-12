@@ -27,7 +27,7 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { inheritStrategicFields, inferSDType } from './child-sd-template.js';
-import { enrichChildrenFromPlan, autoDetectChildMapping } from './plan-to-children-enricher.js';
+import { enrichChildrenFromPlan } from './plan-to-children-enricher.js';
 
 dotenv.config();
 

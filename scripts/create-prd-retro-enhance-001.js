@@ -35,7 +35,7 @@ async function createPRD() {
 
   const prd = {
     id: randomUUID(),
-    id: 'PRD-RETRO-ENHANCE-001' // FIX: Use id instead of prd_id,
+    id: 'PRD-RETRO-ENHANCE-001', // FIX: Use id instead of prd_id
     sd_uuid: sdUuid, // FIX: Use UUID instead of string ID
     directive_id: sd.uuid_id,
     version: '1.0',
@@ -275,9 +275,11 @@ async function createPRD() {
     // complexity_score: 8,
     // FIX: estimated_effort_hours moved to metadata
     // estimated_effort_hours: 120,
-    planned_end: // FIX: Renamed from target_completion_date new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(), // 4 weeks
+    // FIX: Renamed from target_completion_date
+    planned_end: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(), // 4 weeks
 
-    risks: // FIX: Renamed from risks_and_mitigations [
+    // FIX: Renamed from risks_and_mitigations
+    risks: [
       {
         risk: 'Backfill of 97 records may timeout',
         likelihood: 'HIGH',
@@ -322,107 +324,107 @@ async function createPRD() {
     // FIX: success_metrics moved to metadata
 
     // success_metrics: [
-      {
-        metric: 'Field Compliance',
-        target: '100%',
-        measurement: 'Database query counting retrospectives with required fields'
-      },
-      {
-        metric: 'Invalid Data Rate',
-        target: '0%',
-        measurement: 'Zero retrospectives with constraint violations post-deployment'
-      },
-      {
-        metric: 'Semantic Search Relevance',
-        target: '90%+',
-        measurement: 'User feedback validation via feedback form'
-      },
-      {
-        metric: 'Search Result Improvement',
-        target: '3x',
-        measurement: 'Compare semantic vs keyword search across 20 test queries'
-      },
-      {
-        metric: 'Research Confidence',
-        target: '95%',
-        measurement: 'SD-KNOWLEDGE-001 integration confidence score'
-      },
-      {
-        metric: 'Cross-App Learning Adoption',
-        target: '60%',
-        measurement: 'New ventures referencing process improvements (applies_to_all_apps usage)'
-      },
-      {
-        metric: 'Constraint Overhead',
-        target: '<5ms',
-        measurement: 'Database query timing for inserts'
-      },
-      {
-        metric: 'Vector Search Latency',
-        target: '<100ms',
-        measurement: 'match_retrospectives() average query time'
-      },
-      {
-        metric: 'Test Pass Rate',
-        target: '100%',
-        measurement: '45/45 tests passing'
-      }
-    ],
+    //   {
+    //     metric: 'Field Compliance',
+    //     target: '100%',
+    //     measurement: 'Database query counting retrospectives with required fields'
+    //   },
+    //   {
+    //     metric: 'Invalid Data Rate',
+    //     target: '0%',
+    //     measurement: 'Zero retrospectives with constraint violations post-deployment'
+    //   },
+    //   {
+    //     metric: 'Semantic Search Relevance',
+    //     target: '90%+',
+    //     measurement: 'User feedback validation via feedback form'
+    //   },
+    //   {
+    //     metric: 'Search Result Improvement',
+    //     target: '3x',
+    //     measurement: 'Compare semantic vs keyword search across 20 test queries'
+    //   },
+    //   {
+    //     metric: 'Research Confidence',
+    //     target: '95%',
+    //     measurement: 'SD-KNOWLEDGE-001 integration confidence score'
+    //   },
+    //   {
+    //     metric: 'Cross-App Learning Adoption',
+    //     target: '60%',
+    //     measurement: 'New ventures referencing process improvements (applies_to_all_apps usage)'
+    //   },
+    //   {
+    //     metric: 'Constraint Overhead',
+    //     target: '<5ms',
+    //     measurement: 'Database query timing for inserts'
+    //   },
+    //   {
+    //     metric: 'Vector Search Latency',
+    //     target: '<100ms',
+    //     measurement: 'match_retrospectives() average query time'
+    //   },
+    //   {
+    //     metric: 'Test Pass Rate',
+    //     target: '100%',
+    //     measurement: '45/45 tests passing'
+    //   }
+    // ],
 
     // FIX: documentation_requirements moved to metadata
 
     // documentation_requirements: [
-      {
-        file: 'retrospective-schema-reference.md',
-        type: 'UPDATE',
-        description: 'Complete column reference with new fields, constraints, indexes'
-      },
-      {
-        file: 'retrospective-generation-guide.md',
-        type: 'CREATE',
-        description: 'How to generate retrospectives with new fields, validation requirements'
-      },
-      {
-        file: 'retrospective-search-guide.md',
-        type: 'CREATE',
-        description: 'Semantic search usage, filter combinations, query optimization'
-      },
-      {
-        file: 'retrospective-enhancement-migration-guide.md',
-        type: 'CREATE',
-        description: 'Migration steps, backfill process, rollback procedures'
-      },
-      {
-        file: 'retrospective-api.md',
-        type: 'UPDATE',
-        description: 'match_retrospectives() RPC reference, parameters, examples'
-      },
-      {
-        file: 'leo-retrospective-integration.md',
-        type: 'CREATE',
-        description: 'SD-KNOWLEDGE-001 integration, usage in automated retrieval'
-      },
-      {
-        file: 'retrospective-validation-gates.md',
-        type: 'CREATE',
-        description: '4-layer enforcement explanation, each layer detailed'
-      },
-      {
-        file: 'retrospective-examples.md',
-        type: 'CREATE',
-        description: 'Complete retrospective examples, each learning_category represented'
-      },
-      {
-        file: 'retrospective-testing-guide.md',
-        type: 'CREATE',
-        description: 'How to run tests, test structure, adding new tests'
-      },
-      {
-        file: 'retrospective-issues.md',
-        type: 'CREATE',
-        description: 'Common errors and fixes, constraint violations, troubleshooting'
-      }
-    ],
+    //   {
+    //     file: 'retrospective-schema-reference.md',
+    //     type: 'UPDATE',
+    //     description: 'Complete column reference with new fields, constraints, indexes'
+    //   },
+    //   {
+    //     file: 'retrospective-generation-guide.md',
+    //     type: 'CREATE',
+    //     description: 'How to generate retrospectives with new fields, validation requirements'
+    //   },
+    //   {
+    //     file: 'retrospective-search-guide.md',
+    //     type: 'CREATE',
+    //     description: 'Semantic search usage, filter combinations, query optimization'
+    //   },
+    //   {
+    //     file: 'retrospective-enhancement-migration-guide.md',
+    //     type: 'CREATE',
+    //     description: 'Migration steps, backfill process, rollback procedures'
+    //   },
+    //   {
+    //     file: 'retrospective-api.md',
+    //     type: 'UPDATE',
+    //     description: 'match_retrospectives() RPC reference, parameters, examples'
+    //   },
+    //   {
+    //     file: 'leo-retrospective-integration.md',
+    //     type: 'CREATE',
+    //     description: 'SD-KNOWLEDGE-001 integration, usage in automated retrieval'
+    //   },
+    //   {
+    //     file: 'retrospective-validation-gates.md',
+    //     type: 'CREATE',
+    //     description: '4-layer enforcement explanation, each layer detailed'
+    //   },
+    //   {
+    //     file: 'retrospective-examples.md',
+    //     type: 'CREATE',
+    //     description: 'Complete retrospective examples, each learning_category represented'
+    //   },
+    //   {
+    //     file: 'retrospective-testing-guide.md',
+    //     type: 'CREATE',
+    //     description: 'How to run tests, test structure, adding new tests'
+    //   },
+    //   {
+    //     file: 'retrospective-issues.md',
+    //     type: 'CREATE',
+    //     description: 'Common errors and fixes, constraint violations, troubleshooting'
+    //   }
+    // ],
 
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()

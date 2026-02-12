@@ -14,7 +14,6 @@
 import { createClient } from '@supabase/supabase-js';
 import {
   CONFIG,
-  calculateUrgencyScore,
   shouldReprioritize,
   checkJitterProtection,
   sortByUrgency,

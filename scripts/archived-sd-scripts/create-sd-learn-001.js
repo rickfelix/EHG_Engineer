@@ -191,7 +191,7 @@ This SD closes the learning loop, ensuring retrospective insights compound rathe
 
   console.log('📝 Inserting SD-LEARN-001...');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .upsert(sd, { onConflict: 'id' })
     .select();

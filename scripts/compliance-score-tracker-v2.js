@@ -143,7 +143,7 @@ async function calculateComplianceScore(orchestratorId) {
   const targetId = orchestratorId || process.argv[2] || 'SD-LEO-REFAC-COMPLIANCE-EXP-001';
 
   // Check if it's an orchestrator with children, or a single SD
-  const { data: children, error: childError } = await supabase
+  const { data: children, error: _childError } = await supabase
     .from('strategic_directives_v2')
     .select('id, title, status, current_phase, progress_percentage, sd_type')
     .eq('parent_sd_id', targetId)

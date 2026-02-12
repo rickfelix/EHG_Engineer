@@ -437,7 +437,7 @@ export function recordCompactionEvent(sessionId) {
  * @param {string} sdRunId - Current SD run ID (for SD_START checks)
  * @returns {Object} { needsRead, reason, lastRead }
  */
-export function checkFileNeedsRead(filename, trigger, sdRunId = null) {
+export function checkFileNeedsRead(filename, trigger, _sdRunId = null) {
   const state = readSessionState();
   const currentHash = calculateFileHash(filename);
 

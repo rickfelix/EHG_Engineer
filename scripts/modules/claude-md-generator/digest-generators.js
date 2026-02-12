@@ -8,7 +8,6 @@
  */
 
 import {
-  formatSection,
   getMetadata,
   generateTriggerQuickReference
 } from './section-formatters.js';

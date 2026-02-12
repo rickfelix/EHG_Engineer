@@ -582,7 +582,7 @@ export class OIVVerifier {
       // For Node.js resolution
       const resolved = require.resolve(filePath, { paths: [this.basePath] });
       return resolved;
-    } catch (e) {
+    } catch (_e) {
       // Try as-is
       if (fs.existsSync(filePath)) {
         return filePath;

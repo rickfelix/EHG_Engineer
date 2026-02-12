@@ -111,7 +111,7 @@ async function validateSDTimeline(sdId, supabase) {
   }
 
   // Get retrospectives for this SD
-  const { data: retrospectives, error: retroError } = await supabase
+  const { data: _retrospectives, error: retroError } = await supabase
     .from('retrospectives')
     .select('id, sd_id, created_at')
     .eq('sd_id', sdId);
@@ -396,7 +396,7 @@ async function logValidationAuditEvents(findings, supabase) {
         failure_category: finding.failure_category,
         metadata: finding
       });
-    } catch (err) {
+    } catch (_err) {
       // Table may not exist - that's OK, we logged to console
     }
   }

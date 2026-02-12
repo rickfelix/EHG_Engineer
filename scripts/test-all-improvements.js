@@ -9,15 +9,15 @@
  * 5. Smart prioritization
  */
 
-import path from 'path';
+import _path from 'path';
 import fsModule from 'fs';
-const fs = fsModule.promises;
+const _fs = fsModule.promises;
 
 // Import all new systems
-import { SharedIntelligenceHub, getInstance: getHub } from '../lib/agents/shared-intelligence-hub';
-import { IncrementalAnalyzer, getInstance: getAnalyzer } from '../lib/agents/incremental-analyzer';
+import { _SharedIntelligenceHub, getInstance as getHub } from '../lib/agents/shared-intelligence-hub';
+import { _IncrementalAnalyzer, getInstance as getAnalyzer } from '../lib/agents/incremental-analyzer';
 import AutoFixEngine from '../lib/agents/auto-fix-engine';
-import { LearningDatabase, getInstance: getDB } from '../lib/agents/learning-database';
+import { _LearningDatabase, getInstance as getDB } from '../lib/agents/learning-database';
 import PriorityEngine from '../lib/agents/priority-engine';
 
 // Import sub-agents
@@ -48,7 +48,7 @@ async function testAllImprovements() {
   console.log(`   Strategy: ${strategy.type}`);
   console.log(`   Files to analyze: ${strategy.filesToAnalyze.length}/${strategy.totalFiles}`);
   console.log(`   Time saved: ${strategy.timeSaved || '0 seconds'}`);
-  console.log(`   ✅ Incremental analysis working!`);
+  console.log('   ✅ Incremental analysis working!');
   
   // Test 2: INTER-AGENT COLLABORATION
   console.log('\n2️⃣  INTER-AGENT COLLABORATION TEST');
@@ -79,13 +79,13 @@ async function testAllImprovements() {
   const insights = hub.getFileInsights('api/users.js');
   const compoundInsights = hub.getCompoundInsights();
   
-  console.log(`   Findings shared: 2`);
+  console.log('   Findings shared: 2');
   console.log(`   Correlations found: ${insights.length > 0 ? 'YES' : 'NO'}`);
   console.log(`   Compound insights: ${compoundInsights.length}`);
   if (compoundInsights.length > 0) {
     console.log(`   - ${compoundInsights[0].description}`);
   }
-  console.log(`   ✅ Inter-agent collaboration working!`);
+  console.log('   ✅ Inter-agent collaboration working!');
   
   // Test 3: AUTO-FIX GENERATION
   console.log('\n3️⃣  AUTO-FIX GENERATION TEST');
@@ -139,7 +139,7 @@ async function testAllImprovements() {
   for (const fix of fixes) {
     console.log(`   - ${fix.description} (confidence: ${fix.confidence})`);
   }
-  console.log(`   ✅ Auto-fix generation working!`);
+  console.log('   ✅ Auto-fix generation working!');
   
   // Test 4: HISTORICAL LEARNING
   console.log('\n4️⃣  HISTORICAL LEARNING TEST');
@@ -169,7 +169,7 @@ async function testAllImprovements() {
   console.log(`   Confirmed issues: ${stats.confirmedIssues}`);
   console.log(`   False positive rate: ${stats.falsePositiveRate}`);
   console.log(`   Learned patterns: ${stats.learnedPatterns}`);
-  console.log(`   ✅ Historical learning working!`);
+  console.log('   ✅ Historical learning working!');
   
   // Test 5: SMART PRIORITIZATION
   console.log('\n5️⃣  SMART PRIORITIZATION TEST');
@@ -246,7 +246,7 @@ async function testAllImprovements() {
     console.log(`   - Best ROI: ${quickWins[0].type} (ROI: ${quickWins[0].roi})`);
   }
   
-  console.log(`   ✅ Smart prioritization working!`);
+  console.log('   ✅ Smart prioritization working!');
   
   // INTEGRATION TEST: All systems working together
   console.log('\n🎯 INTEGRATION TEST');
@@ -260,8 +260,8 @@ async function testAllImprovements() {
   console.log(`1. Detected ${files.modified.length} modified files`);
   
   // Step 2: Run analysis on changed files only
-  const secAgent = new SecuritySubAgentV3();
-  const perfAgent = new PerformanceSubAgentV2();
+  const _secAgent = new SecuritySubAgentV3();
+  const _perfAgent = new PerformanceSubAgentV2();
   
   // Share findings through hub
   let findingCount = 0;
@@ -329,7 +329,7 @@ async function testAllImprovements() {
 
 // Run test
 testAllImprovements()
-  .then(results => {
+  .then(_results => {
     console.log('Test completed successfully');
     process.exit(0);
   })

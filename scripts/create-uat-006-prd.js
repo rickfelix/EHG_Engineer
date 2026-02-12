@@ -39,7 +39,7 @@ const prdContent = {
     id: 'PRD-SD-UAT-2025-006',
     title: 'Test Suite Architecture Optimization',
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    /* user_stories: [
       {
         id: 'US-TEST-001',
         title: 'Reorganize Test Structure',
@@ -140,7 +140,7 @@ const prdContent = {
           'Metric collection tests'
         ]
       }
-    ],
+    ], */
     technical_requirements: {
       architecture: [
         'Implement page object model pattern',
@@ -173,12 +173,12 @@ const prdContent = {
     },
     // FIX: success_metrics moved to metadata
     // success_metrics: {
-      execution_time: 'Full suite <10 minutes',
-      pass_rate: 'Consistent >85% pass rate',
-      flakiness: '<2% flaky tests',
-      coverage: '>80% code coverage maintained',
-      maintainability: 'Test maintenance <20% effort'
-    }
+    //   execution_time: 'Full suite <10 minutes',
+    //   pass_rate: 'Consistent >85% pass rate',
+    //   flakiness: '<2% flaky tests',
+    //   coverage: '>80% code coverage maintained',
+    //   maintainability: 'Test maintenance <20% effort'
+    // }
   };
 
   const prd = {
@@ -204,8 +204,8 @@ const prdContent = {
     },
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {
@@ -217,7 +217,7 @@ const prdContent = {
       .single();
 
     if (existing) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .update(prd)
         .eq('directive_id', 'SD-UAT-2025-006')
@@ -227,7 +227,7 @@ const prdContent = {
       if (error) throw error;
       console.log('✅ PRD updated successfully!');
     } else {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .insert(prd)
         .select()

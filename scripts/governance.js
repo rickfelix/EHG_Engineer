@@ -160,7 +160,7 @@ async function validateContext(options) {
   let context;
   try {
     context = JSON.parse(options.context);
-  } catch (e) {
+  } catch (_e) {
     console.error('Error: Invalid JSON in --context');
     return;
   }

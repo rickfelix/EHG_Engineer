@@ -25,7 +25,7 @@ import {
  * @param {string} sdKey - SD key
  * @returns {{ missingRequired: string[], missingRecommended: string[], wrongTiming: Object[], cached: string[] }}
  */
-export async function validateSubAgents(supabase, sd, sdKey) {
+export async function validateSubAgents(supabase, sd, _sdKey) {
   const { required, recommended } = getRequiredSubAgents(sd);
 
   // Get handoff timestamps

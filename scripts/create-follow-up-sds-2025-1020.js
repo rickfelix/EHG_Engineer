@@ -118,7 +118,7 @@ const strategicDirectives = [
 // ... (continues in actual file)
 
 async function insertStrategicDirective(sd) {
-  console.log(\`\\n📋 Inserting \${sd.id}: \${sd.title}...\`);
+  console.log(`\n📋 Inserting ${sd.id}: ${sd.title}...`);
 
   try {
     const { data: existing } = await supabase
@@ -137,9 +137,9 @@ async function insertStrategicDirective(sd) {
 
       if (error) throw error;
 
-      console.log(\`✅ \${sd.id} updated successfully!\`);
-      console.log(\`   Priority: \${data.priority}\`);
-      console.log(\`   Status: \${data.status}\`);
+      console.log(`✅ ${sd.id} updated successfully!`);
+      console.log(`   Priority: ${data.priority}`);
+      console.log(`   Status: ${data.status}`);
     } else {
       const { data, error } = await supabase
         .from('strategic_directives_v2')
@@ -149,12 +149,12 @@ async function insertStrategicDirective(sd) {
 
       if (error) throw error;
 
-      console.log(\`✅ \${sd.id} created successfully!\`);
-      console.log(\`   Priority: \${data.priority}\`);
-      console.log(\`   Status: \${data.status}\`);
+      console.log(`✅ ${sd.id} created successfully!`);
+      console.log(`   Priority: ${data.priority}`);
+      console.log(`   Status: ${data.status}`);
     }
   } catch (error) {
-    console.error(\`❌ Error with \${sd.id}:\`, error.message);
+    console.error(`❌ Error with ${sd.id}:`, error.message);
     throw error;
   }
 }

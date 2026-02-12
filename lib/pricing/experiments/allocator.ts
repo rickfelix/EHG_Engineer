@@ -143,7 +143,7 @@ export class VariantAllocator {
     }
 
     // Calculate percentages
-    for (const [_variantId, data] of distribution) {
+    for (const [, data] of distribution) {
       data.percent = (data.count / sampleSize) * 100;
     }
 

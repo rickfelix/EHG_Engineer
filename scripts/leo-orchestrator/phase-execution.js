@@ -15,7 +15,7 @@ import { execSync } from 'child_process';
  * @param {Object} context - Orchestrator context
  * @param {string} _sdId - Strategic Directive ID (unused)
  */
-export async function executeLEADPhase(context, _sdId) {
+export async function executeLEADPhase(_context, _sdId) {
   console.log(chalk.blue('\n🎯 Executing LEAD Phase'));
 
   // Check for over-engineering

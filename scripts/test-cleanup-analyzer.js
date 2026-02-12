@@ -131,7 +131,7 @@ function generateMigrationPlan(scatteredFiles) {
       targetFile = path.basename(file);
     } else if (file.startsWith('lib/') && file.includes('.test.')) {
       // Extract subdirectory structure
-      const subPath = file.replace('lib/', '').replace(/\.test\.(js|ts)$/, '');
+      const _subPath = file.replace('lib/', '').replace(/\.test\.(js|ts)$/, '');
       targetDir = 'tests/unit/lib';
       targetFile = path.basename(file);
     } else if (file.startsWith('agents/')) {

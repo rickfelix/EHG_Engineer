@@ -68,7 +68,7 @@ async function completeOrchestrator() {
 
     // 2. Create PLAN-TO-LEAD handoff for orchestrator
     console.log('\n📋 Creating PLAN-TO-LEAD handoff for orchestrator...');
-    const { data: handoffData, error: handoffError } = await supabase
+    const { data: _handoffData, error: handoffError } = await supabase
       .from('sd_phase_handoffs')
       .insert([{
         sd_id: 'SD-FORGE-FOUNDATION-001',

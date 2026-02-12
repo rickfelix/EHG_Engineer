@@ -5,15 +5,15 @@
  * This version correctly uses the pipeline without corruption
  */
 
-import path from 'path';
+import _path from 'path';
 import fsModule from 'fs';
-const fs = fsModule.promises;
+const _fs = fsModule.promises;
 
 // Import all systems
-import { SharedIntelligenceHub, getInstance: getHub } from '../lib/agents/shared-intelligence-hub';
-import { IncrementalAnalyzer, getInstance: getAnalyzer } from '../lib/agents/incremental-analyzer';
+import { _SharedIntelligenceHub, getInstance as getHub } from '../lib/agents/shared-intelligence-hub';
+import { _IncrementalAnalyzer, getInstance as getAnalyzer } from '../lib/agents/incremental-analyzer';
 import AutoFixEngine from '../lib/agents/auto-fix-engine';
-import { LearningDatabase, getInstance: getDB } from '../lib/agents/learning-database';
+import { _LearningDatabase, getInstance as getDB } from '../lib/agents/learning-database';
 import PriorityEngine from '../lib/agents/priority-engine';
 
 // Import improved sub-agents
@@ -202,7 +202,7 @@ async function testIntegrated() {
   console.log(`   Total findings tracked: ${stats.totalFindings}`);
   console.log(`   Feedback given this run: ${feedbackGiven}`);
   console.log(`   False positive rate: ${stats.falsePositiveRate}`);
-  console.log(`   Top issues:`);
+  console.log('   Top issues:');
   stats.commonIssues.slice(0, 3).forEach(issue => {
     console.log(`   - ${issue.issue}: ${issue.count} times`);
   });
@@ -261,7 +261,7 @@ async function testIntegrated() {
       console.log(`   • ${task.type} - ${task.effort}`);
       console.log(`     ${task.description}`);
       if (task.autoFix) {
-        console.log(`     ✨ Auto-fix available!`);
+        console.log('     ✨ Auto-fix available!');
       }
     });
   }

@@ -371,7 +371,7 @@ async function capture() {
       }
     };
 
-    const run = await storeTestRun(supabase, runData);
+    const _run = await storeTestRun(supabase, runData);
     console.log(`   ✅ Test run stored: ${runId}`);
 
     if (failures.length > 0) {

@@ -31,8 +31,8 @@ const ALLOWED_ROOT_FILES = [
 
 // File placement rubric
 function classifyFile(filename, content) {
-  const lowerName = filename.toLowerCase();
-  const lowerContent = content.toLowerCase();
+  const _lowerName = filename.toLowerCase();
+  const _lowerContent = content.toLowerCase();
 
   // SD completion/status reports
   if (/^(sd-|SD-)/.test(filename) ||

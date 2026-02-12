@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function updatePRDChecklist() {
@@ -143,7 +143,7 @@ async function updatePRDChecklist() {
       from: 'PLAN',
       to: 'EXEC',
       sd_id: 'SD-2025-001',
-      id: 'PRD-PRD-2025-001' // FIX: Use id instead of prd_id,
+      id: 'PRD-PRD-2025-001', // FIX: Use id instead of prd_id
       timestamp: new Date().toISOString(),
       status: 'ready',
       checklist_status: {
