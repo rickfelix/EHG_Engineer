@@ -4007,7 +4007,74 @@ const TEMPLATE = {
 
 ## Stage 20: Quality Assurance
 
-*Analysis pending*
+**Phase**: THE BUILD LOOP (Stages 17-22)
+
+### CLI Implementation (Ground Truth)
+
+**Template**: `lib/eva/stage-templates/stage-20.js`
+
+**Input fields**:
+- `test_suites[]` (min 1): name, total_tests (number ≥ 0), passing_tests (number ≥ 0), coverage_pct (0-100, optional)
+- `known_defects[]`: description, severity (free text), status (free text)
+
+**Derived fields**:
+- `overall_pass_rate`: total_passing / total_tests × 100
+- `coverage_pct`: average coverage across suites
+- `critical_failures`: total_tests - total_passing (note: this counts ALL failures as "critical")
+- `total_tests`, `total_passing`
+- `quality_gate_passed`: overall_pass_rate === 100 AND coverage_pct >= 60
+
+**Validation**:
+- passing_tests cannot exceed total_tests per suite
+- Standard field validation (strings, numbers, array lengths)
+
+**Key properties**:
+- No analysisStep (test suites are entirely user-provided)
+- Quality gate requires 100% pass rate AND ≥60% coverage -- very strict
+- critical_failures is misleadingly named: it's total failures, not just critical-severity failures
+- known_defects severity/status are free text (same issue as Stage 19 issues)
+- No connection to Stage 19 tasks or completion status
+- No test type categorization (unit, integration, e2e, etc.)
+- No traceability from tests to requirements or sprint items
+- MIN_COVERAGE_PCT = 60 (hardcoded constant)
+
+### GUI Implementation (Ground Truth)
+
+**GUI Stage 20 = "Security & Performance"** -- completely different scope from CLI's "Quality Assurance."
+
+**Configuration**: `venture-workflow.ts` → Stage 20
+**Components**: `Stage20SecurityPerformance.tsx`, `Stage20Security.tsx` (enhanced variant)
+
+**GUI features**:
+- **Security Checks** (15 items across 6 categories):
+  - Authentication (password hashing, JWT/session expiration)
+  - Authorization (RBAC, API protection)
+  - Data Protection (encryption, HTTPS, PII compliance)
+  - Input Validation (SQL injection, XSS, CSRF)
+  - Infrastructure (security headers, rate limiting)
+  - Logging (security events, log sanitization)
+- **Performance Metrics** (10 items with specific targets):
+  - LCP ≤2.5s, TTI ≤3.8s, FID ≤100ms, CLS ≤0.1
+  - API Response p95 ≤500ms, p99 ≤1000ms
+  - DB Query Time ≤50ms
+  - Concurrent Users ≥1000, Memory ≤512MB, Bundle ≤500KB
+- **Accessibility** (WCAG 2.1 AA, 6 checks):
+  - Image alt text, color contrast, keyboard navigation, focus indicators, form labels, skip navigation
+- **Compliance Gate**: Overall Score = (Security + Performance + Accessibility) / 3, launch ready ≥80%
+- **Scoring**: Security/performance grades, severity-based scoring, CWE IDs for vulnerabilities
+
+**Major scope divergence**: CLI Stage 20 is generic QA (test suites + pass rates). GUI Stage 20 is specifically security hardening, performance benchmarks, and accessibility. The GUI's QA/UAT functionality is in Stage 21.
+
+### Key Gaps
+
+1. **No analysisStep**: Stage 19 has completed tasks, issues, and a sprint completion decision. Stage 20 should consume these to scope QA appropriately.
+2. **No connection to Stage 19 build output**: Test suites exist in isolation. No reference to which tasks or architecture layers they cover.
+3. **quality_gate is too strict**: 100% pass rate is unrealistic for any non-trivial system. One flaky test blocks the entire venture.
+4. **critical_failures is misleadingly named**: Counts ALL failures, not just critical-severity failures. A low-priority test failure is counted the same as a critical one.
+5. **known_defects severity/status are free text**: Same issue as Stage 19 issues. Should be enums per established pattern.
+6. **No test type categorization**: Can't distinguish unit tests from integration tests from e2e tests. Different test types have different quality implications.
+7. **No test-to-requirement traceability**: Can't tell which Stage 18 sprint items or Stage 19 tasks are covered by tests.
+8. **No security/performance/accessibility assessment**: GUI has extensive security checks and performance benchmarks. CLI has nothing. However, this may be appropriate -- the CLI is a venture lifecycle tool, not a security audit tool.
 
 ---
 
