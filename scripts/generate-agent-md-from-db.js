@@ -56,6 +56,40 @@ When spawned as a teammate in a team:
 5. **Check for more work**: Use TaskList to find additional available tasks
 6. **Coordinate**: Read team config at ~/.claude/teams/{team-name}/config.json to discover teammates`;
 
+const TEAM_SPAWNING_PROTOCOL = `### Requesting Specialist Assistance
+When your task requires expertise outside your domain, you can assemble a team:
+
+**When to spawn help** (use judgment — only when genuinely needed):
+- The problem spans multiple domains (e.g., a DB issue that also involves API and security)
+- You lack the expertise to investigate a specific aspect
+- Parallel investigation would significantly speed up resolution
+
+**How to spawn help**:
+1. Use \`TeamCreate\` to create a team for the investigation
+2. Use \`TaskCreate\` to define tasks for each specialist needed
+3. Use the \`Task\` tool to spawn teammates with clear, scoped prompts
+4. Teammates report findings back to you via \`SendMessage\`
+5. Synthesize findings and report to whoever spawned you
+
+**Available team templates** (pre-built in database):
+- \`rca-investigation\` — RCA lead + DB specialist + API specialist
+- \`security-audit\` — Security lead + DB + API + Testing specialists
+- \`performance-review\` — Performance lead + DB + API specialists
+
+To use a template: \`node scripts/spawn-team.js --template <id> --task "<description>"\`
+
+**Dynamic agent creation**: If no existing agent fits, create one at runtime:
+\`\`\`javascript
+import { createDynamicAgent } from './lib/team/agent-creator.js';
+await createDynamicAgent({ code: 'SPECIALIST_NAME', name: '...', description: '...', instructions: '...' });
+\`\`\`
+Dynamic agents are always teammates (depth limit = 1, no cascading).
+
+**When NOT to spawn help**:
+- You can handle the task yourself with your existing tools
+- The task is simple and well-scoped to your domain
+- Adding coordination overhead would slow things down`;
+
 // ─── Data Fetching ───────────────────────────────────────────────────────────
 
 async function fetchLiveData(supabase) {
@@ -231,8 +265,14 @@ function compileAgentFromPartial(partialPath, agentName, agentCode, data, config
 
   // Build team protocol section if agent has team tools
   let teamProtocol = '';
-  if (agent?.allowed_tools && Array.isArray(agent.allowed_tools) && agent.allowed_tools.includes('SendMessage')) {
-    teamProtocol = `\n${TEAM_COLLABORATION_PROTOCOL}\n`;
+  if (agent?.allowed_tools && Array.isArray(agent.allowed_tools)) {
+    const tools = agent.allowed_tools;
+    if (tools.includes('SendMessage')) {
+      teamProtocol = `\n${TEAM_COLLABORATION_PROTOCOL}\n`;
+    }
+    if (tools.includes('TeamCreate') && tools.includes('Task')) {
+      teamProtocol += `\n${TEAM_SPAWNING_PROTOCOL}\n`;
+    }
   }
 
   // Assemble: frontmatter + body with injected knowledge + team protocol
@@ -265,8 +305,14 @@ function compileAgentFromDB(agentName, agentCode, data, configCategoryMappings) 
   const knowledgeBlock = composeKnowledgeBlock(agentCode, data, configCategoryMappings);
 
   let teamProtocol = '';
-  if (agent.allowed_tools && Array.isArray(agent.allowed_tools) && agent.allowed_tools.includes('SendMessage')) {
-    teamProtocol = `\n${TEAM_COLLABORATION_PROTOCOL}\n`;
+  if (agent.allowed_tools && Array.isArray(agent.allowed_tools)) {
+    const tools = agent.allowed_tools;
+    if (tools.includes('SendMessage')) {
+      teamProtocol = `\n${TEAM_COLLABORATION_PROTOCOL}\n`;
+    }
+    if (tools.includes('TeamCreate') && tools.includes('Task')) {
+      teamProtocol += `\n${TEAM_SPAWNING_PROTOCOL}\n`;
+    }
   }
 
   let assembled = frontmatter + '\n' + agent.instructions;
@@ -438,8 +484,9 @@ async function main() {
 
       const hasKnowledge = compiled.includes('## Institutional Memory (Generated)');
       const hasTeam = compiled.includes('### Team Collaboration Protocol');
+      const hasSpawn = compiled.includes('### Requesting Specialist Assistance');
       const sizeKB = (Buffer.byteLength(compiled) / 1024).toFixed(1);
-      const flags = [hasKnowledge ? 'knowledge' : null, hasTeam ? 'team' : null].filter(Boolean).join('+');
+      const flags = [hasKnowledge ? 'knowledge' : null, hasTeam ? 'team' : null, hasSpawn ? 'spawn' : null].filter(Boolean).join('+');
       console.log(`   ✅ ${agentName} → ${sizeKB}KB${flags ? ` (${flags})` : ''}`);
       results.success.push(agentName);
 
