@@ -1,107 +1,65 @@
 # LEO Protocol Session State
-**Last Updated**: 2026-01-19 (Post-Compaction)
-**Session Focus**: UAT Navigation Resolution - Child SD Execution
+**Last Updated**: 2026-02-12
+**Session Focus**: Vision & Architecture Planning (non-SD work)
 
 ---
 
-## Current Progress
+## Current Work Status: IN PROGRESS
 
-### Orchestrator: SD-UAT-NAV-RESOLUTION-001
-**Status**: In Progress (2/6 children complete)
+### What Was Done This Session
 
-| SD Key | Type | Priority | Status | Notes |
-|--------|------|----------|--------|-------|
-| SD-UAT-WORKFLOW-001 | infrastructure | HIGH | ✅ COMPLETED | PR #392 merged |
-| SD-FIX-VENTURES-001 | bugfix | HIGH | ✅ COMPLETED | Database fix: nav_routes path |
-| SD-FIX-ANALYTICS-001 | bugfix | HIGH | 🔄 IN PROGRESS | LEAD-TO-PLAN passed (98%) |
-| SD-FIX-ADMIN-001 | bugfix | HIGH | ⏳ PENDING | |
-| SD-FIX-NAV-UX-001 | feature | MEDIUM | ⏳ PENDING | |
-| SD-SIMPLIFY-HEADER-001 | ux_debt | LOW | ⏳ PENDING | |
+1. **Continued from prior session** that completed the 25-stage CLI vs GUI gap analysis (PR #1117) and first draft of vision document
+2. **Read full gap analysis** (5,335 lines, all 25 stages) to inform vision revision
+3. **Revised vision document** from v3.0 to v4.3 with major additions:
+   - Section 3: Automation Architecture (DFE, Reality Gates, analysisStep engine, ground truth, gate failure recovery)
+   - Section 9: SD Bridge (lifecycle to engineering interface)
+   - Section 10: Post-Launch Operations
+   - Appendices C (Scoring Models) and D (Enum Reference)
+4. **18 Chairman clarification decisions** captured via multiple-choice Q&A:
+   - Kill gates (3,5) → Fully automated, DFE-only escalation
+   - Release (22) → Chairman always decides
+   - Venture review (25) → Chairman reviews every cycle
+   - Brand (10) → Chairman reviews full brand package, hard blocking gate
+   - Ops cadence → Risk-adaptive (weekly → quarterly based on health)
+   - Roadmap (13) → Fully automated
+   - Pivot model → System determines re-entry, Chairman confirms
+   - Retroactive kill → Anytime, any stage (ultimate authority)
+   - Conditionals → Severity-based routing (critical → Chairman, non-critical → auto)
+   - Expand → New features in same venture (not new ventures)
+   - Idea pipeline → EVA proposes, Chairman approves
+   - Concurrency → Unlimited concurrent ventures
+   - Brand deferral → Blocks until approved
+   - Sprint cadence → Scope-based (not time-boxed)
+   - Decision queuing → Ventures block on Chairman decisions
+   - Ground truth → Targeted web-grounding (Stages 4, 5, 7, 11)
+   - Reality Gate failure → Auto-retry 3x, then kill
+   - Post-launch operations → Automated (customer support, bugs, infra via LEO; marketing TBD)
 
----
+### Key File
+- `docs/plans/eva-venture-lifecycle-vision.md` - Version 4.3, 18 Chairman clarifications applied
 
-## Completed Work Summary
+### Remaining Missing Aspects (to resume)
+- **Human capital beyond Chairman** - When ventures need real humans, is EHG always AI-only?
+- **Cost model** - Compute budget ceiling per venture, portfolio cost management
+- **Post-launch ops (continued)** - Other operational areas beyond the 4 addressed
+- **Data/analytics pipeline** - Where Stage 24 AARRR metrics data comes from
+- **Legal/compliance** - Terms, privacy, IP for AI-generated content
+- **Billing/payments** - Revenue collection infrastructure
+- **Scaling triggers** - Auto-scaling rules, cost monitoring
 
-### SD-UAT-WORKFLOW-001 (COMPLETED)
-- **Deliverables**:
-  - `lib/uat/feedback-saver.js` - Auto-saves raw UAT feedback
-  - `docs/reference/sd-validation-profiles.md` - Schema constraints reference
-  - `scripts/create-sd.js` - Interactive SD creation with type validation
-  - `scripts/sd-from-feedback.js` - Bulk feedback-to-SD conversion
-- **PR**: #392 (merged)
+### No Active SD
+This session is brainstorming/planning work, not SD execution.
 
-### SD-FIX-VENTURES-001 (COMPLETED)
-- **Root Cause**: `nav_routes.path` had `/company-settings` but route was `/companies`
-- **Fix**: Database update - changed path to `/companies`
-- **No code changes** - database-only fix
-- **Retrospective**: Created (ID: 968f3a00-00d4-45e5-ad6c-c6028f213da8)
-
-### Retrospective Constraint Fix (Infrastructure)
-- **Root Cause**: Handoff executors used invalid `retro_type` values
-- **Fix**: Changed to use `'SD_COMPLETION'`, store handoff type in `retrospective_type`
-- **Files**: `LeadToPlanExecutor.js`, `PlanToExecExecutor.js`
-- **Commit**: f0c65ceb5
-
----
-
-## Current Task: SD-FIX-ANALYTICS-001
-
-**Phase**: LEAD-TO-PLAN ✅ passed (98%), needs PRD creation
-
-**Issues to Fix**:
-1. DEF-004: Profitability Analysis - UUID error "invalid input syntax for UUID undefined"
-2. DEF-005: Go-to-Market Execution shows same page as GTM Intelligence
-
-**Next Steps**:
-1. Create PRD (fix sd_key bug in script)
-2. Create user stories
-3. Checkout feature branch in EHG repo
-4. Run PLAN-TO-EXEC
-5. Investigate and fix the issues
-6. Complete handoff cycle
-
----
-
-## Known Issues / Patterns
-
-### PRD Script Bug (RECURRING)
-Auto-generated PRD scripts query `.eq('id', SD_ID)` but should use `.eq('sd_key', SD_KEY)`.
-Workaround: Manually fix script or create PRD directly.
-
-### SD Validation Requirements
-- `strategic_objectives`, `success_metrics`, `key_principles` must be **non-empty arrays**
-- Empty `[]` fails validation even though field is "present"
-- Minimum 3 success_metrics recommended
-
-### User Story Schema
-- `story_key` format: `<SD_KEY>:US-NNN` (e.g., `SD-FIX-001:US-001`)
-- Required: `implementation_context` field
-- Status must be: `draft`, `ready`, `in_progress`, `completed`, `blocked`
+### Next Steps (User's 8-Step Plan)
+1. Rewrite vision (IN PROGRESS - v4.3 drafted, more clarifications pending)
+2. Define architecture (Pending) -- parallel with Step 1
+3. Evaluate stages against vision + architecture (Pending)
+4. Distill corrective measures per phase (Pending)
+5. Data mining: Todoist + YouTube (Pending)
+6. Deep research on specific topics (Pending) -- includes marketing make vs buy
+7. Triangulate enhanced stage designs (Pending)
+8. Dashboard redesign spec (Pending)
 
 ---
 
-## Key Commands
-
-```bash
-# Handoff execution
-node scripts/handoff.js execute <HANDOFF_TYPE> <SD_KEY>
-node scripts/handoff.js execute <TYPE> <SD_KEY> --bypass-validation --bypass-reason "..."
-
-# SD management
-npm run sd:next
-npm run sd:status
-
-# PRD creation (after fixing script)
-node scripts/create-prd-<sd-key>.js
-```
-
----
-
-## Branch Status
-
-- **EHG_Engineer**: `feat/SD-FIX-VENTURES-001-fix-ventures-navigation`
-- **EHG**: `fix/SD-FIX-VENTURES-001-fix-ventures-navigation-errors` (for frontend work)
-
----
-
-*Session state updated after context compaction*
+*Session state updated for /ship*
