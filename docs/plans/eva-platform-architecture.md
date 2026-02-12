@@ -1,14 +1,15 @@
 # EVA Platform Architecture: Shared Services Model
 
-> **Version**: 1.4
+> **Version**: 1.5
 > **Created**: 2026-02-12
 > **Status**: Draft
-> **Companion**: [EVA Venture Lifecycle Vision v4.6](eva-venture-lifecycle-vision.md) (34 Chairman decisions)
-> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`), CLI-vs-GUI triangulation analysis (Stages 1-25), 25-stage codebase-vs-triangulation audit (2026-02-12)
+> **Companion**: [EVA Venture Lifecycle Vision v4.7](eva-venture-lifecycle-vision.md) (34 Chairman decisions + 8 OpenClaw-informed decisions)
+> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`), CLI-vs-GUI triangulation analysis (Stages 1-25), 25-stage codebase-vs-triangulation audit (2026-02-12), OpenClaw architecture research + 8 binding decisions (2026-02-12)
 > **v1.1 Changes**: Chairman Decision Interface (Section 11), resequenced implementation phases (Section 13), Saga Management for multi-step operations (Section 15)
 > **v1.2 Changes**: Stage 0 Venture Ideation Pipeline (Section 16) documenting existing implementation, Service Registry updated, Phase A test scenario extended to start from Stage 0, Chairman Review interactivity gap identified
 > **v1.3 Changes**: Codebase reconciliation — 10 components previously listed as "Needs Building" already exist and are production-ready. Inventory corrected, Phase A resequenced to reflect actual state.
 > **v1.4 Changes**: Added Architectural Principles (Section 7) defining 5 binding design constraints derived from multi-AI triangulation consensus (Claude Opus 4.6 + OpenAI GPT 5.3 + AntiGravity/Gemini). Added 25-Stage Lifecycle Specifications (Section 8) with full target schemas, gate definitions, cross-stage contracts, and enum definitions per stage. Corrected "~6 passive stages" claim to "all 25 stages need active analysisSteps." Sections 7-14 renumbered to 9-16.
+> **v1.5 Changes**: OpenClaw-informed platform capabilities. New Phase C (5 items) inserted between Phase B and former Phase C. Security section expanded with dashboard threat model and tool policy enforcement. Phase renumbering: former C→D, former D→E. GUI deprecation noted: 25-stage GUI components removed, EHG App retained for Chairman governance only.
 
 ---
 
@@ -1390,6 +1391,32 @@ Every state change is logged:
 - `eva_event_log` — All events published on the bus
 - `venture_artifacts` — Immutable versioning (prior versions preserved)
 
+### Dashboard Interaction Threat Model
+
+The EHG App dashboard extends Chairman governance to a web interface. Security considerations:
+
+| Threat | Mitigation | Status |
+|--------|-----------|:------:|
+| **Unauthorized decision submission** | RLS via `fn_is_chairman()` on `chairman_decisions` table. Only authenticated Chairman can INSERT/UPDATE. | Built |
+| **Session hijacking** | Supabase Auth with JWT tokens. Session expiry + refresh token rotation. | Built (Supabase native) |
+| **Decision replay attacks** | Each decision has unique `id` + `venture_id` + `stage` compound key. Duplicate submissions rejected by DB constraint. | Built |
+| **Realtime subscription spoofing** | Supabase Realtime respects RLS policies. Unauthorized clients cannot subscribe to Chairman channels. | Built (Supabase native) |
+| **Dashboard CSRF** | React SPA with Supabase client-side auth. No cookie-based sessions to exploit. | Mitigated by architecture |
+| **Stale decision context** | Decision payloads include `artifact_version` reference. If venture state changed since payload generation, decision rejected with stale context error. | Needs building (Phase C) |
+
+### Agent Tool Policy Enforcement
+
+Per-agent tool profiles control what operations each LEO sub-agent can perform:
+
+| Profile | Allowed Operations | Assigned To |
+|---------|-------------------|-------------|
+| **full** | All tools (Bash, Read, Write, Edit, Task, etc.) | General-purpose agents, orchestrator children |
+| **coding** | Read, Write, Edit, Bash (sandboxed), Grep, Glob | Implementation-focused agents |
+| **readonly** | Read, Grep, Glob, WebSearch, WebFetch | Research agents (Explore, Plan, RCA) |
+| **minimal** | Read, Grep, Glob | Validation-only agents |
+
+**Enforcement point**: Agent compiler (`scripts/generate-agent-md.js`) injects tool restrictions at spawn time. Sub-agents spawned via Task tool inherit the profile from their agent definition in the database (`agent_sub_agents` table). Profile violations are prevented at the tool-call layer, not by trust.
+
 ---
 
 ## 13. What Already Exists vs. What Needs Building
@@ -1468,7 +1495,7 @@ Every state change is logged:
 
 ### Implementation Sequence
 
-The sequence is ordered so that **each phase produces a testable end-to-end capability**. Phase A can shepherd a single venture through all 25 stages manually. Phase B automates scheduling and the Chairman experience. Phase C adds multi-venture intelligence. Phase D optimizes.
+The sequence is ordered so that **each phase produces a testable end-to-end capability**. Phase A can shepherd a single venture through all 25 stages manually. Phase B automates scheduling and the Chairman experience. Phase C adds OpenClaw-inspired platform capabilities (hybrid runtime, tool policies, skill packaging, semantic search). Phase D adds multi-venture intelligence. Phase E optimizes.
 
 **v1.3 resequencing note**: The v1.2 sequence listed 10 items in Phase A. Codebase reconciliation revealed that 5 of those 10 already exist (DFE, Reality Gates, Chairman Preferences, CEO Service executor, Saga Coordinator). Phase A now focuses on the **integration gaps** — wiring existing components together and filling the remaining holes.
 
@@ -1522,14 +1549,50 @@ Phase B: Automated Scheduling + Chairman Dashboard (P1)
   Test: Create 3 ventures. Scheduler auto-advances them. Chairman receives
   notifications, reviews decisions in dashboard, ventures unblock automatically.
 
-Phase C: Portfolio Intelligence (P2)
-  11. Venture template system (extraction + application — cross-venture-learning.js provides analysis)
-  12. Inter-venture dependency manager (venture_dependencies schema defined; manager code needed)
+Phase C: Platform Capabilities — OpenClaw-Inspired (P2)
+  Goal: EVA becomes an always-on, reactive+scheduled platform with
+  intelligent agent management and semantic cross-venture learning.
 
-Phase D: Optimization (P3)
-  13. Shared services abstraction layer
-  14. Expand-vs-spinoff evaluator
-  15. Advanced portfolio optimization (resource contention, priority re-ranking)
+  11. Event-driven venture monitor
+      └── Supabase Realtime listener for chairman_decisions, venture_artifacts,
+          orchestration_metrics changes → immediate venture advancement
+      └── Cron scheduler for planned batch runs: ops cycles, portfolio health
+          sweeps, release scheduling
+      └── Implements hybrid runtime model (Vision Section 3)
+  12. Chairman dashboard wiring (EHG App → CLI governance plane)
+      └── Wire existing DecisionsInbox approve/reject to chairman_decisions table
+      └── Wire EscalationPanel to DFE escalation events
+      └── Add stale-context detection (reject decisions on changed venture state)
+      └── Remove 25-stage GUI components (CLI handles all stage progression)
+  13. Per-agent tool policy profiles
+      └── Define full/coding/readonly/minimal profiles in agent_sub_agents table
+      └── Agent compiler enforces profile at .md generation time
+      └── Runtime validation: sub-agent tool calls checked against profile
+  14. Skill packaging system (SKILL.md format)
+      └── Evolve current .partial.md files to versioned SKILL.md bundles
+      └── Each skill declares requirements (tools, context, memory access)
+      └── Agent compiler selectively injects skills per turn based on task context
+      └── Skills are versioned and can be shared across agents
+  15. Hybrid semantic search for cross-venture learning
+      └── SQLite vector index over issue_patterns + venture_artifacts
+      └── Local Ollama embeddings (reuse existing LLM factory infrastructure)
+      └── BM25 keyword matching as fallback/complement
+      └── Enhances cross-venture-learning.js with similarity-based retrieval
+
+  Test: Supabase Realtime detects Chairman decision in dashboard →
+  venture auto-advances. Cron runs nightly portfolio sweep.
+  Sub-agent spawned with readonly profile cannot write files.
+  Skill injected only when task context matches skill requirements.
+  Semantic search returns related issue patterns across ventures.
+
+Phase D: Portfolio Intelligence (P3)
+  16. Venture template system (extraction + application — cross-venture-learning.js provides analysis)
+  17. Inter-venture dependency manager (venture_dependencies schema defined; manager code needed)
+
+Phase E: Optimization (P4)
+  18. Shared services abstraction layer
+  19. Expand-vs-spinoff evaluator
+  20. Advanced portfolio optimization (resource contention, priority re-ranking)
 ```
 
 ### Phase A Validation: The First Venture Test
@@ -1966,8 +2029,9 @@ When approved, `persistVentureBrief()` writes to both:
 ---
 
 *Architecture document as Step 2 of the 8-step vision & architecture plan.*
-*Informed by: EVA Venture Lifecycle Vision v4.6 (34 Chairman decisions), existing EHG database schema (689 ventures, 25 stages configured), EVA orchestration infrastructure (event bus, task contracts, state machines, circuit breakers), LEO Protocol SD Bridge implementation, Stage 0 CLI implementation (`lib/eva/stage-zero/`).*
+*Informed by: EVA Venture Lifecycle Vision v4.7 (34 Chairman decisions + 8 OpenClaw-informed decisions), existing EHG database schema (689 ventures, 25 stages configured), EVA orchestration infrastructure (event bus, task contracts, state machines, circuit breakers), LEO Protocol SD Bridge implementation, Stage 0 CLI implementation (`lib/eva/stage-zero/`), OpenClaw architecture research (gateway, tool policy, skills, memory/search patterns).*
 *Steps 1 and 2 run in parallel -- vision defines "what," architecture defines "how."*
 *v1.1: Added Chairman Decision Interface (Section 11) defining how the Chairman submits decisions at blocking gates. Resequenced implementation phases (Section 13) so Phase A produces a testable end-to-end single-venture flow including Chairman decisions and CLI task dispatcher. Added Saga Management (Section 15) for multi-step operations (SD execution, Reality Gate retries, venture retirement) using dormant evaStateMachines.ts infrastructure.*
 *v1.2: Added Stage 0 Venture Ideation Pipeline (Section 16) documenting the fully-implemented pre-lifecycle module. Updated Service Registry to include Stage 0 Pipeline. Extended Phase A test scenario to start from Stage 0 ideation. Identified Chairman Review interactivity gap: `conductChairmanReview()` is currently a non-interactive passthrough — wiring to `chairman_decisions` table is P0 item #1. Added Stage 0 as fourth mandatory Chairman blocking gate (alongside Stages 10, 22, 25). Documented 15+ existing database tables, 8 synthesis components, 3 entry paths, 4 discovery strategies, evaluation profile system, counterfactual engine, stage-of-death predictor, gate signal service, and venture nursery.*
 *v1.3: Codebase reconciliation against `lib/eva/` and CLI-vs-GUI triangulation analysis (Stages 1-25). Discovered 10 components listed as "Needs Building" that already exist in production: Decision Filter Engine, Reality Gate Evaluator, Chairman Preferences Store, CEO Service (EVA Orchestrator), Saga Coordinator, Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, Orchestrator State Machine, and Cross-Venture Learning. Corrected Section 13 inventory: "Exists and Active" grew from 15 to 27 entries; "Needs Building" shrunk from 17 to 13 items. Added CLI service ports and venture scripts. Phase A resequenced from 10 items to 6 remaining work items (5 were already built). Added "Stage template gap-fill" as new P0 item based on triangulation finding that all 25 stage templates are passive containers needing active analysisSteps. Phase C reduced from 3 to 2 items (cross-venture learning already built).*
+*v1.5: OpenClaw-informed platform capabilities. Inserted new Phase C: Platform Capabilities (5 items) between Phase B and former Phase C. Items: (1) Event-driven venture monitor — Supabase Realtime listener + cron scheduler implementing hybrid runtime model from Vision D2; (2) Chairman dashboard wiring — EHG App DecisionsInbox/EscalationPanel → chairman_decisions table, 25-stage GUI removal per Vision D3; (3) Per-agent tool policy profiles — full/coding/readonly/minimal enforced at spawn time per D4; (4) Skill packaging system — SKILL.md format with versioned bundles and selective injection per D5; (5) Hybrid semantic search — SQLite vector index + Ollama embeddings for cross-venture learning per D6. Former Phase C (Portfolio Intelligence) → Phase D. Former Phase D (Optimization) → Phase E. Security section expanded with dashboard interaction threat model (6 threats with mitigations) and agent tool policy enforcement (4 profiles). Companion reference updated to Vision v4.7.*
