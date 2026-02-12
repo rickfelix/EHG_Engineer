@@ -38,7 +38,7 @@ const PRD_CONTENT = {
 - Excel Export (UD: 5/10, client-side workaround available)
 - Dashboard Customization (UD: 4/10, default layout sufficient)`,
 
-  business_context: // FIX: Renamed from problem_statement `**Current State (Critical UX Failures)**:
+  business_context: /* FIX: Renamed from problem_statement */ `**Current State (Critical UX Failures)**:
 
 **EVA Realtime Voice Stub**:
 - Location: src/components/eva/EVARealtimeVoice.tsx (52 LOC)
@@ -153,7 +153,7 @@ const PRD_CONTENT = {
   - Header/footer with company branding`,
 
   // FIX: Renamed from technical_architecture
-  system_architecture: // FIX: Renamed from technical_architecture `**System Architecture Overview**:
+  system_architecture: `**System Architecture Overview**:
 
 ┌─────────────────────────────────────────────────────────────┐
 │                     Browser (Client)                        │
@@ -502,7 +502,8 @@ const PRD_CONTENT = {
 - WebSocket clustering (Socket.io Redis adapter for horizontal scaling)
 - Supabase connection pooler (database connection management)`,
 
-  risks: // FIX: Renamed from risks_and_mitigations `**Technical Risks**:
+  // FIX: Renamed from risks_and_mitigations
+  risks: `**Technical Risks**:
 
 **HIGH: Voice Latency Exceeds 200ms p95**
 - Probability: 40%
@@ -636,7 +637,7 @@ const PRD_CONTENT = {
   // FIX: success_metrics moved to metadata
 
 
-  // success_metrics: `**Usage Metrics**:
+  /* success_metrics: `**Usage Metrics**:
 - Voice Session Adoption: >30% of active users try voice within 30 days
 - Voice Session Frequency: >10% of users use voice weekly
 - PDF Export Adoption: >50% of chairman users export PDF monthly
@@ -658,7 +659,7 @@ const PRD_CONTENT = {
 - Uptime: >99.9%
 - Concurrent Sessions: Peak >100 simultaneous voice sessions
 - Database Query Performance: <100ms p95
-- API Response Time: <500ms p95`,
+- API Response Time: <500ms p95`, */
 
   monitoring_and_observability: `**Application Monitoring** (Datadog):
 - Voice latency metrics (p50, p95, p99)

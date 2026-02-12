@@ -26,13 +26,13 @@ async function createPRD() {
   // Create a comprehensive PRD for Feedback Loops consolidated SD
   
   // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
-  const { data: sdData, error: sdError } = await supabase
+  const { data: sdData, error: sdError2 } = await supabase
     .from('strategic_directives_v2')
     .select('uuid_id, id')
     .eq('id', sdId)
     .single();
 
-  if (sdError || !sdData) {
+  if (sdError2 || !sdData) {
     console.log(`❌ Strategic Directive ${sdId} not found in database`);
     console.log('   Create SD first before creating PRD');
     process.exit(1);
@@ -52,7 +52,7 @@ const prdContent = {
       'LOW': 3
     },
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    user_stories: [
       {
         id: 'US-SD-014-001',
         title: 'Real-time User Feedback Collection',
@@ -205,8 +205,8 @@ const prdContent = {
       content: prdContent,
       status: 'approved',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    sd_uuid: sdUuid, // FIX: Added for handoff validation
+      updated_at: new Date().toISOString(),
+      sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select()
     .single();

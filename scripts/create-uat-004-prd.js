@@ -39,7 +39,7 @@ const prdContent = {
     id: 'PRD-SD-UAT-2025-004',
     title: 'UI Component Visibility and Initialization Issues',
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    /* user_stories: [
       {
         id: 'US-UI-001',
         title: 'Fix Dashboard Widget Rendering',
@@ -140,7 +140,7 @@ const prdContent = {
           'Performance profiling'
         ]
       }
-    ],
+    ], */
     technical_requirements: {
       frontend: [
         'Add proper loading states to all components',
@@ -173,12 +173,12 @@ const prdContent = {
     },
     // FIX: success_metrics moved to metadata
     // success_metrics: {
-      visibility: 'Zero "element not found" errors',
-      performance: 'All components render <3 seconds',
-      reliability: '100% component initialization success',
-      testing: '<5% UI-related test failures',
-      accessibility: 'WCAG 2.1 AA compliance'
-    }
+    //   visibility: 'Zero "element not found" errors',
+    //   performance: 'All components render <3 seconds',
+    //   reliability: '100% component initialization success',
+    //   testing: '<5% UI-related test failures',
+    //   accessibility: 'WCAG 2.1 AA compliance'
+    // }
   };
 
   const prd = {
@@ -203,8 +203,8 @@ const prdContent = {
     },
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {
@@ -216,7 +216,7 @@ const prdContent = {
       .single();
 
     if (existing) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .update(prd)
         .eq('directive_id', 'SD-UAT-2025-004')
@@ -226,7 +226,7 @@ const prdContent = {
       if (error) throw error;
       console.log('✅ PRD updated successfully!');
     } else {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .insert(prd)
         .select()

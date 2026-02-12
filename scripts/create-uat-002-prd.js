@@ -39,7 +39,7 @@ const prdContent = {
     id: 'PRD-SD-UAT-2025-002',
     title: 'Authentication System Critical Failures',
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    /* user_stories: [
       {
         id: 'US-AUTH-001',
         title: 'Fix Login Form Detection and Rendering',
@@ -135,7 +135,7 @@ const prdContent = {
           'Token refresh logic tests'
         ]
       }
-    ],
+    ], */
     technical_requirements: {
       frontend: [
         'Fix React component lifecycle issues in login form',
@@ -164,12 +164,12 @@ const prdContent = {
     },
     // FIX: success_metrics moved to metadata
     // success_metrics: {
-      authentication: 'Zero auth-related test failures',
-      performance: 'Login completes in <2 seconds',
-      security: '100% CSRF protection coverage',
-      reliability: '99.9% auth service uptime',
-      user_experience: '<1% failed login attempts due to bugs'
-    }
+    //   authentication: 'Zero auth-related test failures',
+    //   performance: 'Login completes in <2 seconds',
+    //   security: '100% CSRF protection coverage',
+    //   reliability: '99.9% auth service uptime',
+    //   user_experience: '<1% failed login attempts due to bugs'
+    // }
   };
 
   const prd = {
@@ -193,8 +193,8 @@ const prdContent = {
     },
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {
@@ -206,7 +206,7 @@ const prdContent = {
       .single();
 
     if (existing) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .update(prd)
         .eq('directive_id', 'SD-UAT-2025-002')
@@ -216,7 +216,7 @@ const prdContent = {
       if (error) throw error;
       console.log('✅ PRD updated successfully!');
     } else {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .insert(prd)
         .select()

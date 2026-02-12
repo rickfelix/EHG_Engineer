@@ -7,7 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { randomUUID } from 'crypto';
+import { randomUUID as _randomUUID } from 'crypto';
 
 dotenv.config();
 
@@ -30,22 +30,22 @@ if (!sdData) {
 
 
   // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
-  const { data: sdData, error: sdError } = await supabase
+  const { data: sdData2, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('uuid_id, id')
     .eq('id', sdId)
     .single();
 
-  if (sdError || !sdData) {
+  if (sdError || !sdData2) {
     console.log(`❌ Strategic Directive ${sdId} not found in database`);
     console.log('   Create SD first before creating PRD');
     process.exit(1);
   }
 
-  const sdUuid = sdData.uuid_id;
+  const sdUuid = sdData2.uuid_id;
   console.log(`   SD uuid_id: ${sdUuid}`);
 
-const prdContent = {
+const _prdContent = {
   overview: `Add comprehensive timeline/Gantt visualization to the ventures management interface. Enable executive teams to visualize venture progress through the 40-stage lifecycle, identify bottlenecks, track dependencies, and understand critical paths across multiple ventures.
 
 **Target Users**: Executive teams, portfolio managers, venture analysts
@@ -178,7 +178,7 @@ const prdContent = {
         'Filename format: "Ventures_Timeline_YYYY-MM-DD.pdf"'
       ]
     }
-  ]),
+  ],
 
   non_functional_requirements: JSON.stringify([
     {
@@ -461,7 +461,8 @@ const prdContent = {
     ]
   }),
 
-  risks: // FIX: Renamed from risks_and_mitigations JSON.stringify([
+  // FIX: Renamed from risks_and_mitigations
+  risks: JSON.stringify([
     {
       risk: 'Gantt library (gantt-task-react) limitations',
       probability: 'Medium',
@@ -491,7 +492,7 @@ const prdContent = {
   // FIX: success_metrics moved to metadata
 
 
-  // success_metrics: JSON.stringify({
+  /* success_metrics: JSON.stringify({
     primary: {
       metric: 'Manual reporting time reduction',
       target: '60% reduction (measured via user time study)',
@@ -514,7 +515,7 @@ const prdContent = {
         measurement_method: 'Track time from dwell_days>14 to status change'
       }
     ]
-  }),
+  }), */
 
   metadata: {
     sd_key: 'SD-047A',
@@ -533,7 +534,7 @@ async function createPRD() {
   console.log('📋 Creating PRD for SD-047A: Venture Timeline Tab\n');
 
   // Insert PRD into database
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('product_requirements_v2')
     .insert(prdData)
     .select();

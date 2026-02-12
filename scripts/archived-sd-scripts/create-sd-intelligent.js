@@ -33,7 +33,7 @@ const supabase = createClient(
 // DECOMPOSITION CRITERIA (from CLAUDE_LEAD.md)
 // ============================================================
 
-const DECOMPOSITION_CRITERIA = {
+const _DECOMPOSITION_CRITERIA = {
   userStoryThreshold: 8,      // ≥8 stories → consider decomposition
   phaseThreshold: 3,          // 3+ distinct phases → consider decomposition
   durationWeeksThreshold: 2,  // >2 weeks → consider decomposition
@@ -621,7 +621,7 @@ async function createIntelligentSD(input, options = {}) {
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .upsert(sdRecord, { onConflict: 'id' })
         .select()

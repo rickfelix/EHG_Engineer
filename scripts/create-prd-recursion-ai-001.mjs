@@ -340,7 +340,7 @@ type Query {
    - Test outcome tracking
    - Test pattern extraction
 
-**Command**: `npm run test:unit`
+**Command**: \`npm run test:unit\`
 
 ### 5.2 E2E Tests (Playwright)
 **Coverage Target**: 100% of user stories
@@ -377,7 +377,7 @@ type Query {
    - Rationale capture (structured format)
    - Override feeds learning pipeline
 
-**Command**: `npm run test:e2e`
+**Command**: \`npm run test:e2e\`
 
 ### 5.3 Performance Tests
 **Benchmarks**:

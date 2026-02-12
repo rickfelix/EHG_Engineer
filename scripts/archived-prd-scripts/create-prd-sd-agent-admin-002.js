@@ -66,7 +66,7 @@ const prdContent = {
         title: 'Complete Agent Configuration Management',
         description: 'Enable agent managers to create, save, and apply configuration presets for rapid agent setup and consistent behavior across deployments',
         // FIX: success_metrics moved to metadata
-        // success_metrics: [
+        success_metrics: [
           'Agents can be configured from presets in <60 seconds (vs 5-10 minutes manual)',
           '80% of configurations use presets',
           'Configuration error rate <5% (vs 20%+ manual)'
@@ -79,7 +79,7 @@ const prdContent = {
         title: 'Implement Prompt Template Library with A/B Testing',
         description: 'Provide centralized prompt management with versioning, categorization, and built-in A/B testing to optimize agent performance',
         // FIX: success_metrics moved to metadata
-        // success_metrics: [
+        success_metrics: [
           'Prompt reuse rate >70%',
           'A/B tests show 15%+ performance improvement',
           'Prompt iteration time <2 minutes'
@@ -92,7 +92,7 @@ const prdContent = {
         title: 'Enable Advanced Performance Analytics',
         description: 'Add historical trend analysis, comparative dashboards, and performance alerts to monitor and optimize agent behavior over time',
         // FIX: success_metrics moved to metadata
-        // success_metrics: [
+        success_metrics: [
           'Performance trends visible across 7d/30d/90d for 100% of agents',
           'Alerts configured for 100% of production agents',
           'Anomaly detection <5 minutes'
@@ -647,7 +647,7 @@ const prdContent = {
       },
       created_by: 'PLAN Agent',
       phase: 'planning',
-      progress: 0
+      progress: 0,
     sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select();
@@ -668,7 +668,7 @@ const prdContent = {
   console.log(`  Business Objectives: ${prdContent.business_objectives.length}`);
   console.log(`  Subsystems: ${Object.keys(prdContent.detailed_features).length}`);
   console.log(`  Total User Stories: ${prdContent.executive_summary.effort_estimate}`);
-  console.log(`  Database Tables: 4 (agent_configs, prompt_templates, ab_tests, search_preferences)`);
+  console.log('  Database Tables: 4 (agent_configs, prompt_templates, ab_tests, search_preferences)');
   console.log(`  Components: ${prdContent.technical_approach.component_architecture.new_major_components} major, ${prdContent.technical_approach.component_architecture.new_sub_components} sub`);
   console.log(`  Estimated Lines: ${prdContent.technical_approach.component_architecture.total_new_lines}`);
 

@@ -43,7 +43,7 @@ const prdContent = {
       'LOW': 1
     },
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    user_stories: [
       {
         id: `US-${sdId}-001`,
         title: 'Naming Convention Standards Framework',
@@ -210,8 +210,8 @@ const prdContent = {
       content: prdContent,
       status: 'approved',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    sd_uuid: sdUuid, // FIX: Added for handoff validation
+      updated_at: new Date().toISOString(),
+      sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select()
     .single();

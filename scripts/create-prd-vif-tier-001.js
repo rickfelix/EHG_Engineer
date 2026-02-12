@@ -515,8 +515,8 @@ Target: Enable Chairman to capture simple ideas in 15 minutes while preserving d
       progress: 40,
       created_by: 'PLAN (Claude Code)',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    sd_uuid: sdUuid, // FIX: Added for handoff validation
+      updated_at: new Date().toISOString(),
+      sd_uuid: sdUuid, // FIX: Added for handoff validation
     };
 
     // Insert PRD

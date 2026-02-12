@@ -39,7 +39,7 @@ const prdContent = {
     id: 'PRD-SD-UAT-2025-003',
     title: 'Infrastructure Port Configuration Standardization',
     // FIX: user_stories moved to separate table
-    // user_stories: [
+    /* user_stories: [
       {
         id: 'US-PORT-001',
         title: 'Standardize Application Port to 8080',
@@ -136,7 +136,7 @@ const prdContent = {
           'Monitoring integration tests'
         ]
       }
-    ],
+    ], */
     technical_requirements: {
       infrastructure: [
         'Standardize all services to port 8080',
@@ -165,12 +165,12 @@ const prdContent = {
     },
     // FIX: success_metrics moved to metadata
     // success_metrics: {
-      connectivity: 'Zero connection refused errors',
-      consistency: '100% environments on port 8080',
-      testing: 'All tests pass with correct port',
-      deployment: 'Zero deployment failures due to ports',
-      documentation: '100% port configuration documented'
-    }
+    //   connectivity: 'Zero connection refused errors',
+    //   consistency: '100% environments on port 8080',
+    //   testing: 'All tests pass with correct port',
+    //   deployment: 'Zero deployment failures due to ports',
+    //   documentation: '100% port configuration documented'
+    // }
   };
 
   const prd = {
@@ -194,8 +194,8 @@ const prdContent = {
     },
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    updated_at: new Date().toISOString(),
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {
@@ -207,7 +207,7 @@ const prdContent = {
       .single();
 
     if (existing) {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .update(prd)
         .eq('directive_id', 'SD-UAT-2025-003')
@@ -217,7 +217,7 @@ const prdContent = {
       if (error) throw error;
       console.log('✅ PRD updated successfully!');
     } else {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('product_requirements_v2')
         .insert(prd)
         .select()

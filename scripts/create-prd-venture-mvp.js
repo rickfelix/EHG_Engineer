@@ -54,9 +54,9 @@ const prd = {
 
 This PRD establishes requirements for the foundational AI-driven venture intelligence platform based on comprehensive sub-agent review (5 agents, 88% avg confidence).`,
 
-    business_context: `Current modal form provides no intelligence - just data capture. Chairman must conduct all research manually. This creates a 10x opportunity: AI agents can research market data, validate pain points via Reddit/forums, analyze competitors, and assess portfolio fit in minutes instead of hours/days. CrewAI framework provides enterprise-ready multi-agent orchestration with proven 5.76x performance advantages.`,
+    business_context: 'Current modal form provides no intelligence - just data capture. Chairman must conduct all research manually. This creates a 10x opportunity: AI agents can research market data, validate pain points via Reddit/forums, analyze competitors, and assess portfolio fit in minutes instead of hours/days. CrewAI framework provides enterprise-ready multi-agent orchestration with proven 5.76x performance advantages.',
 
-    technical_context: `Existing infrastructure: VentureCreationDialog.tsx (365 lines), VoiceCapture component, EVA validation service. Gaps identified: No CrewAI framework, no research agents, no full-page workflow, no AI research progress display, no pause/resume functionality, no multi-agent orchestration infrastructure. Sub-agent review (5 agents, 88% avg confidence) confirms feasibility and provides detailed technical specifications.`,
+    technical_context: 'Existing infrastructure: VentureCreationDialog.tsx (365 lines), VoiceCapture component, EVA validation service. Gaps identified: No CrewAI framework, no research agents, no full-page workflow, no AI research progress display, no pause/resume functionality, no multi-agent orchestration infrastructure. Sub-agent review (5 agents, 88% avg confidence) confirms feasibility and provides detailed technical specifications.',
 
     functional_requirements: [
       {
@@ -867,8 +867,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
 
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    created_by: 'PLAN'
-  sd_uuid: sdUuid, // FIX: Added for handoff validation
+    created_by: 'PLAN',
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

@@ -26,7 +26,7 @@ async function createOrchestrator() {
   console.log('Creating Documentation Cleanup Orchestrator SD...\n');
 
   // Create parent orchestrator
-  const { data: parent, error: parentError } = await supabase
+  const { data: _parent, error: parentError } = await supabase
     .from('strategic_directives_v2')
     .upsert({
       id: parentId,
