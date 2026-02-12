@@ -1,11 +1,12 @@
 # EVA Platform Architecture: Shared Services Model
 
-> **Version**: 1.1
+> **Version**: 1.2
 > **Created**: 2026-02-12
 > **Status**: Draft
 > **Companion**: [EVA Venture Lifecycle Vision v4.6](eva-venture-lifecycle-vision.md) (34 Chairman decisions)
-> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11)
+> **Inputs**: Existing EHG database schema, EVA orchestration migrations, LEO Protocol codebase, brainstorming decisions (2026-02-11), Stage 0 CLI implementation (`lib/eva/stage-zero/`)
 > **v1.1 Changes**: Chairman Decision Interface (Section 9), resequenced implementation phases (Section 11), Saga Management for multi-step operations (Section 13)
+> **v1.2 Changes**: Stage 0 Venture Ideation Pipeline (Section 14) documenting existing implementation, Service Registry updated, Phase A test scenario extended to start from Stage 0, Chairman Review interactivity gap identified
 
 ---
 
@@ -86,6 +87,7 @@ No service maintains state between invocations. A CEO Service invocation for Ven
 
 | Service | Domain | Key Responsibilities | Existing Infrastructure |
 |---------|--------|---------------------|------------------------|
+| **Stage 0 Pipeline** | Venture ideation | 3 entry paths (competitor teardown, blueprint browse, discovery mode), 8-component synthesis engine, evaluation profiles, financial modeling, venture nursery | `lib/eva/stage-zero/` (fully implemented), 15+ database tables |
 | **CEO Service** | Strategy & coordination | Stage orchestration, analysisStep execution (Stages 1-25), cross-stage synthesis, advisory generation | `ai_ceo_agents` table, `useAICEOAgent.ts` hook, Supabase function |
 | **LEO Service** | Engineering execution | SD creation, PRD generation, code implementation, QA, deployment | Full LEO Protocol (EHG_Engineer), SD Bridge at Stage 18 |
 | **Finance Service** | Financial analysis | Unit economics (Stage 5), P&L (Stage 16), token budget management, cost tracking | `venture_token_budgets`, `venture_phase_budgets`, `venture_budget_transactions` |
@@ -669,10 +671,34 @@ CEO Service resumes venture progression
 
 | Stage | Decision Type | Chairman Sees | Chairman Actions |
 |:-----:|--------------|---------------|------------------|
+| **0** | Venture review | Synthesized brief: name, problem, solution, market, moat, archetype, forecast, venture score | Approve (→ Stage 1) / Park in Nursery / Edit brief / Kill |
 | **10** | Brand approval | Full brand package (name, voice, visual direction, narrative) | Approve / Revise (with notes) / Reject |
 | **22** | Release decision | BUILD LOOP synthesis, technical readiness, business review | Release / Hold (with reason) / Cancel |
 | **25** | Venture future | Complete journey synthesis, financials, health score | Continue / Pivot / Expand / Sunset / Exit |
 | **DFE** | Escalation | Trigger details, context, mitigations if available | Proceed / Block / Modify thresholds |
+
+**Stage 0 Chairman Review — Interactivity Gap:**
+
+The Stage 0 implementation (`lib/eva/stage-zero/chairman-review.js`) currently uses a **programmatic, non-interactive** review. The `conductChairmanReview()` function maps `brief.maturity` to a decision automatically (ready → approve, blocked/nursery → park). The Chairman does not actually see the brief or make a decision interactively.
+
+To close this gap, the Chairman Decision Interface (above) must be wired into Stage 0:
+
+```
+Stage 0 synthesis completes → Venture brief enriched with all 8 components
+    │
+    ▼
+conductChairmanReview() writes to chairman_decisions table:
+    { venture_id: null (new), stage: 0, decision_type: 'venture_review',
+      context: { brief, synthesis_results, forecast, venture_score } }
+    │
+    ▼
+Chairman reviews in Dashboard → Approves/Parks/Edits
+    │
+    ▼
+persistVentureBrief() creates venture record (Stage 1) or nursery entry
+```
+
+This makes Stage 0 the **fourth mandatory Chairman blocking gate** (alongside Stages 10, 22, 25). Until connected, the Chairman review is a no-op passthrough based on synthesis maturity classification.
 
 **Detection Mechanism:**
 
@@ -750,6 +776,12 @@ Every state change is logged:
 
 | Component | Table/Code | Status |
 |-----------|-----------|:------:|
+| **Stage 0 Ideation Pipeline** | `lib/eva/stage-zero/` (3 entry paths, 8 synthesis components, profiles, forecasting, nursery) | Production |
+| **Stage 0 Evaluation Profiles** | `evaluation_profiles` table, `profile-service.js` | Production |
+| **Stage 0 Counterfactual Engine** | `counterfactual-engine.js`, `counterfactual_scores` table | Production |
+| **Stage 0 Stage-of-Death Predictor** | `stage-of-death-predictor.js`, `stage_of_death_predictions` table | Production |
+| **Stage 0 Gate Signal Service** | `gate-signal-service.js`, `evaluation_profile_outcomes` table | Production |
+| **Venture Nursery** | `venture-nursery.js`, `venture_nursery` table | Production |
 | Venture CRUD | `ventures` (689 rows) | Production |
 | Stage config | `lifecycle_stage_config` (25 stages) | Production |
 | Stage advancement | `fn_advance_venture_stage()` | Production |
@@ -778,6 +810,7 @@ Every state change is logged:
 
 | Component | Purpose | Priority |
 |-----------|---------|:--------:|
+| **Stage 0 Interactive Chairman Review** | Wire `conductChairmanReview()` to `chairman_decisions` table + Dashboard (currently programmatic passthrough) | P0 |
 | **Decision Filter Engine** | Pure function evaluating 6 triggers per stage | P0 |
 | **Reality Gate Evaluator** | 5 phase-boundary hard gates | P0 |
 | **Chairman Decision API** | Minimal decision submission (table + Realtime + CLI) | P0 |
@@ -801,23 +834,27 @@ The sequence is ordered so that **each phase produces a testable end-to-end capa
 
 ```
 Phase A: First Venture End-to-End (P0)
-  Goal: One venture can complete all 25 stages via CLI commands.
+  Goal: One venture can progress from ideation (Stage 0) through all 25 stages via CLI commands.
 
-  1. Decision Filter Engine (pure function)
-  2. Reality Gate Evaluator (5 gates)
-  3. Chairman Decision API (chairman_decisions table + Realtime subscription + CLI)
-     └── Unblocks Stages 10, 22, 25 — without this, Phase A deadlocks
-  4. Chairman Preferences Store (chairman_preferences table + DFE integration)
-  5. CEO Service analysisStep executor (Stages 2-25)
-  6. CLI Task Dispatcher ("eva run <venture_id> [--stage N]")
+  1. Stage 0 Interactive Chairman Review (wire conductChairmanReview → chairman_decisions)
+     └── Stage 0 pipeline already built (Section 14); only the interactive review is missing
+  2. Decision Filter Engine (pure function)
+  3. Reality Gate Evaluator (5 gates)
+  4. Chairman Decision API (chairman_decisions table + Realtime subscription + CLI)
+     └── Unblocks Stages 0, 10, 22, 25 — without this, Phase A deadlocks
+  5. Chairman Preferences Store (chairman_preferences table + DFE integration)
+  6. CEO Service analysisStep executor (Stages 2-25)
+  7. CLI Task Dispatcher ("eva run <venture_id> [--stage N]" + "eva ideate [--path ...]")
      └── Manual trigger for testing — replaced by scheduler in Phase B
-  7. Return Path (LEO SD completion → stage progress)
-  8. Saga Coordinator (wire evaStateMachines.ts for SD execution + retry sagas)
+  8. Return Path (LEO SD completion → stage progress)
+  9. Saga Coordinator (wire evaStateMachines.ts for SD execution + retry sagas)
      └── See Section 13 for saga types
-  9. Wire event bus handlers (connect dormant infrastructure)
+  10. Wire event bus handlers (connect dormant infrastructure)
 
-  Test: Create a venture, run "eva run <id>" repeatedly. Venture progresses
-  through all 25 stages. Chairman submits decisions via CLI at Stages 10, 22, 25.
+  Test: Chairman initiates venture via "eva ideate --path competitor_teardown --urls ...",
+  Stage 0 runs synthesis + forecast, Chairman reviews and approves via CLI,
+  venture created at Stage 1. Then "eva run <id>" progresses through Stages 2-25.
+  Chairman submits decisions via CLI at Stages 10, 22, 25.
   SD Bridge creates LEO SDs at Stage 18, return path advances to Stage 20.
 
 Phase B: Automated Scheduling + Chairman Dashboard (P1)
@@ -848,23 +885,28 @@ Phase D: Optimization (P3)
 Phase A is complete when this scenario passes:
 
 ```
-1. Chairman creates venture idea via CLI → Stage 1 artifact written
-2. "eva run <id>" → CEO Service runs Stages 2-9 automatically
-   - DFE evaluates at each stage (AUTO_PROCEED for all)
-   - Reality Gates pass at phase boundaries
-   - Kill gates at 3 and 5 auto-resolve
-3. Stage 10 blocks → Chairman decision created
-4. "eva decisions approve <id>" → Venture unblocks, continues to Stage 12
-5. Stages 13-17 auto-advance
-6. Stage 18 → SD Bridge creates LEO SDs
-7. (LEO executes SDs externally)
-8. Return path receives SD completion → Stage 19 updates
-9. Stages 20-21 auto-advance
-10. Stage 22 blocks → Chairman decides "release"
-11. Stage 23 auto-advances (launch)
-12. Stage 24 auto-advances (metrics)
-13. Stage 25 blocks → Chairman decides "continue"
-14. Venture enters ops cycle (Stage 24 version 2)
+ 1. "eva ideate --path competitor_teardown --urls https://competitor.com"
+    → Stage 0 executes: path routing → 8-component synthesis → financial forecast
+    → Venture brief created with venture_score, archetype, moat strategy
+ 2. Chairman reviews brief via CLI → "eva decisions approve <id>"
+    → persistVentureBrief() creates venture at Stage 1
+    (Alternative: Chairman parks in nursery → venture_nursery record created)
+ 3. "eva run <id>" → CEO Service runs Stages 2-9 automatically
+    - DFE evaluates at each stage (AUTO_PROCEED for all)
+    - Reality Gates pass at phase boundaries
+    - Kill gates at 3 and 5 auto-resolve
+ 4. Stage 10 blocks → Chairman decision created
+ 5. "eva decisions approve <id>" → Venture unblocks, continues to Stage 12
+ 6. Stages 13-17 auto-advance
+ 7. Stage 18 → SD Bridge creates LEO SDs
+ 8. (LEO executes SDs externally)
+ 9. Return path receives SD completion → Stage 19 updates
+10. Stages 20-21 auto-advance
+11. Stage 22 blocks → Chairman decides "release"
+12. Stage 23 auto-advances (launch)
+13. Stage 24 auto-advances (metrics)
+14. Stage 25 blocks → Chairman decides "continue"
+15. Venture enters ops cycle (Stage 24 version 2)
 ```
 
 If any step fails, the phase is not complete.
@@ -1056,7 +1098,221 @@ The circuit breaker (`evaCircuitBreaker.ts`) integrates at the step level: if a 
 
 ---
 
+## 14. Stage 0: Venture Ideation Pipeline
+
+### Overview
+
+Stage 0 is the **pre-lifecycle venture ideation pipeline** — it runs *before* a venture enters the 25-stage lifecycle (Stages 1-25). Its purpose is to take a raw idea signal (competitor URL, blueprint selection, discovery output, or direct chairman input), enrich it through 8 synthesis components, score it with financial modeling, and either approve it into Stage 1 or park it in the Venture Nursery for later re-evaluation.
+
+**Implementation status**: Fully built in `lib/eva/stage-zero/`. This is the most complete EVA module in the codebase.
+
+```
+Signal source (URL, blueprint, discovery, manual, nursery re-eval)
+    │
+    ▼
+Entry Path → PathOutput (structured raw material)
+    │
+    ▼
+Synthesis Engine (8 components in parallel) → Enriched VentureBrief
+    │
+    ▼
+Financial Forecast → 3-year projections + venture score (0-100)
+    │
+    ▼
+Chairman Review → Approve (→ Stage 1) or Park (→ Nursery)
+```
+
+### Entry Paths
+
+Three primary entry paths, each producing a `PathOutput` that feeds the synthesis engine:
+
+| Path | Key | Module | Mechanism |
+|------|-----|--------|-----------|
+| **Competitor Teardown** | `competitor_teardown` | `paths/competitor-teardown.js` | Accepts competitor URLs → LLM analyzes business model, features, work components, automation potential → First-principles deconstruction → Gap analysis (if multiple URLs) |
+| **Blueprint Browse** | `blueprint_browse` | `paths/blueprint-browse.js` | Loads templates from `venture_blueprints` table → Category browsing → Parameter customization → Template-derived brief |
+| **Discovery Mode** | `discovery_mode` | `paths/discovery-mode.js` | 4 AI-driven strategies (see below) → Generates ranked candidates → Selects top candidate |
+
+Two additional origin types flow through the same pipeline:
+
+| Origin | Mechanism |
+|--------|-----------|
+| **Manual** | Chairman direct input — `origin_type: 'manual'`, bypasses path routing |
+| **Nursery Re-eval** | Re-evaluates parked ventures — runs as Discovery Mode `nursery_reeval` strategy, feeds back into Stage 0 with fresh synthesis |
+
+### Discovery Strategies
+
+The Discovery Mode path supports 4 strategies, configured in the `discovery_strategies` database table:
+
+| Strategy | Purpose | Signal Source |
+|----------|---------|---------------|
+| `trend_scanner` | Trending products generating $1K+/month, fully automatable | LLM market research |
+| `democratization_finder` | Premium services ($500+/session) that can be offered at 1/10th cost via AI | LLM service analysis |
+| `capability_overhang` | AI capabilities that exist but are not productized | LLM capability-market gap analysis |
+| `nursery_reeval` | Re-score parked ideas whose conditions may have changed | `venture_nursery` table + LLM re-assessment |
+
+Each strategy generates N candidates (default 5), which are ranked by `automation_feasibility * 10 + competition_bonus`. The top candidate becomes the PathOutput.
+
+### Synthesis Engine
+
+The synthesis engine runs **8 components** on every PathOutput. Components 1-4 and 6-8 execute in parallel via `Promise.all`; component 5 (Chairman Constraints) runs sequentially after.
+
+| # | Component | Module | Produces | Scoring |
+|---|-----------|--------|----------|---------|
+| 1 | Cross-Reference Intellectual Capital | `synthesis/cross-reference.js` | Matches against nursery items, brainstorms, retrospectives, issue patterns | `relevance_score` (0-100) |
+| 2 | Portfolio Evaluation | `synthesis/portfolio-evaluation.js` | Portfolio fit assessment across multiple dimensions | `composite_score` (0-100) |
+| 3 | Problem Reframing | `synthesis/problem-reframing.js` | Alternative problem framings for the venture | Count of reframings → score |
+| 4 | Moat Architecture | `synthesis/moat-architecture.js` | Primary moat (from 5 types) + secondary moats, compounding over 1-24 months, portfolio synergy | `moat_score` (0-100) |
+| 5 | Chairman Constraints | `synthesis/chairman-constraints.js` | Validates against chairman directives | `verdict`: pass / review / fail |
+| 6 | Time Horizon | `synthesis/time-horizon.js` | Positioning classification | `position`: build_now / build_soon / park_and_build_later |
+| 7 | Archetype Recognition | `synthesis/archetypes.js` | Classification into 1 of 6 EHG archetypes + secondary fits | `primary_confidence` (0-1) |
+| 8 | Build Cost Estimation | `synthesis/build-cost-estimation.js` | Complexity assessment with EHG context | `complexity`: simple / moderate / complex |
+
+**Moat types** (Component 4): `data_moat`, `automation_speed`, `vertical_expertise`, `network_effects`, `switching_costs`
+
+**Archetype types** (Component 7): `democratizer`, `automator`, `capability_productizer`, `first_principles_rebuilder`, `vertical_specialist`, `portfolio_connector`
+
+**Maturity determination**: The synthesis engine sets maturity based on:
+- Chairman constraints verdict = `fail` → maturity = `blocked`
+- Time horizon = `park_and_build_later` → maturity = `nursery`
+- Otherwise → maturity = `ready`
+
+### Evaluation Profile System
+
+Synthesis scoring is configurable via database-backed evaluation profiles (`profile-service.js`):
+
+```
+Profile resolution: explicit profile_id → active profile → legacy defaults
+    │
+    ├── Profile weights (9 components, each 0.0-1.0):
+    │     cross_reference: 0.10, portfolio_evaluation: 0.10, problem_reframing: 0.05,
+    │     moat_architecture: 0.15, chairman_constraints: 0.15, time_horizon: 0.10,
+    │     archetypes: 0.10, build_cost: 0.10, virality: 0.15
+    │
+    ├── calculateWeightedScore(synthesisResults, weights) → 0-100
+    │
+    └── Gate thresholds per boundary (overrides legacy defaults):
+          5→6, 9→10, 12→13, 16→17, 20→21
+```
+
+Profiles support CRUD operations, activation (deactivates all others), and version tracking. When no profile exists, the system falls back to hardcoded legacy weights.
+
+### Financial Modeling
+
+The `modeling.js` module generates a horizontal forecast for every venture brief:
+
+| Projection | Granularity | Output |
+|------------|-------------|--------|
+| Market sizing | TAM / SAM / SOM | USD value + rationale |
+| Revenue projections | Years 1-3 | Optimistic / realistic / pessimistic ranges |
+| Unit economics | CAC, LTV, LTV:CAC ratio, payback months | Optimistic / realistic / pessimistic |
+| Growth trajectory | 3, 6, 12-month users | Adoption curve + growth model type |
+| Break-even | Months to break-even, burn at launch/scale | Optimistic / realistic / pessimistic |
+
+**Venture Score** (0-100): Composite of revenue (35%), LTV:CAC ratio (30%), break-even speed (20%), forecast confidence (15%).
+
+### Advanced Analytics
+
+Three modules provide predictive analytics beyond the core synthesis:
+
+| Module | Purpose | Key Function |
+|--------|---------|-------------|
+| **Counterfactual Engine** (`counterfactual-engine.js`) | What-if scoring: "how would this venture score under a different evaluation profile?" Batch re-scoring across N ventures × P profiles. Predictive accuracy via Kendall's tau-b. | `generateCounterfactual()`, `runBatchCounterfactual()`, `generatePredictiveReport()` |
+| **Stage-of-Death Predictor** (`stage-of-death-predictor.js`) | Predicts WHERE a venture will die (which stage), not just IF. Builds per-stage mortality curves from historical kill data + component weakness amplification. Outputs: "Democratizers scoring below 60 on moat have 80% chance of dying at Stage 5." | `predictStageOfDeath()`, `buildMortalityCurve()`, `calibratePredictions()` |
+| **Gate Signal Service** (`gate-signal-service.js`) | Records per-gate survival signals at tracked boundaries (stage_3, 5→6, 12→13, 20→21, graduation). Produces 5-6 data points per venture instead of one, cutting learning cycles from months to weeks. | `recordGateSignal()`, `getSignalsSummary()` |
+
+### Venture Nursery
+
+The Venture Nursery (`venture-nursery.js`) provides **warm storage** for ventures not ready for Stage 1:
+
+```
+Venture brief with maturity = 'blocked' or 'nursery'
+    │
+    ▼
+parkVenture(brief, { reason, triggerConditions, reviewSchedule })
+    → Creates venture_nursery record
+    → Sets review date: 30d (blocked) or 90d (nursery)
+    → Stores trigger conditions for automated re-evaluation
+    │
+    ▼
+checkNurseryTriggers() (called on schedule)
+    → Finds items past their review date
+    → Triggers re-evaluation via discovery_mode.nursery_reeval strategy
+    │
+    ▼
+reactivateVenture(nurseryId)
+    → Feeds back into Stage 0 with origin_type: 'nursery_reeval'
+    → Fresh synthesis with updated context
+    → Chairman reviews again → Approve or re-park
+```
+
+Health monitoring (`getNurseryHealth()`) flags nursery items stale after 180 days.
+
+Synthesis feedback (`recordSynthesisFeedback()`) records outcomes (approved/parked/killed) back to the `venture_synthesis_feedback` table, enabling the cross-reference component to learn from prior ideation decisions.
+
+### Chairman Review (Current vs. Target)
+
+**Current implementation** (`chairman-review.js`): Non-interactive. Maps `brief.maturity` to a decision automatically:
+- `ready` → approve → create venture at Stage 1
+- `blocked` / `nursery` → park in Venture Nursery
+- The Chairman never actually sees the brief or makes a decision
+
+**Target architecture** (see Section 9, Chairman Decision Interface):
+- `conductChairmanReview()` writes to `chairman_decisions` table with full synthesis context
+- Chairman reviews in Dashboard (brief, synthesis scores, forecast, archetype, moat strategy)
+- Chairman submits: Approve / Park / Edit brief / Kill
+- Supabase Realtime broadcasts → event bus → `persistVentureBrief()` executes
+
+**Gap**: The only missing piece is the integration between `conductChairmanReview()` and `chairman_decisions`. The synthesis, scoring, and persistence are all built. This is listed as P0 item #1 in the implementation sequence (Section 11).
+
+### Stage 0 → Stage 1 Contract (VentureBrief)
+
+The VentureBrief is the data contract between Stage 0 and Stage 1. Validated by `interfaces.js`:
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|-------------|
+| `name` | string | Yes | Venture name |
+| `problem_statement` | string | Yes | Core problem (may be reframed by synthesis) |
+| `solution` | string | Yes | Proposed solution |
+| `target_market` | string | Yes | Target market segment |
+| `origin_type` | string | Yes | How this idea was sourced (5 types) |
+| `raw_chairman_intent` | string | Yes | Immutable capture of original chairman vision |
+| `maturity` | enum | Yes | `ready` / `seed` / `sprout` / `blocked` / `nursery` |
+| `archetype` | string | No | Primary archetype from synthesis |
+| `moat_strategy` | object | No | Primary + secondary moats |
+| `portfolio_synergy_score` | number | No | 0-100 fit score |
+| `time_horizon_classification` | string | No | build_now / build_soon / park_and_build_later |
+| `build_estimate` | object | No | Complexity + timeline |
+| `cross_references` | array | No | Matches from intellectual capital |
+| `chairman_constraint_scores` | object | No | Constraint check results |
+| `competitor_ref` | array | No | Source URLs (competitor teardown path) |
+| `blueprint_id` | string | No | Source template (blueprint path) |
+| `discovery_strategy` | string | No | Strategy used (discovery path) |
+| `metadata.synthesis` | object | No | Full synthesis results (all 8 components + profile + weighted score) |
+| `metadata.synthesis.forecast` | object | No | 3-year financial projections |
+
+When approved, `persistVentureBrief()` writes to both:
+- `ventures` table (core record at `current_lifecycle_stage: 1`)
+- `venture_briefs` table (detailed brief with all synthesis data)
+
+### Database Tables (Stage 0)
+
+| Table | Purpose | Status |
+|-------|---------|:------:|
+| `venture_blueprints` | Blueprint templates for browse path | Active |
+| `discovery_strategies` | Strategy configs for discovery mode | Active |
+| `evaluation_profiles` | Configurable scoring weights + gate thresholds | Active |
+| `evaluation_profile_outcomes` | Gate signal tracking (pass/fail per boundary per profile) | Active |
+| `counterfactual_scores` | What-if scoring results | Active |
+| `stage_of_death_predictions` | Mortality predictions per venture per profile | Active |
+| `venture_nursery` | Parked ventures with trigger conditions | Active |
+| `venture_synthesis_feedback` | Outcome learning records (approved/parked/killed) | Active |
+| `venture_briefs` | Detailed brief records linked to ventures | Active |
+| `brainstorm_sessions` | Prior brainstorms (consumed by cross-reference) | Active |
+
+---
+
 *Architecture document as Step 2 of the 8-step vision & architecture plan.*
-*Informed by: EVA Venture Lifecycle Vision v4.6 (34 Chairman decisions), existing EHG database schema (689 ventures, 25 stages configured), EVA orchestration infrastructure (event bus, task contracts, state machines, circuit breakers), LEO Protocol SD Bridge implementation.*
+*Informed by: EVA Venture Lifecycle Vision v4.6 (34 Chairman decisions), existing EHG database schema (689 ventures, 25 stages configured), EVA orchestration infrastructure (event bus, task contracts, state machines, circuit breakers), LEO Protocol SD Bridge implementation, Stage 0 CLI implementation (`lib/eva/stage-zero/`).*
 *Steps 1 and 2 run in parallel -- vision defines "what," architecture defines "how."*
 *v1.1: Added Chairman Decision Interface (Section 9) defining how the Chairman submits decisions at blocking gates. Resequenced implementation phases (Section 11) so Phase A produces a testable end-to-end single-venture flow including Chairman decisions and CLI task dispatcher. Added Saga Management (Section 13) for multi-step operations (SD execution, Reality Gate retries, venture retirement) using dormant evaStateMachines.ts infrastructure.*
+*v1.2: Added Stage 0 Venture Ideation Pipeline (Section 14) documenting the fully-implemented pre-lifecycle module. Updated Service Registry to include Stage 0 Pipeline. Extended Phase A test scenario to start from Stage 0 ideation. Identified Chairman Review interactivity gap: `conductChairmanReview()` is currently a non-interactive passthrough — wiring to `chairman_decisions` table is P0 item #1. Added Stage 0 as fourth mandatory Chairman blocking gate (alongside Stages 10, 22, 25). Documented 15+ existing database tables, 8 synthesis components, 3 entry paths, 4 discovery strategies, evaluation profile system, counterfactual engine, stage-of-death predictor, gate signal service, and venture nursery.*
