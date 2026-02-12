@@ -232,7 +232,7 @@ Per-stage consensus decisions extracted from the 25-stage triangulated analysis.
 |:-----:|------|-------------|-------------|
 | **1** | Idea Capture | Add `problemStatement` (required). Wire Stage 0 synthesis output into Stage 1. Keep `valueProp`. | Stage 0→1 data pipeline closes the synthesis gap |
 | **2** | Idea Analysis | Add active `analysisStep` (the #1 gap). Adopt 0-100 integer scale. Align categories to Stage 3's 6 kill gate metrics. | Every stage gets an analysisStep (pattern established here) |
-| **3** | Kill Gate | Add metric generation `analysisStep`. Hybrid scoring (60% deterministic + 40% AI). Stage 2→3 formal artifact contract. Raise kill threshold from 40. | Deterministic baseline + AI augmentation scoring model |
+| **3** | Kill Gate | Add metric generation `analysisStep`. Hybrid scoring (50% deterministic + 50% AI). Stage 2→3 formal artifact contract. Raise kill threshold from 40. | Deterministic baseline + AI augmentation scoring model |
 | **4** | Competitive Landscape | Add competitor discovery `analysisStep`. Add pricing model per competitor (essential for Stage 5). Eliminate feature comparison matrix. | Cross-stage consumption: Stage 3→4 competitor handoff |
 | **5** | Kill Gate (Financial) | Add financial model generation `analysisStep`. Stage 4 consumption mandatory. Unit economics required (CAC, LTV, LTV:CAC, payback). ROI 25% with bands. | Kill gate evaluates generated data, not user-entered data |
 
@@ -259,7 +259,7 @@ Per-stage consensus decisions extracted from the 25-stage triangulated analysis.
 |:-----:|------|-------------|-------------|
 | **13** | Product Roadmap | Add roadmap generation `analysisStep` consuming Stages 1-12. Wire sales_model → feature generation. Add priority (now/next/later) to milestones. | Sales model drives product priorities |
 | **14** | Technical Architecture | Add architecture generation `analysisStep`. Map Stage 13 deliverable types → architecture layers. Add security section, Schema-Lite data entities. | Structured minimalism: enough to inform Stages 15-16, not premature implementation |
-| **15** | Resource Planning | Add team generation `analysisStep` from Stages 12-14. Phase-aware role bundling (generalists → specialists). Add phase_ref to team/hiring. | "Generalists first, specialize later" principle |
+| **15** | Resource Planning | Add agent allocation `analysisStep` from Stages 12-14. Map AI agent capabilities to build phases. Add service/tool requirements and compute budget per phase. | AI-only operation: agents and compute, not human hiring |
 | **16** | Financial Projections | Add financial model `analysisStep` consuming 7 prior stages. Replace flat projections with "Startup Standard" P&L. Phase-variable costs from Stage 15. Promotion gate checks viability, not just presence. | The synthesis stage of THE BLUEPRINT: all prior stages feed financial truth |
 
 ### Phase 5: THE BUILD LOOP (Stages 17-22)
