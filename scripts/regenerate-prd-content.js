@@ -19,10 +19,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { execSync } from 'child_process';
-import fs from 'fs';
-// path - available for future file path operations
-import path from 'path'; // eslint-disable-line no-unused-vars
+import { executeSubAgent } from '../lib/sub-agent-executor.js';
 
 // Configuration
 const LLM_CONFIG = {
@@ -62,6 +59,32 @@ const PRD_QUALITY_RUBRIC = `
 - 7-8: Specific risks with concrete mitigation strategies
 - 9-10: Comprehensive with rollback and monitoring
 `;
+
+/**
+ * Format executeSubAgent result object as readable text.
+ */
+function formatSubAgentResult(result, agentName) {
+  if (!result) return null;
+  const parts = [`${agentName} Analysis Results:`];
+  if (result.verdict) parts.push(`Verdict: ${result.verdict}`);
+  if (result.confidence) parts.push(`Confidence: ${result.confidence}%`);
+  if (result.message) parts.push(`Summary: ${result.message}`);
+  if (result.recommendations?.length > 0) {
+    parts.push('\nRecommendations:');
+    result.recommendations.forEach((r, i) => parts.push(`  ${i + 1}. ${typeof r === 'string' ? r : r.recommendation || JSON.stringify(r)}`));
+  }
+  if (result.critical_issues?.length > 0) {
+    parts.push('\nCritical Issues:');
+    result.critical_issues.forEach((issue, i) => parts.push(`  ${i + 1}. ${typeof issue === 'string' ? issue : issue.issue || JSON.stringify(issue)}`));
+  }
+  const skipKeys = new Set(['verdict', 'confidence', 'message', 'recommendations', 'critical_issues', 'execution_time_ms', 'hallucination_check', 'stored_result_id']);
+  for (const [key, value] of Object.entries(result)) {
+    if (!skipKeys.has(key) && value != null) {
+      parts.push(typeof value === 'object' ? `\n${key}: ${JSON.stringify(value, null, 2)}` : `${key}: ${value}`);
+    }
+  }
+  return parts.join('\n');
+}
 
 async function main() {
   const sdId = process.argv[2];
@@ -138,17 +161,10 @@ async function main() {
   console.log('═══════════════════════════════════════════════════');
 
   try {
-    const designPrompt = buildDesignPrompt(sd);
-    const promptFile = `/tmp/design-regen-${Date.now()}.txt`;
-    fs.writeFileSync(promptFile, designPrompt);
-
-    designAnalysis = execSync(
-      `node lib/sub-agent-executor.js DESIGN --context-file "${promptFile}"`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 }
-    );
-    fs.unlinkSync(promptFile);
+    const designResult = await executeSubAgent('DESIGN', sd.sd_key || sd.id, { timeout: 120000 });
+    designAnalysis = formatSubAgentResult(designResult, 'DESIGN');
     console.log('   ✅ Design analysis complete\n');
-  } catch (_err) {
+  } catch (err) {
     console.warn('   ⚠️  Design analysis failed:', err.message);
   }
 
@@ -158,17 +174,10 @@ async function main() {
   console.log('═══════════════════════════════════════════════════');
 
   try {
-    const dbPrompt = buildDatabasePrompt(sd, designAnalysis);
-    const promptFile = `/tmp/db-regen-${Date.now()}.txt`;
-    fs.writeFileSync(promptFile, dbPrompt);
-
-    databaseAnalysis = execSync(
-      `node lib/sub-agent-executor.js DATABASE --context-file "${promptFile}"`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 }
-    );
-    fs.unlinkSync(promptFile);
+    const dbResult = await executeSubAgent('DATABASE', sd.sd_key || sd.id, { timeout: 120000 });
+    databaseAnalysis = formatSubAgentResult(dbResult, 'DATABASE');
     console.log('   ✅ Database analysis complete\n');
-  } catch (_err) {
+  } catch (err) {
     console.warn('   ⚠️  Database analysis failed:', err.message);
   }
 
@@ -178,17 +187,10 @@ async function main() {
   console.log('═══════════════════════════════════════════════════');
 
   try {
-    const riskPrompt = buildRiskPrompt(sd);
-    const promptFile = `/tmp/risk-regen-${Date.now()}.txt`;
-    fs.writeFileSync(promptFile, riskPrompt);
-
-    riskAnalysis = execSync(
-      `node lib/sub-agent-executor.js RISK --context-file "${promptFile}"`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 }
-    );
-    fs.unlinkSync(promptFile);
+    const riskResult = await executeSubAgent('RISK', sd.sd_key || sd.id, { timeout: 120000 });
+    riskAnalysis = formatSubAgentResult(riskResult, 'RISK');
     console.log('   ✅ Risk analysis complete\n');
-  } catch (_err) {
+  } catch (err) {
     console.warn('   ⚠️  Risk analysis failed:', err.message);
   }
 
@@ -204,17 +206,10 @@ async function main() {
     console.log('═══════════════════════════════════════════════════');
 
     try {
-      const secPrompt = buildSecurityPrompt(sd);
-      const promptFile = `/tmp/sec-regen-${Date.now()}.txt`;
-      fs.writeFileSync(promptFile, secPrompt);
-
-      securityAnalysis = execSync(
-        `node lib/sub-agent-executor.js SECURITY --context-file "${promptFile}"`,
-        { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 120000 }
-      );
-      fs.unlinkSync(promptFile);
+      const secResult = await executeSubAgent('SECURITY', sd.sd_key || sd.id, { timeout: 120000 });
+      securityAnalysis = formatSubAgentResult(secResult, 'SECURITY');
       console.log('   ✅ Security analysis complete\n');
-    } catch (_err) {
+    } catch (err) {
       console.warn('   ⚠️  Security analysis failed:', err.message);
     }
   }

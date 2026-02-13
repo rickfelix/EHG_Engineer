@@ -6,16 +6,54 @@
  * SD-LEO-REFACTOR-PRD-DB-002
  */
 
-import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { executeSubAgent } from '../../lib/sub-agent-executor.js';
 import {
   formatObjectives,
   formatArrayField,
   formatRisks,
   formatMetadata
 } from './formatters.js';
+
+/**
+ * Format executeSubAgent result object as readable text for PRD pipeline.
+ * The PRD generator expects string analysis output, not structured objects.
+ */
+function formatSubAgentResult(result, agentName) {
+  if (!result) return null;
+
+  const parts = [`${agentName} Analysis Results:`];
+
+  if (result.verdict) parts.push(`Verdict: ${result.verdict}`);
+  if (result.confidence) parts.push(`Confidence: ${result.confidence}%`);
+  if (result.message) parts.push(`Summary: ${result.message}`);
+
+  if (result.recommendations?.length > 0) {
+    parts.push('\nRecommendations:');
+    result.recommendations.forEach((r, i) => parts.push(`  ${i + 1}. ${typeof r === 'string' ? r : r.recommendation || JSON.stringify(r)}`));
+  }
+
+  if (result.critical_issues?.length > 0) {
+    parts.push('\nCritical Issues:');
+    result.critical_issues.forEach((issue, i) => parts.push(`  ${i + 1}. ${typeof issue === 'string' ? issue : issue.issue || JSON.stringify(issue)}`));
+  }
+
+  // Include any analysis-specific data
+  const skipKeys = new Set(['verdict', 'confidence', 'message', 'recommendations', 'critical_issues', 'execution_time_ms', 'hallucination_check', 'stored_result_id']);
+  for (const [key, value] of Object.entries(result)) {
+    if (!skipKeys.has(key) && value != null && typeof value !== 'undefined') {
+      if (typeof value === 'object') {
+        parts.push(`\n${key}: ${JSON.stringify(value, null, 2)}`);
+      } else {
+        parts.push(`${key}: ${value}`);
+      }
+    }
+  }
+
+  return parts.join('\n');
+}
 
 /**
  * Get temp directory path (cross-platform)
@@ -39,28 +77,16 @@ export async function executeDesignAnalysis(sdId, sdData, personaContextBlock = 
   try {
     console.log('Invoking DESIGN sub-agent to analyze UI/UX workflows...\n');
 
-    const designPrompt = buildDesignPrompt(sdId, sdData, personaContextBlock);
-    const designPromptFile = path.join(getTempDir(), `design-agent-prompt-${Date.now()}.txt`);
-    fs.writeFileSync(designPromptFile, designPrompt);
+    console.log('Executing DESIGN sub-agent programmatically...\n');
 
-    console.log('Prompt written to:', designPromptFile);
-    console.log('\nExecuting DESIGN sub-agent...\n');
-
-    const designOutput = execSync(
-      `node lib/sub-agent-executor.js DESIGN --context-file "${designPromptFile}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 120000
-      }
-    );
+    const designResult = await executeSubAgent('DESIGN', sdId, { timeout: 120000 });
+    const designOutput = formatSubAgentResult(designResult, 'DESIGN');
 
     console.log('Design analysis complete!\n');
     console.log('-'.repeat(53));
-    console.log(designOutput);
+    console.log(designOutput || '(no output)');
     console.log('-'.repeat(53) + '\n');
 
-    fs.unlinkSync(designPromptFile);
     return designOutput;
 
   } catch (error) {
@@ -86,28 +112,16 @@ export async function executeDatabaseAnalysis(sdId, sdData, designAnalysis, pers
   try {
     console.log('Invoking DATABASE sub-agent to analyze schema and recommend changes...\n');
 
-    const dbPrompt = buildDatabasePrompt(sdId, sdData, designAnalysis, personaContextBlock);
-    const promptFile = path.join(getTempDir(), `db-agent-prompt-${Date.now()}.txt`);
-    fs.writeFileSync(promptFile, dbPrompt);
+    console.log('Executing DATABASE sub-agent programmatically...\n');
 
-    console.log('Prompt written to:', promptFile);
-    console.log('\nExecuting DATABASE sub-agent...\n');
-
-    const dbOutput = execSync(
-      `node lib/sub-agent-executor.js DATABASE --context-file "${promptFile}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 120000
-      }
-    );
+    const dbResult = await executeSubAgent('DATABASE', sdId, { timeout: 120000 });
+    const dbOutput = formatSubAgentResult(dbResult, 'DATABASE');
 
     console.log('Database sub-agent analysis complete!\n');
     console.log('-'.repeat(53));
-    console.log(dbOutput);
+    console.log(dbOutput || '(no output)');
     console.log('-'.repeat(53) + '\n');
 
-    fs.unlinkSync(promptFile);
     return dbOutput;
 
   } catch (error) {
@@ -142,28 +156,16 @@ export async function executeSecurityAnalysis(sdId, sdData) {
   try {
     console.log('Invoking SECURITY sub-agent to analyze security requirements...\n');
 
-    const securityPrompt = buildSecurityPrompt(sdId, sdData);
-    const securityPromptFile = path.join(getTempDir(), `security-agent-prompt-${Date.now()}.txt`);
-    fs.writeFileSync(securityPromptFile, securityPrompt);
+    console.log('Executing SECURITY sub-agent programmatically...\n');
 
-    console.log('Prompt written to:', securityPromptFile);
-    console.log('\nExecuting SECURITY sub-agent...\n');
-
-    const securityOutput = execSync(
-      `node lib/sub-agent-executor.js SECURITY --context-file "${securityPromptFile}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 120000
-      }
-    );
+    const securityResult = await executeSubAgent('SECURITY', sdId, { timeout: 120000 });
+    const securityOutput = formatSubAgentResult(securityResult, 'SECURITY');
 
     console.log('Security analysis complete!\n');
     console.log('-'.repeat(53));
-    console.log(securityOutput);
+    console.log(securityOutput || '(no output)');
     console.log('-'.repeat(53) + '\n');
 
-    fs.unlinkSync(securityPromptFile);
     return securityOutput;
 
   } catch (error) {
@@ -187,28 +189,16 @@ export async function executeRiskAnalysis(sdId, sdData) {
   try {
     console.log('Invoking RISK sub-agent to assess implementation risks...\n');
 
-    const riskPrompt = buildRiskPrompt(sdId, sdData);
-    const riskPromptFile = path.join(getTempDir(), `risk-agent-prompt-${Date.now()}.txt`);
-    fs.writeFileSync(riskPromptFile, riskPrompt);
+    console.log('Executing RISK sub-agent programmatically...\n');
 
-    console.log('Prompt written to:', riskPromptFile);
-    console.log('\nExecuting RISK sub-agent...\n');
-
-    const riskOutput = execSync(
-      `node lib/sub-agent-executor.js RISK --context-file "${riskPromptFile}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 120000
-      }
-    );
+    const riskResult = await executeSubAgent('RISK', sdId, { timeout: 120000 });
+    const riskOutput = formatSubAgentResult(riskResult, 'RISK');
 
     console.log('Risk analysis complete!\n');
     console.log('-'.repeat(53));
-    console.log(riskOutput);
+    console.log(riskOutput || '(no output)');
     console.log('-'.repeat(53) + '\n');
 
-    fs.unlinkSync(riskPromptFile);
     return riskOutput;
 
   } catch (error) {

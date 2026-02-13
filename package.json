@@ -175,7 +175,7 @@
     "rca:test": "npm run rca:test:unit && npm run rca:test:integration",
     "docs:bg-scripts": "node scripts/generate-workflow-docs.js --target scripts",
     "docs:bg-agents": "node scripts/generate-workflow-docs.js --target lib/agents",
-    "docs:bg-compliance": "node lib/sub-agent-executor.js DOCMON",
+    "docs:bg-compliance": "node scripts/execute-subagent.js --code DOCMON --sd-id SYSTEM",
     "docs:bg-health": "node lib/agents/documentation-sub-agent.js --scope ehg-engineer",
     "docs:bg-all": "npm run docs:bg-scripts && npm run docs:bg-agents && npm run docs:bg-health",
     "pattern:resolve": "node scripts/resolve-pattern.js",
@@ -315,7 +315,7 @@
     "feedback:stale:dry": "node scripts/feedback-staleness-check.js --dry-run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.63.0",
+    "@anthropic-ai/sdk": "^0.63.1",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.28.4",
     "@doist/todoist-api-typescript": "^6.4.0",

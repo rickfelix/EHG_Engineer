@@ -5,62 +5,60 @@
  * Functions to run DESIGN, DATABASE, SECURITY, and RISK sub-agents
  */
 
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { executeSubAgent } from '../../../lib/sub-agent-executor.js';
 
 /**
- * Run a sub-agent with a prompt file
+ * Format executeSubAgent result object as readable text.
+ */
+function formatSubAgentResult(result, agentName) {
+  if (!result) return null;
+  const parts = [`${agentName} Analysis Results:`];
+  if (result.verdict) parts.push(`Verdict: ${result.verdict}`);
+  if (result.confidence) parts.push(`Confidence: ${result.confidence}%`);
+  if (result.message) parts.push(`Summary: ${result.message}`);
+  if (result.recommendations?.length > 0) {
+    parts.push('\nRecommendations:');
+    result.recommendations.forEach((r, i) => parts.push(`  ${i + 1}. ${typeof r === 'string' ? r : r.recommendation || JSON.stringify(r)}`));
+  }
+  if (result.critical_issues?.length > 0) {
+    parts.push('\nCritical Issues:');
+    result.critical_issues.forEach((issue, i) => parts.push(`  ${i + 1}. ${typeof issue === 'string' ? issue : issue.issue || JSON.stringify(issue)}`));
+  }
+  const skipKeys = new Set(['verdict', 'confidence', 'message', 'recommendations', 'critical_issues', 'execution_time_ms', 'hallucination_check', 'stored_result_id']);
+  for (const [key, value] of Object.entries(result)) {
+    if (!skipKeys.has(key) && value != null) {
+      parts.push(typeof value === 'object' ? `\n${key}: ${JSON.stringify(value, null, 2)}` : `${key}: ${value}`);
+    }
+  }
+  return parts.join('\n');
+}
+
+/**
+ * Run a sub-agent programmatically
  *
  * @param {string} agentType - Sub-agent type (DESIGN, DATABASE, SECURITY, RISK)
- * @param {string} prompt - Prompt content
+ * @param {string} prompt - Prompt content (used as sdId context)
  * @param {Object} options - Options
  * @returns {Promise<string|null>} Agent output or null on failure
  */
 async function runSubAgent(agentType, prompt, options = {}) {
-  const { timeout = 120000, maxBuffer = 10 * 1024 * 1024 } = options;
-
-  // Write prompt to temp file
-  const promptFile = path.join('/tmp', `${agentType.toLowerCase()}-agent-prompt-${Date.now()}.txt`);
+  const { timeout = 120000, sdId = 'SYSTEM' } = options;
 
   try {
-    fs.writeFileSync(promptFile, prompt);
-    console.log('\ud83d\udcdd Prompt written to:', promptFile);
-    console.log(`\n\ud83e\udd16 Executing ${agentType} sub-agent...\n`);
+    console.log(`\n🤖 Executing ${agentType} sub-agent programmatically...\n`);
 
-    const output = execSync(
-      `node lib/sub-agent-executor.js ${agentType} --context-file "${promptFile}"`,
-      {
-        encoding: 'utf-8',
-        maxBuffer,
-        timeout
-      }
-    );
+    const result = await executeSubAgent(agentType, sdId, { timeout });
+    const output = formatSubAgentResult(result, agentType);
 
-    console.log(`\u2705 ${agentType} analysis complete!\n`);
-    console.log('\u2500'.repeat(53));
-    console.log(output);
-    console.log('\u2500'.repeat(53) + '\n');
-
-    // Clean up temp file
-    fs.unlinkSync(promptFile);
+    console.log(`✅ ${agentType} analysis complete!\n`);
+    console.log('─'.repeat(53));
+    console.log(output || '(no output)');
+    console.log('─'.repeat(53) + '\n');
 
     return output;
   } catch (error) {
-    console.warn(`\u26a0\ufe0f  ${agentType} analysis failed:`, error.message);
+    console.warn(`⚠️  ${agentType} analysis failed:`, error.message);
     console.log(`   Continuing without ${agentType} analysis...\n`);
-
-    // Clean up temp file if it exists
-    try {
-      fs.unlinkSync(promptFile);
-    } catch {
-      // Ignore cleanup errors
-    }
-
     return null;
   }
 }
