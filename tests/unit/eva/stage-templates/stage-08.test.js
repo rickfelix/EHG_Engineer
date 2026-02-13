@@ -16,7 +16,7 @@ describe('stage-08.js - Business Model Canvas template', () => {
       expect(stage08.id).toBe('stage-08');
       expect(stage08.slug).toBe('bmc');
       expect(stage08.title).toBe('Business Model Canvas');
-      expect(stage08.version).toBe('1.0.0');
+      expect(stage08.version).toBe('2.0.0');
     });
 
     it('should export BMC_BLOCKS with all 9 blocks', () => {

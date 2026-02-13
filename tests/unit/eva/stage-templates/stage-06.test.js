@@ -16,7 +16,7 @@ describe('stage-06.js - Risk Matrix template', () => {
       expect(stage06.id).toBe('stage-06');
       expect(stage06.slug).toBe('risk-matrix');
       expect(stage06.title).toBe('Risk Matrix');
-      expect(stage06.version).toBe('1.0.0');
+      expect(stage06.version).toBe('2.0.0');
     });
 
     it('should export RISK_CATEGORIES', () => {

@@ -16,7 +16,7 @@ describe('stage-09.js - Exit Strategy template', () => {
       expect(stage09.id).toBe('stage-09');
       expect(stage09.slug).toBe('exit-strategy');
       expect(stage09.title).toBe('Exit Strategy');
-      expect(stage09.version).toBe('1.0.0');
+      expect(stage09.version).toBe('2.0.0');
     });
 
     it('should export MIN_RISKS = 10', () => {

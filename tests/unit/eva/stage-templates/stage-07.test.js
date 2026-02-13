@@ -16,7 +16,7 @@ describe('stage-07.js - Pricing template', () => {
       expect(stage07.id).toBe('stage-07');
       expect(stage07.slug).toBe('pricing');
       expect(stage07.title).toBe('Pricing');
-      expect(stage07.version).toBe('1.0.0');
+      expect(stage07.version).toBe('2.0.0');
     });
 
     it('should export BILLING_PERIODS', () => {
