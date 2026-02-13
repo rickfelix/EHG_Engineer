@@ -71,17 +71,26 @@ export async function validateExplorationAudit(prdRepo, sd) {
     }
 
     // Check for exploration_summary in multiple locations (backward compatibility)
-    // Priority: top-level > metadata.exploration_summary > metadata.files_explored
+    // SD-LEO-INFRA-GATE-WORKTREE-FIXES-001: Handle both array and object formats
+    // Priority: top-level > metadata.exploration_summary > metadata.files_explored > SD metadata
     let filesExplored = [];
     let source = 'none';
 
     if (prd.exploration_summary && Array.isArray(prd.exploration_summary)) {
       filesExplored = prd.exploration_summary;
       source = 'exploration_summary';
+    } else if (prd.exploration_summary && typeof prd.exploration_summary === 'object' && prd.exploration_summary.files_explored) {
+      // Object format: { files_explored: [...], summary: "..." }
+      filesExplored = Array.isArray(prd.exploration_summary.files_explored) ? prd.exploration_summary.files_explored : [];
+      source = 'exploration_summary.files_explored';
     } else if (prd.metadata?.exploration_summary && Array.isArray(prd.metadata.exploration_summary)) {
       // SYSTEMIC FIX: Also check metadata.exploration_summary (common storage location)
       filesExplored = prd.metadata.exploration_summary;
       source = 'metadata.exploration_summary';
+    } else if (prd.metadata?.exploration_summary && typeof prd.metadata.exploration_summary === 'object' && prd.metadata.exploration_summary.files_explored) {
+      // Object format in metadata
+      filesExplored = Array.isArray(prd.metadata.exploration_summary.files_explored) ? prd.metadata.exploration_summary.files_explored : [];
+      source = 'metadata.exploration_summary.files_explored';
     } else if (prd.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
       filesExplored = prd.metadata.files_explored;
       source = 'metadata.files_explored';

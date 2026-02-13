@@ -20,10 +20,13 @@ export async function validateTargetApplication(sd, supabase) {
   const combinedText = `${scope} ${title}`;
 
   // Patterns that indicate EHG_Engineer (LEO Protocol infrastructure)
+  // SD-LEO-INFRA-GATE-WORKTREE-FIXES-001: Added EVA template/library paths
   const engineerPatterns = [
     'claude.md', 'claude_', 'leo protocol', 'handoff.js', 'phase-preflight',
     'sub-agent', 'subagent', 'leo_protocol', 'retrospective', 'verification gate',
-    'handoff system', 'bmad', 'scripts/modules', 'lib/sub-agents'
+    'handoff system', 'bmad', 'scripts/modules', 'lib/sub-agents',
+    'lib/eva', 'eva/stage-template', 'stage-template', 'eva template',
+    'eva analysis', 'lib/llm', 'lib/team', 'lib/utils', 'lib/telemetry'
   ];
 
   // Patterns that indicate EHG (main application)
