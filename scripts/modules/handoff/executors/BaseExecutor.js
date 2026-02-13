@@ -256,12 +256,16 @@ export class BaseExecutor {
           const remediation = this.getRemediation(gateResults.failedGate);
 
           // RCA Auto-Trigger on gate failure (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
+          // SD-LEARN-FIX-ADDRESS-PAT-AUTO-003: Use individual gate score, not overall aggregate.
+          // Previously passed gateResults.totalScore/totalMaxScore which is the SUM across ALL gates,
+          // creating misleading patterns like "score 900/1000" for a single gate with max_score 100.
           try {
             const { triggerRCAOnFailure, buildGateContext } = await import('../../../../lib/rca/index.js');
+            const failedGateResult = gateResults.gateResults?.[gateResults.failedGate];
             await triggerRCAOnFailure(buildGateContext({
               gateName: gateResults.failedGate,
-              score: gateResults.totalScore,
-              threshold: gateResults.totalMaxScore,
+              score: failedGateResult?.score ?? gateResults.totalScore,
+              threshold: failedGateResult?.maxScore ?? gateResults.totalMaxScore,
               breakdown: gateResults.issues,
               sdId,
               handoffType: this.handoffType
