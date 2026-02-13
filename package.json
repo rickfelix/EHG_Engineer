@@ -101,6 +101,7 @@
     "llm:canary:rollback": "node scripts/llm-canary-control.js rollback",
     "llm:canary:quality": "node scripts/llm-canary-control.js quality",
     "llm:canary:history": "node scripts/llm-canary-control.js history",
+    "eva:decisions": "node scripts/eva-decisions.js",
     "eva:venture:new": "node scripts/eva-venture-new.js",
     "eva:ideas:sync": "node scripts/eva-idea-sync.js",
     "eva:ideas:evaluate": "node scripts/eva-idea-evaluate.js",
