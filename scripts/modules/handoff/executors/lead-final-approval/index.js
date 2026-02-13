@@ -223,11 +223,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       validateSdKey(sdKey);
       console.log('\n🌲 Worktree Cleanup');
       console.log('-'.repeat(50));
-      worktreeCleanupResult = cleanupWorktree(sdKey, { force: true });
+      worktreeCleanupResult = cleanupWorktree(sdKey);
       if (worktreeCleanupResult.cleaned) {
         console.log(`   ✅ Worktree .worktrees/${sdKey} removed`);
       } else if (worktreeCleanupResult.reason === 'worktree_not_found') {
         console.log(`   ℹ️  No worktree found for ${sdKey} (may not have been created)`);
+      } else if (worktreeCleanupResult.reason === 'dirty_worktree') {
+        console.warn('   ⚠️  Worktree has uncommitted changes — run /ship first, then re-run LEAD-FINAL-APPROVAL');
       } else {
         console.warn(`   ⚠️  Worktree cleanup incomplete: ${worktreeCleanupResult.reason}`);
       }
