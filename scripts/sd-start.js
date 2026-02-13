@@ -27,6 +27,77 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+/**
+ * Map a phase to the appropriate CLAUDE_*.md context file.
+ */
+function getPhaseContextFile(phase) {
+  if (!phase) return 'CLAUDE_LEAD.md';
+  const p = phase.toUpperCase();
+  if (p.startsWith('LEAD')) return 'CLAUDE_LEAD.md';
+  if (p.startsWith('PLAN') || p.startsWith('PRD')) return 'CLAUDE_PLAN.md';
+  if (p.startsWith('EXEC') || p.startsWith('IMPLEMENTATION')) return 'CLAUDE_EXEC.md';
+  return 'CLAUDE_LEAD.md';
+}
+
+/**
+ * Verify handoff integrity for an SD before resuming work.
+ * Checks the last handoff in sd_phase_handoffs to ensure it was accepted.
+ *
+ * @returns {{ valid: boolean, lastHandoff: Object|null, message: string, recoveryOptions: string[] }}
+ */
+async function verifyHandoffIntegrity(sdUuid) {
+  const { data: handoffs, error } = await supabase
+    .from('sd_phase_handoffs')
+    .select('id, sd_id, from_phase, to_phase, status, created_at, rejection_reason')
+    .eq('sd_id', sdUuid)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    return { valid: true, lastHandoff: null, message: 'Could not query handoffs (proceeding)', recoveryOptions: [] };
+  }
+
+  if (!handoffs || handoffs.length === 0) {
+    return {
+      valid: false,
+      lastHandoff: null,
+      status: 'missing',
+      message: 'No prior handoff found',
+      recoveryOptions: [
+        'Run the appropriate handoff for this phase',
+        'Use --force flag to proceed without handoff verification'
+      ]
+    };
+  }
+
+  const last = handoffs[0];
+
+  if (last.status === 'accepted' || last.status === 'completed') {
+    return {
+      valid: true,
+      lastHandoff: last,
+      status: last.status,
+      message: `Last handoff: ${last.status} (${last.from_phase} → ${last.to_phase})`,
+      recoveryOptions: []
+    };
+  }
+
+  // Handoff was rejected or failed
+  const reason = last.rejection_reason || 'No reason provided';
+  return {
+    valid: false,
+    lastHandoff: last,
+    status: last.status,
+    message: `Last handoff ${last.status}: ${last.from_phase} → ${last.to_phase}`,
+    reason,
+    recoveryOptions: [
+      `View handoff details: node -e "..." (handoff ID: ${last.id})`,
+      `Re-run the ${last.from_phase} → ${last.to_phase} handoff after addressing issues`,
+      'Use --force flag to override and continue (not recommended)'
+    ]
+  };
+}
+
 // Colors for terminal output
 const colors = {
   reset: '\x1b[0m',
@@ -237,7 +308,44 @@ async function main() {
     // Silent fail - estimate is optional
   }
 
-  // 6. Show warnings if any
+  // 6. Handoff integrity verification (SD-LEO-INFRA-RESUME-INTEGRITY-HANDOFF-001)
+  const forceResume = process.argv.includes('--force');
+  const handoffCheck = await verifyHandoffIntegrity(sd.id);
+
+  if (handoffCheck.valid) {
+    if (handoffCheck.lastHandoff) {
+      console.log(`\n${colors.green}✓ ${handoffCheck.message}${colors.reset}`);
+      console.log(`   ${colors.dim}Handoff ID: ${handoffCheck.lastHandoff.id} | ${new Date(handoffCheck.lastHandoff.created_at).toLocaleString()}${colors.reset}`);
+    }
+  } else if (handoffCheck.status === 'missing' && (sd.current_phase === 'LEAD' || sd.current_phase === 'LEAD_APPROVAL')) {
+    // No handoff expected for fresh LEAD phase SDs
+    console.log(`\n${colors.dim}ℹ  No prior handoffs (expected for LEAD phase)${colors.reset}`);
+  } else if (!forceResume) {
+    console.log(`\n${colors.red}❌ HANDOFF INTEGRITY CHECK FAILED${colors.reset}`);
+    console.log(`   ${colors.bold}Status:${colors.reset} ${handoffCheck.status}`);
+    console.log(`   ${colors.bold}Detail:${colors.reset} ${handoffCheck.message}`);
+    if (handoffCheck.reason) {
+      console.log(`   ${colors.bold}Reason:${colors.reset} ${handoffCheck.reason}`);
+    }
+    if (handoffCheck.lastHandoff) {
+      console.log(`   ${colors.bold}Handoff ID:${colors.reset} ${handoffCheck.lastHandoff.id}`);
+    }
+    console.log(`\n${colors.yellow}Recovery Options:${colors.reset}`);
+    handoffCheck.recoveryOptions.forEach((opt, i) => {
+      console.log(`   ${i + 1}. ${opt}`);
+    });
+    console.log(`\n${colors.dim}Use --force to override this check${colors.reset}`);
+    console.log('═'.repeat(50));
+    process.exit(1);
+  } else {
+    console.log(`\n${colors.yellow}⚠️  Handoff integrity: ${handoffCheck.message} (--force override)${colors.reset}`);
+  }
+
+  // 6.5. Phase-appropriate context file (SD-LEO-INFRA-RESUME-INTEGRITY-HANDOFF-001)
+  const contextFile = getPhaseContextFile(sd.current_phase);
+  console.log(`\n${colors.bold}Load context:${colors.reset} ${colors.cyan}${contextFile}${colors.reset}`);
+
+  // 7. Show warnings if any
   if (claimResult.warnings?.length > 0) {
     console.log(`\n${colors.yellow}Warnings:${colors.reset}`);
     claimResult.warnings.forEach(w => {
@@ -245,7 +353,7 @@ async function main() {
     });
   }
 
-  // 7. Show next action
+  // 8. Show next action
   const nextHandoff = await getNextHandoff(sd);
 
   console.log(`\n${colors.bold}Next Action:${colors.reset}`);
