@@ -190,6 +190,129 @@ export function scanMetadataForMisplacedDependencies(metadata) {
   };
 }
 
+/**
+ * Trace dependency chain backward to find workable SDs.
+ * When an SD is blocked by dependencies, walks the chain up to maxDepth
+ * to find SDs that are actually actionable (no unresolved deps).
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdKey - Starting SD key to trace from
+ * @param {Object} [options] - Tracing options
+ * @param {number} [options.maxDepth=3] - Maximum trace depth
+ * @param {number} [options.maxResults=5] - Maximum workable SDs to return
+ * @returns {Promise<Object>} Trace result with paths, workable SDs, and diagnostics
+ */
+export async function traceDependencyChain(supabase, sdKey, options = {}) {
+  const { maxDepth = 3, maxResults = 5 } = options;
+  const visited = new Set();
+  const workableSDs = [];
+  const tracedPaths = [];
+  const cycles = [];
+  let depthLimitReached = false;
+
+  async function fetchSD(key) {
+    const { data } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, current_phase, priority, progress_percentage, dependencies, metadata, is_active, parent_sd_id, created_at')
+      .or(`sd_key.eq.${key},id.eq.${key}`)
+      .single();
+    return data;
+  }
+
+  async function trace(currentKey, path, depth) {
+    if (depth > maxDepth) {
+      depthLimitReached = true;
+      return;
+    }
+    if (workableSDs.length >= maxResults) return;
+
+    const effectiveKey = currentKey;
+    if (visited.has(effectiveKey)) {
+      // Cycle detected
+      const cycleStart = path.indexOf(effectiveKey);
+      if (cycleStart >= 0) {
+        cycles.push([...path.slice(cycleStart), effectiveKey]);
+      }
+      return;
+    }
+    visited.add(effectiveKey);
+
+    const sd = await fetchSD(effectiveKey);
+    if (!sd) return;
+
+    const sdId = sd.sd_key || sd.id;
+    const currentPath = [...path, sdId];
+
+    // Check if this SD is workable (no unresolved deps)
+    const deps = parseDependencies(sd.dependencies);
+    const metaDep = checkMetadataDependency(sd.metadata);
+    let hasUnresolvedDeps = false;
+
+    if (deps.length > 0) {
+      const resolved = await checkDependenciesResolved(supabase, sd.dependencies);
+      if (!resolved) hasUnresolvedDeps = true;
+    }
+
+    if (metaDep.hasMetadataDep) {
+      const blocker = await supabase
+        .from('strategic_directives_v2')
+        .select('status')
+        .eq('sd_key', metaDep.blockerSdKey)
+        .single();
+      if (!blocker.data || blocker.data.status !== 'completed') {
+        hasUnresolvedDeps = true;
+      }
+    }
+
+    if (!hasUnresolvedDeps && sd.status !== 'completed' && sd.status !== 'cancelled' && sd.is_active) {
+      workableSDs.push({
+        sd_key: sdId,
+        title: sd.title,
+        status: sd.status,
+        current_phase: sd.current_phase,
+        priority: sd.priority,
+        progress: sd.progress_percentage || 0,
+        path: currentPath,
+        created_at: sd.created_at
+      });
+      tracedPaths.push(currentPath);
+      return;
+    }
+
+    // Trace deeper into this SD's unresolved dependencies
+    if (deps.length > 0) {
+      for (const dep of deps) {
+        await trace(dep.sd_id, currentPath, depth + 1);
+        if (workableSDs.length >= maxResults) return;
+      }
+    }
+
+    // Also trace metadata blocker
+    if (metaDep.hasMetadataDep) {
+      await trace(metaDep.blockerSdKey, currentPath, depth + 1);
+    }
+  }
+
+  await trace(sdKey, [], 0);
+
+  // Sort workable SDs: unblocked first, then by priority, then by created_at
+  const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+  workableSDs.sort((a, b) => {
+    const aPrio = priorityOrder[a.priority] ?? 2;
+    const bPrio = priorityOrder[b.priority] ?? 2;
+    if (aPrio !== bPrio) return aPrio - bPrio;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+
+  return {
+    workableSDs: workableSDs.slice(0, maxResults),
+    tracedPaths,
+    cycles,
+    depthLimitReached,
+    visitedCount: visited.size
+  };
+}
+
 export async function resolveMetadataBlocker(supabase, blockerSdKey) {
   // Fetch the blocker SD
   const { data: blockerSD } = await supabase
