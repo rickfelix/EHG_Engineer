@@ -52,6 +52,7 @@ import {
 import { verifyGitCommits, runAutomatedShippingForSD } from './git-verification.js';
 import { runRussianJudgeAssessment } from './russian-judge.js';
 import { getRemediation } from './remediation.js';
+import { createExecToPlanRetrospective } from './retrospective.js';
 
 // External validators (will be lazy loaded)
 let getValidationRequirements;
@@ -180,6 +181,17 @@ export class ExecToPlanExecutor extends BaseExecutor {
     const orchestrationResult = gateResults.gateResults.SUB_AGENT_ORCHESTRATION?.details || {};
     const bmadResult = gateResults.gateResults.BMAD_EXEC_TO_PLAN || {};
 
+    // Create EXEC phase retrospective (captures implementation learnings for PLAN-TO-LEAD gate)
+    const execResult = {
+      success: true,
+      qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100),
+      test_evidence: testEvidenceResult,
+      automated_shipping: null // Will be set after shipping step below
+    };
+    await createExecToPlanRetrospective(this.supabase, sdId, sd, execResult, {
+      gateResults: gateResults.gateResults
+    });
+
     // STATE TRANSITIONS (SD-LEO-INFRA-HARDENING-001: Atomic mode)
     console.log('\n📊 Step 6: STATE TRANSITIONS');
     console.log('-'.repeat(50));
@@ -261,3 +273,4 @@ export {
 export { verifyGitCommits, runAutomatedShippingForSD } from './git-verification.js';
 export { runRussianJudgeAssessment } from './russian-judge.js';
 export { getRemediation, getAllRemediations } from './remediation.js';
+export { createExecToPlanRetrospective } from './retrospective.js';
