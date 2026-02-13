@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T21:16:41.090Z
+**Generated**: 2026-02-13T22:02:27.454Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (20 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,6 +38,7 @@
 | brief_data | `jsonb` | YES | - | - |
 | dfe_context | `jsonb` | YES | - | DFE engine output: { auto_proceed: bool, triggers: [{type, severity, message, details}], recommendation: string, evaluated_at: timestamp } |
 | mitigation_actions | `jsonb` | YES | `'[]'::jsonb` | Chairman actions on mitigations: [{ mitigation_id, action: accept|reject, reason, acted_at, idempotency_key }] |
+| decided_by | `text` | YES | - | - |
 
 ## Constraints
 
@@ -63,6 +64,10 @@
 - `idx_chairman_decisions_created`
   ```sql
   CREATE INDEX idx_chairman_decisions_created ON public.chairman_decisions USING btree (created_at DESC)
+  ```
+- `idx_chairman_decisions_decided_by`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_decided_by ON public.chairman_decisions USING btree (decided_by) WHERE (decided_by IS NOT NULL)
   ```
 - `idx_chairman_decisions_dfe_context_gin`
   ```sql

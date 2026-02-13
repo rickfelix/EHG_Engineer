@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T21:16:41.090Z
+**Generated**: 2026-02-13T22:02:27.454Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -52,6 +52,10 @@
 - `idx_eva_event_log_created`
   ```sql
   CREATE INDEX idx_eva_event_log_created ON public.eva_event_log USING btree (created_at DESC)
+  ```
+- `idx_eva_event_log_dfe_events`
+  ```sql
+  CREATE INDEX idx_eva_event_log_dfe_events ON public.eva_event_log USING btree (event_type, created_at DESC) WHERE (event_type ~~ 'dfe.%'::text)
   ```
 - `idx_eva_event_log_job`
   ```sql
