@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-12T05:02:16.883Z
+**Generated**: 2026-02-13T00:14:08.377Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,11 @@
 | preference_key | `text` | YES | - | - |
 | preference_ref_id | `uuid` | YES | - | - |
 | preference_snapshot | `jsonb` | YES | - | - |
+| status | `text` | **NO** | `'pending'::text` | - |
+| rationale | `text` | YES | - | - |
+| updated_at | `timestamp with time zone` | YES | `now()` | - |
+| summary | `text` | YES | - | - |
+| brief_data | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -42,9 +47,10 @@
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
-- `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying, 'override'::character varying])::text[])))
+- `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying, 'override'::character varying, 'pending'::character varying])::text[])))
 - `chairman_decisions_health_score_check`: CHECK (((health_score)::text = ANY ((ARRAY['green'::character varying, 'yellow'::character varying, 'red'::character varying])::text[])))
 - `chairman_decisions_recommendation_check`: CHECK (((recommendation)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying])::text[])))
+- `chairman_decisions_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])))
 
 ## Indexes
 
@@ -59,6 +65,18 @@
 - `idx_chairman_decisions_stage`
   ```sql
   CREATE INDEX idx_chairman_decisions_stage ON public.chairman_decisions USING btree (lifecycle_stage)
+  ```
+- `idx_chairman_decisions_status`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_status ON public.chairman_decisions USING btree (status)
+  ```
+- `idx_chairman_decisions_unique_pending`
+  ```sql
+  CREATE UNIQUE INDEX idx_chairman_decisions_unique_pending ON public.chairman_decisions USING btree (venture_id, lifecycle_stage) WHERE (status = 'pending'::text)
+  ```
+- `idx_chairman_decisions_updated`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_updated ON public.chairman_decisions USING btree (updated_at DESC)
   ```
 - `idx_chairman_decisions_venture`
   ```sql
@@ -89,6 +107,11 @@
 - **With Check**: `fn_is_chairman()`
 
 ## Triggers
+
+### trg_chairman_decision_updated_at
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION update_chairman_decision_updated_at()`
 
 ### trg_doctrine_constraint_chairman
 
