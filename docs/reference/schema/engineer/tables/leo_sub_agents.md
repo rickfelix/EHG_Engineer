@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T20:38:04.433Z
+**Generated**: 2026-02-13T21:05:35.429Z
 **Rows**: 31
 **RLS**: Enabled (3 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (20 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,6 +38,7 @@
 | team_role | `character varying(20)` | YES | `'teammate'::character varying` | Role when participating in teams: leader (can create teams/tasks) or teammate (executes assigned tasks). |
 | instructions | `text` | YES | - | Full agent identity text. If populated AND no .partial file exists, compiler generates .md entirely from DB. |
 | category_mappings | `jsonb` | YES | `'[]'::jsonb` | JSON array of issue_patterns categories relevant to this agent. Used for knowledge block composition. |
+| thinking_effort | `character varying(20)` | YES | `'medium'::character varying` | - |
 
 ## Constraints
 
@@ -51,6 +52,7 @@
 - `leo_sub_agents_activation_type_check`: CHECK ((activation_type = ANY (ARRAY['automatic'::text, 'manual'::text])))
 - `leo_sub_agents_model_tier_check`: CHECK (((model_tier)::text = ANY ((ARRAY['haiku'::character varying, 'sonnet'::character varying, 'opus'::character varying])::text[])))
 - `leo_sub_agents_team_role_check`: CHECK (((team_role)::text = ANY ((ARRAY['leader'::character varying, 'teammate'::character varying])::text[])))
+- `leo_sub_agents_thinking_effort_check`: CHECK (((thinking_effort)::text = ANY ((ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying])::text[])))
 
 ## Indexes
 
