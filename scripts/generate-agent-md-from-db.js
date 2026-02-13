@@ -25,6 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { AGENT_CODE_MAP } from '../lib/constants/agent-mappings.js';
 import { filterToolsByProfile, isValidProfile } from '../lib/tool-policy.js';
+import { loadSkillsFromDirectory, selectSkills, formatSkillsForInjection } from '../lib/skills/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,7 @@ dotenv.config();
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const AGENTS_DIR = path.join(__dirname, '..', '.claude', 'agents');
+const SKILLS_DIR = path.join(__dirname, '..', '.claude', 'skills');
 const CONFIG_PATH = path.join(__dirname, '..', 'config', 'phase-model-routing.json');
 const HASH_FILE = path.join(__dirname, '..', '.claude', '.agent-gen-hash');
 const MAX_KNOWLEDGE_TOKENS = 500;
@@ -239,6 +241,38 @@ function composeKnowledgeBlock(agentCode, data, configCategoryMappings) {
   return block;
 }
 
+// ─── Skill Block Composition ─────────────────────────────────────────────────
+
+/**
+ * Load skills from .claude/skills/ and match them to this agent's context.
+ * Returns a formatted skill block for injection, or null if no skills match.
+ */
+function composeSkillBlock(agentCode, data, allSkills) {
+  if (!allSkills || allSkills.length === 0) return null;
+
+  const agent = data.agentByCode[agentCode];
+  if (!agent) return null;
+
+  // Build context from agent's category_mappings, triggers, and capabilities
+  const categories = Array.isArray(agent.category_mappings) ? agent.category_mappings : [];
+  const triggers = (data.triggersByCode[agentCode] || []).map(t => t.phrase);
+  const capabilities = Array.isArray(agent.capabilities) ? agent.capabilities : [];
+
+  const context = {
+    keywords: [...categories, ...triggers.slice(0, 10), ...capabilities.slice(0, 5)],
+    agentCode,
+    tools: Array.isArray(agent.allowed_tools) ? agent.allowed_tools : []
+  };
+
+  const matched = selectSkills(allSkills, context, { threshold: 25, maxSkills: 3 });
+  if (matched.length === 0) return null;
+
+  const { injectedContent, skillCount } = formatSkillsForInjection(matched, 1000);
+  if (skillCount === 0) return null;
+
+  return injectedContent;
+}
+
 // ─── Agent Body Extraction ───────────────────────────────────────────────────
 
 function stripYamlFrontmatter(content) {
@@ -265,7 +299,7 @@ function findInjectionPoint(content) {
   return 0;
 }
 
-function compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings) {
+function compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings, allSkills) {
   const rawContent = fs.readFileSync(partialPath, 'utf8');
   const agent = data.agentByCode[agentCode];
 
@@ -304,6 +338,12 @@ function compileAgentFromPartial(partialPath, agentName, agentCode, data, config
     assembled = `${before}${knowledgeBlock}\n\n${after}`;
   }
 
+  // Inject matched skills
+  const skillBlock = composeSkillBlock(agentCode, data, allSkills);
+  if (skillBlock) {
+    assembled = assembled.trimEnd() + '\n\n' + skillBlock;
+  }
+
   // Inject team protocol at end if applicable
   if (teamProtocol) {
     assembled = assembled.trimEnd() + '\n\n' + teamProtocol;
@@ -312,7 +352,7 @@ function compileAgentFromPartial(partialPath, agentName, agentCode, data, config
   return assembled;
 }
 
-function compileAgentFromDB(agentName, agentCode, data, configCategoryMappings) {
+function compileAgentFromDB(agentName, agentCode, data, configCategoryMappings, allSkills) {
   // DB-only agent: no .partial file, instructions come from DB
   const agent = data.agentByCode[agentCode];
   if (!agent?.instructions) {
@@ -342,6 +382,12 @@ function compileAgentFromDB(agentName, agentCode, data, configCategoryMappings) 
     assembled = `${before}${knowledgeBlock}\n\n${after}`;
   }
 
+  // Inject matched skills
+  const skillBlock = composeSkillBlock(agentCode, data, allSkills);
+  if (skillBlock) {
+    assembled = assembled.trimEnd() + '\n\n' + skillBlock;
+  }
+
   if (teamProtocol) {
     assembled = assembled.trimEnd() + '\n\n' + teamProtocol;
   }
@@ -367,6 +413,18 @@ function computeInputHash(partialsDir, data) {
   hash.update(JSON.stringify(data.agentByCode, Object.keys(data.agentByCode).sort()));
   hash.update(JSON.stringify(data.triggersByCode, Object.keys(data.triggersByCode).sort()));
   hash.update(JSON.stringify(data.patterns));
+
+  // Include skill files in hash for change detection
+  const skillsDir = path.join(partialsDir, '..', 'skills');
+  if (fs.existsSync(skillsDir)) {
+    const skillFiles = fs.readdirSync(skillsDir)
+      .filter(f => f.endsWith('.skill.md') || f.endsWith('.SKILL.md'))
+      .sort();
+    for (const sf of skillFiles) {
+      const skillContent = fs.readFileSync(path.join(skillsDir, sf), 'utf8');
+      hash.update('skill:' + sf + ':' + skillContent);
+    }
+  }
 
   return hash.digest('hex');
 }
@@ -434,6 +492,12 @@ async function main() {
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const configCategoryMappings = config.categoryMappings || {};
 
+  // Load skills from .claude/skills/ directory
+  const allSkills = loadSkillsFromDirectory(SKILLS_DIR);
+  if (allSkills.length > 0) {
+    console.log(`   🎯 Loaded ${allSkills.length} skill(s) from ${SKILLS_DIR}`);
+  }
+
   // Incremental check
   if (incremental) {
     const currentHash = computeInputHash(AGENTS_DIR, data);
@@ -494,7 +558,7 @@ async function main() {
       const partialPath = path.join(AGENTS_DIR, partialFile);
       const outputPath = path.join(AGENTS_DIR, `${agentName}.md`);
 
-      const compiled = compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings);
+      const compiled = compileAgentFromPartial(partialPath, agentName, agentCode, data, configCategoryMappings, allSkills);
 
       if (!dryRun) {
         fs.writeFileSync(outputPath, compiled);
@@ -503,8 +567,9 @@ async function main() {
       const hasKnowledge = compiled.includes('## Institutional Memory (Generated)');
       const hasTeam = compiled.includes('### Team Collaboration Protocol');
       const hasSpawn = compiled.includes('### Requesting Specialist Assistance');
+      const hasSkills = compiled.includes('## Injected Skills');
       const sizeKB = (Buffer.byteLength(compiled) / 1024).toFixed(1);
-      const flags = [hasKnowledge ? 'knowledge' : null, hasTeam ? 'team' : null, hasSpawn ? 'spawn' : null].filter(Boolean).join('+');
+      const flags = [hasKnowledge ? 'knowledge' : null, hasSkills ? 'skills' : null, hasTeam ? 'team' : null, hasSpawn ? 'spawn' : null].filter(Boolean).join('+');
       console.log(`   ✅ ${agentName} → ${sizeKB}KB${flags ? ` (${flags})` : ''}`);
       results.success.push(agentName);
 
@@ -518,7 +583,7 @@ async function main() {
   for (const { code, agentName } of dbOnlyAgents) {
     try {
       const outputPath = path.join(AGENTS_DIR, `${agentName}.md`);
-      const compiled = compileAgentFromDB(agentName, code, data, configCategoryMappings);
+      const compiled = compileAgentFromDB(agentName, code, data, configCategoryMappings, allSkills);
 
       if (!dryRun) {
         fs.writeFileSync(outputPath, compiled);
@@ -562,4 +627,4 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
   });
 }
 
-export { main, composeKnowledgeBlock, compileAgentFromPartial, compileAgentFromDB, fetchLiveData, AGENT_CODE_MAP, generateFrontmatter };
+export { main, composeKnowledgeBlock, composeSkillBlock, compileAgentFromPartial, compileAgentFromDB, fetchLiveData, AGENT_CODE_MAP, generateFrontmatter };
