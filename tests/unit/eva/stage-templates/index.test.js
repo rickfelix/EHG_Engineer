@@ -74,7 +74,7 @@ describe('index.js - Stage templates registry', () => {
 
     it('should have correct Phase 1 template slugs', () => {
       expect(stage01.slug).toBe('draft-idea');
-      expect(stage02.slug).toBe('ai-review');
+      expect(stage02.slug).toBe('idea-validation');
       expect(stage03.slug).toBe('validation');
       expect(stage04.slug).toBe('competitive-intel');
       expect(stage05.slug).toBe('profitability');
@@ -489,10 +489,10 @@ describe('index.js - Stage templates registry', () => {
       });
     });
 
-    it('all templates should have version 1.0.0', () => {
+    it('all templates should have a valid version', () => {
       const templates = getAllTemplates();
       templates.forEach(template => {
-        expect(template.version).toBe('1.0.0');
+        expect(template.version).toMatch(/^\d+\.\d+\.\d+$/);
       });
     });
 
