@@ -24,6 +24,7 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { AGENT_CODE_MAP } from '../lib/constants/agent-mappings.js';
+import { filterToolsByProfile, isValidProfile } from '../lib/tool-policy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,7 +98,7 @@ async function fetchLiveData(supabase) {
   // Fetch all active sub-agents WITH new metadata columns
   const { data: agents, error: agentErr } = await supabase
     .from('leo_sub_agents')
-    .select('id, code, name, description, capabilities, metadata, model_tier, allowed_tools, team_role, instructions, category_mappings')
+    .select('id, code, name, description, capabilities, metadata, model_tier, allowed_tools, team_role, instructions, category_mappings, tool_policy_profile')
     .eq('active', true)
     .order('code');
 
@@ -148,9 +149,25 @@ function loadSnapshot(snapshotPath) {
 
 function generateFrontmatter(agentName, agent) {
   const model = MODEL_TIER_MAP[agent.model_tier] || 'opus';
-  const tools = Array.isArray(agent.allowed_tools)
-    ? agent.allowed_tools.join(', ')
-    : 'Bash, Read, Write';
+  const profile = agent.tool_policy_profile || 'full';
+
+  let toolList = Array.isArray(agent.allowed_tools)
+    ? agent.allowed_tools
+    : ['Bash', 'Read', 'Write'];
+
+  // Apply tool policy profile filtering
+  if (profile !== 'full') {
+    const before = toolList.length;
+    toolList = filterToolsByProfile(profile, toolList);
+    if (!isValidProfile(profile)) {
+      console.warn(`  ⚠️  Unknown tool_policy_profile '${profile}' for ${agentName} — treating as 'full'`);
+    } else {
+      console.log(`  📋 Tool policy '${profile}' applied to ${agentName}: ${before} → ${toolList.length} tools`);
+    }
+  }
+
+  const tools = toolList.join(', ');
+
   // Use first sentence/line of description for frontmatter (Claude Code shows this as tooltip)
   const fullDesc = agent.description || '';
   const firstLine = fullDesc.split(/\n/)[0].replace(/^#+\s*/, '').trim();
