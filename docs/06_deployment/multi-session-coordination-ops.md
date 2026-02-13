@@ -1047,10 +1047,169 @@ git checkout -b recovery/<short-sha> <full-sha>
 - **Session Manager**: `lib/session-manager.mjs`
 - **Concurrent Session Hook**: `scripts/hooks/concurrent-session-worktree.cjs`
 
+## Session Creation Heartbeat Guard (Migration: 20260213)
+
+### Overview
+
+The heartbeat guard prevents `create_or_replace_session()` from auto-releasing sessions with fresh heartbeats (<5 min) when a new Claude instance starts on the same terminal identity.
+
+**Problem Solved**: Before this fix, starting a second Claude instance on the same terminal would unconditionally release the first instance's session, even if it had a fresh heartbeat and was actively working. This caused active sessions to lose their SD claims silently.
+
+**Solution**: The `create_or_replace_session()` function now checks heartbeat freshness before auto-releasing. If the existing session's heartbeat is <300s old, it returns a conflict flag instead of releasing.
+
+### Components
+
+**Database Function**: `create_or_replace_session()`
+- **Location**: `database/migrations/20260213_session_creation_heartbeat_guard.sql`
+- **Behavior Change**:
+  - **Before**: Always auto-released previous session on same terminal_identity
+  - **After**: Only auto-releases if heartbeat >= 300s (stale)
+  - **Conflict response**: Returns `{ conflict: true, conflict_session_id, conflict_sd_id, conflict_heartbeat_age_seconds }`
+
+**Session Manager**: `lib/session-manager.mjs`
+- Handles conflict response from database
+- Attaches conflict metadata to session data: `{ conflict: true, conflict_session_id, conflict_sd_id }`
+
+**SD Start**: `scripts/sd-start.js`
+- Hard blocks (exit 1) when conflict targets the same SD
+- Warning log when conflict targets different SD (coexistence allowed via worktrees)
+
+**Concurrent Detection Hook**: `scripts/hooks/concurrent-session-worktree.cjs`
+- Staleness window aligned from 120s to 300s to match database threshold
+
+### Behavioral Changes
+
+#### Scenario 1: Fresh Session (Heartbeat < 300s)
+
+**Before**:
+```
+Terminal 1: Claude working on SD-XXX-001 (heartbeat: 30s ago)
+Terminal 1: User starts new Claude instance → Session 1 auto-released, loses claim
+Result: Session 1 silently hijacked
+```
+
+**After**:
+```
+Terminal 1: Claude working on SD-XXX-001 (heartbeat: 30s ago)
+Terminal 1: User starts new Claude instance → CONFLICT detected
+  - sd-start.js: "Another active session is already working on SD-XXX-001"
+  - Exit 1, claim preserved for Session 1
+Result: Session 1 protected, user warned
+```
+
+#### Scenario 2: Stale Session (Heartbeat >= 300s)
+
+**Before & After (same behavior)**:
+```
+Terminal 1: Claude crashed 10 min ago (heartbeat: 600s ago)
+Terminal 1: User starts new Claude instance → Session auto-released
+Result: New session created, stale session cleaned up
+```
+
+### Monitoring
+
+**Query Active Session Conflicts**:
+```sql
+-- Find sessions that had conflict flags set (from session metadata)
+SELECT
+  session_id,
+  terminal_identity,
+  metadata->'conflict_session_id' as conflicted_with,
+  metadata->'conflict_sd_id' as sd_conflict,
+  created_at
+FROM claude_sessions
+WHERE metadata->>'conflict' = 'true'
+ORDER BY created_at DESC;
+```
+
+**Conflict Rate Monitoring**:
+```sql
+-- Session creation conflict rate (last 24 hours)
+SELECT
+  COUNT(*) FILTER (WHERE metadata->>'conflict' = 'true') as conflict_count,
+  COUNT(*) as total_sessions,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE metadata->>'conflict' = 'true') / COUNT(*), 2) as conflict_rate_percent
+FROM claude_sessions
+WHERE created_at > NOW() - INTERVAL '24 hours';
+```
+
+### Troubleshooting
+
+#### Issue: "CONFLICT: Another active session is already working on SD-XXX-001"
+
+**Symptom**: `npm run sd:start SD-XXX-001` exits with error
+
+**Diagnosis**:
+```sql
+SELECT
+  session_id,
+  terminal_identity,
+  sd_id,
+  heartbeat_age_human,
+  hostname
+FROM v_active_sessions
+WHERE sd_id = 'SD-XXX-001'
+  AND computed_status = 'active';
+```
+
+**Resolution**:
+- **If heartbeat is fresh (<5 min)**: Another Claude is actively working — wait or pick different SD
+- **If heartbeat is stale (>5 min)**: Manually release via `release_sd()` RPC, then retry claim
+- **If you are the owner**: Close the other Claude instance first
+
+#### Issue: Session Not Auto-Released After Crash
+
+**Symptom**: Know previous session crashed, but new session gets conflict
+
+**Cause**: Crashed session's heartbeat is <300s old (hasn't reached stale threshold yet)
+
+**Resolution**: Wait for stale threshold (5 min) or manually release:
+```sql
+SELECT release_sd('SD-XXX-001');
+```
+
+#### Issue: Two Different SDs Get Conflict Warning
+
+**Symptom**: Warning log: "Note: Another active session detected (session_abc), working on SD-YYY-002"
+
+**Explanation**: This is informational only, not a blocker. Two sessions on same terminal but different SDs can coexist (worktree isolation provides file-level safety).
+
+**Action**: No action needed. Proceed with work in worktree.
+
+### Deployment
+
+**Prerequisites**:
+- PostgreSQL 14+ (existing requirement)
+- Existing multi-session coordination schema (20260130, 20260201 migrations)
+
+**Execution**:
+```bash
+# Via Supabase dashboard (recommended)
+# Paste contents of database/migrations/20260213_session_creation_heartbeat_guard.sql
+
+# OR via psql
+psql "postgresql://..." < database/migrations/20260213_session_creation_heartbeat_guard.sql
+```
+
+**Verification**:
+```sql
+-- Verify function has heartbeat guard logic
+SELECT prosrc FROM pg_proc WHERE proname = 'create_or_replace_session';
+-- Should contain: "v_heartbeat_age < 300"
+```
+
+### Related Documentation
+
+- **Migration**: `database/migrations/20260213_session_creation_heartbeat_guard.sql`
+- **Session Manager**: `lib/session-manager.mjs` (conflict handling)
+- **SD Start**: `scripts/sd-start.js` (conflict blocking)
+- **Concurrent Hook**: `scripts/hooks/concurrent-session-worktree.cjs` (staleness alignment)
+
 ## Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions) |
 | 4.0.0 | 2026-02-11 | Added ship process safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001) |
 | 3.1.0 | 2026-02-09 | Added terminal identity centralization and handoff resolution tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018) |
 | 3.0.0 | 2026-02-07 | Added git worktree automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001) |
