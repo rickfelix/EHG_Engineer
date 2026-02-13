@@ -16,7 +16,7 @@ import { VentureContextManager } from '../../../lib/eva/venture-context-manager.
 import { normalizeVenturePrefix } from '../sd-key-generator.js';
 
 import { colors } from './colors.js';
-import { checkDependenciesResolved } from './dependency-resolver.js';
+import { checkDependenciesResolved, scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
 import {
   loadActiveBaseline,
   loadRecentActivity,
@@ -383,9 +383,21 @@ export class SDNextSelector {
       baselineMap.set(item.sd_id, item);
     }
 
+    // Track SDs with misplaced dependency info in metadata
+    const misplacedDeps = [];
+
     // Process each SD (uses filtered list when venture context is active)
     for (const sd of filteredSDs) {
       if (sd.status === 'completed' || sd.status === 'cancelled') continue;
+
+      // QA: Check for dependency info in metadata with empty dependencies column
+      const depsEmpty = !sd.dependencies || (Array.isArray(sd.dependencies) && sd.dependencies.length === 0);
+      if (depsEmpty && sd.metadata) {
+        const scan = scanMetadataForMisplacedDependencies(sd.metadata);
+        if (scan.hasMisplacedDeps) {
+          misplacedDeps.push({ sd_key: sd.sd_key || sd.id, findings: scan.findings });
+        }
+      }
 
       // Look up baseline item by sd_key or id
       const baselineItem = baselineMap.get(sd.sd_key) || baselineMap.get(sd.id);
@@ -447,6 +459,23 @@ export class SDNextSelector {
     displayTrackSection('C', 'Quality', tracks.C, sessionContext);
     if (tracks.STANDALONE.length > 0) {
       displayTrackSection('STANDALONE', 'Standalone', tracks.STANDALONE, sessionContext);
+    }
+
+    // Display misplaced dependency warnings
+    if (misplacedDeps.length > 0) {
+      console.log(`\n${colors.yellow}${colors.bold}DEPENDENCY QA WARNING:${colors.reset} ${misplacedDeps.length} SD(s) have dependency info in metadata but empty dependencies column`);
+      // Show up to 5 examples
+      for (const item of misplacedDeps.slice(0, 5)) {
+        const keys = item.findings.flatMap(f => f.sdKeys);
+        const metaKeys = item.findings.map(f => `metadata.${f.key}`).join(', ');
+        const sdKeyStr = keys.length > 0 ? ` → ${keys.join(', ')}` : '';
+        console.log(`  ${colors.yellow}!${colors.reset} ${item.sd_key}: ${metaKeys}${sdKeyStr}`);
+      }
+      if (misplacedDeps.length > 5) {
+        console.log(`  ${colors.dim}... and ${misplacedDeps.length - 5} more${colors.reset}`);
+      }
+      console.log(`  ${colors.dim}These dependencies are NOT enforced by the queue system.${colors.reset}`);
+      console.log(`  ${colors.dim}Move them to the "dependencies" column for proper blocking/readiness control.${colors.reset}`);
     }
   }
 }

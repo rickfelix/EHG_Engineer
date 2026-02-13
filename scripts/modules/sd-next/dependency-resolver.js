@@ -138,6 +138,58 @@ export function checkMetadataDependency(metadata) {
  * @param {string} blockerSdKey - The sd_key of the blocking SD
  * @returns {Promise<Object>} Resolution info with blocker status and unblock targets
  */
+/**
+ * Scan metadata for dependency-like information that should be in the dependencies column.
+ *
+ * Many SDs have dependency info stored under various metadata keys (depends_on, dependencies,
+ * blocked_by, prerequisite_sds, etc.) but with an empty `dependencies` column. This function
+ * detects those patterns and returns structured findings for QA warnings.
+ *
+ * @param {Object|null} metadata - SD metadata object
+ * @returns {{ hasMisplacedDeps: boolean, findings: Array<{key: string, value: any, sdKeys: string[]}> }}
+ */
+export function scanMetadataForMisplacedDependencies(metadata) {
+  if (!metadata || typeof metadata !== 'object') {
+    return { hasMisplacedDeps: false, findings: [] };
+  }
+
+  // Keys that indicate dependency information
+  const depKeyPatterns = [
+    'depends_on', 'dependencies', 'blocked_by', 'prerequisite_sds',
+    'prerequisite_for', 'requires_sd', 'after_sd', 'dependency_chain'
+  ];
+
+  // blocked_by_sd_key is already handled by checkMetadataDependency() — skip it
+  const handledKeys = ['blocked_by_sd_key', 'conditional_note'];
+
+  const findings = [];
+  const sdKeyPattern = /SD-[A-Z0-9-]+/g;
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (handledKeys.includes(key)) continue;
+    const keyLower = key.toLowerCase();
+
+    const isDepKey = depKeyPatterns.some(p => keyLower === p || keyLower.includes(p));
+    if (!isDepKey) continue;
+
+    // Skip empty/null values
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (typeof value === 'string' && value.trim() === '') continue;
+
+    // Extract SD keys from the value
+    const valueStr = JSON.stringify(value);
+    const sdKeys = [...new Set((valueStr.match(sdKeyPattern) || []))];
+
+    findings.push({ key, value, sdKeys });
+  }
+
+  return {
+    hasMisplacedDeps: findings.length > 0,
+    findings
+  };
+}
+
 export async function resolveMetadataBlocker(supabase, blockerSdKey) {
   // Fetch the blocker SD
   const { data: blockerSD } = await supabase
