@@ -33,7 +33,7 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
 
   // Use LLM Client Factory instead of direct OpenAI SDK
   const llmClient = getLLMClient({
-    purpose: 'content-generation',
+    purpose: 'generation',
     phase: 'PLAN'
   });
 
@@ -185,191 +185,100 @@ function getImplementationContextConstraints(context) {
 export function buildPRDGenerationContext(sd, context = {}) {
   const sections = [];
 
-  // 1. Strategic Directive Context - COMPREHENSIVE
-  sections.push(`## STRATEGIC DIRECTIVE - COMPLETE CONTEXT
+  // 1. Strategic Directive Context - only include fields that have content
+  const sdLines = [
+    `## SD CONTEXT`,
+    `**SD Key**: ${sd.sd_key || sd.id}`,
+    `**Title**: ${sd.title || 'Untitled'}`,
+    `**Type**: ${sd.sd_type || 'feature'}`,
+    `**Implementation Context**: ${sd.implementation_context || 'web'}`
+  ];
+  if (sd.description) sdLines.push(`\n### Description\n${sd.description}`);
+  if (sd.scope) sdLines.push(`\n### Scope\n${sd.scope}`);
+  if (sd.rationale) sdLines.push(`\n### Rationale\n${sd.rationale}`);
+  if (sd.strategic_objectives) sdLines.push(`\n### Objectives\n${formatObjectives(sd.strategic_objectives)}`);
+  if (sd.success_criteria?.length) sdLines.push(`\n### Success Criteria\n${formatArrayField(sd.success_criteria, 'criterion')}`);
+  if (sd.key_changes?.length) sdLines.push(`\n### Key Changes\n${formatArrayField(sd.key_changes, 'change')}`);
+  if (sd.success_metrics?.length) sdLines.push(`\n### Success Metrics\n${formatArrayField(sd.success_metrics, 'metric')}`);
+  if (sd.dependencies?.length) sdLines.push(`\n### Dependencies\n${formatArrayField(sd.dependencies, 'dependency')}`);
+  if (sd.risks?.length) sdLines.push(`\n### Risks\n${formatRisks(sd.risks)}`);
+  sections.push(sdLines.join('\n'));
 
-**ID**: ${sd.id || sd.sd_key}
-**SD Key**: ${sd.sd_key || 'N/A'}
-**Title**: ${sd.title || 'Untitled'}
-**Type**: ${sd.sd_type || 'feature'}
-**Category**: ${sd.category || 'Not specified'}
-**Priority**: ${sd.priority || 'Not specified'}
-**Status**: ${sd.status || 'draft'}
-**Implementation Context**: ${sd.implementation_context || 'web'}
-
-### Description
-${sd.description || 'No description provided'}
-
-### Scope
-${sd.scope || 'No scope defined'}
-
-### Rationale
-${sd.rationale || 'No rationale provided'}
-
-### Strategic Objectives
-${formatObjectives(sd.strategic_objectives)}
-
-### Success Criteria
-${formatArrayField(sd.success_criteria, 'success criterion')}
-
-### Key Changes
-${formatArrayField(sd.key_changes, 'key change')}
-
-### Success Metrics
-${formatArrayField(sd.success_metrics, 'success metric')}
-
-### Dependencies
-${formatArrayField(sd.dependencies, 'dependency')}
-
-### Risks
-${formatRisks(sd.risks)}
-
-### Target Application
-${sd.target_application || 'EHG_Engineer'}`);
-
-  // 2. SD Metadata (contains vision specs, governance, etc.)
+  // 2. SD Metadata — only non-empty, truncated
   if (sd.metadata && Object.keys(sd.metadata).length > 0) {
-    sections.push(`## SD METADATA (Extended Context)
-
-${formatMetadata(sd.metadata)}`);
+    const meta = formatMetadata(sd.metadata);
+    if (meta.trim()) sections.push(`## SD METADATA\n${meta.substring(0, 3000)}`);
   }
 
-  // 3. Design Analysis (if available)
-  if (context.designAnalysis) {
-    sections.push(`## DESIGN ANALYSIS (from DESIGN sub-agent)
-
-This analysis defines the UI/UX requirements and user workflows:
-
-${typeof context.designAnalysis === 'string'
-  ? context.designAnalysis.substring(0, 5000)
-  : JSON.stringify(context.designAnalysis, null, 2).substring(0, 5000)}`);
+  // 3-4. Sub-agent analyses — cap at 3000 chars each (was 5000)
+  const analyses = [
+    { key: 'designAnalysis', label: 'DESIGN ANALYSIS' },
+    { key: 'databaseAnalysis', label: 'DATABASE ANALYSIS' },
+    { key: 'securityAnalysis', label: 'SECURITY ANALYSIS' },
+    { key: 'riskAnalysis', label: 'RISK ANALYSIS' }
+  ];
+  for (const { key, label } of analyses) {
+    if (context[key]) {
+      const text = typeof context[key] === 'string'
+        ? context[key] : JSON.stringify(context[key], null, 2);
+      sections.push(`## ${label}\n${text.substring(0, 3000)}`);
+    }
   }
 
-  // 4. Database Analysis (if available)
-  if (context.databaseAnalysis) {
-    sections.push(`## DATABASE ANALYSIS (from DATABASE sub-agent)
-
-This analysis defines schema requirements and data architecture:
-
-${typeof context.databaseAnalysis === 'string'
-  ? context.databaseAnalysis.substring(0, 5000)
-  : JSON.stringify(context.databaseAnalysis, null, 2).substring(0, 5000)}`);
-  }
-
-  // 4.1 Security Analysis (if available)
-  if (context.securityAnalysis) {
-    sections.push(`## SECURITY ANALYSIS (from SECURITY sub-agent)
-
-This analysis defines authentication, authorization, and security requirements:
-
-${typeof context.securityAnalysis === 'string'
-  ? context.securityAnalysis.substring(0, 4000)
-  : JSON.stringify(context.securityAnalysis, null, 2).substring(0, 4000)}`);
-  }
-
-  // 4.2 Risk Analysis (if available)
-  if (context.riskAnalysis) {
-    sections.push(`## RISK ANALYSIS (from RISK sub-agent)
-
-This analysis identifies implementation risks and mitigation strategies:
-
-${typeof context.riskAnalysis === 'string'
-  ? context.riskAnalysis.substring(0, 4000)
-  : JSON.stringify(context.riskAnalysis, null, 2).substring(0, 4000)}`);
-  }
-
-  // 5. Persona Context (if available)
-  if (context.personas && context.personas.length > 0) {
-    sections.push(`## STAKEHOLDER PERSONAS
-
-These personas represent the users who will interact with this feature:
-
-${context.personas.map(p => {
-  const details = [];
-  details.push(`### ${p.name}`);
-  if (p.role) details.push(`**Role**: ${p.role}`);
-  if (p.description) details.push(`**Description**: ${p.description}`);
-  if (p.goals) details.push(`**Goals**: ${Array.isArray(p.goals) ? p.goals.join(', ') : p.goals}`);
-  if (p.pain_points) details.push(`**Pain Points**: ${Array.isArray(p.pain_points) ? p.pain_points.join(', ') : p.pain_points}`);
-  return details.join('\n');
-}).join('\n\n')}`);
-  }
-
-  // 6. Vision Spec References (if in metadata)
-  if (sd.metadata?.vision_spec_references) {
-    sections.push(`## VISION SPECIFICATION REFERENCES
-
-${formatVisionSpecs(sd.metadata.vision_spec_references)}`);
-  }
-
-  // 7. Governance Requirements (if in metadata)
-  if (sd.metadata?.governance) {
-    sections.push(`## GOVERNANCE REQUIREMENTS
-
-${formatGovernance(sd.metadata.governance)}`);
-  }
-
-  // 8. Existing User Stories (for consistency if PRD being regenerated)
-  if (context.existingStories && context.existingStories.length > 0) {
-    sections.push(`## EXISTING USER STORIES (Ensure PRD Consistency)
-
-The following user stories already exist for this SD. The PRD MUST be consistent with these stories:
-
-${context.existingStories.map(story => {
-  const lines = [`### ${story.story_key}: ${story.title}`];
-  if (story.user_role) lines.push(`**As a** ${story.user_role}`);
-  if (story.user_want) lines.push(`**I want** ${story.user_want}`);
-  if (story.user_benefit) lines.push(`**So that** ${story.user_benefit}`);
-  if (story.acceptance_criteria && story.acceptance_criteria.length > 0) {
-    lines.push('\n**Acceptance Criteria**:');
-    const acList = Array.isArray(story.acceptance_criteria)
-      ? story.acceptance_criteria
-      : story.acceptance_criteria.split('\n').filter(l => l.trim());
-    acList.forEach(ac => {
-      if (typeof ac === 'string') {
-        lines.push(`- ${ac}`);
-      } else if (ac.criterion) {
-        lines.push(`- ${ac.criterion}`);
-      }
+  // 5. Personas — compact format
+  if (context.personas?.length) {
+    const personaLines = context.personas.map(p => {
+      const parts = [`- **${p.name}**`];
+      if (p.role) parts.push(`(${p.role})`);
+      if (p.goals) parts.push(`Goals: ${Array.isArray(p.goals) ? p.goals.join(', ') : p.goals}`);
+      return parts.join(' ');
     });
-  }
-  return lines.join('\n');
-}).join('\n\n')}`);
+    sections.push(`## PERSONAS\n${personaLines.join('\n')}`);
   }
 
-  // 9. Implementation Context Constraints (SD-LEO-INFRA-PRD-GROUNDING-VALIDATION-001)
-  const implementationContext = sd.implementation_context || 'web';
-  const contextConstraints = getImplementationContextConstraints(implementationContext);
-  if (contextConstraints) {
-    sections.push(`## IMPLEMENTATION CONTEXT CONSTRAINTS
-
-**Target Platform**: ${implementationContext.toUpperCase()}
-
-${contextConstraints}`);
+  // 6-7. Vision/Governance — only if present
+  if (sd.metadata?.vision_spec_references) {
+    sections.push(`## VISION REFS\n${formatVisionSpecs(sd.metadata.vision_spec_references)}`);
+  }
+  if (sd.metadata?.governance) {
+    sections.push(`## GOVERNANCE\n${formatGovernance(sd.metadata.governance)}`);
   }
 
-  // 10. Generation Instructions - Comprehensive
-  sections.push(`## TASK - GENERATE COMPREHENSIVE PRD
+  // 8. Existing User Stories — compact
+  if (context.existingStories?.length) {
+    const storyLines = context.existingStories.map(s => {
+      const parts = [`### ${s.story_key}: ${s.title}`];
+      if (s.user_role) parts.push(`As a ${s.user_role}, I want ${s.user_want || '...'} so that ${s.user_benefit || '...'}`);
+      if (s.acceptance_criteria?.length) {
+        const acList = Array.isArray(s.acceptance_criteria)
+          ? s.acceptance_criteria : s.acceptance_criteria.split('\n').filter(l => l.trim());
+        acList.forEach(ac => parts.push(`- ${typeof ac === 'string' ? ac : ac.criterion}`));
+      }
+      return parts.join('\n');
+    });
+    sections.push(`## EXISTING STORIES (PRD must align)\n${storyLines.join('\n\n')}`);
+  }
 
-Using ALL the context above, generate a complete PRD that:
+  // 9. Implementation Context Constraints
+  const implCtx = sd.implementation_context || 'web';
+  const constraints = getImplementationContextConstraints(implCtx);
+  if (constraints) {
+    sections.push(`## CONTEXT CONSTRAINTS (${implCtx.toUpperCase()})\n${constraints}`);
+  }
 
-1. **Is Implementation-Ready**: Every requirement must be specific enough for a developer to implement immediately without asking clarifying questions
-2. **Aligns with SD Objectives**: Each requirement must trace back to a strategic objective or success criterion
-3. **Incorporates Sub-Agent Analysis**: Use the design and database analysis to inform technical requirements and architecture
-4. **Addresses All Personas**: Ensure requirements cover the needs of identified stakeholders
-5. **Follows Vision Specs**: If vision spec references exist, ensure PRD aligns with those specifications
-6. **Identifies Real Risks**: Document genuine technical and business risks specific to THIS implementation
-7. **Defines Testable Criteria**: Every acceptance criterion must be verifiable through automated or manual testing
-8. **Consistent with User Stories**: If existing user stories are provided, the PRD functional requirements MUST support and align with those stories. Do not contradict user story acceptance criteria.
+  // 10. Generation Instructions — concise
+  sections.push(`## TASK: GENERATE PRD (JSON)
 
-### Minimum Content Requirements:
-- At least 5 functional requirements with acceptance criteria
-- At least 3 technical requirements
-- At least 5 test scenarios covering happy path, edge cases, and error conditions
-- At least 3 identified risks with mitigation strategies
-- Complete system architecture with components and data flow
+Generate an implementation-ready PRD as valid JSON per the system prompt schema.
 
-Return the PRD as a valid JSON object following the schema in the system prompt.`);
+Requirements:
+- 5+ functional requirements with acceptance criteria
+- 3+ technical requirements
+- 5+ test scenarios (happy path, edge cases, errors)
+- 3+ risks with mitigations
+- System architecture with components and data flow
+- All requirements must trace to SD objectives
+- All criteria must be testable`);
 
   return sections.join('\n\n');
 }
