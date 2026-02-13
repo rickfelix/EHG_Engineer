@@ -158,6 +158,39 @@ tmux attach -t SD-BBB-002
 
 ## Troubleshooting
 
+### "CONFLICT: Another active session is already working on SD-XXX-001"
+
+**Error**:
+```
+CONFLICT: Another active session is already working on SD-XXX-001
+   Session: session_abc123_tty1_1234
+   Pick a different SD or wait for that session to finish.
+```
+
+**Cause**: A concurrent Claude instance on the same terminal is actively working on this SD (heartbeat <5 min).
+
+**Solution**:
+```bash
+# Option 1: Wait for the other session to finish
+# Check session health in database:
+# SELECT session_id, sd_id, heartbeat_age_human FROM v_active_sessions WHERE sd_id = 'SD-XXX-001';
+
+# Option 2: Pick a different SD
+npm run sd:next  # Find another ready SD
+
+# Option 3: If you ARE the other session, close it first
+# Close the other Claude terminal/instance
+
+# Option 4: If other session is stale (heartbeat >5 min), manually release:
+# SELECT release_sd('SD-XXX-001');  # Then retry
+```
+
+**When to use each option**:
+- **Wait**: Other session is legitimately working (heartbeat fresh)
+- **Pick different SD**: Common when using multiple Claude instances
+- **Close other session**: Duplicate/forgotten Claude window
+- **Manual release**: Other session crashed but hasn't reached stale threshold
+
 ### "Branch is already checked out"
 
 **Error**:
