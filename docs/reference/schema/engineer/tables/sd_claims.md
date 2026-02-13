@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T01:26:00.621Z
-**Rows**: 2,473
+**Generated**: 2026-02-13T02:06:16.124Z
+**Rows**: 2,481
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -40,7 +40,7 @@
 - `sd_claims_sd_session_unique`: UNIQUE (sd_id, session_id)
 
 ### Check Constraints
-- `sd_claims_release_reason_check`: CHECK ((release_reason = ANY (ARRAY['completed'::text, 'timeout'::text, 'manual'::text, 'conflict'::text, 'session_ended'::text])))
+- `sd_claims_release_reason_check`: CHECK ((release_reason = ANY (ARRAY['completed'::text, 'timeout'::text, 'manual'::text, 'conflict'::text, 'session_ended'::text, 'AUTO_REPLACED'::text, 'STALE_CLEANUP'::text])))
 
 ## Indexes
 
