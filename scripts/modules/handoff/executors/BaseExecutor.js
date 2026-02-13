@@ -136,7 +136,11 @@ export class BaseExecutor {
       // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
       let step2_5Span;
       try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
-      await this._claimSDForSession(sdId, sd);
+      const claimResult = await this._claimSDForSession(sdId, sd);
+      if (claimResult && !claimResult.success) {
+        try { endSpan(step2_5Span, { result: 'claim_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+        return claimResult;
+      }
 
       // Step 2.6: SD-LEARN-010:US-004 - Auto-trigger DATABASE sub-agent for schema SDs
       await this._autoTriggerDatabaseSubAgent(sd);
@@ -556,7 +560,8 @@ export class BaseExecutor {
           console.log('   │  If YES: Pick a different SD to avoid conflicts             │');
           console.log('   │  If NO:  The other session may be stale (>5min = auto-release)│');
           console.log('   └─────────────────────────────────────────────────────────────┘\n');
-          console.log('   [Claim] Proceeding with handoff - claim conflict will not block');
+          console.log('   [Claim] ❌ Cannot proceed - SD claimed by another session');
+          return { success: false, error: 'SD claimed by another session', claimConflict: true };
         } else {
           // Attempt to claim the SD
           const result = await conflictChecker.claimSD(claimId, session.session_id);
@@ -567,8 +572,8 @@ export class BaseExecutor {
               result.warnings.forEach(w => console.log(`   [Claim] ⚠️ ${w.message}`));
             }
           } else {
-            console.log(`   [Claim] ⚠️ Could not claim SD: ${result.error || 'Unknown error'}`);
-            console.log('   [Claim] Proceeding with handoff - claim failure will not block');
+            console.log(`   [Claim] ❌ Could not claim SD: ${result.error || 'Unknown error'}`);
+            return { success: false, error: `Claim failed: ${result.error || 'Unknown error'}` };
           }
         }
 
