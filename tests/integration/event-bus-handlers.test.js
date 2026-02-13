@@ -140,14 +140,15 @@ describe('EVA Event Bus Handler Wiring', () => {
     it('should register handlers idempotently', async () => {
       const result1 = await initializeEventBus(supabase);
       expect(result1.registered).toBe(true);
-      expect(result1.handlerCount).toBe(3);
+      expect(result1.handlerCount).toBe(4);
       expect(result1.types).toContain('stage.completed');
       expect(result1.types).toContain('decision.submitted');
       expect(result1.types).toContain('gate.evaluated');
+      expect(result1.types).toContain('sd.completed');
 
       // Second registration should not increase count
       const result2 = await initializeEventBus(supabase);
-      expect(result2.handlerCount).toBe(3);
+      expect(result2.handlerCount).toBe(4);
     });
 
     it('should register exactly 1 subscriber per event type', () => {
@@ -298,6 +299,79 @@ describe('EVA Event Bus Handler Wiring', () => {
         eva_venture_id: testVentureId,
       });
       expect(killResult.success).toBe(true);
+    });
+  });
+
+  describe('Event Processing: sd.completed', () => {
+    beforeEach(async () => {
+      await initializeEventBus(supabase);
+    });
+
+    it('should skip orchestrator-level completions (no parent)', async () => {
+      if (!testVentureId) return;
+
+      const eventId = await createTestEvent('sd.completed', {
+        sdKey: 'SD-TEST-ORCH-001',
+        ventureId: testVentureId,
+        sdType: 'orchestrator',
+        title: 'Test Orchestrator',
+      }, testVentureId);
+
+      const result = await processEvent(supabase, {
+        id: eventId,
+        event_type: 'sd.completed',
+        event_data: {
+          sdKey: 'SD-TEST-ORCH-001',
+          ventureId: testVentureId,
+          sdType: 'orchestrator',
+          title: 'Test Orchestrator',
+          // No parentSdId - this is an orchestrator
+        },
+        eva_venture_id: testVentureId,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe('success');
+    });
+
+    it('should reject missing sdKey in payload validation', async () => {
+      if (!testVentureId) return;
+
+      const eventId = await createTestEvent('sd.completed', {
+        ventureId: testVentureId,
+        // Missing sdKey
+      }, testVentureId);
+
+      const result = await processEvent(supabase, {
+        id: eventId,
+        event_type: 'sd.completed',
+        event_data: { ventureId: testVentureId },
+        eva_venture_id: testVentureId,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('validation_error');
+      expect(result.error).toContain('sdKey');
+    });
+
+    it('should reject missing ventureId in payload validation', async () => {
+      if (!testVentureId) return;
+
+      const eventId = await createTestEvent('sd.completed', {
+        sdKey: 'SD-TEST-001',
+        // Missing ventureId
+      }, testVentureId);
+
+      const result = await processEvent(supabase, {
+        id: eventId,
+        event_type: 'sd.completed',
+        event_data: { sdKey: 'SD-TEST-001' },
+        eva_venture_id: testVentureId,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe('validation_error');
+      expect(result.error).toContain('ventureId');
     });
   });
 
