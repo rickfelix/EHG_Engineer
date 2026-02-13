@@ -109,6 +109,8 @@
     "eva:ideas:status": "node scripts/eva-idea-status.js",
     "eva:ideas:post-process": "node scripts/eva-idea-post-process.js",
     "eva:ideas:auth:youtube": "node scripts/eva-youtube-auth.js",
+    "eva:scheduler:start": "node scripts/eva-scheduler.js start",
+    "eva:scheduler:status": "node scripts/eva-scheduler.js status",
     "genesis:branches": "node scripts/leo-genesis-branches.js list",
     "genesis:branches:list": "node scripts/leo-genesis-branches.js list",
     "genesis:branches:incinerate": "node scripts/leo-genesis-branches.js incinerate",
