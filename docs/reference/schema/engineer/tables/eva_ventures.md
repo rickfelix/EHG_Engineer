@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T15:49:11.388Z
+**Generated**: 2026-02-13T16:26:42.445Z
 **Rows**: 1
 **RLS**: Enabled (1 policy)
 
@@ -87,6 +87,13 @@
 
 - **Roles**: {public}
 - **Using**: `true`
+
+## Triggers
+
+### trg_auto_enqueue_venture
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION fn_auto_enqueue_venture()`
 
 ---
 
