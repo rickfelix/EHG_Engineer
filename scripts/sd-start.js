@@ -107,13 +107,23 @@ async function main() {
     process.exit(1);
   }
 
+  // 2b. Check for concurrent session conflict on the same SD
+  if (session.conflict && session.conflict_sd_id === effectiveId) {
+    console.log(`\n${colors.red}CONFLICT: Another active session is already working on ${effectiveId}${colors.reset}`);
+    console.log(`   Session: ${session.conflict_session_id}`);
+    console.log('   Pick a different SD or wait for that session to finish.');
+    process.exit(1);
+  } else if (session.conflict) {
+    console.log(`\n${colors.yellow}Note: Another active session detected (${session.conflict_session_id}), working on ${session.conflict_sd_id || 'no SD'}${colors.reset}`);
+  }
+
   // 3. Check current claim status
   const claimStatus = await isSDClaimed(effectiveId, session.session_id);
 
   if (claimStatus.queryFailed) {
     console.log(`\n${colors.red}Error checking SD claim: ${claimStatus.error}${colors.reset}`);
     console.log(`\n${colors.yellow}This may indicate a database schema issue.${colors.reset}`);
-    console.log(`Try running: node scripts/run-sql-migration.js database/migrations/20260213_restore_v_active_sessions_columns.sql`);
+    console.log('Try running: node scripts/run-sql-migration.js database/migrations/20260213_restore_v_active_sessions_columns.sql');
     process.exit(1);
   }
 
