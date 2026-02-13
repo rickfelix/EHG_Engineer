@@ -17,7 +17,7 @@ describe('stage-19.js - Build Execution template', () => {
       expect(stage19.id).toBe('stage-19');
       expect(stage19.slug).toBe('build-execution');
       expect(stage19.title).toBe('Build Execution');
-      expect(stage19.version).toBe('1.0.0');
+      expect(stage19.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {

@@ -19,7 +19,7 @@ describe('stage-22.js - Release Readiness template', () => {
       expect(stage22.id).toBe('stage-22');
       expect(stage22.slug).toBe('release-readiness');
       expect(stage22.title).toBe('Release Readiness');
-      expect(stage22.version).toBe('1.0.0');
+      expect(stage22.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {

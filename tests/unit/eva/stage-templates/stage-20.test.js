@@ -17,7 +17,7 @@ describe('stage-20.js - Quality Assurance template', () => {
       expect(stage20.id).toBe('stage-20');
       expect(stage20.slug).toBe('quality-assurance');
       expect(stage20.title).toBe('Quality Assurance');
-      expect(stage20.version).toBe('1.0.0');
+      expect(stage20.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
