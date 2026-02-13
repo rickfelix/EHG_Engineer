@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T22:34:16.420Z
+**Generated**: 2026-02-13T23:20:47.932Z
 **Rows**: 31
 **RLS**: Enabled (3 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (22 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,7 @@
 | instructions | `text` | YES | - | Full agent identity text. If populated AND no .partial file exists, compiler generates .md entirely from DB. |
 | category_mappings | `jsonb` | YES | `'[]'::jsonb` | JSON array of issue_patterns categories relevant to this agent. Used for knowledge block composition. |
 | thinking_effort | `character varying(20)` | YES | `'medium'::character varying` | - |
+| tool_policy_profile | `character varying(20)` | **NO** | `'full'::character varying` | Tool policy profile controlling which tools this sub-agent can use. full=all tools, coding=read+write+bash (no web), readonly=read-only tools, minimal=Read only. |
 
 ## Constraints
 
@@ -49,6 +50,7 @@
 - `leo_sub_agents_code_key`: UNIQUE (code)
 
 ### Check Constraints
+- `chk_tool_policy_profile`: CHECK (((tool_policy_profile)::text = ANY ((ARRAY['full'::character varying, 'coding'::character varying, 'readonly'::character varying, 'minimal'::character varying])::text[])))
 - `leo_sub_agents_activation_type_check`: CHECK ((activation_type = ANY (ARRAY['automatic'::text, 'manual'::text])))
 - `leo_sub_agents_model_tier_check`: CHECK (((model_tier)::text = ANY ((ARRAY['haiku'::character varying, 'sonnet'::character varying, 'opus'::character varying])::text[])))
 - `leo_sub_agents_team_role_check`: CHECK (((team_role)::text = ANY ((ARRAY['leader'::character varying, 'teammate'::character varying])::text[])))
