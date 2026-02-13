@@ -2,11 +2,11 @@
 
 **Category**: Deployment
 **Status**: Approved
-**Version**: 4.0.0
+**Version**: 4.1.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-02-11
+**Last Updated**: 2026-02-13
 **Tags**: session-management, operations, monitoring, troubleshooting, ship-safety, git-operations
-**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001
+**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001, QF-20260213-620
 
 ## Overview
 
@@ -16,10 +16,17 @@ This runbook provides operational guidance for the Multi-Session Coordination sy
 
 ### 1. Database Constraints
 
-**Unique Index**: `idx_claude_sessions_unique_active_claim`
-- **Purpose**: Enforces single active claim per SD at database level
+**Unique Index (claude_sessions)**: `idx_claude_sessions_unique_active_claim`
+- **Purpose**: Enforces single active session per SD at database level
 - **Location**: `claude_sessions` table
 - **Condition**: `WHERE sd_id IS NOT NULL AND status = 'active'`
+
+**Unique Partial Index (sd_claims)**: `sd_claims_active_unique`
+- **Purpose**: Enforces single unreleased claim per SD at database level (lifecycle-aware)
+- **Location**: `sd_claims` table
+- **Condition**: `WHERE released_at IS NULL`
+- **Added**: Migration `20260213_fix_sd_claims_lifecycle_aware_unique.sql`
+- **Impact**: Only ONE active claim can exist per SD. Once a claim is released (released_at set), the constraint no longer applies, allowing the same SD to be claimed again later.
 
 **Trigger**: `sync_is_working_on_trigger`
 - **Purpose**: Automatically syncs `is_working_on` flag when sessions claim/release SDs
@@ -74,9 +81,13 @@ psql "postgresql://postgres.PROJECT:[PASSWORD]@aws-1-us-east-1.pooler.supabase.c
 
 **Verification**:
 ```sql
--- Verify unique index exists
+-- Verify unique index exists (claude_sessions)
 SELECT indexname, indexdef FROM pg_indexes
 WHERE indexname = 'idx_claude_sessions_unique_active_claim';
+
+-- Verify unique partial index exists (sd_claims)
+SELECT indexname, indexdef FROM pg_indexes
+WHERE indexname = 'sd_claims_active_unique';
 
 -- Verify trigger exists
 SELECT trigger_name, event_manipulation, event_object_table
@@ -97,8 +108,11 @@ If issues arise:
 DROP TRIGGER IF EXISTS sync_is_working_on_trigger ON claude_sessions;
 DROP FUNCTION IF EXISTS sync_is_working_on_with_session();
 
--- Remove unique index
+-- Remove unique index (claude_sessions)
 DROP INDEX IF EXISTS idx_claude_sessions_unique_active_claim;
+
+-- Remove unique partial index (sd_claims)
+DROP INDEX IF EXISTS sd_claims_active_unique;
 
 -- Restore old view (without heartbeat enhancements)
 -- See migration file for full rollback script
@@ -223,11 +237,13 @@ console.log('Healthy:', stats.healthy);
 
 ### Issue: Unique Violation on Claim
 
-**Symptom**: `claim_sd()` returns `race_condition` error
+**Symptom**: `claim_sd()` returns `race_condition` error or unique constraint violation on `sd_claims_active_unique`
 
-**Explanation**: Another session claimed the SD between check and update (race condition caught by unique index)
+**Explanation**: Another session claimed the SD between check and update (race condition caught by unique partial index on sd_claims)
 
 **Resolution**: This is expected behavior - retry or pick different SD
+
+**Note**: The `sd_claims_active_unique` partial index ensures only ONE unreleased claim exists per SD. Once a claim is released (released_at set), the same SD can be claimed again.
 
 ### Issue: is_working_on Not Syncing
 
@@ -267,7 +283,8 @@ WHERE session_id = 'session_abc123';
 
 | Component | Impact | Notes |
 |-----------|--------|-------|
-| Unique Index | Minimal | Indexed on primary key (sd_id) |
+| Unique Index (claude_sessions) | Minimal | Indexed on primary key (sd_id) |
+| Unique Partial Index (sd_claims) | Minimal | Partial index on sd_id WHERE released_at IS NULL |
 | Trigger | Low | Only fires on UPDATE to claude_sessions |
 | View Query | Low | Computed fields calculated on read |
 | Heartbeat RPC | Minimal | One UPDATE every 30s per session |
@@ -280,7 +297,7 @@ WHERE session_id = 'session_abc123';
 ### Scaling Considerations
 
 **Current Capacity**:
-- Unique index supports unlimited concurrent sessions
+- Unique indexes support unlimited concurrent sessions
 - Heartbeat mechanism scales linearly with active sessions
 - View query performance: <10ms for up to 100 active sessions
 
@@ -322,6 +339,7 @@ SELECT AVG(heartbeat_age_seconds) FROM v_active_sessions WHERE computed_status =
    ```sql
    -- Check index bloat (if performance degrades)
    REINDEX INDEX idx_claude_sessions_unique_active_claim;
+   REINDEX INDEX sd_claims_active_unique;
    ```
 
 2. **View Performance**:
@@ -345,6 +363,7 @@ SELECT AVG(heartbeat_age_seconds) FROM v_active_sessions WHERE computed_status =
 ## Related Documentation
 
 - **Migration**: [Multi-Session Pessimistic Locking](../database/migrations/multi-session-pessimistic-locking.md)
+- **Migration**: [SD Claims Lifecycle-Aware Constraint](../database/migrations/20260213_fix_sd_claims_lifecycle_aware_unique.sql)
 - **API Reference**: [Heartbeat Manager](../reference/heartbeat-manager.md)
 - **Database**: [Database README - Enhanced Views](../database/README.md#enhanced-views)
 - **Session Management**: `lib/session-manager.mjs`
@@ -1209,7 +1228,7 @@ SELECT prosrc FROM pg_proc WHERE proname = 'create_or_replace_session';
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions) |
+| 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions), Added sd_claims lifecycle-aware unique constraint (QF-20260213-620) |
 | 4.0.0 | 2026-02-11 | Added ship process safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001) |
 | 3.1.0 | 2026-02-09 | Added terminal identity centralization and handoff resolution tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018) |
 | 3.0.0 | 2026-02-07 | Added git worktree automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001) |
@@ -1219,4 +1238,4 @@ SELECT prosrc FROM pg_proc WHERE proname = 'create_or_replace_session';
 ---
 
 *Part of LEO Protocol v4.3.3 - Multi-Session Coordination & Lifecycle Management*
-*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018, SD-LEO-FIX-MULTI-SESSION-SHIP-001*
+*SDs: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001, SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001, SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018, SD-LEO-FIX-MULTI-SESSION-SHIP-001, QF-20260213-620*
