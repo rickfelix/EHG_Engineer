@@ -876,7 +876,7 @@ npm run agents:compile
 This generates all agent .md files from .partial.md sources + database metadata, with team collaboration and spawning protocols auto-injected.
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-13 8:38:34 AM
+**Last Generated**: 2026-02-13 8:49:22 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

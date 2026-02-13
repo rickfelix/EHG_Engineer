@@ -24,7 +24,7 @@ const TITLE = 'Sub-Agent Invocation Quality Standard';
 
 const CONTENT = `## Sub-Agent Invocation Quality Standard
 
-**CRITICAL**: The prompt you write when spawning a sub-agent is the highest-leverage point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
+**CRITICAL**: The prompt you write when spawning a sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
 
 ### Required Elements (The Five-Point Brief)
 
