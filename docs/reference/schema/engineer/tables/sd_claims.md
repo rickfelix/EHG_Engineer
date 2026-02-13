@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T14:25:45.422Z
-**Rows**: 2,539
+**Generated**: 2026-02-13T14:38:37.646Z
+**Rows**: 2,541
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -36,18 +36,11 @@
 ### Foreign Keys
 - `sd_claims_session_id_fkey`: session_id → claude_sessions(session_id)
 
-### Unique Constraints
-- `sd_claims_sd_session_unique`: UNIQUE (sd_id, session_id)
-
 ### Check Constraints
 - `sd_claims_release_reason_check`: CHECK ((release_reason = ANY (ARRAY['completed'::text, 'timeout'::text, 'manual'::text, 'conflict'::text, 'session_ended'::text, 'AUTO_REPLACED'::text, 'STALE_CLEANUP'::text])))
 
 ## Indexes
 
-- `idx_sd_claims_active`
-  ```sql
-  CREATE INDEX idx_sd_claims_active ON public.sd_claims USING btree (sd_id) WHERE (released_at IS NULL)
-  ```
 - `idx_sd_claims_sd`
   ```sql
   CREATE INDEX idx_sd_claims_sd ON public.sd_claims USING btree (sd_id)
@@ -56,13 +49,13 @@
   ```sql
   CREATE INDEX idx_sd_claims_session ON public.sd_claims USING btree (session_id)
   ```
+- `sd_claims_active_unique`
+  ```sql
+  CREATE UNIQUE INDEX sd_claims_active_unique ON public.sd_claims USING btree (sd_id) WHERE (released_at IS NULL)
+  ```
 - `sd_claims_pkey`
   ```sql
   CREATE UNIQUE INDEX sd_claims_pkey ON public.sd_claims USING btree (id)
-  ```
-- `sd_claims_sd_session_unique`
-  ```sql
-  CREATE UNIQUE INDEX sd_claims_sd_session_unique ON public.sd_claims USING btree (sd_id, session_id)
   ```
 
 ## RLS Policies

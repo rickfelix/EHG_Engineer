@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T14:25:45.422Z
+**Generated**: 2026-02-13T14:38:37.646Z
 **Tables**: 462
 **Source**: Supabase PostgreSQL introspection
 
@@ -97,7 +97,7 @@ SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decision
 | [circuit_breaker_blocks](tables/circuit_breaker_blocks.md) | 1,272 | ✅ | 2 | Audit log for Circuit Breaker blocks (Law 3).
 Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
-| [claude_sessions](tables/claude_sessions.md) | 8,081 | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
+| [claude_sessions](tables/claude_sessions.md) | 8,083 | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
 | [companies](tables/companies.md) | 90 | ✅ | 6 | - |
 | [competitors](tables/competitors.md) | 0 | ✅ | 5 | - |
 | [compliance_alerts](tables/compliance_alerts.md) | 14 | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Compliance alerts and violations |
@@ -110,7 +110,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [compliance_policies](tables/compliance_policies.md) | 6 | ✅ | 2 | CCE Policy Registry: Configurable compliance rules with JSONB configuration |
 | [compliance_violations](tables/compliance_violations.md) | 537 | ✅ | 3 | Stores individual compliance violations detected during checks |
 | [component_registry_embeddings](tables/component_registry_embeddings.md) | 0 | ✅ | 2 | Component registry with semantic search embeddings for AI-powered recommendations during PRD creation |
-| [connection_selection_log](tables/connection_selection_log.md) | 622 | ✅ | 1 | Audit trail for connection method selection. Auto-cleanup recommended at 30 days. |
+| [connection_selection_log](tables/connection_selection_log.md) | 624 | ✅ | 1 | Audit trail for connection method selection. Auto-cleanup recommended at 30 days. |
 | [connection_strategies](tables/connection_strategies.md) | 5 | ✅ | 1 | Ranked connection methods per service. Used by lib/connection-router.js to select optimal connection without trial-and-error. |
 | [content_types](tables/content_types.md) | 3 | ✅ | 2 | - |
 | [context_embeddings](tables/context_embeddings.md) | 0 | ✅ | 2 | RLS enabled 2025-10-26 (migration 020) - Vector embeddings for semantic similarity matching |
@@ -195,7 +195,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [gap_analysis_results](tables/gap_analysis_results.md) | 19 | ✅ | 3 | Stores integration gap analysis results comparing PRD requirements against actual implementation. Part of SD-LEO-FEAT-INTEGRATION-GAP-DETECTOR-001. |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | 5 | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 4 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
-| [governance_audit_log](tables/governance_audit_log.md) | 82,895 | ✅ | 3 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 82,901 | ✅ | 3 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
 | [handoff_audit_log](tables/handoff_audit_log.md) | 6,695 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
@@ -287,7 +287,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [llm_providers](tables/llm_providers.md) | 3 | ✅ | 2 | - |
 | [market_segments](tables/market_segments.md) | 6 | ✅ | 3 | - |
 | [marketing_content_queue](tables/marketing_content_queue.md) | 0 | ✅ | 2 | - |
-| [model_usage_log](tables/model_usage_log.md) | 1,116 | ✅ | 3 | RLS: Append-only for authenticated |
+| [model_usage_log](tables/model_usage_log.md) | 1,117 | ✅ | 3 | RLS: Append-only for authenticated |
 | [modeling_requests](tables/modeling_requests.md) | 0 | ✅ | 1 | Horizontal forecasting and modeling engine serving Stage 0 components including time-horizon positioning, build cost estimation, and market analysis |
 | [naming_favorites](tables/naming_favorites.md) | 0 | ✅ | 1 | - |
 | [naming_suggestions](tables/naming_suggestions.md) | 0 | ✅ | 2 | - |
@@ -335,7 +335,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [protocol_improvement_audit_log](tables/protocol_improvement_audit_log.md) | 245 | ✅ | 2 | Audit trail for all protocol improvement actions. Tracks who approved what and when changes were applied. |
 | [protocol_improvement_queue](tables/protocol_improvement_queue.md) | 82 | ✅ | 5 | Queue for protocol improvements extracted from retrospectives. Enforces database-first approach by requiring target_table and payload. |
 | [public_portfolio](tables/public_portfolio.md) | 2 | ✅ | 4 | - |
-| [quick_fixes](tables/quick_fixes.md) | 36 | ✅ | 2 | LEO Quick-Fix Workflow: Lightweight issue tracking for UAT-discovered bugs/polish (≤50 LOC).
+| [quick_fixes](tables/quick_fixes.md) | 37 | ✅ | 2 | LEO Quick-Fix Workflow: Lightweight issue tracking for UAT-discovered bugs/polish (≤50 LOC).
    Auto-escalates to full SD if criteria not met.
    Part of LEO Protocol v4.2.1 |
 | [rca_auto_trigger_config](tables/rca_auto_trigger_config.md) | 8 | ✅ | 2 | - |
@@ -369,7 +369,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [sd_business_evaluations](tables/sd_business_evaluations.md) | 0 | ✅ | 2 | - |
 | [sd_capabilities](tables/sd_capabilities.md) | 61 | ✅ | 2 | Junction table tracking which capabilities were registered/updated/deprecated by which Strategic Directives. Provides full audit trail. |
 | [sd_checkpoint_history](tables/sd_checkpoint_history.md) | 0 | ✅ | 3 | RLS: Append-only for authenticated |
-| [sd_claims](tables/sd_claims.md) | 2,539 | ✅ | 5 | Historical record of SD claims by sessions. Supports analytics and audit trail. |
+| [sd_claims](tables/sd_claims.md) | 2,541 | ✅ | 5 | Historical record of SD claims by sessions. Supports analytics and audit trail. |
 | [sd_conflict_matrix](tables/sd_conflict_matrix.md) | 0 | ✅ | 1 | Potential conflicts between SDs that should not run in parallel. |
 | [sd_contract_exceptions](tables/sd_contract_exceptions.md) | 0 | ✅ | 4 | Tracks all contract exceptions with full audit trail and automatic scrutiny assessment.
 Each exception records the violation, justification, scrutiny level, and approval status.
@@ -422,7 +422,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [sdip_groups](tables/sdip_groups.md) | 0 | ✅ | 4 | Manually grouped SDIP submissions for combined analysis |
 | [sdip_submissions](tables/sdip_submissions.md) | 0 | ✅ | 4 | Strategic Directive Initiation Protocol submissions with full validation workflow |
 | [self_audit_findings](tables/self_audit_findings.md) | 0 | ✅ | 1 | Stores findings from LEO self-discovery routines (SD-LEO-SELF-IMPROVE-002B) |
-| [session_lifecycle_events](tables/session_lifecycle_events.md) | 2,131 | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
+| [session_lifecycle_events](tables/session_lifecycle_events.md) | 2,134 | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
 | [shipping_decisions](tables/shipping_decisions.md) | 455 | ✅ | 2 | - |
 | [simulation_sessions](tables/simulation_sessions.md) | 5 | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [soul_extractions](tables/soul_extractions.md) | 0 | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
@@ -493,7 +493,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [user_organizations](tables/user_organizations.md) | 0 | ✅ | 1 | Multi-tenant user-organization membership for RLS policies |
 | [user_preferences](tables/user_preferences.md) | 2 | ✅ | 2 | - |
 | [user_stories](tables/user_stories.md) | 2,925 | ✅ | 3 | RLS enabled: service_role full access, authenticated read-only |
-| [validation_audit_log](tables/validation_audit_log.md) | 31,683 | ✅ | 3 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
+| [validation_audit_log](tables/validation_audit_log.md) | 31,711 | ✅ | 3 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
 | [validation_evidence](tables/validation_evidence.md) | 0 | ✅ | 2 | - |
 | [validation_gate_registry](tables/validation_gate_registry.md) | 57 | ✅ | 2 | Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001. |
 | [venture_archetypes](tables/venture_archetypes.md) | 14 | ✅ | 5 | Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies. |
