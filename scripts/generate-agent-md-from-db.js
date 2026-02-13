@@ -43,7 +43,8 @@ const MAX_KNOWLEDGE_CHARS = MAX_KNOWLEDGE_TOKENS * CHARS_PER_TOKEN;
 const REQUIRED_CONFIG_KEYS = ['RCA', 'ORCHESTRATOR_CHILD'];
 
 // Model name mapping for frontmatter
-const MODEL_TIER_MAP = { haiku: 'haiku', sonnet: 'sonnet', opus: 'opus' };
+// Thinking effort strategy: all agents use opus, effort is controlled via thinking budget
+const MODEL_TIER_MAP = { haiku: 'opus', sonnet: 'opus', opus: 'opus' };
 
 const NOT_EXHAUSTIVE_DISCLAIMER = '> **NOT EXHAUSTIVE**: This section contains curated institutional knowledge compiled from the LEO database at generation time. It does NOT represent all available knowledge. When uncertain, query the database directly via `node scripts/execute-subagent.js --code <CODE> --sd-id <SD-ID>` or check `issue_patterns` and `leo_sub_agents` tables for the latest data.';
 

@@ -1,94 +1,94 @@
 {
-  "version": "2.0.0",
-  "description": "Phase-aware and default model routing for sub-agents",
-  "lastUpdated": "2026-02-11",
-  "updatedBy": "LLM tier upgrade - quality-first strategy",
-  "philosophy": "QUALITY-FIRST STRATEGY - Use most capable model where quality matters, sonnet minimum for all tasks",
+  "version": "3.0.0",
+  "description": "Phase-aware thinking effort routing for sub-agents",
+  "lastUpdated": "2026-02-13",
+  "updatedBy": "SD-LEO-FIX-REPLACE-MODEL-SELECTION-001 - thinking effort routing",
+  "philosophy": "THINKING EFFORT STRATEGY - Single model (Opus) with varying thinking depth: low for operational, medium for reasoning, high for critical",
 
   "phaseOverrides": {
     "LEAD": {
       "_comment": "Approval phase - strategic evaluation, risk assessment",
-      "GITHUB": "sonnet",
-      "DOCMON": "sonnet",
-      "RETRO": "sonnet",
-      "QUICKFIX": "sonnet",
-      "VALIDATION": "sonnet",
-      "DESIGN": "opus",
-      "TESTING": "opus",
-      "DATABASE": "opus",
-      "STORIES": "opus",
-      "API": "opus",
-      "RISK": "opus",
-      "DEPENDENCY": "opus",
-      "PERFORMANCE": "opus",
-      "UAT": "opus",
-      "SECURITY": "opus",
-      "RCA": "opus",
-      "REGRESSION": "opus",
-      "ORCHESTRATOR_CHILD": "sonnet"
+      "GITHUB": "low",
+      "DOCMON": "low",
+      "RETRO": "low",
+      "QUICKFIX": "low",
+      "VALIDATION": "medium",
+      "DESIGN": "medium",
+      "TESTING": "medium",
+      "DATABASE": "high",
+      "STORIES": "medium",
+      "API": "medium",
+      "RISK": "medium",
+      "DEPENDENCY": "medium",
+      "PERFORMANCE": "medium",
+      "UAT": "medium",
+      "SECURITY": "high",
+      "RCA": "high",
+      "REGRESSION": "medium",
+      "ORCHESTRATOR_CHILD": "high"
     },
     "PLAN": {
       "_comment": "Planning phase - PRD quality determines EXEC success",
-      "GITHUB": "sonnet",
-      "DOCMON": "sonnet",
-      "DESIGN": "opus",
-      "TESTING": "opus",
-      "DATABASE": "opus",
-      "API": "opus",
-      "RISK": "opus",
-      "DEPENDENCY": "opus",
-      "PERFORMANCE": "opus",
-      "RETRO": "opus",
-      "UAT": "opus",
-      "SECURITY": "opus",
-      "VALIDATION": "opus",
-      "STORIES": "opus",
-      "RCA": "opus",
-      "REGRESSION": "opus",
-      "ORCHESTRATOR_CHILD": "sonnet"
+      "GITHUB": "low",
+      "DOCMON": "low",
+      "DESIGN": "medium",
+      "TESTING": "medium",
+      "DATABASE": "high",
+      "API": "medium",
+      "RISK": "medium",
+      "DEPENDENCY": "medium",
+      "PERFORMANCE": "medium",
+      "RETRO": "medium",
+      "UAT": "medium",
+      "SECURITY": "high",
+      "VALIDATION": "high",
+      "STORIES": "medium",
+      "RCA": "high",
+      "REGRESSION": "medium",
+      "ORCHESTRATOR_CHILD": "high"
     },
     "EXEC": {
       "_comment": "Execution phase - code quality is paramount",
-      "GITHUB": "sonnet",
-      "QUICKFIX": "sonnet",
-      "DOCMON": "sonnet",
-      "DESIGN": "opus",
-      "DATABASE": "opus",
-      "STORIES": "opus",
-      "API": "opus",
-      "DEPENDENCY": "opus",
-      "PERFORMANCE": "opus",
-      "RETRO": "opus",
-      "UAT": "opus",
-      "SECURITY": "opus",
-      "VALIDATION": "opus",
-      "TESTING": "opus",
-      "RCA": "opus",
-      "REGRESSION": "opus",
-      "ORCHESTRATOR_CHILD": "sonnet"
+      "GITHUB": "low",
+      "QUICKFIX": "low",
+      "DOCMON": "low",
+      "DESIGN": "medium",
+      "DATABASE": "high",
+      "STORIES": "medium",
+      "API": "medium",
+      "DEPENDENCY": "medium",
+      "PERFORMANCE": "medium",
+      "RETRO": "medium",
+      "UAT": "medium",
+      "SECURITY": "high",
+      "VALIDATION": "high",
+      "TESTING": "high",
+      "RCA": "high",
+      "REGRESSION": "medium",
+      "ORCHESTRATOR_CHILD": "high"
     }
   },
 
   "defaults": {
-    "_comment": "Fallback when phase is unknown - quality-first defaults",
-    "GITHUB": "sonnet",
-    "DOCMON": "sonnet",
-    "RETRO": "sonnet",
-    "QUICKFIX": "sonnet",
-    "DATABASE": "opus",
-    "STORIES": "opus",
-    "DESIGN": "opus",
-    "RISK": "opus",
-    "PERFORMANCE": "opus",
-    "TESTING": "opus",
-    "API": "opus",
-    "DEPENDENCY": "opus",
-    "UAT": "opus",
-    "VALIDATION": "opus",
-    "SECURITY": "opus",
-    "RCA": "opus",
-    "REGRESSION": "opus",
-    "ORCHESTRATOR_CHILD": "sonnet"
+    "_comment": "Fallback when phase is unknown - balanced defaults",
+    "GITHUB": "low",
+    "DOCMON": "low",
+    "RETRO": "low",
+    "QUICKFIX": "low",
+    "DATABASE": "high",
+    "STORIES": "medium",
+    "DESIGN": "medium",
+    "RISK": "medium",
+    "PERFORMANCE": "medium",
+    "TESTING": "medium",
+    "API": "medium",
+    "DEPENDENCY": "medium",
+    "UAT": "medium",
+    "VALIDATION": "medium",
+    "SECURITY": "high",
+    "RCA": "high",
+    "REGRESSION": "medium",
+    "ORCHESTRATOR_CHILD": "high"
   },
 
   "categoryMappings": {
@@ -113,18 +113,18 @@
     "ORCHESTRATOR_CHILD": ["protocol", "process", "code_structure"]
   },
 
-  "tierDocumentation": {
-    "haiku": {
-      "tier": 1,
-      "useCases": ["Reserved for local LLM routing only (qwen3-coder:30b via Ollama)"]
+  "effortDocumentation": {
+    "low": {
+      "budgetTokens": 1024,
+      "useCases": ["CI/CD operations", "documentation validation", "pattern extraction", "quick fixes", "operational checks"]
     },
-    "sonnet": {
-      "tier": 2,
-      "useCases": ["CI/CD verification", "doc field validation", "operational checks", "quick-fix analysis", "minimum tier for all sub-agents"]
+    "medium": {
+      "budgetTokens": 4096,
+      "useCases": ["design analysis", "testing strategy", "API design", "risk assessment", "dependency analysis", "story generation"]
     },
-    "opus": {
-      "tier": 3,
-      "useCases": ["architecture decisions", "code quality", "security analysis", "schema design", "risk assessment", "acceptance testing", "all critical reasoning"]
+    "high": {
+      "budgetTokens": 16384,
+      "useCases": ["security analysis", "database schema design", "root cause analysis", "regression testing", "final validation gates", "orchestrator child execution"]
     }
   }
 }
