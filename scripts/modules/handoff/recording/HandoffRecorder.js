@@ -473,8 +473,19 @@ export class HandoffRecorder {
             console.warn('   ⚠️  WARNING: GATE1_PRD_QUALITY not found in gateResults');
           }
         }
+        // PLAN-TO-LEAD: Store Gate 3 results for LEAD-FINAL-APPROVAL Gate 4
+        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Previously missing — Gate 4 couldn't find gate3 data
+        if (handoffType === 'PLAN-TO-LEAD') {
+          if (result.gateResults.GATE3_TRACEABILITY) {
+            metadata.gate3_validation = result.gateResults.GATE3_TRACEABILITY;
+            console.log('   ✅ Gate 3 traceability saved to metadata.gate3_validation');
+          } else {
+            console.warn('   ⚠️  WARNING: GATE3_TRACEABILITY not found in gateResults');
+          }
+        }
         // Store all gate results for comprehensive audit trail
         metadata.gate_results = result.gateResults;
+        metadata.gate_results_version = 1;
       } else {
         console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
       }
