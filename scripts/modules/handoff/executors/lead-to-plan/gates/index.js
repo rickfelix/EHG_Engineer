@@ -32,3 +32,10 @@ export {
   ensureSDBranchExists,
   createBranchPreparationGate
 } from './branch-preparation.js';
+
+export {
+  validatePlaceholderContent,
+  createPlaceholderContentGate,
+  isPlaceholderText,
+  analyzePlaceholderContent
+} from './placeholder-content.js';

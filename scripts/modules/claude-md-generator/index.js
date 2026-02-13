@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
+import { writeFileAtomic } from '../../../lib/utils/atomic-write.js';
 
 import {
   getActiveProtocol,
@@ -277,7 +278,7 @@ class CLAUDEMDGeneratorV3 {
     const content = generatorFn(data);
     const contentHash = this.computeHash(content);
 
-    fs.writeFileSync(filePath, content);
+    writeFileAtomic(filePath, content);
 
     const size = (content.length / 1024).toFixed(1);
     const charCount = content.length;
@@ -300,7 +301,7 @@ class CLAUDEMDGeneratorV3 {
    */
   writeManifest() {
     const manifestPath = path.join(this.baseDir, 'claude-generation-manifest.json');
-    fs.writeFileSync(manifestPath, JSON.stringify(this.manifest, null, 2));
+    writeFileAtomic(manifestPath, JSON.stringify(this.manifest, null, 2));
     console.log('\nManifest written: claude-generation-manifest.json');
   }
 }

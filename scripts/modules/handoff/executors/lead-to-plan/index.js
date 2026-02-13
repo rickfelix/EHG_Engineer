@@ -14,7 +14,8 @@ import {
   createTargetApplicationGate,
   createSdTypeValidationGate,
   createBaselineDebtGate,
-  createSmokeTestSpecificationGate
+  createSmokeTestSpecificationGate,
+  createPlaceholderContentGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -79,6 +80,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
     // Smoke Test Specification Gate (LEO v4.4.0)
     gates.push(createSmokeTestSpecificationGate());
+
+    // Placeholder Content Detection Gate (SD-LEO-INFRA-PROTOCOL-FILE-STATE-001)
+    // Warning-only: detects default template text from leo-create-sd.js
+    gates.push(createPlaceholderContentGate());
 
     // LEO v4.4.1: Proactive Branch Creation Gate (DISABLED)
     // See: ./gates/branch-preparation.js for code preserved for reference
