@@ -206,7 +206,18 @@ function createWorktree(sdKey, repoRoot) {
     repoRoot
   }, null, 2));
 
-  // Symlink node_modules
+  ensureWorktreeEssentials(worktreePath, repoRoot);
+
+  return { path: worktreePath, branch, created: true };
+}
+
+/**
+ * Ensure worktree has essential untracked files (node_modules symlink, .env copy).
+ * Runs after EVERY successful resolution — not just creation — so previously
+ * created worktrees also get patched up.
+ */
+function ensureWorktreeEssentials(worktreePath, repoRoot) {
+  // Symlink node_modules (avoids duplicating ~500MB)
   const sourceModules = path.join(repoRoot, 'node_modules');
   const targetModules = path.join(worktreePath, 'node_modules');
   if (fs.existsSync(sourceModules) && !fs.existsSync(targetModules)) {
@@ -219,7 +230,14 @@ function createWorktree(sdKey, repoRoot) {
     } catch { /* best effort */ }
   }
 
-  return { path: worktreePath, branch, created: true };
+  // Copy .env (gitignored, so never present in worktrees)
+  const sourceEnv = path.join(repoRoot, '.env');
+  const targetEnv = path.join(worktreePath, '.env');
+  if (fs.existsSync(sourceEnv) && !fs.existsSync(targetEnv)) {
+    try {
+      fs.copyFileSync(sourceEnv, targetEnv);
+    } catch { /* best effort */ }
+  }
 }
 
 /**
@@ -279,6 +297,7 @@ async function resolve(sdKey, mode, repoRoot) {
     } else {
       const branch = getWorktreeBranch(dbResult.path);
       emitLog({ event: 'worktree.resolved', sdKey, source: 'db', resolvedCwd: dbResult.path, outcome: 'success' });
+      ensureWorktreeEssentials(dbResult.path, repoRoot);
       return {
         sdKey, cwd: dbResult.path, source: 'db', success: true,
         worktree: { exists: true, path: dbResult.path, branch },
@@ -296,6 +315,7 @@ async function resolve(sdKey, mode, repoRoot) {
     // Persist to DB for future lookups
     await persistWorktreePath(sdKey, scanResult.path);
 
+    ensureWorktreeEssentials(scanResult.path, repoRoot);
     return {
       sdKey, cwd: scanResult.path, source: 'scan', success: true,
       worktree: { exists: true, path: scanResult.path, branch }
