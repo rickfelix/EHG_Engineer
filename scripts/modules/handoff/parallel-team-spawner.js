@@ -12,6 +12,7 @@
  */
 
 import { getReadyChildren } from './child-sd-selector.js';
+import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { createWorktree, getRepoRoot } from '../../../lib/worktree-manager.js';
 import { compose } from '../../../lib/agent-experience-factory/index.js';
 import fs from 'fs';
@@ -240,7 +241,7 @@ export async function planParallelExecution(supabase, parentSdId, currentSdId) {
 
   for (const child of toStartCandidates) {
     const sdKey = child.sd_key || child.id;
-    const branch = `feat/${sdKey}`.substring(0, 100);
+    const branch = safeTruncate(`feat/${sdKey}`, 100);
 
     // FR-3: Provision or reuse worktree
     let worktreePath;
@@ -323,7 +324,7 @@ export async function planParallelExecution(supabase, parentSdId, currentSdId) {
   state.orchestratorSdKey = parentSdKey;
   atomicWriteJSON(statePath, state);
 
-  const teamName = `orch-${parentSdKey}`.substring(0, 50);
+  const teamName = safeTruncate(`orch-${parentSdKey}`, 50);
 
   return {
     schemaVersion: SCHEMA_VERSION,

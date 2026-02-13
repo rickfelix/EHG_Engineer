@@ -10,6 +10,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 
 /**
  * PRD-Readiness Pre-Check (Improvement #1)
@@ -252,7 +253,7 @@ export function validateSuccessCriteriaActionability(sd) {
     const isVague = vaguePatterns.some(p => p.test(text)) && !isActionable;
 
     if (isVague) {
-      vagueCriteria.push({ index: index + 1, text: text.substring(0, 50) });
+      vagueCriteria.push({ index: index + 1, text: safeTruncate(text, 50) });
     }
   });
 

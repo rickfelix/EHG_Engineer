@@ -6,6 +6,7 @@
  */
 
 import ResultBuilder from '../ResultBuilder.js';
+import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -553,7 +554,7 @@ export class BaseExecutor {
           console.log('\n   ┌─────────────────────────────────────────────────────────────┐');
           console.log('   │  ⚠️  SD CLAIMED BY ANOTHER SESSION                          │');
           console.log('   ├─────────────────────────────────────────────────────────────┤');
-          console.log(`   │  Session:   ${claimStatus.claimedBy?.substring(0, 45) || 'unknown'}`);
+          console.log(`   │  Session:   ${safeTruncate(claimStatus.claimedBy || '', 45) || 'unknown'}`);
           console.log(`   │  Hostname:  ${claimStatus.hostname || 'unknown'}`);
           console.log(`   │  TTY:       ${claimStatus.tty || 'unknown'}`);
           console.log(`   │  Heartbeat: ${claimStatus.heartbeatAgeHuman || 'unknown'}`);

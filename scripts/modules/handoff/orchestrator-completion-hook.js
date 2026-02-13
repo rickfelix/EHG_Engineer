@@ -11,6 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolver.js';
 import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
 import { generateAndEmitSummary, createCollector } from '../session-summary/index.js';
@@ -346,7 +347,7 @@ export async function displayQueue(supabase, limit = 200) {
       sds.slice(0, 10).forEach(sd => {
         const isChild = sd.parent_sd_id ? '  └─' : '  •';
         const phase = sd.current_phase ? ` (${sd.current_phase})` : '';
-        console.log(`   ${isChild} ${sd.id}: ${sd.title?.slice(0, 40)}${phase}`);
+        console.log(`   ${isChild} ${sd.id}: ${safeTruncate(sd.title || '', 40)}${phase}`);
       });
       if (sds.length > 10) {
         console.log(`      ... and ${sds.length - 10} more`);

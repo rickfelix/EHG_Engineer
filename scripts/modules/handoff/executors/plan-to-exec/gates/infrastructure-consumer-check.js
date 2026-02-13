@@ -20,6 +20,8 @@
  * Format: INFRA_CONSUMER_CHECK:SKIP or INFRA_CONSUMER_CHECK:SKIP item=<name> reason=<text>
  */
 
+import { safeTruncate } from '../../../../../../lib/utils/safe-truncate.js';
+
 /**
  * Reason codes for gate failures (FR-2, FR-3)
  */
@@ -219,7 +221,7 @@ function extractInfrastructureItems(content, config) {
         items.push({
           name: itemName,
           pattern: pattern.toString(),
-          evidence: match[0].substring(0, 100),
+          evidence: safeTruncate(match[0], 100),
           status: 'DETECTED'
         });
       }
@@ -250,7 +252,7 @@ function checkItemHasConsumer(itemName, content, config) {
         evidence.push({
           type: 'consumer_hint',
           pattern: hint.toString(),
-          snippet: hintMatches[0].substring(0, 80)
+          snippet: safeTruncate(hintMatches[0], 80)
         });
       }
     }
@@ -312,7 +314,7 @@ function validateUserStoryCompleteness(userStories) {
       result.existenceStories.push({
         id: story.id,
         title: story.title,
-        evidence: storyContent.substring(0, 100)
+        evidence: safeTruncate(storyContent, 100)
       });
     }
 
@@ -322,7 +324,7 @@ function validateUserStoryCompleteness(userStories) {
       result.usageStories.push({
         id: story.id,
         title: story.title,
-        evidence: storyContent.substring(0, 100)
+        evidence: safeTruncate(storyContent, 100)
       });
     }
   }
@@ -795,7 +797,7 @@ export async function generateFollowUpSD(parentSd, gaps, supabase) {
   // Generate unique SD key
   const timestamp = Date.now().toString(36).toUpperCase();
   const parentKey = parentSd.sd_key?.replace('SD-', '').replace(/[^A-Z0-9-]/g, '') || 'PARENT';
-  const sdKey = `SD-LEO-IMPL-${parentKey.substring(0, 20)}-CONSUMER-${timestamp}`;
+  const sdKey = `SD-LEO-IMPL-${safeTruncate(parentKey, 20)}-CONSUMER-${timestamp}`;
 
   // FR-4: Build checklist of tasks per missing infra item
   const taskChecklist = gaps.map(g => {

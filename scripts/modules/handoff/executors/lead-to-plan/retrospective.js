@@ -14,6 +14,7 @@
  */
 
 import readline from 'readline';
+import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -202,7 +203,7 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
 
       // Add issue category insight
       keyLearnings.push({
-        learning: `[${issue.pattern_id}] ${issue.category} issue: ${issue.issue_summary.substring(0, 80)}${issue.issue_summary.length > 80 ? '...' : ''}`,
+        learning: `[${issue.pattern_id}] ${issue.category} issue: ${safeTruncate(issue.issue_summary, 80)}${issue.issue_summary.length > 80 ? '...' : ''}`,
         is_boilerplate: false,
         pattern_id: issue.pattern_id
       });
@@ -262,7 +263,7 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       pattern_id: issue.pattern_id,
       category: issue.category,
       severity: issue.severity,
-      summary: issue.issue_summary.substring(0, 200)
+      summary: safeTruncate(issue.issue_summary, 200)
     }));
 
     // Create retrospective record
