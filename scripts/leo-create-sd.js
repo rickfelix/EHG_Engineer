@@ -29,6 +29,7 @@ import {
   getStatus as getPhase0Status
 } from './modules/phase-0/leo-integration.js';
 import { routeWorkItem } from '../lib/utils/work-item-router.js';
+import { scanMetadataForMisplacedDependencies } from './modules/sd-next/dependency-resolver.js';
 import {
   parsePlanFile,
   formatFilesAsScope,
@@ -943,7 +944,38 @@ async function createSD(options) {
   console.log(`   Priority: ${data.priority}`);
   console.log(`   Status:   ${data.status}`);
   console.log(`   Phase:    ${data.current_phase}`);
+  console.log(`   Dependencies: ${sdData.dependencies?.length ? sdData.dependencies.map(d => d.sd_id || d).join(', ') : '(none)'}`);
   console.log('═'.repeat(60));
+
+  // QA CHECK: Detect dependency info misplaced in metadata
+  const depScan = scanMetadataForMisplacedDependencies(sdData.metadata);
+  if (depScan.hasMisplacedDeps) {
+    console.log('\n' + '⚠'.repeat(30));
+    console.log('⚠️  DEPENDENCY QA WARNING');
+    console.log('⚠'.repeat(30));
+    console.log('   The dependencies column is empty, but dependency-like');
+    console.log('   information was found in the metadata field:');
+    for (const finding of depScan.findings) {
+      console.log(`\n   metadata.${finding.key}:`);
+      if (Array.isArray(finding.value)) {
+        finding.value.forEach(v => console.log(`     - ${typeof v === 'string' ? v : JSON.stringify(v)}`));
+      } else {
+        console.log(`     ${typeof finding.value === 'string' ? finding.value : JSON.stringify(finding.value)}`);
+      }
+      if (finding.sdKeys.length > 0) {
+        console.log(`   → SD keys detected: ${finding.sdKeys.join(', ')}`);
+      }
+    }
+    console.log('\n   ℹ️  The "dependencies" column is the correct place for SD');
+    console.log('   dependencies. It controls blocking/readiness in sd:next.');
+    console.log('   Metadata dependencies are NOT enforced by the queue system.');
+    console.log('\n   To fix, update the SD:');
+    console.log('   UPDATE strategic_directives_v2');
+    console.log(`   SET dependencies = '[${depScan.findings.flatMap(f => f.sdKeys).map(k => `{"sd_id":"${k}"}`).join(',')}]'`);
+    console.log(`   WHERE sd_key = '${data.sd_key}';`);
+    console.log('⚠'.repeat(30));
+  }
+
   console.log('\n📋 Next Steps:');
   console.log('   1. Review SD details');
   console.log('   2. Run LEAD-TO-PLAN handoff when ready:');
@@ -979,6 +1011,23 @@ Flags:
   --yes, -y          Skip confirmation for auto-detected plans
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
   --help             Show this help message
+
+Dependency Field Guide:
+  The "dependencies" column (JSONB array) is the CORRECT place for SD prerequisites.
+  Format: [{"sd_id": "SD-XXX-001"}, {"sd_id": "SD-YYY-002"}]
+
+  This column controls:
+    - Whether an SD shows as BLOCKED or READY in sd:next
+    - Whether AUTO-PROCEED will skip or process the SD
+    - Unresolved dependency warnings in the queue display
+
+  DO NOT put dependency info in the "metadata" field — it will NOT be
+  enforced by the queue system. Common mistakes:
+    metadata.depends_on, metadata.dependencies, metadata.blocked_by,
+    metadata.prerequisite_sds — all ignored by the dependency resolver.
+
+  The only metadata dependency key that IS checked is:
+    metadata.blocked_by_sd_key — soft/conditional blocker (single SD key)
 
 Venture Context:
   Venture prefix is resolved in order: --venture flag > VENTURE env var > active session venture.

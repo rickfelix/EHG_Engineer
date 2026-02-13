@@ -25,7 +25,8 @@ export {
   checkDependenciesResolved,
   getUnresolvedDependencies,
   checkMetadataDependency,
-  resolveMetadataBlocker
+  resolveMetadataBlocker,
+  scanMetadataForMisplacedDependencies
 } from './dependency-resolver.js';
 
 // Data loaders
