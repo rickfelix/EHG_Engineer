@@ -12,7 +12,11 @@
  * - This runs BEFORE gate validation (pre-gate detection)
  * - This attempts resolution, not skipping
  * - Falls back to skip-and-continue if resolution fails
- *
+ */
+
+import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
+
+/*
  * @module blocker-resolution
  */
 
@@ -149,7 +153,7 @@ export async function identifyBlockerSD(blockerId, supabase) {
       return { blockerSD: null, found: false, status: 'not_found' };
     }
 
-    console.log(`   [blocker-identify] Found: ${blockerSD.id} - ${blockerSD.title?.slice(0, 40)}`);
+    console.log(`   [blocker-identify] Found: ${blockerSD.id} - ${safeTruncate(blockerSD.title || '', 40)}`);
     console.log(`      Status: ${blockerSD.status}, Progress: ${blockerSD.progress}%`);
 
     return { blockerSD, found: true, status: blockerSD.status };
@@ -379,7 +383,7 @@ export async function executeBlockerResolution(params) {
   console.log('\n🔍 BLOCKER DETECTION (D21)');
   console.log('─'.repeat(50));
   console.log(`   SD: ${sd.id}`);
-  console.log(`   Title: ${sd.title?.slice(0, 50)}`);
+  console.log(`   Title: ${safeTruncate(sd.title || '', 50)}`);
 
   // Step 1: Detect blockers
   const { blockers, method, confidence, detectionTime } = await detectBlockers(sd, supabase);

@@ -12,6 +12,7 @@
  */
 
 import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
+import { safeTruncate } from '../../../../../../lib/utils/safe-truncate.js';
 
 /**
  * Validate smoke test specification
@@ -89,7 +90,7 @@ export async function validateSmokeTestSpecification(sd) {
 
     if (hasInstruction && hasOutcome) {
       validSteps++;
-      console.log(`   ✅ Step ${step.step_number || validSteps}: ${(hasInstruction).substring(0, 50)}...`);
+      console.log(`   ✅ Step ${step.step_number || validSteps}: ${safeTruncate(hasInstruction, 50)}...`);
     } else {
       warnings.push(`Step ${step.step_number || '?'} missing instruction or expected_outcome`);
     }

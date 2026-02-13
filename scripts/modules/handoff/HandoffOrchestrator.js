@@ -9,6 +9,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { SDRepository } from './db/SDRepository.js';
 import { PRDRepository } from './db/PRDRepository.js';
 import { HandoffRepository } from './db/HandoffRepository.js';
@@ -504,7 +505,7 @@ export class HandoffOrchestrator {
       // High confidence - proceed
       console.log('   ✅ HIGH CONFIDENCE: Proceeding with handoff');
       if (reasoning) {
-        console.log(`   📝 Reasoning: ${reasoning.substring(0, 100)}${reasoning.length > 100 ? '...' : ''}`);
+        console.log(`   📝 Reasoning: ${safeTruncate(reasoning, 100)}${reasoning.length > 100 ? '...' : ''}`);
       }
       console.log('');
       return {
@@ -524,7 +525,7 @@ export class HandoffOrchestrator {
       }
 
       if (reasoning) {
-        console.log(`   📝 Reasoning: ${reasoning.substring(0, 100)}${reasoning.length > 100 ? '...' : ''}`);
+        console.log(`   📝 Reasoning: ${safeTruncate(reasoning, 100)}${reasoning.length > 100 ? '...' : ''}`);
       }
 
       console.log('');
@@ -559,7 +560,7 @@ export class HandoffOrchestrator {
 
       // Low confidence but with explanation - warn but allow
       console.log('   ⚠️  LOW CONFIDENCE but explanation provided');
-      console.log(`   📝 Reasoning: ${reasoning.substring(0, 150)}${reasoning.length > 150 ? '...' : ''}`);
+      console.log(`   📝 Reasoning: ${safeTruncate(reasoning, 150)}${reasoning.length > 150 ? '...' : ''}`);
 
       if (gaps.length > 0) {
         console.log('   📋 Known Gaps:');

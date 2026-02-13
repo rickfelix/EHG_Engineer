@@ -12,6 +12,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { getNextReadyChild, getOrchestratorContext } from './child-sd-selector.js';
 
 // Configuration constants
@@ -323,7 +324,7 @@ export async function executeSkipAndContinue(params) {
 
     console.log('   Blocked children:');
     blockedChildren.forEach(c => {
-      console.log(`      • ${c.id}: ${c.title?.slice(0, 40)}`);
+      console.log(`      • ${c.id}: ${safeTruncate(c.title || '', 40)}`);
     });
 
     console.log('═'.repeat(50));

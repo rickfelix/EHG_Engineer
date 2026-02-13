@@ -7,6 +7,7 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -332,7 +333,7 @@ export function createPRMergeVerificationGate() {
               })));
             }
           } catch (repoError) {
-            console.log(`   ⚠️  Could not check ${repo}: ${repoError.message?.substring(0, 50) || 'unknown error'}`);
+            console.log(`   ⚠️  Could not check ${repo}: ${safeTruncate(repoError.message || '', 50) || 'unknown error'}`);
           }
         }
 

@@ -16,6 +16,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import ContentBuilder from '../content/ContentBuilder.js';
 import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
 import { withRetry, isRetryable, RETRY_PRESETS } from '../../resilience/retry-executor.js';
@@ -430,7 +431,7 @@ export class HandoffRecorder {
             pattern_id: i.pattern_id,
             category: i.category,
             severity: i.severity,
-            summary: i.issue_summary.substring(0, 200)
+            summary: safeTruncate(i.issue_summary, 200)
           }));
           metadata.issue_pattern_ids = sdIssues.map(i => i.pattern_id);
           console.log(`   📋 ${sdIssues.length} issue pattern(s) linked to handoff metadata`);
@@ -561,7 +562,7 @@ export class HandoffRecorder {
         sdId,
         executionId,
         error: error.message,
-        stack: error.stack?.substring(0, 500)
+        stack: safeTruncate(error.stack || '', 500)
       });
 
       // Return null but don't throw - the handoff execution was still recorded
