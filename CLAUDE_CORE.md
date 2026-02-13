@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-12 8:24:59 PM
+**Generated**: 2026-02-13 8:38:34 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -73,6 +73,41 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
+
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -112,41 +147,6 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -199,6 +199,37 @@ npm run handoff:compliance SD-ID
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## 🤖 Built-in Agent Integration
 
@@ -285,65 +316,6 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
-
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
-> **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
-
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -375,6 +347,34 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+> **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -418,7 +418,6 @@ Before marking any stage/feature as complete:
 - E2E testing is MANDATORY
 - 100% user story coverage required
 - Both unit tests AND E2E tests must pass
-- **TDD for applicable SD types**: For `feature` (mandatory) and `enhancement`/`bugfix`/`refactor` (recommended) SDs, invoke the TESTING sub-agent **before implementation** to generate failing tests from PRD acceptance criteria, then implement to make tests pass. See CLAUDE_EXEC.md "TDD Workflow (EXEC)" for the full sequence.
 
 ### Database-First (REQUIRED)
 **Zero markdown files.** Database tables are single source of truth:
@@ -651,6 +650,66 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Size**: <100 lines ideal, <200 max
 
 **Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
+
+## Sub-Agent Invocation Quality Standard
+
+**CRITICAL**: The prompt you write when spawning a sub-agent is the highest-leverage point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
+
+### Required Elements (The Five-Point Brief)
+
+When invoking ANY sub-agent via the Task tool, your prompt MUST include:
+
+| Element | What to Include | Example |
+|---------|----------------|---------|
+| **Symptom** | What is actually happening (observable behavior) | "The /users endpoint returns 504 after 30s" |
+| **Location** | Files, endpoints, systems, or DB tables involved | "API route in routes/users.js, query in lib/queries/" |
+| **Frequency** | One-time, recurring, pattern, or regression | "Started 2 hours ago, affects every 3rd request" |
+| **Prior attempts** | What has already been tried or ruled out | "Restarted server — no improvement. Not a DNS issue." |
+| **Impact** | Severity and what is blocked downstream | "Blocking all user signups, P0 severity" |
+
+### What to EXCLUDE from Sub-Agent Prompts
+
+| Exclude | Why |
+|---------|-----|
+| **Your hypothesis about the cause** | Biases the investigation — let the agent form its own hypothesis |
+| **Large log/code dumps** | The agent has Read and Bash tools — point to files instead |
+| **Unrelated context** | Every extra token is a token not spent on investigation |
+| **Vague descriptions** | "Look into this error" gives the agent nothing to anchor on |
+
+### Quality Examples
+
+**GOOD prompt** (RCA agent):
+```
+"Analyze why the /api/users endpoint returns 504 timeout after 30 seconds.
+- Location: routes/users.js line 45 calls lib/queries/user-lookup.js
+- Frequency: Started 2 hours ago, every 3rd request fails
+- Prior attempts: Server restart did not help, DNS resolution is fine
+- Impact: All user signups blocked (P0)
+Perform 5-whys analysis and identify the root cause."
+```
+
+**BAD prompt** (same scenario):
+```
+"Investigate this timeout issue. Something is wrong with the users endpoint."
+```
+
+### Why This Matters
+
+The prompt quality compounds through every level of the agent chain:
+
+```
+Strong prompt -> Agent understands domain -> Picks RIGHT teammates
+  -> Teammates get focused assignments -> Findings are actionable
+
+Weak prompt -> Agent guesses at scope -> Generic team spawned
+  -> Broad investigation -> Scattered findings -> "12 possible issues"
+```
+
+### Enforcement
+
+This standard applies to ALL sub-agent invocations, not just RCA. Whether spawning DATABASE, TESTING, SECURITY, PERFORMANCE, or any other agent — include the Five-Point Brief.
+
+**Exception**: Routine/automated invocations (e.g., DOCMON on phase transitions) that follow a fixed template are exempt.
 
 ## 📊 Communication & Context
 
@@ -1438,27 +1497,27 @@ Task tool with subagent_type="validation-agent":
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: Refactor design.js (sub-agent) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/20/2026 | **Score**: 100
+### 1. Consolidate SD Identity and Type Fields with Intelligent Classification - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/23/2026 | **Score**: 100
 
 **Key Improvements**:
 - Continue monitoring PLAN→EXEC handoff for improvement opportunities
 - Continue monitoring PLAN→EXEC handoff for improvement opportunities
 
 **Action Items**:
-- [ ] Owner: Eng Lead | By 2026-02-01: Add eslint rule to flag files >500 LOC with war...
-- [ ] Owner: DevOps | Next SD: Add CI check for import cycle detection using madge or ...
+- [ ] Audit remaining validation gates for SD type checks
+- [ ] Create SD for column rename work
 
-### 2. LEAD_TO_PLAN Handoff Retrospective: LEO Protocol Validation Hardening - Comprehensive Gap Fix [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/21/2026 | **Score**: 100
+### 2. Migrate Data and Remove legacy_id Column - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/23/2026 | **Score**: 100
 
 **Key Improvements**:
-- Migration 20260123_retrospective_auto_archive_trigger.sql needs manual execution in Supabase SQL Edi...
-- SD had 0% progress despite 5/6 deliverables being verified as complete - need better progress tracki...
+- Continue monitoring PLAN→EXEC handoff for improvement opportunities
+- Continue monitoring PLAN→EXEC handoff for improvement opportunities
 
 **Action Items**:
-- [ ] Execute migration: Run database/migrations/20260123_retrospective_auto_archive_t...
-- [ ] Verify migration: SELECT run_retrospective_maintenance() should return archived_...
+- [ ] Create PRD for SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D in product_requirements_v2 t...
+- [ ] Run E2E tests and store evidence for SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D in uni...
 
 ### 3. LEO-001 Comprehensive Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 1/17/2026 | **Score**: 100
@@ -1482,16 +1541,16 @@ Task tool with subagent_type="validation-agent":
 - [ ] Create reusable SD lookup utility
 - [ ] Add E2E test CI job for risk-recalibration
 
-### 5. PLAN_TO_EXEC Handoff Retrospective: Phase 2: Risk Classification [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/22/2026 | **Score**: 100
+### 5. /leo assist - Intelligent Autonomous Inbox Processing - Retrospective [QUALITY]
+**Category**: DATABASE_SCHEMA | **Date**: 1/30/2026 | **Score**: 100
 
 **Key Improvements**:
-- Classification rules are hardcoded - consider database-driven rule configuration for runtime updates
-- No audit trail for classification decisions - add logging for compliance and debugging
+- Processing throughput baseline: Currently 0 issues/session handled manually. Target: 5-10 issues/ses...
+- LOC estimation accuracy unknown: Need empirical validation comparing keyword-based estimates vs actu...
 
 **Action Items**:
-- [ ] Integrate RiskClassifier with AI Quality Judge canAutoApply() scoring flow
-- [ ] Add classification decision audit logging to evidence accumulation pipeline
+- [ ] Create PRD for SD-LEO-FIX-LEO-ASSIST-INTELLIGENT-002 in product_requirements_v2 ...
+- [ ] Run E2E tests and store evidence for SD-LEO-FIX-LEO-ASSIST-INTELLIGENT-002 in un...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1697,7 +1756,7 @@ Constitutional vetting of proposals using AEGIS framework. Routes feedback throu
 
 ---
 
-*Generated from database: 2026-02-12*
+*Generated from database: 2026-02-13*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*

@@ -25,6 +25,7 @@
       "weighted_keyword_scoring",
       "script_anti_patterns",
       "mandatory_agent_invocation",
+      "sub_agent_prompt_quality",
       "application_architecture",
       "session_verification",
       "session_verification_quick_start",

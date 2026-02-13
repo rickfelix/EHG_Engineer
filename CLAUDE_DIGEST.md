@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-12T01:24:59.823Z -->
-<!-- git_commit: d3c2692c -->
-<!-- db_snapshot_hash: 888be2bc0030516b -->
+<!-- generated_at: 2026-02-13T13:38:34.002Z -->
+<!-- git_commit: c9d14d63 -->
+<!-- db_snapshot_hash: 09759431152b1c6f -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -121,5 +121,5 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*DIGEST generated: 2026-02-12 8:24:59 PM*
+*DIGEST generated: 2026-02-13 8:38:34 AM*
 *Protocol: 4.3.3*
