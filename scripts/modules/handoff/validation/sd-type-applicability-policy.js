@@ -581,7 +581,23 @@ export function checkSkipCondition(validatorName, context, options = {}) {
     return decision;
   }
 
-  // Check 4: Already completed (if context provides completion info)
+  // Check 4: Library-only SDs skip UI/DESIGN gates
+  // SD-LEO-INFRA-GATE-WORKTREE-FIXES-001: Feature SDs that only modify lib/ files
+  // (e.g., EVA templates) should not require DESIGN validation
+  const uiDesignValidators = ['DESIGN', 'UI_REVIEW', 'ACCESSIBILITY', 'RESPONSIVE'];
+  const implementationContext = sd?.metadata?.implementation_context || sd?.metadata?.scope_type;
+  if (uiDesignValidators.includes(validatorName.toUpperCase()) && implementationContext === 'library-only') {
+    decision.shouldSkip = true;
+    decision.reason = SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+    decision.result = createSkippedResult(validatorName, sdType, `Library-only implementation: no UI components`);
+
+    if (logDecision) {
+      console.log(`   ⏭️  SKIP ${validatorName}: Library-only SD (no UI components)`);
+    }
+    return decision;
+  }
+
+  // Check 5: Already completed (if context provides completion info)
   if (context?.completedValidators?.includes(validatorName)) {
     decision.shouldSkip = true;
     decision.reason = SkipReasonCode.ALREADY_COMPLETED;

@@ -8,6 +8,7 @@
 import ResultBuilder from '../ResultBuilder.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
 import { applyGatePolicies } from '../gate-policy-resolver.js';
@@ -22,17 +23,36 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Get cross-platform repository path
+ * SD-LEO-INFRA-GATE-WORKTREE-FIXES-001: Use git rev-parse for worktree-safe resolution.
+ * __dirname fails in worktrees because it resolves inside .worktrees/ subdirectory.
  * @param {string} repoName - 'EHG_Engineer' or 'EHG'/'ehg'
  * @returns {string} Resolved absolute path
  */
 function getRepoPath(repoName) {
   const normalizedName = repoName.toLowerCase();
   if (normalizedName.includes('engineer')) {
-    // EHG_Engineer is 4 levels up from this file: executors -> handoff -> modules -> scripts -> root
-    return path.resolve(__dirname, '../../../../');
+    // Use git rev-parse to get true repo root (works in worktrees)
+    try {
+      const gitRoot = execSync('git rev-parse --show-toplevel', {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      }).trim();
+      return gitRoot;
+    } catch {
+      // Fallback: 4 levels up from this file (executors -> handoff -> modules -> scripts -> root)
+      return path.resolve(__dirname, '../../../../');
+    }
   }
   // EHG/ehg is sibling to EHG_Engineer
-  return path.resolve(__dirname, '../../../../../ehg');
+  try {
+    const gitRoot = execSync('git rev-parse --show-toplevel', {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+    return path.resolve(gitRoot, '../ehg');
+  } catch {
+    return path.resolve(__dirname, '../../../../../ehg');
+  }
 }
 
 export class BaseExecutor {

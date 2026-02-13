@@ -94,8 +94,8 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     console.log('⚠️  BYPASS MODE ENABLED (SD-LEARN-010:US-005)');
     console.log('─'.repeat(50));
     console.log(`   Reason: ${bypassReason}`);
-    console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}/3`);
-    console.log(`   Global Bypasses Today: ${(globalBypasses?.length || 0) + 1}/10`);
+    console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}/10`);
+    console.log(`   Global Bypasses Today: ${(globalBypasses?.length || 0) + 1}/2000`);
     console.log('   ⚠️  Bypass logged to validation_audit_log for review');
     console.log('─'.repeat(50));
   }
