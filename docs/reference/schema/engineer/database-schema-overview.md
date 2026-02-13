@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T01:18:31.427Z
+**Generated**: 2026-02-13T01:26:00.621Z
 **Tables**: 462
 **Source**: Supabase PostgreSQL introspection
 
@@ -97,7 +97,7 @@ SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decision
 | [circuit_breaker_blocks](tables/circuit_breaker_blocks.md) | 1,272 | ✅ | 2 | Audit log for Circuit Breaker blocks (Law 3).
 Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
-| [claude_sessions](tables/claude_sessions.md) | 7,985 | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
+| [claude_sessions](tables/claude_sessions.md) | 7,998 | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
 | [companies](tables/companies.md) | 90 | ✅ | 6 | - |
 | [competitors](tables/competitors.md) | 0 | ✅ | 5 | - |
 | [compliance_alerts](tables/compliance_alerts.md) | 14 | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Compliance alerts and violations |
@@ -156,7 +156,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [enhancement_proposals](tables/enhancement_proposals.md) | 1 | ✅ | 2 | Stores LEO-generated enhancement proposals for protocol improvements |
 | [eva_actions](tables/eva_actions.md) | 0 | ✅ | 4 | EVA orchestration actions - tracks all automated and manual actions executed during sessions |
 | [eva_agent_communications](tables/eva_agent_communications.md) | 0 | ✅ | 4 | Inter-agent messaging for EVA orchestration - tracks all agent-to-agent communications |
-| [eva_audit_log](tables/eva_audit_log.md) | 5 | ✅ | 1 | EVA Audit Trail - All actions logged |
+| [eva_audit_log](tables/eva_audit_log.md) | 0 | ✅ | 1 | EVA Audit Trail - All actions logged |
 | [eva_automation_executions](tables/eva_automation_executions.md) | 0 | ✅ | 1 | Log of all automation rule executions |
 | [eva_automation_rules](tables/eva_automation_rules.md) | 4 | ✅ | 1 | EVA automation rules for Class A auto-fix and Class B auto-draft actions (SD-EVA-AUTOMATION-001) |
 | [eva_circuit_breaker](tables/eva_circuit_breaker.md) | 1 | ✅ | 2 | EVA Circuit Breaker - Protects ventures from cascading EVA failures. State machine: closed → open → half_open → closed |
@@ -195,10 +195,10 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [gap_analysis_results](tables/gap_analysis_results.md) | 19 | ✅ | 3 | Stores integration gap analysis results comparing PRD requirements against actual implementation. Part of SD-LEO-FEAT-INTEGRATION-GAP-DETECTOR-001. |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | 5 | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 4 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
-| [governance_audit_log](tables/governance_audit_log.md) | 82,047 | ✅ | 3 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 82,131 | ✅ | 3 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
-| [handoff_audit_log](tables/handoff_audit_log.md) | 6,560 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
+| [handoff_audit_log](tables/handoff_audit_log.md) | 6,569 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
 | [handoff_validation_rules](tables/handoff_validation_rules.md) | 8 | ✅ | 2 | - |
 | [handoff_verification_gates](tables/handoff_verification_gates.md) | 0 | ✅ | 2 | Mandatory verification checkpoints that must pass before handoffs can proceed |
 | [hap_blocks_v2](tables/hap_blocks_v2.md) | 0 | ✅ | 2 | - |
@@ -237,7 +237,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [leo_feature_flags](tables/leo_feature_flags.md) | 4 | ✅ | 2 | Feature flag definitions for LEO Protocol runtime control |
 | [leo_feedback](tables/leo_feedback.md) | 0 | ✅ | 2 | - |
 | [leo_gate_reviews](tables/leo_gate_reviews.md) | 438 | ✅ | 2 | - |
-| [leo_handoff_executions](tables/leo_handoff_executions.md) | 3,186 | ✅ | 3 | Tracks all LEO Protocol handoff executions with full audit trail. Used by unified-handoff-system.js for workflow orchestration. |
+| [leo_handoff_executions](tables/leo_handoff_executions.md) | 3,188 | ✅ | 3 | Tracks all LEO Protocol handoff executions with full audit trail. Used by unified-handoff-system.js for workflow orchestration. |
 | [leo_handoff_rejections](tables/leo_handoff_rejections.md) | 0 | ✅ | 2 | Tracks rejected handoffs with improvement guidance for LEO Protocol v4.2.0 |
 | [leo_handoff_templates](tables/leo_handoff_templates.md) | 5 | ✅ | 3 | - |
 | [leo_handoff_validations](tables/leo_handoff_validations.md) | 0 | ✅ | 2 | Stores validation results for handoff executions in LEO Protocol v4.2.0 |
@@ -287,7 +287,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [llm_providers](tables/llm_providers.md) | 3 | ✅ | 2 | - |
 | [market_segments](tables/market_segments.md) | 6 | ✅ | 3 | - |
 | [marketing_content_queue](tables/marketing_content_queue.md) | 0 | ✅ | 2 | - |
-| [model_usage_log](tables/model_usage_log.md) | 1,093 | ✅ | 3 | RLS: Append-only for authenticated |
+| [model_usage_log](tables/model_usage_log.md) | 1,095 | ✅ | 3 | RLS: Append-only for authenticated |
 | [modeling_requests](tables/modeling_requests.md) | 0 | ✅ | 1 | Horizontal forecasting and modeling engine serving Stage 0 components including time-horizon positioning, build cost estimation, and market analysis |
 | [naming_favorites](tables/naming_favorites.md) | 0 | ✅ | 1 | - |
 | [naming_suggestions](tables/naming_suggestions.md) | 0 | ✅ | 2 | - |
@@ -363,13 +363,13 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [screen_layouts](tables/screen_layouts.md) | 1 | ✅ | 2 | - |
 | [sd_backlog_map](tables/sd_backlog_map.md) | 6 | ✅ | 2 | - |
 | [sd_baseline_issues](tables/sd_baseline_issues.md) | 11 | ✅ | 4 | Tracks pre-existing codebase issues that should not block unrelated SD completion. Part of LEO Protocol governance. |
-| [sd_baseline_items](tables/sd_baseline_items.md) | 672 | ✅ | 1 | Individual SD assignments within a baseline, including track assignment, sequence, and effort estimates. |
+| [sd_baseline_items](tables/sd_baseline_items.md) | 687 | ✅ | 1 | Individual SD assignments within a baseline, including track assignment, sequence, and effort estimates. |
 | [sd_baseline_rationale](tables/sd_baseline_rationale.md) | 10 | ✅ | 3 | - |
 | [sd_burn_rate_snapshots](tables/sd_burn_rate_snapshots.md) | 0 | ✅ | 1 | Periodic snapshots of velocity metrics for trending and forecasting. |
 | [sd_business_evaluations](tables/sd_business_evaluations.md) | 0 | ✅ | 2 | - |
 | [sd_capabilities](tables/sd_capabilities.md) | 61 | ✅ | 2 | Junction table tracking which capabilities were registered/updated/deprecated by which Strategic Directives. Provides full audit trail. |
 | [sd_checkpoint_history](tables/sd_checkpoint_history.md) | 0 | ✅ | 3 | RLS: Append-only for authenticated |
-| [sd_claims](tables/sd_claims.md) | 2,465 | ✅ | 5 | Historical record of SD claims by sessions. Supports analytics and audit trail. |
+| [sd_claims](tables/sd_claims.md) | 2,474 | ✅ | 5 | Historical record of SD claims by sessions. Supports analytics and audit trail. |
 | [sd_conflict_matrix](tables/sd_conflict_matrix.md) | 0 | ✅ | 1 | Potential conflicts between SDs that should not run in parallel. |
 | [sd_contract_exceptions](tables/sd_contract_exceptions.md) | 0 | ✅ | 4 | Tracks all contract exceptions with full audit trail and automatic scrutiny assessment.
 Each exception records the violation, justification, scrutiny level, and approval status.
@@ -398,7 +398,7 @@ Weight adjustments are ADDED to base weights (must sum to 0 to maintain 100% tot
 | [sd_key_result_alignment](tables/sd_key_result_alignment.md) | 28 | ✅ | 2 | Links Strategic Directives to Key Results |
 | [sd_kickbacks](tables/sd_kickbacks.md) | 0 | ✅ | 1 | LEO 5.0 Kickback tracking - manages phase kickbacks for failure recovery |
 | [sd_overlap_analysis](tables/sd_overlap_analysis.md) | 641 | ✅ | 2 | Stores overlap analysis results between strategic directives |
-| [sd_phase_handoffs](tables/sd_phase_handoffs.md) | 5,971 | ✅ | 8 | DEPRECATED: Use leo_handoff_executions instead. This table is empty (0 records) and was created after leo_handoff_executions (166 records). Kept for backwards compatibility only. Single source of truth: leo_handoff_executions. |
+| [sd_phase_handoffs](tables/sd_phase_handoffs.md) | 5,981 | ✅ | 8 | DEPRECATED: Use leo_handoff_executions instead. This table is empty (0 records) and was created after leo_handoff_executions (166 records). Kept for backwards compatibility only. Single source of truth: leo_handoff_executions. |
 | [sd_phase_tracking](tables/sd_phase_tracking.md) | 9 | ✅ | 2 | Tracks LEO Protocol phase completion for strategic directives |
 | [sd_proposals](tables/sd_proposals.md) | 0 | ✅ | 3 | Proactive SD proposals generated by observer agents - LEO Protocol v4.4 |
 | [sd_scope_deliverables](tables/sd_scope_deliverables.md) | 4,402 | ✅ | 2 | Tracks deliverables extracted from SD scope documents to ensure all promises are fulfilled |
@@ -422,8 +422,8 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [sdip_groups](tables/sdip_groups.md) | 0 | ✅ | 4 | Manually grouped SDIP submissions for combined analysis |
 | [sdip_submissions](tables/sdip_submissions.md) | 0 | ✅ | 4 | Strategic Directive Initiation Protocol submissions with full validation workflow |
 | [self_audit_findings](tables/self_audit_findings.md) | 0 | ✅ | 1 | Stores findings from LEO self-discovery routines (SD-LEO-SELF-IMPROVE-002B) |
-| [session_lifecycle_events](tables/session_lifecycle_events.md) | 1,992 | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
-| [shipping_decisions](tables/shipping_decisions.md) | 438 | ✅ | 2 | - |
+| [session_lifecycle_events](tables/session_lifecycle_events.md) | 2,007 | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
+| [shipping_decisions](tables/shipping_decisions.md) | 439 | ✅ | 2 | - |
 | [simulation_sessions](tables/simulation_sessions.md) | 5 | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [soul_extractions](tables/soul_extractions.md) | 0 | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
 | [stage13_assessments](tables/stage13_assessments.md) | 0 | ✅ | 1 | EVA-generated exit readiness assessments. SD-STAGE-13-001. |
@@ -493,7 +493,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [user_organizations](tables/user_organizations.md) | 0 | ✅ | 1 | Multi-tenant user-organization membership for RLS policies |
 | [user_preferences](tables/user_preferences.md) | 2 | ✅ | 2 | - |
 | [user_stories](tables/user_stories.md) | 2,895 | ✅ | 3 | RLS enabled: service_role full access, authenticated read-only |
-| [validation_audit_log](tables/validation_audit_log.md) | 31,406 | ✅ | 3 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
+| [validation_audit_log](tables/validation_audit_log.md) | 31,423 | ✅ | 3 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
 | [validation_evidence](tables/validation_evidence.md) | 0 | ✅ | 2 | - |
 | [validation_gate_registry](tables/validation_gate_registry.md) | 57 | ✅ | 2 | Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001. |
 | [venture_archetypes](tables/venture_archetypes.md) | 14 | ✅ | 5 | Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies. |
@@ -524,7 +524,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [workflow_checkpoints](tables/workflow_checkpoints.md) | 2 | ✅ | 2 | Stores workflow state checkpoints for recovery |
 | [workflow_executions](tables/workflow_executions.md) | 579 | ✅ | 3 | - |
 | [workflow_recovery_state](tables/workflow_recovery_state.md) | 0 | ✅ | 2 | Tracks recovery attempts and status |
-| [workflow_trace_log](tables/workflow_trace_log.md) | 11,314 | ✅ | 1 | Stores workflow telemetry spans for bottleneck detection (SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A) |
+| [workflow_trace_log](tables/workflow_trace_log.md) | 11,385 | ✅ | 1 | Stores workflow telemetry spans for bottleneck detection (SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A) |
 | [working_sd_sessions](tables/working_sd_sessions.md) | 0 | ✅ | 2 | - |
 
 ## Tables by Category
