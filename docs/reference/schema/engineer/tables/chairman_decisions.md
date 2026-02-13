@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T20:27:15.571Z
+**Generated**: 2026-02-13T20:38:04.433Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,8 @@
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | summary | `text` | YES | - | - |
 | brief_data | `jsonb` | YES | - | - |
+| dfe_context | `jsonb` | YES | - | DFE engine output: { auto_proceed: bool, triggers: [{type, severity, message, details}], recommendation: string, evaluated_at: timestamp } |
+| mitigation_actions | `jsonb` | YES | `'[]'::jsonb` | Chairman actions on mitigations: [{ mitigation_id, action: accept|reject, reason, acted_at, idempotency_key }] |
 
 ## Constraints
 
@@ -61,6 +63,14 @@
 - `idx_chairman_decisions_created`
   ```sql
   CREATE INDEX idx_chairman_decisions_created ON public.chairman_decisions USING btree (created_at DESC)
+  ```
+- `idx_chairman_decisions_dfe_context_gin`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_dfe_context_gin ON public.chairman_decisions USING gin (dfe_context jsonb_path_ops) WHERE (dfe_context IS NOT NULL)
+  ```
+- `idx_chairman_decisions_has_dfe`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_has_dfe ON public.chairman_decisions USING btree (((dfe_context IS NOT NULL))) WHERE (dfe_context IS NOT NULL)
   ```
 - `idx_chairman_decisions_stage`
   ```sql
