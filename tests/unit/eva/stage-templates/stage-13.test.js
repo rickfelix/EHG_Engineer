@@ -17,7 +17,7 @@ describe('stage-13.js - Product Roadmap template', () => {
       expect(stage13.id).toBe('stage-13');
       expect(stage13.slug).toBe('product-roadmap');
       expect(stage13.title).toBe('Product Roadmap');
-      expect(stage13.version).toBe('1.0.0');
+      expect(stage13.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {

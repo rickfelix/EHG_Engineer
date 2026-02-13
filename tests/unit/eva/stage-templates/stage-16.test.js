@@ -20,7 +20,7 @@ describe('stage-16.js - Financial Projections template', () => {
       expect(stage16.id).toBe('stage-16');
       expect(stage16.slug).toBe('financial-projections');
       expect(stage16.title).toBe('Financial Projections');
-      expect(stage16.version).toBe('1.0.0');
+      expect(stage16.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {

@@ -17,7 +17,7 @@ describe('stage-15.js - Resource Planning template', () => {
       expect(stage15.id).toBe('stage-15');
       expect(stage15.slug).toBe('resource-planning');
       expect(stage15.title).toBe('Resource Planning');
-      expect(stage15.version).toBe('1.0.0');
+      expect(stage15.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
