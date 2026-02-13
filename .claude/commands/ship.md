@@ -284,6 +284,50 @@ See `/simplify` command for full details.
 
 ---
 
+### Step 0.9: Worktree Validation (MANDATORY - PAT-WORKTREE-LIFECYCLE-001)
+
+Before committing, verify you are working in the correct worktree for the active SD.
+
+**Check if a worktree exists for the current SD:**
+
+```bash
+node -e "
+const { resolve } = require('./scripts/resolve-sd-workdir.js');
+const { execSync } = require('child_process');
+const repoRoot = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
+// Get active SD from session or git branch
+const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+resolve(process.argv[2] || branch, 'ship', repoRoot).then(r => {
+  if (r?.success && r?.worktree?.exists) {
+    const cwd = process.cwd().replace(/\\\\/g, '/');
+    const wtPath = r.cwd.replace(/\\\\/g, '/');
+    if (cwd !== wtPath) {
+      console.log('WORKTREE_MISMATCH=true');
+      console.log('WORKTREE_CWD=' + r.cwd);
+      console.log('CURRENT_CWD=' + process.cwd());
+    } else {
+      console.log('WORKTREE_OK=true');
+    }
+  } else {
+    console.log('NO_WORKTREE=true');
+  }
+}).catch(() => console.log('NO_WORKTREE=true'));
+" <SD-ID>
+```
+
+**If `WORKTREE_MISMATCH=true`:**
+- You are NOT in the worktree but one exists for this SD
+- **STOP** and `cd` to the worktree path shown in `WORKTREE_CWD`
+- Verify your changes are in the worktree (they may need to be moved)
+- Resume shipping from the worktree directory
+
+**If `WORKTREE_OK=true` or `NO_WORKTREE=true`:**
+- Proceed to Step 1
+
+**Why this matters:** Without this check, changes get committed to the main repo on `main` branch instead of the SD's isolated worktree branch, bypassing branch isolation.
+
+---
+
 ### Step 1: Check current state
    - Run `git status` to see uncommitted changes
    - Run `git log origin/main..HEAD` to see unpushed commits

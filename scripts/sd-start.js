@@ -273,12 +273,14 @@ async function main() {
   console.log(`Type: ${sd.sd_type || 'feature'}`);
   console.log(`is_working_on: ${colors.green}true${colors.reset}`);
 
-  // 5.1. Show worktree info
+  // 5.1. Show worktree info + machine-readable activation directive
   if (worktreeInfo?.success && worktreeInfo.worktree?.exists) {
     console.log(`\n${colors.bold}Worktree:${colors.reset}`);
     console.log(`   Path:   ${colors.cyan}${worktreeInfo.cwd}${colors.reset}`);
     console.log(`   Branch: ${worktreeInfo.worktree.branch || 'unknown'}`);
     console.log(`   Source: ${worktreeInfo.source}${worktreeInfo.worktree.created ? ' (newly created)' : ''}`);
+    // Machine-readable directive for agent consumption (PAT-WORKTREE-LIFECYCLE-001)
+    console.log(`\n>>> WORKTREE_CWD=${worktreeInfo.cwd}`);
   }
 
   // 5.5. Show duration estimate

@@ -900,9 +900,19 @@ This is the RECOMMENDED way to begin work on an SD. It combines claiming + conte
    npm run sd:start <SD-ID>
    ```
 
-3. **Get the current phase from output** (look for `Phase: LEAD` or similar)
+3. **MANDATORY: Activate worktree if shown in output (PAT-WORKTREE-LIFECYCLE-001):**
+   - Look for the line `>>> WORKTREE_CWD=<path>` in the sd-start output
+   - If present, you **MUST** `cd` to that path and use it as your working directory for ALL subsequent operations (file edits, git commands, shipping)
+   - Example: if output contains `>>> WORKTREE_CWD=C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-XXX-001`, run:
+     ```bash
+     cd "C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-XXX-001"
+     ```
+   - If `>>> WORKTREE_CWD` is NOT in the output, continue working in the current directory
+   - **Why**: Without this step, edits go to the main repo on `main` branch instead of the SD's isolated worktree branch, causing merge conflicts and lost isolation
 
-4. **MANDATORY: Read protocol files based on phase:**
+4. **Get the current phase from output** (look for `Phase: LEAD` or similar)
+
+5. **MANDATORY: Read protocol files based on phase:**
 
    **Step 1: ALWAYS read CLAUDE_CORE.md first (contains sub-agent prompt quality standard, SD type requirements, gate thresholds):**
    ```
@@ -925,11 +935,11 @@ This is the RECOMMENDED way to begin work on an SD. It combines claiming + conte
    Read tool: CLAUDE_EXEC.md   (if phase is EXEC)
    ```
 
-5. **Check for orchestrator/child status:**
+6. **Check for orchestrator/child status:**
    - If SD has children (orchestrator) → run `node scripts/orchestrator-preflight.js <SD-ID>`
    - If SD has parent (child) → run `node scripts/child-sd-preflight.js <SD-ID>`
 
-6. **Display unified output:**
+7. **Display unified output:**
    ```
    ✅ SD Started: <SD-ID>
       Title: <title>
@@ -952,10 +962,11 @@ This is the RECOMMENDED way to begin work on an SD. It combines claiming + conte
 
 When the argument matches `SD-*` pattern (e.g., `SD-FEATURE-001`):
 1. Run `npm run sd:start <SD-ID>` to claim and show info
-2. Check if orchestrator (has children) → run preflight
-3. Check if child SD (has parent) → run child preflight
-4. Load appropriate CLAUDE_*.md context based on phase
-5. Proceed with LEAD→PLAN→EXEC workflow
+2. **If output contains `>>> WORKTREE_CWD=<path>`, cd to that path** (PAT-WORKTREE-LIFECYCLE-001)
+3. Check if orchestrator (has children) → run preflight
+4. Check if child SD (has parent) → run child preflight
+5. Load appropriate CLAUDE_*.md context based on phase
+6. Proceed with LEAD→PLAN→EXEC workflow
 
 **NOTE**: Consider using `/leo start <SD-ID>` instead for explicit protocol file loading with confirmation.
 
