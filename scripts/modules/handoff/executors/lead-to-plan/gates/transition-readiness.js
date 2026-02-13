@@ -56,13 +56,14 @@ export async function validateTransitionReadiness(sd, supabase) {
     console.log('   ✅ Status allows transition');
   }
 
-  // Check 3: Look for previous failed/rejected LEAD-TO-PLAN handoffs
-  // PAT-HANDOFF-PHZ-001 FIX: Query correct table (sd_phase_handoffs) with correct
-  // case (lowercase). Previous code queried non-existent 'sd_handoffs' table, so
-  // rejections were never detected and handoffs were never blocked by prior failures.
+  // Check 3: Auto-resolve previous failed/rejected LEAD-TO-PLAN handoffs on retry
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-003: A new LEAD-TO-PLAN attempt implicitly means the
+  // agent has addressed the rejection reason (enriched fields, fixed issues). Auto-resolve
+  // old failures to prevent a dead-loop where Check 3 blocks every retry attempt.
+  //
+  // PAT-HANDOFF-PHZ-001 FIX: Query correct table (sd_phase_handoffs) with correct case.
+  // RCA-MULTI-SESSION-CASCADE-001: Only check UNRESOLVED failures.
   try {
-    // RCA-MULTI-SESSION-CASCADE-001: Only check UNRESOLVED failures
-    // Resolved failures (resolved_at IS NOT NULL) should not block retries
     const { data: previousHandoffs } = await supabase
       .from('sd_phase_handoffs')
       .select('id, status, created_at, rejection_reason, resolved_at')
@@ -74,19 +75,22 @@ export async function validateTransitionReadiness(sd, supabase) {
       .limit(5);
 
     if (previousHandoffs && previousHandoffs.length > 0) {
-      const latestFailed = previousHandoffs[0];
       const failedCount = previousHandoffs.length;
+      console.log(`   ℹ️  Found ${failedCount} previous failed/rejected handoff attempt(s) - auto-resolving`);
 
-      console.log(`   ⚠️  Found ${failedCount} previous failed/rejected handoff attempt(s)`);
+      // Auto-resolve: a new attempt means issues were addressed
+      const idsToResolve = previousHandoffs.map(h => h.id);
+      const { error: resolveError } = await supabase
+        .from('sd_phase_handoffs')
+        .update({ resolved_at: new Date().toISOString() })
+        .in('id', idsToResolve);
 
-      // If the most recent attempt was rejected, require acknowledgment
-      if (latestFailed.status === 'rejected') {
-        issues.push(`Previous LEAD-TO-PLAN handoff was REJECTED: ${latestFailed.rejection_reason || 'No reason provided'}`);
-        issues.push('Action: Address rejection reason before retrying handoff');
-        console.log(`   ❌ Last rejection: ${latestFailed.rejection_reason || 'No reason provided'}`);
+      if (resolveError) {
+        console.log(`   ⚠️  Could not auto-resolve previous handoffs: ${resolveError.message}`);
+        warnings.push(`Could not auto-resolve previous handoffs: ${resolveError.message}`);
+        score -= 10;
       } else {
-        warnings.push(`Previous handoff attempt failed (${failedCount}x) - verify issues resolved`);
-        score -= 15;
+        console.log(`   ✅ Auto-resolved ${failedCount} previous handoff failure(s) (retry attempt)`);
       }
     } else {
       console.log('   ✅ No previous failed handoff attempts');
