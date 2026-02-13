@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T19:13:42.158Z
-**Tables**: 466
+**Generated**: 2026-02-13T20:27:15.571Z
+**Tables**: 467
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (466)
+## All Tables (467)
 
 ### LEO Protocol
 
@@ -219,6 +219,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [chairman_directives](tables/chairman_directives.md)
 - [chairman_feedback](tables/chairman_feedback.md)
 - [chairman_interests](tables/chairman_interests.md)
+- [chairman_notifications](tables/chairman_notifications.md)
 - [chairman_overrides](tables/chairman_overrides.md)
 - [chairman_preferences](tables/chairman_preferences.md)
 - [chairman_settings](tables/chairman_settings.md)
