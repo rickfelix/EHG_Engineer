@@ -17,7 +17,7 @@ describe('stage-14.js - Technical Architecture template', () => {
       expect(stage14.id).toBe('stage-14');
       expect(stage14.slug).toBe('technical-architecture');
       expect(stage14.title).toBe('Technical Architecture');
-      expect(stage14.version).toBe('1.0.0');
+      expect(stage14.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
