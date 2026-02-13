@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T11:29:54.192Z
-**Rows**: 6,041
+**Generated**: 2026-02-13T14:25:45.422Z
+**Rows**: 6,083
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -163,6 +163,11 @@
 
 - **Timing**: BEFORE INSERT
 - **Action**: `EXECUTE FUNCTION enforce_handoff_system()`
+
+### trg_enforce_is_working_on_handoffs
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_is_working_on_for_handoffs()`
 
 ### trigger_handoff_accepted_at
 
