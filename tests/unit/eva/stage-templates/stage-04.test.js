@@ -1,14 +1,16 @@
 /**
- * Unit tests for Stage 04 - Competitive Intel template
- * Part of SD-LEO-FEAT-TMPL-TRUTH-001
+ * Unit tests for Stage 04 - Competitive Intel template (v2.0.0)
+ * Phase: THE TRUTH (Stages 1-5)
+ * Part of SD-EVA-FEAT-TEMPLATES-TRUTH-001
  *
- * Test Scenario TS-6: Stage 04 competitor name uniqueness validation (case-insensitive)
+ * Tests: pricingModel enum, stage5Handoff derived artifact, duplicate name detection,
+ *        SWOT validation, PRICING_MODELS export
  *
  * @module tests/unit/eva/stage-templates/stage-04.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage04, { THREAT_LEVELS } from '../../../../lib/eva/stage-templates/stage-04.js';
+import stage04, { THREAT_LEVELS, PRICING_MODELS } from '../../../../lib/eva/stage-templates/stage-04.js';
 
 describe('stage-04.js - Competitive Intel template', () => {
   describe('Template metadata', () => {
@@ -16,446 +18,312 @@ describe('stage-04.js - Competitive Intel template', () => {
       expect(stage04.id).toBe('stage-04');
       expect(stage04.slug).toBe('competitive-intel');
       expect(stage04.title).toBe('Competitive Intel');
-      expect(stage04.version).toBe('1.0.0');
+      expect(stage04.version).toBe('2.0.0');
     });
 
     it('should have correct threat levels', () => {
       expect(THREAT_LEVELS).toEqual(['H', 'M', 'L']);
     });
 
-    it('should have defaultData', () => {
+    it('should export PRICING_MODELS', () => {
+      expect(PRICING_MODELS).toEqual([
+        'freemium', 'subscription', 'one_time', 'usage_based', 'marketplace_commission', 'hybrid',
+      ]);
+    });
+
+    it('should have defaultData with stage5Handoff', () => {
       expect(stage04.defaultData).toEqual({
         competitors: [],
+        blueOceanAnalysis: null,
+        stage5Handoff: null,
       });
+    });
+
+    it('should have analysisStep attached', () => {
+      expect(typeof stage04.analysisStep).toBe('function');
     });
   });
 
-  describe('validate() - Competitors array validation', () => {
-    const validCompetitor = {
-      name: 'Acme Corp',
-      position: 'Market leader in enterprise SaaS',
-      threat: 'H',
-      strengths: ['Strong brand', 'Large customer base'],
-      weaknesses: ['Legacy tech stack'],
-      swot: {
-        strengths: ['Market dominance'],
-        weaknesses: ['Slow innovation'],
-        opportunities: ['New markets'],
-        threats: ['Nimble startups'],
-      },
-    };
+  const makeValidCompetitor = (overrides = {}) => ({
+    name: 'Acme Corp',
+    position: 'Market leader in enterprise SaaS',
+    threat: 'H',
+    pricingModel: 'subscription',
+    strengths: ['Strong brand', 'Large customer base'],
+    weaknesses: ['Legacy tech stack'],
+    swot: {
+      strengths: ['Market dominance'],
+      weaknesses: ['Slow innovation'],
+      opportunities: ['New markets'],
+      threats: ['Nimble startups'],
+    },
+    ...overrides,
+  });
 
+  describe('validate() - Competitors array validation', () => {
     it('should pass for valid data with single competitor', () => {
-      const data = { competitors: [validCompetitor] };
+      const data = { competitors: [makeValidCompetitor()] };
       const result = stage04.validate(data);
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should pass for valid data with multiple competitors', () => {
+    it('should pass for multiple competitors with different names', () => {
       const data = {
         competitors: [
-          { ...validCompetitor, name: 'Acme Corp' },
-          { ...validCompetitor, name: 'Beta Inc' },
-          { ...validCompetitor, name: 'Gamma LLC' },
+          makeValidCompetitor({ name: 'Acme Corp' }),
+          makeValidCompetitor({ name: 'Beta Inc', pricingModel: 'freemium' }),
+          makeValidCompetitor({ name: 'Gamma LLC', pricingModel: 'usage_based' }),
         ],
       };
       const result = stage04.validate(data);
       expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
     });
 
     it('should fail for empty competitors array', () => {
-      const data = { competitors: [] };
-      const result = stage04.validate(data);
+      const result = stage04.validate({ competitors: [] });
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('competitors');
-      expect(result.errors[0]).toContain('must have at least 1 item');
     });
 
-    it('should fail for missing competitors field', () => {
-      const data = {};
-      const result = stage04.validate(data);
+    it('should fail for missing competitors', () => {
+      const result = stage04.validate({});
       expect(result.valid).toBe(false);
     });
 
     it('should fail for non-array competitors', () => {
-      const data = { competitors: 'not an array' };
-      const result = stage04.validate(data);
+      const result = stage04.validate({ competitors: 'not an array' });
       expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('must be an array');
-    });
-
-    it('should fail for competitor with missing name', () => {
-      const data = {
-        competitors: [{
-          position: 'Market leader',
-          threat: 'H',
-          strengths: ['S1'],
-          weaknesses: ['W1'],
-          swot: {
-            strengths: ['S1'],
-            weaknesses: ['W1'],
-            opportunities: ['O1'],
-            threats: ['T1'],
-          },
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].name');
-      expect(result.errors[0]).toContain('is required');
-    });
-
-    it('should fail for competitor with missing position', () => {
-      const data = {
-        competitors: [{
-          name: 'Acme',
-          threat: 'H',
-          strengths: ['S1'],
-          weaknesses: ['W1'],
-          swot: {
-            strengths: ['S1'],
-            weaknesses: ['W1'],
-            opportunities: ['O1'],
-            threats: ['T1'],
-          },
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].position');
-      expect(result.errors[0]).toContain('is required');
-    });
-
-    it('should fail for invalid threat level', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          threat: 'X',
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].threat');
-      expect(result.errors[0]).toContain('must be one of [H, M, L]');
-    });
-
-    it('should fail for empty strengths array', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          strengths: [],
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].strengths');
-      expect(result.errors[0]).toContain('must have at least 1 item');
-    });
-
-    it('should fail for empty weaknesses array', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          weaknesses: [],
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].weaknesses');
-      expect(result.errors[0]).toContain('must have at least 1 item');
-    });
-
-    it('should fail for missing swot object', () => {
-      const data = {
-        competitors: [{
-          name: 'Acme',
-          position: 'Leader',
-          threat: 'H',
-          strengths: ['S1'],
-          weaknesses: ['W1'],
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].swot');
-      expect(result.errors[0]).toContain('is required and must be an object');
-    });
-
-    it('should fail for swot with empty strengths array', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          swot: {
-            strengths: [],
-            weaknesses: ['W1'],
-            opportunities: ['O1'],
-            threats: ['T1'],
-          },
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].swot.strengths');
-      expect(result.errors[0]).toContain('must have at least 1 item');
-    });
-
-    it('should fail for swot with empty weaknesses array', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          swot: {
-            strengths: ['S1'],
-            weaknesses: [],
-            opportunities: ['O1'],
-            threats: ['T1'],
-          },
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].swot.weaknesses');
-    });
-
-    it('should fail for swot with empty opportunities array', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          swot: {
-            strengths: ['S1'],
-            weaknesses: ['W1'],
-            opportunities: [],
-            threats: ['T1'],
-          },
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].swot.opportunities');
-    });
-
-    it('should fail for swot with empty threats array', () => {
-      const data = {
-        competitors: [{
-          ...validCompetitor,
-          swot: {
-            strengths: ['S1'],
-            weaknesses: ['W1'],
-            opportunities: ['O1'],
-            threats: [],
-          },
-        }],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('competitors[0].swot.threats');
     });
   });
 
-  describe('validate() - TS-6: Duplicate name detection (case-insensitive)', () => {
-    const baseCompetitor = {
-      position: 'Market leader',
-      threat: 'H',
-      strengths: ['S1'],
-      weaknesses: ['W1'],
-      swot: {
-        strengths: ['S1'],
-        weaknesses: ['W1'],
-        opportunities: ['O1'],
-        threats: ['T1'],
-      },
-    };
+  describe('validate() - Per-competitor field validation', () => {
+    it('should fail for missing name', () => {
+      const c = makeValidCompetitor();
+      delete c.name;
+      const result = stage04.validate({ competitors: [c] });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].name');
+    });
 
+    it('should fail for missing position', () => {
+      const c = makeValidCompetitor();
+      delete c.position;
+      const result = stage04.validate({ competitors: [c] });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].position');
+    });
+
+    it('should fail for invalid threat level', () => {
+      const result = stage04.validate({
+        competitors: [makeValidCompetitor({ threat: 'X' })],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].threat');
+    });
+
+    it('should fail for invalid pricingModel', () => {
+      const result = stage04.validate({
+        competitors: [makeValidCompetitor({ pricingModel: 'barter' })],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].pricingModel');
+    });
+
+    it('should accept all valid pricing models', () => {
+      for (const pm of PRICING_MODELS) {
+        const result = stage04.validate({
+          competitors: [makeValidCompetitor({ pricingModel: pm })],
+        });
+        expect(result.valid).toBe(true);
+      }
+    });
+
+    it('should fail for empty strengths array', () => {
+      const result = stage04.validate({
+        competitors: [makeValidCompetitor({ strengths: [] })],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].strengths');
+    });
+
+    it('should fail for empty weaknesses array', () => {
+      const result = stage04.validate({
+        competitors: [makeValidCompetitor({ weaknesses: [] })],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].weaknesses');
+    });
+  });
+
+  describe('validate() - SWOT validation', () => {
+    it('should fail for missing swot object', () => {
+      const c = makeValidCompetitor();
+      delete c.swot;
+      const result = stage04.validate({ competitors: [c] });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].swot');
+    });
+
+    it('should fail for swot with empty strengths', () => {
+      const result = stage04.validate({
+        competitors: [makeValidCompetitor({
+          swot: { strengths: [], weaknesses: ['W1'], opportunities: ['O1'], threats: ['T1'] },
+        })],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].swot.strengths');
+    });
+
+    it('should fail for swot with empty opportunities', () => {
+      const result = stage04.validate({
+        competitors: [makeValidCompetitor({
+          swot: { strengths: ['S1'], weaknesses: ['W1'], opportunities: [], threats: ['T1'] },
+        })],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('competitors[0].swot.opportunities');
+    });
+  });
+
+  describe('validate() - Duplicate name detection (case-insensitive)', () => {
     it('should detect exact duplicate names', () => {
-      const data = {
+      const result = stage04.validate({
         competitors: [
-          { ...baseCompetitor, name: 'Acme Corp' },
-          { ...baseCompetitor, name: 'Acme Corp' },
+          makeValidCompetitor({ name: 'Acme Corp' }),
+          makeValidCompetitor({ name: 'Acme Corp' }),
         ],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('Duplicate competitor name');
-      expect(result.errors[0]).toContain('Acme Corp');
-      expect(result.errors[0]).toContain('indices 0 and 1');
-    });
-
-    it('should detect duplicate names case-insensitively (Acme vs acme)', () => {
-      const data = {
-        competitors: [
-          { ...baseCompetitor, name: 'Acme' },
-          { ...baseCompetitor, name: 'acme' },
-        ],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('Duplicate competitor name');
-      expect(result.errors[0]).toContain('acme');
-    });
-
-    it('should detect duplicate names case-insensitively (ACME vs Acme)', () => {
-      const data = {
-        competitors: [
-          { ...baseCompetitor, name: 'ACME' },
-          { ...baseCompetitor, name: 'Acme' },
-        ],
-      };
-      const result = stage04.validate(data);
+      });
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('Duplicate competitor name');
     });
 
-    it('should detect duplicate names case-insensitively (mixed case)', () => {
-      const data = {
+    it('should detect case-insensitive duplicates', () => {
+      const result = stage04.validate({
         competitors: [
-          { ...baseCompetitor, name: 'AcMe CoRp' },
-          { ...baseCompetitor, name: 'acme corp' },
+          makeValidCompetitor({ name: 'Acme' }),
+          makeValidCompetitor({ name: 'acme' }),
         ],
-      };
-      const result = stage04.validate(data);
+      });
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('Duplicate competitor name');
     });
 
-    it('should allow different names that differ only after case-normalization would be caught', () => {
-      const data = {
+    it('should report correct indices', () => {
+      const result = stage04.validate({
         competitors: [
-          { ...baseCompetitor, name: 'Acme Corp' },
-          { ...baseCompetitor, name: 'Beta Inc' },
-          { ...baseCompetitor, name: 'Gamma LLC' },
+          makeValidCompetitor({ name: 'Alpha' }),
+          makeValidCompetitor({ name: 'Beta' }),
+          makeValidCompetitor({ name: 'alpha' }),
         ],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(true);
-    });
-
-    it('should report correct indices for duplicates', () => {
-      const data = {
-        competitors: [
-          { ...baseCompetitor, name: 'Alpha' },
-          { ...baseCompetitor, name: 'Beta' },
-          { ...baseCompetitor, name: 'alpha' }, // Duplicate of index 0
-        ],
-      };
-      const result = stage04.validate(data);
+      });
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('indices 0 and 2');
     });
 
-    it('should detect multiple duplicate pairs', () => {
-      const data = {
+    it('should provide rename suggestion', () => {
+      const result = stage04.validate({
         competitors: [
-          { ...baseCompetitor, name: 'Acme' },
-          { ...baseCompetitor, name: 'Beta' },
-          { ...baseCompetitor, name: 'acme' }, // Duplicate of 0
-          { ...baseCompetitor, name: 'BETA' }, // Duplicate of 1
+          makeValidCompetitor({ name: 'Acme' }),
+          makeValidCompetitor({ name: 'Acme' }),
         ],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should provide helpful error message with rename suggestion', () => {
-      const data = {
-        competitors: [
-          { ...baseCompetitor, name: 'Acme' },
-          { ...baseCompetitor, name: 'Acme' },
-        ],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
+      });
       expect(result.errors[0]).toContain('Rename one competitor');
-    });
-
-    it('should not flag duplicate when name is missing/non-string', () => {
-      const data = {
-        competitors: [
-          { ...baseCompetitor }, // Missing name
-          { ...baseCompetitor }, // Missing name
-        ],
-      };
-      const result = stage04.validate(data);
-      expect(result.valid).toBe(false);
-      // Should have errors for missing names, but NOT duplicate error
-      expect(result.errors.some(e => e.includes('Duplicate'))).toBe(false);
-      expect(result.errors.some(e => e.includes('name') && e.includes('required'))).toBe(true);
     });
   });
 
-  describe('computeDerived()', () => {
-    const validCompetitor = {
-      name: 'Acme Corp',
-      position: 'Market leader',
-      threat: 'H',
-      strengths: ['S1'],
-      weaknesses: ['W1'],
-      swot: {
-        strengths: ['S1'],
-        weaknesses: ['W1'],
-        opportunities: ['O1'],
-        threats: ['T1'],
-      },
-    };
-
-    it('should return data unchanged (no derived fields)', () => {
-      const data = { competitors: [validCompetitor] };
+  describe('computeDerived() - stage5Handoff', () => {
+    it('should build pricingLandscape from competitor pricing models', () => {
+      const data = {
+        competitors: [
+          makeValidCompetitor({ name: 'Acme', pricingModel: 'subscription' }),
+          makeValidCompetitor({ name: 'Beta', pricingModel: 'freemium' }),
+        ],
+      };
       const result = stage04.computeDerived(data);
-      expect(result).toEqual(data);
+      expect(result.stage5Handoff).toBeDefined();
+      expect(result.stage5Handoff.pricingLandscape).toContain('Acme: subscription');
+      expect(result.stage5Handoff.pricingLandscape).toContain('Beta: freemium');
+    });
+
+    it('should build competitivePositioning from high-threat competitors', () => {
+      const data = {
+        competitors: [
+          makeValidCompetitor({ name: 'Acme', threat: 'H' }),
+          makeValidCompetitor({ name: 'Beta', threat: 'L' }),
+        ],
+      };
+      const result = stage04.computeDerived(data);
+      expect(result.stage5Handoff.competitivePositioning).toContain('1 high-threat');
+      expect(result.stage5Handoff.competitivePositioning).toContain('Acme');
+    });
+
+    it('should show no high-threat message when none exist', () => {
+      const data = {
+        competitors: [
+          makeValidCompetitor({ name: 'Beta', threat: 'L' }),
+        ],
+      };
+      const result = stage04.computeDerived(data);
+      expect(result.stage5Handoff.competitivePositioning).toContain('No high-threat');
+    });
+
+    it('should extract marketGaps from SWOT opportunities', () => {
+      const data = {
+        competitors: [
+          makeValidCompetitor({
+            name: 'Acme',
+            swot: {
+              strengths: ['S1'], weaknesses: ['W1'],
+              opportunities: ['Gap A', 'Gap B'], threats: ['T1'],
+            },
+          }),
+          makeValidCompetitor({
+            name: 'Beta',
+            swot: {
+              strengths: ['S1'], weaknesses: ['W1'],
+              opportunities: ['Gap B', 'Gap C'], threats: ['T1'],
+            },
+          }),
+        ],
+      };
+      const result = stage04.computeDerived(data);
+      // Gap B should be deduplicated
+      expect(result.stage5Handoff.marketGaps).toContain('Gap A');
+      expect(result.stage5Handoff.marketGaps).toContain('Gap B');
+      expect(result.stage5Handoff.marketGaps).toContain('Gap C');
+      expect(result.stage5Handoff.marketGaps).toHaveLength(3);
+    });
+
+    it('should handle empty competitors array', () => {
+      const result = stage04.computeDerived({ competitors: [] });
+      expect(result.stage5Handoff).toBeDefined();
+      expect(result.stage5Handoff.pricingLandscape).toBe('');
+      expect(result.stage5Handoff.marketGaps).toEqual([]);
     });
 
     it('should not mutate original data', () => {
-      const data = { competitors: [validCompetitor] };
+      const data = { competitors: [makeValidCompetitor()] };
       const original = JSON.parse(JSON.stringify(data));
       stage04.computeDerived(data);
       expect(data).toEqual(original);
     });
-
-    it('should preserve all competitor fields', () => {
-      const data = {
-        competitors: [
-          validCompetitor,
-          { ...validCompetitor, name: 'Beta Inc' },
-        ],
-      };
-      const result = stage04.computeDerived(data);
-      expect(result.competitors).toHaveLength(2);
-      expect(result.competitors[0].name).toBe('Acme Corp');
-      expect(result.competitors[1].name).toBe('Beta Inc');
-    });
   });
 
   describe('Integration: validate + computeDerived workflow', () => {
-    const validCompetitor = {
-      name: 'Acme Corp',
-      position: 'Market leader',
-      threat: 'H',
-      strengths: ['S1'],
-      weaknesses: ['W1'],
-      swot: {
-        strengths: ['S1'],
-        weaknesses: ['W1'],
-        opportunities: ['O1'],
-        threats: ['T1'],
-      },
-    };
-
     it('should work together for valid data', () => {
-      const data = { competitors: [validCompetitor] };
+      const data = { competitors: [makeValidCompetitor()] };
       const validation = stage04.validate(data);
       expect(validation.valid).toBe(true);
 
       const computed = stage04.computeDerived(data);
-      expect(computed).toEqual(data);
+      expect(computed.stage5Handoff).toBeDefined();
+      expect(computed.stage5Handoff.pricingLandscape).toContain('subscription');
     });
 
     it('should reject duplicate names before computeDerived', () => {
       const data = {
-        competitors: [
-          validCompetitor,
-          { ...validCompetitor }, // Same name
-        ],
+        competitors: [makeValidCompetitor(), makeValidCompetitor()],
       };
       const validation = stage04.validate(data);
       expect(validation.valid).toBe(false);

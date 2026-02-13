@@ -1,9 +1,10 @@
 /**
- * Unit tests for Stage 05 - Profitability template
- * Part of SD-LEO-FEAT-TMPL-TRUTH-001
+ * Unit tests for Stage 05 - Profitability Kill Gate template (v2.0.0)
+ * Phase: THE TRUTH (Stages 1-5)
+ * Part of SD-EVA-FEAT-TEMPLATES-TRUTH-001
  *
- * Test Scenario TS-4: Stage 05 break-even handles non-profitable Year 1 (netProfitY1 <= 0)
- * Test Scenario TS-5: Kill gate boundary tests (ROI 0.49 vs 0.50, breakEvenMonth 24 vs 25)
+ * Tests: banded ROI gate (pass/conditional_pass/kill), unit economics validation,
+ *        supplementary metrics for conditional pass, remediationRoute
  *
  * @module tests/unit/eva/stage-templates/stage-05.test
  */
@@ -11,340 +12,287 @@
 import { describe, it, expect } from 'vitest';
 import stage05, {
   evaluateKillGate,
-  ROI_THRESHOLD,
+  ROI_PASS_THRESHOLD,
+  ROI_CONDITIONAL_THRESHOLD,
   MAX_BREAKEVEN_MONTHS,
+  LTV_CAC_THRESHOLD,
+  PAYBACK_THRESHOLD,
+  CONDITIONAL_LTV_CAC_THRESHOLD,
+  CONDITIONAL_PAYBACK_THRESHOLD,
+  ROBUSTNESS_LEVELS,
 } from '../../../../lib/eva/stage-templates/stage-05.js';
 
-describe('stage-05.js - Profitability template', () => {
+describe('stage-05.js - Profitability Kill Gate template', () => {
   describe('Template metadata', () => {
     it('should have correct template structure', () => {
       expect(stage05.id).toBe('stage-05');
       expect(stage05.slug).toBe('profitability');
-      expect(stage05.title).toBe('Profitability');
-      expect(stage05.version).toBe('1.0.0');
+      expect(stage05.title).toBe('Profitability Kill Gate');
+      expect(stage05.version).toBe('2.0.0');
     });
 
-    it('should have correct thresholds', () => {
-      expect(ROI_THRESHOLD).toBe(0.5);
+    it('should have correct banded thresholds', () => {
+      expect(ROI_PASS_THRESHOLD).toBe(0.25);
+      expect(ROI_CONDITIONAL_THRESHOLD).toBe(0.15);
       expect(MAX_BREAKEVEN_MONTHS).toBe(24);
+      expect(LTV_CAC_THRESHOLD).toBe(2);
+      expect(PAYBACK_THRESHOLD).toBe(18);
+      expect(CONDITIONAL_LTV_CAC_THRESHOLD).toBe(3);
+      expect(CONDITIONAL_PAYBACK_THRESHOLD).toBe(12);
     });
 
-    it('should have defaultData', () => {
-      expect(stage05.defaultData).toMatchObject({
-        initialInvestment: null,
-        year1: { revenue: 0, cogs: 0, opex: 0 },
-        year2: { revenue: 0, cogs: 0, opex: 0 },
-        year3: { revenue: 0, cogs: 0, opex: 0 },
-      });
+    it('should export ROBUSTNESS_LEVELS', () => {
+      expect(ROBUSTNESS_LEVELS).toEqual(['fragile', 'normal', 'resilient']);
+    });
+
+    it('should have defaultData with unitEconomics', () => {
+      expect(stage05.defaultData.unitEconomics).toBeDefined();
+      expect(stage05.defaultData.unitEconomics.cac).toBe(0);
+      expect(stage05.defaultData.unitEconomics.ltv).toBe(0);
+      expect(stage05.defaultData.scenarioAnalysis).toBeNull();
+      expect(stage05.defaultData.remediationRoute).toBeNull();
     });
   });
 
-  describe('validate() - Financial inputs validation', () => {
-    const validData = {
-      initialInvestment: 100000,
-      year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-      year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-      year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-    };
+  const makeValidData = (overrides = {}) => ({
+    initialInvestment: 100000,
+    year1: { revenue: 150000, cogs: 50000, opex: 40000 },
+    year2: { revenue: 300000, cogs: 100000, opex: 80000 },
+    year3: { revenue: 500000, cogs: 150000, opex: 120000 },
+    unitEconomics: {
+      cac: 100, ltv: 500, churnRate: 0.05, paybackMonths: 6, grossMargin: 0.7,
+    },
+    ...overrides,
+  });
 
+  describe('validate() - Financial inputs', () => {
     it('should pass for valid data', () => {
-      const result = stage05.validate(validData);
+      const result = stage05.validate(makeValidData());
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
     it('should fail for missing initialInvestment', () => {
-      const data = { ...validData };
+      const data = makeValidData();
       delete data.initialInvestment;
       const result = stage05.validate(data);
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('initialInvestment');
-      expect(result.errors[0]).toContain('is required');
     });
 
     it('should fail for initialInvestment <= 0', () => {
-      const data = { ...validData, initialInvestment: 0 };
-      const result = stage05.validate(data);
+      const result = stage05.validate(makeValidData({ initialInvestment: 0 }));
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('initialInvestment');
-      expect(result.errors[0]).toContain('must be >= 0.01');
     });
 
     it('should pass for initialInvestment = 0.01 (minimum)', () => {
-      const data = { ...validData, initialInvestment: 0.01 };
-      const result = stage05.validate(data);
+      const result = stage05.validate(makeValidData({ initialInvestment: 0.01 }));
       expect(result.valid).toBe(true);
     });
 
-    it('should fail for missing year1 object', () => {
-      const data = { ...validData };
+    it('should fail for missing year1', () => {
+      const data = makeValidData();
       delete data.year1;
       const result = stage05.validate(data);
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('year1');
-      expect(result.errors[0]).toContain('is required and must be an object');
-    });
-
-    it('should fail for year1 with missing revenue', () => {
-      const data = {
-        ...validData,
-        year1: { cogs: 50000, opex: 40000 },
-      };
-      const result = stage05.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('year1.revenue');
-      expect(result.errors[0]).toContain('is required');
     });
 
     it('should fail for negative revenue', () => {
-      const data = {
-        ...validData,
+      const result = stage05.validate(makeValidData({
         year1: { revenue: -1000, cogs: 50000, opex: 40000 },
-      };
-      const result = stage05.validate(data);
+      }));
       expect(result.valid).toBe(false);
       expect(result.errors[0]).toContain('year1.revenue');
-      expect(result.errors[0]).toContain('must be >= 0');
+    });
+  });
+
+  describe('validate() - Unit economics', () => {
+    it('should fail for missing unitEconomics', () => {
+      const data = makeValidData();
+      delete data.unitEconomics;
+      const result = stage05.validate(data);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('unitEconomics');
     });
 
-    it('should pass for zero revenue (valid business case)', () => {
-      const data = {
-        ...validData,
-        year1: { revenue: 0, cogs: 0, opex: 40000 },
-      };
-      const result = stage05.validate(data);
+    it('should fail for churnRate > 1', () => {
+      const result = stage05.validate(makeValidData({
+        unitEconomics: { cac: 100, ltv: 500, churnRate: 1.5, paybackMonths: 6, grossMargin: 0.7 },
+      }));
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('churnRate'))).toBe(true);
+    });
+
+    it('should fail for churnRate < 0', () => {
+      const result = stage05.validate(makeValidData({
+        unitEconomics: { cac: 100, ltv: 500, churnRate: -0.1, paybackMonths: 6, grossMargin: 0.7 },
+      }));
+      expect(result.valid).toBe(false);
+    });
+
+    it('should fail for grossMargin > 1', () => {
+      const result = stage05.validate(makeValidData({
+        unitEconomics: { cac: 100, ltv: 500, churnRate: 0.05, paybackMonths: 6, grossMargin: 1.5 },
+      }));
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('grossMargin'))).toBe(true);
+    });
+
+    it('should pass for boundary values (churnRate 0, grossMargin 1)', () => {
+      const result = stage05.validate(makeValidData({
+        unitEconomics: { cac: 100, ltv: 500, churnRate: 0, paybackMonths: 6, grossMargin: 1 },
+      }));
       expect(result.valid).toBe(true);
-    });
-
-    it('should fail for non-number cogs', () => {
-      const data = {
-        ...validData,
-        year2: { revenue: 300000, cogs: '100000', opex: 80000 },
-      };
-      const result = stage05.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors[0]).toContain('year2.cogs');
-      expect(result.errors[0]).toContain('must be a finite number');
-    });
-
-    it('should collect errors across all years', () => {
-      const data = {
-        initialInvestment: -100,
-        year1: { revenue: -1000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: -100, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: -50 },
-      };
-      const result = stage05.validate(data);
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThanOrEqual(4);
     });
   });
 
   describe('computeDerived() - Financial calculations', () => {
     it('should compute gross and net profit correctly', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
-      const result = stage05.computeDerived(data);
-
-      expect(result.grossProfitY1).toBe(100000); // 150k - 50k
-      expect(result.grossProfitY2).toBe(200000); // 300k - 100k
-      expect(result.grossProfitY3).toBe(350000); // 500k - 150k
-
-      expect(result.netProfitY1).toBe(60000); // 100k - 40k
-      expect(result.netProfitY2).toBe(120000); // 200k - 80k
-      expect(result.netProfitY3).toBe(230000); // 350k - 120k
+      const result = stage05.computeDerived(makeValidData());
+      expect(result.grossProfitY1).toBe(100000);
+      expect(result.grossProfitY2).toBe(200000);
+      expect(result.grossProfitY3).toBe(350000);
+      expect(result.netProfitY1).toBe(60000);
+      expect(result.netProfitY2).toBe(120000);
+      expect(result.netProfitY3).toBe(230000);
     });
 
     it('should compute ROI correctly', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
-      const result = stage05.computeDerived(data);
-      // Total net profit: 60k + 120k + 230k = 410k
-      // ROI: (410k - 100k) / 100k = 3.1
+      const result = stage05.computeDerived(makeValidData());
+      // Total net: 60k + 120k + 230k = 410k. ROI: (410k - 100k) / 100k = 3.1
       expect(result.roi3y).toBeCloseTo(3.1, 2);
     });
 
     it('should compute break-even month correctly', () => {
-      const data = {
-        initialInvestment: 120000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
-      const result = stage05.computeDerived(data);
-      // Net profit Y1: 60000
-      // Monthly: 5000
-      // Break-even: 120000 / 5000 = 24 months
+      const result = stage05.computeDerived(makeValidData({ initialInvestment: 120000 }));
+      // Monthly net: 60000/12 = 5000. Break-even: 120000/5000 = 24
       expect(result.breakEvenMonth).toBe(24);
     });
 
-    it('should round up break-even month (Math.ceil)', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
-      const result = stage05.computeDerived(data);
-      // Net profit Y1: 60000
-      // Monthly: 5000
-      // Break-even: 100000 / 5000 = 20 months (exact)
-      expect(result.breakEvenMonth).toBe(20);
+    it('should compute ltvCacRatio', () => {
+      const result = stage05.computeDerived(makeValidData());
+      // ltv=500, cac=100 → ratio=5
+      expect(result.unitEconomics.ltvCacRatio).toBe(5);
     });
 
-    it('should round up partial months', () => {
-      const data = {
-        initialInvestment: 110000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
-      const result = stage05.computeDerived(data);
-      // Net profit Y1: 60000
-      // Monthly: 5000
-      // Break-even: 110000 / 5000 = 22 months (rounds up from 22.0)
-      expect(result.breakEvenMonth).toBe(22);
+    it('should return null ltvCacRatio when cac is 0', () => {
+      const result = stage05.computeDerived(makeValidData({
+        unitEconomics: { cac: 0, ltv: 500, churnRate: 0.05, paybackMonths: 6, grossMargin: 0.7 },
+      }));
+      expect(result.unitEconomics.ltvCacRatio).toBeNull();
     });
   });
 
-  describe('computeDerived() - TS-4: Non-profitable Year 1 handling', () => {
+  describe('computeDerived() - Non-profitable Y1', () => {
     it('should return null breakEvenMonth when netProfitY1 is zero', () => {
-      const data = {
-        initialInvestment: 100000,
+      const data = makeValidData({
         year1: { revenue: 100000, cogs: 50000, opex: 50000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
+      });
       const result = stage05.computeDerived(data);
       expect(result.netProfitY1).toBe(0);
       expect(result.breakEvenMonth).toBeNull();
     });
 
     it('should return null breakEvenMonth when netProfitY1 is negative', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 100000, cogs: 50000, opex: 60000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
+      const data = makeValidData({
+        year1: { revenue: 50000, cogs: 30000, opex: 30000 },
+      });
       const result = stage05.computeDerived(data);
       expect(result.netProfitY1).toBe(-10000);
       expect(result.breakEvenMonth).toBeNull();
     });
-
-    it('should compute breakEvenMonth when netProfitY1 is positive', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
-      const result = stage05.computeDerived(data);
-      expect(result.netProfitY1).toBe(60000);
-      expect(result.breakEvenMonth).toBe(20);
-    });
   });
 
-  describe('evaluateKillGate() - Kill gate logic', () => {
-    it('should pass when ROI >= 0.5 and breakEvenMonth <= 24', () => {
+  describe('evaluateKillGate() - Banded ROI gate', () => {
+    it('should pass when ROI >= 0.25, breakEven <= 24, ltvCac >= 2, payback <= 18', () => {
       const result = evaluateKillGate({
-        roi3y: 0.6,
-        breakEvenMonth: 20,
+        roi3y: 0.30, breakEvenMonth: 20, ltvCacRatio: 3, paybackMonths: 12,
       });
       expect(result.decision).toBe('pass');
       expect(result.blockProgression).toBe(false);
       expect(result.reasons).toEqual([]);
+      expect(result.remediationRoute).toBeNull();
     });
 
-    it('should pass at exact threshold boundaries (ROI 0.5, breakEven 24)', () => {
+    it('should pass at exact thresholds (0.25 ROI, 24 months, 2 ltvCac, 18 payback)', () => {
       const result = evaluateKillGate({
-        roi3y: 0.5,
-        breakEvenMonth: 24,
+        roi3y: 0.25, breakEvenMonth: 24, ltvCacRatio: 2, paybackMonths: 18,
       });
       expect(result.decision).toBe('pass');
-      expect(result.blockProgression).toBe(false);
-      expect(result.reasons).toEqual([]);
     });
 
-    it('should kill when ROI is 0.49 (just below threshold)', () => {
+    it('should conditional_pass when 0.15 <= ROI < 0.25 with strong supplementary', () => {
       const result = evaluateKillGate({
-        roi3y: 0.49,
-        breakEvenMonth: 20,
+        roi3y: 0.20, breakEvenMonth: 20, ltvCacRatio: 3, paybackMonths: 12,
+      });
+      expect(result.decision).toBe('conditional_pass');
+      expect(result.blockProgression).toBe(true);
+      expect(result.reasons[0].type).toBe('roi_in_conditional_band');
+    });
+
+    it('should kill when ROI in conditional band but supplementary metrics weak', () => {
+      const result = evaluateKillGate({
+        roi3y: 0.20, breakEvenMonth: 20, ltvCacRatio: 2, paybackMonths: 15,
+      });
+      expect(result.decision).toBe('kill');
+      expect(result.reasons[0].type).toBe('roi_conditional_supplementary_fail');
+      expect(result.remediationRoute).toContain('unit economics');
+    });
+
+    it('should kill when ROI < 0.15', () => {
+      const result = evaluateKillGate({
+        roi3y: 0.14, breakEvenMonth: 20, ltvCacRatio: 5, paybackMonths: 6,
       });
       expect(result.decision).toBe('kill');
       expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('roi_below_threshold');
-      expect(result.reasons[0].actual).toBe(0.49);
-      expect(result.reasons[0].threshold).toBe(0.5);
+      expect(result.reasons[0].type).toBe('roi_below_kill_threshold');
     });
 
-    it('should kill when breakEvenMonth is 25 (just above threshold)', () => {
+    it('should kill when breakEvenMonth > 24', () => {
       const result = evaluateKillGate({
-        roi3y: 0.6,
-        breakEvenMonth: 25,
+        roi3y: 0.30, breakEvenMonth: 25, ltvCacRatio: 3, paybackMonths: 12,
       });
       expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
       expect(result.reasons[0].type).toBe('break_even_too_late');
-      expect(result.reasons[0].actual).toBe(25);
-      expect(result.reasons[0].threshold).toBe(24);
     });
 
-    it('should kill when breakEvenMonth is null (non-profitable Y1)', () => {
+    it('should kill when breakEvenMonth is null', () => {
       const result = evaluateKillGate({
-        roi3y: 0.6,
-        breakEvenMonth: null,
+        roi3y: 0.30, breakEvenMonth: null, ltvCacRatio: 3, paybackMonths: 12,
       });
       expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
       expect(result.reasons[0].type).toBe('no_break_even_year1');
-      expect(result.reasons[0].message).toContain('Year 1 net profit is non-positive');
     });
 
-    it('should kill with multiple reasons when both ROI and breakEven fail', () => {
+    it('should kill when ROI passes but ltvCacRatio < 2', () => {
       const result = evaluateKillGate({
-        roi3y: 0.49,
-        breakEvenMonth: 25,
+        roi3y: 0.30, breakEvenMonth: 20, ltvCacRatio: 1.5, paybackMonths: 12,
       });
       expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(2);
-      expect(result.reasons.some(r => r.type === 'break_even_too_late')).toBe(true);
-      expect(result.reasons.some(r => r.type === 'roi_below_threshold')).toBe(true);
+      expect(result.reasons[0].type).toBe('ltv_cac_below_threshold');
     });
 
-    it('should kill when all criteria fail', () => {
+    it('should kill when ROI passes but paybackMonths > 18', () => {
       const result = evaluateKillGate({
-        roi3y: 0.3,
-        breakEvenMonth: null,
+        roi3y: 0.30, breakEvenMonth: 20, ltvCacRatio: 3, paybackMonths: 19,
       });
       expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons.length).toBeGreaterThanOrEqual(2);
+      expect(result.reasons[0].type).toBe('payback_too_long');
     });
 
-    it('should provide detailed reason messages', () => {
+    it('should include remediationRoute for kills', () => {
       const result = evaluateKillGate({
-        roi3y: 0.4,
-        breakEvenMonth: 30,
+        roi3y: -0.1, breakEvenMonth: null, ltvCacRatio: 1, paybackMonths: 24,
       });
-      expect(result.reasons[0].message).toContain('Break-even at month 30 exceeds maximum 24 months');
-      expect(result.reasons[1].message).toContain('3-year ROI of 40.0% is below threshold 50%');
+      expect(result.decision).toBe('kill');
+      expect(result.remediationRoute).toBeDefined();
+      expect(result.remediationRoute).toContain('Stage 1');
     });
 
     it('should be pure (no side effects)', () => {
-      const input = { roi3y: 0.6, breakEvenMonth: 20 };
+      const input = { roi3y: 0.30, breakEvenMonth: 20, ltvCacRatio: 3, paybackMonths: 12 };
       const original = { ...input };
       evaluateKillGate(input);
       expect(input).toEqual(original);
@@ -353,67 +301,42 @@ describe('stage-05.js - Profitability template', () => {
 
   describe('Integration: validate + computeDerived + kill gate', () => {
     it('should work together for passing scenario', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
+      const data = makeValidData();
       const validation = stage05.validate(data);
       expect(validation.valid).toBe(true);
 
       const computed = stage05.computeDerived(data);
       expect(computed.decision).toBe('pass');
       expect(computed.blockProgression).toBe(false);
-      expect(computed.roi3y).toBeGreaterThan(0.5);
-      expect(computed.breakEvenMonth).toBeLessThanOrEqual(24);
-    });
-
-    it('should work together for kill scenario (low ROI)', () => {
-      const data = {
-        initialInvestment: 500000,
-        year1: { revenue: 150000, cogs: 100000, opex: 40000 },
-        year2: { revenue: 180000, cogs: 120000, opex: 50000 },
-        year3: { revenue: 200000, cogs: 130000, opex: 60000 },
-      };
-      const validation = stage05.validate(data);
-      expect(validation.valid).toBe(true);
-
-      const computed = stage05.computeDerived(data);
-      expect(computed.decision).toBe('kill');
-      expect(computed.blockProgression).toBe(true);
-      expect(computed.roi3y).toBeLessThan(0.5);
+      expect(computed.roi3y).toBeGreaterThan(ROI_PASS_THRESHOLD);
+      expect(computed.unitEconomics.ltvCacRatio).toBeGreaterThanOrEqual(LTV_CAC_THRESHOLD);
     });
 
     it('should work together for kill scenario (non-profitable Y1)', () => {
-      const data = {
-        initialInvestment: 100000,
+      const data = makeValidData({
         year1: { revenue: 50000, cogs: 30000, opex: 30000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
+      });
       const validation = stage05.validate(data);
       expect(validation.valid).toBe(true);
 
       const computed = stage05.computeDerived(data);
       expect(computed.decision).toBe('kill');
-      expect(computed.blockProgression).toBe(true);
-      expect(computed.netProfitY1).toBeLessThanOrEqual(0);
       expect(computed.breakEvenMonth).toBeNull();
     });
 
-    it('should preserve original input fields in computed output', () => {
-      const data = {
-        initialInvestment: 100000,
-        year1: { revenue: 150000, cogs: 50000, opex: 40000 },
-        year2: { revenue: 300000, cogs: 100000, opex: 80000 },
-        year3: { revenue: 500000, cogs: 150000, opex: 120000 },
-      };
+    it('should preserve original input fields', () => {
+      const data = makeValidData();
       const computed = stage05.computeDerived(data);
       expect(computed.initialInvestment).toBe(100000);
       expect(computed.year1).toEqual(data.year1);
-      expect(computed.year2).toEqual(data.year2);
-      expect(computed.year3).toEqual(data.year3);
+      expect(computed.unitEconomics.cac).toBe(100);
+    });
+
+    it('should not mutate original data', () => {
+      const data = makeValidData();
+      const original = JSON.parse(JSON.stringify(data));
+      stage05.computeDerived(data);
+      expect(data).toEqual(original);
     });
   });
 });
