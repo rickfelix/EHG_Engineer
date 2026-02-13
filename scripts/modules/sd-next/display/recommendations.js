@@ -5,7 +5,7 @@
 
 import { colors } from '../colors.js';
 import { isActionableForLead } from '../status-helpers.js';
-import { checkDependenciesResolved } from '../dependency-resolver.js';
+import { checkDependenciesResolved, checkMetadataDependency, resolveMetadataBlocker } from '../dependency-resolver.js';
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
 
 /**
@@ -28,11 +28,17 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
   }
 
   // Find ready SDs from baseline (skip SDs claimed by other sessions)
-  const { readySDs, needsVerificationSDs } = await categorizeBaselineSDs(supabase, baselineItems, sessionContext);
+  const { readySDs, needsVerificationSDs, metadataBlockedSDs } = await categorizeBaselineSDs(supabase, baselineItems, sessionContext);
 
   // Show SDs needing verification/close-out FIRST (Control Gap Fix)
   if (needsVerificationSDs.length > 0) {
     displayVerificationNeeded(needsVerificationSDs);
+  }
+
+  // Show UNBLOCK recommendations before START (metadata-blocked SDs)
+  let unblockTarget = null;
+  if (metadataBlockedSDs.length > 0 && (!workingOn || workingOn._claimedByOther)) {
+    unblockTarget = await displayUnblockRecommendations(supabase, metadataBlockedSDs);
   }
 
   if (readySDs.length > 0 && (!workingOn || workingOn._claimedByOther)) {
@@ -54,6 +60,7 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
   displayBeginWorkInstructions();
 
   // Return structured action data (PAT-AUTO-PROCEED-002 CAPA)
+  // Priority: continue > verify > unblock target > start > none
   if (workingOn && !workingOn._claimedByOther) {
     const sdId = workingOn.sd_key || workingOn.id;
     return { action: 'continue', sd_id: sdId, reason: `SD ${sdId} is marked as working on (${workingOn.progress_percentage || 0}% complete)` };
@@ -62,6 +69,10 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
     const sd = needsVerificationSDs[0];
     const sdId = sd.sd_key || sd.id;
     return { action: 'verify', sd_id: sdId, reason: `SD ${sdId} needs verification (phase: ${sd.current_phase})` };
+  }
+  if (unblockTarget) {
+    const sdId = unblockTarget.sd_key || unblockTarget.id;
+    return { action: 'start', sd_id: sdId, reason: `SD ${sdId} unblocks a metadata-dependent SD` };
   }
   if (readySDs.length > 0) {
     const sd = readySDs[0];
@@ -152,13 +163,14 @@ async function displayWorkingOnSD(supabase, workingOn, sessionContext = {}) {
 async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {}) {
   const readySDs = [];
   const needsVerificationSDs = [];
+  const metadataBlockedSDs = [];
   const { claimedSDs, currentSession } = sessionContext;
   const currentSessionId = currentSession?.session_id;
 
   for (const item of baselineItems) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, dependencies, is_active')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, dependencies, is_active, metadata')
       .or(`sd_key.eq.${item.sd_id},id.eq.${item.sd_id}`)
       .single();
 
@@ -179,12 +191,95 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
       if (sd.current_phase === 'EXEC_COMPLETE' || sd.status === 'review') {
         needsVerificationSDs.push(enrichedSD);
       } else if (depsResolved && isActionableForLead(enrichedSD)) {
-        readySDs.push(enrichedSD);
+        // Check metadata dependency (soft/conditional)
+        const metaDep = checkMetadataDependency(sd.metadata);
+        if (metaDep.hasMetadataDep) {
+          const blockerInfo = await resolveMetadataBlocker(supabase, metaDep.blockerSdKey);
+          if (blockerInfo.isComplete || !blockerInfo.blockerSD) {
+            // Blocker satisfied or doesn't exist — treat as ready
+            readySDs.push(enrichedSD);
+          } else {
+            // Blocker incomplete — metadata-blocked
+            enrichedSD._metaDep = metaDep;
+            enrichedSD._blockerInfo = blockerInfo;
+            metadataBlockedSDs.push(enrichedSD);
+          }
+        } else {
+          readySDs.push(enrichedSD);
+        }
       }
     }
   }
 
-  return { readySDs, needsVerificationSDs };
+  return { readySDs, needsVerificationSDs, metadataBlockedSDs };
+}
+
+/**
+ * Display UNBLOCK recommendations for metadata-blocked SDs
+ * Returns the top unblock target SD for AUTO-PROCEED action, or null
+ */
+async function displayUnblockRecommendations(supabase, metadataBlockedSDs) {
+  let topTarget = null;
+
+  for (const sd of metadataBlockedSDs.slice(0, 2)) {
+    const { _metaDep, _blockerInfo } = sd;
+    const blockerSD = _blockerInfo.blockerSD;
+    const blockerKey = blockerSD.sd_key || blockerSD.id;
+    const blockedKey = sd.sd_key || sd.id;
+
+    if (_blockerInfo.actionableChildren.length > 0) {
+      const target = _blockerInfo.actionableChildren[0];
+      const targetKey = target.sd_key || target.id;
+
+      if (!topTarget) topTarget = target;
+
+      console.log(`${colors.bgCyan}${colors.bold} UNBLOCK ${colors.reset} ${targetKey}`);
+      console.log(`  ${target.title || blockerSD.title}`);
+
+      // Progress info
+      if (_blockerInfo.isLeaf) {
+        console.log(`  ${colors.dim}Reason: ${blockedKey} depends on ${blockerKey} (${blockerSD.progress_percentage || 0}% complete)${colors.reset}`);
+      } else {
+        const remaining = (_blockerInfo.totalChildren || 0) - (_blockerInfo.completedChildren || 0);
+        console.log(`  ${colors.dim}Reason: ${blockedKey} depends on ${blockerKey} (${blockerSD.progress_percentage || 0}% complete)${colors.reset}`);
+        console.log(`  ${colors.dim}Completing this child advances the blocker (${remaining} remaining children)${colors.reset}`);
+      }
+
+      // Conditional note
+      if (_metaDep.conditionalNote) {
+        console.log(`  ${colors.dim}Condition: ${_metaDep.conditionalNote}${colors.reset}`);
+      }
+
+      // Duration estimate + track
+      try {
+        const { data: targetFull } = await supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_type, category, priority')
+          .eq('sd_key', targetKey)
+          .single();
+
+        if (targetFull) {
+          const estimate = await getEstimatedDuration(supabase, targetFull);
+          console.log(`  ${colors.dim}Track: ${target.track || sd.track || 'N/A'} | Est: ${formatEstimateShort(estimate)}${colors.reset}\n`);
+        } else {
+          console.log();
+        }
+      } catch {
+        console.log();
+      }
+    } else {
+      // No actionable children — show info-only blocked badge
+      console.log(`${colors.bgYellow}${colors.bold} BLOCKED ${colors.reset} ${blockedKey}`);
+      console.log(`  ${sd.title}`);
+      console.log(`  ${colors.dim}Depends on ${blockerKey} (${blockerSD.progress_percentage || 0}% complete) — no actionable children${colors.reset}`);
+      if (_metaDep.conditionalNote) {
+        console.log(`  ${colors.dim}Condition: ${_metaDep.conditionalNote}${colors.reset}`);
+      }
+      console.log();
+    }
+  }
+
+  return topTarget;
 }
 
 /**

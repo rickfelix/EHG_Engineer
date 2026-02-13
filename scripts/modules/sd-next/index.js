@@ -23,7 +23,9 @@ export { getPhaseAwareStatus, isActionableForLead } from './status-helpers.js';
 export {
   parseDependencies,
   checkDependenciesResolved,
-  getUnresolvedDependencies
+  getUnresolvedDependencies,
+  checkMetadataDependency,
+  resolveMetadataBlocker
 } from './dependency-resolver.js';
 
 // Data loaders

@@ -112,3 +112,93 @@ export async function getUnresolvedDependencies(supabase, dependencies) {
 
   return unresolvedDeps;
 }
+
+/**
+ * Check if an SD has a metadata-level dependency (soft/conditional)
+ *
+ * @param {Object|null} metadata - SD metadata object
+ * @returns {{ hasMetadataDep: boolean, blockerSdKey: string|null, conditionalNote: string|null }}
+ */
+export function checkMetadataDependency(metadata) {
+  if (!metadata || !metadata.blocked_by_sd_key) {
+    return { hasMetadataDep: false, blockerSdKey: null, conditionalNote: null };
+  }
+
+  return {
+    hasMetadataDep: true,
+    blockerSdKey: metadata.blocked_by_sd_key,
+    conditionalNote: metadata.conditional_note || null
+  };
+}
+
+/**
+ * Resolve a metadata blocker SD — check its status and find actionable children
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} blockerSdKey - The sd_key of the blocking SD
+ * @returns {Promise<Object>} Resolution info with blocker status and unblock targets
+ */
+export async function resolveMetadataBlocker(supabase, blockerSdKey) {
+  // Fetch the blocker SD
+  const { data: blockerSD } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status, sd_type, progress_percentage, parent_sd_id, is_active')
+    .eq('sd_key', blockerSdKey)
+    .single();
+
+  // Blocker doesn't exist — fail-open
+  if (!blockerSD) {
+    return { blockerSD: null, isComplete: false, actionableChildren: [] };
+  }
+
+  // Blocker is completed — dependency satisfied
+  if (blockerSD.status === 'completed') {
+    return { blockerSD, isComplete: true, actionableChildren: [] };
+  }
+
+  // Blocker is a leaf SD (not an orchestrator) — recommend it directly
+  const { data: children } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, sequence_rank, track, sd_type, is_active')
+    .eq('parent_sd_id', blockerSD.id)
+    .eq('is_active', true);
+
+  if (!children || children.length === 0) {
+    // Leaf SD — the blocker itself is the unblock target
+    const isActionable = blockerSD.is_active && blockerSD.status !== 'cancelled';
+    return {
+      blockerSD,
+      isComplete: false,
+      actionableChildren: isActionable ? [blockerSD] : [],
+      isLeaf: true
+    };
+  }
+
+  // Orchestrator — find non-completed children sorted by actionability
+  const statusPriority = { active: 0, in_progress: 1, planning: 2, draft: 3, ready: 4 };
+  const actionableChildren = children
+    .filter(c => c.status !== 'completed' && c.status !== 'cancelled')
+    .sort((a, b) => {
+      // Working-on first
+      if (a.is_working_on && !b.is_working_on) return -1;
+      if (!a.is_working_on && b.is_working_on) return 1;
+      // Then by status priority
+      const aPrio = statusPriority[a.status] ?? 99;
+      const bPrio = statusPriority[b.status] ?? 99;
+      if (aPrio !== bPrio) return aPrio - bPrio;
+      // Then by sequence_rank
+      return (a.sequence_rank || 9999) - (b.sequence_rank || 9999);
+    });
+
+  const totalChildren = children.length;
+  const completedChildren = children.filter(c => c.status === 'completed').length;
+
+  return {
+    blockerSD,
+    isComplete: false,
+    actionableChildren,
+    totalChildren,
+    completedChildren,
+    isLeaf: false
+  };
+}
