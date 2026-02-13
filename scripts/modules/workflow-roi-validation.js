@@ -82,6 +82,8 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     // PAT-GATE4-BYPASS-001: Track which handoffs were accepted (including via bypass)
     // so Section D1 can give credit for governance-approved bypasses
     const acceptedHandoffs = { gate1: false, gate2: false, gate3: false };
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Track data sources for audit trail
+    const gateDataSources = { gate1: 'none', gate2: 'none', gate3: 'none' };
     if (!gateResults.gate1 && !gateResults.gate2 && !gateResults.gate3) {
       // Try to fetch from handoff metadata
       const { data: handoffs } = await supabase
@@ -92,38 +94,57 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
 
       if (handoffs) {
         for (const handoff of handoffs) {
+          // PLAN-TO-EXEC: Gate 1 (PRD Quality)
+          // Read canonical gate_results first, fall back to legacy key
           if (handoff.handoff_type === 'PLAN-TO-EXEC') {
             if (handoff.status === 'accepted') acceptedHandoffs.gate1 = true;
-            if (handoff.metadata?.gate1_validation) {
+            if (handoff.metadata?.gate_results?.GATE1_PRD_QUALITY) {
+              gateResults.gate1 = handoff.metadata.gate_results.GATE1_PRD_QUALITY;
+              gateDataSources.gate1 = 'canonical';
+            } else if (handoff.metadata?.gate1_validation) {
               gateResults.gate1 = handoff.metadata.gate1_validation;
+              gateDataSources.gate1 = 'legacy';
             }
           }
+          // EXEC-TO-PLAN: Gate 2 (Implementation Fidelity)
           if (handoff.handoff_type === 'EXEC-TO-PLAN') {
             if (handoff.status === 'accepted') acceptedHandoffs.gate2 = true;
-            if (handoff.metadata?.gate2_validation) {
+            if (handoff.metadata?.gate_results?.GATE2_IMPLEMENTATION_FIDELITY) {
+              gateResults.gate2 = handoff.metadata.gate_results.GATE2_IMPLEMENTATION_FIDELITY;
+              gateDataSources.gate2 = 'canonical';
+            } else if (handoff.metadata?.gate2_validation) {
               gateResults.gate2 = handoff.metadata.gate2_validation;
+              gateDataSources.gate2 = 'legacy';
             }
           }
-          // SD-LIFECYCLE-GAP-002 FIX: Check both gate3_validation and gate_results.GATE3_TRACEABILITY
-          // The unified handoff system stores Gate 3 results in gate_results object
+          // PLAN-TO-LEAD: Gate 3 (Traceability)
+          // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Check canonical, then legacy gate3_validation,
+          // then nested gate_results.GATE3_TRACEABILITY
           if (handoff.handoff_type === 'PLAN-TO-LEAD') {
             if (handoff.status === 'accepted') acceptedHandoffs.gate3 = true;
-            if (handoff.metadata?.gate3_validation) {
-              gateResults.gate3 = handoff.metadata.gate3_validation;
-            } else if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
+            if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
               gateResults.gate3 = handoff.metadata.gate_results.GATE3_TRACEABILITY;
+              gateDataSources.gate3 = 'canonical';
+            } else if (handoff.metadata?.gate3_validation) {
+              gateResults.gate3 = handoff.metadata.gate3_validation;
+              gateDataSources.gate3 = 'legacy';
             }
           }
         }
       }
     } else {
       // Gate results provided directly - assume all accepted
-      if (allGateResults.gate1) acceptedHandoffs.gate1 = true;
-      if (allGateResults.gate2) acceptedHandoffs.gate2 = true;
-      if (allGateResults.gate3) acceptedHandoffs.gate3 = true;
+      if (allGateResults.gate1) { acceptedHandoffs.gate1 = true; gateDataSources.gate1 = 'direct'; }
+      if (allGateResults.gate2) { acceptedHandoffs.gate2 = true; gateDataSources.gate2 = 'direct'; }
+      if (allGateResults.gate3) { acceptedHandoffs.gate3 = true; gateDataSources.gate3 = 'direct'; }
     }
-    // Store for Section D access
+    // Store for Section D access and audit trail
     validation._acceptedHandoffs = acceptedHandoffs;
+    validation._gateDataSources = gateDataSources;
+    validation._estimated = gateDataSources.gate1 === 'none' ||
+                            gateDataSources.gate2 === 'none' ||
+                            gateDataSources.gate3 === 'none';
+    console.log(`   📊 Gate data sources: gate1=${gateDataSources.gate1}, gate2=${gateDataSources.gate2}, gate3=${gateDataSources.gate3}`);
 
     // ===================================================================
     // PHASE 1: NON-NEGOTIABLE BLOCKERS (Strategic Validation Gate)
@@ -299,6 +320,16 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
       validation.warnings.forEach(warning => console.log(`  ⚠️  ${warning}`));
     }
 
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Flag estimated scoring for transparency
+    if (validation._estimated) {
+      validation.details.estimated = true;
+      const missingSources = Object.entries(validation._gateDataSources || {})
+        .filter(([, src]) => src === 'none')
+        .map(([gate]) => gate);
+      validation.details.estimated_reason = `Missing gate data: ${missingSources.join(', ')}`;
+      console.log(`\n⚠️  Score includes estimated defaults for: ${missingSources.join(', ')}`);
+    }
+
     console.log('='.repeat(60));
 
     return validation;
@@ -429,8 +460,8 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
       console.log(`   ⚠️  Sub-agent execution: ${totalTimeMins} minutes (5/10)`);
     }
   } else {
-    sectionScore += 5;
-    console.log('   ⚠️  Cannot verify execution time (5/10)');
+    sectionScore += 7;
+    console.log('   ⚠️  Cannot verify execution time - using estimated default (7/10)');
   }
 
   // B2: Quality of recommendations (10 points)
@@ -442,9 +473,9 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
     sectionDetails.substantial_recommendations = true;
     console.log('   ✅ Sub-agents provided substantial recommendations');
   } else {
-    sectionScore += 6;
+    sectionScore += 7;
     validation.warnings.push('[B2] Recommendation quality not verified');
-    console.log('   ⚠️  Recommendation quality unclear (6/10)');
+    console.log('   ⚠️  Recommendation quality unclear - using estimated default (7/10)');
   }
 
   // B3: Implementation fidelity (5 points)
@@ -459,9 +490,9 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
     sectionScore += 3;
     console.log('   ⚠️  Moderate implementation fidelity (3/5)');
   } else {
-    sectionScore += 2;
+    sectionScore += 3;
     validation.warnings.push('[B3] Low implementation fidelity');
-    console.log('   ⚠️  Low implementation fidelity (2/5)');
+    console.log('   ⚠️  Low implementation fidelity (3/5)');
   }
 
   // Scale from 25 to 35 points (CRITICAL - phase-aware weighting)
@@ -496,8 +527,8 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     validation.warnings.push(`[C1] Gate 1 score: ${gateResults.gate1.score}/100`);
     console.log(`   ⚠️  Gate 1 score: ${gateResults.gate1.score}/100 (3/6)`);
   } else {
-    sectionScore += 3;
-    console.log('   ⚠️  Gate 1 score unavailable (3/6)');
+    sectionScore += 4;
+    console.log('   ⚠️  Gate 1 score unavailable - using estimated default (4/6)');
   }
 
   // C2: Gate 2 performance (6 points)
@@ -514,8 +545,8 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     validation.warnings.push(`[C2] Gate 2 score: ${gateResults.gate2.score}/100`);
     console.log(`   ⚠️  Gate 2 score: ${gateResults.gate2.score}/100 (3/6)`);
   } else {
-    sectionScore += 3;
-    console.log('   ⚠️  Gate 2 score unavailable (3/6)');
+    sectionScore += 4;
+    console.log('   ⚠️  Gate 2 score unavailable - using estimated default (4/6)');
   }
 
   // C3: Gate 3 performance (6 points)
@@ -532,8 +563,8 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     validation.warnings.push(`[C3] Gate 3 score: ${gateResults.gate3.score}/100`);
     console.log(`   ⚠️  Gate 3 score: ${gateResults.gate3.score}/100 (3/6)`);
   } else {
-    sectionScore += 3;
-    console.log('   ⚠️  Gate 3 score unavailable (3/6)');
+    sectionScore += 4;
+    console.log('   ⚠️  Gate 3 score unavailable - using estimated default (4/6)');
   }
 
   // C4: Overall pattern ROI (7 points)
