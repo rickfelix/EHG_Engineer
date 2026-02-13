@@ -29,7 +29,7 @@ const path = require('path');
 const os = require('os');
 
 // Configuration
-const STALENESS_WINDOW_S = parseInt(process.env.WORKTREE_STALENESS_WINDOW_S || '120', 10);
+const STALENESS_WINDOW_S = parseInt(process.env.WORKTREE_STALENESS_WINDOW_S || '300', 10);
 const RECHECK_DELAY_MS = parseInt(process.env.WORKTREE_RECHECK_DELAY_MS || '1000', 10);
 const WORKTREE_TIMEOUT_MS = parseInt(process.env.WORKTREE_TIMEOUT_MS || '60000', 10);
 
