@@ -511,14 +511,26 @@ npm run sd:next
 
 This command provides:
 1. **Track View** - Three parallel execution tracks (A: Infrastructure, B: Features, C: Quality)
-2. **Dependency Status** - Which SDs are READY vs BLOCKED
+2. **SD Status Badges** - Current state of each SD (see legend below)
 3. **Continuity** - Recent git activity and "Working On" flag
 4. **Recommendations** - Suggested starting point per track
 
+### SD Status Badge Legend
+| Badge | Meaning | Workable? |
+|-------|---------|-----------|
+| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD.md and run LEAD-TO-PLAN. |
+| **READY** | Past LEAD phase, dependencies resolved | **YES** - Proceed to next handoff in workflow |
+| **PLANNING** | In PLAN phase (PRD creation) | **YES** - Continue planning work |
+| **EXEC N%** | In EXEC phase with progress | **YES** - Continue implementation |
+| **BLOCKED** | Dependencies not resolved | **NO** - Work on blocking SDs first |
+| **CLAIMED** | Another session is actively working on it | **NO** - Pick a different SD |
+
 ### After Running sd:next
-1. If SD marked "CONTINUE" (is_working_on=true) → Resume that SD
-2. If no active SD → Pick highest-ranked READY SD from appropriate track
-3. Load CLAUDE_LEAD.md for SD approval workflow
+1. If SD marked "CONTINUE" (is_working_on=true) and not CLAIMED by another session → Resume that SD
+2. If no active SD → Pick the highest-ranked **workable** SD (any status except BLOCKED or CLAIMED)
+3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
+4. READY SDs have already been approved — proceed to the next handoff in their workflow.
+5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
 
 ### Related Commands
 | Command | Purpose |
@@ -527,7 +539,6 @@ This command provides:
 | `npm run sd:status` | Progress vs baseline |
 | `npm run sd:burnrate` | Velocity and forecasting |
 | `npm run sd:baseline view` | Current execution plan |
-
 
 ## Work Item Creation Routing
 
@@ -865,7 +876,7 @@ npm run agents:compile
 This generates all agent .md files from .partial.md sources + database metadata, with team collaboration and spawning protocols auto-injected.
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-12 8:24:59 PM
+**Last Generated**: 2026-02-13 8:38:34 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -987,7 +998,7 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*Router generated from database: 2026-02-12*
+*Router generated from database: 2026-02-13*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
 

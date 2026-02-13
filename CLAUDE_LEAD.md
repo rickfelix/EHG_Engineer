@@ -22,7 +22,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-12 8:24:59 PM
+**Generated**: 2026-02-13 8:38:34 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -49,71 +49,6 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## Baseline Issues Management
-
-## Baseline Issues System
-
-Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
-
-### LEAD Gate: BASELINE_DEBT_CHECK
-- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
-- **WARNS** if: Total open issues > 10 or stale non-critical > 5
-
-### Lifecycle
-| Status | Meaning |
-|--------|---------|
-| open | Issue identified, no owner assigned |
-| acknowledged | Issue reviewed, owner assigned |
-| in_progress | Remediation SD actively working |
-| resolved | Fixed and verified |
-| wont_fix | Accepted risk (requires LEAD approval + justification) |
-
-### Commands
-```bash
-npm run baseline:list          # Show all open issues
-npm run baseline:assign <key> <SD-ID>  # Assign ownership
-npm run baseline:resolve <key> # Mark resolved
-npm run baseline:summary       # Category summary
-```
-
-### Categories
-security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
-
-### Issue Key Format
-`BL-{CATEGORY}-{NNN}` where:
-- BL-SEC-001: Security baseline issue #1
-- BL-TST-001: Testing baseline issue #1
-- BL-PRF-001: Performance baseline issue #1
-- BL-DB-001: Database baseline issue #1
-- BL-DOC-001: Documentation baseline issue #1
-- BL-A11Y-001: Accessibility baseline issue #1
-- BL-CQ-001: Code quality baseline issue #1
-- BL-DEP-001: Dependency baseline issue #1
-- BL-INF-001: Infrastructure baseline issue #1
-
-### Functions
-- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
-- `generate_baseline_issue_key(p_category)`: Generates unique issue key
-
-## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -203,6 +138,71 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## Migration Execution Protocol
+
+## ⚠️ CRITICAL: Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
+
+## Baseline Issues Management
+
+## Baseline Issues System
+
+Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
+
+### LEAD Gate: BASELINE_DEBT_CHECK
+- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
+- **WARNS** if: Total open issues > 10 or stale non-critical > 5
+
+### Lifecycle
+| Status | Meaning |
+|--------|---------|
+| open | Issue identified, no owner assigned |
+| acknowledged | Issue reviewed, owner assigned |
+| in_progress | Remediation SD actively working |
+| resolved | Fixed and verified |
+| wont_fix | Accepted risk (requires LEAD approval + justification) |
+
+### Commands
+```bash
+npm run baseline:list          # Show all open issues
+npm run baseline:assign <key> <SD-ID>  # Assign ownership
+npm run baseline:resolve <key> # Mark resolved
+npm run baseline:summary       # Category summary
+```
+
+### Categories
+security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
+
+### Issue Key Format
+`BL-{CATEGORY}-{NNN}` where:
+- BL-SEC-001: Security baseline issue #1
+- BL-TST-001: Testing baseline issue #1
+- BL-PRF-001: Performance baseline issue #1
+- BL-DB-001: Database baseline issue #1
+- BL-DOC-001: Documentation baseline issue #1
+- BL-A11Y-001: Accessibility baseline issue #1
+- BL-CQ-001: Code quality baseline issue #1
+- BL-DEP-001: Dependency baseline issue #1
+- BL-INF-001: Infrastructure baseline issue #1
+
+### Functions
+- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
+- `generate_baseline_issue_key(p_category)`: Generates unique issue key
+
 ## 🔍 Explore Before Validation (LEAD Phase)
 
 ## Explore Before Validation
@@ -259,45 +259,6 @@ Claude: "Found existing user preferences in the EHG app. Let me now run formal v
 
 node lib/sub-agent-executor.js VALIDATION <SD-ID>
 ```
-
-## Plan Mode (Optional Guardrail)
-
-### Read-Only Exploration with Claude Code Plan Mode
-
-During the LEAD phase, you may use Claude Code's native **Plan Mode** (`Shift+Tab+Tab`) to enforce read-only exploration. This prevents accidental file edits while you are reading files, assessing validators, and drafting your approach.
-
-**How to use:**
-1. Press `Shift+Tab+Tab` to enter Plan Mode
-2. Explore the codebase: read files, search code, run git status
-3. Draft your assessment and approach
-4. Exit Plan Mode before making any changes
-
-**What Plan Mode prevents:**
-- File writes (Edit, Write tools are blocked)
-- File creation (new files cannot be created)
-- Bash commands that modify state (git commit, npm install, etc.)
-
-**What Plan Mode allows:**
-- Reading files (Read tool)
-- Searching code (Grep, Glob tools)
-- Running read-only commands (git log, git status, npm run sd:next)
-- Exploring the codebase (Task tool with Explore agent)
-
-### Important: Plan Mode is Optional
-
-- Plan Mode is a **convenience guardrail**, not a mandatory step
-- Existing LEAD→PLAN handoff gates remain **authoritative** (no threshold changes)
-- The 9-question LEAD validation gate is unchanged
-- You can perform LEAD exploration without Plan Mode and the workflow is identical
-
-### When Plan Mode Adds Value
-
-| Scenario | Plan Mode Helpful? |
-|----------|--------------------|
-| Complex SD with many affected files | Yes - prevents accidental edits during discovery |
-| Simple/known scope SD | No - skip directly to validation |
-| Follow-up work (already explored) | No - context is already established |
-| Emergency/time-critical fixes | No - speed matters more |
 
 ## SD to Quick Fix Reverse Rubric (LEO v4.3.3)
 
@@ -1618,7 +1579,7 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-02-12*
+*Generated from database: 2026-02-13*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
 
