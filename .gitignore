@@ -182,6 +182,9 @@ src/client/dist/
 !.claude/agents/_model-tracking-section.md
 .claude/.agent-gen-hash
 
+# Account handoff exchange (local session state between account switches)
+.claude/handoff/
+
 # Claude session state (modified during protocol operations, local only)
 .claude/unified-session-state.json
 .claude/auto-proceed-state.json
