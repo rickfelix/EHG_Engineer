@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T20:38:04.433Z
+**Generated**: 2026-02-13T21:05:35.429Z
 **Rows**: 11
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (27 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -45,6 +45,7 @@
 | deleted_at | `timestamp with time zone` | YES | - | - |
 | leo_tier | `character varying(20)` | YES | - | - |
 | is_local | `boolean` | YES | `false` | - |
+| thinking_budget_tokens | `integer(32)` | YES | - | - |
 
 ## Constraints
 
