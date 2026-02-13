@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T00:14:08.377Z
+**Generated**: 2026-02-13T00:58:19.770Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,9 @@
 | processed_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | trace_id | `uuid` | YES | - | - |
+| retry_count | `integer(32)` | YES | `0` | - |
+| idempotency_key | `text` | YES | - | - |
+| last_error | `text` | YES | - | - |
 
 ## Constraints
 
@@ -37,13 +40,17 @@
 - `eva_events_eva_venture_id_fkey`: eva_venture_id → eva_ventures(id)
 
 ### Check Constraints
-- `eva_events_event_type_check`: CHECK ((event_type = ANY (ARRAY['metric_update'::text, 'health_change'::text, 'decision_required'::text, 'alert_triggered'::text, 'automation_executed'::text, 'status_change'::text, 'milestone_reached'::text, 'risk_detected'::text, 'user_action'::text])))
+- `eva_events_event_type_check`: CHECK ((event_type = ANY (ARRAY['metric_update'::text, 'health_change'::text, 'decision_required'::text, 'alert_triggered'::text, 'automation_executed'::text, 'status_change'::text, 'milestone_reached'::text, 'risk_detected'::text, 'user_action'::text, 'stage_processing_started'::text, 'stage_processing_failed'::text, 'stage.completed'::text, 'decision.submitted'::text, 'gate.evaluated'::text])))
 
 ## Indexes
 
 - `eva_events_pkey`
   ```sql
   CREATE UNIQUE INDEX eva_events_pkey ON public.eva_events USING btree (id)
+  ```
+- `idx_eva_events_idempotency_key`
+  ```sql
+  CREATE UNIQUE INDEX idx_eva_events_idempotency_key ON public.eva_events USING btree (idempotency_key) WHERE (idempotency_key IS NOT NULL)
   ```
 - `idx_eva_events_trace_id`
   ```sql
