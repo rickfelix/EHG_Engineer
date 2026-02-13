@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T23:20:47.932Z
+**Generated**: 2026-02-13T23:53:41.400Z
 **Rows**: 5
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,10 @@
 | validated_by | `character varying(100)` | YES | - | Who validated: chairman, auto_validation, crewai_agent_name, etc. |
 | epistemic_classification | `text` | YES | - | Golden Nugget: Four Buckets classification (fact/assumption/simulation/unknown) |
 | epistemic_evidence | `jsonb` | YES | - | Evidence linking for epistemic claims (sources, assumption IDs, simulation runs) |
+| artifact_embedding | `USER-DEFINED` | YES | - | pgvector embedding (1536-dim, text-embedding-3-small) for semantic search |
+| embedding_model | `text` | YES | `'text-embedding-3-small'::text` | - |
+| embedding_updated_at | `timestamp with time zone` | YES | - | - |
+| indexing_status | `text` | YES | `'pending'::text` | Embedding indexing status: pending, indexed, failed, skipped |
 
 ## Constraints
 
@@ -48,6 +52,7 @@
 
 ### Check Constraints
 - `venture_artifacts_epistemic_classification_check`: CHECK ((epistemic_classification = ANY (ARRAY['fact'::text, 'assumption'::text, 'simulation'::text, 'unknown'::text])))
+- `venture_artifacts_indexing_status_check`: CHECK ((indexing_status = ANY (ARRAY['pending'::text, 'indexed'::text, 'failed'::text, 'skipped'::text])))
 - `venture_artifacts_quality_score_check`: CHECK (((quality_score >= 0) AND (quality_score <= 100)))
 - `venture_artifacts_validation_status_check`: CHECK (((validation_status)::text = ANY ((ARRAY['pending'::character varying, 'validated'::character varying, 'rejected'::character varying, 'needs_revision'::character varying])::text[])))
 
@@ -61,9 +66,17 @@
   ```sql
   CREATE INDEX idx_artifacts_epistemic_evidence ON public.venture_artifacts USING gin (epistemic_evidence)
   ```
+- `idx_venture_artifacts_content_trgm`
+  ```sql
+  CREATE INDEX idx_venture_artifacts_content_trgm ON public.venture_artifacts USING gin (content gin_trgm_ops)
+  ```
 - `idx_venture_artifacts_current`
   ```sql
   CREATE INDEX idx_venture_artifacts_current ON public.venture_artifacts USING btree (venture_id, artifact_type) WHERE (is_current = true)
+  ```
+- `idx_venture_artifacts_embedding_ivfflat`
+  ```sql
+  CREATE INDEX idx_venture_artifacts_embedding_ivfflat ON public.venture_artifacts USING ivfflat (artifact_embedding vector_cosine_ops) WITH (lists='1')
   ```
 - `idx_venture_artifacts_quality_score`
   ```sql
