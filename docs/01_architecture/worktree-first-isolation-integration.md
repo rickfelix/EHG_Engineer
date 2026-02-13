@@ -154,7 +154,7 @@ if (options.worktreePath) {
 **Flow** (lines 191-208):
 1. **SD marked completed** (status → 'completed', progress → 100%)
 2. **Automated shipping** runs (PR merge + branch cleanup)
-3. **cleanupWorktree()** called with `force: true`
+3. **cleanupWorktree()** called (safe mode — aborts if uncommitted changes detected)
 4. **Worktree removed** from filesystem and git tracking
 
 **Key Code**:
@@ -164,12 +164,14 @@ let worktreeCleanupResult = null;
 const sdKey = sd.sd_key || sdId;
 try {
   validateSdKey(sdKey);
-  worktreeCleanupResult = cleanupWorktree(sdKey, { force: true });
+  worktreeCleanupResult = cleanupWorktree(sdKey);
 
   if (worktreeCleanupResult.cleaned) {
     console.log(`✅ Worktree .worktrees/${sdKey} removed`);
   } else if (worktreeCleanupResult.reason === 'worktree_not_found') {
     console.log(`ℹ️  No worktree found for ${sdKey}`);
+  } else if (worktreeCleanupResult.reason === 'dirty_worktree') {
+    console.warn(`⚠️  Worktree has uncommitted changes — run /ship first`);
   }
 } catch (worktreeError) {
   // Non-blocking: cleanup failures don't block completion
@@ -177,7 +179,7 @@ try {
 }
 ```
 
-**Force Cleanup**: Uses `force: true` to override dirty worktree checks, since automated shipping has already committed and merged changes.
+**Safe Cleanup**: Uses default `force: false` so the dirty-state check protects uncommitted changes. If automated shipping has already committed and merged, the worktree will be clean and cleanup proceeds normally. If changes are still uncommitted, cleanup aborts with `dirty_worktree` and prompts the user to run `/ship` first.
 
 ## Configuration
 
@@ -221,7 +223,7 @@ try {
 | Disk space exhausted | Creation fails | Free up space, create manually |
 | Git lock file present | Creation fails | Remove `.git/worktrees/<sdKey>/locked` |
 | Worktree path doesn't exist | Cleanup skipped (idempotent) | No action needed |
-| Uncommitted changes at cleanup | Cleanup skipped (force overrides) | Force cleanup after manual commit |
+| Uncommitted changes at cleanup | Cleanup aborts with `dirty_worktree` | Commit or `/ship` first, then re-run or use `--force` for manual cleanup |
 
 ## User-Facing Changes
 
@@ -292,7 +294,7 @@ try {
    - Reused worktree handling
 
 3. **cleanupWorktree contract** (4 tests):
-   - Successful cleanup with force flag
+   - Successful cleanup (safe mode, no force flag)
    - `worktree_not_found` handling
    - Failure handling (non-throwing)
    - sdKey validation

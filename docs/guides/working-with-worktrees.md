@@ -258,18 +258,23 @@ git checkout feat/SD-XXX-001-title
 ⚠️  Worktree cleanup failed: uncommitted changes detected
 ```
 
-**Cause**: Worktree has uncommitted changes and `force: false`.
+**Cause**: Worktree has uncommitted changes. Both LEAD-FINAL-APPROVAL automatic cleanup and manual cleanup (without `--force`) will abort to protect your work.
 
 **Solution**:
 ```bash
-# Commit changes first
+# Option 1: Commit changes first (recommended)
 cd .worktrees/SD-XXX-001
 git add . && git commit -m "WIP"
 cd ../..
 
-# Then cleanup
+# Then cleanup (automatic cleanup will succeed on next LEAD-FINAL-APPROVAL run)
+npm run session:cleanup -- --sd-key SD-XXX-001
+
+# Option 2: Force cleanup (manual only — discards uncommitted changes)
 npm run session:cleanup -- --sd-key SD-XXX-001 --force
 ```
+
+**Note**: LEAD-FINAL-APPROVAL handles cleanup automatically without `--force`. If uncommitted changes are detected, it aborts gracefully and prompts you to run `/ship` first.
 
 ## Best Practices
 

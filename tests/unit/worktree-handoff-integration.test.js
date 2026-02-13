@@ -141,22 +141,31 @@ describe('Worktree-Handoff Integration', () => {
   });
 
   describe('cleanupWorktree call contract', () => {
-    it('should call cleanupWorktree with force on LEAD-FINAL-APPROVAL', () => {
+    it('should call cleanupWorktree without force on LEAD-FINAL-APPROVAL', () => {
       cleanupWorktree.mockReturnValue({ cleaned: true, reason: 'success' });
 
-      const result = cleanupWorktree('SD-TEST-001', { force: true });
+      const result = cleanupWorktree('SD-TEST-001');
 
-      expect(cleanupWorktree).toHaveBeenCalledWith('SD-TEST-001', { force: true });
+      expect(cleanupWorktree).toHaveBeenCalledWith('SD-TEST-001');
       expect(result.cleaned).toBe(true);
     });
 
     it('should handle worktree_not_found gracefully', () => {
       cleanupWorktree.mockReturnValue({ cleaned: false, reason: 'worktree_not_found' });
 
-      const result = cleanupWorktree('SD-TEST-001', { force: true });
+      const result = cleanupWorktree('SD-TEST-001');
 
       expect(result.cleaned).toBe(false);
       expect(result.reason).toBe('worktree_not_found');
+    });
+
+    it('should handle dirty_worktree by aborting cleanup', () => {
+      cleanupWorktree.mockReturnValue({ cleaned: false, reason: 'dirty_worktree' });
+
+      const result = cleanupWorktree('SD-TEST-001');
+
+      expect(result.cleaned).toBe(false);
+      expect(result.reason).toBe('dirty_worktree');
     });
 
     it('should handle cleanup failure without throwing', () => {
@@ -167,7 +176,7 @@ describe('Worktree-Handoff Integration', () => {
       let cleanupResult = null;
       let warning = null;
       try {
-        cleanupResult = cleanupWorktree('SD-TEST-001', { force: true });
+        cleanupResult = cleanupWorktree('SD-TEST-001');
       } catch (err) {
         warning = err.message;
       }
