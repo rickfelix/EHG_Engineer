@@ -17,7 +17,7 @@ describe('stage-17.js - Pre-Build Checklist template', () => {
       expect(stage17.id).toBe('stage-17');
       expect(stage17.slug).toBe('pre-build-checklist');
       expect(stage17.title).toBe('Pre-Build Checklist');
-      expect(stage17.version).toBe('1.0.0');
+      expect(stage17.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {

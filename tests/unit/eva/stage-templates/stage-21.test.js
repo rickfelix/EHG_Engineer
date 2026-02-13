@@ -17,7 +17,7 @@ describe('stage-21.js - Integration Testing template', () => {
       expect(stage21.id).toBe('stage-21');
       expect(stage21.slug).toBe('integration-testing');
       expect(stage21.title).toBe('Integration Testing');
-      expect(stage21.version).toBe('1.0.0');
+      expect(stage21.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {

@@ -17,7 +17,7 @@ describe('stage-18.js - Sprint Planning template', () => {
       expect(stage18.id).toBe('stage-18');
       expect(stage18.slug).toBe('sprint-planning');
       expect(stage18.title).toBe('Sprint Planning');
-      expect(stage18.version).toBe('1.0.0');
+      expect(stage18.version).toBe('2.0.0');
     });
 
     it('should have schema definition', () => {
