@@ -354,10 +354,10 @@ if [ ! -z "$STAGED_MD_FILES" ]; then
   # Check for PRD markdown files
   PRD_FILES=$(echo "$STAGED_MD_FILES" | grep -E '^(docs/)?PRD-.*\.md$' || true)
 
-  # Check for handoff markdown files (exclude design docs, retrospectives, and reference docs)
-  # Excludes: retrospectives/, docs/vision/, docs/plans/, docs/specs/, docs/reference/
+  # Check for handoff markdown files (exclude design docs, retrospectives, reference docs, and slash commands)
+  # Excludes: retrospectives/, docs/vision/, docs/plans/, docs/specs/, docs/reference/, .claude/commands/
   # SD-LEO-STREAMS-001: Added docs/reference/ exclusion for schema documentation
-  HANDOFF_FILES=$(echo "$STAGED_MD_FILES" | grep -i 'handoff' | grep -v 'retrospectives/' | grep -v 'docs/vision/' | grep -v 'docs/plans/' | grep -v 'docs/specs/' | grep -v 'docs/reference/' || true)
+  HANDOFF_FILES=$(echo "$STAGED_MD_FILES" | grep -i 'handoff' | grep -v 'retrospectives/' | grep -v 'docs/vision/' | grep -v 'docs/plans/' | grep -v 'docs/specs/' | grep -v 'docs/reference/' | grep -v '\.claude/commands/' || true)
 
   VIOLATIONS=""
 
