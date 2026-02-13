@@ -584,11 +584,12 @@ Resume work on the current working SD.
 
 2. **If SD found (is_working_on = true and progress < 100):**
    - Display the SD info from the script output
-   - Determine the appropriate context file based on `current_phase`:
+   - **ALWAYS read `CLAUDE_CORE.md` first** (sub-agent prompt quality standard, SD type requirements)
+   - Then read the phase-specific context file based on `current_phase`:
      - LEAD phases (LEAD_APPROVAL, LEAD_FINAL_APPROVAL) → Read `CLAUDE_LEAD.md`
      - PLAN phases (PLAN_*, PRD_*) → Read `CLAUDE_PLAN.md`
      - EXEC phases (EXEC_*, IMPLEMENTATION_*) → Read `CLAUDE_EXEC.md`
-   - Load that context file using the Read tool
+   - Load BOTH context files using the Read tool
    - Show recommended next action based on phase:
      - LEAD phases: "Continue LEAD approval workflow"
      - PLAN phases: "Continue PRD/planning work"
@@ -769,7 +770,8 @@ Restore session state after a crash, compaction, or interruption using the Unifi
 4. **After displaying state, determine next action:**
 
    **If RESUME_SD_ID is set:**
-   - Load the appropriate CLAUDE context file based on RESUME_SD_PHASE:
+   - **ALWAYS read `CLAUDE_CORE.md` first** (sub-agent prompt quality standard, SD type requirements)
+   - Then read the phase-specific context file based on RESUME_SD_PHASE:
      - LEAD phases (LEAD_APPROVAL, LEAD_FINAL_APPROVAL) → Read `CLAUDE_LEAD.md`
      - PLAN phases (PLAN_*, PRD_*) → Read `CLAUDE_PLAN.md`
      - EXEC phases (EXEC_*, IMPLEMENTATION_*) → Read `CLAUDE_EXEC.md`
@@ -902,14 +904,22 @@ This is the RECOMMENDED way to begin work on an SD. It combines claiming + conte
 
 4. **MANDATORY: Read protocol files based on phase:**
 
+   **Step 1: ALWAYS read CLAUDE_CORE.md first (contains sub-agent prompt quality standard, SD type requirements, gate thresholds):**
+   ```
+   Read tool: CLAUDE_CORE.md
+   ```
+
+   **Step 2: Read phase-specific file:**
+
    | Phase | Files to Read (use Read tool) |
    |-------|-------------------------------|
    | LEAD | `CLAUDE_LEAD.md` |
    | PLAN | `CLAUDE_PLAN.md` |
    | EXEC | `CLAUDE_EXEC.md` |
 
-   **Execute the file read immediately** - do not just mention it, actually use the Read tool:
+   **Execute BOTH file reads immediately** - do not just mention them, actually use the Read tool:
    ```
+   Read tool: CLAUDE_CORE.md   (ALWAYS - contains Five-Point Brief, model routing, SD types)
    Read tool: CLAUDE_LEAD.md   (if phase is LEAD)
    Read tool: CLAUDE_PLAN.md   (if phase is PLAN)
    Read tool: CLAUDE_EXEC.md   (if phase is EXEC)

@@ -8,11 +8,39 @@
 2. **DO NOT ignore it** - Every issue is a signal that something needs attention
 3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
 
-**Example invocation:**
+### Sub-Agent Prompt Quality Standard (Five-Point Brief)
+
+**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
+
+Every sub-agent invocation MUST include these five elements:
+
+| Element | What to Include | Example |
+|---------|----------------|---------|
+| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
+| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
+| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
+| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
+| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
+
+**Anti-patterns** (NEVER do these):
+- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
+- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
+- ❌ Omitting prior attempts — agent repeats your failed approaches
+
+**Example invocation (GOOD - RCA agent):**
 ```
 Task tool with subagent_type="rca-agent":
-"Analyze why [describe the issue] is occurring.
-Perform 5-whys analysis and identify the root cause."
+"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
+Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
+Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
+Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
+Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
+```
+
+**Example invocation (BAD - too vague):**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
 ```
 
 **Why this matters:**
@@ -22,7 +50,7 @@ Perform 5-whys analysis and identify the root cause."
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-13 8:49:22 AM
+**Generated**: 2026-02-13 10:07:42 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -1591,11 +1619,39 @@ npm run sd:status    # Overall progress by track
 2. **DO NOT ignore it** - Every issue is a signal that something needs attention
 3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
 
-**Example invocation:**
+### Sub-Agent Prompt Quality Standard (Five-Point Brief)
+
+**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
+
+Every sub-agent invocation MUST include these five elements:
+
+| Element | What to Include | Example |
+|---------|----------------|---------|
+| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
+| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
+| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
+| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
+| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
+
+**Anti-patterns** (NEVER do these):
+- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
+- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
+- ❌ Omitting prior attempts — agent repeats your failed approaches
+
+**Example invocation (GOOD - RCA agent):**
 ```
 Task tool with subagent_type="rca-agent":
-"Analyze why [describe the issue] is occurring.
-Perform 5-whys analysis and identify the root cause."
+"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
+Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
+Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
+Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
+Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
+```
+
+**Example invocation (BAD - too vague):**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
 ```
 
 **Why this matters:**
