@@ -280,7 +280,7 @@ describe('sd.completed Handler (Return Path)', () => {
     });
 
     it('should map SD statuses to task statuses correctly', async () => {
-      const result = await handleSdCompleted(
+      await handleSdCompleted(
         {
           sdKey: `SD-${PREFIX}-CHILD-001`,
           ventureId: testVentureId,
