@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T00:58:19.770Z
+**Generated**: 2026-02-13T01:18:31.427Z
 **Rows**: 951
 **RLS**: Enabled (4 policies)
 
@@ -376,6 +376,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_sync_sd_to_baseline()`
+
+### tr_sd_completed_event
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_emit_sd_completed_event()`
 
 ### trg_aaa_sync_type_change_reason
 

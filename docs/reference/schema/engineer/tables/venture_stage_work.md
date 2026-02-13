@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T00:58:19.770Z
+**Generated**: 2026-02-13T01:18:31.427Z
 **Rows**: 33
 **RLS**: Enabled (5 policies)
 
@@ -61,6 +61,10 @@
 - `idx_venture_stage_work_venture`
   ```sql
   CREATE INDEX idx_venture_stage_work_venture ON public.venture_stage_work USING btree (venture_id)
+  ```
+- `idx_venture_stage_work_venture_stage`
+  ```sql
+  CREATE INDEX idx_venture_stage_work_venture_stage ON public.venture_stage_work USING btree (venture_id, lifecycle_stage)
   ```
 - `venture_stage_work_pkey`
   ```sql
