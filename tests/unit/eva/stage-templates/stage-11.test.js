@@ -20,7 +20,7 @@ describe('stage-11.js - GTM template', () => {
       expect(stage11.id).toBe('stage-11');
       expect(stage11.slug).toBe('gtm');
       expect(stage11.title).toBe('Go-To-Market');
-      expect(stage11.version).toBe('1.0.0');
+      expect(stage11.version).toBe('2.0.0');
     });
 
     it('should export REQUIRED_TIERS = 3', () => {

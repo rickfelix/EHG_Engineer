@@ -20,7 +20,7 @@ describe('stage-10.js - Naming/Brand template', () => {
       expect(stage10.id).toBe('stage-10');
       expect(stage10.slug).toBe('naming-brand');
       expect(stage10.title).toBe('Naming / Brand');
-      expect(stage10.version).toBe('1.0.0');
+      expect(stage10.version).toBe('2.0.0');
     });
 
     it('should export MIN_CANDIDATES = 5', () => {
