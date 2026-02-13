@@ -2,11 +2,11 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-02-01
+**Last Updated**: 2026-02-13
 **Tags**: session-management, heartbeat, liveness, monitoring, lifecycle
-**SD**: SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001 (v2.0.0)
+**SD**: SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001 (v2.0.0), QF-20260213-620
 
 ## Overview
 
@@ -482,9 +482,34 @@ Stale status line files (>5 min old, no matching active session) are automatical
 StatusLine.cleanupStaleFiles();  // Static method
 ```
 
+## SD Claims Lifecycle Awareness (QF-20260213-620)
+
+### Integration with sd_claims Table
+
+The heartbeat manager and session lifecycle system integrate with the `sd_claims` table to provide lifecycle-aware claim tracking.
+
+**Key Concept**: An "active" claim is defined as one where `released_at IS NULL`. The database enforces uniqueness on active claims via the `sd_claims_active_unique` partial unique index.
+
+**How It Works**:
+1. **Session claims SD**: Insert into `sd_claims` with `released_at = NULL` (active claim)
+2. **Heartbeat maintains liveness**: Heartbeat updates on `claude_sessions` indicate session is alive
+3. **Session releases SD**: Update `sd_claims` set `released_at = NOW()` (claim becomes inactive)
+4. **Same session can reclaim**: After releasing, the same session can claim again (unique constraint only applies to unreleased claims)
+
+**Benefits**:
+- Sessions can reclaim SDs they previously worked on (common in iterative development)
+- Database enforces single active claim per SD (integrity protection)
+- Claim history preserved for auditing and retrospectives
+
+**Related Files**:
+- **Migration**: `database/migrations/20260213_fix_sd_claims_lifecycle_aware_unique.sql`
+- **Schema Doc**: `docs/reference/schema/engineer/tables/sd_claims.md`
+- **Ops Doc**: `docs/06_deployment/multi-session-coordination-ops.md`
+
 ## Related Documentation
 
 - Migration: [20260201_intelligent_session_lifecycle.sql](../database/migrations/20260201_intelligent_session_lifecycle.sql)
+- Migration: [20260213_fix_sd_claims_lifecycle_aware_unique.sql](../database/migrations/20260213_fix_sd_claims_lifecycle_aware_unique.sql)
 - Session Management: [session-manager.mjs](../../lib/session-manager.mjs)
 - Status Line Integration: [leo-status-line.js](../../scripts/leo-status-line.js)
 - Operations: [Multi-Session Coordination Ops](../06_deployment/multi-session-coordination-ops.md)
@@ -493,6 +518,7 @@ StatusLine.cleanupStaleFiles();  // Static method
 ## References
 
 - **SD**: SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001
+- **Quick-Fix**: QF-20260213-620
 - **User Stories**: US-001 (Terminal Identity), US-002 (Graceful Release), US-003 (PID Validation), US-004 (Stale Cleanup), US-005 (Observability), US-006 (Status Line Files)
 - **FR-3**: Graceful exit with 5s timeout and exponential backoff
 - **FR-4**: PID validation for orphaned session detection
