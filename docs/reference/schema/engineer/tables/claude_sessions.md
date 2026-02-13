@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T22:02:27.454Z
-**Rows**: 8,120
+**Generated**: 2026-02-13T22:34:16.420Z
+**Rows**: 8,121
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (27 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -45,6 +45,7 @@
 | terminal_identity | `text` | YES | - | Computed identity from machine_id:terminal_id for uniqueness. Part of FR-1. |
 | current_branch | `text` | YES | - | Current git branch, updated by heartbeat. Used for multi-session ship safety. |
 | worktree_path | `text` | YES | - | Absolute path to git worktree for this session's claimed SD. Populated at claim time by resolve-sd-workdir.js. NULL if no worktree exists. |
+| is_alive | `boolean` | YES | `false` | - |
 
 ## Constraints
 
@@ -71,6 +72,10 @@
 - `idx_claude_sessions_heartbeat`
   ```sql
   CREATE INDEX idx_claude_sessions_heartbeat ON public.claude_sessions USING btree (heartbeat_at DESC)
+  ```
+- `idx_claude_sessions_is_alive`
+  ```sql
+  CREATE INDEX idx_claude_sessions_is_alive ON public.claude_sessions USING btree (is_alive) WHERE (is_alive = true)
   ```
 - `idx_claude_sessions_sd`
   ```sql
