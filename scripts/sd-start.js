@@ -110,6 +110,13 @@ async function main() {
   // 3. Check current claim status
   const claimStatus = await isSDClaimed(effectiveId, session.session_id);
 
+  if (claimStatus.queryFailed) {
+    console.log(`\n${colors.red}Error checking SD claim: ${claimStatus.error}${colors.reset}`);
+    console.log(`\n${colors.yellow}This may indicate a database schema issue.${colors.reset}`);
+    console.log(`Try running: node scripts/run-sql-migration.js database/migrations/20260213_restore_v_active_sessions_columns.sql`);
+    process.exit(1);
+  }
+
   if (claimStatus.claimed && claimStatus.claimedBy !== session.session_id) {
     // FR-2: Enhanced output showing owner session details and heartbeat age
     console.log(`\n${colors.red}❌ SD is already claimed by another session${colors.reset}`);
