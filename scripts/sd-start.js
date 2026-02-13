@@ -14,9 +14,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
+import os from 'os';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { claimSD, isSDClaimed } from '../lib/session-conflict-checker.mjs';
+import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 
@@ -200,7 +202,7 @@ async function main() {
   }
 
   if (claimStatus.claimed && claimStatus.claimedBy !== session.session_id) {
-    // FR-2: Enhanced output showing owner session details and heartbeat age
+    // SD-LEO-FIX-PID-BASED-SESSION-001: PID-aware claim conflict resolution
     console.log(`\n${colors.red}❌ SD is already claimed by another session${colors.reset}`);
     console.log(`\n${colors.bold}Owner Session Details:${colors.reset}`);
     console.log(`   Session ID: ${colors.cyan}${claimStatus.claimedBy}${colors.reset}`);
@@ -208,26 +210,52 @@ async function main() {
     console.log(`   TTY/Term:   ${claimStatus.tty || 'unknown'}`);
     console.log(`   Codebase:   ${claimStatus.codebase || 'unknown'}`);
     console.log(`   Track:      ${claimStatus.track || 'STANDALONE'}`);
+    console.log(`   PID:        ${claimStatus.pid || 'unknown'}`);
     console.log(`\n${colors.bold}Heartbeat Status:${colors.reset}`);
     console.log(`   Last seen:  ${colors.yellow}${claimStatus.heartbeatAgeHuman || claimStatus.activeMinutes + 'm ago'}${colors.reset}`);
     console.log(`   Age:        ${claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60} seconds`);
 
-    // Show stale warning if close to 5-minute threshold
-    const secondsUntilStale = 300 - (claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60);
-    if (secondsUntilStale > 0 && secondsUntilStale < 60) {
-      console.log(`\n${colors.yellow}⏳ Session will become stale in ${secondsUntilStale}s (auto-released)${colors.reset}`);
-    } else if (secondsUntilStale <= 0) {
-      console.log(`\n${colors.yellow}⚠️  Session appears stale - it may auto-release soon${colors.reset}`);
+    // PID-based liveness check (same machine only)
+    const sameHost = claimStatus.hostname === os.hostname();
+    const ownerPid = claimStatus.pid;
+
+    if (sameHost && ownerPid) {
+      const pidAlive = isProcessRunning(ownerPid);
+      if (pidAlive) {
+        // HARD REFUSE: Process is confirmed running
+        console.log(`\n${colors.red}${colors.bold}🔒 PROCESS IS RUNNING (PID: ${ownerPid})${colors.reset}`);
+        console.log(`${colors.red}   Another Claude Code instance is actively using this SD.${colors.reset}`);
+        console.log(`${colors.red}   DO NOT release this claim — the other session is alive.${colors.reset}`);
+        console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+      } else {
+        // SAFE TO RELEASE: Process exited, session is orphaned
+        console.log(`\n${colors.green}${colors.bold}💀 PROCESS EXITED (PID: ${ownerPid} is dead)${colors.reset}`);
+        console.log(`   The owning process is no longer running.`);
+        console.log(`   This claim is orphaned and safe to release.`);
+        console.log(`\n${colors.bold}Action:${colors.reset} Run ${colors.cyan}npm run session:cleanup${colors.reset} then retry`);
+      }
+    } else if (sameHost && !ownerPid) {
+      // Same machine but no PID recorded (legacy session)
+      console.log(`\n${colors.yellow}⚠️  No PID recorded for this session (legacy session format)${colors.reset}`);
+      console.log(`   Cannot verify process liveness.`);
+      const secondsUntilStale = 300 - (claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60);
+      if (secondsUntilStale <= 0) {
+        console.log(`   Heartbeat is stale — likely safe to release.`);
+        console.log(`\n${colors.bold}Action:${colors.reset} Run ${colors.cyan}npm run session:cleanup${colors.reset} then retry`);
+      } else {
+        console.log(`   Heartbeat is recent (${claimStatus.heartbeatAgeHuman}) — another instance may be active.`);
+        console.log(`\n${colors.bold}Action:${colors.reset} Check for other Claude Code instances, or wait ${secondsUntilStale}s for stale timeout`);
+      }
+    } else {
+      // Different machine — cannot verify PID
+      console.log(`\n${colors.yellow}⚠️  DIFFERENT MACHINE (${claimStatus.hostname} vs ${os.hostname()})${colors.reset}`);
+      console.log(`   Cannot verify process liveness across machines.`);
+      console.log(`\n${colors.bold}Options:${colors.reset}`);
+      console.log(`   1. Check if ${colors.cyan}${claimStatus.hostname}${colors.reset} is still running a Claude session`);
+      console.log(`   2. Wait for heartbeat to go stale (5min threshold)`);
+      console.log(`   3. If abandoned, run ${colors.cyan}npm run session:cleanup${colors.reset}`);
     }
 
-    // QF-CLAIM-CONFLICT-UX-001: Add clear question about parallel instances
-    console.log(`\n${colors.yellow}🤔 Do you have another Claude Code instance running?${colors.reset}`);
-    console.log(`\n${colors.bold}Options:${colors.reset}`);
-    console.log(`   ${colors.green}If YES${colors.reset}: Pick a different SD to avoid conflicts`);
-    console.log(`   ${colors.green}If NO${colors.reset}:  The session may be stale. Try these:`);
-    console.log('      1. Wait for auto-release (stale after 5min)');
-    console.log(`      2. Run ${colors.cyan}npm run sd:release${colors.reset} in the other terminal`);
-    console.log(`      3. If abandoned, run ${colors.cyan}npm run session:cleanup${colors.reset}`);
     console.log('═'.repeat(50));
     process.exit(1);
   }
