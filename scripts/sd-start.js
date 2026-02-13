@@ -107,14 +107,15 @@ async function main() {
     process.exit(1);
   }
 
-  // 2b. Check for concurrent session conflict on the same SD
-  if (session.conflict && session.conflict_sd_id === effectiveId) {
-    console.log(`\n${colors.red}CONFLICT: Another active session is already working on ${effectiveId}${colors.reset}`);
-    console.log(`   Session: ${session.conflict_session_id}`);
-    console.log('   Pick a different SD or wait for that session to finish.');
-    process.exit(1);
-  } else if (session.conflict) {
-    console.log(`\n${colors.yellow}Note: Another active session detected (${session.conflict_session_id}), working on ${session.conflict_sd_id || 'no SD'}${colors.reset}`);
+  // 2b. Check adopted session (heartbeat guard adopted the existing session)
+  // When adopted=true, we're reusing the main Claude process's session (same terminal).
+  // This is normal for child processes like sd-start.js.
+  if (session.adopted) {
+    if (session.adopted_sd_id && session.adopted_sd_id === effectiveId) {
+      console.log(`\n${colors.yellow}Note: Session already working on ${effectiveId}, refreshing claim...${colors.reset}`);
+    } else if (session.adopted_sd_id) {
+      console.log(`\n${colors.yellow}Note: Session currently working on ${session.adopted_sd_id}, switching to ${effectiveId}${colors.reset}`);
+    }
   }
 
   // 3. Check current claim status
