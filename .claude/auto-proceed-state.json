@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-EVA-QA-AUDIT-ENGINE-001",
+  "currentSd": "SD-EVA-FIX-INFRA-BUGS-001",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing Phase 2 THE ENGINE Audit (Stages 6-9)",
+  "currentTask": "Implementing PRD: Infrastructure Bug Fixes - Event Bus, CLI, and Handler Corrections",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-02-14T17:30:00.418Z",
-  "lastUpdatedAt": "2026-02-14T18:31:26.013Z"
+  "lastUpdatedAt": "2026-02-14T22:02:10.676Z"
 }
