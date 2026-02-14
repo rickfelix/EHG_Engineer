@@ -43,12 +43,13 @@ describe('RealityGates', () => {
       expect(isGatedBoundary(9, 10)).toBe(true);
       expect(isGatedBoundary(12, 13)).toBe(true);
       expect(isGatedBoundary(16, 17)).toBe(true);
-      expect(isGatedBoundary(20, 21)).toBe(true);
+      expect(isGatedBoundary(22, 23)).toBe(true);
     });
 
     it('should return false for non-gated transitions', () => {
       expect(isGatedBoundary(1, 2)).toBe(false);
       expect(isGatedBoundary(7, 8)).toBe(false);
+      expect(isGatedBoundary(20, 21)).toBe(false);
       expect(isGatedBoundary(24, 25)).toBe(false);
     });
   });
@@ -57,7 +58,7 @@ describe('RealityGates', () => {
     it('should return config for valid boundary', () => {
       const config = getBoundaryConfig(5, 6);
       expect(config).toBeDefined();
-      expect(config.description).toBe('Ideation → Validation');
+      expect(config.description).toBe('SPARK → ENGINE');
       expect(config.required_artifacts).toHaveLength(3);
     });
 

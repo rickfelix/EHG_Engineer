@@ -100,7 +100,7 @@ describe('Reality Gates', () => {
 
     it('has config for exactly 5 boundaries', () => {
       const boundaries = Object.keys(BOUNDARY_CONFIG);
-      expect(boundaries).toEqual(['5->6', '9->10', '12->13', '16->17', '20->21']);
+      expect(boundaries).toEqual(['5->6', '9->10', '12->13', '16->17', '22->23']);
     });
   });
 
@@ -110,7 +110,7 @@ describe('Reality Gates', () => {
       expect(isGatedBoundary(9, 10)).toBe(true);
       expect(isGatedBoundary(12, 13)).toBe(true);
       expect(isGatedBoundary(16, 17)).toBe(true);
-      expect(isGatedBoundary(20, 21)).toBe(true);
+      expect(isGatedBoundary(22, 23)).toBe(true);
     });
 
     it('returns false for non-boundary transitions', () => {
@@ -124,7 +124,7 @@ describe('Reality Gates', () => {
     it('returns config for a valid boundary', () => {
       const config = getBoundaryConfig(5, 6);
       expect(config).not.toBeNull();
-      expect(config.description).toBe('Ideation → Validation');
+      expect(config.description).toBe('SPARK → ENGINE');
       expect(config.required_artifacts.length).toBeGreaterThan(0);
     });
 
@@ -321,8 +321,8 @@ describe('Reality Gates', () => {
     });
   });
 
-  describe('evaluateRealityGate - 20→21 Launch → Scale', () => {
-    const boundary = { fromStage: 20, toStage: 21 };
+  describe('evaluateRealityGate - 22→23 BUILD LOOP → LAUNCH & LEARN', () => {
+    const boundary = { fromStage: 22, toStage: 23 };
     const requiredTypes = ['launch_metrics', 'user_feedback_summary', 'production_app'];
 
     it('PASS when all artifacts present with URL check', async () => {
