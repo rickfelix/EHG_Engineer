@@ -50,7 +50,7 @@ function getPhaseContextFile(phase) {
 async function verifyHandoffIntegrity(sdUuid) {
   const { data: handoffs, error } = await supabase
     .from('sd_phase_handoffs')
-    .select('id, sd_id, from_phase, to_phase, status, created_at, rejection_reason')
+    .select('id, sd_id, from_phase, to_phase, status, created_at, rejection_reason, resolved_at')
     .eq('sd_id', sdUuid)
     .order('created_at', { ascending: false })
     .limit(1);
@@ -84,7 +84,17 @@ async function verifyHandoffIntegrity(sdUuid) {
     };
   }
 
-  // Handoff was rejected or failed
+  // Handoff was rejected or failed — but check if it was already resolved
+  if (last.resolved_at) {
+    return {
+      valid: true,
+      lastHandoff: last,
+      status: 'resolved',
+      message: `Last handoff ${last.status} but resolved at ${new Date(last.resolved_at).toLocaleString()} (${last.from_phase} → ${last.to_phase})`,
+      recoveryOptions: []
+    };
+  }
+
   const reason = last.rejection_reason || 'No reason provided';
   return {
     valid: false,
@@ -198,6 +208,7 @@ async function main() {
     console.log(formatClaimFailure(claimResult));
 
     // PID-based liveness check for enhanced diagnostics (same machine only)
+    let autoReleased = false;
     if (claimResult.owner) {
       const sameHost = claimResult.owner.hostname === os.hostname();
       // Extract PID from session ID if available (format: win-cc-{ssePort}-{pid})
@@ -210,16 +221,41 @@ async function main() {
           console.log(`\n${colors.red}${colors.bold}🔒 PROCESS IS RUNNING (PID: ${ownerPid})${colors.reset}`);
           console.log(`${colors.red}   Another Claude Code instance is actively using this SD.${colors.reset}`);
         } else {
-          console.log(`\n${colors.green}${colors.bold}💀 PROCESS EXITED (PID: ${ownerPid} is dead)${colors.reset}`);
-          console.log(`   This claim is orphaned and safe to release.`);
-          console.log(`\n${colors.bold}Action:${colors.reset} Run ${colors.cyan}npm run session:cleanup${colors.reset} then retry`);
+          console.log(`\n${colors.green}${colors.bold}💀 PROCESS EXITED (PID: ${ownerPid} is dead) — auto-releasing orphaned claim${colors.reset}`);
+
+          // Auto-release the orphaned claim and retry
+          const { error: releaseError } = await supabase.rpc('release_sd', {
+            p_session_id: claimResult.owner.session_id
+          });
+
+          if (releaseError) {
+            console.log(`${colors.yellow}   ⚠️  Auto-release failed: ${releaseError.message}${colors.reset}`);
+          } else {
+            console.log(`${colors.green}   ✅ Orphaned claim released. Retrying...${colors.reset}`);
+            autoReleased = true;
+          }
         }
       }
     }
 
-    console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
-    console.log('═'.repeat(50));
-    process.exit(1);
+    if (autoReleased) {
+      // Retry the claim after releasing the orphaned session
+      const retryResult = await claimGuard(effectiveId, session.session_id);
+      if (retryResult.success) {
+        console.log(`${colors.green}   ✅ Claim acquired on retry${colors.reset}`);
+        // Replace claimResult for downstream use
+        Object.assign(claimResult, retryResult);
+      } else {
+        console.log(`${colors.red}   ❌ Retry failed: ${retryResult.error}${colors.reset}`);
+        console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+        console.log('═'.repeat(50));
+        process.exit(1);
+      }
+    } else {
+      console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+      console.log('═'.repeat(50));
+      process.exit(1);
+    }
   }
 
   // 4.5. Resolve worktree (creates if needed in claim mode)
