@@ -42,7 +42,48 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
   }
 
   if (readySDs.length > 0 && (!workingOn || workingOn._claimedByOther)) {
-    await displayStartRecommendation(supabase, readySDs[0]);
+    // Check if the top SD is an orchestrator — if so, show its unclaimed children instead
+    const topSD = readySDs[0];
+    const topSdId = topSD.sd_key || topSD.id;
+    const { data: orchChildren } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, current_phase, claiming_session_id, priority')
+      .eq('parent_sd_id', topSdId)
+      .in('status', ['draft', 'active', 'in_progress']);
+
+    if (orchChildren && orchChildren.length > 0) {
+      // This is an orchestrator — show unclaimed children as individual START candidates
+      const unclaimed = orchChildren.filter(c => !c.claiming_session_id);
+      const claimed = orchChildren.filter(c => c.claiming_session_id);
+
+      console.log(`${colors.bgBlue}${colors.bold} ORCHESTRATOR ${colors.reset} ${topSdId} (${orchChildren.length} children)`);
+      console.log(`  ${topSD.title}`);
+      if (claimed.length > 0) {
+        console.log(`  ${colors.dim}${claimed.length} child(ren) already claimed by other sessions${colors.reset}`);
+      }
+      console.log();
+
+      if (unclaimed.length > 0) {
+        // Show first unclaimed child as the START recommendation
+        const firstChild = unclaimed[0];
+        await displayStartRecommendation(supabase, { ...firstChild, track: topSD.track, sequence_rank: topSD.sequence_rank });
+
+        // Show additional unclaimed children as parallel opportunities
+        if (unclaimed.length > 1) {
+          console.log(`${colors.cyan}  Other unclaimed children:${colors.reset}`);
+          unclaimed.slice(1, 4).forEach(c => {
+            const childId = c.sd_key || c.id;
+            console.log(`    ${childId} - ${c.title.substring(0, 50)}${c.title.length > 50 ? '...' : ''}`);
+          });
+          console.log();
+        }
+      } else {
+        console.log(`  ${colors.yellow}All children are claimed or completed.${colors.reset}\n`);
+      }
+    } else {
+      // Not an orchestrator — display normally
+      await displayStartRecommendation(supabase, topSD);
+    }
   }
 
   // Show parallel opportunities
@@ -77,6 +118,23 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
   if (readySDs.length > 0) {
     const sd = readySDs[0];
     const sdId = sd.sd_key || sd.id;
+
+    // If top SD is an orchestrator, return first unclaimed child as the action target
+    const { data: actionChildren } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, claiming_session_id, status')
+      .eq('parent_sd_id', sdId)
+      .in('status', ['draft', 'active', 'in_progress']);
+
+    if (actionChildren && actionChildren.length > 0) {
+      const unclaimed = actionChildren.filter(c => !c.claiming_session_id);
+      if (unclaimed.length > 0) {
+        const childId = unclaimed[0].sd_key || unclaimed[0].id;
+        return { action: 'start', sd_id: childId, reason: `Child ${childId} of orchestrator ${sdId} (${unclaimed.length} unclaimed children)` };
+      }
+      return { action: 'none', sd_id: null, reason: `Orchestrator ${sdId} has no unclaimed children` };
+    }
+
     return { action: 'start', sd_id: sdId, reason: `SD ${sdId} is next in queue (rank: ${sd.sequence_rank}, deps satisfied)` };
   }
   return { action: 'none', sd_id: null, reason: 'No actionable SDs found in queue' };

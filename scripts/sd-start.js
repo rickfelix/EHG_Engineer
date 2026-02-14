@@ -21,6 +21,7 @@ import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
+import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
 
 dotenv.config();
 
@@ -139,6 +140,60 @@ async function getSDDetails(sdId) {
   return data;
 }
 
+/**
+ * Check if an SD is an orchestrator (has children).
+ * Returns the list of children if found, empty array otherwise.
+ */
+async function getOrchestratorChildren(sdKey) {
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status, current_phase, priority, claiming_session_id, progress_percentage')
+    .eq('parent_sd_id', sdKey);
+
+  if (error || !data) return [];
+  return data;
+}
+
+/**
+ * Find the first unclaimed child SD that's ready to work on.
+ * Uses child-sd-selector for urgency-based sorting, then filters out claimed children.
+ */
+async function findUnclaimedChild(parentSdKey) {
+  // Use the existing getNextReadyChild which handles urgency sorting and blocker filtering
+  const result = await getNextReadyChild(supabase, parentSdKey);
+
+  if (!result.sd) {
+    return { child: null, allComplete: result.allComplete, reason: result.reason };
+  }
+
+  // Check if the selected child is already claimed by another session
+  if (result.sd.claiming_session_id) {
+    // The top-priority child is claimed — check all children for an unclaimed one
+    const children = await getOrchestratorChildren(parentSdKey);
+    const readyChildren = children.filter(c =>
+      !c.claiming_session_id &&
+      c.status !== 'completed' &&
+      c.status !== 'blocked'
+    );
+
+    if (readyChildren.length > 0) {
+      return { child: readyChildren[0], allComplete: false, reason: 'First unclaimed child' };
+    }
+
+    // All children are either claimed or not ready
+    const allClaimed = children.filter(c => c.claiming_session_id && c.status !== 'completed');
+    if (allClaimed.length > 0) {
+      return {
+        child: null,
+        allComplete: false,
+        reason: `All ready children are claimed by other sessions (${allClaimed.length} active)`
+      };
+    }
+  }
+
+  return { child: result.sd, allComplete: false, reason: result.reason };
+}
+
 async function getNextHandoff(sd) {
   const phase = sd.current_phase || 'LEAD';
 
@@ -180,7 +235,61 @@ async function main() {
     process.exit(1);
   }
 
-  const effectiveId = sd.sd_key || sd.id;
+  let effectiveId = sd.sd_key || sd.id;
+
+  // 1.5. Orchestrator detection — route to child instead of claiming parent
+  const explicitChild = process.argv.includes('--child') ? process.argv[process.argv.indexOf('--child') + 1] : null;
+  if (!explicitChild) {
+    const children = await getOrchestratorChildren(effectiveId);
+    if (children.length > 0) {
+      console.log(`\n${colors.cyan}🔀 ORCHESTRATOR DETECTED${colors.reset} (${children.length} children)`);
+      console.log(`   ${colors.dim}Routing to first unclaimed child instead of claiming orchestrator${colors.reset}`);
+
+      const { child, allComplete, reason } = await findUnclaimedChild(effectiveId);
+
+      if (allComplete) {
+        console.log(`\n${colors.green}✅ All children completed${colors.reset}`);
+        console.log(`   Run orchestrator completion: node scripts/handoff.js execute PLAN-TO-LEAD ${effectiveId}`);
+        console.log('═'.repeat(50));
+        process.exit(0);
+      }
+
+      if (!child) {
+        console.log(`\n${colors.yellow}⚠️  No unclaimed children available: ${reason}${colors.reset}`);
+
+        // Show current child status for visibility
+        const claimed = children.filter(c => c.claiming_session_id);
+        const completed = children.filter(c => c.status === 'completed');
+        console.log(`   Claimed: ${claimed.length} | Completed: ${completed.length} | Total: ${children.length}`);
+
+        if (claimed.length > 0) {
+          console.log(`\n${colors.bold}Currently claimed children:${colors.reset}`);
+          claimed.forEach(c => {
+            console.log(`   ${colors.yellow}🔒${colors.reset} ${c.sd_key} - ${c.title} (${c.current_phase || 'LEAD'})`);
+          });
+        }
+
+        console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+        console.log('═'.repeat(50));
+        process.exit(1);
+      }
+
+      // Route to the child — update the SD reference for the rest of the flow
+      const childId = child.sd_key || child.id;
+      console.log(`\n${colors.green}→ Routing to child: ${childId}${colors.reset}`);
+      console.log(`   ${child.title}`);
+
+      // Re-fetch the child SD details for the rest of the flow
+      const childSd = await getSDDetails(childId);
+      if (childSd.error || !childSd) {
+        console.log(`${colors.red}Error fetching child SD: ${childSd?.error || 'not found'}${colors.reset}`);
+        process.exit(1);
+      }
+      Object.assign(sd, childSd);
+      effectiveId = childId;
+      console.log(`   ${colors.dim}(Orchestrator ${sdId} not claimed — only child ${childId} will be claimed)${colors.reset}`);
+    }
+  }
 
   // 2. Get or create session
   const session = await getOrCreateSession();
