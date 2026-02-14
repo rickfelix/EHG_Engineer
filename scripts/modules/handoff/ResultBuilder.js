@@ -6,6 +6,8 @@
  * Ensures consistent response structure across all handoff operations.
  */
 
+import { getRemediation as getMappedRemediation } from './rejection-subagent-mapping.js';
+
 export class ResultBuilder {
   /**
    * Create a success response
@@ -99,116 +101,21 @@ export class ResultBuilder {
   }
 
   /**
-   * Get default remediation for known reason codes
-   * SD-LEO-STREAMS-001 Retrospective: Enhanced with exact field paths
+   * Get default remediation for known reason codes.
+   * Delegates to centralized rejection-subagent-mapping for Task tool invocations.
+   * SD-LEO-INFRA-ACTIONABLE-REJECTION-TEMPLATES-001
+   *
    * @param {string} reasonCode - Reason code
+   * @param {Object} context - Optional { sdId, gateName, details, score } for richer prompts
    * @returns {string|null} Default remediation or null
    */
-  static getDefaultRemediation(reasonCode) {
-    const remediations = {
-      // BMAD validations
-      'BMAD_VALIDATION_FAILED': 'Run STORIES sub-agent to generate user stories with proper acceptance criteria.',
-      'BMAD_PLAN_TO_EXEC_FAILED': 'Run STORIES sub-agent: node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>',
-      'BMAD_EXEC_TO_PLAN_FAILED': 'Ensure all test plans are complete and E2E test coverage is 100%.',
+  static getDefaultRemediation(reasonCode, context = {}) {
+    // Try centralized mapping first (includes Task tool invocations)
+    const mapped = getMappedRemediation(reasonCode, context);
+    if (mapped) return mapped.message;
 
-      // Gate validations with field path hints
-      'GATE1_VALIDATION_FAILED': [
-        'Execute DESIGN and DATABASE sub-agents:',
-        '1. Run DESIGN sub-agent: node scripts/execute-subagent.js --code DESIGN --sd-id <SD-ID>',
-        '2. Run DATABASE sub-agent: node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>',
-        '3. Run STORIES sub-agent: node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>',
-        '4. Re-run this handoff',
-        '',
-        'Field reference: sd_phase_handoffs.metadata.gate1_validation'
-      ].join('\n'),
-      'GATE2_VALIDATION_FAILED': [
-        'Review implementation fidelity. Ensure code matches PRD requirements.',
-        '',
-        'Field reference: sd_phase_handoffs.metadata.gate2_validation',
-        'See: docs/reference/schema/handoff-field-reference.md'
-      ].join('\n'),
-      'GATE3_VALIDATION_FAILED': [
-        'Verify traceability from requirements to implementation to tests.',
-        '',
-        'This gate reads: EXEC-TO-PLAN.metadata.gate2_validation',
-        'If missing, update the EXEC-TO-PLAN handoff metadata first.',
-        'See: docs/reference/schema/handoff-field-reference.md'
-      ].join('\n'),
-      'GATE4_VALIDATION_FAILED': 'Review workflow ROI. Ensure deliverables justify process overhead.',
-      'GATE5_VALIDATION_FAILED': [
-        'Git commit verification failed.',
-        '',
-        'Common issues:',
-        '1. Uncommitted changes - run: git add . && git commit -m "message"',
-        '2. Unpushed commits - run: git push',
-        '',
-        'Run: node scripts/check-git-state.js for details'
-      ].join('\n'),
-      'GATE6_VALIDATION_FAILED': 'Create feature branch before starting EXEC work.',
-
-      // Branch enforcement
-      'BRANCH_ENFORCEMENT_FAILED': [
-        'Create a feature branch before EXEC work begins:',
-        '1. git checkout main',
-        '2. git pull origin main',
-        '3. git checkout -b feature/<SD-ID>-short-description',
-        '4. Re-run this handoff'
-      ].join('\n'),
-
-      // Git commit
-      'GIT_COMMIT_VERIFICATION_FAILED': [
-        'Commit all changes with proper commit messages before handoff.',
-        '',
-        'Run: node scripts/check-git-state.js for details'
-      ].join('\n'),
-
-      // E2E coverage
-      'E2E_COVERAGE_INCOMPLETE': 'All user stories must have corresponding E2E tests. Run TESTING sub-agent.',
-
-      // RCA/CAPA
-      'RCA_BLOCKING_ISSUES': 'Resolve all blocking RCA issues before proceeding with handoff.',
-
-      // Not found with table references
-      'SD_NOT_FOUND': [
-        'Create SD in database using LEO Protocol dashboard or create-strategic-directive.js script.',
-        '',
-        'Table: strategic_directives_v2',
-        'Lookup fields: id (VARCHAR), sd_key'
-      ].join('\n'),
-      'PRD_NOT_FOUND': [
-        'Create PRD using add-prd-to-database.js script.',
-        '',
-        'Table: product_requirements_v2',
-        'Link field: sd_id (references strategic_directives_v2.id)'
-      ].join('\n'),
-      'TEMPLATE_NOT_FOUND': 'Contact administrator to create handoff template.',
-
-      // Deliverables (SD-LEO-STREAMS-001)
-      'DELIVERABLES_INCOMPLETE': [
-        'Not all deliverables are marked complete.',
-        '',
-        'Table: sd_scope_deliverables',
-        'Columns: deliverable_name, deliverable_type, completion_status',
-        'Valid completion_status: pending, in_progress, completed, blocked',
-        '',
-        'Query: SELECT * FROM sd_scope_deliverables WHERE sd_id = <UUID>'
-      ].join('\n'),
-
-      // Fidelity data missing (SD-LEO-STREAMS-001)
-      'FIDELITY_DATA_MISSING': [
-        'Gate 2 fidelity data not found in EXEC-TO-PLAN handoff.',
-        '',
-        'The PLAN-TO-LEAD Gate 3 (Traceability) requires fidelity data.',
-        '',
-        'Expected field: sd_phase_handoffs.metadata.gate2_validation',
-        'Must contain: { score, passed, gate_scores: { design_fidelity, database_fidelity, ... } }',
-        '',
-        'Fix: Update the EXEC-TO-PLAN handoff metadata',
-        'See: docs/reference/schema/handoff-field-reference.md'
-      ].join('\n')
-    };
-
-    return remediations[reasonCode] || null;
+    // Fallback: legacy static remediations for any unmapped codes
+    return null;
   }
 
   /**
