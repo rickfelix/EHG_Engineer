@@ -93,6 +93,19 @@ export function createPerformanceCriticalGate(supabase) {
           return result;
         }
 
+        // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Load PRD performance_requirements
+        const { data: prdData } = await supabase
+          .from('product_requirements_v2')
+          .select('performance_requirements')
+          .eq('sd_id', sdUuid)
+          .single();
+
+        const perfRequirements = prdData?.performance_requirements;
+        if (perfRequirements && Object.keys(perfRequirements).length > 0) {
+          console.log(`   📊 PRD performance requirements loaded`);
+          result.prd_targets = perfRequirements;
+        }
+
         // Query PERFORMANCE sub-agent results
         const { data: perfResults, error: perfError } = await supabase
           .from('sub_agent_execution_results')
