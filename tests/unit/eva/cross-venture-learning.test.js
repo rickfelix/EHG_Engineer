@@ -9,6 +9,7 @@ import {
   analyzeKillStageFrequency,
   analyzeFailedAssumptions,
   analyzeSuccessPatterns,
+  searchSimilar,
   round2,
   MIN_VENTURES,
 } from '../../../lib/eva/cross-venture-learning.js';
@@ -660,5 +661,156 @@ describe('output format', () => {
       minimum: MIN_VENTURES,
       actual: 2,
     });
+  });
+});
+
+// ── searchSimilar tests ──────────────────────────────────
+
+/**
+ * Build a mock supabase that supports rpc() calls for searchSimilar testing
+ */
+function createRpcMockDb(rpcResponses = {}) {
+  return {
+    from: vi.fn(() => {
+      throw new Error('searchSimilar should only use rpc(), not from()');
+    }),
+    rpc: vi.fn((funcName, params) => {
+      const response = rpcResponses[funcName] || { data: [], error: null };
+      return Promise.resolve(response);
+    }),
+  };
+}
+
+describe('searchSimilar', () => {
+  it('throws when neither query nor queryEmbedding is provided', async () => {
+    const db = createRpcMockDb();
+    await expect(searchSimilar(db, {})).rejects.toThrow('requires at least query or queryEmbedding');
+  });
+
+  it('returns keyword-only results when no embedding provided', async () => {
+    const db = createRpcMockDb({
+      keyword_search_fallback: {
+        data: [
+          { source_table: 'issue_patterns', record_id: 'ip-1', similarity_score: 0.6, content_preview: 'Database migration best practices' },
+          { source_table: 'venture_artifacts', record_id: 'va-1', similarity_score: 0.4, content_preview: 'Business model canvas v2' },
+        ],
+        error: null,
+      },
+    });
+
+    const results = await searchSimilar(db, { query: 'database migration' });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].score).toBe(0.18); // 0.6 * 0.3 keyword weight
+    expect(results[0].scoreBreakdown.semantic).toBe(0);
+    expect(results[0].scoreBreakdown.keyword).toBe(0.6);
+    expect(results[0].source).toBe('issue_patterns');
+  });
+
+  it('returns vector-only results when no query text provided', async () => {
+    const fakeEmbedding = new Array(1536).fill(0.1);
+    const db = createRpcMockDb({
+      match_venture_artifacts: {
+        data: [
+          { id: 'va-1', content: 'Venture artifact content', similarity: 0.85, venture_id: 'v1', artifact_type: 'bmc', quality_score: 90 },
+        ],
+        error: null,
+      },
+    });
+
+    const results = await searchSimilar(db, {
+      queryEmbedding: fakeEmbedding,
+      tables: ['venture_artifacts'],
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].score).toBe(0.6); // 0.85 * 0.7 semantic weight = 0.595 → round2 = 0.6
+    expect(results[0].scoreBreakdown.semantic).toBe(0.85);
+    expect(results[0].scoreBreakdown.keyword).toBe(0);
+  });
+
+  it('merges vector and keyword scores for hybrid search', async () => {
+    const fakeEmbedding = new Array(1536).fill(0.1);
+    const db = createRpcMockDb({
+      match_issue_patterns: {
+        data: [
+          { id: 'ip-1', issue_summary: 'Migration failure pattern', similarity: 0.8, pattern_id: 'PAT-001', category: 'database', severity: 'high', occurrence_count: 5 },
+        ],
+        error: null,
+      },
+      keyword_search_fallback: {
+        data: [
+          { source_table: 'issue_patterns', record_id: 'ip-1', similarity_score: 0.5, content_preview: 'Migration failure pattern' },
+          { source_table: 'venture_artifacts', record_id: 'va-2', similarity_score: 0.3, content_preview: 'New artifact' },
+        ],
+        error: null,
+      },
+    });
+
+    const results = await searchSimilar(db, {
+      query: 'migration failure',
+      queryEmbedding: fakeEmbedding,
+      tables: ['issue_patterns'],
+    });
+
+    // ip-1 should have merged scores: 0.8*0.7 + 0.5*0.3 = 0.56 + 0.15 = 0.71
+    const merged = results.find((r) => r.id === 'ip-1');
+    expect(merged).toBeDefined();
+    expect(merged.score).toBe(0.71);
+    expect(merged.scoreBreakdown.semantic).toBe(0.8);
+    expect(merged.scoreBreakdown.keyword).toBe(0.5);
+
+    // va-2 is keyword-only (not in tables filter for vector, but keyword_search_fallback returns it)
+    const kwOnly = results.find((r) => r.id === 'va-2');
+    expect(kwOnly).toBeDefined();
+    expect(kwOnly.score).toBe(0.09); // 0.3 * 0.3 = 0.09
+  });
+
+  it('respects limit parameter', async () => {
+    const db = createRpcMockDb({
+      keyword_search_fallback: {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          source_table: 'issue_patterns',
+          record_id: `ip-${i}`,
+          similarity_score: 0.5 - i * 0.01,
+          content_preview: `Pattern ${i}`,
+        })),
+        error: null,
+      },
+    });
+
+    const results = await searchSimilar(db, { query: 'test', limit: 5 });
+    expect(results).toHaveLength(5);
+  });
+
+  it('handles RPC errors gracefully', async () => {
+    const db = createRpcMockDb({
+      keyword_search_fallback: {
+        data: null,
+        error: { message: 'function not found' },
+      },
+    });
+
+    // Should not throw, just return empty
+    const results = await searchSimilar(db, { query: 'test' });
+    expect(results).toEqual([]);
+  });
+
+  it('sorts results by weighted score descending', async () => {
+    const db = createRpcMockDb({
+      keyword_search_fallback: {
+        data: [
+          { source_table: 'issue_patterns', record_id: 'low', similarity_score: 0.2, content_preview: 'Low' },
+          { source_table: 'issue_patterns', record_id: 'high', similarity_score: 0.9, content_preview: 'High' },
+          { source_table: 'issue_patterns', record_id: 'mid', similarity_score: 0.5, content_preview: 'Mid' },
+        ],
+        error: null,
+      },
+    });
+
+    const results = await searchSimilar(db, { query: 'test' });
+    expect(results[0].id).toBe('high');
+    expect(results[1].id).toBe('mid');
+    expect(results[2].id).toBe('low');
   });
 });

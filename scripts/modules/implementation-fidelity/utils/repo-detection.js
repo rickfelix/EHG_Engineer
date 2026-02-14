@@ -31,15 +31,28 @@ export const EHG_ROOT = path.resolve(__dirname, '../../../../../ehg');
  * @returns {Promise<string>} - Root path of implementation repository
  */
 export async function detectImplementationRepo(sd_id, supabase) {
+  // SD-VENTURE-STAGE0-UI-001: Also search by sd_key (SD-XXX-001 format)
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Renamed legacy_id to sd_key (column dropped 2026-01-24)
+  const searchTerms = await getSDSearchTerms(sd_id, supabase);
+
+  // PAT-WORKTREE-LIFECYCLE-001: If running inside a worktree for this SD, prefer cwd.
+  // When __dirname is inside .worktrees/, relative paths resolve to sibling worktrees
+  // instead of actual repos, causing false matches (e.g., .worktrees/ehg instead of ehg).
+  const cwd = process.cwd();
+  const cwdNorm = cwd.replace(/\\/g, '/');
+  if (cwdNorm.includes('.worktrees/')) {
+    const sdKey = searchTerms.find(t => t.startsWith('SD-'));
+    if (sdKey && cwdNorm.includes(sdKey)) {
+      console.log(`   📋 Worktree detected for ${sdKey}, using cwd: ${cwd}`);
+      return cwd;
+    }
+  }
+
   const repos = [
     EHG_ROOT,           // Application repo (priority)
     EHG_ENGINEER_ROOT   // Governance repo (fallback)
   ];
 
-  // SD-VENTURE-STAGE0-UI-001: Also search by sd_key (SD-XXX-001 format)
-  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Renamed legacy_id to sd_key (column dropped 2026-01-24)
-  // since commits often use sd_key instead of UUID
-  const searchTerms = await getSDSearchTerms(sd_id, supabase);
   if (searchTerms.length > 1) {
     console.log(`   📋 Also searching for sd_key: ${searchTerms[1]}`);
   }
@@ -61,7 +74,6 @@ export async function detectImplementationRepo(sd_id, supabase) {
   }
 
   // Default to current working directory if no commits found
-  const cwd = process.cwd();
   console.log(`   ⚠️  No SD commits found in known repos, using current directory: ${cwd}`);
   return cwd;
 }
