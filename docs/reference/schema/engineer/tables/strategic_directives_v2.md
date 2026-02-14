@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-13T23:53:41.400Z
-**Rows**: 967
+**Generated**: 2026-02-14T01:06:50.987Z
+**Rows**: 970
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (80 total)
+## Columns (81 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -102,6 +102,7 @@ Use the id column instead - it is the canonical identifier. |
 | sd_code_user_facing | `character varying(100)` | **NO** | - | - |
 | uuid_internal_pk | `uuid` | **NO** | - | - |
 | type_change_reason | `text` | YES | - | Required explanation when sd_type is changed. Used to document why type was corrected and to detect gaming attempts. |
+| claiming_session_id | `text` | YES | - | Session ID of the Claude instance that owns this SD. Set by claimGuard, cleared by release_sd. Replaces is_working_on boolean. |
 
 ## Constraints
 
