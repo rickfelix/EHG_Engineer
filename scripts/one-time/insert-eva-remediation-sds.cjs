@@ -22,7 +22,7 @@ const children = [
     description: `Add blocking Chairman decisions at stages 10, 22, and 25 following the Stage 0 pattern.
 
 Pattern to follow: lib/eva/stage-zero/ — createOrReusePendingDecision() + waitForDecision()
-Files: lib/eva/stages/stage-10/, lib/eva/stages/stage-22/, lib/eva/stages/stage-25/
+Files: lib/eva/stage-templates/stage-10.js, lib/eva/stage-templates/stage-22.js, lib/eva/stage-templates/stage-25.js
 
 Findings addressed:
 - Vision CRIT-001: 3 missing Chairman blocking points (stages 10, 22, 25)
@@ -45,7 +45,7 @@ Files: lib/eva/stage-templates/stage-15.js, lib/eva/stage-templates/analysis-ste
 Action: Replace Resource Planning schema with Risk Register schema
 
 Findings addressed:
-- Blueprint CRIT-001: Stage 15 scope mismatch
+- Blueprint #19 CRITICAL: Stage 15 scope mismatch (Risk Register vs Resource Planning)
 - Theme 9: Stage 15 Scope Mismatch
 
 ${AUDIT_SOURCE}`,
@@ -92,7 +92,7 @@ Files: 25 stage analysis files in lib/eva/stage-templates/analysis-steps/
 Actions: Extract parseJSON() to lib/eva/utils/parse-json.js, update 25 imports
 
 Findings addressed:
-- Cross-Cutting CRIT: parseJSON x25 duplication
+- Cross-Cutting CRIT-001: 25 identical copies of parseJSON utility
 - Theme 6: Utility Duplication
 
 ${AUDIT_SOURCE}`,
@@ -106,22 +106,28 @@ ${AUDIT_SOURCE}`,
   {
     key: 'SD-EVA-FIX-DB-SCHEMA-001',
     title: 'Database Schema Normalization',
-    description: `Create 25 per-stage tables, 16 PostgreSQL ENUMs, tighten RLS policies.
+    description: `Create 25 per-stage tables, 16 PostgreSQL ENUMs, tighten RLS policies, add gate constraints and data contracts.
 
 Actions:
 1. Create 25 per-stage tables (e.g., eva_stage_1_draft_ideas through eva_stage_25_optimization)
 2. Create 16 PostgreSQL ENUM types (9 decision + 7 categorization)
 3. Replace USING (TRUE) RLS with role-based policies
+4. Add stage-specific gate constraint columns
+5. Add cross-stage data contract tracking (artifact dependency validation)
 
 Files: database/migrations/, RLS policies
 
 Findings addressed:
-- DB CRIT-001/002: Missing per-stage tables, no ENUMs
+- DB Schema CRIT-001: Missing per-stage tables (single JSONB column)
+- DB Schema CRIT-002: Missing 16 PostgreSQL ENUM types
+- DB Schema HIGH-001: USING (TRUE) RLS policies
+- DB Schema HIGH-002: Missing stage-specific gate constraints
+- DB Schema HIGH-003: Missing cross-stage data contracts
 - Theme 3: Database Schema
 - Theme 17: RLS Policies
 
 ${AUDIT_SOURCE}`,
-    scope: 'Create 25 per-stage tables, 16 PostgreSQL ENUMs, tighten RLS policies',
+    scope: 'Create 25 per-stage tables, 16 PostgreSQL ENUMs, tighten RLS policies, add gate constraints and data contracts',
     priority: 'critical',
     est_loc: 500,
     tier: 1,
@@ -141,9 +147,9 @@ Actions:
 Files: lib/eva/reality-gates.js, stage-12 local gate
 
 Findings addressed:
-- Engine CRIT-001: Gate 9→10 wrong artifact validation
-- Vision HIGH: Gate 20→21 in wrong position
-- Identity dual-gate: Stage 12 coordination
+- Engine CRITICAL-1: Reality gate 9→10 validates wrong artifacts
+- Vision HIGH-001: Gate 20→21 in wrong position
+- Identity HIGH G12-6: Stage 12 dual-gate coordination
 - Theme 8: Reality Gate Issues
 - Theme 15: Dual-Gate Coordination
 
@@ -161,14 +167,18 @@ ${AUDIT_SOURCE}`,
     description: `CLI arg validation, wrong column ref (decision-submitted.js), string-based error matching.
 
 Actions:
-1. Add CLI arg validation to eva-run.js (check next element exists, isn't a flag)
-2. Fix stage → lifecycle_stage column reference in decision-submitted.js
-3. Replace string-based error matching with error.code === '23505' in sd-completed.js
+1. Fix retry logic dead code in event-router.js:215 to check error.retryable flag
+2. Add CLI arg validation to eva-run.js (check next element exists, isn't a flag)
+3. Fix stage → lifecycle_stage column reference in decision-submitted.js
+4. Replace string-based error matching with error.code === '23505' in sd-completed.js
 
-Files: scripts/eva-run.js, lib/eva/event-bus/handlers/decision-submitted.js, lib/eva/event-bus/handlers/sd-completed.js
+Files: lib/eva/event-bus/event-router.js, scripts/eva-run.js, lib/eva/event-bus/handlers/decision-submitted.js, lib/eva/event-bus/handlers/sd-completed.js
 
 Findings addressed:
-- Infrastructure HIGH-001/002/003
+- Infrastructure CRIT-001: Retry logic dead code in event-router.js
+- Infrastructure CRIT-002: CLI argument parsing lacks validation
+- Infrastructure CRIT-003: Wrong column reference in decision-submitted.js
+- Infrastructure HIGH-005: String-based error matching
 - Theme 13: Infrastructure Bugs
 
 ${AUDIT_SOURCE}`,
@@ -192,15 +202,15 @@ Actions:
 Files: Stage 13 kill gate, Stage 23 kill gate, Stage 6 template/analysis
 
 Findings addressed:
-- Blueprint kill gate: Stage 13 missing priority check
-- Launch kill gate: Stage 23 missing upstream prerequisite
-- Engine risk threshold: Standardize to Vision v4.7
+- Engine CRITICAL-2: Risk threshold triple-inconsistency (values 1, 8, 10 vs spec 7, 9)
+- Blueprint #8: Stage 13 kill gate missing 'now'-priority check
+- Launch CC-3: Stage 23 kill gate missing Stage 22 prerequisite
 - Theme 10: Kill Gate Logic
 - Theme 20: Risk Threshold
 
 ${AUDIT_SOURCE}`,
     scope: 'Stage 13 priority check, Stage 23 upstream prerequisite, risk threshold standardization',
-    priority: 'high',
+    priority: 'critical',
     est_loc: 120,
     tier: 1,
     blocks: [],
@@ -221,7 +231,10 @@ Actions:
 Files: docs/guides/workflow/dossiers/
 
 Findings addressed:
-- Dossier CRIT-001/002/003: Missing dossiers, stale names, wrong status
+- Dossier CRITICAL-1: 20 missing dossier structures
+- Dossier CRITICAL-2: 4 stale stage names
+- Dossier CRITICAL-3: README claims 100% but only 5/25 exist
+- Dossier HIGH-1/2: Phase grouping and archive issues
 - Theme 14: Dossier System
 
 ${AUDIT_SOURCE}`,
@@ -237,24 +250,26 @@ ${AUDIT_SOURCE}`,
   {
     key: 'SD-EVA-FIX-TEMPLATE-ALIGN-001',
     title: 'Template Schema Alignment',
-    description: `Add missing fields/decision objects across Phases 3 (10 fields), 5 (13 fields), 6 (12+ fields); fix Stages 7-9, 14, 16 missing Architecture v2.0 fields.
+    description: `Add missing fields/decision objects across Phases 3 (10 fields), 5 (13 fields), 6 (12+ fields); fix Stages 6-9, 14, 16 missing Architecture v2.0 fields.
 
 Actions:
-1. Phase 3: Add 10 missing fields (narrativeExtension, namingStrategy, decision objects, etc.)
-2. Phase 5: Add 5 decision objects + 8 fields
-3. Phase 6: Add launchOutcome, ventureDecision, financialComparison objects
-4. Stages 7-9, 14, 16: Add Architecture v2.0 missing fields
+1. Phase 3 (Identity): Add 10 missing fields (narrativeExtension, namingStrategy, decision objects, etc.)
+2. Phase 5 (Build Loop): Add 5 decision objects + 8 fields
+3. Phase 6 (Launch): Add launchOutcome, ventureDecision, financialComparison objects; Stage 23 (launchType, successCriteria, rollbackTriggers); Stage 24 (AARRR trend fields)
+4. Stage 6: Add aggregate risk metrics, risk_source enum alignment, 3-factor scoring fields (Engine HIGH-1/2/5)
+5. Stages 7-9, 14, 16: Add Architecture v2.0 missing fields
 
-Files: Stage templates for 10, 11, 12, 17, 19, 20, 21, 22, 23, 24, 25 + Stages 7, 8, 9, 14, 16
+Files: Stage templates for 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 19, 20, 21, 22, 23, 24, 25
 
 Findings addressed:
-- Template-Analysis divergence (systemic)
-- Architecture v2.0 gaps
+- Template-Analysis divergence (systemic across all phases)
+- Architecture v2.0 gaps (Engine HIGH-1/2/5 for Stage 6)
+- Launch template gaps (Stage 23-24 missing fields)
 - Theme 1: Template-Analysis Divergence
 - Theme 12: Missing Arch v2.0 Fields
 
 ${AUDIT_SOURCE}`,
-    scope: 'Add missing fields/decision objects across Phases 3, 5, 6; fix Stages 7-9, 14, 16 Architecture v2.0 fields',
+    scope: 'Add missing fields/decision objects across Phases 3, 5, 6; fix Stages 6-9, 14, 16 Architecture v2.0 fields; add Stage 23-24 Launch gaps',
     priority: 'critical',
     est_loc: 350,
     tier: 2,
@@ -358,7 +373,7 @@ Dependency graph:
   Tier 1 (parallel): [1-CHAIRMAN] [2-STAGE15] [3-ERR/LOG] [4-UTILS] [5-DB] [6-GATES] [7-INFRA] [8-KILL] [9-DOSSIER]
   Tier 2 (after):     [10-TEMPLATES←3,4]  [11-ENUMS←4,5]  [12-POST-LAUNCH←3,7]
 
-All 20 audit themes mapped to at least one child SD. No findings left unaddressed.
+Coverage: All 20 major audit themes assigned to child SDs. All CRITICAL and HIGH findings explicitly addressed. Some MEDIUM/LOW findings (DB Schema MED-001/002/003, Cross-Cutting MED-001/002/003, Infrastructure MED-001-004) are not explicitly scoped — these may be addressed incidentally during related work or deferred to follow-up SDs.
 
 ${AUDIT_SOURCE}`,
       scope: 'Remediate all 157 findings from EVA Comprehensive Audit across 12 child SDs',
