@@ -543,7 +543,7 @@ export class BaseExecutor {
       .eq('sd_id', claimId)
       .in('computed_status', ['active']);
 
-    const activeClaim = (existingClaims || []).find(c => c.heartbeat_age_seconds < 300);
+    const activeClaim = (existingClaims || []).find(c => c.heartbeat_age_seconds < 900);
 
     if (activeClaim) {
       // Valid claim exists from parent conversation — just validate, don't replace

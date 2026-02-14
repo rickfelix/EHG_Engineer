@@ -339,13 +339,31 @@ export class HandoffOrchestrator {
    * @param {object} params - { sdId, sd }
    */
   async _executeDeferredPrdGeneration({ sdId, sd }) {
+    const title = sd.title || 'Technical Implementation';
+    const idToUse = sd.id || sdId;
+
+    // Inline mode (default): Claude Code IS the LLM — skip detached spawn.
+    // The detached process can't feed the prompt back to Claude Code,
+    // so PRD generation must happen inline in the conversation flow.
+    if (process.env.LLM_PRD_INLINE !== 'false') {
+      console.log('\n🤖 PRD GENERATION (Inline Mode)');
+      console.log('='.repeat(70));
+      console.log(`   SD: ${title}`);
+      console.log('   Method: Inline — Claude Code generates PRD directly');
+      console.log(`   SD ID: ${idToUse}`);
+      console.log('');
+      console.log('   ℹ️  Handoff recorded. PRD creation is the next workflow step.');
+      console.log(`   💡 Run: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+      console.log('      Claude Code will process the inline prompt and insert the PRD.');
+      console.log('');
+      return;
+    }
+
     const { spawn } = await import('child_process');
     const { join } = await import('path');
     const fs = await import('fs');
 
     const scriptPath = join(process.cwd(), 'scripts', 'add-prd-to-database.js');
-    const title = sd.title || 'Technical Implementation';
-    const idToUse = sd.id || sdId;
 
     console.log('\n🤖 PRD GENERATION (Detached with Verification)');
     console.log('='.repeat(70));

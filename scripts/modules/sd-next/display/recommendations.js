@@ -433,11 +433,11 @@ export function displayActiveSessions(activeSessions, currentSession) {
       const heartbeatAgeSeconds = Math.round(s.heartbeat_age_seconds || 0);
       const heartbeatAge = s.heartbeat_age_human || formatHeartbeatAgeDisplay(heartbeatAgeSeconds);
 
-      // Color code heartbeat: green <60s, yellow <180s, red >=180s (approaching 5min stale)
+      // Color code heartbeat: green <120s, yellow <600s, red >=600s (approaching 15min stale)
       let heartbeatColor = colors.green;
-      if (heartbeatAgeSeconds >= 180) {
+      if (heartbeatAgeSeconds >= 600) {
         heartbeatColor = colors.red;
-      } else if (heartbeatAgeSeconds >= 60) {
+      } else if (heartbeatAgeSeconds >= 120) {
         heartbeatColor = colors.yellow;
       }
 
