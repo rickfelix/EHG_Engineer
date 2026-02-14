@@ -292,8 +292,54 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       });
     }
 
+    // When no action items from issues or quality gaps, derive from gate scores and git context
     if (actionItems.length === 0) {
-      actionItems.push({ action: `All objectives met for "${sd.title}" — monitor for regressions in next SD cycle`, is_boilerplate: false });
+      // Gate-derived: find lowest-scoring gates and recommend specific improvements
+      const gateEntries = Object.entries(gateResults)
+        .filter(([, v]) => v && typeof v.score === 'number' && typeof v.max_score === 'number')
+        .map(([name, v]) => ({ name, score: v.score, max: v.max_score, pct: Math.round((v.score / Math.max(v.max_score, 1)) * 100) }))
+        .sort((a, b) => a.pct - b.pct);
+
+      for (const gate of gateEntries.slice(0, 2)) {
+        if (gate.pct < 100) {
+          actionItems.push({
+            action: `Improve ${gate.name} gate score from ${gate.pct}% (${gate.score}/${gate.max}) — review scoring criteria and add missing evidence for ${sd.sd_key || sdId}`,
+            is_boilerplate: false
+          });
+        }
+      }
+
+      // Git-context-derived: recommend tests if code changed without test files
+      if (gitContext.filesChanged.length > 0) {
+        const testFiles = gitContext.filesChanged.filter(f => /\.(test|spec)\.[jt]sx?$/.test(f) || f.includes('__tests__'));
+        const srcFiles = gitContext.filesChanged.filter(f => !testFiles.includes(f) && /\.[jt]sx?$/.test(f));
+        if (srcFiles.length > 0 && testFiles.length === 0) {
+          const topSrc = srcFiles.slice(0, 3).map(f => f.split('/').pop()).join(', ');
+          actionItems.push({
+            action: `Add unit tests for modified source files (${topSrc}) — ${srcFiles.length} file(s) changed without corresponding test coverage`,
+            is_boilerplate: false
+          });
+        }
+      }
+
+      // Objective-derived: verify each objective is fully addressed
+      if (objectives.length > 0 && actionItems.length < 5) {
+        const topObj = typeof objectives[0] === 'string' ? objectives[0] : objectives[0]?.objective || objectives[0]?.title || '';
+        if (topObj) {
+          actionItems.push({
+            action: `Validate that objective "${safeTruncate(topObj, 80)}" has measurable evidence of completion in ${sd.sd_key || sdId}`,
+            is_boilerplate: false
+          });
+        }
+      }
+
+      // Final fallback: at least one concrete item referencing the SD
+      if (actionItems.length === 0) {
+        actionItems.push({
+          action: `Review ${sd.sd_key || sdId} implementation against PRD acceptance criteria and document any gaps for follow-up`,
+          is_boilerplate: false
+        });
+      }
     }
 
     // Build discovered_issues metadata
@@ -345,7 +391,23 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       within_scope: true,
       success_patterns: [`EXEC quality: ${qualityScore}%`],
       failure_patterns: whatNeedsImprovement.slice(0, 3),
-      improvement_areas: whatNeedsImprovement.slice(0, 3),
+      improvement_areas: whatNeedsImprovement.slice(0, 3).map(item => {
+        // Enrich each improvement area with root cause analysis
+        if (item.includes('Test coverage')) {
+          return `${item}. Root cause: test evidence scored ${testRating}/5 — gate expects comprehensive scenario coverage including edge cases and error paths. Remediation: add explicit test files covering each PRD acceptance criterion, targeting ≥4/5 on next iteration.`;
+        }
+        if (item.includes('Implementation fidelity')) {
+          return `${item}. Root cause: PRD alignment scored ${implRating}/5 — implementation may have deviated from functional requirements or missed acceptance criteria. Remediation: cross-reference each FR in the PRD against delivered code and close gaps.`;
+        }
+        if (item.includes('Sub-agent orchestration')) {
+          return `${item}. Root cause: sub-agent usage scored ${subAgentRating}/5 — required sub-agents may have been skipped or invoked without the Five-Point Brief standard. Remediation: verify all trigger-keyword sub-agents were invoked per CLAUDE_CORE.md and review prompt quality.`;
+        }
+        if (item.includes('No specific issues')) {
+          return `${item}. All gates passed above threshold — focus on maintaining quality by documenting implementation patterns for reuse in similar SDs.`;
+        }
+        // Issue-pattern items: already contain pattern_id and summary
+        return `${item}. Remediation: check issue_patterns table for proven_solutions and apply the highest-rated fix to prevent recurrence.`;
+      }),
       protocol_improvements: discoveredIssues.length > 0
         ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
         : null,
