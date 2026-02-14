@@ -20,10 +20,9 @@ export function registerGate3Validators(registry) {
     const sectionAScore = sectionAFromSections.score ??
       result?.gate_scores?.recommendation_adherence ?? 0;
 
-    // Gate 3 Section A is scored out of 30, convert to percentage
-    const normalizedScore = result?.gate_scores?.recommendation_adherence !== undefined
-      ? Math.round((result.gate_scores.recommendation_adherence / 30) * 100)
-      : sectionAScore;
+    // Gate 3 Section A is scored out of 30, always normalize to percentage
+    const rawScore = result?.gate_scores?.recommendation_adherence ?? sectionAScore;
+    const normalizedScore = Math.round((rawScore / 30) * 100);
     const passed = result?.passed ?? (normalizedScore >= 70);
 
     return {
@@ -45,10 +44,9 @@ export function registerGate3Validators(registry) {
     const sectionBScore = sectionBFromSections.score ??
       result?.gate_scores?.implementation_quality ?? 0;
 
-    // Gate 3 Section B is scored out of 30, convert to percentage
-    const normalizedScore = result?.gate_scores?.implementation_quality !== undefined
-      ? Math.round((result.gate_scores.implementation_quality / 30) * 100)
-      : sectionBScore;
+    // Gate 3 Section B is scored out of 30, always normalize to percentage
+    const rawScore = result?.gate_scores?.implementation_quality ?? sectionBScore;
+    const normalizedScore = Math.round((rawScore / 30) * 100);
     const passed = result?.passed ?? (normalizedScore >= 70);
 
     return {
@@ -70,10 +68,9 @@ export function registerGate3Validators(registry) {
     const sectionCScore = sectionCFromSections.score ??
       result?.gate_scores?.traceability_mapping ?? 0;
 
-    // Gate 3 Section C is scored out of 25, convert to percentage
-    const normalizedScore = result?.gate_scores?.traceability_mapping !== undefined
-      ? Math.round((result.gate_scores.traceability_mapping / 25) * 100)
-      : sectionCScore;
+    // Gate 3 Section C is scored out of 25, always normalize to percentage
+    const rawScore = result?.gate_scores?.traceability_mapping ?? sectionCScore;
+    const normalizedScore = Math.round((rawScore / 25) * 100);
     const passed = result?.passed ?? (normalizedScore >= 70);
 
     return {
@@ -95,10 +92,9 @@ export function registerGate3Validators(registry) {
     const sectionDScore = sectionDFromSections.score ??
       result?.gate_scores?.sub_agent_effectiveness ?? 0;
 
-    // Gate 3 Section D is scored out of 10, convert to percentage
-    const normalizedScore = result?.gate_scores?.sub_agent_effectiveness !== undefined
-      ? Math.round((result.gate_scores.sub_agent_effectiveness / 10) * 100)
-      : sectionDScore;
+    // Gate 3 Section D is scored out of 10, always normalize to percentage
+    const rawScore = result?.gate_scores?.sub_agent_effectiveness ?? sectionDScore;
+    const normalizedScore = Math.round((rawScore / 10) * 100);
 
     return {
       passed: true, // Non-critical
@@ -119,10 +115,9 @@ export function registerGate3Validators(registry) {
     const sectionEScore = sectionEFromSections.score ??
       result?.gate_scores?.lessons_captured ?? 0;
 
-    // Gate 3 Section E is scored out of 5, convert to percentage
-    const normalizedScore = result?.gate_scores?.lessons_captured !== undefined
-      ? Math.round((result.gate_scores.lessons_captured / 5) * 100)
-      : sectionEScore;
+    // Gate 3 Section E is scored out of 5, always normalize to percentage
+    const rawScore = result?.gate_scores?.lessons_captured ?? sectionEScore;
+    const normalizedScore = Math.round((rawScore / 5) * 100);
 
     return {
       passed: true, // Non-critical

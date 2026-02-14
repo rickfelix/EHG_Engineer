@@ -216,7 +216,7 @@ export function registerGate2Validators(registry) {
     if (!['PASS', 'CONDITIONAL_PASS'].includes(execution.verdict)) {
       return {
         passed: false,
-        score: 30,
+        score: 0,
         max_score: 100,
         issues: [`${requiredAgent} sub-agent verdict: ${execution.verdict}, expected PASS or CONDITIONAL_PASS`]
       };
