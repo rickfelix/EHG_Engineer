@@ -48,7 +48,9 @@ const EXIT = Object.freeze({
 function getArg(name) {
   const idx = process.argv.indexOf(`--${name}`);
   if (idx === -1) return undefined;
-  return process.argv[idx + 1];
+  const next = process.argv[idx + 1];
+  if (next === undefined || next.startsWith('--')) return undefined;
+  return next;
 }
 
 function hasFlag(name) {

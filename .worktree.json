@@ -1,6 +1,6 @@
 {
-  "sdKey": "SD-EVA-QA-AUDIT-BUILDLOOP-001",
-  "expectedBranch": "feat/SD-EVA-QA-AUDIT-BUILDLOOP-001",
-  "createdAt": "2026-02-14T16:24:28.954Z",
+  "sdKey": "SD-EVA-FIX-INFRA-BUGS-001",
+  "expectedBranch": "feat/SD-EVA-FIX-INFRA-BUGS-001",
+  "createdAt": "2026-02-14T21:49:16.491Z",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
