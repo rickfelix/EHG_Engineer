@@ -203,6 +203,25 @@ describe('stage-20.js - Quality Assurance template', () => {
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('known_defects[0].status'))).toBe(true);
     });
+    it('should fail for defect with invalid severity enum value', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ description: 'Defect 1', severity: 'urgent', status: 'open' }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].severity'))).toBe(true);
+    });
+
+    it('should fail for defect with invalid status enum value', () => {
+      const invalidData = {
+        test_suites: [{ name: 'Unit Tests', total_tests: 100, passing_tests: 100 }],
+        known_defects: [{ description: 'Defect 1', severity: 'low', status: 'closed' }],
+      };
+      const result = stage20.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('known_defects[0].status'))).toBe(true);
+    });
   });
 
   describe('computeDerived() - Test metrics', () => {

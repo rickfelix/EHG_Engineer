@@ -225,6 +225,16 @@ describe('stage-17.js - Pre-Build Checklist template', () => {
       expect(result.errors.some(e => e.includes('blockers[0].severity'))).toBe(true);
     });
 
+    it('should fail for blocker with invalid severity enum value', () => {
+      const invalidData = {
+        checklist: validChecklist,
+        blockers: [{ description: 'Test', severity: 'urgent', mitigation: 'Escalate' }],
+      };
+      const result = stage17.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('blockers[0].severity'))).toBe(true);
+    });
+
     it('should fail for blocker missing mitigation', () => {
       const invalidData = {
         checklist: validChecklist,
