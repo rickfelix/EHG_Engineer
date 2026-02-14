@@ -441,6 +441,48 @@ describe('stage-23.js - Launch Execution template', () => {
       expect(result.reasons).toHaveLength(1);
       expect(result.reasons[0].type).toBe('no_go_decision');
     });
+
+    it('should kill when stage22 promotion gate has not passed (Launch CC-3)', () => {
+      const result = evaluateKillGate({
+        go_decision: 'go',
+        incident_response_plan: 'Incident response plan details',
+        monitoring_setup: 'Monitoring setup details',
+        rollback_plan: 'Rollback plan details',
+        stage22Data: {
+          promotion_gate: { pass: false, blockers: ['Test coverage below 80%', 'Integration failing'] },
+        },
+      });
+      expect(result.decision).toBe('kill');
+      expect(result.blockProgression).toBe(true);
+      const s22Reason = result.reasons.find(r => r.type === 'stage22_not_complete');
+      expect(s22Reason).toBeDefined();
+      expect(s22Reason.message).toContain('2 blocker(s)');
+    });
+
+    it('should pass when stage22 promotion gate has passed', () => {
+      const result = evaluateKillGate({
+        go_decision: 'go',
+        incident_response_plan: 'Incident response plan details',
+        monitoring_setup: 'Monitoring setup details',
+        rollback_plan: 'Rollback plan details',
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [], warnings: [] },
+        },
+      });
+      expect(result.decision).toBe('pass');
+      expect(result.blockProgression).toBe(false);
+    });
+
+    it('should not check stage22 when stage22Data is not provided', () => {
+      const result = evaluateKillGate({
+        go_decision: 'go',
+        incident_response_plan: 'Incident response plan details',
+        monitoring_setup: 'Monitoring setup details',
+        rollback_plan: 'Rollback plan details',
+      });
+      expect(result.decision).toBe('pass');
+      expect(result.reasons.some(r => r.type === 'stage22_not_complete')).toBe(false);
+    });
   });
 
   describe('computeDerived() - Kill gate integration', () => {
@@ -487,6 +529,23 @@ describe('stage-23.js - Launch Execution template', () => {
       expect(result.decision).toBe('kill');
       expect(result.blockProgression).toBe(true);
       expect(result.reasons.length).toBeGreaterThan(0);
+    });
+
+    it('should pass prerequisites stage22Data to kill gate', () => {
+      const data = {
+        go_decision: 'go',
+        incident_response_plan: 'Incident response plan details',
+        monitoring_setup: 'Monitoring setup details',
+        rollback_plan: 'Rollback plan details',
+        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
+        launch_date: '2026-03-01',
+      };
+      const prerequisites = {
+        stage22: { promotion_gate: { pass: false, blockers: ['Not ready'] } },
+      };
+      const result = stage23.computeDerived(data, prerequisites);
+      expect(result.decision).toBe('kill');
+      expect(result.reasons.some(r => r.type === 'stage22_not_complete')).toBe(true);
     });
 
     it('should preserve original data fields', () => {
