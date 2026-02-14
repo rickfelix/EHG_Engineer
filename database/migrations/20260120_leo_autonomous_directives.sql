@@ -84,7 +84,7 @@ INSERT INTO leo_autonomous_directives (directive_code, title, content, enforceme
 -- Directive 5: Protocol Familiarization (HANDOFF_START)
 ('PROTOCOL_FAMILIARIZATION',
  'Protocol Familiarization',
- 'At each handoff point, familiarize yourself with and read the LEO protocol documentation for the relevant phase. Load CLAUDE_LEAD.md for LEAD phase, CLAUDE_PLAN.md for PLAN phase, CLAUDE_EXEC.md for EXEC phase.',
+ 'At each handoff point, familiarize yourself with and read the LEO protocol documentation for the relevant phase. Load CLAUDE_LEAD_DIGEST.md for LEAD phase, CLAUDE_PLAN_DIGEST.md for PLAN phase, CLAUDE_EXEC_DIGEST.md for EXEC phase.',
  'HANDOFF_START',
  false,
  ARRAY['LEAD', 'PLAN', 'EXEC'],

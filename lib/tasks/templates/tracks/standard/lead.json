@@ -7,7 +7,7 @@
       "id_template": "{{SD_ID}}-LEAD-INIT",
       "subject": "LEAD Phase Initialized: {{SD_TITLE}}",
       "activeForm": "Initializing LEAD phase",
-      "description": "Load CLAUDE_LEAD.md identity and SD context.",
+      "description": "Load CLAUDE_LEAD_DIGEST.md identity and SD context.",
       "blockedBy": [],
       "metadata": {
         "category": "init",
