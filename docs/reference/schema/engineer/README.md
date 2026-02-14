@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-14T03:53:19.552Z
-**Tables**: 477
+**Generated**: 2026-02-14T05:39:23.270Z
+**Tables**: 479
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (477)
+## All Tables (479)
 
 ### LEO Protocol
 
@@ -501,12 +501,14 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_compliance_artifacts](tables/venture_compliance_artifacts.md)
 - [venture_compliance_progress](tables/venture_compliance_progress.md)
 - [venture_decisions](tables/venture_decisions.md)
+- [venture_dependencies](tables/venture_dependencies.md)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
 - [venture_nursery](tables/venture_nursery.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
+- [venture_templates](tables/venture_templates.md)
 - [venture_token_budgets](tables/venture_token_budgets.md)
 - [venture_token_ledger](tables/venture_token_ledger.md)
 - [venture_tool_quotas](tables/venture_tool_quotas.md)
