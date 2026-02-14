@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-14T13:45:39.448Z -->
-<!-- git_commit: d0e85a94 -->
-<!-- db_snapshot_hash: 22ccf93283573780 -->
+<!-- generated_at: 2026-02-14T16:16:12.112Z -->
+<!-- git_commit: 4b3a9ae3 -->
+<!-- db_snapshot_hash: 7edfb580cb18d5e3 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
@@ -296,39 +296,6 @@ If documentation elsewhere conflicts with this truth table:
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
 
-## Global Negative Constraints
-
-These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
-
-### NC-001: No Markdown Files as Source of Truth
-❌ Creating/updating .md files to store requirements, PRDs, or status
-✅ Use database tables via scripts
-
-### NC-002: No Bypassing Process Scripts
-❌ Directly inserting into database tables
-✅ Always use handoff.js, add-prd-to-database.js
-
-### NC-003: No Guessing File Locations
-❌ Assuming file paths based on naming conventions
-✅ Use Glob/Grep to find exact paths, read files before editing
-
-### NC-004: No Implementation Without Reading
-❌ Starting to code before reading existing implementation
-✅ Read ≥5 relevant files before writing any code
-
-### NC-005: No Workarounds Before Root Cause Analysis
-❌ Implementing quick fixes without understanding why something fails
-✅ Identify root cause first, then fix
-
-### NC-006: No Background Execution for Validation
-❌ Using `run_in_background: true` for handoff/validation commands
-✅ Run all LEO process scripts inline with appropriate timeouts
-
-**Affected Commands** (MUST run inline):
-- `node scripts/handoff.js execute ...`
-- `node scripts/add-prd-to-database.js ...`
-- `node scripts/phase-preflight.js ...`
-
 ## AUTO-PROCEED Mode
 
 **AUTO-PROCEED** enables fully autonomous LEO Protocol execution, allowing Claude to work through SD workflows without manual confirmation at each phase transition.
@@ -547,6 +514,39 @@ Perform 5-whys analysis and recommend systematic fix."
 | D29 | Resume reminder | Show what was happening before resuming |
 
 *Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
+
+## Global Negative Constraints
+
+These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
+
+### NC-001: No Markdown Files as Source of Truth
+❌ Creating/updating .md files to store requirements, PRDs, or status
+✅ Use database tables via scripts
+
+### NC-002: No Bypassing Process Scripts
+❌ Directly inserting into database tables
+✅ Always use handoff.js, add-prd-to-database.js
+
+### NC-003: No Guessing File Locations
+❌ Assuming file paths based on naming conventions
+✅ Use Glob/Grep to find exact paths, read files before editing
+
+### NC-004: No Implementation Without Reading
+❌ Starting to code before reading existing implementation
+✅ Read ≥5 relevant files before writing any code
+
+### NC-005: No Workarounds Before Root Cause Analysis
+❌ Implementing quick fixes without understanding why something fails
+✅ Identify root cause first, then fix
+
+### NC-006: No Background Execution for Validation
+❌ Using `run_in_background: true` for handoff/validation commands
+✅ Run all LEO process scripts inline with appropriate timeouts
+
+**Affected Commands** (MUST run inline):
+- `node scripts/handoff.js execute ...`
+- `node scripts/add-prd-to-database.js ...`
+- `node scripts/phase-preflight.js ...`
 
 ## Sub-Agent Invocation Quality Standard
 
@@ -826,5 +826,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-02-14 8:45:39 AM*
+*DIGEST generated: 2026-02-14 11:16:12 AM*
 *Protocol: 4.3.3*

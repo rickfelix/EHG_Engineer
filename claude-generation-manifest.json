@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-02-14T13:45:39.448Z",
-  "git_commit": "d0e85a94",
-  "db_snapshot_hash": "22ccf93283573780",
+  "generated_at": "2026-02-14T16:16:12.112Z",
+  "git_commit": "4b3a9ae3",
+  "db_snapshot_hash": "7edfb580cb18d5e3",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 14699,
-      "estimated_tokens": 3675,
-      "content_hash": "7428401d0d97d720",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE.md"
+      "chars": 14714,
+      "estimated_tokens": 3679,
+      "content_hash": "b714a48fe519ee26",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 78329,
-      "estimated_tokens": 19583,
-      "content_hash": "dcd513bf6344230a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_CORE.md"
+      "chars": 78462,
+      "estimated_tokens": 19616,
+      "content_hash": "e97e6a5d6d8ca466",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 58834,
-      "estimated_tokens": 14709,
-      "content_hash": "db4150e8df8dcf03",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_LEAD.md"
+      "chars": 58919,
+      "estimated_tokens": 14730,
+      "content_hash": "4b0fd3d587d419b3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 90650,
+      "chars": 90651,
       "estimated_tokens": 22663,
-      "content_hash": "e6c6db07056e5271",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_PLAN.md"
+      "content_hash": "a08190bb5ddadc51",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 69168,
-      "estimated_tokens": 17292,
-      "content_hash": "b0103a0475192c4c",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_EXEC.md"
+      "chars": 69169,
+      "estimated_tokens": 17293,
+      "content_hash": "5c73f55187fc2975",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 6344,
-      "estimated_tokens": 1586,
-      "content_hash": "7cf37e670b968eec",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_DIGEST.md"
+      "chars": 6359,
+      "estimated_tokens": 1590,
+      "content_hash": "3c7b11647a00550a",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 36446,
+      "chars": 36447,
       "estimated_tokens": 9112,
-      "content_hash": "65f1ebb4ba199afb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "b188a846dc990d53",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 6931,
+      "chars": 6932,
       "estimated_tokens": 1733,
-      "content_hash": "3dc520248ef2a6f2",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "efc3c3f5298ec3ee",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 14901,
+      "chars": 14902,
       "estimated_tokens": 3726,
-      "content_hash": "7be08eb974e28e9d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "0b9d6a4e565aa6c7",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 18621,
+      "chars": 18622,
       "estimated_tokens": 4656,
-      "content_hash": "cc5af729b6b32de5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-CLAIM-MANAGEMENT-COMMAND-001\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "09f0c8f7dabe4a0d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }

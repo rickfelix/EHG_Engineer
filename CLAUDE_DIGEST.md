@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-14T13:45:39.448Z -->
-<!-- git_commit: d0e85a94 -->
-<!-- db_snapshot_hash: 22ccf93283573780 -->
+<!-- generated_at: 2026-02-14T16:16:12.112Z -->
+<!-- git_commit: 4b3a9ae3 -->
+<!-- db_snapshot_hash: 7edfb580cb18d5e3 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -113,7 +113,7 @@ This command provides:
 ### SD Status Badge Legend
 | Badge | Meaning | Workable? |
 |-------|---------|-----------|
-| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD.md and run LEAD-TO-PLAN. |
+| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD_DIGEST.md and run LEAD-TO-PLAN. |
 | **READY** | Past LEAD phase, dependencies resolved | **YES** - Proceed to next handoff in workflow |
 | **PLANNING** | In PLAN phase (PRD creation) | **YES** - Continue planning work |
 | **EXEC N%** | In EXEC phase with progress | **YES** - Continue implementation |
@@ -123,7 +123,7 @@ This command provides:
 ### After Running sd:next
 1. If SD marked "CONTINUE" (is_working_on=true) and not CLAIMED by another session → Resume that SD
 2. If no active SD → Pick the highest-ranked **workable** SD (any status except BLOCKED or CLAIMED)
-3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
+3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD_DIGEST.md.
 4. READY SDs have already been approved — proceed to the next handoff in their workflow.
 5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
 
@@ -145,5 +145,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-02-14 8:45:39 AM*
+*DIGEST generated: 2026-02-14 11:16:12 AM*
 *Protocol: 4.3.3*
