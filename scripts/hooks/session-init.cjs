@@ -242,10 +242,11 @@ async function initializeSessionState() {
     initialized_at: new Date().toISOString(),
     last_activity: new Date().toISOString(),
 
-    // SD context
+    // SD context (SD-LEO-INFRA-CLAIM-GUARD-001: claim_verified=false until claimGuard runs)
     current_sd: currentSD,
     current_phase: currentPhase,
     detected_from: currentSD ? 'git_branch' : null,
+    claim_verified: false, // Must be verified via claimGuard before work begins
 
     // Git context
     git: gitContext,

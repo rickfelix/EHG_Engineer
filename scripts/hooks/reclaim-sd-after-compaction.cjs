@@ -168,46 +168,20 @@ async function main() {
     }
   }
 
-  // Attempt to claim the SD for the current session
+  // SD-LEO-INFRA-CLAIM-GUARD-001: Use centralized claimGuard (no fallbacks)
   try {
-    // Get track info
-    const { data: sdData } = await supabase
-      .from('sd_baseline_items')
-      .select('track')
-      .eq('sd_id', sdKey)
-      .single();
+    const { claimGuard } = require('../../lib/claim-guard.cjs');
+    const result = await claimGuard(sdKey, currentSessionId);
 
-    const track = sdData?.track || 'STANDALONE';
-
-    const { data, error } = await supabase.rpc('claim_sd', {
-      p_sd_id: sdKey,
-      p_session_id: currentSessionId,
-      p_track: track
-    });
-
-    if (error) {
-      console.log(`[RECLAIM] Claim failed: ${error.message}`);
-      // Fallback: direct update if RPC fails
-      const { error: updateError } = await supabase
-        .from('claude_sessions')
-        .update({ sd_id: sdKey })
-        .eq('session_id', currentSessionId);
-
-      if (updateError) {
-        console.log(`[RECLAIM] Direct update also failed: ${updateError.message}`);
-        process.exit(1);
+    if (!result.success) {
+      console.log(`[RECLAIM] ❌ Claim guard rejected: ${result.error}`);
+      if (result.owner) {
+        console.log(`[RECLAIM]    Owner: ${result.owner.session_id} (${result.owner.heartbeat_age_human})`);
       }
-      console.log(`[RECLAIM] ✅ SD ${sdKey} claimed via direct update`);
-    } else {
-      console.log(`[RECLAIM] ✅ SD ${sdKey} successfully re-claimed for session ${currentSessionId}`);
+      process.exit(1);
     }
 
-    // Update is_working_on flag
-    await supabase
-      .from('strategic_directives_v2')
-      .update({ is_working_on: true })
-      .eq('sd_key', sdKey);
-
+    console.log(`[RECLAIM] ✅ SD ${sdKey} re-claimed via claimGuard (${result.claim.status})`);
   } catch (err) {
     console.log(`[RECLAIM] Error during claim: ${err.message}`);
     process.exit(1);

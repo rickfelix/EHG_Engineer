@@ -86,27 +86,24 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
  * Get SD marked as "working on", cross-referenced with session claims
  */
 async function getWorkingOnSD(supabase, sessionContext = {}) {
+  // SD-LEO-INFRA-CLAIM-GUARD-001: Use claiming_session_id as primary, fall back to is_working_on
   const { data: workingOn } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, progress_percentage')
+    .select('id, sd_key, title, progress_percentage, claiming_session_id')
     .eq('is_active', true)
-    .eq('is_working_on', true)
+    .or('claiming_session_id.not.is.null,is_working_on.eq.true')
     .lt('progress_percentage', 100)
     .single();
 
   if (!workingOn) return null;
 
-  // Cross-reference with session claims to detect multi-session conflicts
-  const { claimedSDs, currentSession } = sessionContext;
-  if (claimedSDs) {
-    const sdId = workingOn.sd_key || workingOn.id;
-    const claimingSessionId = claimedSDs.get(sdId) || claimedSDs.get(workingOn.id);
-    const currentSessionId = currentSession?.session_id;
+  // Use claiming_session_id directly (no need to cross-reference session claims map)
+  const { currentSession } = sessionContext;
+  const currentSessionId = currentSession?.session_id;
 
-    if (claimingSessionId && claimingSessionId !== currentSessionId) {
-      workingOn._claimedByOther = true;
-      workingOn._claimingSessionId = claimingSessionId;
-    }
+  if (workingOn.claiming_session_id && workingOn.claiming_session_id !== currentSessionId) {
+    workingOn._claimedByOther = true;
+    workingOn._claimingSessionId = workingOn.claiming_session_id;
   }
 
   return workingOn;
@@ -170,18 +167,14 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
   for (const item of baselineItems) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, dependencies, is_active, metadata')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, dependencies, is_active, metadata, claiming_session_id')
       .or(`sd_key.eq.${item.sd_id},id.eq.${item.sd_id}`)
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
-      // Skip SDs claimed by OTHER sessions
-      if (claimedSDs) {
-        const sdId = sd.sd_key || sd.id;
-        const claimingSession = claimedSDs.get(sdId) || claimedSDs.get(sd.id);
-        if (claimingSession && claimingSession !== currentSessionId) {
-          continue;
-        }
+      // SD-LEO-INFRA-CLAIM-GUARD-001: Skip SDs claimed by OTHER sessions (use claiming_session_id)
+      if (sd.claiming_session_id && sd.claiming_session_id !== currentSessionId) {
+        continue;
       }
 
       const depsResolved = await checkDependenciesResolved(supabase, sd.dependencies);
