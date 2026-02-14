@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-14T01:06:50.987Z
-**Tables**: 469
+**Generated**: 2026-02-14T02:43:03.595Z
+**Tables**: 477
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (469)
+## All Tables (477)
 
 ### LEO Protocol
 
@@ -213,6 +213,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brainstorm_sessions](tables/brainstorm_sessions.md)
 - [brand_genome_submissions](tables/brand_genome_submissions.md)
 - [brand_variants](tables/brand_variants.md)
+- [campaign_content](tables/campaign_content.md)
 - [capital_transactions](tables/capital_transactions.md)
 - [chairman_approval_requests](tables/chairman_approval_requests.md)
 - [chairman_constraints](tables/chairman_constraints.md)
@@ -224,6 +225,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [chairman_overrides](tables/chairman_overrides.md)
 - [chairman_preferences](tables/chairman_preferences.md)
 - [chairman_settings](tables/chairman_settings.md)
+- [channel_budgets](tables/channel_budgets.md)
 - [circuit_breaker_blocks](tables/circuit_breaker_blocks.md)
 - [claude_sessions](tables/claude_sessions.md)
 - [companies](tables/companies.md)
@@ -255,6 +257,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [crewai_flows](tables/crewai_flows.md)
 - [cross_agent_correlations](tables/cross_agent_correlations.md)
 - [cultural_design_styles](tables/cultural_design_styles.md)
+- [daily_rollups](tables/daily_rollups.md)
 - [db_agent_config](tables/db_agent_config.md)
 - [db_agent_invocations](tables/db_agent_invocations.md)
 - [debate_arguments](tables/debate_arguments.md)
@@ -347,7 +350,12 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
 - [market_segments](tables/market_segments.md)
+- [marketing_attribution](tables/marketing_attribution.md)
+- [marketing_campaigns](tables/marketing_campaigns.md)
+- [marketing_channels](tables/marketing_channels.md)
+- [marketing_content](tables/marketing_content.md)
 - [marketing_content_queue](tables/marketing_content_queue.md)
+- [marketing_content_variants](tables/marketing_content_variants.md)
 - [model_usage_log](tables/model_usage_log.md)
 - [modeling_requests](tables/modeling_requests.md)
 - [naming_favorites](tables/naming_favorites.md)
