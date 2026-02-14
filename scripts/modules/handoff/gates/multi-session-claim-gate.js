@@ -30,6 +30,10 @@ import os from 'os';
 // Import from single source of truth to prevent duplication cascade
 import { getTerminalId } from '../../../../lib/terminal-identity.js';
 
+// RCA-TERMINAL-IDENTITY-CHAIN-BREAK-001: Three-case terminal_id matching
+// Handles ambiguous case where one terminal_id has PID suffix and the other doesn't
+import { isSameConversation } from '../../../../lib/claim-guard.mjs';
+
 /**
  * Validate that no session on another machine has claimed this SD
  *
@@ -77,13 +81,27 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
     // These share the same hostname AND terminal_id (based on parent PID).
     // Two DIFFERENT Claude Code conversations on the same machine have the same
     // hostname but DIFFERENT terminal_ids — those ARE conflicts.
+    //
+    // RCA-TERMINAL-IDENTITY-CHAIN-BREAK-001: When findClaudeCodePid() fails
+    // (e.g., npm run subprocess), terminal_id falls back to SSE-port-only
+    // (win-cc-{port} instead of win-cc-{port}-{pid}). Use isSameConversation()
+    // for three-case matching: true/false/'ambiguous'.
     const otherClaims = (data || []).filter(claim => {
       // Exact session ID match → always exclude (backward compat)
       if (claim.session_id === currentSessionId) return false;
-      // Same hostname + same terminal_id → same conversation → not a conflict
-      if (claim.hostname && claim.hostname === currentHostname &&
-          claim.terminal_id && claim.terminal_id === currentTerminalId) {
-        return false;
+      // Same hostname check first
+      if (claim.hostname && claim.hostname === currentHostname) {
+        // Use three-case terminal_id matching from claim-guard
+        const sameConvo = isSameConversation(currentTerminalId, claim.terminal_id);
+        if (sameConvo === true) return false; // Definitely same conversation
+        if (sameConvo === 'ambiguous') {
+          // Same SSE port, one missing PID suffix — likely same conversation
+          // For the multi-session gate, treat ambiguous as same-conversation (fail-open)
+          // because blocking a handoff from the same conversation is worse than allowing it
+          console.log(`   ℹ️  Ambiguous terminal_id match (${currentTerminalId} vs ${claim.terminal_id}) — treating as same conversation`);
+          return false;
+        }
+        // sameConvo === false → different conversation on same machine → conflict
       }
       return true;
     });
@@ -93,7 +111,7 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       const sameConversationClaims = (data || []).filter(
         claim => claim.session_id !== currentSessionId &&
                  claim.hostname === currentHostname &&
-                 claim.terminal_id === currentTerminalId
+                 isSameConversation(currentTerminalId, claim.terminal_id) !== false
       );
       if (sameConversationClaims.length > 0) {
         console.log(`   ✅ SD claimed by same-conversation session (${sameConversationClaims[0].session_id?.substring(0, 24)}...) — allowing`);
