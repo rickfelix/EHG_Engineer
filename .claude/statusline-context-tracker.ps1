@@ -7,7 +7,7 @@
 #   - Wide traffic signal bar (green=running / red=idle)
 #   - Server-authoritative token counting (via current_usage)
 #   - Cache-aware calculations (includes cache_read tokens)
-#   - USABLE context percentage (accounts for 45K auto-compact buffer)
+#   - USABLE context percentage (100% = auto-compaction threshold at 80% of window)
 #   - Threshold alerts (WARNING @ 60%, CRITICAL @ 80%, EMERGENCY @ 95%)
 #   - Compaction detection (non-monotonic usage)
 #
@@ -31,7 +31,7 @@ $StateFile = "$LogDir\.context-state.json"
 
 # Thresholds
 $ContextWindow = 200000
-$AutocompactBuffer = 45000
+$AutocompactPct = 80          # Compaction triggers at this % of context window
 $WarningThreshold = 60
 $CriticalThreshold = 80
 $EmergencyThreshold = 95
@@ -81,9 +81,9 @@ $outputTokens = if ($currentUsage.output_tokens) { [int]$currentUsage.output_tok
 $cacheCreation = if ($currentUsage.cache_creation_input_tokens) { [int]$currentUsage.cache_creation_input_tokens } else { 0 }
 $cacheRead = if ($currentUsage.cache_read_input_tokens) { [int]$currentUsage.cache_read_input_tokens } else { 0 }
 
-# Calculate context usage
+# Calculate context usage — progress bar fills to 100% at the auto-compaction threshold
 $contextUsed = $inputTokens + $cacheCreation + $cacheRead
-$usableContext = $contextSize - $AutocompactBuffer
+$usableContext = [int]($contextSize * $AutocompactPct / 100)
 if ($usableContext -le 0) { $usableContext = $contextSize }
 
 $percentUsed = [Math]::Min(100, [int]($contextUsed * 100 / $usableContext))
