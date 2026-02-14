@@ -288,13 +288,13 @@ describe('stage-13.js - Product Roadmap template', () => {
   });
 
   describe('evaluateKillGate() - Pure function', () => {
-    it('should pass kill gate for valid roadmap (>= 3 milestones, all with deliverables, >= 3 months)', () => {
+    it('should pass kill gate for valid roadmap (>= 3 milestones, all with deliverables, >= 3 months, one now priority)', () => {
       const result = evaluateKillGate({
         milestone_count: 3,
         milestones: [
-          { name: 'M1', deliverables: ['D1'] },
-          { name: 'M2', deliverables: ['D2'] },
-          { name: 'M3', deliverables: ['D3'] },
+          { name: 'M1', deliverables: ['D1'], priority: 'now' },
+          { name: 'M2', deliverables: ['D2'], priority: 'next' },
+          { name: 'M3', deliverables: ['D3'], priority: 'later' },
         ],
         timeline_months: 6,
       });
@@ -307,24 +307,24 @@ describe('stage-13.js - Product Roadmap template', () => {
       const result = evaluateKillGate({
         milestone_count: 2,
         milestones: [
-          { name: 'M1', deliverables: ['D1'] },
+          { name: 'M1', deliverables: ['D1'], priority: 'now' },
           { name: 'M2', deliverables: ['D2'] },
         ],
         timeline_months: 6,
       });
       expect(result.decision).toBe('kill');
       expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('insufficient_milestones');
-      expect(result.reasons[0].threshold).toBe(MIN_MILESTONES);
-      expect(result.reasons[0].actual).toBe(2);
+      expect(result.reasons.some(r => r.type === 'insufficient_milestones')).toBe(true);
+      const reason = result.reasons.find(r => r.type === 'insufficient_milestones');
+      expect(reason.threshold).toBe(MIN_MILESTONES);
+      expect(reason.actual).toBe(2);
     });
 
     it('should kill for milestone missing deliverables', () => {
       const result = evaluateKillGate({
         milestone_count: 3,
         milestones: [
-          { name: 'M1', deliverables: ['D1'] },
+          { name: 'M1', deliverables: ['D1'], priority: 'now' },
           { name: 'M2', deliverables: [] },
           { name: 'M3', deliverables: ['D3'] },
         ],
@@ -341,7 +341,7 @@ describe('stage-13.js - Product Roadmap template', () => {
       const result = evaluateKillGate({
         milestone_count: 3,
         milestones: [
-          { name: 'M1', deliverables: ['D1'] },
+          { name: 'M1', deliverables: ['D1'], priority: 'now' },
           { name: 'M2', deliverables: ['D2'] },
           { name: 'M3', deliverables: ['D3'] },
         ],
@@ -355,6 +355,32 @@ describe('stage-13.js - Product Roadmap template', () => {
       expect(result.reasons[0].actual).toBe(2);
     });
 
+    it('should kill for no now-priority milestone (Blueprint #8)', () => {
+      const result = evaluateKillGate({
+        milestone_count: 3,
+        milestones: [
+          { name: 'M1', deliverables: ['D1'], priority: 'next' },
+          { name: 'M2', deliverables: ['D2'], priority: 'later' },
+          { name: 'M3', deliverables: ['D3'] },
+        ],
+        timeline_months: 6,
+      });
+      expect(result.decision).toBe('kill');
+      expect(result.blockProgression).toBe(true);
+      expect(result.reasons).toHaveLength(1);
+      expect(result.reasons[0].type).toBe('no_now_priority_milestone');
+    });
+
+    it('should not trigger now-priority check for empty milestones', () => {
+      const result = evaluateKillGate({
+        milestone_count: 0,
+        milestones: [],
+        timeline_months: 0,
+      });
+      // Should have insufficient_milestones and timeline_too_short but NOT no_now_priority
+      expect(result.reasons.some(r => r.type === 'no_now_priority_milestone')).toBe(false);
+    });
+
     it('should collect multiple kill reasons', () => {
       const result = evaluateKillGate({
         milestone_count: 2,
@@ -366,25 +392,27 @@ describe('stage-13.js - Product Roadmap template', () => {
       });
       expect(result.decision).toBe('kill');
       expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(3);
-      expect(result.reasons[0].type).toBe('insufficient_milestones');
-      expect(result.reasons[1].type).toBe('milestone_missing_deliverables');
-      expect(result.reasons[2].type).toBe('timeline_too_short');
+      expect(result.reasons.length).toBeGreaterThanOrEqual(3);
+      expect(result.reasons.some(r => r.type === 'insufficient_milestones')).toBe(true);
+      expect(result.reasons.some(r => r.type === 'milestone_missing_deliverables')).toBe(true);
+      expect(result.reasons.some(r => r.type === 'timeline_too_short')).toBe(true);
+      expect(result.reasons.some(r => r.type === 'no_now_priority_milestone')).toBe(true);
     });
 
     it('should handle milestone without name (uses index)', () => {
       const result = evaluateKillGate({
         milestone_count: 3,
         milestones: [
-          { deliverables: [] },
+          { deliverables: [], priority: 'now' },
           { name: 'M2', deliverables: ['D2'] },
           { name: 'M3', deliverables: ['D3'] },
         ],
         timeline_months: 6,
       });
       expect(result.decision).toBe('kill');
-      expect(result.reasons[0].type).toBe('milestone_missing_deliverables');
-      expect(result.reasons[0].message).toContain('0');
+      const delReason = result.reasons.find(r => r.type === 'milestone_missing_deliverables');
+      expect(delReason).toBeDefined();
+      expect(delReason.message).toContain('0');
     });
   });
 
@@ -393,7 +421,7 @@ describe('stage-13.js - Product Roadmap template', () => {
       const data = {
         vision_statement: 'A'.repeat(20),
         milestones: [
-          { name: 'M1', date: '2026-01-01', deliverables: ['D1'], dependencies: [] },
+          { name: 'M1', date: '2026-01-01', deliverables: ['D1'], dependencies: [], priority: 'now' },
           { name: 'M2', date: '2026-04-01', deliverables: ['D2'], dependencies: [] },
           { name: 'M3', date: '2026-07-01', deliverables: ['D3'], dependencies: [] },
         ],
@@ -454,7 +482,7 @@ describe('stage-13.js - Product Roadmap template', () => {
       const data = {
         vision_statement: 'A'.repeat(20),
         milestones: [
-          { name: 'M1', date: '2026-01-01', deliverables: ['D1'], dependencies: [] },
+          { name: 'M1', date: '2026-01-01', deliverables: ['D1'], dependencies: [], priority: 'now' },
           { name: 'M2', date: '2026-04-01', deliverables: ['D2'], dependencies: [] },
           { name: 'M3', date: '2026-07-01', deliverables: ['D3'], dependencies: [] },
         ],

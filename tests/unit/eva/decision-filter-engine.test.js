@@ -23,10 +23,11 @@ describe('DecisionFilterEngine', () => {
 
     it('should auto-proceed when all values are within thresholds', () => {
       const result = evaluateDecision(
-        { cost: 5000, score: 8, technologies: ['React'], vendors: ['AWS'] },
+        { cost: 5000, score: 9, technologies: ['React'], vendors: ['AWS'] },
         { preferences: {
           [PREFERENCE_KEYS.cost_threshold]: 10000,
           [PREFERENCE_KEYS.low_score]: 7,
+          [PREFERENCE_KEYS.chairman_review_score]: 9,
           [PREFERENCE_KEYS.approved_tech]: ['react'],
           [PREFERENCE_KEYS.approved_vendors]: ['aws'],
         }},
@@ -116,24 +117,54 @@ describe('DecisionFilterEngine', () => {
     });
   });
 
-  describe('low_score trigger', () => {
-    it('should trigger when score is below threshold', () => {
+  describe('low_score trigger (two-tier)', () => {
+    it('should trigger HIGH when score is below min_score', () => {
       const result = evaluateDecision(
         { score: 3 },
-        { preferences: { [PREFERENCE_KEYS.low_score]: 7 } },
+        { preferences: {
+          [PREFERENCE_KEYS.low_score]: 7,
+          [PREFERENCE_KEYS.chairman_review_score]: 9,
+        }},
+      );
+      const scoreTrigger = result.triggers.find(t => t.type === 'low_score');
+      expect(scoreTrigger).toBeDefined();
+      expect(scoreTrigger.severity).toBe('HIGH');
+    });
+
+    it('should trigger MEDIUM when score is between min and chairman thresholds', () => {
+      const result = evaluateDecision(
+        { score: 8 },
+        { preferences: {
+          [PREFERENCE_KEYS.low_score]: 7,
+          [PREFERENCE_KEYS.chairman_review_score]: 9,
+        }},
       );
       const scoreTrigger = result.triggers.find(t => t.type === 'low_score');
       expect(scoreTrigger).toBeDefined();
       expect(scoreTrigger.severity).toBe('MEDIUM');
     });
 
-    it('should not trigger when score meets threshold', () => {
+    it('should not trigger when score meets chairman threshold', () => {
+      const result = evaluateDecision(
+        { score: 9 },
+        { preferences: {
+          [PREFERENCE_KEYS.low_score]: 7,
+          [PREFERENCE_KEYS.chairman_review_score]: 9,
+        }},
+      );
+      const scoreTrigger = result.triggers.find(t => t.type === 'low_score');
+      expect(scoreTrigger).toBeUndefined();
+    });
+
+    it('should use default chairman_review_score when preference missing', () => {
       const result = evaluateDecision(
         { score: 8 },
         { preferences: { [PREFERENCE_KEYS.low_score]: 7 } },
       );
       const scoreTrigger = result.triggers.find(t => t.type === 'low_score');
-      expect(scoreTrigger).toBeUndefined();
+      expect(scoreTrigger).toBeDefined();
+      expect(scoreTrigger.severity).toBe('MEDIUM');
+      expect(scoreTrigger.details.chairmanThreshold).toBe(DEFAULTS['filter.chairman_review_score']);
     });
   });
 
@@ -173,10 +204,13 @@ describe('DecisionFilterEngine', () => {
       expect(result.recommendation).toBe('PRESENT_TO_CHAIRMAN');
     });
 
-    it('should recommend PRESENT_TO_CHAIRMAN_WITH_MITIGATIONS for MEDIUM triggers', () => {
+    it('should recommend PRESENT_TO_CHAIRMAN_WITH_MITIGATIONS for MEDIUM-only triggers', () => {
       const result = evaluateDecision(
-        { score: 3 },
-        { preferences: { [PREFERENCE_KEYS.low_score]: 7 } },
+        { score: 8 },
+        { preferences: {
+          [PREFERENCE_KEYS.low_score]: 7,
+          [PREFERENCE_KEYS.chairman_review_score]: 9,
+        }},
       );
       expect(result.auto_proceed).toBe(false);
       expect(result.recommendation).toBe('PRESENT_TO_CHAIRMAN_WITH_MITIGATIONS');
