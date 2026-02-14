@@ -120,6 +120,54 @@ export function registerGate2Validators(registry) {
     };
   }, 'E2E test coverage (CRITICAL)');
 
+  // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Wire acceptance_criteria into implementation fidelity
+  registry.register('acceptanceCriteriaValidation', async (context) => {
+    const { prd } = context;
+    const criteria = prd?.acceptance_criteria || [];
+
+    if (!Array.isArray(criteria) || criteria.length === 0) {
+      return {
+        passed: true,
+        score: 70,
+        max_score: 100,
+        issues: [],
+        warnings: ['No acceptance_criteria defined in PRD - implementation fidelity may be incomplete']
+      };
+    }
+
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      details: { criteria_count: criteria.length, criteria }
+    };
+  }, 'PRD acceptance criteria validation - ensures criteria are defined for fidelity checks');
+
+  // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Wire test_scenarios into EXEC-TO-PLAN validation
+  registry.register('testScenariosValidation', async (context) => {
+    const { prd } = context;
+    const scenarios = prd?.test_scenarios || [];
+
+    if (!Array.isArray(scenarios) || scenarios.length === 0) {
+      return {
+        passed: true,
+        score: 70,
+        max_score: 100,
+        issues: [],
+        warnings: ['No test_scenarios defined in PRD - test coverage cannot be validated against PRD']
+      };
+    }
+
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      details: { scenario_count: scenarios.length, scenarios: scenarios.map(s => s.name || s.description || s) }
+    };
+  }, 'PRD test scenarios validation - ensures test scenarios are defined for coverage checks');
+
   registry.register('testingSubAgentVerified', async (context) => {
     const { sd_id, supabase } = context;
 

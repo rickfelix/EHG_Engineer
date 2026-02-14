@@ -146,6 +146,66 @@ export function registerGate1Validators(registry) {
     return registry.normalizeResult(result);
   }, 'BMAD context engineering validation');
 
+  // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Wire risks into PLAN-TO-EXEC context
+  registry.register('risksValidation', async (context) => {
+    const { prd } = context;
+    const risks = prd?.risks || [];
+
+    if (!Array.isArray(risks) || risks.length === 0) {
+      return {
+        passed: true,
+        score: 70,
+        max_score: 100,
+        issues: [],
+        warnings: ['No risks defined in PRD - consider documenting known risks and mitigations']
+      };
+    }
+
+    const missingMitigation = risks.filter(r => !r.mitigation && !r.mitigation_strategy);
+    if (missingMitigation.length > 0) {
+      return {
+        passed: true,
+        score: 80,
+        max_score: 100,
+        issues: [],
+        warnings: [`${missingMitigation.length} risk(s) lack mitigation strategies`],
+        details: { risk_count: risks.length, missing_mitigation: missingMitigation.length }
+      };
+    }
+
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      details: { risk_count: risks.length }
+    };
+  }, 'PRD risks validation - ensures risks are documented with mitigations');
+
+  // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Wire implementation_approach into EXEC context
+  registry.register('implementationApproachValidation', async (context) => {
+    const { prd } = context;
+    const approach = prd?.implementation_approach || '';
+
+    if (!approach || approach.length === 0) {
+      return {
+        passed: true,
+        score: 70,
+        max_score: 100,
+        issues: [],
+        warnings: ['No implementation_approach defined in PRD']
+      };
+    }
+
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      details: { approach_length: approach.length }
+    };
+  }, 'PRD implementation approach validation');
+
   registry.register('goalSummaryValidation', async (context) => {
     const { prd } = context;
     const goalSummary = prd?.goal_summary || prd?.executive_summary || '';
@@ -276,4 +336,37 @@ export function registerGate1Validators(registry) {
       warnings
     };
   }, 'Testing strategy validation');
+
+  // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Wire Category B/D fields into PLAN-TO-EXEC context
+  registry.register('prdFieldCompletenessAudit', async (context) => {
+    const { prd } = context;
+    const warnings = [];
+    const consumed = [];
+
+    // Category B: Medium-value fields
+    if (prd?.data_model && Object.keys(prd.data_model).length > 0) consumed.push('data_model');
+    if (prd?.api_specifications && Object.keys(prd.api_specifications).length > 0) consumed.push('api_specifications');
+    if (prd?.ui_ux_requirements && Object.keys(prd.ui_ux_requirements).length > 0) consumed.push('ui_ux_requirements');
+    if (prd?.technology_stack && Object.keys(prd.technology_stack).length > 0) consumed.push('technology_stack');
+    if (prd?.dependencies && (Array.isArray(prd.dependencies) ? prd.dependencies.length > 0 : Object.keys(prd.dependencies).length > 0)) consumed.push('dependencies');
+    if (prd?.performance_requirements && Object.keys(prd.performance_requirements).length > 0) consumed.push('performance_requirements');
+
+    // Category D: Administrative fields (consumed for audit trail)
+    if (prd?.assumptions) consumed.push('assumptions');
+    if (prd?.stakeholders) consumed.push('stakeholders');
+    if (prd?.business_context) consumed.push('business_context');
+    if (prd?.technical_context) consumed.push('technical_context');
+
+    const totalTracked = 10;
+    const score = consumed.length >= 6 ? 100 : consumed.length >= 3 ? 85 : 70;
+
+    return {
+      passed: true,
+      score,
+      max_score: 100,
+      issues: [],
+      warnings: consumed.length < 3 ? ['PRD has few populated fields - consider enriching PRD content'] : [],
+      details: { populated_fields: consumed, populated_count: consumed.length, total_tracked: totalTracked }
+    };
+  }, 'PRD field completeness audit - verifies Category B/D fields are populated');
 }
