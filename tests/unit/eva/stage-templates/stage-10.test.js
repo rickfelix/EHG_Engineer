@@ -80,6 +80,7 @@ describe('stage-10.js - Naming/Brand template', () => {
         { name: 'Candidate4', rationale: 'Reason 4', scores: { Memorability: 75, Relevance: 85, Availability: 75 } },
         { name: 'Candidate5', rationale: 'Reason 5', scores: { Memorability: 90, Relevance: 70, Availability: 85 } },
       ],
+      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
     });
 
     it('should pass for valid data', () => {
@@ -170,6 +171,7 @@ describe('stage-10.js - Naming/Brand template', () => {
         { name: 'C4', rationale: 'R4', scores: { Memorability: 75, Relevance: 85 } },
         { name: 'C5', rationale: 'R5', scores: { Memorability: 90, Relevance: 70 } },
       ],
+      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
     });
 
     it('should pass when weights sum to exactly 100', () => {
@@ -276,6 +278,7 @@ describe('stage-10.js - Naming/Brand template', () => {
         { name: 'C4', rationale: 'R4', scores: { Memorability: 75, Relevance: 85 } },
         { name: 'C5', rationale: 'R5', scores: { Memorability: 90, Relevance: 70 } },
       ],
+      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
     });
 
     it('should pass with exactly 5 candidates', () => {
@@ -389,6 +392,7 @@ describe('stage-10.js - Naming/Brand template', () => {
         { name: 'Delta', rationale: 'R4', scores: { Memorability: 85, Relevance: 85, Availability: 85 } },
         { name: 'Epsilon', rationale: 'R5', scores: { Memorability: 75, Relevance: 95, Availability: 65 } },
       ],
+      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
     });
 
     it('should compute weighted scores for all candidates (TS-3)', () => {
@@ -513,6 +517,7 @@ describe('stage-10.js - Naming/Brand template', () => {
         { name: 'C4', rationale: 'R4', scores: { M: 75, R: 85 } },
         { name: 'C5', rationale: 'R5', scores: { M: 90, R: 70 } },
       ],
+      chairmanGate: { status: 'approved', rationale: null, decision_id: null },
     });
 
     it('should work together for valid data', () => {
