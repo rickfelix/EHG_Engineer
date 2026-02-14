@@ -5,6 +5,7 @@
  * Extracted from add-prd-to-database.js for modularity
  * SD-LEO-REFACTOR-PRD-DB-002
  * SD-LEO-INFRA-REPLACE-GPT-OPUS-001: Switched from GPT 5.2 to Opus 4.6
+ * SD-LEO-FIX-REPLACE-EXTERNAL-API-001: Added inline mode for Claude Code execution
  */
 
 import { getLLMClient } from '../../lib/llm/client-factory.js';
@@ -19,19 +20,63 @@ import {
 } from './formatters.js';
 
 /**
- * Generate PRD content using LLM (Opus 4.6 via effort-based routing)
+ * Check if inline PRD generation mode is enabled.
+ * Inline mode outputs the prompt to stdout for Claude Code to process
+ * instead of making an external API call.
+ *
+ * Default: true (inline mode on) since Claude Code IS already Opus 4.6.
+ * Set LLM_PRD_INLINE=false to use the external API path.
+ */
+function isInlineModeEnabled() {
+  return process.env.LLM_PRD_INLINE !== 'false';
+}
+
+/**
+ * Generate PRD content using inline mode (Claude Code processes the prompt directly).
+ *
+ * Outputs system + user prompt to stdout with delimiters, then reads JSON response
+ * from the calling process. This eliminates the external HTTP API call since
+ * Claude Code IS already Opus 4.6.
+ *
+ * @param {Object} sd - Strategic Directive data
+ * @param {Object} context - Additional context
+ * @returns {Promise<Object|null>} Generated PRD content or null if failed
+ */
+async function generatePRDInline(sd, context = {}) {
+  const sdType = sd.sd_type || 'feature';
+
+  console.log('   🧠 INLINE MODE: Claude Code will generate PRD content directly');
+  console.log(`   📋 SD Type: ${sdType}`);
+  console.log('   ℹ️  No external API call needed — Claude Code IS Opus 4.6');
+
+  const systemPrompt = buildSystemPrompt(sdType);
+  const userPrompt = buildPRDGenerationContext(sd, context);
+
+  // Output the prompt with clear delimiters for the calling process to capture
+  console.log('\n===PRD_GENERATION_PROMPT_START===');
+  console.log('SYSTEM_PROMPT:');
+  console.log(systemPrompt);
+  console.log('\nUSER_PROMPT:');
+  console.log(userPrompt);
+  console.log('===PRD_GENERATION_PROMPT_END===\n');
+
+  console.log('   ℹ️  Prompt output complete. Claude Code should process this inline.');
+  console.log('   ℹ️  If running outside Claude Code, set LLM_PRD_INLINE=false to use external API.');
+
+  // In inline mode, we return null — the calling script (add-prd-to-database.js)
+  // will detect inline mode and expect the caller (Claude Code) to generate
+  // the PRD content and insert it directly into the database.
+  return null;
+}
+
+/**
+ * Generate PRD content using external LLM API (Opus 4.6 via effort-based routing)
  *
  * @param {Object} sd - Strategic Directive data
  * @param {Object} context - Additional context (design analysis, database analysis, personas)
  * @returns {Promise<Object|null>} Generated PRD content or null if failed
  */
-export async function generatePRDContentWithLLM(sd, context = {}) {
-  if (!LLM_PRD_CONFIG.enabled) {
-    console.log('   ℹ️  LLM PRD generation disabled via LLM_PRD_GENERATION=false');
-    return null;
-  }
-
-  // Use LLM Client Factory instead of direct OpenAI SDK
+async function generatePRDViaExternalAPI(sd, context = {}) {
   const llmClient = getLLMClient({
     purpose: 'generation',
     phase: 'PLAN'
@@ -44,46 +89,23 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
 
   try {
     const systemPrompt = buildSystemPrompt(sdType);
-
-    // Build user prompt with context
     const userPrompt = buildPRDGenerationContext(sd, context);
 
-    // Use adapter interface .complete()
-    // Opus 4.6 completes in seconds; standard 60s timeout is sufficient
+    // Use adapter interface .complete() with streaming flag for long operations
     const response = await llmClient.complete(systemPrompt, userPrompt, {
       temperature: LLM_PRD_CONFIG.temperature,
-      max_tokens: LLM_PRD_CONFIG.maxTokens
+      max_tokens: LLM_PRD_CONFIG.maxTokens,
+      stream: true // Required by Anthropic SDK for operations >10 minutes
     });
 
-    // Parse adapter response format
     const content = response.content;
-    const finishReason = null; // Adapter doesn't expose finish_reason
 
     if (!content) {
       console.warn('   ⚠️  LLM returned empty content');
       return null;
     }
 
-    if (finishReason === 'length') {
-      console.warn('   ⚠️  LLM response truncated (token limit), attempting parse anyway');
-    }
-
-    // Parse JSON response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.warn('   ⚠️  Could not extract JSON from LLM response');
-      console.log('   Response preview:', content.substring(0, 500));
-      return null;
-    }
-
-    const prdContent = JSON.parse(jsonMatch[0]);
-
-    console.log('   ✅ PRD content generated successfully');
-    console.log(`   📊 Generated: ${prdContent.functional_requirements?.length || 0} functional requirements`);
-    console.log(`   📊 Generated: ${prdContent.test_scenarios?.length || 0} test scenarios`);
-    console.log(`   📊 Generated: ${prdContent.risks?.length || 0} risks identified`);
-
-    return prdContent;
+    return parsePRDResponse(content);
 
   } catch (error) {
     console.error('   ❌ LLM PRD generation failed:', error.message);
@@ -92,6 +114,53 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     }
     return null;
   }
+}
+
+/**
+ * Parse LLM response text into PRD JSON content
+ * @param {string} content - Raw LLM response text
+ * @returns {Object|null} Parsed PRD content or null
+ */
+export function parsePRDResponse(content) {
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.warn('   ⚠️  Could not extract JSON from LLM response');
+    console.log('   Response preview:', content.substring(0, 500));
+    return null;
+  }
+
+  const prdContent = JSON.parse(jsonMatch[0]);
+
+  console.log('   ✅ PRD content generated successfully');
+  console.log(`   📊 Generated: ${prdContent.functional_requirements?.length || 0} functional requirements`);
+  console.log(`   📊 Generated: ${prdContent.test_scenarios?.length || 0} test scenarios`);
+  console.log(`   📊 Generated: ${prdContent.risks?.length || 0} risks identified`);
+
+  return prdContent;
+}
+
+/**
+ * Generate PRD content — routes between inline and external API modes.
+ *
+ * - Inline mode (default): Outputs prompt for Claude Code to process directly.
+ *   No external API call. Claude Code IS Opus 4.6.
+ * - External mode (LLM_PRD_INLINE=false): Uses AnthropicAdapter via LLM factory.
+ *
+ * @param {Object} sd - Strategic Directive data
+ * @param {Object} context - Additional context (design analysis, database analysis, personas)
+ * @returns {Promise<Object|null>} Generated PRD content or null if failed/inline mode
+ */
+export async function generatePRDContentWithLLM(sd, context = {}) {
+  if (!LLM_PRD_CONFIG.enabled) {
+    console.log('   ℹ️  LLM PRD generation disabled via LLM_PRD_GENERATION=false');
+    return null;
+  }
+
+  if (isInlineModeEnabled()) {
+    return generatePRDInline(sd, context);
+  }
+
+  return generatePRDViaExternalAPI(sd, context);
 }
 
 /**
