@@ -89,7 +89,7 @@ export function generateKeywordQuickReference() {
 
   for (const agent of sortedAgents) {
     const agentKw = keywords[agent];
-    const flat = flattenKeywords(agentKw, 10);
+    const flat = flattenKeywords(agentKw, 3);
     const moreCount = (agentKw.primary?.length || 0) +
                       (agentKw.secondary?.length || 0) +
                       (agentKw.tertiary?.length || 0) - flat.length;
