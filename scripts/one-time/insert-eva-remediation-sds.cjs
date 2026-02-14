@@ -59,28 +59,31 @@ ${AUDIT_SOURCE}`,
   {
     key: 'SD-EVA-FIX-ERROR-LOGGING-001',
     title: 'Error & Logging Standardization',
-    description: `Adopt ServiceError across 119 files, mandatory logger injection in 68 files, fix 12 silent catches, fix retry logic.
+    description: `Adopt ServiceError across 119 files, mandatory logger injection in 68 files, fix 12 silent catches.
 
 Actions:
 1. Expand ServiceError class from shared-services.js to lib/eva/errors/service-error.js
 2. Create error catalog with codes per subsystem
 3. Add mandatory logger = console DI parameter to all public functions
-4. Fix event-router.js:215 retry logic to check error.retryable flag
-5. Add logging to 12 bare catch blocks
+4. Add logging to 12 bare catch blocks
 
 Files: 119 EVA files (55 with throw Error, 68 with no logging, 12 with silent catches)
 
 Findings addressed:
-- Cross-Cutting CRIT-001/002/003: Error handling, logging, retry conflict
+- Cross-Cutting CRIT-002: No ServiceError adoption (119 files use throw new Error)
+- Cross-Cutting CRIT-003: No logging injection (68 files with no logger)
+- Cross-Cutting HIGH-001: Silent catch blocks (12+ files)
 - Theme 4: Error Handling
 - Theme 5: Logging Gaps
 
+Note: Infrastructure CRIT-001 (retry logic dead code in event-router.js) is addressed by SD-EVA-FIX-INFRA-BUGS-001, not this SD.
+
 ${AUDIT_SOURCE}`,
-    scope: 'Adopt ServiceError across 119 files, mandatory logger injection in 68 files, fix 12 silent catches, fix retry logic',
+    scope: 'Adopt ServiceError across 119 files, mandatory logger injection in 68 files, fix 12 silent catches',
     priority: 'critical',
     est_loc: 400,
     tier: 1,
-    blocks: ['SD-EVA-FIX-TEMPLATE-ALIGN-001', 'SD-EVA-FIX-POST-LAUNCH-001'],
+    blocks: ['SD-EVA-FIX-POST-LAUNCH-001'],
     blocked_by: []
   },
   {
@@ -100,17 +103,17 @@ ${AUDIT_SOURCE}`,
     priority: 'high',
     est_loc: 100,
     tier: 1,
-    blocks: ['SD-EVA-FIX-TEMPLATE-ALIGN-001', 'SD-EVA-FIX-ENUM-NAMING-001'],
+    blocks: ['SD-EVA-FIX-ENUM-NAMING-001'],
     blocked_by: []
   },
   {
     key: 'SD-EVA-FIX-DB-SCHEMA-001',
     title: 'Database Schema Normalization',
-    description: `Create 25 per-stage tables, 16 PostgreSQL ENUMs, tighten RLS policies, add gate constraints and data contracts.
+    description: `Normalize EVA database schema: replace single JSONB column with structured storage, create PostgreSQL ENUMs, tighten RLS policies, add gate constraints and data contracts.
 
 Actions:
-1. Create 25 per-stage tables (e.g., eva_stage_1_draft_ideas through eva_stage_25_optimization)
-2. Create 16 PostgreSQL ENUM types (9 decision + 7 categorization)
+1. Design and implement structured stage data storage (architecture to be determined in PLAN phase — options include per-stage tables, partitioned tables, or typed JSONB with constraints)
+2. Create 16 PostgreSQL ENUM types (9 decision + 7 categorization) to replace free-text fields
 3. Replace USING (TRUE) RLS with role-based policies
 4. Add stage-specific gate constraint columns
 5. Add cross-stage data contract tracking (artifact dependency validation)
@@ -118,7 +121,7 @@ Actions:
 Files: database/migrations/, RLS policies
 
 Findings addressed:
-- DB Schema CRIT-001: Missing per-stage tables (single JSONB column)
+- DB Schema CRIT-001: Missing structured stage storage (single JSONB column for all stage data)
 - DB Schema CRIT-002: Missing 16 PostgreSQL ENUM types
 - DB Schema HIGH-001: USING (TRUE) RLS policies
 - DB Schema HIGH-002: Missing stage-specific gate constraints
@@ -127,11 +130,11 @@ Findings addressed:
 - Theme 17: RLS Policies
 
 ${AUDIT_SOURCE}`,
-    scope: 'Create 25 per-stage tables, 16 PostgreSQL ENUMs, tighten RLS policies, add gate constraints and data contracts',
+    scope: 'Normalize stage data storage, create 16 PostgreSQL ENUMs, tighten RLS policies, add gate constraints and data contracts',
     priority: 'critical',
     est_loc: 500,
     tier: 1,
-    blocks: ['SD-EVA-FIX-ENUM-NAMING-001'],
+    blocks: [],
     blocked_by: []
   },
   {
@@ -164,13 +167,14 @@ ${AUDIT_SOURCE}`,
   {
     key: 'SD-EVA-FIX-INFRA-BUGS-001',
     title: 'Infrastructure Bug Fixes',
-    description: `CLI arg validation, wrong column ref (decision-submitted.js), string-based error matching.
+    description: `Fix retry logic dead code, failure reason classification, CLI arg validation, wrong column ref, string-based error matching.
 
 Actions:
 1. Fix retry logic dead code in event-router.js:215 to check error.retryable flag
-2. Add CLI arg validation to eva-run.js (check next element exists, isn't a flag)
-3. Fix stage → lifecycle_stage column reference in decision-submitted.js
-4. Replace string-based error matching with error.code === '23505' in sd-completed.js
+2. Track original + final errors in retry exhaustion for accurate failure classification (event-router.js:228)
+3. Add CLI arg validation to eva-run.js (check next element exists, isn't a flag)
+4. Fix stage -> lifecycle_stage column reference in decision-submitted.js
+5. Replace string-based error matching with error.code === '23505' in sd-completed.js
 
 Files: lib/eva/event-bus/event-router.js, scripts/eva-run.js, lib/eva/event-bus/handlers/decision-submitted.js, lib/eva/event-bus/handlers/sd-completed.js
 
@@ -178,13 +182,14 @@ Findings addressed:
 - Infrastructure CRIT-001: Retry logic dead code in event-router.js
 - Infrastructure CRIT-002: CLI argument parsing lacks validation
 - Infrastructure CRIT-003: Wrong column reference in decision-submitted.js
+- Infrastructure HIGH-001: Incorrect failure reason classification in event-router.js (line 228)
 - Infrastructure HIGH-005: String-based error matching
 - Theme 13: Infrastructure Bugs
 
 ${AUDIT_SOURCE}`,
-    scope: 'CLI arg validation, wrong column ref, string-based error matching',
+    scope: 'Fix retry logic dead code, failure reason classification, CLI arg validation, wrong column ref, string-based error matching',
     priority: 'high',
-    est_loc: 80,
+    est_loc: 100,
     tier: 1,
     blocks: ['SD-EVA-FIX-POST-LAUNCH-001'],
     blocked_by: []
@@ -271,39 +276,45 @@ Findings addressed:
 ${AUDIT_SOURCE}`,
     scope: 'Add missing fields/decision objects across Phases 3, 5, 6; fix Stages 6-9, 14, 16 Architecture v2.0 fields; add Stage 23-24 Launch gaps',
     priority: 'critical',
-    est_loc: 350,
-    tier: 2,
+    est_loc: 700,
+    tier: 1,
     blocks: [],
-    blocked_by: ['SD-EVA-FIX-ERROR-LOGGING-001', 'SD-EVA-FIX-UTILITY-DEDUP-001']
+    blocked_by: []
   },
   {
     key: 'SD-EVA-FIX-ENUM-NAMING-001',
     title: 'Enum Validation & Field Naming',
-    description: `Replace typeof x === 'string' with enum arrays in 8+ Build Loop fields, fix camelCase/snake_case drift, DI db→supabase in 6 files, client→llmClient in 25 templates.
+    description: `Replace typeof x === 'string' template validation with enum arrays for 8 Build Loop fields, fix camelCase/snake_case drift, rename DI params.
 
 Actions:
-1. Replace typeof x === 'string' with VALID_ENUMS.includes(x) for 8+ fields
-2. Fix camelCase/snake_case drift across templates
-3. Rename db → supabase in 6 files
-4. Rename LLM client → llmClient in 25 templates
+1. Replace typeof x === 'string' with VALID_ENUMS.includes(x) in Build Loop template validation for 8 fields:
+   - Stage 17: bugs[].severity, bugs[].status
+   - Stage 18: improvements[].category
+   - Stage 19: metricUpdates[].trend
+   - Stage 20: roadmapItems[].priority
+   - Stage 21: completionItems[].status
+   - Stage 22: releaseItems[].category
+2. Fix camelCase/snake_case drift across stage templates
+3. Rename db -> supabase in 6 DI files
+4. Rename LLM client -> llmClient in 25 templates
 
 Files: Build Loop templates (17-22), all stage templates (naming), 6 DI files, 25 LLM client files
 
 Findings addressed:
-- Enum validation: 8+ fields use typeof instead of enum arrays
-- Schema field naming drift
-- DI parameter naming inconsistency
+- Build Loop Finding 2 (HIGH): 8 fields use typeof instead of enum arrays in template validation
+- Cross-Cutting HIGH-003: DI parameter naming (db -> supabase)
+- Schema field naming drift across templates
 - Theme 7: Enum Validation
 - Theme 11: Schema Field Naming
 - Theme 19: DI Parameter Naming
 
 ${AUDIT_SOURCE}`,
-    scope: 'Replace typeof checks with enum arrays, fix naming drift, rename DI params',
+    scope: 'Replace typeof checks with enum arrays for 8 Build Loop fields, fix naming drift, rename DI params',
     priority: 'high',
     est_loc: 200,
     tier: 2,
     blocks: [],
-    blocked_by: ['SD-EVA-FIX-UTILITY-DEDUP-001', 'SD-EVA-FIX-DB-SCHEMA-001']
+    blocked_by: ['SD-EVA-FIX-UTILITY-DEDUP-001']
   },
   {
     key: 'SD-EVA-FIX-POST-LAUNCH-001',
@@ -366,12 +377,12 @@ async function main() {
       title: 'EVA Audit Remediation: Address 157 Findings from Comprehensive Audit',
       description: `Orchestrator for remediating 157 findings (36 critical, 53 high, 48 medium, 20 low) identified by EVA Comprehensive Audit (SD-EVA-QA-AUDIT-ORCH-001).
 
-Tier 1 (9 SDs, parallel): Chairman Gates, Stage 15 Risk, Error/Logging, Utility Dedup, DB Schema, Reality Gates, Infra Bugs, Kill Gates, Dossier Rebuild
-Tier 2 (3 SDs, sequential): Template Alignment, Enum/Naming, Post-Launch/Tests
+Tier 1 (10 SDs, parallel): Chairman Gates, Stage 15 Risk, Error/Logging, Utility Dedup, DB Schema, Reality Gates, Infra Bugs, Kill Gates, Dossier Rebuild, Template Alignment
+Tier 2 (2 SDs, sequential): Enum/Naming, Post-Launch/Tests
 
 Dependency graph:
-  Tier 1 (parallel): [1-CHAIRMAN] [2-STAGE15] [3-ERR/LOG] [4-UTILS] [5-DB] [6-GATES] [7-INFRA] [8-KILL] [9-DOSSIER]
-  Tier 2 (after):     [10-TEMPLATES←3,4]  [11-ENUMS←4,5]  [12-POST-LAUNCH←3,7]
+  Tier 1 (parallel): [1-CHAIRMAN] [2-STAGE15] [3-ERR/LOG] [4-UTILS] [5-DB] [6-GATES] [7-INFRA] [8-KILL] [9-DOSSIER] [10-TEMPLATES]
+  Tier 2 (after):     [11-ENUMS←4]  [12-POST-LAUNCH←3,7]
 
 Coverage: All 20 major audit themes assigned to child SDs. All CRITICAL and HIGH findings explicitly addressed. Some MEDIUM/LOW findings (DB Schema MED-001/002/003, Cross-Cutting MED-001/002/003, Infrastructure MED-001-004) are not explicitly scoped — these may be addressed incidentally during related work or deferred to follow-up SDs.
 
@@ -449,10 +460,10 @@ ${AUDIT_SOURCE}`,
       scope: child.scope,
       parent_sd_id: ORCH_KEY,
       rationale: `Part of EVA Audit Remediation orchestrator (${ORCH_KEY}). Addresses findings from EVA Comprehensive Audit.`,
-      success_criteria: [{ measure: 'Findings resolved', criterion: `${child.scope} — all mapped findings addressed and verified` }],
-      risks: [],
+      success_criteria: child.success_criteria || [{ measure: 'Findings resolved', criterion: `${child.scope} — all mapped findings addressed and verified` }],
+      risks: child.risks || [],
       stakeholders: ['Chairman'],
-      implementation_guidelines: ['Reference docs/audits/eva-comprehensive/ for detailed findings'],
+      implementation_guidelines: child.implementation_guidelines || ['Reference docs/audits/eva-comprehensive/ for detailed findings'],
       key_changes: [{ change: child.title, impact: `Fixes audit findings in scope: ${child.scope}` }],
       key_principles: ['Fix root cause, not symptoms', 'Follow gold standard specs'],
       success_metrics: [
