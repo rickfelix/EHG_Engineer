@@ -576,6 +576,19 @@ async function main() {
     console.log('');
     console.log('PROCEEDING: Full LEAD→PLAN→EXEC workflow for each child.');
     console.log('');
+
+    // Emit RECOMMENDED_CHILD for agent consumption
+    // Find first unclaimed, non-completed child
+    const unclaimed = children.filter(c =>
+      !c.claiming_session_id &&
+      c.status !== 'completed' &&
+      c.status !== 'blocked'
+    );
+    if (unclaimed.length > 0) {
+      const recommended = unclaimed[0];
+      const childKey = recommended.sd_key || recommended.id;
+      console.log(`>>> RECOMMENDED_CHILD=${childKey}`);
+    }
   }
 
   // Exit code based on validation
