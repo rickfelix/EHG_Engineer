@@ -194,7 +194,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-14 7:50:42 AM
+**Last Generated**: 2026-02-14 8:45:39 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

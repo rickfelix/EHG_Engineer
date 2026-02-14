@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-14 7:50:42 AM
+**Generated**: 2026-02-14 8:45:39 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
