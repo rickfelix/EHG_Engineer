@@ -518,20 +518,59 @@ export class BaseExecutor {
   }
 
   /**
-   * Auto-claim SD for the current session
-   * This ensures is_working_on is set at the START of any handoff
+   * Validate that this SD has an existing claim from the parent conversation.
    *
-   * Non-blocking: Errors are logged but handoff continues
+   * Handoff scripts are transient subprocesses — they should NOT create their
+   * own claims. The claim lifecycle is: sd:start creates it, LEAD-FINAL-APPROVAL
+   * releases it. Handoffs just validate that a claim exists.
+   *
+   * If no claim exists (e.g., handoff run without sd:start), falls back to
+   * creating one for backward compatibility, but logs a warning.
+   *
    * @param {string} sdId - SD ID
    * @param {object} sd - SD record
    */
   async _claimSDForSession(sdId, sd) {
-    // SD-LEO-INFRA-CLAIM-GUARD-001: Claim failure is a HARD BLOCKER (FR-4)
-    // No try/catch swallowing — errors propagate and block handoff execution
     const { claimGuard, formatClaimFailure } = await import('../../../../lib/claim-guard.mjs');
-    const sessionManager = await import('../../../../lib/session-manager.mjs');
     const heartbeatManager = await import('../../../../lib/heartbeat-manager.mjs');
 
+    const claimId = sd.sd_key || sdId;
+
+    // Step 1: Check if a valid claim already exists (from sd:start or parent conversation)
+    const { data: existingClaims } = await this.supabase
+      .from('v_active_sessions')
+      .select('session_id, sd_id, terminal_id, heartbeat_age_seconds, computed_status')
+      .eq('sd_id', claimId)
+      .in('computed_status', ['active']);
+
+    const activeClaim = (existingClaims || []).find(c => c.heartbeat_age_seconds < 300);
+
+    if (activeClaim) {
+      // Valid claim exists from parent conversation — just validate, don't replace
+      console.log(`   [Claim] ✅ SD ${claimId} claimed (${activeClaim.session_id === (await this._getCurrentSessionId()) ? 'already_owned' : 'parent_conversation'})`);
+
+      // Refresh the existing claim's heartbeat to keep it alive during handoff
+      await this.supabase
+        .from('claude_sessions')
+        .update({ heartbeat_at: new Date().toISOString() })
+        .eq('session_id', activeClaim.session_id);
+
+      // Start heartbeat for the existing session (not a new one)
+      const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+      if (!heartbeatStatus.active) {
+        heartbeatManager.startHeartbeat(activeClaim.session_id);
+      }
+
+      // Show duration estimate (non-blocking)
+      await this._showDurationEstimate(sd);
+      return;
+    }
+
+    // Step 2: No active claim found — fall back to creating one (backward compatibility)
+    // This handles the case where someone runs handoff without sd:start first
+    console.log('   [Claim] ⚠️  No existing claim found — creating one (run sd:start first next time)');
+
+    const sessionManager = await import('../../../../lib/session-manager.mjs');
     const session = await sessionManager.getOrCreateSession();
 
     if (!session) {
@@ -539,7 +578,6 @@ export class BaseExecutor {
       return { success: false, error: 'Claim required - no session available' };
     }
 
-    const claimId = sd.sd_key || sdId;
     const result = await claimGuard(claimId, session.session_id);
 
     if (!result.success) {
@@ -558,6 +596,20 @@ export class BaseExecutor {
 
     // Show duration estimate (non-blocking)
     await this._showDurationEstimate(sd);
+  }
+
+  /**
+   * Get the current subprocess session ID (if one exists).
+   * Helper for claim validation — does NOT create a new session.
+   */
+  async _getCurrentSessionId() {
+    try {
+      const sessionManager = await import('../../../../lib/session-manager.mjs');
+      const existing = sessionManager.getCurrentSession?.();
+      return existing?.session_id || null;
+    } catch {
+      return null;
+    }
   }
 
   /**
