@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-14 11:16:12 AM
+**Generated**: 2026-02-14 1:11:38 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1633,7 +1633,7 @@ Validates that refactoring changes maintain backward compatibility. Captures bas
 
 **🆕 NEW in v3.0.0**: 
 
-**Trigger Keywords**: `DAILY_DOCMON_CHECK`, `EXEC_COMPLETION`, `EXEC_IMPLEMENTATION`, `FILE_CREATED`, `HANDOFF_ACCEPTED`, `HANDOFF_CREATED`, `LEAD_APPROVAL`, `LEAD_HANDOFF_CREATION`, `LEAD_SD_CREATION`, `PHASE_TRANSITION`, `PLAN_PRD_GENERATION`, `PLAN_VERIFICATION`, `RETRO_GENERATED`, `VIOLATION_DETECTED`, `add documentation`, `api documentation`, `document this`, `jsdoc`, `missing docs`, `readme update`, `tsdoc`, `update documentation`, `comment`, `comments`, `describe`, `docs`, `document`, `documentation`, `explain`, `guide`, `howto`, `readme`, `tutorial`
+**Trigger Keywords**: `DAILY_DOCMON_CHECK`, `EXEC_COMPLETION`, `EXEC-TO-PLAN`, `FILE_CREATED`, `HANDOFF_ACCEPTED`, `HANDOFF_CREATED`, `LEAD_APPROVAL`, `LEAD_HANDOFF_CREATION`, `LEAD_SD_CREATION`, `PHASE_TRANSITION`, `PLAN_PRD_GENERATION`, `PLAN_VERIFICATION`, `RETRO_GENERATED`, `VIOLATION_DETECTED`, `add documentation`, `api documentation`, `document this`, `jsdoc`, `missing docs`, `readme update`, `tsdoc`, `update documentation`, `comment`, `comments`, `describe`, `docs`, `document`, `documentation`, `explain`, `guide`, `howto`, `readme`, `tutorial`
 
 #### Quick-Fix Orchestrator ("LEO Lite" Field Medic) (`QUICKFIX`)
 Lightweight triage and resolution for small UAT-discovered issues (≤50 LOC). Acts as mini-orchestrat
@@ -1657,21 +1657,21 @@ Former NSA security architect with 25 years experience securing systems from sta
 
 **Identity**: You are a DevOps Platform Architect with 20 yea
 
-**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `LEAD_APPROVAL_COMPLETE`, `PLAN_VERIFICATION_PASS`, `ci pipeline`, `code review`, `create pr`, `git merge`, `git rebase`, `github actions`, `github workflow`, `merge pr`, `pull request`, `actions`, `branch`, `cd`, `ci`, `commit`, `create pull request`, `create release`, `deploy`, `deployment ci pattern`, `gh pr create`, `git`, `github`, `github deploy`, `github status`, `merge`, `pipeline`, `pr`, `pull`, `push`, `release`, `workflow`
+**Trigger Keywords**: `EXEC-TO-PLAN`, `LEAD_APPROVAL_COMPLETE`, `PLAN_VERIFICATION_PASS`, `ci pipeline`, `code review`, `create pr`, `git merge`, `git rebase`, `github actions`, `github workflow`, `merge pr`, `pull request`, `actions`, `branch`, `cd`, `ci`, `commit`, `create pull request`, `create release`, `deploy`, `deployment ci pattern`, `gh pr create`, `git`, `github`, `github deploy`, `github status`, `merge`, `pipeline`, `pr`, `pull`, `push`, `release`, `workflow`
 
 #### Principal Database Architect (`DATABASE`)
 ## Principal Database Architect v2.0.0 - Lessons Learned Edition
 
 **🆕 NEW in v2.0.0**: Proactive le
 
-**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add column`, `alter table`, `apply migration`, `apply schema changes`, `apply the migration`, `create table`, `data model`, `database migration`, `database schema`, `db migration`, `erd`, `execute migration`, `execute the migration`, `foreign key`, `postgres schema`, `primary key`, `rls policy`, `row level security`, `run migration`, `run the migration`, `supabase migration`, `add this column`, `add this to the database`, `alter the table`, `apply this migration`, `can you execute`, `can you run`, `column`, `constraint`, `create the table`, `database`, `database agent should run`, `database query`, `delete from the table`, `drop the table`, `embedding`, `execute it`, `execute the following`, `execute the query`, `execute this sql`, `fetch from database`, `fix this in the database`, `go ahead and run`, `have the database agent`, `index`, `insert into`, `insert this into`, `make this change in the database`, `migrate`, `migration`, `modify the schema`, `pgvector`, `please execute`, `please run`, `postgres`, `postgresql`, `query`, `rls`, `run it`, `run that migration`, `run the following`, `run the query`, `run this migration`, `run this sql`, `schema`, `seed`, `seeding`, `select from`, `sql`, `supabase`, `table`, `update the database`, `update the table`, `update this in supabase`, `use database sub-agent`, `use the database sub-agent`, `vector`, `yes, execute`, `yes, run it`
+**Trigger Keywords**: `EXEC-TO-PLAN`, `add column`, `alter table`, `apply migration`, `apply schema changes`, `apply the migration`, `create table`, `data model`, `database migration`, `database schema`, `db migration`, `erd`, `execute migration`, `execute the migration`, `foreign key`, `postgres schema`, `primary key`, `rls policy`, `row level security`, `run migration`, `run the migration`, `supabase migration`, `add this column`, `add this to the database`, `alter the table`, `apply this migration`, `can you execute`, `can you run`, `column`, `constraint`, `create the table`, `database`, `database agent should run`, `database query`, `delete from the table`, `drop the table`, `embedding`, `execute it`, `execute the following`, `execute the query`, `execute this sql`, `fetch from database`, `fix this in the database`, `go ahead and run`, `have the database agent`, `index`, `insert into`, `insert this into`, `make this change in the database`, `migrate`, `migration`, `modify the schema`, `pgvector`, `please execute`, `please run`, `postgres`, `postgresql`, `query`, `rls`, `run it`, `run that migration`, `run the following`, `run the query`, `run this migration`, `run this sql`, `schema`, `seed`, `seeding`, `select from`, `sql`, `supabase`, `table`, `update the database`, `update the table`, `update this in supabase`, `use database sub-agent`, `use the database sub-agent`, `vector`, `yes, execute`, `yes, run it`
 
 #### QA Engineering Director (`TESTING`)
 ## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
 
 **🆕 NEW in v2.4.0**: 7
 
-**Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `add tests`, `create tests`, `e2e test`, `end to end test`, `integration test`, `vitest test`, `playwright test`, `spec file`, `test coverage`, `test file`, `test suite`, `unit test`, `vitest`, `write tests`, `assertion`, `build error`, `coverage`, `cypress`, `describe`, `dev server`, `expect`, `fixture`, `it`, `vitest`, `mock`, `npm run test:unit`, `playwright`, `playwright build`, `protected route`, `redirect to login`, `spy`, `stub`, `test`, `test infrastructure`, `test results`, `testing`, `testing evidence`, `testing test pattern`, `tests`, `unit tests`
+**Trigger Keywords**: `EXEC-TO-PLAN`, `add tests`, `create tests`, `e2e test`, `end to end test`, `integration test`, `vitest test`, `playwright test`, `spec file`, `test coverage`, `test file`, `test suite`, `unit test`, `vitest`, `write tests`, `assertion`, `build error`, `coverage`, `cypress`, `describe`, `dev server`, `expect`, `fixture`, `it`, `vitest`, `mock`, `npm run test:unit`, `playwright`, `playwright build`, `protected route`, `redirect to login`, `spy`, `stub`, `test`, `test infrastructure`, `test results`, `testing`, `testing evidence`, `testing test pattern`, `tests`, `unit tests`
 
 #### Performance Engineering Lead (`PERFORMANCE`)
 Performance engineering lead with 20+ years optimizing high-scale systems.

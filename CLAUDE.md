@@ -194,7 +194,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-02-14 11:16:12 AM
+**Last Generated**: 2026-02-14 1:11:38 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -268,12 +268,12 @@ Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate
 | `ANALYTICS` | analytics tracking, conversion tracking, funnel analysis (+31 more) |
 | `API` | add endpoint, api design, api endpoint (+44 more) |
 | `CRM` | contact management, crm system, customer relationship (+21 more) |
-| `DATABASE` | EXEC_IMPLEMENTATION_COMPLETE, add column, alter table (+91 more) |
+| `DATABASE` | EXEC-TO-PLAN, add column, alter table (+91 more) |
 | `DEPENDENCY` | dependency update, dependency vulnerability, npm audit (+36 more) |
 | `DESIGN` | a11y, accessibility, component design (+74 more) |
-| `DOCMON` | DAILY_DOCMON_CHECK, EXEC_COMPLETION, EXEC_IMPLEMENTATION (+37 more) |
+| `DOCMON` | DAILY_DOCMON_CHECK, EXEC_COMPLETION, EXEC-TO-PLAN (+37 more) |
 | `FINANCIAL` | burn rate, cash flow analysis, financial model (+28 more) |
-| `GITHUB` | EXEC_IMPLEMENTATION_COMPLETE, LEAD_APPROVAL_COMPLETE, PLAN_VERIFICATION_PASS (+40 more) |
+| `GITHUB` | EXEC-TO-PLAN, LEAD_APPROVAL_COMPLETE, PLAN_VERIFICATION_PASS (+40 more) |
 | `LAUNCH` | deploy to production, go live checklist, launch checklist (+27 more) |
 | `MARKETING` | brand awareness, content marketing, go to market (+27 more) |
 | `MONITORING` | alerting system, application monitoring, datadog (+30 more) |
@@ -287,7 +287,7 @@ Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate
 | `SALES` | close deal, objection handling, sales cycle (+24 more) |
 | `SECURITY` | api key exposed, authentication bypass, csrf vulnerability (+41 more) |
 | `STORIES` | acceptance criteria, as a user, definition of done (+30 more) |
-| `TESTING` | EXEC_IMPLEMENTATION_COMPLETE, add tests, create tests (+49 more) |
+| `TESTING` | EXEC-TO-PLAN, add tests, create tests (+49 more) |
 | `UAT` | acceptance criteria, click through, happy path (+38 more) |
 | `VALIDATION` | already exists, already implemented, before i build (+25 more) |
 | `VALUATION` | acquisition target, company valuation, dcf analysis (+27 more) |
