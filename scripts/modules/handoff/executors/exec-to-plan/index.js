@@ -23,7 +23,9 @@ import {
   createPerformanceCriticalGate,
   createTestCoverageQualityGate,
   createIntegrationTestRequirementGate,
-  createIntegrationContractGate
+  createIntegrationContractGate,
+  createStoryAutoValidationGate,
+  createE2ETestMappingGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -148,6 +150,14 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Integration contract gate (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-2)
     // Verifies integration_contract items from PRD metadata are present in codebase
     gates.push(createIntegrationContractGate(this.supabase));
+
+    // Story auto-validation (SD-LEO-FIX-STORIES-SUB-AGENT-001)
+    // Validates user stories after EXEC completion
+    gates.push(createStoryAutoValidationGate(this.supabase));
+
+    // E2E test mapping (SD-LEO-FIX-STORIES-SUB-AGENT-001)
+    // Maps E2E test files to user stories for coverage tracking
+    gates.push(createE2ETestMappingGate(this.supabase));
 
     return gates;
   }

@@ -19,3 +19,5 @@ export { createPerformanceCriticalGate } from './performance-critical-gate.js';
 export { createTestCoverageQualityGate } from './test-coverage-quality.js';
 export { createIntegrationTestRequirementGate } from './integration-test-requirement.js';
 export { createIntegrationContractGate } from './integration-contract-gate.js';
+export { createStoryAutoValidationGate } from './story-auto-validation.js';
+export { createE2ETestMappingGate } from './e2e-test-mapping.js';
