@@ -855,7 +855,7 @@ export function createPostCompactionGate(currentPhase) {
     },
     required: true,
     blocking: true,
-    remediation: 'Re-read CLAUDE.md, CLAUDE_CORE.md, and phase file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
+    remediation: 'Re-read CLAUDE.md, CLAUDE_CORE_DIGEST.md, and phase digest file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE_DIGEST.md"'
   };
 }
 
@@ -1018,7 +1018,7 @@ export function createSessionStartGate(sessionId) {
     },
     required: true,
     blocking: true,
-    remediation: 'Read CLAUDE.md and CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
+    remediation: 'Read CLAUDE.md and CLAUDE_CORE_DIGEST.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE_DIGEST.md"'
   };
 }
 

@@ -52,7 +52,7 @@ function readSessionState() {
  */
 function isLeadFileRead() {
   const state = readSessionState();
-  return state.protocolFilesRead?.includes('CLAUDE_LEAD.md') || false;
+  return state.protocolFilesRead?.includes('CLAUDE_LEAD.md') || state.protocolFilesRead?.includes('CLAUDE_LEAD_DIGEST.md') || false;
 }
 
 /**
@@ -61,7 +61,7 @@ function isLeadFileRead() {
  */
 function isCoreFileRead() {
   const state = readSessionState();
-  return state.protocolFilesRead?.includes('CLAUDE_CORE.md') || false;
+  return state.protocolFilesRead?.includes('CLAUDE_CORE.md') || state.protocolFilesRead?.includes('CLAUDE_CORE_DIGEST.md') || false;
 }
 
 /**
@@ -142,10 +142,10 @@ export function validateCoreFileRead() {
 │   • Required validation patterns                                           │
 │                                                                             │
 │ ACTION REQUIRED:                                                           │
-│   1. Read CLAUDE_CORE.md completely (no limit parameter)                   │
+│   1. Read CLAUDE_CORE_DIGEST.md completely (no limit parameter)            │
 │   2. Then retry SD key generation                                          │
 │                                                                             │
-│ HINT: Use Read tool with file_path="CLAUDE_CORE.md" (no limit)             │
+│ HINT: Use Read tool with file_path="CLAUDE_CORE_DIGEST.md" (no limit)      │
 └─────────────────────────────────────────────────────────────────────────────┘
 `
     };
@@ -171,10 +171,10 @@ export function validateCoreFileRead() {
 │   • Protocol phase validation rules                                        │
 │                                                                             │
 │ ACTION REQUIRED:                                                           │
-│   1. Re-read CLAUDE_CORE.md completely (WITHOUT limit parameter)           │
+│   1. Re-read CLAUDE_CORE_DIGEST.md completely (WITHOUT limit parameter)    │
 │   2. Then retry SD key generation                                          │
 │                                                                             │
-│ HINT: Use Read tool with file_path="CLAUDE_CORE.md" (no limit)             │
+│ HINT: Use Read tool with file_path="CLAUDE_CORE_DIGEST.md" (no limit)      │
 └─────────────────────────────────────────────────────────────────────────────┘
 `
     };
@@ -223,10 +223,10 @@ export function validateLeadFileRead() {
 │   • Handoff chain requirements                                             │
 │                                                                             │
 │ ACTION REQUIRED:                                                           │
-│   1. Read CLAUDE_LEAD.md completely (no limit parameter)                   │
+│   1. Read CLAUDE_LEAD_DIGEST.md completely (no limit parameter)            │
 │   2. Then retry SD key generation                                          │
 │                                                                             │
-│ HINT: Use Read tool with file_path="CLAUDE_LEAD.md" (no limit)             │
+│ HINT: Use Read tool with file_path="CLAUDE_LEAD_DIGEST.md" (no limit)      │
 └─────────────────────────────────────────────────────────────────────────────┘
 `
     };
@@ -253,10 +253,10 @@ export function validateLeadFileRead() {
 │   • Lines 825-1030: PRD Enrichment and Evaluation Checklist                │
 │                                                                             │
 │ ACTION REQUIRED:                                                           │
-│   1. Re-read CLAUDE_LEAD.md completely (WITHOUT limit parameter)           │
+│   1. Re-read CLAUDE_LEAD_DIGEST.md completely (WITHOUT limit parameter)    │
 │   2. Then retry SD key generation                                          │
 │                                                                             │
-│ HINT: Use Read tool with file_path="CLAUDE_LEAD.md" (no limit)             │
+│ HINT: Use Read tool with file_path="CLAUDE_LEAD_DIGEST.md" (no limit)      │
 └─────────────────────────────────────────────────────────────────────────────┘
 `
     };

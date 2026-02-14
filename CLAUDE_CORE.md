@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-14 8:45:39 AM
+**Generated**: 2026-02-14 11:16:12 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -228,37 +228,6 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -344,6 +313,65 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+> **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
+
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -376,33 +404,38 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
-## Sub-Agent Model Routing
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
+### Requirements
 
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
 
-> **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -440,39 +473,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -1525,29 +1525,7 @@ Task tool with subagent_type="validation-agent":
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Consolidate SD Identity and Type Fields with Intelligent Classification - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/23/2026 | **Score**: 100
-
-**Key Improvements**:
-- Continue monitoring PLAN→EXEC handoff for improvement opportunities
-- Continue monitoring PLAN→EXEC handoff for improvement opportunities
-
-**Action Items**:
-- [ ] Audit remaining validation gates for SD type checks
-- [ ] Create SD for column rename work
-
-### 2. Migrate Data and Remove legacy_id Column - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/23/2026 | **Score**: 100
-
-**Key Improvements**:
-- Continue monitoring PLAN→EXEC handoff for improvement opportunities
-- Continue monitoring PLAN→EXEC handoff for improvement opportunities
-
-**Action Items**:
-- [ ] Create PRD for SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D in product_requirements_v2 t...
-- [ ] Run E2E tests and store evidence for SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D in uni...
-
-### 3. LEO-001 Comprehensive Retrospective [QUALITY]
+### 1. LEO-001 Comprehensive Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 1/17/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1558,7 +1536,7 @@ Task tool with subagent_type="validation-agent":
 - [ ] Document plugin discovery protocol - add 'Check for official Claude Code plugins...
 - [ ] Create systematic quality gate gap analysis tool to audit all handoff validators...
 
-### 4. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
+### 2. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
 **Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1569,16 +1547,38 @@ Task tool with subagent_type="validation-agent":
 - [ ] Create reusable SD lookup utility
 - [ ] Add E2E test CI job for risk-recalibration
 
-### 5. /leo assist - Intelligent Autonomous Inbox Processing - Retrospective [QUALITY]
-**Category**: DATABASE_SCHEMA | **Date**: 1/30/2026 | **Score**: 100
+### 3. Fix Unicode Surrogate Pair Splitting in Handoff Output - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/12/2026 | **Score**: 100
 
 **Key Improvements**:
-- Processing throughput baseline: Currently 0 issues/session handled manually. Target: 5-10 issues/ses...
-- LOC estimation accuracy unknown: Need empirical validation comparing keyword-based estimates vs actu...
+- [PAT-AUTO-45e4dfb7] Gate 1:userStoryQualityValidation failed: score 209/300
+- [PAT-AUTO-d2c1c285] Gate PREREQUISITE_HANDOFF_CHECK failed: score 841/1000
 
 **Action Items**:
-- [ ] Create PRD for SD-LEO-FIX-LEO-ASSIST-INTELLIGENT-002 in product_requirements_v2 ...
-- [ ] Run E2E tests and store evidence for SD-LEO-FIX-LEO-ASSIST-INTELLIGENT-002 in un...
+- [ ] No immediate actions required - continue standard workflow
+- [ ] Re-run blocking sub-agents for SD-LEO-FIX-FIX-UNICODE-SURROGATE-001 until PASS v...
+
+### 4. SD Completion Retrospective: Centralized Claim Guard Eliminates 7 Multi-Session Collision Vectors [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+
+**Key Improvements**:
+- The 7 separate claim paths existed because each was added incrementally without recognizing the cros...
+- ESM/CJS compatibility required a wrapper file (claim-guard.cjs) which adds one more file to maintain...
+
+**Action Items**:
+- [ ] Create integration test that spawns 2 concurrent claim attempts on the same SD t...
+- [ ] Add cross-cutting concern detection to LEAD phase checklist: when approving an S...
+
+### 5. LEAD_TO_PLAN Handoff Retrospective: Distill CLAUDE*.md Files for Maximum Token Reduction [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+
+**Key Improvements**:
+- [PAT-AUTO-c205e83a] Gate 2D:testingSubAgentVerified failed: score 0/100
+- [PAT-AUTO-0bd90c7f] Gate GATE2_IMPLEMENTATION_FIDELITY failed: score 68/100
+
+**Action Items**:
+- [ ] Monitor digest token budget utilization over next 5 SDs — current 83% (20,814/25...
+- [ ] Add regression test to verify CLAUDE.md stays under 15K chars after regeneration...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*

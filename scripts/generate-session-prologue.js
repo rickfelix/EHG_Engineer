@@ -57,7 +57,7 @@ async function generateSessionPrologue() {
 1. Run \`npm run sd:next\` to see the SD queue
 2. If SD marked "CONTINUE" → Resume that SD
 3. If no active SD → Pick highest-ranked READY SD
-4. Load CLAUDE_LEAD.md for approval workflow
+4. Load CLAUDE_LEAD_DIGEST.md for approval workflow
 
 ---
 *Remind Claude: Follow database-first, keep PRs small, use sub-agents, create handoffs*`;

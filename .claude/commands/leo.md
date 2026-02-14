@@ -535,8 +535,8 @@ node scripts/modules/sd-key-generator.js LEO <type> "<title>"
 
   **MANDATORY**: Before running `--from-plan`, you MUST read protocol files:
   ```
-  Read tool: CLAUDE_CORE.md    (SD types, validation requirements, sub-agent triggers)
-  Read tool: CLAUDE_LEAD.md    (SD creation process, field requirements, handoff gates)
+  Read tool: CLAUDE_CORE_DIGEST.md    (SD types, validation requirements, sub-agent triggers)
+  Read tool: CLAUDE_LEAD_DIGEST.md    (SD creation process, field requirements, handoff gates)
   ```
 
   Then run the creation script:
@@ -584,11 +584,11 @@ Resume work on the current working SD.
 
 2. **If SD found (is_working_on = true and progress < 100):**
    - Display the SD info from the script output
-   - **ALWAYS read `CLAUDE_CORE.md` first** (sub-agent prompt quality standard, SD type requirements)
+   - **ALWAYS read `CLAUDE_CORE_DIGEST.md` first** (sub-agent prompt quality standard, SD type requirements)
    - Then read the phase-specific context file based on `current_phase`:
-     - LEAD phases (LEAD_APPROVAL, LEAD_FINAL_APPROVAL) → Read `CLAUDE_LEAD.md`
-     - PLAN phases (PLAN_*, PRD_*) → Read `CLAUDE_PLAN.md`
-     - EXEC phases (EXEC_*, IMPLEMENTATION_*) → Read `CLAUDE_EXEC.md`
+     - LEAD phases (LEAD_APPROVAL, LEAD_FINAL_APPROVAL) → Read `CLAUDE_LEAD_DIGEST.md`
+     - PLAN phases (PLAN_*, PRD_*) → Read `CLAUDE_PLAN_DIGEST.md`
+     - EXEC phases (EXEC_*, IMPLEMENTATION_*) → Read `CLAUDE_EXEC_DIGEST.md`
    - Load BOTH context files using the Read tool
    - Show recommended next action based on phase:
      - LEAD phases: "Continue LEAD approval workflow"
@@ -914,25 +914,25 @@ This is the RECOMMENDED way to begin work on an SD. It combines claiming + conte
 
 5. **MANDATORY: Read protocol files based on phase:**
 
-   **Step 1: ALWAYS read CLAUDE_CORE.md first (contains sub-agent prompt quality standard, SD type requirements, gate thresholds):**
+   **Step 1: ALWAYS read CLAUDE_CORE_DIGEST.md first (contains sub-agent prompt quality standard, SD type requirements, gate thresholds):**
    ```
-   Read tool: CLAUDE_CORE.md
+   Read tool: CLAUDE_CORE_DIGEST.md
    ```
 
-   **Step 2: Read phase-specific file:**
+   **Step 2: Read phase-specific digest file:**
 
    | Phase | Files to Read (use Read tool) |
    |-------|-------------------------------|
-   | LEAD | `CLAUDE_LEAD.md` |
-   | PLAN | `CLAUDE_PLAN.md` |
-   | EXEC | `CLAUDE_EXEC.md` |
+   | LEAD | `CLAUDE_LEAD_DIGEST.md` |
+   | PLAN | `CLAUDE_PLAN_DIGEST.md` |
+   | EXEC | `CLAUDE_EXEC_DIGEST.md` |
 
    **Execute BOTH file reads immediately** - do not just mention them, actually use the Read tool:
    ```
-   Read tool: CLAUDE_CORE.md   (ALWAYS - contains Five-Point Brief, model routing, SD types)
-   Read tool: CLAUDE_LEAD.md   (if phase is LEAD)
-   Read tool: CLAUDE_PLAN.md   (if phase is PLAN)
-   Read tool: CLAUDE_EXEC.md   (if phase is EXEC)
+   Read tool: CLAUDE_CORE_DIGEST.md   (ALWAYS - contains Five-Point Brief, model routing, SD types)
+   Read tool: CLAUDE_LEAD_DIGEST.md   (if phase is LEAD)
+   Read tool: CLAUDE_PLAN_DIGEST.md   (if phase is PLAN)
+   Read tool: CLAUDE_EXEC_DIGEST.md   (if phase is EXEC)
    ```
 
 6. **Check for orchestrator/child status:**
@@ -1228,10 +1228,10 @@ node scripts/child-sd-preflight.js SD-XXX-001
 
 **CRITICAL**: Before starting work on ANY SD (new, existing, or child), you MUST load the required context files in this order:
 
-#### Step 1: ALWAYS Read CLAUDE.md and CLAUDE_CORE.md First
+#### Step 1: ALWAYS Read CLAUDE.md and CLAUDE_CORE_DIGEST.md First
 ```
 Read tool: CLAUDE.md
-Read tool: CLAUDE_CORE.md
+Read tool: CLAUDE_CORE_DIGEST.md
 ```
 
 **CLAUDE.md provides**:
@@ -1240,7 +1240,7 @@ Read tool: CLAUDE_CORE.md
 - AUTO-PROCEED mode configuration
 - Session initialization guidance
 
-**CLAUDE_CORE.md provides**:
+**CLAUDE_CORE_DIGEST.md provides**:
 - SD type definitions and workflow requirements
 - PRD requirements, handoff counts, gate thresholds
 - Sub-agent configuration and model routing
@@ -1249,13 +1249,13 @@ Read tool: CLAUDE_CORE.md
 **This applies to ALL SDs including children of orchestrators.**
 
 #### Step 2: Load Phase-Specific Context
-Based on the SD's `current_phase`, load the appropriate file:
+Based on the SD's `current_phase`, load the appropriate digest file:
 
 | Phase | File to Load |
 |-------|--------------|
-| LEAD_APPROVAL, LEAD_FINAL_APPROVAL | CLAUDE_LEAD.md |
-| PLAN_*, PRD_* | CLAUDE_PLAN.md |
-| EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
+| LEAD_APPROVAL, LEAD_FINAL_APPROVAL | CLAUDE_LEAD_DIGEST.md |
+| PLAN_*, PRD_* | CLAUDE_PLAN_DIGEST.md |
+| EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC_DIGEST.md |
 
 #### Why This Matters
 Without loading CLAUDE.md and CLAUDE_CORE.md:
@@ -1312,7 +1312,7 @@ Child SDs with incomplete dependencies show as BLOCKED.
    - Skill intent detection patterns
    - AUTO-PROCEED mode behavior
 
-2. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
+2. **CLAUDE_CORE_DIGEST.md** - Core protocol guidance, SD types, workflow requirements
    - Contains SD type definitions and their mandatory requirements
    - Specifies PRD requirements, handoff counts, and gate thresholds per SD type
    - Defines the LEAD→PLAN→EXEC workflow phases
@@ -1327,7 +1327,7 @@ Child SDs with incomplete dependencies show as BLOCKED.
 #### SD Creation Checklist
 Before creating any SD, ensure you:
 - [ ] Read CLAUDE.md for sub-agent trigger keywords
-- [ ] Read CLAUDE_CORE.md for SD type requirements
+- [ ] Read CLAUDE_CORE_DIGEST.md for SD type requirements
 - [ ] Read field reference for required fields and formats
 - [ ] Use proper ID format: `SD-{CATEGORY}-{NUMBER}` (e.g., SD-FEATURE-001)
 - [ ] Set appropriate `sd_type` based on scope and requirements
