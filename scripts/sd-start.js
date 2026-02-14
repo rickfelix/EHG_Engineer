@@ -334,7 +334,8 @@ async function main() {
 
           // Auto-release the orphaned claim and retry
           const { error: releaseError } = await supabase.rpc('release_sd', {
-            p_session_id: claimResult.owner.session_id
+            p_session_id: claimResult.owner.session_id,
+            p_reason: 'manual'
           });
 
           if (releaseError) {

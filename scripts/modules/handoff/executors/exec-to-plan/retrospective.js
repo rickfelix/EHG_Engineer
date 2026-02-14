@@ -13,9 +13,14 @@
  *
  * ROOT CAUSE FIX (PAT-RETRO-BOILERPLATE-001): Queries issue_patterns table
  * for actual issues discovered during execution instead of generating boilerplate.
+ *
+ * ROOT CAUSE FIX (PAT-AUTO-ae348342): Enhanced to include SD-specific context
+ * (title, description, objectives) and git context (files changed, commits)
+ * instead of generating metric-only key learnings that score 34/100.
  */
 
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { execSync } from 'child_process';
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -65,6 +70,55 @@ async function getRecentActiveIssues(supabase) {
 }
 
 /**
+ * Get git context for the SD (files changed, recent commits)
+ * @param {string} sdId - SD ID for branch name detection
+ * @returns {Object} { filesChanged, commitMessages, summary }
+ */
+function getGitContext(sdId) {
+  const result = { filesChanged: [], commitMessages: [], summary: '' };
+  try {
+    // Get files changed vs main (limit to 20)
+    const diffOutput = execSync('git diff --name-only main...HEAD 2>/dev/null || git diff --name-only HEAD~5..HEAD 2>/dev/null', {
+      encoding: 'utf8', timeout: 10000
+    }).trim();
+    if (diffOutput) {
+      result.filesChanged = diffOutput.split('\n').slice(0, 20);
+    }
+
+    // Get recent commit messages (limit to 10)
+    const logOutput = execSync('git log --oneline -10 --no-merges 2>/dev/null', {
+      encoding: 'utf8', timeout: 10000
+    }).trim();
+    if (logOutput) {
+      result.commitMessages = logOutput.split('\n');
+    }
+
+    // Build summary
+    const fileCount = result.filesChanged.length;
+    const commitCount = result.commitMessages.length;
+    if (fileCount > 0 || commitCount > 0) {
+      result.summary = `${fileCount} file(s) changed across ${commitCount} commit(s)`;
+      // Categorize files
+      const categories = {};
+      for (const f of result.filesChanged) {
+        const cat = f.startsWith('scripts/') ? 'scripts' :
+          f.startsWith('lib/') ? 'lib' :
+          f.startsWith('database/') ? 'database' :
+          f.startsWith('docs/') ? 'docs' :
+          f.startsWith('tests/') ? 'tests' : 'other';
+        categories[cat] = (categories[cat] || 0) + 1;
+      }
+      const catSummary = Object.entries(categories).map(([k, v]) => `${v} ${k}`).join(', ');
+      if (catSummary) result.summary += ` (${catSummary})`;
+    }
+  } catch {
+    // Git context is optional - graceful fallback
+    result.summary = 'Git context unavailable';
+  }
+  return result;
+}
+
+/**
  * Create EXEC-TO-PLAN handoff retrospective
  *
  * Captures implementation phase learnings: code quality, test coverage,
@@ -106,17 +160,14 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
     const implRating = Math.ceil((implFidelityScore / Math.max(implFidelityMax, 1)) * 5);
     const subAgentRating = Math.ceil((subAgentScore / Math.max(subAgentMax, 1)) * 5);
 
-    // Build what went well
+    // Build what went well (SD-specific, not generic)
     const whatWentWell = [];
-    if (testRating >= 4) whatWentWell.push({ achievement: 'Test evidence was comprehensive and automated', is_boilerplate: false });
-    if (implRating >= 4) whatWentWell.push({ achievement: 'Implementation closely matched PRD requirements', is_boilerplate: false });
-    if (subAgentRating >= 4) whatWentWell.push({ achievement: 'Sub-agents (TESTING, GITHUB) executed successfully', is_boilerplate: false });
-    if (handoffResult.success) whatWentWell.push({ achievement: 'EXEC-TO-PLAN handoff passed all validation gates', is_boilerplate: false });
+    // SD-specific achievement
+    whatWentWell.push({ achievement: `Successfully implemented "${sd.title}" (${sd.sd_type || 'feature'} SD)`, is_boilerplate: false });
+    if (testRating >= 4) whatWentWell.push({ achievement: 'Test evidence was comprehensive and covered key scenarios', is_boilerplate: false });
+    if (implRating >= 4) whatWentWell.push({ achievement: `Implementation matched PRD requirements for ${sd.sd_key || sdId}`, is_boilerplate: false });
     if (handoffResult.automated_shipping?.pr_url) {
       whatWentWell.push({ achievement: `PR created and ready for review: ${handoffResult.automated_shipping.pr_url}`, is_boilerplate: false });
-    }
-    if (whatWentWell.length === 0) {
-      whatWentWell.push({ achievement: 'EXEC phase completed - implementation delivered', is_boilerplate: false });
     }
 
     // Build what needs improvement
@@ -135,55 +186,79 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       whatNeedsImprovement.push('No specific issues identified - implementation phase was clean');
     }
 
-    // Build key learnings
+    // Build key learnings with SD-specific context (PAT-AUTO-ae348342 fix)
     const avgRating = [testRating, implRating, subAgentRating]
       .filter(r => r > 0)
       .reduce((sum, r, _, arr) => sum + r / arr.length, 0) || 4;
 
-    const keyLearnings = [
-      { learning: `EXEC phase quality score: ${qualityScore}%`, is_boilerplate: false },
-      { learning: `Average gate rating: ${avgRating.toFixed(1)}/5`, is_boilerplate: false }
-    ];
+    // Get git context for concrete implementation details
+    const gitContext = getGitContext(sdId);
 
-    if (handoffResult.test_evidence?.testCount > 0) {
+    const keyLearnings = [];
+
+    // SD-specific learning: what was implemented and why
+    const sdDescription = safeTruncate(sd.description || '', 150);
+    const sdType = sd.sd_type || 'feature';
+    keyLearnings.push({
+      learning: `Implemented "${sd.title}" (${sdType}): ${sdDescription || 'No description available'}`,
+      is_boilerplate: false
+    });
+
+    // Git-based learning: what actually changed
+    if (gitContext.filesChanged.length > 0) {
+      const topFiles = gitContext.filesChanged.slice(0, 5).map(f => f.split('/').pop()).join(', ');
       keyLearnings.push({
-        learning: `${handoffResult.test_evidence.testCount} test(s) captured as evidence`,
+        learning: `Modified ${gitContext.summary}. Key files: ${topFiles}`,
         is_boilerplate: false
       });
     }
 
-    // Add learnings from issue patterns
+    // SD objectives-based learning: what goals were addressed
+    const objectives = sd.strategic_objectives || [];
+    if (objectives.length > 0) {
+      const topObjective = typeof objectives[0] === 'string' ? objectives[0] : objectives[0]?.objective || '';
+      if (topObjective) {
+        keyLearnings.push({
+          learning: `Primary objective addressed: ${safeTruncate(topObjective, 120)}`,
+          is_boilerplate: false
+        });
+      }
+    }
+
+    // Quality context (keep but make less prominent)
+    if (qualityScore < 80 || testRating <= 3) {
+      keyLearnings.push({
+        learning: `Quality assessment: ${qualityScore}% overall, test evidence ${testRating}/5, implementation fidelity ${implRating}/5`,
+        is_boilerplate: false
+      });
+    }
+
+    if (handoffResult.test_evidence?.testCount > 0) {
+      keyLearnings.push({
+        learning: `${handoffResult.test_evidence.testCount} test(s) captured as evidence for validation`,
+        is_boilerplate: false
+      });
+    }
+
+    // Add learnings from issue patterns (real issues found during implementation)
     for (const issue of allIssues) {
       if (keyLearnings.length >= 7) break;
       keyLearnings.push({
-        learning: `[${issue.pattern_id}] ${issue.category} issue: ${safeTruncate(issue.issue_summary, 80)}${issue.issue_summary.length > 80 ? '...' : ''}`,
+        learning: `Issue discovered during implementation: [${issue.pattern_id}] ${safeTruncate(issue.issue_summary, 80)}`,
         is_boilerplate: false,
         pattern_id: issue.pattern_id
       });
       if (issue.prevention_checklist && Array.isArray(issue.prevention_checklist) && issue.prevention_checklist.length > 0) {
         keyLearnings.push({
-          learning: `Prevention for ${issue.pattern_id}: ${issue.prevention_checklist[0]}`,
+          learning: `Prevention strategy for ${issue.pattern_id}: ${issue.prevention_checklist[0]}`,
           is_boilerplate: false,
           pattern_id: issue.pattern_id
         });
       }
     }
 
-    if (sdIssues.length > 0) {
-      keyLearnings.push({
-        learning: `${sdIssues.length} issue pattern(s) linked to this SD for future reference`,
-        is_boilerplate: false
-      });
-    }
-
-    // Build action items
+    // Build action items (SD-specific, not generic)
     const actionItems = [];
-    if (testRating <= 3) {
-      actionItems.push({ action: 'Improve test coverage before next EXEC-TO-PLAN handoff', is_boilerplate: false });
-    }
-    if (implRating <= 3) {
-      actionItems.push({ action: 'Review PRD requirements more carefully during implementation', is_boilerplate: false });
-    }
 
     // Add action items from issue pattern proven_solutions
     for (const issue of allIssues) {
@@ -201,8 +276,24 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       }
     }
 
+    // Add quality-based action items (only when there's a real gap)
+    if (testRating <= 3) {
+      actionItems.push({ action: `Increase test coverage for ${sd.sd_key || sdId} — current test evidence scored ${testRating}/5`, is_boilerplate: false });
+    }
+    if (implRating <= 3) {
+      actionItems.push({ action: `Review implementation fidelity for ${sd.sd_key || sdId} — PRD alignment scored ${implRating}/5`, is_boilerplate: false });
+    }
+
+    // SD-specific follow-up based on objectives
+    if (objectives.length > 1 && actionItems.length < 5) {
+      actionItems.push({
+        action: `Verify all ${objectives.length} strategic objectives are fully addressed in "${sd.title}"`,
+        is_boilerplate: false
+      });
+    }
+
     if (actionItems.length === 0) {
-      actionItems.push({ action: 'No immediate actions required - continue standard workflow', is_boilerplate: false });
+      actionItems.push({ action: `All objectives met for "${sd.title}" — monitor for regressions in next SD cycle`, is_boilerplate: false });
     }
 
     // Build discovered_issues metadata

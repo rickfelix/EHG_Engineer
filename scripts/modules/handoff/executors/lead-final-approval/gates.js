@@ -352,7 +352,11 @@ export function createPRMergeVerificationGate() {
             max_score: 100,
             issues: [
               `${openPRs.length} open PR(s) must be merged before SD completion`,
-              ...openPRs.map(pr => `  → PR #${pr.number} (${pr.repo}): ${pr.url}`)
+              ...openPRs.map(pr => `  → PR #${pr.number} (${pr.repo}): ${pr.url}`),
+              '',
+              'REMEDIATION: Run /ship to merge open PRs before running LEAD-FINAL-APPROVAL.',
+              'Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL',
+              ...openPRs.map(pr => `  → gh pr merge ${pr.number} --repo ${pr.repo} --merge --delete-branch`)
             ],
             warnings: [],
             details: { openPRs: openPRs.map(pr => ({ number: pr.number, repo: pr.repo, url: pr.url })) }
@@ -413,7 +417,11 @@ export function createPRMergeVerificationGate() {
             max_score: 100,
             issues: [
               `${unmergedBranches.length} unmerged branch(es) with commits - create PRs and merge before completion`,
-              ...unmergedBranches.map(b => `  → ${b.branch} (${b.commits} commits) in ${b.repo}`)
+              ...unmergedBranches.map(b => `  → ${b.branch} (${b.commits} commits) in ${b.repo}`),
+              '',
+              'REMEDIATION: Run /ship to create PRs and merge branches before running LEAD-FINAL-APPROVAL.',
+              'Required order: EXEC → /ship (merge PR) → LEAD-FINAL-APPROVAL',
+              ...unmergedBranches.map(b => `  → cd to ${b.repo} repo, then: git push -u origin ${b.branch} && gh pr create && gh pr merge --merge --delete-branch`)
             ],
             warnings: [],
             details: {

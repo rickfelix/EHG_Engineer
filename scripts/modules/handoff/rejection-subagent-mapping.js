@@ -582,13 +582,13 @@ const REJECTION_MAP = {
     category: 'workflow',
     promptFn: (ctx) => {
       const brief = fivePointBrief({
-        symptom: `Retrospective quality insufficient for ${ctx.sdId}. Contains boilerplate or generic learnings.`,
-        location: `sd_retrospectives table WHERE sd_id='${ctx.sdId}'`,
-        frequency: 'Blocking PLAN-TO-LEAD handoff',
-        priorAttempts: 'Retrospective exists but quality is too low',
-        desiredOutcome: 'Replace boilerplate learnings with SD-specific insights. Add at least one concrete improvement area. Ensure key_learnings are not generic phrases.'
+        symptom: `Retrospective quality insufficient for ${ctx.sdId}. Contains boilerplate or metric-only learnings (e.g., "EXEC phase quality score: 80%").`,
+        location: `retrospectives table WHERE sd_id='${ctx.sdId}'`,
+        frequency: 'Blocking PLAN-TO-LEAD handoff — common with auto-generated retrospectives',
+        priorAttempts: 'Retrospective exists but quality is too low. Key learnings need SD-specific context instead of just gate metrics.',
+        desiredOutcome: `Replace metric-only learnings with SD-specific insights. Include: (1) What was implemented and why (reference SD title/description), (2) What files were changed and their purpose, (3) Specific implementation challenges encountered, (4) Concrete action items referencing the SD. Example good learning: "Implemented claim guard by adding p_reason parameter to release_sd RPC calls in lib/claim-guard.mjs to fix PostgREST function overload ambiguity."`
       });
-      return 'Retrospective quality insufficient. Improve with specific insights.' +
+      return 'Retrospective needs SD-specific insights, not metric-only learnings.' +
         taskInvocation('retro-agent', brief);
     }
   },
@@ -599,12 +599,12 @@ const REJECTION_MAP = {
     promptFn: (ctx) => {
       const brief = fivePointBrief({
         symptom: `Unmerged code for ${ctx.sdId}. LEAD-FINAL-APPROVAL requires all PRs merged to main.`,
-        location: 'GitHub PRs, feature branches',
-        frequency: 'Blocking final approval',
-        priorAttempts: 'Code is on feature branch but not merged',
-        desiredOutcome: `Merge all open PRs for ${ctx.sdId}. For unmerged branches: push, create PR, merge, then verify on main.`
+        location: 'GitHub PRs, feature branches for rickfelix/ehg and rickfelix/EHG_Engineer',
+        frequency: 'Blocking final approval — this is the #1 cause of LEAD-FINAL-APPROVAL failure',
+        priorAttempts: 'Code is on feature branch but not merged. Run /ship BEFORE LEAD-FINAL-APPROVAL.',
+        desiredOutcome: `Run /ship to commit, create PR, and merge all changes for ${ctx.sdId}. Required order: EXEC → /ship → LEAD-FINAL-APPROVAL. For each open PR: gh pr merge <number> --merge --delete-branch`
       });
-      return 'All code must be merged to main before completion.' +
+      return 'Run /ship BEFORE LEAD-FINAL-APPROVAL. All code must be merged to main first.' +
         taskInvocation('github-agent', brief);
     }
   },
