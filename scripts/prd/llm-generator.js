@@ -1,13 +1,13 @@
 /**
  * LLM-Based PRD Content Generation
- * Uses GPT to generate actual PRD content instead of placeholder text
+ * Uses Opus 4.6 to generate actual PRD content with codebase grounding
  *
  * Extracted from add-prd-to-database.js for modularity
  * SD-LEO-REFACTOR-PRD-DB-002
+ * SD-LEO-INFRA-REPLACE-GPT-OPUS-001: Switched from GPT 5.2 to Opus 4.6
  */
 
 import { getLLMClient } from '../../lib/llm/client-factory.js';
-import { PROVIDER_TIMEOUT_LONG_MS } from '../../lib/sub-agents/vetting/provider-adapters.js';
 import { LLM_PRD_CONFIG, buildSystemPrompt } from './config.js';
 import {
   formatObjectives,
@@ -19,7 +19,7 @@ import {
 } from './formatters.js';
 
 /**
- * Generate PRD content using LLM (GPT 5.2)
+ * Generate PRD content using LLM (Opus 4.6 via effort-based routing)
  *
  * @param {Object} sd - Strategic Directive data
  * @param {Object} context - Additional context (design analysis, database analysis, personas)
@@ -48,12 +48,11 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
     // Build user prompt with context
     const userPrompt = buildPRDGenerationContext(sd, context);
 
-    // Use adapter interface .complete() instead of OpenAI SDK interface
-    // PRD generation produces 5-30K tokens and needs much longer than the 30s default
+    // Use adapter interface .complete()
+    // Opus 4.6 completes in seconds; standard 60s timeout is sufficient
     const response = await llmClient.complete(systemPrompt, userPrompt, {
       temperature: LLM_PRD_CONFIG.temperature,
-      max_tokens: LLM_PRD_CONFIG.maxTokens,
-      timeout: PROVIDER_TIMEOUT_LONG_MS // 3 minutes - PRD generation is a long-form content task
+      max_tokens: LLM_PRD_CONFIG.maxTokens
     });
 
     // Parse adapter response format
