@@ -2,10 +2,28 @@
  * Improvement Guidance for PLAN-TO-EXEC Verifier
  *
  * Generates specific improvement guidance when handoff is rejected.
+ * Enhanced with Task tool invocations (SD-LEO-INFRA-ACTIONABLE-REJECTION-TEMPLATES-001)
  *
- * Extracted from scripts/verify-handoff-plan-to-exec.js for maintainability.
- * Part of SD-LEO-REFACTOR-HANDOFF-001
+ * Delegates to centralized rejection-subagent-mapping.js for Task tool invocations.
+ * Preserves structured return shape: { required, actions, timeEstimate, instructions }
  */
+
+import { getRemediation as getMappedRemediation } from '../../rejection-subagent-mapping.js';
+
+/**
+ * Append Task tool invocation from centralized mapping to instructions.
+ * @param {string} instructions - Base instructions
+ * @param {string} reasonCode - Rejection code
+ * @param {Object} context - { sdId, gateName, details, score }
+ * @returns {string} Instructions with Task invocation appended
+ */
+function appendTaskInvocation(instructions, reasonCode, context) {
+  const mapped = getMappedRemediation(reasonCode, context);
+  if (mapped && mapped.subagentType) {
+    return instructions + '\n\n' + mapped.message;
+  }
+  return instructions;
+}
 
 /**
  * Generate specific improvement guidance based on rejection reason
@@ -15,6 +33,7 @@
  * @returns {Object} - Guidance with required, actions, timeEstimate, instructions
  */
 export function generateImprovementGuidance(reasonCode, details = {}) {
+  const context = { sdId: details.sdId || 'unknown', gateName: reasonCode, details };
   const guidance = {
     required: [],
     actions: [],
@@ -27,10 +46,13 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
       guidance.required = ['Create comprehensive PRD using create-prd-script.js'];
       guidance.actions = ['Run PRD creation script', 'Validate PRD quality', 'Resubmit handoff'];
       guidance.timeEstimate = '2-3 hours';
-      guidance.instructions = 'Execute comprehensive PRD creation script and ensure all required fields are completed.';
+      guidance.instructions = appendTaskInvocation(
+        'Execute comprehensive PRD creation script and ensure all required fields are completed.',
+        reasonCode, context
+      );
       break;
 
-    case 'PRD_QUALITY':
+    case 'PRD_QUALITY': {
       const prdValidation = details.prdValidation;
       guidance.required = prdValidation?.errors || ['Improve PRD quality to meet minimum standards'];
       guidance.actions = [
@@ -40,14 +62,21 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
         'Improve acceptance criteria detail'
       ];
       guidance.timeEstimate = '1-2 hours';
-      guidance.instructions = `Current PRD score: ${details.actualScore}%. Minimum required: ${details.requiredScore}%. Focus on completing missing fields and enhancing requirement detail.`;
+      guidance.instructions = appendTaskInvocation(
+        `Current PRD score: ${details.actualScore}%. Minimum required: ${details.requiredScore}%. Focus on completing missing fields and enhancing requirement detail.`,
+        reasonCode, context
+      );
       break;
+    }
 
     case 'PLAN_INCOMPLETE':
       guidance.required = ['Complete PLAN phase activities', 'Update PRD status to approved'];
       guidance.actions = ['Review PLAN checklist', 'Complete outstanding items', 'Update PRD status'];
       guidance.timeEstimate = '45-90 minutes';
-      guidance.instructions = 'Complete all PLAN phase checklist items before requesting EXEC handoff.';
+      guidance.instructions = appendTaskInvocation(
+        'Complete all PLAN phase checklist items before requesting EXEC handoff.',
+        reasonCode, context
+      );
       break;
 
     case 'NO_USER_STORIES':
@@ -60,18 +89,23 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
         'Retry PLAN->EXEC handoff'
       ];
       guidance.timeEstimate = '30-45 minutes';
-      guidance.instructions = 'User stories are MANDATORY for testing validation. Run Product Requirements Expert to generate user stories from PRD before proceeding to EXEC phase.';
+      guidance.instructions = appendTaskInvocation(
+        'User stories are MANDATORY for testing validation. Run Product Requirements Expert to generate user stories from PRD before proceeding to EXEC phase.',
+        reasonCode, context
+      );
       break;
 
     case 'USER_STORIES_ERROR':
       guidance.required = ['Fix database access issues for user_stories table'];
       guidance.actions = ['Check database connectivity', 'Verify user_stories table exists', 'Retry handoff'];
       guidance.timeEstimate = '15-20 minutes';
-      guidance.instructions = 'Database error accessing user_stories table. Verify table exists and permissions are correct.';
+      guidance.instructions = appendTaskInvocation(
+        'Database error accessing user_stories table. Verify table exists and permissions are correct.',
+        reasonCode, context
+      );
       break;
 
-    case 'USER_STORY_QUALITY':
-      // SD-CAPABILITY-LIFECYCLE-001: User story quality gate
+    case 'USER_STORY_QUALITY': {
       const qualityValidation = details.qualityValidation;
       const qualityImprovements = details.improvements;
 
@@ -88,14 +122,17 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
         'Retry PLAN->EXEC handoff'
       ];
       guidance.timeEstimate = qualityImprovements?.timeEstimate || '30-60 minutes';
-      guidance.instructions = qualityImprovements?.instructions ||
-        `User story quality score is ${qualityValidation?.averageScore || 0}% (minimum ${qualityValidation?.minimumScore || 70}%). ` +
-        `${qualityValidation?.qualityDistribution?.poor || 0} stories scored below minimum threshold. ` +
-        'Focus on stories with blocking issues first. Use the stories-agent skill for guidance.';
+      guidance.instructions = appendTaskInvocation(
+        qualityImprovements?.instructions ||
+          `User story quality score is ${qualityValidation?.averageScore || 0}% (minimum ${qualityValidation?.minimumScore || 70}%). ` +
+          `${qualityValidation?.qualityDistribution?.poor || 0} stories scored below minimum threshold. ` +
+          'Focus on stories with blocking issues first. Use the stories-agent skill for guidance.',
+        reasonCode, context
+      );
       break;
+    }
 
-    case 'PRD_BOILERPLATE':
-      // SD-CAPABILITY-LIFECYCLE-001: PRD content quality gate
+    case 'PRD_BOILERPLATE': {
       const prdQualityValidation = details.qualityValidation;
       const prdImprovements = details.improvements;
 
@@ -111,19 +148,26 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
         'Retry PLAN->EXEC handoff'
       ];
       guidance.timeEstimate = prdImprovements?.timeEstimate || '30-60 minutes';
-      guidance.instructions = prdImprovements?.instructions ||
-        `PRD content quality score is ${prdQualityValidation?.score || 0}% (minimum ${prdQualityValidation?.minimumScore || 70}%). ` +
-        'Focus on replacing placeholder text with specific, measurable content unique to this SD.';
+      guidance.instructions = appendTaskInvocation(
+        prdImprovements?.instructions ||
+          `PRD content quality score is ${prdQualityValidation?.score || 0}% (minimum ${prdQualityValidation?.minimumScore || 70}%). ` +
+          'Focus on replacing placeholder text with specific, measurable content unique to this SD.',
+        reasonCode, context
+      );
       break;
+    }
 
     case 'HANDOFF_INVALID':
       guidance.required = ['Fix handoff document to meet LEO Protocol standards'];
       guidance.actions = ['Review handoff validation errors', 'Update handoff document', 'Ensure all 7 elements present'];
       guidance.timeEstimate = '30-45 minutes';
-      guidance.instructions = 'Handoff document must include all 7 required elements per LEO Protocol v4.1.2.';
+      guidance.instructions = appendTaskInvocation(
+        'Handoff document must include all 7 required elements per LEO Protocol v4.1.2.',
+        reasonCode, context
+      );
       break;
 
-    case 'PLAN_PRESENTATION_INVALID':
+    case 'PLAN_PRESENTATION_INVALID': {
       const ppValidation = details.planPresentationValidation;
       guidance.required = ppValidation?.errors || ['Add complete plan_presentation to handoff metadata'];
       guidance.actions = [
@@ -136,10 +180,14 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
         'Resubmit handoff'
       ];
       guidance.timeEstimate = '20-30 minutes';
-      guidance.instructions = 'PLAN->EXEC handoffs require plan_presentation in metadata per SD-PLAN-PRESENT-001. Include implementation goals, file scope, execution steps, and testing strategy.';
+      guidance.instructions = appendTaskInvocation(
+        'PLAN->EXEC handoffs require plan_presentation in metadata per SD-PLAN-PRESENT-001. Include implementation goals, file scope, execution steps, and testing strategy.',
+        reasonCode, context
+      );
       break;
+    }
 
-    case 'WORKFLOW_REVIEW_FAILED':
+    case 'WORKFLOW_REVIEW_FAILED': {
       const workflowAnalysis = details.workflowAnalysis;
       const requiredActions = details.requiredActions || [];
 
@@ -151,7 +199,6 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
         guidance.required = ['Fix workflow validation issues detected by Design Sub-Agent'];
       }
 
-      // Count issues across all dimensions
       const vr = workflowAnalysis?.validation_results || {};
       const allIssues = [
         ...(vr.dead_ends || []),
@@ -181,42 +228,28 @@ export function generateImprovementGuidance(reasonCode, details = {}) {
       ];
 
       const issues = [];
-      if (vr.dead_ends?.length > 0) {
-        issues.push(`${vr.dead_ends.length} dead ends`);
-      }
-      if (vr.circular_flows?.length > 0) {
-        issues.push(`${vr.circular_flows.length} circular flows`);
-      }
-      if (criticalCount > 0) {
-        issues.push(`${criticalCount} CRITICAL`);
-      }
-      if (highCount > 0) {
-        issues.push(`${highCount} HIGH`);
-      }
-      if (workflowAnalysis?.ux_impact_score < 6.0) {
-        issues.push(`UX score ${workflowAnalysis.ux_impact_score}/10`);
-      }
+      if (vr.dead_ends?.length > 0) issues.push(`${vr.dead_ends.length} dead ends`);
+      if (vr.circular_flows?.length > 0) issues.push(`${vr.circular_flows.length} circular flows`);
+      if (criticalCount > 0) issues.push(`${criticalCount} CRITICAL`);
+      if (highCount > 0) issues.push(`${highCount} HIGH`);
+      if (workflowAnalysis?.ux_impact_score < 6.0) issues.push(`UX score ${workflowAnalysis.ux_impact_score}/10`);
 
       guidance.timeEstimate = criticalCount > 3 ? '1-2 hours' : '30-60 minutes';
-      guidance.instructions = `Workflow validation failed with ${issues.join(', ')}.
-
-RECOMMENDED: node scripts/review-workflow.js <SD-ID>
-
-Interactive tool features:
-- Adaptive analysis depth (DEEP/STANDARD/LIGHT based on story risk)
-- Pattern learning from existing codebase
-- Confidence-based recommendations (>=90%: auto-apply, 60-89%: options, <60%: ask human)
-- Direct user story updates in database
-- Iterative re-analysis (max 3 rounds)
-
-After iteration complete, retry handoff.`;
+      guidance.instructions = appendTaskInvocation(
+        `Workflow validation failed with ${issues.join(', ')}.\n\nRECOMMENDED: node scripts/review-workflow.js <SD-ID>\n\nAfter iteration complete, retry handoff.`,
+        reasonCode, context
+      );
       break;
+    }
 
     default:
       guidance.required = ['Address system errors and retry'];
       guidance.actions = ['Check system status', 'Verify database connectivity', 'Retry handoff'];
       guidance.timeEstimate = '15-30 minutes';
-      guidance.instructions = 'System error encountered. Check logs and retry handoff verification.';
+      guidance.instructions = appendTaskInvocation(
+        'System error encountered. Check logs and retry handoff verification.',
+        reasonCode, context
+      );
   }
 
   return guidance;
