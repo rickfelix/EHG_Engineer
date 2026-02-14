@@ -1,4 +1,6 @@
 node_modules/
+.vscode/
+handoff-result.txt
 .env
 .env.*
 !.env.example
