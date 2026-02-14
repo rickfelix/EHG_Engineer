@@ -1,41 +1,39 @@
 /**
- * Unit tests for Stage 15 - Resource Planning template
- * Part of SD-LEO-FEAT-TMPL-BLUEPRINT-001
+ * Unit tests for Stage 15 - Risk Register template
+ * Part of SD-EVA-FIX-STAGE15-RISK-001
  *
- * Test Scenario: Stage 15 validation enforces minimum team members,
- * unique roles, and validates allocation percentages.
+ * Test Scenario: Stage 15 validation enforces minimum risks,
+ * severity/priority enums, and required fields.
  *
  * @module tests/unit/eva/stage-templates/stage-15.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage15, { MIN_TEAM_MEMBERS, MIN_ROLES } from '../../../../lib/eva/stage-templates/stage-15.js';
+import stage15, { MIN_RISKS, SEVERITY_ENUM, PRIORITY_ENUM } from '../../../../lib/eva/stage-templates/stage-15.js';
 
-describe('stage-15.js - Resource Planning template', () => {
+describe('stage-15.js - Risk Register template', () => {
   describe('Template metadata', () => {
     it('should have correct template structure', () => {
       expect(stage15.id).toBe('stage-15');
-      expect(stage15.slug).toBe('resource-planning');
-      expect(stage15.title).toBe('Resource Planning');
-      expect(stage15.version).toBe('2.0.0');
+      expect(stage15.slug).toBe('risk-register');
+      expect(stage15.title).toBe('Risk Register');
+      expect(stage15.version).toBe('3.0.0');
     });
 
     it('should have schema definition', () => {
       expect(stage15.schema).toBeDefined();
-      expect(stage15.schema.team_members).toBeDefined();
-      expect(stage15.schema.skill_gaps).toBeDefined();
-      expect(stage15.schema.hiring_plan).toBeDefined();
+      expect(stage15.schema.risks).toBeDefined();
+      expect(stage15.schema.total_risks).toBeDefined();
+      expect(stage15.schema.severity_breakdown).toBeDefined();
+      expect(stage15.schema.budget_coherence).toBeDefined();
     });
 
     it('should have defaultData', () => {
       expect(stage15.defaultData).toEqual({
-        team_members: [],
-        skill_gaps: [],
-        hiring_plan: [],
-        total_headcount: 0,
-        total_monthly_cost: 0,
-        unique_roles: 0,
-        avg_allocation: 0,
+        risks: [],
+        total_risks: 0,
+        severity_breakdown: { critical: 0, high: 0, medium: 0, low: 0 },
+        budget_coherence: { aligned: false, notes: '' },
       });
     });
 
@@ -48,383 +46,229 @@ describe('stage-15.js - Resource Planning template', () => {
     });
 
     it('should export constants', () => {
-      expect(MIN_TEAM_MEMBERS).toBe(2);
-      expect(MIN_ROLES).toBe(2);
+      expect(MIN_RISKS).toBe(1);
+      expect(SEVERITY_ENUM).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(PRIORITY_ENUM).toEqual(['immediate', 'short_term', 'long_term']);
     });
   });
 
-  describe('validate() - Team members array', () => {
-    it('should pass for valid team_members (>= 2 members, >= 2 roles)', () => {
-      const validData = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript', 'React'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma', 'UI/UX'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(validData);
+  const validRisk = {
+    title: 'Market adoption risk',
+    description: 'Target market may not adopt the product within expected timeframe',
+    owner: 'Product Manager',
+    severity: 'high',
+    priority: 'immediate',
+    phaseRef: 'Phase 1 - MVP Launch',
+    mitigationPlan: 'Conduct user interviews and iterate on feedback',
+    contingencyPlan: 'Pivot to adjacent market segment',
+  };
+
+  const minValidRisk = {
+    title: 'Technical risk',
+    description: 'Integration complexity',
+    owner: 'Tech Lead',
+    severity: 'medium',
+    priority: 'short_term',
+    mitigationPlan: 'Prototype early',
+  };
+
+  describe('validate() - Risks array', () => {
+    it('should pass for valid risks (>= 1 risk)', () => {
+      const result = stage15.validate({ risks: [validRisk] });
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should fail for fewer than 2 team members', () => {
-      const invalidData = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('team_members') && e.includes('at least 2'))).toBe(true);
+    it('should pass for multiple valid risks', () => {
+      const result = stage15.validate({ risks: [validRisk, minValidRisk] });
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
     });
 
-    it('should fail for team member missing role', () => {
-      const invalidData = {
-        team_members: [
-          { skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
+    it('should fail for empty risks array', () => {
+      const result = stage15.validate({ risks: [] });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('team_members[0].role'))).toBe(true);
+      expect(result.errors.some(e => e.includes('risks') && e.includes('at least 1'))).toBe(true);
     });
 
-    it('should fail for team member missing allocation_pct', () => {
-      const invalidData = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
+    it('should fail for missing risks', () => {
+      const result = stage15.validate({});
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('team_members[0].allocation_pct'))).toBe(true);
     });
 
-    it('should fail for allocation_pct > 100', () => {
-      const invalidData = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 150, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
+    it('should fail for risk missing title', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, title: undefined }],
+      });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('team_members[0].allocation_pct') && e.includes('150'))).toBe(true);
+      expect(result.errors.some(e => e.includes('risks[0].title'))).toBe(true);
     });
 
-    it('should fail for team member with empty skills array', () => {
-      const invalidData = {
-        team_members: [
-          { role: 'Engineer', skills: [], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
+    it('should fail for risk missing description', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, description: undefined }],
+      });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('team_members[0].skills'))).toBe(true);
+      expect(result.errors.some(e => e.includes('risks[0].description'))).toBe(true);
     });
 
-    it('should fail for team member missing skills', () => {
-      const invalidData = {
-        team_members: [
-          { role: 'Engineer', allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
+    it('should fail for risk missing owner', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, owner: undefined }],
+      });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('team_members[0].skills'))).toBe(true);
+      expect(result.errors.some(e => e.includes('risks[0].owner'))).toBe(true);
     });
 
-    it('should fail for fewer than 2 unique roles', () => {
-      const invalidData = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Engineer', skills: ['Python'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.validate(invalidData);
+    it('should fail for risk missing mitigationPlan', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, mitigationPlan: undefined }],
+      });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('at least 2 unique roles'))).toBe(true);
+      expect(result.errors.some(e => e.includes('risks[0].mitigationPlan'))).toBe(true);
+    });
+
+    it('should fail for risk missing severity', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, severity: undefined }],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('risks[0].severity'))).toBe(true);
+    });
+
+    it('should fail for risk missing priority', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, priority: undefined }],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('risks[0].priority'))).toBe(true);
+    });
+
+    it('should fail for invalid severity enum', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, severity: 'extreme' }],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('risks[0].severity') && e.includes('extreme'))).toBe(true);
+    });
+
+    it('should fail for invalid priority enum', () => {
+      const result = stage15.validate({
+        risks: [{ ...validRisk, priority: 'urgent' }],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('risks[0].priority') && e.includes('urgent'))).toBe(true);
+    });
+
+    it('should pass without optional phaseRef and contingencyPlan', () => {
+      const result = stage15.validate({ risks: [minValidRisk] });
+      expect(result.valid).toBe(true);
+    });
+
+    it('should report multiple errors for a single risk', () => {
+      const result = stage15.validate({
+        risks: [{ severity: 'invalid', priority: 'invalid' }],
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThanOrEqual(4);
     });
   });
 
-  describe('validate() - Skill gaps (optional)', () => {
-    const validTeamMembers = [
-      { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-      { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-    ];
-
-    it('should pass when skill_gaps are omitted', () => {
-      const validData = {
-        team_members: validTeamMembers,
-      };
-      const result = stage15.validate(validData);
-      expect(result.valid).toBe(true);
+  describe('computeDerived() - Risk statistics', () => {
+    it('should calculate total_risks correctly', () => {
+      const result = stage15.computeDerived({ risks: [validRisk, minValidRisk] });
+      expect(result.total_risks).toBe(2);
     });
 
-    it('should pass when skill_gaps are empty array', () => {
-      const validData = {
-        team_members: validTeamMembers,
-        skill_gaps: [],
-      };
-      const result = stage15.validate(validData);
-      expect(result.valid).toBe(true);
+    it('should calculate severity_breakdown correctly', () => {
+      const risks = [
+        { ...validRisk, severity: 'critical' },
+        { ...validRisk, severity: 'high' },
+        { ...validRisk, severity: 'high' },
+        { ...validRisk, severity: 'low' },
+      ];
+      const result = stage15.computeDerived({ risks });
+      expect(result.severity_breakdown).toEqual({
+        critical: 1,
+        high: 2,
+        medium: 0,
+        low: 1,
+      });
     });
 
-    it('should pass when skill_gaps have valid items', () => {
-      const validData = {
-        team_members: validTeamMembers,
-        skill_gaps: [
-          { skill: 'DevOps', severity: 'high', mitigation: 'Hire contractor' },
-        ],
-      };
-      const result = stage15.validate(validData);
-      expect(result.valid).toBe(true);
+    it('should return zeroed severity_breakdown for empty risks', () => {
+      const result = stage15.computeDerived({ risks: [] });
+      expect(result.severity_breakdown).toEqual({
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+      });
     });
 
-    it('should fail for skill gap missing skill', () => {
-      const invalidData = {
-        team_members: validTeamMembers,
-        skill_gaps: [
-          { severity: 'high', mitigation: 'Hire contractor' },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('skill_gaps[0].skill'))).toBe(true);
+    it('should set budget_coherence.aligned to true when risks exist', () => {
+      const result = stage15.computeDerived({ risks: [validRisk] });
+      expect(result.budget_coherence.aligned).toBe(true);
     });
 
-    it('should fail for skill gap missing severity', () => {
-      const invalidData = {
-        team_members: validTeamMembers,
-        skill_gaps: [
-          { skill: 'DevOps', mitigation: 'Hire contractor' },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('skill_gaps[0].severity'))).toBe(true);
+    it('should set budget_coherence.aligned to false when no risks', () => {
+      const result = stage15.computeDerived({ risks: [] });
+      expect(result.budget_coherence.aligned).toBe(false);
     });
 
-    it('should fail for skill gap missing mitigation', () => {
-      const invalidData = {
-        team_members: validTeamMembers,
-        skill_gaps: [
-          { skill: 'DevOps', severity: 'high' },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('skill_gaps[0].mitigation'))).toBe(true);
-    });
-  });
-
-  describe('validate() - Hiring plan (optional)', () => {
-    const validTeamMembers = [
-      { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-      { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-    ];
-
-    it('should pass when hiring_plan is omitted', () => {
-      const validData = {
-        team_members: validTeamMembers,
-      };
-      const result = stage15.validate(validData);
-      expect(result.valid).toBe(true);
+    it('should include notes in budget_coherence', () => {
+      const result = stage15.computeDerived({ risks: [validRisk, minValidRisk] });
+      expect(result.budget_coherence.notes).toContain('2 risk(s)');
     });
 
-    it('should pass when hiring_plan is empty array', () => {
-      const validData = {
-        team_members: validTeamMembers,
-        hiring_plan: [],
-      };
-      const result = stage15.validate(validData);
-      expect(result.valid).toBe(true);
-    });
-
-    it('should pass when hiring_plan has valid items', () => {
-      const validData = {
-        team_members: validTeamMembers,
-        hiring_plan: [
-          { role: 'DevOps Engineer', timeline: 'Q2 2026', priority: 'high' },
-        ],
-      };
-      const result = stage15.validate(validData);
-      expect(result.valid).toBe(true);
-    });
-
-    it('should fail for hiring plan missing role', () => {
-      const invalidData = {
-        team_members: validTeamMembers,
-        hiring_plan: [
-          { timeline: 'Q2 2026', priority: 'high' },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('hiring_plan[0].role'))).toBe(true);
-    });
-
-    it('should fail for hiring plan missing timeline', () => {
-      const invalidData = {
-        team_members: validTeamMembers,
-        hiring_plan: [
-          { role: 'DevOps Engineer', priority: 'high' },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('hiring_plan[0].timeline'))).toBe(true);
-    });
-
-    it('should fail for hiring plan missing priority', () => {
-      const invalidData = {
-        team_members: validTeamMembers,
-        hiring_plan: [
-          { role: 'DevOps Engineer', timeline: 'Q2 2026' },
-        ],
-      };
-      const result = stage15.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('hiring_plan[0].priority'))).toBe(true);
-    });
-  });
-
-  describe('computeDerived() - Team statistics', () => {
-    it('should calculate total_headcount correctly', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-          { role: 'PM', skills: ['Agile'], allocation_pct: 75, cost_monthly: 8000 },
-        ],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.total_headcount).toBe(3);
-    });
-
-    it('should calculate total_monthly_cost correctly', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.total_monthly_cost).toBe(15000);
-    });
-
-    it('should handle missing cost_monthly (default to 0)', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50 },
-        ],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.total_monthly_cost).toBe(0);
-    });
-
-    it('should calculate unique_roles correctly', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Engineer', skills: ['Python'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.unique_roles).toBe(2);
-    });
-
-    it('should calculate avg_allocation correctly', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.avg_allocation).toBe(75);
-    });
-
-    it('should round avg_allocation to 2 decimal places', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-          { role: 'PM', skills: ['Agile'], allocation_pct: 33, cost_monthly: 3000 },
-        ],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.avg_allocation).toBe(61);
-    });
-
-    it('should return 0 avg_allocation for empty team_members', () => {
-      const data = {
-        team_members: [],
-      };
-      const result = stage15.computeDerived(data);
-      expect(result.avg_allocation).toBe(0);
+    it('should return 0 total_risks for empty array', () => {
+      const result = stage15.computeDerived({ risks: [] });
+      expect(result.total_risks).toBe(0);
     });
   });
 
   describe('Edge cases', () => {
-    it('should handle empty team_members array', () => {
-      const data = {
-        team_members: [],
-      };
-      const validation = stage15.validate(data);
-      expect(validation.valid).toBe(false);
-
-      const derived = stage15.computeDerived(data);
-      expect(derived.total_headcount).toBe(0);
-      expect(derived.total_monthly_cost).toBe(0);
-      expect(derived.unique_roles).toBe(0);
-      expect(derived.avg_allocation).toBe(0);
-    });
-
-    it('should handle null values', () => {
+    it('should handle null data', () => {
       const result = stage15.validate(null);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle undefined values', () => {
+    it('should handle undefined data', () => {
       const result = stage15.validate(undefined);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it('should handle empty object', () => {
+      const result = stage15.validate({});
+      expect(result.valid).toBe(false);
+    });
+
+    it('should handle computeDerived with missing risks gracefully', () => {
+      const result = stage15.computeDerived({});
+      expect(result.total_risks).toBe(0);
+      expect(result.severity_breakdown).toEqual({ critical: 0, high: 0, medium: 0, low: 0 });
     });
   });
 
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100, cost_monthly: 10000 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50, cost_monthly: 5000 },
-        ],
-      };
+      const data = { risks: [validRisk, minValidRisk] };
       const validation = stage15.validate(data);
       expect(validation.valid).toBe(true);
 
       const computed = stage15.computeDerived(data);
-      expect(computed.total_headcount).toBe(2);
-      expect(computed.unique_roles).toBe(2);
-      expect(computed.total_monthly_cost).toBe(15000);
+      expect(computed.total_risks).toBe(2);
+      expect(computed.severity_breakdown.high).toBe(1);
+      expect(computed.severity_breakdown.medium).toBe(1);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
-      const data = {
-        team_members: [
-          { role: 'Engineer', skills: [], allocation_pct: 100, cost_monthly: 10000 },
-        ],
-      };
+      const data = { risks: [{ severity: 'critical' }] };
       const computed = stage15.computeDerived(data);
-      expect(computed.total_headcount).toBe(1);
-      expect(computed.unique_roles).toBe(1);
+      expect(computed.total_risks).toBe(1);
+      expect(computed.severity_breakdown.critical).toBe(1);
     });
   });
 });
