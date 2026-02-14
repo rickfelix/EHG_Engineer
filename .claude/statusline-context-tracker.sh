@@ -144,7 +144,7 @@ if [ "$CURRENT_USAGE" != "null" ]; then
     [[ "$CACHE_READ" =~ ^[0-9]+$ ]] || CACHE_READ=0
 
     # The accurate context usage calculation
-    CONTEXT_USED=$((INPUT_TOKENS + CACHE_CREATION + CACHE_READ))
+    CONTEXT_USED=$((INPUT_TOKENS + OUTPUT_TOKENS + CACHE_CREATION + CACHE_READ))
 
     # Calculate USABLE context (total minus auto-compact buffer)
     # This gives accurate "% until compaction" rather than misleading raw %
