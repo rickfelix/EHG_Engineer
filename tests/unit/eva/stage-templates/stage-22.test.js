@@ -66,7 +66,7 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should pass for valid release items', () => {
       const validData = {
         release_items: [
-          { name: 'Security review', category: 'Security', status: 'approved', approver: 'CISO' },
+          { name: 'Security review', category: 'security', status: 'approved', approver: 'CISO' },
         ],
         release_notes: 'Release notes for v1.0',
         target_date: '2026-03-01',
@@ -100,7 +100,7 @@ describe('stage-22.js - Release Readiness template', () => {
 
     it('should fail for release item missing name', () => {
       const invalidData = {
-        release_items: [{ category: 'Security', status: 'approved' }],
+        release_items: [{ category: 'security', status: 'approved' }],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
       };
@@ -122,7 +122,7 @@ describe('stage-22.js - Release Readiness template', () => {
 
     it('should fail for release item missing status', () => {
       const invalidData = {
-        release_items: [{ name: 'Security review', category: 'Security' }],
+        release_items: [{ name: 'Security review', category: 'security' }],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
       };
@@ -133,7 +133,7 @@ describe('stage-22.js - Release Readiness template', () => {
 
     it('should fail for release item with invalid status', () => {
       const invalidData = {
-        release_items: [{ name: 'Security review', category: 'Security', status: 'invalid' }],
+        release_items: [{ name: 'Security review', category: 'security', status: 'invalid' }],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
       };
@@ -142,10 +142,21 @@ describe('stage-22.js - Release Readiness template', () => {
       expect(result.errors.some(e => e.includes('release_items[0].status'))).toBe(true);
     });
 
+    it('should fail for release item with invalid category enum value', () => {
+      const invalidData = {
+        release_items: [{ name: 'Security review', category: 'InvalidCategory', status: 'approved' }],
+        release_notes: 'Release notes',
+        target_date: '2026-03-01',
+      };
+      const result = stage22.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('release_items[0].category'))).toBe(true);
+    });
+
     it('should pass with optional approver field', () => {
       const validData = {
         release_items: [
-          { name: 'Security review', category: 'Security', status: 'approved', approver: 'CISO' },
+          { name: 'Security review', category: 'security', status: 'approved', approver: 'CISO' },
         ],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
@@ -158,7 +169,7 @@ describe('stage-22.js - Release Readiness template', () => {
 
   describe('validate() - Release notes and target date', () => {
     const validItems = [
-      { name: 'Security review', category: 'Security', status: 'approved' },
+      { name: 'Security review', category: 'security', status: 'approved' },
     ];
 
     it('should fail for missing release_notes', () => {
@@ -208,9 +219,9 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should calculate total_items correctly', () => {
       const data = {
         release_items: [
-          { name: 'R1', category: 'C1', status: 'approved' },
-          { name: 'R2', category: 'C2', status: 'pending' },
-          { name: 'R3', category: 'C3', status: 'approved' },
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'pending' },
+          { name: 'R3', category: 'infrastructure', status: 'approved' },
         ],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
@@ -222,10 +233,10 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should calculate approved_items correctly', () => {
       const data = {
         release_items: [
-          { name: 'R1', category: 'C1', status: 'approved' },
-          { name: 'R2', category: 'C2', status: 'pending' },
-          { name: 'R3', category: 'C3', status: 'approved' },
-          { name: 'R4', category: 'C4', status: 'rejected' },
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'pending' },
+          { name: 'R3', category: 'infrastructure', status: 'approved' },
+          { name: 'R4', category: 'documentation', status: 'rejected' },
         ],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
@@ -237,8 +248,8 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should set all_approved to true when all items approved', () => {
       const data = {
         release_items: [
-          { name: 'R1', category: 'C1', status: 'approved' },
-          { name: 'R2', category: 'C2', status: 'approved' },
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'approved' },
         ],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
@@ -250,8 +261,8 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should set all_approved to false when any item not approved', () => {
       const data = {
         release_items: [
-          { name: 'R1', category: 'C1', status: 'approved' },
-          { name: 'R2', category: 'C2', status: 'pending' },
+          { name: 'R1', category: 'feature', status: 'approved' },
+          { name: 'R2', category: 'bugfix', status: 'pending' },
         ],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
@@ -310,7 +321,7 @@ describe('stage-22.js - Release Readiness template', () => {
       },
       stage22: {
         release_items: [
-          { name: 'R1', category: 'C1', status: 'approved' },
+          { name: 'R1', category: 'feature', status: 'approved' },
         ],
       },
     };
@@ -447,8 +458,8 @@ describe('stage-22.js - Release Readiness template', () => {
         ...validPrerequisites,
         stage22: {
           release_items: [
-            { name: 'R1', category: 'C1', status: 'approved' },
-            { name: 'R2', category: 'C2', status: 'pending' },
+            { name: 'R1', category: 'feature', status: 'approved' },
+            { name: 'R2', category: 'bugfix', status: 'pending' },
           ],
         },
       };
@@ -465,7 +476,7 @@ describe('stage-22.js - Release Readiness template', () => {
         stage19: { completion_pct: 50, blocked_tasks: 1 },
         stage20: { quality_gate_passed: false, overall_pass_rate: 90, coverage_pct: 50 },
         stage21: { all_passing: false, failing_integrations: [{ name: 'I1' }] },
-        stage22: { release_items: [{ name: 'R1', category: 'C1', status: 'pending' }] },
+        stage22: { release_items: [{ name: 'R1', category: 'feature', status: 'pending' }] },
       };
       const result = evaluatePromotionGate(prerequisites);
       expect(result.pass).toBe(false);
@@ -477,7 +488,7 @@ describe('stage-22.js - Release Readiness template', () => {
   describe('computeDerived() - Integration with promotion gate', () => {
     it('should include promotion gate evaluation when prerequisites provided', () => {
       const data = {
-        release_items: [{ name: 'R1', category: 'C1', status: 'approved' }],
+        release_items: [{ name: 'R1', category: 'feature', status: 'approved' }],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
       };
@@ -504,7 +515,7 @@ describe('stage-22.js - Release Readiness template', () => {
 
     it('should return default promotion gate when prerequisites not provided', () => {
       const data = {
-        release_items: [{ name: 'R1', category: 'C1', status: 'approved' }],
+        release_items: [{ name: 'R1', category: 'feature', status: 'approved' }],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
       };
@@ -545,8 +556,8 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should work together for valid data', () => {
       const data = {
         release_items: [
-          { name: 'Security review', category: 'Security', status: 'approved' },
-          { name: 'Legal review', category: 'Legal', status: 'approved' },
+          { name: 'Security review', category: 'security', status: 'approved' },
+          { name: 'Legal review', category: 'documentation', status: 'approved' },
         ],
         release_notes: 'Major release with new features',
         target_date: '2026-03-01',
@@ -564,7 +575,7 @@ describe('stage-22.js - Release Readiness template', () => {
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
         release_items: [
-          { name: 'R1', category: 'C1', status: 'invalid_status' },
+          { name: 'R1', category: 'feature', status: 'invalid_status' },
         ],
         release_notes: 'Short',
         target_date: '2026-03-01',

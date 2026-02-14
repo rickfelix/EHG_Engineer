@@ -176,6 +176,25 @@ describe('stage-19.js - Build Execution template', () => {
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('issues[0].status'))).toBe(true);
     });
+    it('should fail for issue with invalid severity enum value', () => {
+      const invalidData = {
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ description: 'Issue 1', severity: 'urgent', status: 'open' }],
+      };
+      const result = stage19.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('issues[0].severity'))).toBe(true);
+    });
+
+    it('should fail for issue with invalid status enum value', () => {
+      const invalidData = {
+        tasks: [{ name: 'Task 1', status: 'done' }],
+        issues: [{ description: 'Issue 1', severity: 'high', status: 'closed' }],
+      };
+      const result = stage19.validate(invalidData);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('issues[0].status'))).toBe(true);
+    });
   });
 
   describe('computeDerived() - Task metrics', () => {
