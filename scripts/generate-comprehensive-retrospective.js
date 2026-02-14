@@ -11,8 +11,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
 
 // Import retrospective signals module for intelligent signal aggregation
 // SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001
@@ -59,10 +57,10 @@ if (supabaseKey.length < 100 || !supabaseKey.includes('eyJ')) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * Extract insights from handoff documents
+ * Extract insights from handoff records in sd_phase_handoffs table
+ * (SD-LEARN-FIX-ADDRESS-PAT-AUTO-010: Replaced markdown file reading with database queries)
  */
-function analyzeHandoffs(sdKey) {
-  const handoffDir = './handoffs';
+async function analyzeHandoffs(sdKey) {
   const insights = {
     achievements: [],
     challenges: [],
@@ -71,63 +69,143 @@ function analyzeHandoffs(sdKey) {
     patterns: []
   };
 
-  if (!fs.existsSync(handoffDir)) {
-    return insights;
+  try {
+    const { data: handoffs, error } = await supabase
+      .from('sd_phase_handoffs')
+      .select('from_phase, to_phase, handoff_type, status, executive_summary, deliverables_manifest, key_decisions, known_issues, action_items, validation_score, validation_details')
+      .eq('sd_id', sdKey)
+      .order('created_at', { ascending: true });
+
+    if (error || !handoffs || handoffs.length === 0) {
+      return insights;
+    }
+
+    for (const handoff of handoffs) {
+      // Extract achievements from executive summaries
+      if (handoff.executive_summary) {
+        insights.achievements.push(`${handoff.from_phase}→${handoff.to_phase}: ${handoff.executive_summary}`);
+      }
+
+      // Extract achievements from deliverables
+      if (handoff.deliverables_manifest) {
+        const deliverables = Array.isArray(handoff.deliverables_manifest)
+          ? handoff.deliverables_manifest
+          : (typeof handoff.deliverables_manifest === 'object' ? Object.values(handoff.deliverables_manifest) : []);
+        for (const d of deliverables) {
+          const label = typeof d === 'string' ? d : (d.name || d.title || d.description || '');
+          if (label) insights.achievements.push(`Delivered: ${label}`);
+        }
+      }
+
+      // Extract learnings from key decisions
+      if (handoff.key_decisions) {
+        const decisions = Array.isArray(handoff.key_decisions)
+          ? handoff.key_decisions
+          : (typeof handoff.key_decisions === 'object' ? Object.values(handoff.key_decisions) : []);
+        for (const d of decisions) {
+          const label = typeof d === 'string' ? d : (d.decision || d.description || d.title || '');
+          if (label) insights.learnings.push(`Decision: ${label}`);
+        }
+      }
+
+      // Extract challenges from known issues
+      if (handoff.known_issues) {
+        const issues = Array.isArray(handoff.known_issues)
+          ? handoff.known_issues
+          : (typeof handoff.known_issues === 'object' ? Object.values(handoff.known_issues) : []);
+        for (const issue of issues) {
+          const label = typeof issue === 'string' ? issue : (issue.description || issue.title || issue.issue || '');
+          if (label) insights.challenges.push(label);
+        }
+      }
+
+      // Extract action items
+      if (handoff.action_items) {
+        const items = Array.isArray(handoff.action_items)
+          ? handoff.action_items
+          : (typeof handoff.action_items === 'object' ? Object.values(handoff.action_items) : []);
+        for (const item of items) {
+          const label = typeof item === 'string' ? item : (item.action || item.description || item.title || '');
+          if (label) insights.actions.push(label);
+        }
+      }
+
+      // Extract validation patterns
+      if (handoff.validation_score !== null && handoff.validation_score !== undefined) {
+        insights.patterns.push(`${handoff.from_phase}→${handoff.to_phase} gate score: ${handoff.validation_score}%`);
+      }
+
+      // Extract validation detail insights
+      if (handoff.validation_details) {
+        const details = typeof handoff.validation_details === 'string'
+          ? handoff.validation_details
+          : JSON.stringify(handoff.validation_details);
+        const scoreMatches = details.match(/score["\s:]+(\d+)/gi);
+        if (scoreMatches) {
+          insights.patterns.push(...scoreMatches.map(m => `Validation: ${m}`));
+        }
+      }
+    }
+
+    // Track handoff count as a pattern
+    insights.patterns.push(`${handoffs.length} handoff(s) completed`);
+    const accepted = handoffs.filter(h => h.status === 'accepted').length;
+    if (accepted > 0) {
+      insights.patterns.push(`${accepted}/${handoffs.length} handoffs accepted`);
+    }
+
+  } catch (err) {
+    console.warn(`   ⚠️  Handoff analysis failed (non-fatal): ${err.message}`);
   }
 
-  const handoffFiles = fs.readdirSync(handoffDir)
-    .filter(f => f.includes(sdKey) && f.endsWith('.md'));
+  return insights;
+}
 
-  for (const file of handoffFiles) {
-    const content = fs.readFileSync(path.join(handoffDir, file), 'utf8');
+/**
+ * Extract additional content from SD metadata fields
+ * (SD-LEARN-FIX-ADDRESS-PAT-AUTO-010: Secondary content source)
+ */
+function analyzeSDMetadata(sd) {
+  const insights = {
+    achievements: [],
+    challenges: [],
+    learnings: [],
+    actions: [],
+    patterns: []
+  };
 
-    // Extract "What Went Well" patterns
-    const wentWellMatch = content.match(/##.*What.*Well[\s\S]*?(?=##|$)/i);
-    if (wentWellMatch) {
-      const items = wentWellMatch[0].match(/[-•]\s*(.+)/g);
-      if (items) {
-        insights.achievements.push(...items.map(i => i.replace(/^[-•]\s*/, '').trim()));
-      }
+  // Extract from key_changes
+  if (sd.key_changes && Array.isArray(sd.key_changes)) {
+    for (const change of sd.key_changes) {
+      const label = typeof change === 'string' ? change : (change.description || change.change || change.title || '');
+      if (label) insights.achievements.push(`Implemented: ${label}`);
     }
+  }
 
-    // Extract challenges/issues
-    const issuesMatch = content.match(/##.*(?:Issues?|Challenges?|Concerns?)[\s\S]*?(?=##|$)/i);
-    if (issuesMatch) {
-      const items = issuesMatch[0].match(/[-•]\s*(.+)/g);
-      if (items) {
-        insights.challenges.push(...items.map(i => i.replace(/^[-•]\s*/, '').trim()));
-      }
+  // Extract from success_criteria
+  if (sd.success_criteria && Array.isArray(sd.success_criteria)) {
+    for (const criterion of sd.success_criteria) {
+      const label = typeof criterion === 'string' ? criterion : (criterion.description || criterion.criterion || criterion.title || '');
+      if (label) insights.learnings.push(`Success criterion: ${label}`);
     }
+  }
 
-    // Extract learnings
-    const learningsMatch = content.match(/##.*(?:Learnings?|Lessons?)[\s\S]*?(?=##|$)/i);
-    if (learningsMatch) {
-      const items = learningsMatch[0].match(/[-•]\s*(.+)/g);
-      if (items) {
-        insights.learnings.push(...items.map(i => i.replace(/^[-•]\s*/, '').trim()));
-      }
+  // Extract from risks
+  if (sd.risks && Array.isArray(sd.risks)) {
+    for (const risk of sd.risks) {
+      const label = typeof risk === 'string' ? risk : (risk.description || risk.risk || risk.title || '');
+      if (label) insights.challenges.push(`Risk managed: ${label}`);
     }
+  }
 
-    // Extract action items
-    const actionsMatch = content.match(/##.*Action.*Items[\s\S]*?(?=##|$)/i);
-    if (actionsMatch) {
-      const items = actionsMatch[0].match(/[-•]\s*(.+)/g);
-      if (items) {
-        insights.actions.push(...items.map(i => i.replace(/^[-•]\s*/, '').trim()));
-      }
-    }
+  // Extract from description
+  if (sd.description && sd.description.length > 20) {
+    insights.learnings.push(`SD scope: ${sd.description.substring(0, 200)}`);
+  }
 
-    // Extract time/performance metrics
-    const timeMatches = content.match(/(\d+)\s*(?:hours?|mins?|minutes?)/gi);
-    if (timeMatches) {
-      insights.patterns.push(`Time metrics: ${timeMatches.join(', ')}`);
-    }
-
-    // Extract sub-agent verdicts
-    const verdictMatches = content.match(/(?:Verdict|Confidence|Score):\s*([^\n]+)/gi);
-    if (verdictMatches) {
-      insights.patterns.push(...verdictMatches);
-    }
+  // Extract from scope
+  if (sd.scope && sd.scope.length > 10) {
+    insights.patterns.push(`Scope: ${sd.scope.substring(0, 150)}`);
   }
 
   return insights;
@@ -137,11 +215,18 @@ function analyzeHandoffs(sdKey) {
  * Analyze PRD for context
  */
 async function analyzePRD(sdId, sdUuid) {
-  // PRD table uses sd_uuid (UUID foreign key), not strategic_directive_id (string)
-  const { data: prds } = await supabase
+  // Try sd_id first (string key), then directive_id (UUID) as fallback
+  let { data: prds } = await supabase
     .from('product_requirements_v2')
     .select('*')
-    .eq('sd_uuid', sdUuid);
+    .eq('sd_id', sdId);
+
+  if (!prds || prds.length === 0) {
+    ({ data: prds } = await supabase
+      .from('product_requirements_v2')
+      .select('*')
+      .eq('directive_id', sdUuid));
+  }
 
   if (!prds || prds.length === 0) return null;
 
@@ -306,8 +391,18 @@ async function generateComprehensiveRetrospective(sdId) {
   // Gather comprehensive data
   console.log('\n📊 Analyzing implementation artifacts...');
 
-  const handoffInsights = analyzeHandoffs(sd.sd_key);
-  console.log('   ✅ Analyzed handoff documents');
+  const handoffInsights = await analyzeHandoffs(sd.sd_key);
+  console.log(`   ✅ Analyzed handoff records (${handoffInsights.achievements.length} achievements, ${handoffInsights.learnings.length} learnings)`);
+
+  // Secondary content source: SD metadata fields
+  const sdMetadataInsights = analyzeSDMetadata(sd);
+  // Merge SD metadata insights into handoff insights (handoff data takes priority)
+  handoffInsights.achievements.push(...sdMetadataInsights.achievements);
+  handoffInsights.challenges.push(...sdMetadataInsights.challenges);
+  handoffInsights.learnings.push(...sdMetadataInsights.learnings);
+  handoffInsights.actions.push(...sdMetadataInsights.actions);
+  handoffInsights.patterns.push(...sdMetadataInsights.patterns);
+  console.log(`   ✅ Merged SD metadata (${sdMetadataInsights.achievements.length} achievements, ${sdMetadataInsights.learnings.length} learnings)`);
 
   const prdAnalysis = await analyzePRD(sdId, sd.uuid_id);
   console.log('   ✅ Analyzed PRD');
