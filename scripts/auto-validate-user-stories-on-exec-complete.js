@@ -11,7 +11,7 @@
  * 2. All deliverables are marked complete
  * 3. User stories exist but are still 'pending'
  *
- * **Integration Point**: Called by unified-handoff-system.js during EXEC→PLAN
+ * **Integration Point**: Called by EXEC-TO-PLAN gate pipeline (SD-LEO-FIX-STORIES-SUB-AGENT-001)
  *
  * **Usage**: node scripts/auto-validate-user-stories-on-exec-complete.js <SD-ID>
  */
@@ -20,19 +20,19 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+/**
+ * Auto-validate user stories for a given SD
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {Object} [sbClient] - Optional Supabase client (creates one if not provided)
+ * @returns {Promise<Object>} Validation result
+ */
+async function autoValidateUserStories(sdId, sbClient) {
+  const supabase = sbClient || createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 
-const sdId = process.argv[2];
-
-if (!sdId) {
-  console.error('❌ Usage: node auto-validate-user-stories-on-exec-complete.js <SD-ID>');
-  process.exit(1);
-}
-
-async function autoValidateUserStories() {
   console.log(`🔍 Checking user stories for ${sdId}...`);
 
   // 1. Get all user stories for this SD
@@ -112,8 +112,14 @@ async function autoValidateUserStories() {
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  autoValidateUserStories()
+const sdIdArg = process.argv[2];
+const argv1 = process.argv[1] || '';
+if (import.meta.url === `file://${argv1}` || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`) {
+  if (!sdIdArg) {
+    console.error('❌ Usage: node auto-validate-user-stories-on-exec-complete.js <SD-ID>');
+    process.exit(1);
+  }
+  autoValidateUserStories(sdIdArg)
     .then(result => {
       console.log('\n📊 Result:', JSON.stringify(result, null, 2));
       process.exit(result.validated ? 0 : 1);
