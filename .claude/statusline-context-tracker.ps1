@@ -82,7 +82,7 @@ $cacheCreation = if ($currentUsage.cache_creation_input_tokens) { [int]$currentU
 $cacheRead = if ($currentUsage.cache_read_input_tokens) { [int]$currentUsage.cache_read_input_tokens } else { 0 }
 
 # Calculate context usage — progress bar fills to 100% at the auto-compaction threshold
-$contextUsed = $inputTokens + $cacheCreation + $cacheRead
+$contextUsed = $inputTokens + $outputTokens + $cacheCreation + $cacheRead
 $usableContext = [int]($contextSize * $AutocompactPct / 100)
 if ($usableContext -le 0) { $usableContext = $contextSize }
 
