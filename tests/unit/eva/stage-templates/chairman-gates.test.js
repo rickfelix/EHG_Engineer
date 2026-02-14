@@ -40,7 +40,7 @@ function validStage10Data(gateOverride = {}) {
 function validStage22Data(gateOverride = {}) {
   return {
     release_items: [
-      { name: 'Feature A', category: 'core', status: 'approved', approver: 'QA' },
+      { name: 'Feature A', category: 'feature', status: 'approved', approver: 'QA' },
     ],
     release_notes: 'Release notes for version 1.0 with improvements and fixes.',
     target_date: '2026-03-01',
