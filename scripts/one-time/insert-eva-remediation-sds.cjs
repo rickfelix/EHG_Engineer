@@ -33,7 +33,7 @@ ${AUDIT_SOURCE}`,
     priority: 'critical',
     est_loc: 150,
     tier: 1,
-    blocks: ['SD-EVA-FIX-TEMPLATE-ALIGN-001'],
+    blocks: [],
     blocked_by: []
   },
   {
