@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-14T01:06:50.987Z
-**Rows**: 2,815
+**Generated**: 2026-02-14T02:43:03.595Z
+**Rows**: 2,621
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -44,6 +44,10 @@
 - `idx_sd_claims_sd`
   ```sql
   CREATE INDEX idx_sd_claims_sd ON public.sd_claims USING btree (sd_id)
+  ```
+- `idx_sd_claims_sd_session_unique`
+  ```sql
+  CREATE UNIQUE INDEX idx_sd_claims_sd_session_unique ON public.sd_claims USING btree (sd_id, session_id)
   ```
 - `idx_sd_claims_session`
   ```sql
