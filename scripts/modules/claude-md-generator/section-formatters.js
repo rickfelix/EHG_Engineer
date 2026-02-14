@@ -152,7 +152,7 @@ function generateTriggerQuickReference(_subAgents) {
   // Sort agents alphabetically and generate rows
   Object.keys(scorerKeywords).sort().forEach(agent => {
     const agentKw = scorerKeywords[agent];
-    const flat = flattenKeywords(agentKw, 10);
+    const flat = flattenKeywords(agentKw, 3);
     const totalCount = (agentKw.primary?.length || 0) +
                        (agentKw.secondary?.length || 0) +
                        (agentKw.tertiary?.length || 0);

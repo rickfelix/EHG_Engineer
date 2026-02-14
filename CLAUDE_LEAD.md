@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-13 10:07:42 AM
+**Generated**: 2026-02-14 7:50:42 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -77,6 +77,71 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
+
+## Baseline Issues Management
+
+## Baseline Issues System
+
+Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
+
+### LEAD Gate: BASELINE_DEBT_CHECK
+- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
+- **WARNS** if: Total open issues > 10 or stale non-critical > 5
+
+### Lifecycle
+| Status | Meaning |
+|--------|---------|
+| open | Issue identified, no owner assigned |
+| acknowledged | Issue reviewed, owner assigned |
+| in_progress | Remediation SD actively working |
+| resolved | Fixed and verified |
+| wont_fix | Accepted risk (requires LEAD approval + justification) |
+
+### Commands
+```bash
+npm run baseline:list          # Show all open issues
+npm run baseline:assign <key> <SD-ID>  # Assign ownership
+npm run baseline:resolve <key> # Mark resolved
+npm run baseline:summary       # Category summary
+```
+
+### Categories
+security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
+
+### Issue Key Format
+`BL-{CATEGORY}-{NNN}` where:
+- BL-SEC-001: Security baseline issue #1
+- BL-TST-001: Testing baseline issue #1
+- BL-PRF-001: Performance baseline issue #1
+- BL-DB-001: Database baseline issue #1
+- BL-DOC-001: Documentation baseline issue #1
+- BL-A11Y-001: Accessibility baseline issue #1
+- BL-CQ-001: Code quality baseline issue #1
+- BL-DEP-001: Dependency baseline issue #1
+- BL-INF-001: Infrastructure baseline issue #1
+
+### Functions
+- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
+- `generate_baseline_issue_key(p_category)`: Generates unique issue key
+
+## Migration Execution Protocol
+
+## ⚠️ CRITICAL: Migration Execution Protocol
+
+**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
+
+The DATABASE sub-agent handles common blockers automatically:
+- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
+- **Connection issues**: Uses proven connection patterns
+- **Execution failures**: Tries alternative scripts before giving up
+
+**Never give up on migration execution** - the sub-agent has multiple fallback methods.
+
+**Invocation**:
+```
+Task tool with subagent_type="database-agent":
+"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
+```
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -165,71 +230,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
-
-## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
-
-## Baseline Issues Management
-
-## Baseline Issues System
-
-Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
-
-### LEAD Gate: BASELINE_DEBT_CHECK
-- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
-- **WARNS** if: Total open issues > 10 or stale non-critical > 5
-
-### Lifecycle
-| Status | Meaning |
-|--------|---------|
-| open | Issue identified, no owner assigned |
-| acknowledged | Issue reviewed, owner assigned |
-| in_progress | Remediation SD actively working |
-| resolved | Fixed and verified |
-| wont_fix | Accepted risk (requires LEAD approval + justification) |
-
-### Commands
-```bash
-npm run baseline:list          # Show all open issues
-npm run baseline:assign <key> <SD-ID>  # Assign ownership
-npm run baseline:resolve <key> # Mark resolved
-npm run baseline:summary       # Category summary
-```
-
-### Categories
-security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
-
-### Issue Key Format
-`BL-{CATEGORY}-{NNN}` where:
-- BL-SEC-001: Security baseline issue #1
-- BL-TST-001: Testing baseline issue #1
-- BL-PRF-001: Performance baseline issue #1
-- BL-DB-001: Database baseline issue #1
-- BL-DOC-001: Documentation baseline issue #1
-- BL-A11Y-001: Accessibility baseline issue #1
-- BL-CQ-001: Code quality baseline issue #1
-- BL-DEP-001: Dependency baseline issue #1
-- BL-INF-001: Infrastructure baseline issue #1
-
-### Functions
-- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
-- `generate_baseline_issue_key(p_category)`: Generates unique issue key
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -610,81 +610,6 @@ node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 - **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`, `scripts/leo-create-sd.js`
 - **Plan-Aware Creation**: `docs/reference/sd-key-generator-guide.md` (--from-plan section)
 
-## Child SD Context Loading (MANDATORY)
-
-**CRITICAL**: When starting work on a child SD (any SD with a parent_sd_id), you MUST load context files before beginning work.
-
-### Why This Applies to Children
-
-Child SDs are **independent Strategic Directives** that require their own full LEAD→PLAN→EXEC workflow. Each child:
-- Has its own PRD
-- Has its own handoffs
-- Has its own retrospective
-- Must meet its own gate thresholds
-
-**Children are NOT sub-tasks.** They are first-class SDs that happen to be coordinated by a parent orchestrator.
-
-### Required Context Loading Sequence
-
-Before starting ANY work on a child SD:
-
-1. **Run child preflight validation**:
-   ```bash
-   node scripts/child-sd-preflight.js SD-XXX-001
-   ```
-
-2. **Read CLAUDE_CORE.md** (provides SD type requirements):
-   ```
-   Read tool: CLAUDE_CORE.md
-   ```
-
-3. **Read phase-specific file** based on current_phase:
-   | Phase | File |
-   |-------|------|
-   | LEAD_APPROVAL | CLAUDE_LEAD.md |
-   | PLAN_*, PRD_* | CLAUDE_PLAN.md |
-   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
-
-### What CLAUDE_CORE.md Provides
-
-- SD type definitions (feature, bugfix, infrastructure, etc.)
-- Gate pass thresholds per SD type
-- Required handoff counts
-- Required sub-agents per SD type
-- Global negative constraints
-
-### Consequences of Skipping Context Loading
-
-Without loading CLAUDE_CORE.md before child SD work:
-- **Unknown requirements**: May not know PRD is required
-- **Wrong thresholds**: May target 70% when 85% is required
-- **Missing sub-agents**: May skip TESTING, DESIGN, etc.
-- **Incomplete handoffs**: May not execute full chain
-
-### Enforcement
-
-The `child-sd-preflight.js` script now displays a reminder:
-```
-⚠️  CONTEXT LOADING REMINDER:
-   Before starting work, you MUST read:
-   1. CLAUDE_CORE.md (SD type requirements, gates, thresholds)
-   2. Phase-specific file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md)
-```
-
-**This reminder is advisory.** The actual context loading must be performed by reading the files.
-
-### Quick Reference
-
-| Child SD Type | Gate Threshold | Min Handoffs | PRD Required |
-|---------------|----------------|--------------|--------------|
-| feature | 85% | 5 | YES |
-| bugfix | 85% | 5 | YES |
-| infrastructure | 80% | 4 | YES |
-| documentation | 60% | 4 | NO |
-| refactor | 75-90% | 5 | Brief |
-
-*Always verify current requirements from CLAUDE_CORE.md as they may be updated.*
-
 ## Common SD Creation Errors and Solutions
 
 ### Database Constraint Errors
@@ -957,6 +882,81 @@ const sdKey = await generateSDKey({ source, type, title });
 4. `scripts/create-sd.js`
 5. `scripts/modules/learning/executor.js`
 
+
+## Child SD Context Loading (MANDATORY)
+
+**CRITICAL**: When starting work on a child SD (any SD with a parent_sd_id), you MUST load context files before beginning work.
+
+### Why This Applies to Children
+
+Child SDs are **independent Strategic Directives** that require their own full LEAD→PLAN→EXEC workflow. Each child:
+- Has its own PRD
+- Has its own handoffs
+- Has its own retrospective
+- Must meet its own gate thresholds
+
+**Children are NOT sub-tasks.** They are first-class SDs that happen to be coordinated by a parent orchestrator.
+
+### Required Context Loading Sequence
+
+Before starting ANY work on a child SD:
+
+1. **Run child preflight validation**:
+   ```bash
+   node scripts/child-sd-preflight.js SD-XXX-001
+   ```
+
+2. **Read CLAUDE_CORE.md** (provides SD type requirements):
+   ```
+   Read tool: CLAUDE_CORE.md
+   ```
+
+3. **Read phase-specific file** based on current_phase:
+   | Phase | File |
+   |-------|------|
+   | LEAD_APPROVAL | CLAUDE_LEAD.md |
+   | PLAN_*, PRD_* | CLAUDE_PLAN.md |
+   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
+
+### What CLAUDE_CORE.md Provides
+
+- SD type definitions (feature, bugfix, infrastructure, etc.)
+- Gate pass thresholds per SD type
+- Required handoff counts
+- Required sub-agents per SD type
+- Global negative constraints
+
+### Consequences of Skipping Context Loading
+
+Without loading CLAUDE_CORE.md before child SD work:
+- **Unknown requirements**: May not know PRD is required
+- **Wrong thresholds**: May target 70% when 85% is required
+- **Missing sub-agents**: May skip TESTING, DESIGN, etc.
+- **Incomplete handoffs**: May not execute full chain
+
+### Enforcement
+
+The `child-sd-preflight.js` script now displays a reminder:
+```
+⚠️  CONTEXT LOADING REMINDER:
+   Before starting work, you MUST read:
+   1. CLAUDE_CORE.md (SD type requirements, gates, thresholds)
+   2. Phase-specific file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md)
+```
+
+**This reminder is advisory.** The actual context loading must be performed by reading the files.
+
+### Quick Reference
+
+| Child SD Type | Gate Threshold | Min Handoffs | PRD Required |
+|---------------|----------------|--------------|--------------|
+| feature | 85% | 5 | YES |
+| bugfix | 85% | 5 | YES |
+| infrastructure | 80% | 4 | YES |
+| documentation | 60% | 4 | NO |
+| refactor | 75-90% | 5 | Brief |
+
+*Always verify current requirements from CLAUDE_CORE.md as they may be updated.*
 
 ## 📋 Directive Submission Review Process
 
@@ -1410,33 +1410,6 @@ Sequential LEAD approval allows learning from earlier children to inform later d
 
 > **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
-
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1478,6 +1451,33 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
+
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 
@@ -1607,56 +1607,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-02-13*
+*Generated from database: 2026-02-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
-
-## ⚠️ CRITICAL: Issue Resolution Protocol
-
-**When you encounter ANY issue, error, or unexpected behavior:**
-
-1. **DO NOT work around it** - Workarounds hide problems and create technical debt
-2. **DO NOT ignore it** - Every issue is a signal that something needs attention
-3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
-
-### Sub-Agent Prompt Quality Standard (Five-Point Brief)
-
-**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
-
-Every sub-agent invocation MUST include these five elements:
-
-| Element | What to Include | Example |
-|---------|----------------|---------|
-| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
-| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
-| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
-| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
-| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
-
-**Anti-patterns** (NEVER do these):
-- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
-- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
-- ❌ Omitting prior attempts — agent repeats your failed approaches
-
-**Example invocation (GOOD - RCA agent):**
-```
-Task tool with subagent_type="rca-agent":
-"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
-Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
-Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
-Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
-Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
-```
-
-**Example invocation (BAD - too vague):**
-```
-Task tool with subagent_type="rca-agent":
-"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
-```
-
-**Why this matters:**
-- Root cause fixes prevent recurrence
-- Issues captured in `issue_patterns` table benefit future sessions
-- Systematic analysis produces better solutions than quick fixes
-
-**The only acceptable response to an issue is understanding WHY it happened.**

@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-13T15:07:42.259Z -->
-<!-- git_commit: 2acb69ad -->
+<!-- generated_at: 2026-02-14T12:50:42.761Z -->
+<!-- git_commit: 4759585d -->
 <!-- db_snapshot_hash: 09759431152b1c6f -->
 <!-- file_content_hash: pending -->
 
@@ -140,6 +140,29 @@ LEAD MUST answer these questions BEFORE approval:
 
 **SCOPE LOCK**: Once LEAD approves an SD, the scope is LOCKED. LEAD commits to delivering the approved scope.
 
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
+
 
 ---
 
@@ -150,5 +173,5 @@ LEAD MUST answer these questions BEFORE approval:
 
 ---
 
-*DIGEST generated: 2026-02-13 10:07:42 AM*
+*DIGEST generated: 2026-02-14 7:50:42 AM*
 *Protocol: 4.3.3*

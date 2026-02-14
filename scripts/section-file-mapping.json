@@ -1,20 +1,14 @@
 {
   "CLAUDE.md": {
-    "description": "Minimal router file (~5-10k chars) - tells agents which files to load",
+    "description": "Compact router file (~10-15k chars) - tells agents which files to load, condensed summaries",
     "sections": [
       "file_warning",
       "smart_router",
       "session_prologue",
-      "migration_execution_protocol_main",
-      "auto_proceed_mode",
-      "orchestrator_chaining",
-      "sd_continuation_truth_table",
       "session_init",
-      "work_item_routing",
-      "skill_intent_detection",
-      "common_commands",
-      "teams_protocol"
-    ]
+      "common_commands"
+    ],
+    "_removed_sections_note": "auto_proceed_mode, orchestrator_chaining, sd_continuation_truth_table, migration_execution_protocol_main, work_item_routing, skill_intent_detection, teams_protocol - moved to CORE/phase files, condensed summaries in router generator code"
   },
   "CLAUDE_CORE.md": {
     "description": "Essential context for ALL sessions (~15-20k chars)",

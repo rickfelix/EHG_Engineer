@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-13 10:07:42 AM
+**Generated**: 2026-02-14 7:50:42 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -310,70 +310,6 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
 
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
-
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -461,6 +397,70 @@ If `research_confidence_score = 0.00`, you skipped this step.
 | Simulate sub-agents | 15% quality loss | Execute actual tools |
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
+
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
 
 ## EXEC Phase Negative Constraints
 
@@ -1931,56 +1931,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2026-02-13*
+*Generated from database: 2026-02-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*
-
-## ⚠️ CRITICAL: Issue Resolution Protocol
-
-**When you encounter ANY issue, error, or unexpected behavior:**
-
-1. **DO NOT work around it** - Workarounds hide problems and create technical debt
-2. **DO NOT ignore it** - Every issue is a signal that something needs attention
-3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
-
-### Sub-Agent Prompt Quality Standard (Five-Point Brief)
-
-**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
-
-Every sub-agent invocation MUST include these five elements:
-
-| Element | What to Include | Example |
-|---------|----------------|---------|
-| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
-| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
-| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
-| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
-| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
-
-**Anti-patterns** (NEVER do these):
-- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
-- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
-- ❌ Omitting prior attempts — agent repeats your failed approaches
-
-**Example invocation (GOOD - RCA agent):**
-```
-Task tool with subagent_type="rca-agent":
-"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
-Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
-Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
-Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
-Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
-```
-
-**Example invocation (BAD - too vague):**
-```
-Task tool with subagent_type="rca-agent":
-"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
-```
-
-**Why this matters:**
-- Root cause fixes prevent recurrence
-- Issues captured in `issue_patterns` table benefit future sessions
-- Systematic analysis produces better solutions than quick fixes
-
-**The only acceptable response to an issue is understanding WHY it happened.**

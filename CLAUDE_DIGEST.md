@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-13T15:07:42.259Z -->
-<!-- git_commit: 2acb69ad -->
+<!-- generated_at: 2026-02-14T12:50:42.761Z -->
+<!-- git_commit: 4759585d -->
 <!-- db_snapshot_hash: 09759431152b1c6f -->
 <!-- file_content_hash: pending -->
 
@@ -29,63 +29,44 @@
 
 ## CLAUDE.md Router (Context Loading)
 
-### Loading Strategy
-1. **ALWAYS**: Read CLAUDE_CORE.md first (15k)
-2. **Phase Detection**: Load phase-specific file based on keywords
-3. **On-Demand**: Load reference docs only when issues arise
+### Loading Strategy (Digest-First)
+1. **ALWAYS**: Read CLAUDE_CORE_DIGEST.md first (~10k) - compact enforcement rules
+2. **Phase Detection**: Load phase-specific DIGEST file based on keywords
+3. **Escalation**: Load FULL file only when digest is insufficient
+4. **On-Demand**: Load reference docs only when issues arise
 
 **CRITICAL**: This loading strategy applies to ALL SD work:
 - New SDs being created
 - Existing SDs being resumed
 - **Child SDs of orchestrators** (each child requires fresh context loading)
 
-Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresholds, skipped sub-agents.
+Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate thresholds, skipped sub-agents.
 
-### ⚠️ MANDATORY: Read Entire Files (No Partial Reads)
+### Digest vs Full File
 
-**When reading any file that contains instructions, requirements, or critical context, you MUST read the ENTIRE file from start to finish.**
+| Situation | Load |
+|-----------|------|
+| Starting any SD work | CLAUDE_CORE_DIGEST.md (default) |
+| Need detailed sub-agent config | CLAUDE_CORE.md (full) |
+| Need detailed handoff procedures | CLAUDE_PLAN.md (full) |
+| Complex debugging or unknown errors | Full phase file |
+| Everything else | DIGEST files |
 
-**General Rule**: If a file is important enough to read, read it completely. Partial reads lead to missed requirements.
+### Escalation Triggers (When to Load Full Files)
+- Gate validation fails and root cause is unclear
+- Sub-agent invocation requires detailed configuration
+- Handoff template structure needed
+- Database schema constraint lookup required
+- Retrospective or pattern analysis needed
 
-**Files that MUST be read in full (no `limit` parameter):**
-- CLAUDE.md, CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md
-- PRD content from database
-- Any file containing protocol instructions, requirements, or acceptance criteria
-- Configuration files (.json, .yaml, .env.example)
-- Test files when debugging failures
-- Migration files when working on database changes
+### Phase Keywords -> File
+| Keywords | Digest (Default) | Full (Escalation) |
+|----------|-------------------|-------------------|
+| "approve", "LEAD", "directive" | CLAUDE_LEAD_DIGEST.md | CLAUDE_LEAD.md |
+| "PRD", "PLAN", "validation" | CLAUDE_PLAN_DIGEST.md | CLAUDE_PLAN.md |
+| "implement", "EXEC", "code" | CLAUDE_EXEC_DIGEST.md | CLAUDE_EXEC.md |
 
-**When `limit` parameter IS acceptable:**
-- Log files (reading recent entries)
-- Large data files where you only need a sample
-- Files explicitly marked as "preview only"
-
-**Correct usage:**
-```
-Read tool: CLAUDE_EXEC.md (no limit parameter)
-Read tool: docs/reference/database-agent-patterns.md (no limit parameter)
-```
-
-**Incorrect usage:**
-```
-Read tool: CLAUDE_EXEC.md with limit: 200  ← VIOLATION
-Read tool: PRD file with limit: 100  ← VIOLATION
-```
-
-**Why this matters:** Critical instructions are often in later sections of files. Partial reads cause:
-- Missed validation requirements
-- Skipped sub-agent invocations
-- Incomplete understanding of acceptance criteria
-- Protocol violations
-
-### Phase Keywords → File
-| Keywords | Load |
-|----------|------|
-| "approve", "LEAD", "directive", "simplicity" | CLAUDE_LEAD.md |
-| "PRD", "PLAN", "validation", "schema" | CLAUDE_PLAN.md |
-| "implement", "EXEC", "code", "test" | CLAUDE_EXEC.md |
-
-### Issue → Reference Doc
+### Issue -> Reference Doc
 | Issue | Load |
 |-------|------|
 | Database/schema/RLS errors | docs/reference/database-agent-patterns.md |
@@ -94,10 +75,11 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 | Test/E2E issues | docs/reference/qa-director-guide.md |
 | Context >70% | docs/reference/context-monitoring.md |
 
-### Context Budget
-- Router + Core: 18k (9% of 200k budget) ✅
-- + Phase file: 43k avg (22%) ✅
-- + Reference doc: 58k (29%) ✅
+### Context Budget (Digest-First)
+- Router + Core Digest: ~12k (6% of 200k budget)
+- + Phase Digest: ~17k (9%)
+- + Full file (if escalated): ~55k (28%)
+- Savings vs always-full: ~75% per session
 
 ## Session Prologue (Short)
 
@@ -111,6 +93,48 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
+## Session Initialization - SD Selection
+
+### Intent Detection Keywords
+When the user says any of the following, run `npm run sd:next` FIRST:
+- "start LEO", "start the LEO protocol"
+- "what should we work on", "what's next"
+- "identify next work", "next SD", "next strategic directive"
+- "continue work", "resume", "pick up where we left off"
+- "show queue", "show priorities", "what's ready"
+
+### Automatic SD Queue Loading
+This command provides:
+1. **Track View** - Three parallel execution tracks (A: Infrastructure, B: Features, C: Quality)
+2. **SD Status Badges** - Current state of each SD (see legend below)
+3. **Continuity** - Recent git activity and "Working On" flag
+4. **Recommendations** - Suggested starting point per track
+
+### SD Status Badge Legend
+| Badge | Meaning | Workable? |
+|-------|---------|-----------|
+| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD.md and run LEAD-TO-PLAN. |
+| **READY** | Past LEAD phase, dependencies resolved | **YES** - Proceed to next handoff in workflow |
+| **PLANNING** | In PLAN phase (PRD creation) | **YES** - Continue planning work |
+| **EXEC N%** | In EXEC phase with progress | **YES** - Continue implementation |
+| **BLOCKED** | Dependencies not resolved | **NO** - Work on blocking SDs first |
+| **CLAIMED** | Another session is actively working on it | **NO** - Pick a different SD |
+
+### After Running sd:next
+1. If SD marked "CONTINUE" (is_working_on=true) and not CLAIMED by another session → Resume that SD
+2. If no active SD → Pick the highest-ranked **workable** SD (any status except BLOCKED or CLAIMED)
+3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
+4. READY SDs have already been approved — proceed to the next handoff in their workflow.
+5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
+
+### Related Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run sd:next` | Show intelligent SD queue |
+| `npm run sd:status` | Progress vs baseline |
+| `npm run sd:burnrate` | Velocity and forecasting |
+| `npm run sd:baseline view` | Current execution plan |
+
 
 ---
 
@@ -121,5 +145,5 @@ Read tool: PRD file with limit: 100  ← VIOLATION
 
 ---
 
-*DIGEST generated: 2026-02-13 10:07:42 AM*
+*DIGEST generated: 2026-02-14 7:50:42 AM*
 *Protocol: 4.3.3*

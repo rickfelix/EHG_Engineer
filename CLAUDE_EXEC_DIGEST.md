@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-13T15:07:42.259Z -->
-<!-- git_commit: 2acb69ad -->
+<!-- generated_at: 2026-02-14T12:50:42.761Z -->
+<!-- git_commit: 4759585d -->
 <!-- db_snapshot_hash: 09759431152b1c6f -->
 <!-- file_content_hash: pending -->
 
@@ -183,6 +183,91 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
+## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
+
+**Source**: Analysis of 175 high-quality retrospectives (score ≥60)
+
+These patterns have caused significant time waste. **AVOID them.**
+
+### 1. Manual Test Creation (2-3 hours waste per SD)
+**Pattern**: Writing tests manually instead of delegating to testing-agent
+
+**Evidence**: SD-VENTURE-UNIFICATION-001
+> "Manual test creation wasted 2-3 hours instead of delegating to testing-agent"
+
+**Fix**: Always use Task tool with `subagent_type: "testing-agent"`
+```
+Task(subagent_type="testing-agent", prompt="Create E2E tests for [feature] based on PRD acceptance criteria")
+```
+
+---
+
+### 2. Skipping Knowledge Retrieval (4-6 hours rework)
+**Pattern**: Starting implementation without querying retrospectives/patterns
+
+**Evidence**: SD-VENTURE-UNIFICATION-001
+> "Zero consultation of retrospectives before implementation (research_confidence_score = 0.00)"
+
+**Fix**: Run before EXEC starts:
+If `research_confidence_score = 0.00`, you skipped this step.
+
+---
+
+### 3. Workarounds Before Root Cause (2-3x time multiplier)
+**Pattern**: Working around issues instead of fixing root causes
+
+**Evidence**: SD-2025-1020-E2E-SELECTORS (Score: 100)
+> "Time spent on workarounds >> time to follow protocol"
+> "Multiple workarounds instead of fixing root causes"
+
+**Fix**: Before implementing a workaround, ask:
+- [ ] Have I identified the root cause?
+- [ ] Is this a fix or a workaround?
+- [ ] What is the time multiplier? (typical: 2-3x)
+
+---
+
+### 4. Accepting Environmental Blockers Without Debug
+**Pattern**: Accepting "it's environmental" without investigation
+
+**Evidence**: SD-VENTURE-UNIFICATION-001
+> "Environmental issues treated as blockers rather than investigation opportunities"
+
+**Fix**: 5-step minimum debug before accepting as environmental:
+1. Check logs for specific error
+2. Verify credentials/tokens
+3. Test in isolation (curl, manual browser)
+4. Check network/ports
+5. Compare with known working state
+
+---
+
+### 5. Manual Sub-Agent Simulation (15% quality delta)
+**Pattern**: Manually creating sub-agent results instead of executing tools
+
+**Evidence**: SD-RECONNECT-014 (Score: 90)
+> "Manual: 75% confidence. Tool: 60% confidence (-15% delta)"
+> "Manual sub-agent simulation is an anti-pattern"
+
+**Fix**: Sub-agent results MUST have:
+- `tool_executed: true`
+- Actual execution timestamp
+- Real output (not simulated)
+
+---
+
+### Quick Reference
+
+| Anti-Pattern | Time Cost | Fix |
+|--------------|-----------|-----|
+| Manual test creation | 2-3 hours | Use testing-agent |
+| Skip knowledge retrieval | 4-6 hours | Run automated-knowledge-retrieval.js |
+| Workarounds first | 2-3x multiplier | Fix root cause |
+| Accept environmental | Hours of idle | 5-step debug minimum |
+| Simulate sub-agents | 15% quality loss | Execute actual tools |
+
+**Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
+
 ## EXEC Phase Negative Constraints
 
 ## 🚫 EXEC Phase Negative Constraints
@@ -364,5 +449,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-02-13 10:07:42 AM*
+*DIGEST generated: 2026-02-14 7:50:42 AM*
 *Protocol: 4.3.3*

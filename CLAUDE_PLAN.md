@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-13 10:07:42 AM
+**Generated**: 2026-02-14 7:50:42 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -335,30 +335,6 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
-
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -396,6 +372,30 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
+
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -565,6 +565,23 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -635,23 +652,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -2639,56 +2639,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*Generated from database: 2026-02-13*
+*Generated from database: 2026-02-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
-
-## ⚠️ CRITICAL: Issue Resolution Protocol
-
-**When you encounter ANY issue, error, or unexpected behavior:**
-
-1. **DO NOT work around it** - Workarounds hide problems and create technical debt
-2. **DO NOT ignore it** - Every issue is a signal that something needs attention
-3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
-
-### Sub-Agent Prompt Quality Standard (Five-Point Brief)
-
-**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
-
-Every sub-agent invocation MUST include these five elements:
-
-| Element | What to Include | Example |
-|---------|----------------|---------|
-| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
-| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
-| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
-| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
-| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
-
-**Anti-patterns** (NEVER do these):
-- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
-- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
-- ❌ Omitting prior attempts — agent repeats your failed approaches
-
-**Example invocation (GOOD - RCA agent):**
-```
-Task tool with subagent_type="rca-agent":
-"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
-Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
-Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
-Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
-Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
-```
-
-**Example invocation (BAD - too vague):**
-```
-Task tool with subagent_type="rca-agent":
-"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
-```
-
-**Why this matters:**
-- Root cause fixes prevent recurrence
-- Issues captured in `issue_patterns` table benefit future sessions
-- Systematic analysis produces better solutions than quick fixes
-
-**The only acceptable response to an issue is understanding WHY it happened.**

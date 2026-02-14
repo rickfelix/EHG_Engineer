@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-13T15:07:42.259Z -->
-<!-- git_commit: 2acb69ad -->
+<!-- generated_at: 2026-02-14T12:50:42.761Z -->
+<!-- git_commit: 4759585d -->
 <!-- db_snapshot_hash: 09759431152b1c6f -->
 <!-- file_content_hash: pending -->
 
@@ -10,6 +10,58 @@
 **Purpose**: Essential workflow rules and constraints (<10k chars)
 
 ---
+
+## RCA Issue Resolution Mandate
+
+## ⚠️ CRITICAL: Issue Resolution Protocol
+
+**When you encounter ANY issue, error, or unexpected behavior:**
+
+1. **DO NOT work around it** - Workarounds hide problems and create technical debt
+2. **DO NOT ignore it** - Every issue is a signal that something needs attention
+3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
+
+### Sub-Agent Prompt Quality Standard (Five-Point Brief)
+
+**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
+
+Every sub-agent invocation MUST include these five elements:
+
+| Element | What to Include | Example |
+|---------|----------------|---------|
+| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
+| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
+| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
+| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
+| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
+
+**Anti-patterns** (NEVER do these):
+- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
+- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
+- ❌ Omitting prior attempts — agent repeats your failed approaches
+
+**Example invocation (GOOD - RCA agent):**
+```
+Task tool with subagent_type="rca-agent":
+"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
+Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
+Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
+Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
+Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
+```
+
+**Example invocation (BAD - too vague):**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
+```
+
+**Why this matters:**
+- Root cause fixes prevent recurrence
+- Issues captured in `issue_patterns` table benefit future sessions
+- Systematic analysis produces better solutions than quick fixes
+
+**The only acceptable response to an issue is understanding WHY it happened.**
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -65,6 +117,147 @@
 2. Invoke required agent(s) BEFORE making changes
 3. Agent findings inform implementation
 4. Re-run agent AFTER changes to verify fixes
+
+## SD Continuation Truth Table
+
+**CRITICAL**: This table is AUTHORITATIVE for ALL SD transition decisions. It covers every transition type, not just orchestrator boundaries. When behavior is ambiguous, THIS TABLE WINS.
+
+### Complete Transition Matrix
+
+| Transition Context | AUTO-PROCEED | Chaining | Behavior | Implementation |
+|-------------------|:------------:|:--------:|----------|----------------|
+| **Handoff completes (not LEAD-FINAL-APPROVAL)** | * | * | **TERMINAL** - Phase work required before next handoff | `getNextInWorkflow()` returns null |
+| Handoff completes (LEAD-FINAL-APPROVAL) | ON | * | **AUTO-CONTINUE** to next ready child (if orchestrator) | Child-to-child continuation |
+| Handoff completes (LEAD-FINAL-APPROVAL) | OFF | * | PAUSE for user selection | User must invoke next handoff |
+| **Child completes → next child** | ON | * | **AUTO-CONTINUE** to next ready child (priority-based) | `getNextReadyChild()` |
+| Child completes → next child | OFF | * | PAUSE for user selection | User must invoke `/leo next` |
+| **Child fails gate (retries exhausted)** | ON | * | **SKIP** to next sibling (D16) | `executeSkipAndContinue()` |
+| Child fails gate (retries exhausted) | OFF | * | PAUSE with failure details | Manual remediation |
+| **All children complete (orchestrator done)** | ON | ON | Run /learn → **AUTO-CONTINUE** to next orchestrator | `orchestrator-completion-hook.js` |
+| All children complete (orchestrator done) | ON | OFF | Run /learn → Show queue → **PAUSE** (D08) | User selects next orchestrator |
+| All children complete (orchestrator done) | OFF | * | PAUSE before /learn | Maximum human control |
+| **All children blocked** | * | * | **PAUSE** - show blockers (D23) | Human decision required |
+| **Dependency unresolved** | * | * | **SKIP** SD, continue to next ready | `checkDependenciesResolved()` |
+| **Grandchild completes** | ON | * | Return to parent context, continue to next child | Hierarchical traversal |
+
+### Phase Work Between Handoffs (D34 - Added 2026-02-06)
+
+**ALL handoffs are terminal.** Phase work must happen between every handoff:
+
+| After Handoff | Required Phase Work | Next Handoff |
+|---------------|---------------------|--------------|
+| LEAD-TO-PLAN | Create PRD via `add-prd-to-database.js` | PLAN-TO-EXEC |
+| PLAN-TO-EXEC | Implement features (coding, testing) | EXEC-TO-PLAN |
+| EXEC-TO-PLAN | Verify implementation (QA, review) | PLAN-TO-LEAD |
+| PLAN-TO-LEAD | Final review, address feedback | LEAD-FINAL-APPROVAL |
+| LEAD-FINAL-APPROVAL | (Triggers child-to-child continuation) | (Next child SD via AUTO-PROCEED) |
+
+**Why handoffs are terminal:**
+- Prevents skipping critical work (PRD creation, implementation, verification)
+- Clarifies AUTO-PROCEED scope: child-to-child only, not handoff-to-handoff
+- Aligns with original design intent
+
+**SD-type-specific workflows** are defined in `workflow-definitions.js` (which handoffs are required/optional per type), not in auto-chaining logic.
+
+### Key Rules
+
+1. **AUTO-PROCEED OFF always pauses** - Chaining has no effect when AUTO-PROCEED is OFF
+2. **Chaining only affects orchestrator-to-orchestrator transitions** - Child-to-child is controlled by AUTO-PROCEED alone
+3. **All handoffs are terminal (D34)** - No auto-chaining within a single SD, phase work required between handoffs
+4. **Priority determines next SD** - `sortByUrgency()` ranks by: Band (P0→P3) → Score → FIFO
+5. **Dependencies gate readiness** - SD with unresolved deps is skipped, not paused on
+6. **Both ON = no pauses except hard stops** - Runs until D23 (all blocked) or context exhaustion
+
+### Next SD Selection Priority
+
+When AUTO-PROCEED determines "next SD", selection follows this order:
+
+```
+1. Unblocked children of current orchestrator (by urgency score)
+2. Unblocked grandchildren (depth-first, urgency-sorted)
+3. Next orchestrator (if Chaining ON and current orchestrator complete)
+4. PAUSE (if nothing ready or Chaining OFF at orchestrator boundary)
+```
+
+**Urgency Score Components** (from `urgency-scorer.js`):
+- SD Priority (critical/high/medium/low): 25% weight
+- Active issue patterns: 20% weight
+- Downstream blockers: 15% weight
+- Time sensitivity: 15% weight
+- Learning signals: 40% blend
+- Progress (≥80% complete): 10% bonus
+
+### Decision Flow (Complete)
+
+```
+SD Completes (child, grandchild, or orchestrator)
+         │
+         ▼
+   Is this a handoff completion (not LEAD-FINAL-APPROVAL)?
+    │           │
+   YES          NO (LEAD-FINAL-APPROVAL or child SD done)
+    │           │
+    │           └──► Continue below to check AUTO-PROCEED
+    ▼
+   TERMINAL - Show phase work guidance
+   Example: "Create PRD, then run PLAN-TO-EXEC"
+   PAUSE
+         │
+         ▼
+   AUTO-PROCEED ON?
+    │           │
+   YES          NO
+    │           └──► PAUSE (ask user to invoke /leo next)
+    ▼
+   Is this an orchestrator with all children done?
+    │           │
+   YES          NO (more children remain)
+    │           │
+    │           └──► getNextReadyChild() → Continue to next child
+    ▼
+   Run /learn automatically
+         │
+         ▼
+   Chaining ON?
+    │           │
+   YES          NO
+    │           └──► Show queue → PAUSE (D08)
+    ▼
+   findNextAvailableOrchestrator()
+    │           │
+   Found       Not Found
+    │           └──► Show queue → PAUSE (no more work)
+    ▼
+   Auto-continue to next orchestrator
+```
+
+### Implementation Files
+
+| Component | File | Key Function |
+|-----------|------|--------------|
+| Handoff termination | `scripts/modules/handoff/cli/cli-main.js` | `getNextInWorkflow()` (always returns null) |
+| Child selection | `scripts/modules/handoff/child-sd-selector.js` | `getNextReadyChild()` |
+| Skip failed child | `scripts/modules/handoff/skip-and-continue.js` | `executeSkipAndContinue()` |
+| Orchestrator completion | `scripts/modules/handoff/orchestrator-completion-hook.js` | `executeOrchestratorCompletionHook()` |
+| Urgency scoring | `scripts/modules/auto-proceed/urgency-scorer.js` | `sortByUrgency()` |
+| Dependency check | `scripts/modules/sd-next/dependency-resolver.js` | `checkDependenciesResolved()` |
+| Mode resolution | `scripts/modules/handoff/auto-proceed-resolver.js` | `resolveAutoProceed()` |
+| SD-type workflows | `scripts/modules/handoff/cli/workflow-definitions.js` | `getWorkflowForType()` |
+
+### Conflict Resolution
+
+If documentation elsewhere conflicts with this truth table:
+1. **This truth table wins** - It is the canonical specification
+2. **Report the conflict** - Create an issue or RCA to fix inconsistent text
+3. **Never guess** - When behavior is ambiguous, consult this table
+
+### Historical Notes
+
+**2026-02-06 (v3)**: D34 added - All handoffs are terminal (no auto-chaining within SD). Added phase work guidance table. Previous auto-chaining behavior (LEAD-TO-PLAN → PLAN-TO-EXEC) removed as it skipped PRD creation.
+
+**2026-02-01 (v2)**: Expanded to cover ALL transition types, not just orchestrator boundaries. Added child-to-child and grandchild transitions.
+
+**2026-02-01 (v1)**: D08 was written as absolute rule without Chaining exception. Added orchestrator completion matrix.
 
 ## Execution Philosophy
 
@@ -135,6 +328,285 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
+
+## AUTO-PROCEED Mode
+
+**AUTO-PROCEED** enables fully autonomous LEO Protocol execution, allowing Claude to work through SD workflows without manual confirmation at each phase transition.
+
+### Activation
+
+AUTO-PROCEED is **ON by default** for new sessions. To change:
+- Run `/leo init` or `/leo settings` to set session preference
+- Preference stored in `claude_sessions.metadata.auto_proceed`
+
+Check status:
+### Behavior Summary
+
+| When AUTO-PROCEED is ON | When OFF |
+|-------------------------|----------|
+| Phase transitions execute automatically | Pause and ask before each transition |
+| Post-completion runs /document → /ship → /learn | Ask before each step |
+| Shows next SD after completion | Ask before showing queue |
+| No confirmation prompts | AskUserQuestion at each decision |
+
+### CRITICAL: No Background Tasks
+
+**When AUTO-PROCEED is active, NEVER use `run_in_background: true` on ANY tool that supports it.**
+
+This applies to:
+- **Bash tool**: `run_in_background: true` is FORBIDDEN
+- **Task tool**: `run_in_background: true` is FORBIDDEN
+
+All commands and sub-agents must run inline/foreground to maintain workflow continuity. Background task completion notifications interrupt the autonomous flow, causing unexpected pauses.
+
+| Tool | Parameter | AUTO-PROCEED ON | AUTO-PROCEED OFF |
+|------|-----------|-----------------|------------------|
+| Bash | `run_in_background: true` | FORBIDDEN | Allowed |
+| Task | `run_in_background: true` | FORBIDDEN | Allowed |
+| Both | `run_in_background: false` or omitted | Required | Allowed |
+
+**Why this matters:**
+- Background tasks return control immediately, breaking the sequential workflow
+- Completion notifications arrive asynchronously, interrupting current work
+- The workflow stops unexpectedly waiting for user acknowledgment
+- If session goes stale, orphaned background tasks complete later and pollute new sessions
+
+**This is a hard behavioral constraint, not a suggestion.**
+
+**2026-02-01 Incident**: Background Task tool invocations were spawned during AUTO-PROCEED, creating orphaned tasks that completed in later sessions. Root cause: Rule only mentioned Bash, not Task tool.
+
+### Platform-Level Enforcement
+
+**RECOMMENDED**: Set the `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` environment variable to enforce this constraint at the platform level:
+
+**What this disables (when set to 1):**
+- `run_in_background: true` parameter on Bash and Task tools
+- Auto-backgrounding behavior
+- Ctrl+B keyboard shortcut
+
+**Benefits:**
+- Platform-native enforcement (maintained by Claude Code team)
+- Zero maintenance burden vs custom validators
+- Takes effect at process startup
+- Simpler than documentation-only rules
+
+**Available since**: Claude Code v2.1.4
+
+**Pattern Reference**: See `docs/patterns/PAT-AUTO-PROCEED-001.md` for full analysis of the background task enforcement gap.
+
+### Pause Points (When ON)
+
+AUTO-PROCEED runs continuously EXCEPT at these boundaries:
+1. **Orchestrator completion** - After all children complete, pauses for /learn review
+2. **Blocking errors** - Errors that cannot be auto-resolved
+3. **Test failures** - After 2 retry attempts
+4. **Merge conflicts** - Require human resolution
+5. **All children blocked** - Shows blockers and waits for decision
+
+### Multi-Session Coordination Infrastructure
+
+**SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001** provides database-level protection ensuring only ONE Claude session can claim a given SD at any time.
+
+#### Database Constraint
+
+A **partial unique index** enforces single active claim at the database level:
+
+```sql
+-- Only one session can have status='active' for a given sd_id
+CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim
+ON claude_sessions (sd_id)
+WHERE sd_id IS NOT NULL AND status = 'active';
+```
+
+**Impact on AUTO-PROCEED**: When a session attempts to claim an SD already held by another active session, the claim is rejected with detailed owner information (session ID, heartbeat age, hostname).
+
+#### Heartbeat Manager
+
+The heartbeat manager (`lib/heartbeat-manager.mjs`) maintains session liveness:
+
+- **Interval**: 30 seconds (automatic updates)
+- **Stale threshold**: 5 minutes (300 seconds)
+- **Max failures**: 3 consecutive before stopping
+
+**AUTO-PROCEED uses heartbeat to**:
+- Detect if previous session crashed (stale heartbeat)
+- Allow claim takeover for abandoned SDs
+- Maintain claim ownership during long operations
+
+#### Enhanced Session View
+
+The `v_active_sessions` view provides real-time session monitoring:
+
+| Field | Description |
+|-------|-------------|
+| `heartbeat_age_seconds` | Seconds since last heartbeat |
+| `heartbeat_age_human` | Human-readable age ("30s ago", "2m ago") |
+| `seconds_until_stale` | Countdown to 5-minute threshold |
+| `computed_status` | active, stale, idle, or released |
+
+**Query stale sessions**:
+```sql
+SELECT session_id, sd_id, heartbeat_age_human
+FROM v_active_sessions WHERE computed_status = 'stale';
+```
+
+#### Claim Conflict Resolution
+
+When AUTO-PROCEED encounters a claim conflict:
+
+1. **Check existing claim** - Query `v_active_sessions` for owner details
+2. **Evaluate staleness** - If heartbeat > 5 minutes, session is stale
+3. **Auto-release stale** - Use `release_sd()` RPC for abandoned claims
+4. **Retry claim** - Attempt to claim after releasing stale session
+
+**Related documentation**:
+- Migration: `database/migrations/20260130_multi_session_pessimistic_locking.sql`
+- Heartbeat API: `docs/reference/heartbeat-manager.md`
+- Ops runbook: `docs/06_deployment/multi-session-coordination-ops.md`
+
+### Error Resolution with RCA Sub-Agent
+
+**CRITICAL**: When AUTO-PROCEED encounters issues that cannot be immediately resolved, use the **RCA (Root Cause Analysis) sub-agent** to systematically diagnose and prevent recurrence.
+
+**When to invoke RCA sub-agent:**
+- After 2+ retry attempts fail on the same issue
+- When the same error pattern appears across multiple SDs
+- Database errors, migration failures, or schema conflicts
+- Test failures that aren't obvious code bugs
+- Any blocking error before pausing for human intervention
+
+**RCA Workflow in AUTO-PROCEED:**
+1. **Detect persistent issue** → Invoke RCA sub-agent via Task tool
+2. **RCA performs 5-Whys analysis** → Identifies true root cause
+3. **Generate CAPA** → Corrective and Preventive Actions
+4. **Auto-create fix SD if needed** → For systemic issues requiring code changes
+5. **Document pattern** → Add to issue_patterns table for future prevention
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [error description] keeps occurring.
+Perform 5-whys analysis and recommend systematic fix."
+```
+
+**Benefits:**
+- Prevents repeated failures on the same issue type
+- Creates institutional knowledge through issue patterns
+- Enables truly autonomous operation by learning from failures
+- Reduces human intervention over time
+
+### How to Stop
+
+- **User interrupt**: Type in terminal at any time (auto-resumes after handling)
+- **Explicit stop**: Say "stop AUTO-PROCEED" or "disable AUTO-PROCEED"
+- **Session preference**: Run `/leo init` and select "Turn OFF"
+
+### Quick Start
+
+```
+1. Start session → AUTO-PROCEED ON by default
+2. Run /leo next → See SD queue
+3. Pick SD → Work begins automatically
+4. Phase transitions → No confirmation needed
+5. Completion → /document → /ship → /learn → next SD
+6. Orchestrator done → /learn runs, queue displayed, PAUSE
+```
+
+### Discovery Decisions Summary (D01-D29)
+
+| # | Area | Decision |
+|---|------|----------|
+| D01 | Pause points | Never within session, only at orchestrator completion |
+| D02 | Error handling | Auto-retry with exponential backoff, then RCA for persistent issues |
+| D03 | Visibility | Full streaming (show all activity) |
+| D04 | Limits | None - run until complete or interrupted |
+| D05 | UAT | Auto-pass with flag for later human review |
+| D06 | Notifications | Terminal + Claude Code sound notification |
+| D07 | Learning trigger | Auto-invoke /learn at orchestrator end |
+| D08 | Post-learn | Show queue, pause for user selection |
+| D09 | Context | Existing compaction process handles it |
+| D10 | Restart | Auto-restart with logging for visibility |
+| D11 | Handoff | Propagate AUTO-PROCEED flag through handoff.js |
+| D12 | Activation | Uses claude_sessions.metadata.auto_proceed (default: true) |
+| D13 | Interruption | Built-in, auto-resume after handling user input |
+| D14 | Multi-orchestrator | Show full queue of available orchestrators/SDs |
+| D15 | Chaining | Configurable (default: pause at orchestrator boundary) |
+| D16 | Validation failures | Skip failed children, mark as blocked, continue |
+| D17 | Session summary | Detailed - all SDs processed, status, time, issues |
+| D18 | Crash recovery | Both auto-load AND explicit /leo resume |
+| D19 | Metrics | Use existing retrospectives and issue patterns |
+| D20 | Sensitive SDs | No exceptions - all SD types treated the same |
+| D21 | Mid-exec blockers | Attempt to identify and resolve dependency first |
+| D22 | Re-prioritization | Auto-adjust queue based on learnings |
+| D23 | All blocked | Show blockers, pause for human decision |
+| D24 | Mode reminder | Display AUTO-PROCEED status when /leo starts SD |
+| D25 | Status line | Add mode + phase + progress (keep existing content) |
+| D26 | Completion cue | No acknowledgment between SDs - smooth continuation |
+| D27 | Compaction notice | Brief inline notice when context compacted |
+| D28 | Error retries | Log inline with "Retrying... (attempt X/Y)", RCA after failures |
+| D29 | Resume reminder | Show what was happening before resuming |
+
+*Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
+
+## Sub-Agent Invocation Quality Standard
+
+**CRITICAL**: The prompt you write when spawning a sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
+
+### Required Elements (The Five-Point Brief)
+
+When invoking ANY sub-agent via the Task tool, your prompt MUST include:
+
+| Element | What to Include | Example |
+|---------|----------------|---------|
+| **Symptom** | What is actually happening (observable behavior) | "The /users endpoint returns 504 after 30s" |
+| **Location** | Files, endpoints, systems, or DB tables involved | "API route in routes/users.js, query in lib/queries/" |
+| **Frequency** | One-time, recurring, pattern, or regression | "Started 2 hours ago, affects every 3rd request" |
+| **Prior attempts** | What has already been tried or ruled out | "Restarted server — no improvement. Not a DNS issue." |
+| **Impact** | Severity and what is blocked downstream | "Blocking all user signups, P0 severity" |
+
+### What to EXCLUDE from Sub-Agent Prompts
+
+| Exclude | Why |
+|---------|-----|
+| **Your hypothesis about the cause** | Biases the investigation — let the agent form its own hypothesis |
+| **Large log/code dumps** | The agent has Read and Bash tools — point to files instead |
+| **Unrelated context** | Every extra token is a token not spent on investigation |
+| **Vague descriptions** | "Look into this error" gives the agent nothing to anchor on |
+
+### Quality Examples
+
+**GOOD prompt** (RCA agent):
+```
+"Analyze why the /api/users endpoint returns 504 timeout after 30 seconds.
+- Location: routes/users.js line 45 calls lib/queries/user-lookup.js
+- Frequency: Started 2 hours ago, every 3rd request fails
+- Prior attempts: Server restart did not help, DNS resolution is fine
+- Impact: All user signups blocked (P0)
+Perform 5-whys analysis and identify the root cause."
+```
+
+**BAD prompt** (same scenario):
+```
+"Investigate this timeout issue. Something is wrong with the users endpoint."
+```
+
+### Why This Matters
+
+The prompt quality compounds through every level of the agent chain:
+
+```
+Strong prompt -> Agent understands domain -> Picks RIGHT teammates
+  -> Teammates get focused assignments -> Findings are actionable
+
+Weak prompt -> Agent guesses at scope -> Generic team spawned
+  -> Broad investigation -> Scattered findings -> "12 possible issues"
+```
+
+### Enforcement
+
+This standard applies to ALL sub-agent invocations, not just RCA. Whether spawning DATABASE, TESTING, SECURITY, PERFORMANCE, or any other agent — include the Five-Point Brief.
+
+**Exception**: Routine/automated invocations (e.g., DOCMON on phase transitions) that follow a fixed template are exempt.
 
 ## Critical Term Definitions
 
@@ -313,33 +785,33 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 | Sub-Agent | Trigger Keywords |
 |-----------|------------------|
-| `ANALYTICS` | analytics tracking, conversion tracking, funnel analysis, google analytics, kpi dashboard, metrics dashboard, mixpanel, user analytics, AARRR, KPI (+24 more) |
-| `API` | add endpoint, api design, api endpoint, api route, backend route, create endpoint, graphql api, openapi, rest api, swagger (+37 more) |
-| `CRM` | contact management, crm system, customer relationship, hubspot setup, lead tracking, salesforce integration, CRM, HubSpot, Salesforce, account (+14 more) |
-| `DATABASE` | EXEC_IMPLEMENTATION_COMPLETE, add column, alter table, apply migration, apply schema changes, apply the migration, create table, data model, database migration, database schema (+84 more) |
-| `DEPENDENCY` | dependency update, dependency vulnerability, npm audit, npm install, outdated packages, package update, pnpm add, security advisory, yarn add, CVE (+29 more) |
-| `DESIGN` | a11y, accessibility, component design, dark mode, design system, mobile layout, responsive design, shadcn, ui design, ux design (+67 more) |
-| `DOCMON` | DAILY_DOCMON_CHECK, EXEC_COMPLETION, EXEC_IMPLEMENTATION, FILE_CREATED, HANDOFF_ACCEPTED, HANDOFF_CREATED, LEAD_APPROVAL, LEAD_HANDOFF_CREATION, LEAD_SD_CREATION, PHASE_TRANSITION (+30 more) |
-| `FINANCIAL` | burn rate, cash flow analysis, financial model, p&l statement, profit and loss, revenue projection, runway calculation, EBITDA, P&L, break even (+21 more) |
-| `GITHUB` | EXEC_IMPLEMENTATION_COMPLETE, LEAD_APPROVAL_COMPLETE, PLAN_VERIFICATION_PASS, ci pipeline, code review, create pr, git merge, git rebase, github actions, github workflow (+33 more) |
-| `LAUNCH` | deploy to production, go live checklist, launch checklist, production deployment, ready to launch, release to production, ship to prod, GA release, beta release, cutover (+20 more) |
-| `MARKETING` | brand awareness, content marketing, go to market, gtm strategy, marketing campaign, marketing strategy, seo strategy, GTM, SEO, advertising (+20 more) |
-| `MONITORING` | alerting system, application monitoring, datadog, error monitoring, health check, prometheus, sentry, system monitoring, uptime monitoring, Datadog (+23 more) |
-| `PERFORMANCE` | bottleneck, cpu usage, load time, memory leak, n+1 query, performance issue, performance optimization, response time, slow query, speed optimization (+27 more) |
-| `PRICING` | cac ltv, pricing model, pricing page, pricing strategy, subscription pricing, tiered pricing, unit economics, CAC, LTV, arpu (+19 more) |
-| `QUICKFIX` | easy fix, hotfix, minor fix, one liner, quick fix, quickfix, simple fix, small fix, trivial fix, adjust (+13 more) |
-| `RCA` | 5 whys, causal analysis, ci_pipeline_failure, fault tree, fishbone, five whys, get to the bottom, handoff_rejection, ishikawa, keeps happening (+46 more) |
-| `REGRESSION` | api signature, backward compatible, backwards compatible, before and after, breaking change, no behavior change, refactor safely, regression test, DRY violation, backward (+34 more) |
-| `RETRO` | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION, PLAN_VERIFICATION_COMPLETE, action items, continuous improvement, learn from this, lessons learned, post-mortem, postmortem, retrospective (+49 more) |
-| `RISK` | architecture decision, high risk, pros and cons, risk analysis, risk assessment, risk mitigation, security risk, system design, tradeoff analysis, LEAD_PRE_APPROVAL (+79 more) |
-| `SALES` | close deal, objection handling, sales cycle, sales pipeline, sales playbook, sales process, sales strategy, close, closing, deal (+17 more) |
-| `SECURITY` | api key exposed, authentication bypass, csrf vulnerability, cve, exposed credential, hardcoded secret, owasp, penetration test, security audit, security vulnerability (+34 more) |
-| `STORIES` | acceptance criteria, as a user, definition of done, epic, feature request, i want to, so that, user stories, user story, PLAN_PRD (+23 more) |
-| `TESTING` | EXEC_IMPLEMENTATION_COMPLETE, add tests, create tests, e2e test, end to end test, integration test, vitest test, playwright test, spec file, test coverage (+42 more) |
-| `UAT` | acceptance criteria, click through, happy path, human test, manual test, test scenario, uat test, user acceptance test, user journey, TEST-AUTH (+31 more) |
-| `VALIDATION` | already exists, already implemented, before i build, check if exists, codebase search, duplicate check, existing implementation, codebase, codebase check, conflict (+18 more) |
-| `VALUATION` | acquisition target, company valuation, dcf analysis, exit strategy, fundraising round, series a, startup valuation, DCF, IPO, Series A (+20 more) |
-| `VETTING` | vet, vetting, proposal, rubric, constitutional, aegis, governance check, compliance check, validate proposal, assess feedback (+14 more) |
+| `ANALYTICS` | analytics tracking, conversion tracking, funnel analysis (+31 more) |
+| `API` | add endpoint, api design, api endpoint (+44 more) |
+| `CRM` | contact management, crm system, customer relationship (+21 more) |
+| `DATABASE` | EXEC_IMPLEMENTATION_COMPLETE, add column, alter table (+91 more) |
+| `DEPENDENCY` | dependency update, dependency vulnerability, npm audit (+36 more) |
+| `DESIGN` | a11y, accessibility, component design (+74 more) |
+| `DOCMON` | DAILY_DOCMON_CHECK, EXEC_COMPLETION, EXEC_IMPLEMENTATION (+37 more) |
+| `FINANCIAL` | burn rate, cash flow analysis, financial model (+28 more) |
+| `GITHUB` | EXEC_IMPLEMENTATION_COMPLETE, LEAD_APPROVAL_COMPLETE, PLAN_VERIFICATION_PASS (+40 more) |
+| `LAUNCH` | deploy to production, go live checklist, launch checklist (+27 more) |
+| `MARKETING` | brand awareness, content marketing, go to market (+27 more) |
+| `MONITORING` | alerting system, application monitoring, datadog (+30 more) |
+| `PERFORMANCE` | bottleneck, cpu usage, load time (+34 more) |
+| `PRICING` | cac ltv, pricing model, pricing page (+26 more) |
+| `QUICKFIX` | easy fix, hotfix, minor fix (+20 more) |
+| `RCA` | 5 whys, causal analysis, ci_pipeline_failure (+53 more) |
+| `REGRESSION` | api signature, backward compatible, backwards compatible (+41 more) |
+| `RETRO` | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION, PLAN_VERIFICATION_COMPLETE (+56 more) |
+| `RISK` | architecture decision, high risk, pros and cons (+86 more) |
+| `SALES` | close deal, objection handling, sales cycle (+24 more) |
+| `SECURITY` | api key exposed, authentication bypass, csrf vulnerability (+41 more) |
+| `STORIES` | acceptance criteria, as a user, definition of done (+30 more) |
+| `TESTING` | EXEC_IMPLEMENTATION_COMPLETE, add tests, create tests (+49 more) |
+| `UAT` | acceptance criteria, click through, happy path (+38 more) |
+| `VALIDATION` | already exists, already implemented, before i build (+25 more) |
+| `VALUATION` | acquisition target, company valuation, dcf analysis (+27 more) |
+| `VETTING` | vet, vetting, proposal (+21 more) |
 
 *Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
 
@@ -354,5 +826,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-02-13 10:07:42 AM*
+*DIGEST generated: 2026-02-14 7:50:42 AM*
 *Protocol: 4.3.3*
