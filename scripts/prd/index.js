@@ -408,10 +408,17 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
     });
 
     if (!llmPrdContent) {
-      // HARD GATE: Exit when LLM generation fails
+      // Check if inline mode is active — null return is expected
+      if (process.env.LLM_PRD_INLINE !== 'false') {
+        console.log('\n   ℹ️  INLINE MODE: PRD prompt output complete.');
+        console.log('   Claude Code should generate and insert the PRD content directly.');
+        console.log('   Exiting without creating PRD record (expected in inline mode).');
+        process.exit(0);
+      }
+      // HARD GATE: Exit when LLM generation fails in external API mode
       console.error('\n   ❌ QUALITY GATE FAILED: LLM PRD generation failed');
       console.error('   No PRD will be created (avoiding placeholder content).');
-      console.error('   Check OPENAI_API_KEY and retry PRD creation.');
+      console.error('   Check API credentials and retry PRD creation.');
       process.exit(1);
     }
 
