@@ -104,11 +104,11 @@ async function checkResumeEligibility(sdUuid, currentPhase) {
 
 async function getWorkingOnSD() {
   try {
-    // Get SD marked as working_on that is not completed
+    // SD-LEO-INFRA-CLAIM-GUARD-001: Prefer claiming_session_id, fall back to is_working_on
     const { data: workingOn, error: workingError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, is_working_on, created_at, current_phase, progress, description')
-      .eq('is_working_on', true)
+      .select('id, sd_key, title, status, priority, is_working_on, claiming_session_id, created_at, current_phase, progress, description')
+      .or('claiming_session_id.not.is.null,is_working_on.eq.true')
       .lt('progress', 100);  // Less than 100% complete
 
     if (workingError) {
@@ -129,6 +129,7 @@ async function getWorkingOnSD() {
    Priority: ${sd.priority || 'not set'}
    Current Phase: ${sd.current_phase || 'not set'}
    Progress: ${sd.progress || 0}%
+   Claimed by: ${sd.claiming_session_id || 'unknown (legacy is_working_on)'}
    Created: ${new Date(sd.created_at).toLocaleDateString()}
 
    Description:
@@ -171,8 +172,8 @@ async function getWorkingOnSD() {
       // Also check if there's a completed SD still marked
       const { data: completedWorking } = await supabase
         .from('strategic_directives_v2')
-        .select('id, title, progress')
-        .eq('is_working_on', true)
+        .select('id, title, progress, claiming_session_id')
+        .or('claiming_session_id.not.is.null,is_working_on.eq.true')
         .gte('progress', 100);
 
       if (completedWorking && completedWorking.length > 0) {

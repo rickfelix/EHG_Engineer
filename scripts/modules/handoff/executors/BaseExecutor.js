@@ -526,76 +526,38 @@ export class BaseExecutor {
    * @param {object} sd - SD record
    */
   async _claimSDForSession(sdId, sd) {
-    try {
-      // Dynamic imports to avoid circular dependencies
-      const sessionManager = await import('../../../../lib/session-manager.mjs');
-      const conflictChecker = await import('../../../../lib/session-conflict-checker.mjs');
-      // SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001 (FR-5): Import heartbeat manager
-      const heartbeatManager = await import('../../../../lib/heartbeat-manager.mjs');
+    // SD-LEO-INFRA-CLAIM-GUARD-001: Claim failure is a HARD BLOCKER (FR-4)
+    // No try/catch swallowing — errors propagate and block handoff execution
+    const { claimGuard, formatClaimFailure } = await import('../../../../lib/claim-guard.mjs');
+    const sessionManager = await import('../../../../lib/session-manager.mjs');
+    const heartbeatManager = await import('../../../../lib/heartbeat-manager.mjs');
 
-      // Get or create session for this terminal
-      const session = await sessionManager.getOrCreateSession();
+    const session = await sessionManager.getOrCreateSession();
 
-      if (!session) {
-        console.log('   [Claim] No session available - skipping auto-claim');
-      } else {
-        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Use sd_key or id for claiming (legacy_id removed 2026-01-24)
-        const claimId = sd.sd_key || sdId;
-
-        // Check if already claimed by this session
-        const claimStatus = await conflictChecker.isSDClaimed(claimId, session.session_id);
-
-        if (claimStatus.claimed && claimStatus.claimedBy === session.session_id) {
-          // Already claimed by us - just update heartbeat
-          await sessionManager.updateHeartbeat(session.session_id);
-          console.log('   [Claim] SD already claimed by this session');
-        } else if (claimStatus.claimed) {
-          // QF-CLAIM-CONFLICT-UX-001: Enhanced claim conflict display
-          console.log('\n   ┌─────────────────────────────────────────────────────────────┐');
-          console.log('   │  ⚠️  SD CLAIMED BY ANOTHER SESSION                          │');
-          console.log('   ├─────────────────────────────────────────────────────────────┤');
-          console.log(`   │  Session:   ${safeTruncate(claimStatus.claimedBy || '', 45) || 'unknown'}`);
-          console.log(`   │  Hostname:  ${claimStatus.hostname || 'unknown'}`);
-          console.log(`   │  TTY:       ${claimStatus.tty || 'unknown'}`);
-          console.log(`   │  Heartbeat: ${claimStatus.heartbeatAgeHuman || 'unknown'}`);
-          console.log(`   │  Codebase:  ${claimStatus.codebase || 'unknown'}`);
-          console.log('   ├─────────────────────────────────────────────────────────────┤');
-          console.log('   │  🤔 Do you have another Claude Code instance running?       │');
-          console.log('   │                                                             │');
-          console.log('   │  If YES: Pick a different SD to avoid conflicts             │');
-          console.log('   │  If NO:  The other session may be stale (>5min = auto-release)│');
-          console.log('   └─────────────────────────────────────────────────────────────┘\n');
-          console.log('   [Claim] ❌ Cannot proceed - SD claimed by another session');
-          return { success: false, error: 'SD claimed by another session', claimConflict: true };
-        } else {
-          // Attempt to claim the SD
-          const result = await conflictChecker.claimSD(claimId, session.session_id);
-
-          if (result.success) {
-            console.log(`   [Claim] ✅ SD ${claimId} claimed for session - is_working_on=true`);
-            if (result.warnings?.length > 0) {
-              result.warnings.forEach(w => console.log(`   [Claim] ⚠️ ${w.message}`));
-            }
-          } else {
-            console.log(`   [Claim] ❌ Could not claim SD: ${result.error || 'Unknown error'}`);
-            return { success: false, error: `Claim failed: ${result.error || 'Unknown error'}` };
-          }
-        }
-
-        // FR-5: Start automatic heartbeat updates (every 30s, well under 60s requirement)
-        // This keeps the session alive during long-running operations
-        const heartbeatStatus = heartbeatManager.isHeartbeatActive();
-        if (!heartbeatStatus.active || heartbeatStatus.sessionId !== session.session_id) {
-          heartbeatManager.startHeartbeat(session.session_id);
-        }
-      }
-
-      // Show duration estimate (non-blocking) - ALWAYS runs regardless of claim status
-      await this._showDurationEstimate(sd);
-    } catch (error) {
-      // Non-fatal - allow handoff to proceed
-      console.log(`   [Claim] ⚠️ Auto-claim error (non-blocking): ${error.message}`);
+    if (!session) {
+      console.log('   [Claim] ❌ No session available - cannot proceed without claim');
+      return { success: false, error: 'Claim required - no session available' };
     }
+
+    const claimId = sd.sd_key || sdId;
+    const result = await claimGuard(claimId, session.session_id);
+
+    if (!result.success) {
+      console.log(formatClaimFailure(result));
+      console.log('   [Claim] ❌ Cannot proceed - claim guard rejected');
+      return { success: false, error: 'Claim required - cannot proceed without valid SD claim', claimConflict: true };
+    }
+
+    console.log(`   [Claim] ✅ SD ${claimId} claimed (${result.claim.status})`);
+
+    // Start automatic heartbeat updates
+    const heartbeatStatus = heartbeatManager.isHeartbeatActive();
+    if (!heartbeatStatus.active || heartbeatStatus.sessionId !== session.session_id) {
+      heartbeatManager.startHeartbeat(session.session_id);
+    }
+
+    // Show duration estimate (non-blocking)
+    await this._showDurationEstimate(sd);
   }
 
   /**

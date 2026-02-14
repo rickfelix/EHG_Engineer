@@ -17,7 +17,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
-import { claimSD, isSDClaimed } from '../lib/session-conflict-checker.mjs';
+import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
@@ -191,92 +191,34 @@ async function main() {
     }
   }
 
-  // 3. Check current claim status
-  const claimStatus = await isSDClaimed(effectiveId, session.session_id);
-
-  if (claimStatus.queryFailed) {
-    console.log(`\n${colors.red}Error checking SD claim: ${claimStatus.error}${colors.reset}`);
-    console.log(`\n${colors.yellow}This may indicate a database schema issue.${colors.reset}`);
-    console.log('Try running: node scripts/run-sql-migration.js database/migrations/20260213_restore_v_active_sessions_columns.sql');
-    process.exit(1);
-  }
-
-  if (claimStatus.claimed && claimStatus.claimedBy !== session.session_id) {
-    // SD-LEO-FIX-PID-BASED-SESSION-001: PID-aware claim conflict resolution
-    console.log(`\n${colors.red}❌ SD is already claimed by another session${colors.reset}`);
-    console.log(`\n${colors.bold}Owner Session Details:${colors.reset}`);
-    console.log(`   Session ID: ${colors.cyan}${claimStatus.claimedBy}${colors.reset}`);
-    console.log(`   Hostname:   ${claimStatus.hostname || 'unknown'}`);
-    console.log(`   TTY/Term:   ${claimStatus.tty || 'unknown'}`);
-    console.log(`   Codebase:   ${claimStatus.codebase || 'unknown'}`);
-    console.log(`   Track:      ${claimStatus.track || 'STANDALONE'}`);
-    console.log(`   PID:        ${claimStatus.pid || 'unknown'}`);
-    console.log(`\n${colors.bold}Heartbeat Status:${colors.reset}`);
-    console.log(`   Last seen:  ${colors.yellow}${claimStatus.heartbeatAgeHuman || claimStatus.activeMinutes + 'm ago'}${colors.reset}`);
-    console.log(`   Age:        ${claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60} seconds`);
-
-    // PID-based liveness check (same machine only)
-    const sameHost = claimStatus.hostname === os.hostname();
-    const ownerPid = claimStatus.pid;
-
-    if (sameHost && ownerPid) {
-      const pidAlive = isProcessRunning(ownerPid);
-      if (pidAlive) {
-        // HARD REFUSE: Process is confirmed running
-        console.log(`\n${colors.red}${colors.bold}🔒 PROCESS IS RUNNING (PID: ${ownerPid})${colors.reset}`);
-        console.log(`${colors.red}   Another Claude Code instance is actively using this SD.${colors.reset}`);
-        console.log(`${colors.red}   DO NOT release this claim — the other session is alive.${colors.reset}`);
-        console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
-      } else {
-        // SAFE TO RELEASE: Process exited, session is orphaned
-        console.log(`\n${colors.green}${colors.bold}💀 PROCESS EXITED (PID: ${ownerPid} is dead)${colors.reset}`);
-        console.log(`   The owning process is no longer running.`);
-        console.log(`   This claim is orphaned and safe to release.`);
-        console.log(`\n${colors.bold}Action:${colors.reset} Run ${colors.cyan}npm run session:cleanup${colors.reset} then retry`);
-      }
-    } else if (sameHost && !ownerPid) {
-      // Same machine but no PID recorded (legacy session)
-      console.log(`\n${colors.yellow}⚠️  No PID recorded for this session (legacy session format)${colors.reset}`);
-      console.log(`   Cannot verify process liveness.`);
-      const secondsUntilStale = 300 - (claimStatus.heartbeatAgeSeconds || claimStatus.activeMinutes * 60);
-      if (secondsUntilStale <= 0) {
-        console.log(`   Heartbeat is stale — likely safe to release.`);
-        console.log(`\n${colors.bold}Action:${colors.reset} Run ${colors.cyan}npm run session:cleanup${colors.reset} then retry`);
-      } else {
-        console.log(`   Heartbeat is recent (${claimStatus.heartbeatAgeHuman}) — another instance may be active.`);
-        console.log(`\n${colors.bold}Action:${colors.reset} Check for other Claude Code instances, or wait ${secondsUntilStale}s for stale timeout`);
-      }
-    } else {
-      // Different machine — cannot verify PID
-      console.log(`\n${colors.yellow}⚠️  DIFFERENT MACHINE (${claimStatus.hostname} vs ${os.hostname()})${colors.reset}`);
-      console.log(`   Cannot verify process liveness across machines.`);
-      console.log(`\n${colors.bold}Options:${colors.reset}`);
-      console.log(`   1. Check if ${colors.cyan}${claimStatus.hostname}${colors.reset} is still running a Claude session`);
-      console.log(`   2. Wait for heartbeat to go stale (5min threshold)`);
-      console.log(`   3. If abandoned, run ${colors.cyan}npm run session:cleanup${colors.reset}`);
-    }
-
-    console.log('═'.repeat(50));
-    process.exit(1);
-  }
-
-  // 4. Claim the SD
-  let claimResult;
-  if (claimStatus.claimed && claimStatus.claimedBy === session.session_id) {
-    // Already claimed by us - just update heartbeat
-    await updateHeartbeat(session.session_id);
-    claimResult = { success: true, alreadyClaimed: true };
-  } else {
-    claimResult = await claimSD(effectiveId, session.session_id);
-  }
+  // 3. SD-LEO-INFRA-CLAIM-GUARD-001: Use centralized claimGuard
+  const claimResult = await claimGuard(effectiveId, session.session_id);
 
   if (!claimResult.success) {
-    console.log(`\n${colors.red}Error claiming SD: ${claimResult.error}${colors.reset}`);
-    if (claimResult.blockingReasons) {
-      claimResult.blockingReasons.forEach(r => {
-        console.log(`   - ${r.message}`);
-      });
+    console.log(formatClaimFailure(claimResult));
+
+    // PID-based liveness check for enhanced diagnostics (same machine only)
+    if (claimResult.owner) {
+      const sameHost = claimResult.owner.hostname === os.hostname();
+      // Extract PID from session ID if available (format: win-cc-{ssePort}-{pid})
+      const pidMatch = claimResult.owner.session_id?.match(/-(\d+)$/);
+      const ownerPid = pidMatch ? parseInt(pidMatch[1]) : null;
+
+      if (sameHost && ownerPid) {
+        const pidAlive = isProcessRunning(ownerPid);
+        if (pidAlive) {
+          console.log(`\n${colors.red}${colors.bold}🔒 PROCESS IS RUNNING (PID: ${ownerPid})${colors.reset}`);
+          console.log(`${colors.red}   Another Claude Code instance is actively using this SD.${colors.reset}`);
+        } else {
+          console.log(`\n${colors.green}${colors.bold}💀 PROCESS EXITED (PID: ${ownerPid} is dead)${colors.reset}`);
+          console.log(`   This claim is orphaned and safe to release.`);
+          console.log(`\n${colors.bold}Action:${colors.reset} Run ${colors.cyan}npm run session:cleanup${colors.reset} then retry`);
+        }
+      }
     }
+
+    console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+    console.log('═'.repeat(50));
     process.exit(1);
   }
 
@@ -292,14 +234,14 @@ async function main() {
   }
 
   // 5. Display SD info
-  console.log(`\n${colors.green}✓ SD claimed successfully${colors.reset}`);
+  console.log(`\n${colors.green}✓ SD claimed successfully (${claimResult.claim.status})${colors.reset}`);
   console.log(`\n${colors.bold}SD: ${effectiveId}${colors.reset}`);
   console.log(`Title: ${sd.title}`);
   console.log(`Status: ${sd.status}`);
   console.log(`Phase: ${sd.current_phase || 'LEAD'}`);
   console.log(`Progress: ${sd.progress_percentage || 0}%`);
   console.log(`Type: ${sd.sd_type || 'feature'}`);
-  console.log(`is_working_on: ${colors.green}true${colors.reset}`);
+  console.log(`claiming_session_id: ${colors.green}${session.session_id}${colors.reset}`);
 
   // 5.1. Show worktree info + machine-readable activation directive
   if (worktreeInfo?.success && worktreeInfo.worktree?.exists) {

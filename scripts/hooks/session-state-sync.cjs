@@ -228,35 +228,18 @@ async function attemptSDReclaim(currentSessionId) {
     });
   }
 
-  // Claim for current session
+  // SD-LEO-INFRA-CLAIM-GUARD-001: Use centralized claimGuard (no fallbacks)
   try {
-    const { data: sdBaseline } = await supabase
-      .from('sd_baseline_items')
-      .select('track')
-      .eq('sd_id', sdKey)
-      .single();
+    const { claimGuard } = require('../../lib/claim-guard.cjs');
+    const result = await claimGuard(sdKey, currentSessionId);
 
-    const track = sdBaseline?.track || 'STANDALONE';
-
-    const { error: claimError } = await supabase.rpc('claim_sd', {
-      p_sd_id: sdKey,
-      p_session_id: currentSessionId,
-      p_track: track
-    });
-
-    if (claimError) {
-      // Fallback: direct update
-      await supabase
-        .from('claude_sessions')
-        .update({ sd_id: sdKey })
-        .eq('session_id', currentSessionId);
+    if (!result.success) {
+      console.log(`[session-state-sync] ❌ Claim guard rejected: ${result.error}`);
+      if (result.owner) {
+        console.log(`[session-state-sync]    Owner: ${result.owner.session_id} (${result.owner.heartbeat_age_human})`);
+      }
+      return; // Do not proceed without valid claim
     }
-
-    // Restore is_working_on
-    await supabase
-      .from('strategic_directives_v2')
-      .update({ is_working_on: true })
-      .eq('sd_key', sdKey);
 
     console.log('');
     console.log('========================================');
@@ -267,7 +250,7 @@ async function attemptSDReclaim(currentSessionId) {
     if (previousSessionId) {
       console.log(`  Previous session: ${previousSessionId}`);
     }
-    console.log(`  ✅ Claim transferred to: ${currentSessionId}`);
+    console.log(`  ✅ Claim transferred to: ${currentSessionId} (${result.claim.status})`);
     console.log('========================================');
     console.log('');
   } catch (err) {
