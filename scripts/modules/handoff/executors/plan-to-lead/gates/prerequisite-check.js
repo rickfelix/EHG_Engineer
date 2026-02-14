@@ -6,6 +6,7 @@
  */
 
 import { isInfrastructureSDSync } from '../../../../sd-type-checker.js';
+import { autoResolveFailedHandoffs } from '../../../gates/auto-resolve-failures.js';
 
 /**
  * Create the PREREQUISITE_HANDOFF_CHECK gate validator
@@ -22,6 +23,14 @@ export function createPrerequisiteCheckGate(supabase) {
 
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
       const sdUuid = ctx.sd?.id || ctx.sdId;
+
+      // Auto-resolve previous failed PLAN-TO-LEAD attempts on retry
+      const resolveResult = await autoResolveFailedHandoffs(supabase, sdUuid, 'PLAN-TO-LEAD');
+      if (resolveResult.resolved > 0) {
+        console.log(`   ✅ Auto-resolved ${resolveResult.resolved} previous PLAN-TO-LEAD failure(s)`);
+      } else if (resolveResult.error) {
+        console.log(`   ⚠️  Could not check previous failures: ${resolveResult.error}`);
+      }
 
       // PARENT SD DETECTION: Parent orchestrator SDs don't have their own EXEC phase
       const parentCheckResult = await checkParentOrchestrator(supabase, sdUuid, ctx);

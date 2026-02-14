@@ -5,6 +5,8 @@
  * ROOT CAUSE FIX: Validates LEAD-TO-PLAN handoff exists before PLAN-TO-EXEC (SD-VISION-V2-009)
  */
 
+import { autoResolveFailedHandoffs } from '../../../gates/auto-resolve-failures.js';
+
 /**
  * Create the PREREQUISITE_HANDOFF_CHECK gate validator
  *
@@ -18,9 +20,18 @@ export function createPrerequisiteCheckGate(supabase) {
       console.log('\n🔐 PREREQUISITE CHECK: LEAD-TO-PLAN Handoff Required');
       console.log('-'.repeat(50));
 
-      // Query for an accepted LEAD-TO-PLAN handoff for this SD
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
       const sdUuid = ctx.sd?.id || ctx.sdId;
+
+      // Auto-resolve previous failed PLAN-TO-EXEC attempts on retry
+      const resolveResult = await autoResolveFailedHandoffs(supabase, sdUuid, 'PLAN-TO-EXEC');
+      if (resolveResult.resolved > 0) {
+        console.log(`   ✅ Auto-resolved ${resolveResult.resolved} previous PLAN-TO-EXEC failure(s)`);
+      } else if (resolveResult.error) {
+        console.log(`   ⚠️  Could not check previous failures: ${resolveResult.error}`);
+      }
+
+      // Query for an accepted LEAD-TO-PLAN handoff for this SD
       const { data: leadToPlanHandoff, error } = await supabase
         .from('sd_phase_handoffs')
         .select('id, status, created_at, validation_score')

@@ -5,6 +5,8 @@
  * ROOT CAUSE FIX: Validates PLAN-TO-EXEC handoff exists before EXEC-TO-PLAN (SD-VISION-V2-009)
  */
 
+import { autoResolveFailedHandoffs } from '../../../gates/auto-resolve-failures.js';
+
 /**
  * Create the PREREQUISITE_HANDOFF_CHECK gate validator
  *
@@ -20,6 +22,15 @@ export function createPrerequisiteCheckGate(supabase) {
 
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
       const sdUuid = ctx.sd?.id || ctx.sdId;
+
+      // Auto-resolve previous failed EXEC-TO-PLAN attempts on retry
+      const resolveResult = await autoResolveFailedHandoffs(supabase, sdUuid, 'EXEC-TO-PLAN');
+      if (resolveResult.resolved > 0) {
+        console.log(`   ✅ Auto-resolved ${resolveResult.resolved} previous EXEC-TO-PLAN failure(s)`);
+      } else if (resolveResult.error) {
+        console.log(`   ⚠️  Could not check previous failures: ${resolveResult.error}`);
+      }
+
       const { data: allHandoffs, error } = await supabase
         .from('sd_phase_handoffs')
         .select('id, status, created_at, validation_score, rejection_reason')
