@@ -9,9 +9,9 @@
 - **Last Updated**: 2026-01-21
 - **Tags**: unit, validation, architecture, postgres
 
-**Purpose**: Define tunable parameters for Stage 7 (Comprehensive Planning Suite) to allow Chairman/Admin customization
+**Purpose**: Define tunable parameters for Stage 7 (Revenue Architecture) to allow Chairman/Admin customization
 
-**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:274-319 "Comprehensive Planning Suite"
+**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:274-319 "Revenue Architecture"
 
 ---
 

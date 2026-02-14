@@ -28,7 +28,7 @@ Ideation (1-10) → Design (11-20) → [Execution (21-31)] → Growth (32-40)
 ```
 Stage 24 (MVP Engine: Automated Feedback Iteration)
     ↓
-[Stage 25: Quality Assurance]
+[Stage 25: Venture Review]
     ↓
 Stage 26 (Security & Compliance)
 ```
@@ -148,7 +148,7 @@ Stage 26 (Security & Compliance)
 | Depends on Stage 24 | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1106-1107 | "depends_on: - 24" |
 | 3 substages defined | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1128-1146 | "substages: - id: '25.1'" |
 | Regression testing required | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1140 | "- Regression tested" |
-| Execution phase stage | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1103-1105 | "id: 25, title: Quality Assurance" |
+| Execution phase stage | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1103-1105 | "id: 25, title: Venture Review" |
 
 ---
 

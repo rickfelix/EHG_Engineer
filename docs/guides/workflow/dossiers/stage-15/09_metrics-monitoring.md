@@ -9,7 +9,7 @@
 - **Last Updated**: 2026-01-21
 - **Tags**: database, api, testing, unit
 
-**Purpose**: Define KPIs, tracking queries, and monitoring dashboards for Pricing Strategy & Revenue Architecture
+**Purpose**: Define KPIs, tracking queries, and monitoring dashboards for Resource Planning
 **Owner**: LEAD agent
 **Monitoring Frequency**: Monthly (first year), Quarterly (thereafter)
 **Dashboard Refresh**: Real-time (automated) + Manual refresh on-demand
