@@ -41,6 +41,7 @@ describe('stage-25.js - Venture Review template', () => {
         current_vision: null,
         drift_justification: null,
         next_steps: [],
+        chairmanGate: { status: 'pending', rationale: null, decision_id: null },
         total_initiatives: 0,
         all_categories_reviewed: false,
         drift_detected: false,
@@ -114,6 +115,7 @@ describe('stage-25.js - Venture Review template', () => {
         },
         current_vision: 'Current vision statement',
         next_steps: [{ action: 'Action 1', owner: 'Owner 1', timeline: 'Q1 2026' }],
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage25.validate(validData);
       expect(result.valid).toBe(true);
@@ -159,6 +161,7 @@ describe('stage-25.js - Venture Review template', () => {
         },
         current_vision: 'Current vision statement',
         next_steps: [{ action: 'Action 1', owner: 'Owner 1', timeline: 'Q1 2026' }],
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage25.validate(validData);
       expect(result.valid).toBe(true);
@@ -269,6 +272,7 @@ describe('stage-25.js - Venture Review template', () => {
         },
         current_vision: 'Current vision statement',
         next_steps: [{ action: 'Action 1', owner: 'Owner 1', timeline: 'Q1 2026' }],
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage25.validate(validData);
       expect(result.valid).toBe(true);
@@ -313,6 +317,7 @@ describe('stage-25.js - Venture Review template', () => {
         initiatives: validInitiatives,
         current_vision: 'Current vision statement for the venture',
         next_steps: [{ action: 'Action 1', owner: 'Owner 1', timeline: 'Q1 2026' }],
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage25.validate(validData);
       expect(result.valid).toBe(true);
@@ -386,6 +391,7 @@ describe('stage-25.js - Venture Review template', () => {
           { action: 'Launch next phase', owner: 'CEO', timeline: 'Q1 2026' },
           { action: 'Expand team', owner: 'HR', timeline: 'Q2 2026' },
         ],
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage25.validate(validDataWithSteps);
       expect(result.valid).toBe(true);
@@ -649,6 +655,7 @@ describe('stage-25.js - Venture Review template', () => {
         next_steps: [
           { action: 'Launch next phase', owner: 'CEO', timeline: 'Q1 2026' },
         ],
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const validation = stage25.validate(data);
       expect(validation.valid).toBe(true);

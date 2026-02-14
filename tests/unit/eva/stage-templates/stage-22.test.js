@@ -38,6 +38,7 @@ describe('stage-22.js - Release Readiness template', () => {
         approved_items: 0,
         all_approved: false,
         promotion_gate: null,
+        chairmanGate: { status: 'pending', rationale: null, decision_id: null },
       });
     });
 
@@ -69,6 +70,7 @@ describe('stage-22.js - Release Readiness template', () => {
         ],
         release_notes: 'Release notes for v1.0',
         target_date: '2026-03-01',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage22.validate(validData);
       expect(result.valid).toBe(true);
@@ -147,6 +149,7 @@ describe('stage-22.js - Release Readiness template', () => {
         ],
         release_notes: 'Release notes',
         target_date: '2026-03-01',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result = stage22.validate(validData);
       expect(result.valid).toBe(true);
@@ -547,6 +550,7 @@ describe('stage-22.js - Release Readiness template', () => {
         ],
         release_notes: 'Major release with new features',
         target_date: '2026-03-01',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const validation = stage22.validate(data);
       expect(validation.valid).toBe(true);
