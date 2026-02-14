@@ -23,7 +23,7 @@
 
 ```yaml
   - id: 25
-    title: Quality Assurance
+    title: Venture Review
     description: Comprehensive quality assurance and testing processes.
     depends_on:
       - 24
@@ -79,7 +79,7 @@
 | Field | Value | Type | Notes |
 |-------|-------|------|-------|
 | id | 25 | integer | Sequential stage identifier |
-| title | Quality Assurance | string | Human-readable stage name |
+| title | Venture Review | string | Human-readable stage name |
 | description | Comprehensive quality assurance and testing processes. | string | Brief purpose statement |
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1103-1105
@@ -236,7 +236,7 @@
 ### Required Fields (All Present)
 
 ✅ `id`: 25
-✅ `title`: Quality Assurance
+✅ `title`: Venture Review
 ✅ `depends_on`: [24]
 ✅ `inputs`: 3 items
 ✅ `outputs`: 3 items
@@ -305,7 +305,7 @@ node scripts/validate-stages-schema.js --stage 25
 | Claim | Repo | Commit | Path | Lines | Excerpt |
 |-------|------|--------|------|-------|---------|
 | Stage ID 25 | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1103 | "- id: 25" |
-| Title: Quality Assurance | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1104 | "title: Quality Assurance" |
+| Title: Venture Review | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1104 | "title: Venture Review" |
 | Depends on 24 | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1106-1107 | "depends_on: - 24" |
 | 3 inputs defined | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1108-1111 | "inputs: - Test plans" |
 | 3 outputs defined | EHG_Engineer | 6ef8cf4 | docs/workflow/stages.yaml | 1112-1115 | "outputs: - Test results" |

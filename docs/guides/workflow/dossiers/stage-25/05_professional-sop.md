@@ -11,7 +11,7 @@
 
 ## Purpose
 
-Step-by-step execution procedures for Stage 25 (Quality Assurance), enabling EXEC/QA agents to execute consistently across ventures.
+Step-by-step execution procedures for Stage 25 (Venture Review), enabling EXEC/QA agents to execute consistently across ventures.
 
 **Owner**: EXEC (with QA specialist automation)
 **Automation Level**: Manual → Assisted → Auto (suggested)
@@ -452,7 +452,7 @@ WHERE venture_id = 'VENTURE-001';
 # Quality Certification: [Venture Name]
 
 **Venture ID**: VENTURE-001
-**Stage**: 25 (Quality Assurance)
+**Stage**: 25 (Venture Review)
 **Date**: 2025-11-06
 **QA Lead**: [Name]
 

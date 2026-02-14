@@ -11,7 +11,7 @@
 
 ## Overview
 
-**Purpose**: Define recursive triggers for Stage 25 (Quality Assurance) when quality gates fail or regressions detected.
+**Purpose**: Define recursive triggers for Stage 25 (Venture Review) when quality gates fail or regressions detected.
 
 **Recursion Support**: Currently 2/5 (low, per critique) → Target: 4/5 (high) after implementing QA-001 through QA-004 triggers
 

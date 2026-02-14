@@ -1,4 +1,4 @@
-# Stage 25: Quality Assurance — Operating Dossier
+# Stage 25: Venture Review — Operating Dossier
 
 
 ## Metadata
@@ -31,12 +31,12 @@
 ## Executive Summary
 
 **Stage ID**: 25
-**Title**: Quality Assurance
-**Phase**: Execution (Stages 21-31)
-**Depends On**: 24 (MVP Engine: Automated Feedback Iteration)
-**Next Stage**: 26 (Security & Compliance)
+**Title**: Venture Review
+**Phase**: LAUNCH & LEARN (Stages 23-25)
+**Depends On**: 24 (Metrics & Learning)
+**Next Stage**: N/A (final stage)
 
-Stage 25 executes comprehensive quality assurance and testing processes including test execution, bug management, and quality certification. This stage ensures all quality criteria are met before security review and production release.
+Stage 25 conducts a comprehensive venture review evaluating overall venture viability, outcomes against initial hypotheses, and lessons learned. This is the final stage in the 25-stage Vision v4.7 lifecycle.
 
 **Maturity**: Template stage (no implementation evidence)
 **Automation Level**: Manual → Assisted → Auto (suggested)
