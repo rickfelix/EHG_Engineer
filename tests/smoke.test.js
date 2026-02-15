@@ -107,7 +107,7 @@ describe('Smoke Tests - Critical System Validation', () => {
 
     test('should access vitest config', async () => {
       const fs = await import('fs/promises');
-      const configExists = await fs.access('./vitest.config.ts')
+      const configExists = await fs.access('./vitest.config.js')
         .then(() => true)
         .catch(() => false);
 
