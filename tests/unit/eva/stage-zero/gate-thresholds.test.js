@@ -14,7 +14,6 @@ import {
   resolveGateThreshold,
   resolveAllGateThresholds,
   LEGACY_GATE_THRESHOLDS,
-  LEGACY_WEIGHTS,
 } from '../../../../lib/eva/stage-zero/profile-service.js';
 import {
   evaluateRealityGate,
@@ -29,8 +28,8 @@ describe('LEGACY_GATE_THRESHOLDS', () => {
   });
 
   test('all thresholds are between 0 and 1', () => {
-    for (const [boundary, artifacts] of Object.entries(LEGACY_GATE_THRESHOLDS)) {
-      for (const [type, score] of Object.entries(artifacts)) {
+    for (const [_boundary, artifacts] of Object.entries(LEGACY_GATE_THRESHOLDS)) {
+      for (const [_type, score] of Object.entries(artifacts)) {
         expect(score).toBeGreaterThan(0);
         expect(score).toBeLessThanOrEqual(1);
       }

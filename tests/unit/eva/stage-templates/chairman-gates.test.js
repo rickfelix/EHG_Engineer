@@ -7,7 +7,7 @@
  * @module tests/unit/eva/stage-templates/chairman-gates.test
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import stage10 from '../../../../lib/eva/stage-templates/stage-10.js';
 import stage22 from '../../../../lib/eva/stage-templates/stage-22.js';
 import stage25 from '../../../../lib/eva/stage-templates/stage-25.js';

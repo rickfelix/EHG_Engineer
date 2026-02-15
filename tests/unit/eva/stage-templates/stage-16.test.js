@@ -10,9 +10,6 @@
 
 import { describe, it, expect } from 'vitest';
 import stage16, { evaluatePromotionGate, MIN_PROJECTION_MONTHS } from '../../../../lib/eva/stage-templates/stage-16.js';
-import { MIN_MILESTONES } from '../../../../lib/eva/stage-templates/stage-13.js';
-import { REQUIRED_LAYERS } from '../../../../lib/eva/stage-templates/stage-14.js';
-import { MIN_RISKS } from '../../../../lib/eva/stage-templates/stage-15.js';
 
 describe('stage-16.js - Financial Projections template', () => {
   describe('Template metadata', () => {
