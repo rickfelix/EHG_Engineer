@@ -19,8 +19,16 @@ vi.mock('../../../../../lib/eva/utils/parse-json.js', () => ({
   parseJSON: vi.fn((str) => JSON.parse(str)),
 }));
 
+// Mock web-search
+vi.mock('../../../../../lib/eva/utils/web-search.js', () => ({
+  isSearchEnabled: vi.fn(() => false),
+  searchBatch: vi.fn(async () => []),
+  formatResultsForPrompt: vi.fn(() => ''),
+}));
+
 import { analyzeStage04, MIN_COMPETITORS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-04-competitive-landscape.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
+import { isSearchEnabled, searchBatch, formatResultsForPrompt } from '../../../../../lib/eva/utils/web-search.js';
 
 function createMockLogger() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -234,5 +242,51 @@ describe('analyzeStage04', () => {
 
     const result = await analyzeStage04({ stage1Data: validStage1Data, logger });
     expect(result.competitors[0].name).toBe('Unknown');
+  });
+
+  describe('web search integration', () => {
+    it('does not call searchBatch when search is disabled', async () => {
+      isSearchEnabled.mockReturnValue(false);
+      mockComplete.mockResolvedValueOnce(makeLLMResponse(3));
+
+      await analyzeStage04({ stage1Data: validStage1Data, logger });
+
+      expect(searchBatch).not.toHaveBeenCalled();
+      expect(formatResultsForPrompt).not.toHaveBeenCalled();
+    });
+
+    it('calls searchBatch with competitive queries when search is enabled', async () => {
+      isSearchEnabled.mockReturnValue(true);
+      searchBatch.mockResolvedValueOnce([{ title: 'Competitor Report', url: 'https://example.com', content: 'Market data' }]);
+      formatResultsForPrompt.mockReturnValue('Web: Market data');
+      mockComplete.mockResolvedValueOnce(makeLLMResponse(3));
+
+      await analyzeStage04({
+        stage1Data: validStage1Data,
+        ventureName: 'TestVenture',
+        logger,
+      });
+
+      expect(searchBatch).toHaveBeenCalledTimes(1);
+      const queries = searchBatch.mock.calls[0][0];
+      expect(queries).toHaveLength(3);
+      expect(queries[0]).toContain('competitors');
+      expect(formatResultsForPrompt).toHaveBeenCalledWith(
+        expect.any(Array),
+        'Competitive Intelligence Research',
+      );
+    });
+
+    it('injects web context into LLM prompt when search is enabled', async () => {
+      isSearchEnabled.mockReturnValue(true);
+      searchBatch.mockResolvedValueOnce([]);
+      formatResultsForPrompt.mockReturnValue('Web Research: competitor data here');
+      mockComplete.mockResolvedValueOnce(makeLLMResponse(3));
+
+      await analyzeStage04({ stage1Data: validStage1Data, logger });
+
+      const prompt = mockComplete.mock.calls[0][1];
+      expect(prompt).toContain('Web Research: competitor data here');
+    });
   });
 });
