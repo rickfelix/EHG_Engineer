@@ -38,6 +38,7 @@ describe('stage-06.js - Risk Matrix template', () => {
       expect(stage06.defaultData).toEqual({
         risks: [],
         aggregate_risk_score: 0,
+        normalized_risk_score: 0,
         highest_risk_factor: null,
         mitigation_coverage_pct: 0,
       });
