@@ -214,7 +214,7 @@ describe('detectConstraintDrift', () => {
     const result = await detectConstraintDrift({
       ventureId: 'v-1',
       currentStage: 10,
-      db,
+      supabase: db,
       logger,
     });
 
@@ -239,7 +239,7 @@ describe('detectConstraintDrift', () => {
     const result = await detectConstraintDrift({
       ventureId: 'v-1',
       currentStage: 10,
-      db,
+      supabase: db,
       logger,
     });
 
@@ -270,7 +270,7 @@ describe('detectConstraintDrift', () => {
     const result = await detectConstraintDrift({
       ventureId: 'v-1',
       currentStage: 25,
-      db,
+      supabase: db,
       logger,
     });
 
@@ -301,7 +301,7 @@ describe('detectConstraintDrift', () => {
     const result = await detectConstraintDrift({
       ventureId: 'v-1',
       currentStage: 10,
-      db,
+      supabase: db,
       logger,
     });
 
@@ -317,7 +317,7 @@ describe('detectConstraintDrift', () => {
     const result = await detectConstraintDrift({
       ventureId: 'v-1',
       currentStage: 10,
-      db,
+      supabase: db,
       logger,
     });
 
@@ -354,7 +354,7 @@ describe('detectConstraintDrift', () => {
     const result = await detectConstraintDrift({
       ventureId: 'v-1',
       currentStage: 15,
-      db,
+      supabase: db,
       logger,
     });
 
