@@ -56,11 +56,12 @@ function main() {
           console.error(`SessionStart:capture-session-id: CLAUDE_ENV_FILE not set. Claude vars: [${claudeVars}]`);
         }
 
-        // Strategy 2: Write session marker files keyed by SSE port.
-        // Each Claude Code instance has a unique SSE port, so getTerminalId()
-        // can look up its own session ID by reading port-{ssePort}.json.
-        // This avoids the latest.json race condition with concurrent sessions.
+        // Strategy 2: Write session marker files keyed by Claude Code PID.
+        // The hook's process.ppid IS the Claude Code node process (unique per conversation).
+        // getTerminalId() uses findClaudeCodePid() to discover the same PID and reads
+        // pid-{ccPid}.json to get the session UUID — stable, no ambiguity.
         const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
+        const ccPid = process.ppid || process.pid;
         const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
         try {
           if (!fs.existsSync(markerDir)) {
@@ -70,28 +71,36 @@ function main() {
           const marker = {
             session_id: sessionId,
             sse_port: ssePort || null,
-            pid: process.ppid || process.pid,
+            cc_pid: ccPid,
             source: data.source || 'unknown',
             model: data.model || null,
             captured_at: new Date().toISOString()
           };
 
-          // Write port-keyed marker (primary lookup for getTerminalId)
-          if (ssePort) {
-            const portFile = path.join(markerDir, `port-${ssePort}.json`);
-            fs.writeFileSync(portFile, JSON.stringify(marker, null, 2));
-          }
+          // Write PID-keyed marker (primary lookup for getTerminalId)
+          const pidFile = path.join(markerDir, `pid-${ccPid}.json`);
+          fs.writeFileSync(pidFile, JSON.stringify(marker, null, 2));
 
           // Write per-session marker (for audit/debugging)
           const markerFile = path.join(markerDir, `${sessionId}.json`);
           fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
 
-          // Cleanup old session markers (keep last 10, skip port-* files)
+          // Cleanup old markers (keep last 10 of each type)
+          const cleanup = (prefix) => {
+            const files = fs.readdirSync(markerDir)
+              .filter(f => f.startsWith(prefix) && f.endsWith('.json'))
+              .map(f => ({ name: f, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs }))
+              .sort((a, b) => b.mtime - a.mtime);
+            for (const old of files.slice(10)) {
+              try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
+            }
+          };
+          cleanup('pid-');
+          // Clean non-prefixed session markers too
           const sessionMarkers = fs.readdirSync(markerDir)
-            .filter(f => !f.startsWith('port-') && f.endsWith('.json'))
+            .filter(f => !f.startsWith('pid-') && !f.startsWith('port-') && f.endsWith('.json'))
             .map(f => ({ name: f, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs }))
             .sort((a, b) => b.mtime - a.mtime);
-
           for (const old of sessionMarkers.slice(10)) {
             try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
           }
