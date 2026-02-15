@@ -251,8 +251,8 @@ describe('DecisionFilterEngine', () => {
       expect(ENGINE_VERSION).toBe('1.0.0');
     });
 
-    it('should export all 6 trigger types', () => {
-      expect(TRIGGER_TYPES).toHaveLength(6);
+    it('should export all 7 trigger types', () => {
+      expect(TRIGGER_TYPES).toHaveLength(7);
     });
   });
 });
