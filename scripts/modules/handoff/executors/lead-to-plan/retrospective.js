@@ -188,9 +188,12 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       whatNeedsImprovement.push('No specific issues identified - handoff executed smoothly');
     }
 
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-017: Use SD-specific context instead of metric-only entries
+    const sdTitle = safeTruncate(sd?.title || sdId, 80);
+    const sdType = sd?.sd_type || 'unknown';
     const keyLearnings = [
-      { learning: `Average handoff quality rating: ${avgRating.toFixed(1)}/5`, is_boilerplate: false },
-      { learning: `Handoff completed with quality score: ${qualityScore}%`, is_boilerplate: false }
+      { learning: `${retrospectiveType} handoff for ${sdType} SD "${sdTitle}" completed at ${qualityScore}% quality`, is_boilerplate: false },
+      { learning: `SD type '${sdType}' ${retrospectiveType} transition: ratings clarity=${clarityRating}/5, criteria=${criteriaRating}/5, deps=${depsRating}/5, simplicity=${simplicityRating}/5`, is_boilerplate: false }
     ];
 
     if (frictionPoints && frictionPoints !== 'none' && frictionPoints !== 'N/A') {
@@ -253,9 +256,9 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       }
     }
 
-    // Only add generic item if we have NO actual content
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-017: SD-context-aware fallback instead of generic text
     if (actionItems.length === 0) {
-      actionItems.push({ action: 'No immediate actions required - continue standard workflow', is_boilerplate: false });
+      actionItems.push({ action: `Review ${sdType} SD "${sdTitle}" outcomes during next retrospective cycle`, is_boilerplate: false });
     }
 
     // Build discovered_issues metadata (PAT-RETRO-BOILERPLATE-001 fix)
@@ -296,7 +299,11 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       objectives_met: handoffResult.success,
       on_schedule: true,
       within_scope: true,
-      success_patterns: [`Quality rating: ${avgRating.toFixed(1)}/5`],
+      // SD-LEARN-FIX-ADDRESS-PAT-AUTO-017: Derive patterns from SD metadata
+      success_patterns: [
+        `${sdType} SD "${sdTitle}" passed ${retrospectiveType} at ${qualityScore}%`,
+        ...(handoffResult.success ? [`All ${retrospectiveType} gates passed for ${sdType} type`] : [])
+      ],
       failure_patterns: whatNeedsImprovement.slice(0, 3),
       improvement_areas: whatNeedsImprovement.slice(0, 3),
       // PAT-RETRO-BOILERPLATE-001 fix: Include actual issues in protocol_improvements
