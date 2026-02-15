@@ -103,7 +103,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
     gates.push(createPrerequisiteCheckGate(this.supabase));
 
     // Sub-agent orchestration
-    gates.push(createSubAgentOrchestrationGate());
+    gates.push(createSubAgentOrchestrationGate(this.supabase));
 
     // Retrospective quality gate
     gates.push(createRetrospectiveQualityGate(this.supabase));
