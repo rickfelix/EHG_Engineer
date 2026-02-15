@@ -19,8 +19,16 @@ vi.mock('../../../../../lib/eva/utils/parse-json.js', () => ({
   parseJSON: vi.fn((str) => JSON.parse(str)),
 }));
 
+// Mock web-search
+vi.mock('../../../../../lib/eva/utils/web-search.js', () => ({
+  isSearchEnabled: vi.fn(() => false),
+  searchBatch: vi.fn(async () => []),
+  formatResultsForPrompt: vi.fn(() => ''),
+}));
+
 import { analyzeStage05, ROI_THRESHOLD, MAX_PAYBACK_MONTHS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-05-financial-model.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
+import { isSearchEnabled, searchBatch, formatResultsForPrompt } from '../../../../../lib/eva/utils/web-search.js';
 
 function createMockLogger() {
   return { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -305,5 +313,51 @@ describe('analyzeStage05', () => {
 
     // Fallback is 10000
     expect(result.initialInvestment).toBe(10000);
+  });
+
+  describe('web search integration', () => {
+    it('does not call searchBatch when search is disabled', async () => {
+      isSearchEnabled.mockReturnValue(false);
+      mockComplete.mockResolvedValueOnce(makeFinancialResponse());
+
+      await analyzeStage05({ stage1Data: validStage1Data, logger });
+
+      expect(searchBatch).not.toHaveBeenCalled();
+    });
+
+    it('calls searchBatch with financial queries when search is enabled', async () => {
+      isSearchEnabled.mockReturnValue(true);
+      searchBatch.mockResolvedValueOnce([{ title: 'Benchmarks', url: 'https://example.com', content: 'CAC data' }]);
+      formatResultsForPrompt.mockReturnValue('Web: CAC data');
+      mockComplete.mockResolvedValueOnce(makeFinancialResponse());
+
+      await analyzeStage05({
+        stage1Data: validStage1Data,
+        ventureName: 'TestVenture',
+        logger,
+      });
+
+      expect(searchBatch).toHaveBeenCalledTimes(1);
+      const queries = searchBatch.mock.calls[0][0];
+      expect(queries).toHaveLength(2);
+      expect(queries[0]).toContain('benchmarks');
+      expect(queries[1]).toContain('CAC');
+      expect(formatResultsForPrompt).toHaveBeenCalledWith(
+        expect.any(Array),
+        'Financial Benchmark Research',
+      );
+    });
+
+    it('injects web context into LLM prompt when search is enabled', async () => {
+      isSearchEnabled.mockReturnValue(true);
+      searchBatch.mockResolvedValueOnce([]);
+      formatResultsForPrompt.mockReturnValue('Web: Financial benchmarks here');
+      mockComplete.mockResolvedValueOnce(makeFinancialResponse());
+
+      await analyzeStage05({ stage1Data: validStage1Data, logger });
+
+      const prompt = mockComplete.mock.calls[0][1];
+      expect(prompt).toContain('Web: Financial benchmarks here');
+    });
   });
 });

@@ -20,8 +20,16 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
+// Mock web-search
+vi.mock('../../../../../lib/eva/utils/web-search.js', () => ({
+  isSearchEnabled: vi.fn(() => false),
+  searchBatch: vi.fn(async () => []),
+  formatResultsForPrompt: vi.fn(() => ''),
+}));
+
 import { analyzeStage11, REQUIRED_TIERS, REQUIRED_CHANNELS, CHANNEL_TYPES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-11-gtm.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
+import { isSearchEnabled, searchBatch, formatResultsForPrompt } from '../../../../../lib/eva/utils/web-search.js';
 
 /**
  * Helper: create a well-formed LLM response JSON string.
@@ -573,6 +581,46 @@ describe('stage-11-gtm.js - Analysis Step v2.0', () => {
       const mockComplete = vi.fn().mockResolvedValue('Not JSON');
       getLLMClient.mockReturnValue({ complete: mockComplete });
       await expect(analyzeStage11(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
+    });
+  });
+
+  describe('Web search integration', () => {
+    it('should not call searchBatch when search is disabled', async () => {
+      isSearchEnabled.mockReturnValue(false);
+      setupMock();
+      await analyzeStage11(VALID_PARAMS);
+      expect(searchBatch).not.toHaveBeenCalled();
+    });
+
+    it('should call searchBatch with GTM queries when search is enabled', async () => {
+      isSearchEnabled.mockReturnValue(true);
+      searchBatch.mockResolvedValueOnce([{ title: 'GTM Report', url: 'https://example.com', content: 'GTM data' }]);
+      formatResultsForPrompt.mockReturnValue('Web: GTM data');
+      setupMock();
+
+      await analyzeStage11({ ...VALID_PARAMS, ventureName: 'TestVenture' });
+
+      expect(searchBatch).toHaveBeenCalledTimes(1);
+      const queries = searchBatch.mock.calls[0][0];
+      expect(queries).toHaveLength(3);
+      expect(queries[0]).toContain('go to market');
+      expect(queries[1]).toContain('CAC');
+      expect(formatResultsForPrompt).toHaveBeenCalledWith(
+        expect.any(Array),
+        'GTM Intelligence Research',
+      );
+    });
+
+    it('should inject web context into LLM prompt when search is enabled', async () => {
+      isSearchEnabled.mockReturnValue(true);
+      searchBatch.mockResolvedValueOnce([]);
+      formatResultsForPrompt.mockReturnValue('Web: GTM intelligence here');
+      const mockComplete = setupMock();
+
+      await analyzeStage11(VALID_PARAMS);
+
+      const prompt = mockComplete.mock.calls[0][1];
+      expect(prompt).toContain('Web: GTM intelligence here');
     });
   });
 });
