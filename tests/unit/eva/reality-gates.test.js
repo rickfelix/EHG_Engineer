@@ -73,7 +73,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 1,
         toStage: 2,
-        db: createMockDb(),
+        supabase: createMockDb(),
         logger: silentLogger,
       });
       expect(result.status).toBe('NOT_APPLICABLE');
@@ -87,19 +87,19 @@ describe('RealityGates', () => {
         ventureId: null,
         fromStage: 5,
         toStage: 6,
-        db: createMockDb(),
+        supabase: createMockDb(),
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
       expect(result.reasons[0].code).toBe(REASON_CODES.CONFIG_ERROR);
     });
 
-    it('should FAIL when db is missing', async () => {
+    it('should FAIL when supabase is missing', async () => {
       const result = await evaluateRealityGate({
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        db: null,
+        supabase: null,
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
@@ -118,7 +118,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        db: createMockDb(artifacts),
+        supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
       expect(result.status).toBe('PASS');
@@ -133,7 +133,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        db: createMockDb(artifacts),
+        supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
@@ -151,7 +151,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        db: createMockDb(artifacts),
+        supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
@@ -169,7 +169,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        db: createMockDb(artifacts),
+        supabase: createMockDb(artifacts),
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
@@ -184,7 +184,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 5,
         toStage: 6,
-        db: createErrorDb('Connection timeout'),
+        supabase: createErrorDb('Connection timeout'),
         logger: silentLogger,
       });
       expect(result.status).toBe('FAIL');
@@ -204,7 +204,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 16,
         toStage: 17,
-        db: createMockDb(artifacts),
+        supabase: createMockDb(artifacts),
         httpClient,
         logger: silentLogger,
       });
@@ -223,7 +223,7 @@ describe('RealityGates', () => {
         ventureId: 'v1',
         fromStage: 16,
         toStage: 17,
-        db: createMockDb(artifacts),
+        supabase: createMockDb(artifacts),
         httpClient,
         logger: silentLogger,
       });
