@@ -43,6 +43,7 @@ describe('stage-24.js - Metrics & Learning template', () => {
         funnel_count: 0,
         metrics_on_target: 0,
         metrics_below_target: 0,
+        launchOutcome: null,
       });
     });
 

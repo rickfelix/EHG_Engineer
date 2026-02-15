@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-EVA-FIX-INFRA-BUGS-001",
+  "currentSd": "SD-EVA-FIX-TEMPLATE-ALIGN-001",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing PRD: Infrastructure Bug Fixes - Event Bus, CLI, and Handler Corrections",
+  "currentTask": "Implementing EVA Template Schema Alignment with Architecture v1.6/v2.0",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-02-14T17:30:00.418Z",
-  "lastUpdatedAt": "2026-02-14T22:02:10.676Z"
+  "lastUpdatedAt": "2026-02-14T23:47:30.543Z"
 }

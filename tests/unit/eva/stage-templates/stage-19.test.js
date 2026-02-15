@@ -9,7 +9,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import stage19, { TASK_STATUSES, MIN_TASKS } from '../../../../lib/eva/stage-templates/stage-19.js';
+import stage19, {
+  TASK_STATUSES,
+  ISSUE_SEVERITIES,
+  ISSUE_STATUSES,
+  SPRINT_COMPLETION_DECISIONS,
+  MIN_TASKS,
+} from '../../../../lib/eva/stage-templates/stage-19.js';
 
 describe('stage-19.js - Build Execution template', () => {
   describe('Template metadata', () => {
@@ -36,6 +42,7 @@ describe('stage-19.js - Build Execution template', () => {
         blocked_tasks: 0,
         completion_pct: 0,
         tasks_by_status: {},
+        sprintCompletion: null,
       });
     });
 
@@ -48,7 +55,10 @@ describe('stage-19.js - Build Execution template', () => {
     });
 
     it('should export constants', () => {
-      expect(TASK_STATUSES).toEqual(['todo', 'in_progress', 'done', 'blocked']);
+      expect(TASK_STATUSES).toEqual(['pending', 'in_progress', 'done', 'blocked']);
+      expect(ISSUE_SEVERITIES).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(ISSUE_STATUSES).toEqual(['open', 'investigating', 'resolved', 'deferred']);
+      expect(SPRINT_COMPLETION_DECISIONS).toEqual(['complete', 'continue', 'blocked']);
       expect(MIN_TASKS).toBe(1);
     });
   });
@@ -203,7 +213,7 @@ describe('stage-19.js - Build Execution template', () => {
         tasks: [
           { name: 'T1', status: 'done' },
           { name: 'T2', status: 'in_progress' },
-          { name: 'T3', status: 'todo' },
+          { name: 'T3', status: 'pending' },
         ],
       };
       const result = stage19.computeDerived(data);
@@ -242,7 +252,7 @@ describe('stage-19.js - Build Execution template', () => {
           { name: 'T1', status: 'done' },
           { name: 'T2', status: 'done' },
           { name: 'T3', status: 'in_progress' },
-          { name: 'T4', status: 'todo' },
+          { name: 'T4', status: 'pending' },
           { name: 'T5', status: 'blocked' },
         ],
       };
@@ -262,7 +272,7 @@ describe('stage-19.js - Build Execution template', () => {
         tasks: [
           { name: 'T1', status: 'done' },
           { name: 'T2', status: 'in_progress' },
-          { name: 'T3', status: 'todo' },
+          { name: 'T3', status: 'pending' },
         ],
       };
       const result = stage19.computeDerived(data);
@@ -278,13 +288,13 @@ describe('stage-19.js - Build Execution template', () => {
           { name: 'T1', status: 'done' },
           { name: 'T2', status: 'done' },
           { name: 'T3', status: 'in_progress' },
-          { name: 'T4', status: 'todo' },
+          { name: 'T4', status: 'pending' },
           { name: 'T5', status: 'blocked' },
         ],
       };
       const result = stage19.computeDerived(data);
       expect(result.tasks_by_status).toEqual({
-        todo: 1,
+        pending: 1,
         in_progress: 1,
         done: 2,
         blocked: 1,
@@ -310,7 +320,7 @@ describe('stage-19.js - Build Execution template', () => {
         ],
       };
       const result = stage19.computeDerived(data);
-      expect(result.tasks_by_status.todo).toBe(0);
+      expect(result.tasks_by_status.pending).toBe(0);
       expect(result.tasks_by_status.in_progress).toBe(0);
       expect(result.tasks_by_status.done).toBe(1);
       expect(result.tasks_by_status.blocked).toBe(0);
@@ -326,7 +336,7 @@ describe('stage-19.js - Build Execution template', () => {
       expect(result.blocked_tasks).toBe(0);
       expect(result.completion_pct).toBe(0);
       expect(result.tasks_by_status).toEqual({
-        todo: 0,
+        pending: 0,
         in_progress: 0,
         done: 0,
         blocked: 0,
@@ -352,7 +362,7 @@ describe('stage-19.js - Build Execution template', () => {
         tasks: [
           { name: 'Task 1', status: 'done', assignee: 'Dev 1' },
           { name: 'Task 2', status: 'in_progress', assignee: 'Dev 2' },
-          { name: 'Task 3', status: 'todo' },
+          { name: 'Task 3', status: 'pending' },
         ],
         issues: [
           { description: 'Issue 1', severity: 'medium', status: 'open' },

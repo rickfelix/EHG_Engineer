@@ -56,6 +56,7 @@ describe('stage-12.js - Sales Logic template', () => {
         deal_stages: [],
         funnel_stages: [],
         customer_journey: [],
+        economyCheck: null,
         reality_gate: null,
       });
     });

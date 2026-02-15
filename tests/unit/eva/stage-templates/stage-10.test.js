@@ -46,7 +46,11 @@ describe('stage-10.js - Naming/Brand template', () => {
         },
         scoringCriteria: [],
         candidates: [],
+        narrativeExtension: { vision: null, mission: null, brandVoice: null },
+        namingStrategy: null,
         ranked_candidates: [],
+        decision: null,
+        chairmanGate: { status: 'pending', rationale: null, decision_id: null },
       });
     });
 

@@ -36,6 +36,7 @@ describe('stage-17.js - Pre-Build Checklist template', () => {
         readiness_pct: 0,
         all_categories_present: false,
         blocker_count: 0,
+        buildReadiness: null,
       });
     });
 

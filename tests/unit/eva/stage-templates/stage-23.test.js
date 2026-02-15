@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import stage23, { evaluateKillGate, GO_DECISIONS, MIN_LAUNCH_TASKS } from '../../../../lib/eva/stage-templates/stage-23.js';
+import stage23, { evaluateKillGate, GO_DECISIONS, LAUNCH_TYPES, MIN_LAUNCH_TASKS } from '../../../../lib/eva/stage-templates/stage-23.js';
 
 describe('stage-23.js - Launch Execution template', () => {
   describe('Template metadata', () => {
@@ -36,11 +36,16 @@ describe('stage-23.js - Launch Execution template', () => {
     it('should have defaultData', () => {
       expect(stage23.defaultData).toEqual({
         go_decision: null,
+        launchType: null,
         incident_response_plan: null,
         monitoring_setup: null,
         rollback_plan: null,
         launch_tasks: [],
         launch_date: null,
+        planned_launch_date: null,
+        actual_launch_date: null,
+        successCriteria: [],
+        rollbackTriggers: [],
         decision: null,
         blockProgression: false,
         reasons: [],
@@ -56,7 +61,8 @@ describe('stage-23.js - Launch Execution template', () => {
     });
 
     it('should export constants', () => {
-      expect(GO_DECISIONS).toEqual(['go', 'no-go']);
+      expect(GO_DECISIONS).toEqual(['go', 'no-go', 'conditional_go']);
+      expect(LAUNCH_TYPES).toEqual(['soft_launch', 'hard_launch', 'staged_rollout', 'beta_release']);
       expect(MIN_LAUNCH_TASKS).toBe(1);
     });
 

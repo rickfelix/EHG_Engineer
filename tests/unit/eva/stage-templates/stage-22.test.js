@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import stage22, { evaluatePromotionGate, APPROVAL_STATUSES, MIN_RELEASE_ITEMS, MIN_READINESS_PCT, MIN_BUILD_COMPLETION_PCT } from '../../../../lib/eva/stage-templates/stage-22.js';
+import stage22, { evaluatePromotionGate, APPROVAL_STATUSES, RELEASE_CATEGORIES, RELEASE_DECISIONS, MIN_RELEASE_ITEMS, MIN_READINESS_PCT, MIN_BUILD_COMPLETION_PCT } from '../../../../lib/eva/stage-templates/stage-22.js';
 import { CHECKLIST_CATEGORIES } from '../../../../lib/eva/stage-templates/stage-17.js';
 import { MIN_COVERAGE_PCT } from '../../../../lib/eva/stage-templates/stage-20.js';
 
@@ -34,9 +34,12 @@ describe('stage-22.js - Release Readiness template', () => {
         release_items: [],
         release_notes: null,
         target_date: null,
+        sprintRetrospective: { wentWell: [], wentPoorly: [], actionItems: [] },
+        sprintSummary: null,
         total_items: 0,
         approved_items: 0,
         all_approved: false,
+        releaseDecision: null,
         promotion_gate: null,
         chairmanGate: { status: 'pending', rationale: null, decision_id: null },
       });
@@ -52,6 +55,8 @@ describe('stage-22.js - Release Readiness template', () => {
 
     it('should export constants', () => {
       expect(APPROVAL_STATUSES).toEqual(['pending', 'approved', 'rejected']);
+      expect(RELEASE_CATEGORIES).toEqual(['feature', 'bugfix', 'infrastructure', 'documentation', 'security', 'performance', 'configuration']);
+      expect(RELEASE_DECISIONS).toEqual(['release', 'hold', 'cancel']);
       expect(MIN_RELEASE_ITEMS).toBe(1);
       expect(MIN_READINESS_PCT).toBe(80);
       expect(MIN_BUILD_COMPLETION_PCT).toBe(80);
