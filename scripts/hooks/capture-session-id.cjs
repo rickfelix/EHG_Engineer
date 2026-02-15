@@ -18,6 +18,78 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+
+/**
+ * Find the Claude Code node.exe PID by walking the process ancestry chain.
+ * Mirrors the logic in lib/terminal-identity.js findClaudeCodePid(), but in CJS
+ * for use in this hook. Falls back to process scan if tree walk fails.
+ *
+ * @returns {string|null} Claude Code process PID
+ */
+function findClaudeCodePid() {
+  if (process.platform !== 'win32') return null;
+
+  // Method 1: Walk process ancestry
+  try {
+    const script = [
+      `$p = ${process.pid}`,
+      '$chain = @()',
+      'while ($p -and $p -ne 0) {',
+      '  $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$p" -ErrorAction SilentlyContinue',
+      '  if (-not $proc) { break }',
+      '  $chain += "$($proc.ProcessId)|$($proc.Name)|$($proc.ParentProcessId)"',
+      '  $p = $proc.ParentProcessId',
+      '}',
+      '$chain -join ";"'
+    ].join('\n');
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 10000
+    }).trim();
+
+    if (raw) {
+      const chain = raw.split(';').map(entry => {
+        const [pid, name, ppid] = entry.split('|');
+        return { pid, name: (name || '').toLowerCase(), ppid };
+      });
+
+      // Find the first node.exe whose parent is NOT node/bash/sh
+      for (let i = 1; i < chain.length; i++) {
+        const proc = chain[i];
+        if (proc.name === 'node.exe' || proc.name === 'node') {
+          const parent = chain[i + 1];
+          if (!parent || !['node.exe', 'node', 'bash.exe', 'bash', 'sh.exe', 'sh'].includes(parent.name)) {
+            return proc.pid;
+          }
+        }
+      }
+    }
+  } catch { /* fall through to scan */ }
+
+  // Method 2: Scan all node.exe processes for SSE port match
+  const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
+  if (!ssePort) return null;
+  try {
+    const script = [
+      'Get-CimInstance Win32_Process -Filter "Name=\'node.exe\'" -ErrorAction SilentlyContinue |',
+      `  Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -match '${ssePort}' } |`,
+      '  ForEach-Object { $_.ProcessId } |',
+      '  Select-Object -First 1'
+    ].join('\n');
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    const raw = execSync(`powershell -NoProfile -EncodedCommand ${encoded}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 5000
+    }).trim();
+    if (raw && /^\d+$/.test(raw)) return raw;
+  } catch { /* give up */ }
+
+  return null;
+}
 
 function main() {
   return new Promise((resolve) => {
@@ -57,11 +129,11 @@ function main() {
         }
 
         // Strategy 2: Write session marker files keyed by Claude Code PID.
-        // The hook's process.ppid IS the Claude Code node process (unique per conversation).
-        // getTerminalId() uses findClaudeCodePid() to discover the same PID and reads
-        // pid-{ccPid}.json to get the session UUID — stable, no ambiguity.
+        // Walk the process tree to find the actual Claude Code node.exe ancestor
+        // (process.ppid is often cmd.exe, not Claude Code). This PID matches what
+        // getTerminalId() → findClaudeCodePid() discovers at Bash tool runtime.
         const ssePort = process.env.CLAUDE_CODE_SSE_PORT;
-        const ccPid = process.ppid || process.pid;
+        const ccPid = findClaudeCodePid() || process.ppid || process.pid;
         const markerDir = path.resolve(__dirname, '../../.claude/session-identity');
         try {
           if (!fs.existsSync(markerDir)) {
@@ -120,8 +192,9 @@ function main() {
       resolve();
     });
 
-    // Timeout after 2 seconds if stdin doesn't close
-    setTimeout(resolve, 2000);
+    // Timeout after 8 seconds if stdin doesn't close.
+    // Increased from 2s to accommodate PowerShell process tree walk on Windows.
+    setTimeout(resolve, 8000);
   });
 }
 
