@@ -12,7 +12,14 @@ vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({
   normalizeVenturePrefix: vi.fn().mockReturnValue('TEST'),
 }));
 
+vi.mock('../../../lib/eva/devils-advocate.js', () => ({
+  isDevilsAdvocateGate: vi.fn().mockReturnValue({ isGate: false, gateType: null }),
+  getDevilsAdvocateReview: vi.fn(),
+  buildArtifactRecord: vi.fn().mockReturnValue({}),
+}));
+
 import { processStage, run, _internal } from '../../../lib/eva/eva-orchestrator.js';
+import { isDevilsAdvocateGate, getDevilsAdvocateReview } from '../../../lib/eva/devils-advocate.js';
 
 const { buildResult, mergeArtifactOutputs, STATUS, FILTER_ACTION } = _internal;
 
@@ -337,6 +344,88 @@ describe('EvaOrchestrator', () => {
         expect(FILTER_ACTION.REQUIRE_REVIEW).toBe('REQUIRE_REVIEW');
         expect(FILTER_ACTION.STOP).toBe('STOP');
       });
+    });
+  });
+
+  describe("Devil's Advocate advisory behavior", () => {
+    it('should include DA gate result with passed=true on successful review', async () => {
+      const mockSupabase = createMockSupabase();
+      isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'kill' });
+      getDevilsAdvocateReview.mockResolvedValue({
+        overallAssessment: 'Venture has risks but manageable',
+        counterArguments: [{ argument: 'Market too small' }, { argument: 'High CAC' }],
+        isFallback: false,
+      });
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      const daGate = result.gateResults.find(g => g.type === 'devils_advocate');
+      expect(daGate).toBeDefined();
+      expect(daGate.passed).toBe(true);
+      expect(daGate.assessment).toBe('Venture has risks but manageable');
+      expect(daGate.counterArguments).toBe(2);
+      expect(daGate.isFallback).toBe(false);
+
+      // Restore default mock
+      isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+    });
+
+    it('should still pass DA gate when getDevilsAdvocateReview throws', async () => {
+      const mockSupabase = createMockSupabase();
+      isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'kill' });
+      getDevilsAdvocateReview.mockRejectedValue(new Error('GPT-4o unavailable'));
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      const daGate = result.gateResults.find(g => g.type === 'devils_advocate');
+      expect(daGate).toBeDefined();
+      expect(daGate.passed).toBe(true);
+      expect(daGate.error).toBe('GPT-4o unavailable');
+
+      // Restore default mock
+      isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+    });
+
+    it('should never set status to BLOCKED when only DA fails', async () => {
+      const mockSupabase = createMockSupabase();
+      isDevilsAdvocateGate.mockReturnValue({ isGate: true, gateType: 'kill' });
+      getDevilsAdvocateReview.mockRejectedValue(new Error('DA service down'));
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      // DA failure should NOT block the stage
+      expect(result.status).toBe(STATUS.COMPLETED);
+      expect(result.status).not.toBe(STATUS.BLOCKED);
+
+      // Restore default mock
+      isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
     });
   });
 });

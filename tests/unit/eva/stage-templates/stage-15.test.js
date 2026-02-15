@@ -271,4 +271,65 @@ describe('stage-15.js - Risk Register template', () => {
       expect(computed.severity_breakdown.critical).toBe(1);
     });
   });
+
+  describe('computeDerived() - Stage 16 cross-validation', () => {
+    it('should set financialDataAvailable: true when stage16Data has positive burn rate', () => {
+      const data = { risks: [validRisk] };
+      const stage16Data = {
+        initial_capital: 100000,
+        monthly_burn_rate: 10000,
+        revenue_projections: [1, 2, 3, 4, 5, 6],
+      };
+      const result = stage15.computeDerived(data, stage16Data);
+      expect(result.budget_coherence.financialDataAvailable).toBe(true);
+    });
+
+    it('should set aligned: true when runway >= 6 months and no critical/high risks', () => {
+      const lowRisk = { ...validRisk, severity: 'low' };
+      const data = { risks: [lowRisk, { ...lowRisk, title: 'Another low risk' }] };
+      const stage16Data = {
+        initial_capital: 60000,
+        monthly_burn_rate: 10000,
+        revenue_projections: [1, 2, 3, 4, 5, 6],
+      };
+      const result = stage15.computeDerived(data, stage16Data);
+      expect(result.budget_coherence.aligned).toBe(true);
+      expect(result.budget_coherence.runwayMonths).toBe(6);
+    });
+
+    it('should set aligned: false when runway < 6 months and critical risks present', () => {
+      const criticalRisk = { ...validRisk, severity: 'critical' };
+      const data = { risks: [criticalRisk] };
+      const stage16Data = {
+        initial_capital: 30000,
+        monthly_burn_rate: 10000,
+        revenue_projections: [1, 2, 3, 4, 5, 6],
+      };
+      const result = stage15.computeDerived(data, stage16Data);
+      expect(result.budget_coherence.aligned).toBe(false);
+      expect(result.budget_coherence.runwayMonths).toBe(3);
+      expect(result.budget_coherence.criticalRiskCount).toBeGreaterThan(0);
+    });
+
+    it('should set aligned: false when financial coverage is incomplete (initial_capital=0)', () => {
+      const lowRisk = { ...validRisk, severity: 'low' };
+      const data = { risks: [lowRisk] };
+      const stage16Data = {
+        initial_capital: 0,
+        monthly_burn_rate: 10000,
+        revenue_projections: [1, 2, 3, 4, 5, 6],
+      };
+      const result = stage15.computeDerived(data, stage16Data);
+      expect(result.budget_coherence.aligned).toBe(false);
+      expect(result.budget_coherence.financialDataAvailable).toBe(true);
+    });
+
+    it('should fall back to risk-count-only alignment without stage16Data', () => {
+      const data = { risks: [validRisk] };
+      const result = stage15.computeDerived(data);
+      expect(result.budget_coherence.financialDataAvailable).toBe(false);
+      expect(result.budget_coherence.aligned).toBe(true); // true because risks.length > 0
+      expect(result.budget_coherence.notes).toContain('Stage 16 data not available');
+    });
+  });
 });
