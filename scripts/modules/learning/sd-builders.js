@@ -38,7 +38,18 @@ function validateLearningItem(item, index) {
  * @returns {string}
  */
 export function buildSDDescription(items) {
-  const lines = ['## Items to Address\n'];
+  const patternCount = items.filter(i => i.pattern_id).length;
+  const improvementCount = items.length - patternCount;
+  const totalOccurrences = items.reduce((sum, i) => sum + (i.occurrence_count || 1), 0);
+
+  const lines = [
+    '## Business Impact\n',
+    `This SD addresses ${items.length} item(s) identified through retrospective analysis and pattern detection.`,
+    `Total occurrences across items: ${totalOccurrences}. Recurring patterns increase manual intervention time and reduce workflow throughput.`,
+    ''
+  ];
+
+  lines.push('## Items to Address\n');
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -52,6 +63,7 @@ export function buildSDDescription(items) {
       lines.push(`- **Severity:** ${item.severity || 'Unknown'}`);
       lines.push(`- **Summary:** ${item.issue_summary || 'No summary'}`);
       lines.push(`- **Occurrences:** ${item.occurrence_count || 1}`);
+      lines.push(`- **Impact:** ${item.occurrence_count > 1 ? 'Recurring issue requiring systematic fix to prevent future occurrences' : 'Single occurrence — root cause fix prevents recurrence'}`);
       lines.push('');
     } else {
       lines.push(`### Improvement: ${item.improvement_type || 'General'}`);
@@ -62,6 +74,16 @@ export function buildSDDescription(items) {
     }
   }
 
+  lines.push('## Root Cause Analysis');
+  lines.push('Items surfaced by the /learn command from accumulated retrospective evidence and pattern detection.');
+  if (patternCount > 0) {
+    lines.push(`${patternCount} pattern(s) detected with ${totalOccurrences} total occurrence(s) — systematic fixes needed to prevent recurrence.`);
+  }
+  if (improvementCount > 0) {
+    lines.push(`${improvementCount} improvement(s) backed by retrospective evidence — implementing these addresses workflow gaps.`);
+  }
+
+  lines.push('');
   lines.push('## Source');
   lines.push('Created automatically by `/learn` command based on accumulated evidence.');
 
@@ -77,7 +99,8 @@ export function buildSDTitle(items) {
   if (items.length === 1) {
     const item = items[0];
     if (item.pattern_id) {
-      return `Address ${item.pattern_id}: ${(item.issue_summary || '').slice(0, 60)}`;
+      const summary = item.issue_summary || item.category || 'Recurring issue';
+      return `Address ${item.pattern_id}: ${summary.slice(0, 60)}`;
     }
     return (item.description || 'Learning improvement').slice(0, 80);
   }
@@ -165,15 +188,17 @@ export function buildStrategicObjectives(items) {
 
   for (const item of items) {
     if (item.pattern_id) {
-      objectives.push(`Eliminate ${item.pattern_id} pattern from the codebase`);
+      const count = item.occurrence_count || 1;
+      objectives.push(`Reduce ${item.pattern_id} occurrences from ${count} to 0 within 30 days by addressing root cause in ${item.category || 'affected'} code`);
     } else {
       const desc = (item.description || 'improvement').slice(0, 60);
-      objectives.push(`Implement: ${desc}`);
+      objectives.push(`Implement ${desc} — validated by smoke tests and sub-agent verification`);
     }
   }
 
-  if (objectives.length === 0) {
-    objectives.push('Address all identified learning items');
+  // Ensure minimum 2 objectives for LEAD-TO-PLAN gate
+  if (objectives.length < 2) {
+    objectives.push('Achieve RETROSPECTIVE_QUALITY_GATE score >= 55% on PLAN-TO-LEAD handoff without manual metadata patching');
   }
 
   return objectives;

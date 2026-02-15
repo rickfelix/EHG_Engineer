@@ -77,12 +77,12 @@ export async function createSDFromLearning(items, type, options = {}) {
     strategic_objectives: strategicObjectives,
     key_principles: keyPrinciples,
     key_changes: keyChanges,
+    risks: risks,
     metadata: {
       source: 'learn_command',
       source_items: items.map(i => i.id || i.pattern_id),
       classification: type,
-      created_via: '/learn apply',
-      risks: risks
+      created_via: '/learn apply'
     }
   };
 
