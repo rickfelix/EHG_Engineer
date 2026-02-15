@@ -18,7 +18,7 @@ describe('stage-contracts', () => {
     });
 
     it('each contract has consumes and produces', () => {
-      for (const [num, contract] of STAGE_CONTRACTS) {
+      for (const [_num, contract] of STAGE_CONTRACTS) {
         expect(contract).toHaveProperty('consumes');
         expect(contract).toHaveProperty('produces');
         expect(Array.isArray(contract.consumes)).toBe(true);
