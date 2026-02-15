@@ -9,7 +9,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import stage20, { MIN_TEST_SUITES, MIN_COVERAGE_PCT } from '../../../../lib/eva/stage-templates/stage-20.js';
+import stage20, {
+  MIN_TEST_SUITES,
+  MIN_COVERAGE_PCT,
+  TEST_SUITE_TYPES,
+  DEFECT_SEVERITIES,
+  DEFECT_STATUSES,
+  QUALITY_DECISIONS,
+} from '../../../../lib/eva/stage-templates/stage-20.js';
 
 describe('stage-20.js - Quality Assurance template', () => {
   describe('Template metadata', () => {
@@ -34,9 +41,11 @@ describe('stage-20.js - Quality Assurance template', () => {
         overall_pass_rate: 0,
         coverage_pct: 0,
         critical_failures: 0,
+        totalFailures: 0,
         total_tests: 0,
         total_passing: 0,
         quality_gate_passed: false,
+        qualityDecision: null,
       });
     });
 
@@ -51,6 +60,10 @@ describe('stage-20.js - Quality Assurance template', () => {
     it('should export constants', () => {
       expect(MIN_TEST_SUITES).toBe(1);
       expect(MIN_COVERAGE_PCT).toBe(60);
+      expect(TEST_SUITE_TYPES).toEqual(['unit', 'integration', 'e2e']);
+      expect(DEFECT_SEVERITIES).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(DEFECT_STATUSES).toEqual(['open', 'investigating', 'resolved', 'deferred', 'wont_fix']);
+      expect(QUALITY_DECISIONS).toEqual(['pass', 'conditional_pass', 'fail']);
     });
   });
 

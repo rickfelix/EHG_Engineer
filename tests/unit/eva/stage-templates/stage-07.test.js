@@ -58,6 +58,7 @@ describe('stage-07.js - Pricing template', () => {
 
     const validData = {
       currency: 'USD',
+      pricing_model: 'subscription',
       tiers: [validTier],
       gross_margin_pct: 70,
       churn_rate_monthly: 5,
@@ -451,6 +452,7 @@ describe('stage-07.js - Pricing template', () => {
     it('should work together for valid data with normal churn', () => {
       const data = {
         currency: 'USD',
+        pricing_model: 'subscription',
         tiers: [{ name: 'Pro', price: 99, billing_period: 'monthly', target_segment: 'SMB' }],
         gross_margin_pct: 70,
         churn_rate_monthly: 5,
@@ -470,6 +472,7 @@ describe('stage-07.js - Pricing template', () => {
     it('should work together for zero churn edge case', () => {
       const data = {
         currency: 'USD',
+        pricing_model: 'subscription',
         tiers: [{ name: 'Pro', price: 99, billing_period: 'monthly', target_segment: 'SMB' }],
         gross_margin_pct: 70,
         churn_rate_monthly: 0,
@@ -489,6 +492,7 @@ describe('stage-07.js - Pricing template', () => {
     it('should work together for high churn scenario', () => {
       const data = {
         currency: 'USD',
+        pricing_model: 'subscription',
         tiers: [{ name: 'Pro', price: 99, billing_period: 'monthly', target_segment: 'SMB' }],
         gross_margin_pct: 70,
         churn_rate_monthly: 40,

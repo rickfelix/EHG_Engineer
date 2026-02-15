@@ -36,6 +36,7 @@ describe('stage-21.js - Integration Testing template', () => {
         failing_integrations: [],
         pass_rate: 0,
         all_passing: false,
+        reviewDecision: null,
       });
     });
 
