@@ -17,7 +17,7 @@ describe('stage-04.js - Competitive Intel template', () => {
     it('should have correct template structure', () => {
       expect(stage04.id).toBe('stage-04');
       expect(stage04.slug).toBe('competitive-intel');
-      expect(stage04.title).toBe('Competitive Intel');
+      expect(stage04.title).toBe('Competitive Landscape');
       expect(stage04.version).toBe('2.0.0');
     });
 

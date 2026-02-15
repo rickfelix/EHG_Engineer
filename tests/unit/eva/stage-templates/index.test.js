@@ -132,9 +132,9 @@ describe('index.js - Stage templates registry', () => {
     });
 
     it('should have correct Phase 3 template titles', () => {
-      expect(stage10.title).toBe('Naming / Brand');
-      expect(stage11.title).toBe('Go-To-Market');
-      expect(stage12.title).toBe('Sales Logic');
+      expect(stage10.title).toBe('Naming/Brand');
+      expect(stage11.title).toBe('GTM Strategy');
+      expect(stage12.title).toBe('Sales Identity');
     });
   });
 
@@ -161,7 +161,7 @@ describe('index.js - Stage templates registry', () => {
     it('should have correct Phase 4 template slugs', () => {
       expect(stage13.slug).toBe('product-roadmap');
       expect(stage14.slug).toBe('technical-architecture');
-      expect(stage15.slug).toBe('resource-planning');
+      expect(stage15.slug).toBe('risk-register');
       expect(stage16.slug).toBe('financial-projections');
     });
 
@@ -210,7 +210,7 @@ describe('index.js - Stage templates registry', () => {
       expect(stage18.title).toBe('Sprint Planning');
       expect(stage19.title).toBe('Build Execution');
       expect(stage20.title).toBe('Quality Assurance');
-      expect(stage21.title).toBe('Integration Testing');
+      expect(stage21.title).toBe('Build Review');
       expect(stage22.title).toBe('Release Readiness');
     });
   });

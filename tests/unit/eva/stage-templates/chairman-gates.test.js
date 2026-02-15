@@ -54,11 +54,11 @@ function validStage25Data(gateOverride = {}) {
   return {
     review_summary: 'Comprehensive venture review covering all categories and outcomes.',
     initiatives: {
-      product: [{ title: 'MVP', status: 'complete', outcome: 'Shipped' }],
-      market: [{ title: 'Launch', status: 'complete', outcome: 'Validated' }],
-      technical: [{ title: 'Platform', status: 'complete', outcome: 'Stable' }],
-      financial: [{ title: 'Revenue', status: 'on-track', outcome: 'Growing' }],
-      team: [{ title: 'Hiring', status: 'complete', outcome: 'Full team' }],
+      product: [{ title: 'MVP', status: 'completed', outcome: 'Shipped' }],
+      market: [{ title: 'Launch', status: 'completed', outcome: 'Validated' }],
+      technical: [{ title: 'Platform', status: 'completed', outcome: 'Stable' }],
+      financial: [{ title: 'Revenue', status: 'in_progress', outcome: 'Growing' }],
+      team: [{ title: 'Hiring', status: 'completed', outcome: 'Full team' }],
     },
     current_vision: 'Building the next generation platform for startups',
     next_steps: [{ action: 'Scale', owner: 'CEO', timeline: 'Q2' }],

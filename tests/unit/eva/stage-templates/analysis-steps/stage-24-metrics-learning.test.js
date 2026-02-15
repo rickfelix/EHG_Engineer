@@ -334,7 +334,7 @@ describe('stage-24-metrics-learning.js', () => {
     it('should throw on unparseable response', async () => {
       const mockComplete = vi.fn().mockResolvedValue('Not valid JSON');
       getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage24(VALID_PARAMS)).rejects.toThrow('Failed to parse metrics & learning response');
+      await expect(analyzeStage24(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
     });
   });
 });

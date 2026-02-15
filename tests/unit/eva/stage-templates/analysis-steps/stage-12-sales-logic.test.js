@@ -591,7 +591,7 @@ describe('stage-12-sales-logic.js - Analysis Step v2.0', () => {
     it('should throw on unparseable LLM response', async () => {
       const mockComplete = vi.fn().mockResolvedValue('This is garbage');
       getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage12(VALID_PARAMS)).rejects.toThrow('Failed to parse sales logic response');
+      await expect(analyzeStage12(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
     });
   });
 });

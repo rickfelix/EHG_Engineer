@@ -2,8 +2,8 @@
  * Unit tests for Stage 14 - Technical Architecture template
  * Part of SD-LEO-FEAT-TMPL-BLUEPRINT-001
  *
- * Test Scenario: Stage 14 validation enforces all 4 required layers
- * (frontend, backend, data, infra) with components and integration points.
+ * Test Scenario: Stage 14 validation enforces all 5 required layers
+ * (presentation, api, business_logic, data, infrastructure) with components and integration points.
  *
  * @module tests/unit/eva/stage-templates/stage-14.test
  */
@@ -17,7 +17,7 @@ describe('stage-14.js - Technical Architecture template', () => {
       expect(stage14.id).toBe('stage-14');
       expect(stage14.slug).toBe('technical-architecture');
       expect(stage14.title).toBe('Technical Architecture');
-      expect(stage14.version).toBe('2.0.0');
+      expect(stage14.version).toBe('3.0.0');
     });
 
     it('should have schema definition', () => {
@@ -35,11 +35,14 @@ describe('stage-14.js - Technical Architecture template', () => {
       expect(stage14.defaultData).toEqual({
         architecture_summary: null,
         layers: {},
+        security: { authStrategy: null, dataClassification: null, complianceRequirements: [] },
+        dataEntities: [],
         integration_points: [],
         constraints: [],
         layer_count: 0,
         total_components: 0,
         all_layers_defined: false,
+        entity_count: 0,
       });
     });
 
@@ -52,24 +55,31 @@ describe('stage-14.js - Technical Architecture template', () => {
     });
 
     it('should export constants', () => {
-      expect(REQUIRED_LAYERS).toEqual(['frontend', 'backend', 'data', 'infra']);
+      expect(REQUIRED_LAYERS).toEqual(['presentation', 'api', 'business_logic', 'data', 'infrastructure']);
       expect(MIN_INTEGRATION_POINTS).toBe(1);
     });
   });
 
   describe('validate() - Architecture summary', () => {
     const validLayers = {
-      frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-      backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+      presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+      api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+      business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
       data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-      infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+      infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
     };
+
+    const validSecurity = { authStrategy: 'JWT', dataClassification: 'internal', complianceRequirements: [] };
+    const validEntities = [{ name: 'User', description: 'App user entity', relationships: ['Order'] }];
+    const validIntegration = [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }];
 
     it('should pass for valid architecture_summary', () => {
       const validData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
       };
       const result = stage14.validate(validData);
       expect(result.valid).toBe(true);
@@ -80,7 +90,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'Short summary',
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -90,7 +102,9 @@ describe('stage-14.js - Technical Architecture template', () => {
     it('should fail for missing architecture_summary', () => {
       const invalidData = {
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -102,71 +116,85 @@ describe('stage-14.js - Technical Architecture template', () => {
     it('should fail for missing layers object', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('layers is required'))).toBe(true);
     });
 
-    it('should fail for missing frontend layer', () => {
+    it('should fail for missing presentation layer', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'backend', target_layer: 'data', protocol: 'SQL' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'api', target_layer: 'data', protocol: 'SQL' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('layers.frontend is required'))).toBe(true);
+      expect(result.errors.some(e => e.includes('layers.presentation is required'))).toBe(true);
     });
 
-    it('should fail for missing backend layer', () => {
+    it('should fail for missing api layer', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'data', protocol: 'SQL' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'data', protocol: 'SQL' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('layers.backend is required'))).toBe(true);
+      expect(result.errors.some(e => e.includes('layers.api is required'))).toBe(true);
     });
 
     it('should fail for missing data layer', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('layers.data is required'))).toBe(true);
     });
 
-    it('should fail for missing infra layer', () => {
+    it('should fail for missing infrastructure layer', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('layers.infra is required'))).toBe(true);
+      expect(result.errors.some(e => e.includes('layers.infrastructure is required'))).toBe(true);
     });
   });
 
@@ -175,60 +203,72 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('layers.frontend.technology'))).toBe(true);
+      expect(result.errors.some(e => e.includes('layers.presentation.technology'))).toBe(true);
     });
 
     it('should fail for layer missing rationale', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'] },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'] },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('layers.backend.rationale'))).toBe(true);
+      expect(result.errors.some(e => e.includes('layers.api.rationale'))).toBe(true);
     });
 
     it('should fail for layer with empty components array', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: [], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: [], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'backend', target_layer: 'data', protocol: 'SQL' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'api', target_layer: 'data', protocol: 'SQL' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('layers.frontend.components'))).toBe(true);
+      expect(result.errors.some(e => e.includes('layers.presentation.components'))).toBe(true);
     });
 
     it('should fail for layer missing components', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -238,16 +278,21 @@ describe('stage-14.js - Technical Architecture template', () => {
 
   describe('validate() - Integration points', () => {
     const validLayers = {
-      frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-      backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+      presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+      api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+      business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
       data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-      infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+      infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
     };
+    const validSecurity = { authStrategy: 'JWT', dataClassification: 'internal' };
+    const validEntities = [{ name: 'User', description: 'Entity' }];
 
     it('should fail for empty integration_points array', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
+        security: validSecurity,
+        dataEntities: validEntities,
         integration_points: [],
       };
       const result = stage14.validate(invalidData);
@@ -259,7 +304,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: [{ source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -270,7 +317,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: [{ name: 'API Call', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -281,7 +330,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', protocol: 'HTTP' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -292,7 +343,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api' }],
       };
       const result = stage14.validate(invalidData);
       expect(result.valid).toBe(false);
@@ -302,17 +355,23 @@ describe('stage-14.js - Technical Architecture template', () => {
 
   describe('validate() - Constraints (optional)', () => {
     const validLayers = {
-      frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-      backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+      presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+      api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+      business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
       data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-      infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+      infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
     };
+    const validSecurity = { authStrategy: 'JWT', dataClassification: 'internal' };
+    const validEntities = [{ name: 'User', description: 'Entity' }];
+    const validIntegration = [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }];
 
     it('should pass when constraints are omitted', () => {
       const validData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
       };
       const result = stage14.validate(validData);
       expect(result.valid).toBe(true);
@@ -322,7 +381,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const validData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
         constraints: [],
       };
       const result = stage14.validate(validData);
@@ -333,7 +394,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const validData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
         constraints: [{ name: 'C1', description: 'Constraint 1' }],
       };
       const result = stage14.validate(validData);
@@ -344,7 +407,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
         constraints: [{ description: 'Constraint 1' }],
       };
       const result = stage14.validate(invalidData);
@@ -356,7 +421,9 @@ describe('stage-14.js - Technical Architecture template', () => {
       const invalidData = {
         architecture_summary: 'A'.repeat(20),
         layers: validLayers,
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: validSecurity,
+        dataEntities: validEntities,
+        integration_points: validIntegration,
         constraints: [{ name: 'C1' }],
       };
       const result = stage14.validate(invalidData);
@@ -370,42 +437,48 @@ describe('stage-14.js - Technical Architecture template', () => {
       const data = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI', 'Router'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API', 'Auth'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI', 'Router'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST', 'Auth'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        dataEntities: [],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.computeDerived(data);
-      expect(result.layer_count).toBe(4);
+      expect(result.layer_count).toBe(5);
     });
 
     it('should calculate total_components correctly', () => {
       const data = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI', 'Router', 'State'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API', 'Auth'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI', 'Router', 'State'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST', 'Auth'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2', 'S3'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2', 'S3'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        dataEntities: [],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.computeDerived(data);
-      expect(result.total_components).toBe(8);
+      expect(result.total_components).toBe(9);
     });
 
-    it('should set all_layers_defined to true when all 4 layers present', () => {
+    it('should set all_layers_defined to true when all 5 layers present', () => {
       const data = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        dataEntities: [],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.computeDerived(data);
       expect(result.all_layers_defined).toBe(true);
@@ -415,10 +488,11 @@ describe('stage-14.js - Technical Architecture template', () => {
       const data = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        dataEntities: [],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.computeDerived(data);
       expect(result.all_layers_defined).toBe(false);
@@ -428,7 +502,8 @@ describe('stage-14.js - Technical Architecture template', () => {
       const data = {
         architecture_summary: 'A'.repeat(20),
         layers: {},
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        dataEntities: [],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const result = stage14.computeDerived(data);
       expect(result.layer_count).toBe(0);
@@ -456,27 +531,31 @@ describe('stage-14.js - Technical Architecture template', () => {
       const data = {
         architecture_summary: 'A'.repeat(20),
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node.js', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node.js', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
-        integration_points: [{ name: 'API Call', source_layer: 'frontend', target_layer: 'backend', protocol: 'HTTP' }],
+        security: { authStrategy: 'JWT', dataClassification: 'internal' },
+        dataEntities: [{ name: 'User', description: 'Entity' }],
+        integration_points: [{ name: 'API Call', source_layer: 'presentation', target_layer: 'api', protocol: 'HTTP' }],
       };
       const validation = stage14.validate(data);
       expect(validation.valid).toBe(true);
 
       const computed = stage14.computeDerived(data);
       expect(computed.all_layers_defined).toBe(true);
-      expect(computed.layer_count).toBe(4);
+      expect(computed.layer_count).toBe(5);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
         architecture_summary: 'Short',
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
         },
+        dataEntities: [],
         integration_points: [],
       };
       const computed = stage14.computeDerived(data);

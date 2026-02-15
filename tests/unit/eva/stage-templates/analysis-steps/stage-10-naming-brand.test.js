@@ -529,7 +529,7 @@ describe('stage-10-naming-brand.js - Analysis Step v2.0', () => {
     it('should throw on unparseable LLM response', async () => {
       const mockComplete = vi.fn().mockResolvedValue('This is not JSON at all');
       getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage10(VALID_PARAMS)).rejects.toThrow('Failed to parse brand naming response');
+      await expect(analyzeStage10(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
     });
   });
 });

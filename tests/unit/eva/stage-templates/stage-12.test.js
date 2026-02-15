@@ -25,7 +25,7 @@ describe('stage-12.js - Sales Logic template', () => {
     it('should have correct template structure', () => {
       expect(stage12.id).toBe('stage-12');
       expect(stage12.slug).toBe('sales-logic');
-      expect(stage12.title).toBe('Sales Logic');
+      expect(stage12.title).toBe('Sales Identity');
       expect(stage12.version).toBe('2.0.0');
     });
 

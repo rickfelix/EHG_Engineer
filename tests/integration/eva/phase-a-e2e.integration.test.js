@@ -289,7 +289,7 @@ async function realityGateWrapper(params, deps) {
     ventureId: params.ventureId || params.from,
     fromStage: params.from,
     toStage: params.to,
-    db: deps.db,
+    supabase: deps.supabase,
     logger: silentLogger,
   });
   // NOT_APPLICABLE means this isn't a boundary stage — treated as pass
@@ -439,14 +439,15 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
     const state = mockSupabase._state;
     state.venture.current_lifecycle_stage = 10;
 
-    // Use a low score to trigger REQUIRE_REVIEW
+    // Score between min_score (7) and chairman_review_score (9) triggers MEDIUM low_score
+    // MEDIUM severity → REQUIRE_REVIEW (not STOP which requires HIGH)
     const result = await processStage(
       {
         ventureId: 'v-e2e-phase-a',
         stageId: 10,
         options: {
           dryRun: true,
-          stageTemplate: makeStageTemplate(10, { score: DEFAULTS['filter.min_score'] - 2, cost: 1000 }),
+          stageTemplate: makeStageTemplate(10, { score: DEFAULTS['filter.min_score'] + 1, cost: 1000 }),
         },
       },
       {
@@ -588,16 +589,12 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
   });
 
   // Step 10: Stages 20-21 auto-advance
-  it('Step 10: Stages 20-21 auto-advance with reality gate at 20->21', async () => {
+  it('Step 10: Stages 20-21 auto-advance (no reality gate at these stages)', async () => {
     const state = mockSupabase._state;
     const results = [];
 
     for (let stage = 20; stage <= 21; stage++) {
       state.venture.current_lifecycle_stage = stage;
-
-      if (stage === 20) {
-        state.artifacts.push(...buildBoundaryArtifacts('20->21'));
-      }
 
       const result = await processStage(
         { ventureId: 'v-e2e-phase-a', stageId: stage, options: { dryRun: true, stageTemplate: makeStageTemplate(stage) } },
@@ -784,7 +781,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
       expect(boundaries).toContain('16->17');
-      expect(boundaries).toContain('20->21');
+      expect(boundaries).toContain('22->23');
     });
 
     it('verifies kill gates at stages 3, 5, 13, 23 and promotion gates at 16, 17, 22', () => {
@@ -820,7 +817,7 @@ describe('Phase A E2E Integration Test (15-Step Scenario)', () => {
         state.venture.current_lifecycle_stage = stage;
 
         // Seed boundary artifacts
-        const boundaries = ['5->6', '9->10', '12->13', '16->17', '20->21'];
+        const boundaries = ['5->6', '9->10', '12->13', '16->17', '22->23'];
         for (const b of boundaries) {
           const [from] = b.split('->').map(Number);
           if (stage === from) {

@@ -17,7 +17,7 @@ describe('stage-02.js - Idea Validation template', () => {
     it('should have correct template structure', () => {
       expect(stage02.id).toBe('stage-02');
       expect(stage02.slug).toBe('idea-validation');
-      expect(stage02.title).toBe('Idea Validation');
+      expect(stage02.title).toBe('Idea Analysis');
       expect(stage02.version).toBe('2.0.0');
     });
 
