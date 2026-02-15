@@ -13,6 +13,7 @@ import {
   validateArray,
   validateEnum,
   collectErrors,
+  validateCrossStageContract,
 } from '../../../../lib/eva/stage-templates/validation.js';
 
 describe('validation.js - Shared validation utilities', () => {
@@ -314,6 +315,139 @@ describe('validation.js - Shared validation utilities', () => {
     it('should handle empty results array', () => {
       const errors = collectErrors([]);
       expect(errors).toEqual([]);
+    });
+  });
+
+  describe('validateCrossStageContract()', () => {
+    it('should pass for valid upstream data matching contract', () => {
+      const upstream = { name: 'Test', count: 5, items: [1, 2] };
+      const contract = {
+        name: { type: 'string' },
+        count: { type: 'number' },
+        items: { type: 'array', minItems: 1 },
+      };
+      const result = validateCrossStageContract(upstream, contract, 'stage-01');
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('should fail when upstream data is null', () => {
+      const contract = { name: { type: 'string' } };
+      const result = validateCrossStageContract(null, contract, 'stage-01');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-01');
+      expect(result.errors[0]).toContain('required');
+    });
+
+    it('should fail when upstream data is undefined', () => {
+      const contract = { name: { type: 'string' } };
+      const result = validateCrossStageContract(undefined, contract, 'stage-01');
+      expect(result.valid).toBe(false);
+    });
+
+    it('should fail for missing required field', () => {
+      const upstream = {};
+      const contract = { name: { type: 'string' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-02');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-02.name');
+      expect(result.errors[0]).toContain('required');
+    });
+
+    it('should skip optional fields when missing', () => {
+      const upstream = {};
+      const contract = { name: { type: 'string', required: false } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-01');
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('should validate string type', () => {
+      const upstream = { name: 123 };
+      const contract = { name: { type: 'string' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-01');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-01.name');
+    });
+
+    it('should validate string minLength', () => {
+      const upstream = { desc: 'short' };
+      const contract = { desc: { type: 'string', minLength: 20 } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-01');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-01.desc');
+    });
+
+    it('should validate number type', () => {
+      const upstream = { score: 'not a number' };
+      const contract = { score: { type: 'number' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-06');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-06.score');
+    });
+
+    it('should validate integer type and range', () => {
+      const upstream = { count: 3.5 };
+      const contract = { count: { type: 'integer', min: 1, max: 10 } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-07');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-07.count');
+    });
+
+    it('should validate array type and minItems', () => {
+      const upstream = { items: [] };
+      const contract = { items: { type: 'array', minItems: 1 } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-03');
+      expect(result.valid).toBe(false);
+    });
+
+    it('should validate object type', () => {
+      const upstream = { config: 'not an object' };
+      const contract = { config: { type: 'object' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-05');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('object');
+    });
+
+    it('should reject arrays for object type', () => {
+      const upstream = { config: [1, 2, 3] };
+      const contract = { config: { type: 'object' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-05');
+      expect(result.valid).toBe(false);
+    });
+
+    it('should pass for valid object type', () => {
+      const upstream = { config: { key: 'value' } };
+      const contract = { config: { type: 'object' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-05');
+      expect(result.valid).toBe(true);
+    });
+
+    it('should collect multiple errors across fields', () => {
+      const upstream = { name: '', count: -1 };
+      const contract = {
+        name: { type: 'string', minLength: 5 },
+        count: { type: 'number', min: 0 },
+        missing: { type: 'string' },
+      };
+      const result = validateCrossStageContract(upstream, contract, 'stage-01');
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should handle unknown type gracefully', () => {
+      const upstream = { field: 'value' };
+      const contract = { field: { type: 'unknown_type' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-01');
+      expect(result.valid).toBe(true);
+    });
+
+    it('should include stage label in error messages', () => {
+      const upstream = { a: null };
+      const contract = { a: { type: 'string' } };
+      const result = validateCrossStageContract(upstream, contract, 'stage-99');
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('stage-99');
     });
   });
 });
