@@ -127,6 +127,21 @@ const STAGE_FIXTURES = {
           threats: ['Artisan backlash', 'Fee increases'],
         },
       },
+      {
+        name: 'Novica',
+        position: 'Niche marketplace for artisan goods from developing countries',
+        threat: 'M',
+        pricingModel: 'commission',
+        marketPosition: 'Established artisan-focused competitor with NGO partnerships',
+        strengths: ['Artisan relationships', 'Fair trade certification', 'Cultural storytelling'],
+        weaknesses: ['Limited scale', 'Outdated technology', 'Small buyer base'],
+        swot: {
+          strengths: ['Artisan relationships', 'Fair trade brand'],
+          weaknesses: ['Limited tech investment', 'Small scale'],
+          opportunities: ['Digital modernization', 'Social commerce'],
+          threats: ['Larger platforms entering niche', 'Funding constraints'],
+        },
+      },
     ],
     blueOceanAnalysis: {
       eliminate: ['Generic product listings', 'Impersonal buyer experience'],
