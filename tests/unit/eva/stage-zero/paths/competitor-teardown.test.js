@@ -27,9 +27,8 @@ const silentLogger = { log: vi.fn(), warn: vi.fn() };
 
 let mockLlmClient;
 
-function createMockLlm(analysisResponse, deconstructionResponse, gapResponse) {
+function _createMockLlm(analysisResponse, deconstructionResponse, _gapResponse) {
   let callCount = 0;
-  const responses = [];
 
   return {
     _model: 'test-model',

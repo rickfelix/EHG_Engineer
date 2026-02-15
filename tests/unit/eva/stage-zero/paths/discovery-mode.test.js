@@ -21,7 +21,7 @@ vi.mock('../../../../../scripts/modules/sd-key-generator.js', () => ({
   normalizeVenturePrefix: vi.fn().mockReturnValue('TEST'),
 }));
 
-import { executeDiscoveryMode, listDiscoveryStrategies, rankCandidates } from '../../../../../lib/eva/stage-zero/paths/discovery-mode.js';
+import { executeDiscoveryMode, rankCandidates } from '../../../../../lib/eva/stage-zero/paths/discovery-mode.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
 

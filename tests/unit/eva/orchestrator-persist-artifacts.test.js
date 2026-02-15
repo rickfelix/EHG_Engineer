@@ -8,7 +8,7 @@
  * @module tests/unit/eva/orchestrator-persist-artifacts.test
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock transitive deps with shebangs that vitest can't transform
 vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({

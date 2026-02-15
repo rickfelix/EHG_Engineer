@@ -172,7 +172,7 @@ describe('ChairmanReview', () => {
         validation: { valid: true, errors: [] },
       };
 
-      const result = await persistVentureBrief(reviewResult, {
+      await persistVentureBrief(reviewResult, {
         supabase: mockSupabase,
         logger: silentLogger,
       });
