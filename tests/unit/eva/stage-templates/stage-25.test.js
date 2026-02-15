@@ -685,4 +685,87 @@ describe('stage-25.js - Venture Review template', () => {
       expect(computed.all_categories_reviewed).toBe(false);
     });
   });
+
+  describe('computeDerived() - Venture decision classification', () => {
+    const fullInitiatives = {
+      product: [{ title: 'P1', status: 'completed', outcome: 'Success' }],
+      market: [{ title: 'M1', status: 'completed', outcome: 'Success' }],
+      technical: [{ title: 'T1', status: 'completed', outcome: 'Success' }],
+      financial: [{ title: 'F1', status: 'completed', outcome: 'Success' }],
+      team: [{ title: 'T1', status: 'completed', outcome: 'Success' }],
+    };
+
+    const baseData = {
+      review_summary: 'Comprehensive review summary here',
+      initiatives: fullInitiatives,
+      current_vision: 'Building revolutionary platform technology solutions',
+      next_steps: [{ action: 'Action 1', owner: 'Owner 1', timeline: 'Q1 2026' }],
+    };
+
+    it('should return ventureDecision.decision="continue" when no drift and all categories reviewed', () => {
+      const prerequisites = {
+        stage01: {
+          venture_name: 'Platform Builder',
+          elevator_pitch: 'Building revolutionary platform technology solutions',
+        },
+      };
+      const result = stage25.computeDerived(baseData, prerequisites);
+      expect(result.ventureDecision).toBeDefined();
+      expect(result.ventureDecision.decision).toBe('continue');
+      expect(result.ventureDecision.confidence).toBe('high');
+    });
+
+    it('should return ventureDecision.decision="pivot" when drift_detected=true', () => {
+      const data = {
+        ...baseData,
+        current_vision: 'Creating artisanal handmade crafts marketplace',
+      };
+      const prerequisites = {
+        stage01: {
+          venture_name: 'Platform Builder',
+          elevator_pitch: 'Building revolutionary platform technology solutions',
+        },
+      };
+      const result = stage25.computeDerived(data, prerequisites);
+      expect(result.ventureDecision.decision).toBe('pivot');
+      expect(result.ventureDecision.rationale).toContain('Drift detected');
+      expect(result.ventureDecision.rationale).toContain('pivot');
+    });
+
+    it('should return ventureDecision.confidence="low" when not all categories reviewed', () => {
+      const data = {
+        ...baseData,
+        initiatives: {
+          product: [{ title: 'P1', status: 'completed', outcome: 'Success' }],
+          market: [{ title: 'M1', status: 'completed', outcome: 'Success' }],
+          technical: [],
+          financial: [],
+          team: [],
+        },
+      };
+      const result = stage25.computeDerived(data);
+      expect(result.ventureDecision.confidence).toBe('low');
+    });
+
+    it('should set drift_check with semanticDrift field in computeDerived output', () => {
+      const prerequisites = {
+        stage01: {
+          venture_name: 'Platform Builder',
+          elevator_pitch: 'Building revolutionary platform technology solutions',
+        },
+      };
+      const result = stage25.computeDerived(baseData, prerequisites);
+      expect(result.drift_check).toBeDefined();
+      expect(result.drift_check).toHaveProperty('semanticDrift');
+      expect(result.drift_check.semanticDrift).toBe('aligned');
+
+      // With drift
+      const driftData = {
+        ...baseData,
+        current_vision: 'Creating artisanal handmade crafts marketplace',
+      };
+      const driftResult = stage25.computeDerived(driftData, prerequisites);
+      expect(driftResult.drift_check.semanticDrift).toMatch(/moderate_drift|major_drift/);
+    });
+  });
 });
