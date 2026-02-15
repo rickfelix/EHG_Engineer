@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-15T00:39:41.914Z
+**Generated**: 2026-02-15T04:40:09.724Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -108,26 +108,11 @@
    FROM user_company_access
   WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true))))`
 
-### 2. eva_actions_company_delete (DELETE)
+### 2. eva_actions_service_role_write (ALL)
 
-- **Roles**: {public}
-- **Using**: `(company_id IN ( SELECT user_company_access.company_id
-   FROM user_company_access
-  WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true) AND (user_company_access.role = ANY (ARRAY['owner'::text, 'admin'::text, 'editor'::text])))))`
-
-### 3. eva_actions_company_insert (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `(company_id IN ( SELECT user_company_access.company_id
-   FROM user_company_access
-  WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true) AND (user_company_access.role = ANY (ARRAY['owner'::text, 'admin'::text, 'editor'::text])))))`
-
-### 4. eva_actions_company_update (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `(company_id IN ( SELECT user_company_access.company_id
-   FROM user_company_access
-  WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true) AND (user_company_access.role = ANY (ARRAY['owner'::text, 'admin'::text, 'editor'::text])))))`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 

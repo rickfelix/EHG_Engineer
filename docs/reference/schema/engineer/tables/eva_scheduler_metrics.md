@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-15T00:39:41.914Z
+**Generated**: 2026-02-15T04:40:09.724Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -66,15 +66,16 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_esm (SELECT)
+### 1. eva_scheduler_metrics_authenticated_select (SELECT)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'authenticated'::text)`
+- **Roles**: {authenticated}
+- **Using**: `true`
 
-### 2. service_role_esm (ALL)
+### 2. eva_scheduler_metrics_service_role_all (ALL)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
