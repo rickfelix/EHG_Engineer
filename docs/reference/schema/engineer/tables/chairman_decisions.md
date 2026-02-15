@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-15T04:40:09.724Z
+**Generated**: 2026-02-15T06:25:59.563Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -50,7 +50,7 @@
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
-- `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying, 'override'::character varying, 'pending'::character varying])::text[])))
+- `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY ((ARRAY['pass'::character varying, 'revise'::character varying, 'kill'::character varying, 'conditional_pass'::character varying, 'go'::character varying, 'conditional_go'::character varying, 'no_go'::character varying, 'complete'::character varying, 'continue'::character varying, 'blocked'::character varying, 'fail'::character varying, 'approve'::character varying, 'conditional'::character varying, 'reject'::character varying, 'release'::character varying, 'hold'::character varying, 'cancel'::character varying, 'no-go'::character varying, 'pivot'::character varying, 'expand'::character varying, 'sunset'::character varying, 'exit'::character varying, 'proceed'::character varying, 'fix'::character varying, 'pause'::character varying, 'override'::character varying, 'pending'::character varying, 'terminate'::character varying])::text[])))
 - `chairman_decisions_health_score_check`: CHECK (((health_score)::text = ANY ((ARRAY['green'::character varying, 'yellow'::character varying, 'red'::character varying])::text[])))
 - `chairman_decisions_recommendation_check`: CHECK (((recommendation)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying])::text[])))
 - `chairman_decisions_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])))
