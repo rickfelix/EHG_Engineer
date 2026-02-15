@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-15T00:39:41.914Z
+**Generated**: 2026-02-15T04:40:09.724Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -61,6 +61,19 @@
   ```sql
   CREATE INDEX idx_eva_event_ledger_status ON public.eva_event_ledger USING btree (status)
   ```
+
+## RLS Policies
+
+### 1. eva_event_ledger_authenticated_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. eva_event_ledger_service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

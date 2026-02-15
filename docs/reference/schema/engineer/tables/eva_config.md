@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-15T00:39:41.914Z
+**Generated**: 2026-02-15T04:40:09.724Z
 **Rows**: 2
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -34,6 +34,19 @@
   ```sql
   CREATE UNIQUE INDEX eva_config_pkey ON public.eva_config USING btree (key)
   ```
+
+## RLS Policies
+
+### 1. eva_config_authenticated_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. eva_config_service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
