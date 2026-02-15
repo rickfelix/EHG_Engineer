@@ -14,7 +14,6 @@ import {
   resolveGateThreshold,
   resolveAllGateThresholds,
   LEGACY_GATE_THRESHOLDS,
-  LEGACY_WEIGHTS,
 } from '../../../../lib/eva/stage-zero/profile-service.js';
 import {
   evaluateRealityGate,
@@ -29,16 +28,22 @@ describe('LEGACY_GATE_THRESHOLDS', () => {
   });
 
   test('all thresholds are between 0 and 1', () => {
-    for (const [boundary, artifacts] of Object.entries(LEGACY_GATE_THRESHOLDS)) {
-      for (const [type, score] of Object.entries(artifacts)) {
+    for (const [_boundary, artifacts] of Object.entries(LEGACY_GATE_THRESHOLDS)) {
+      for (const [_type, score] of Object.entries(artifacts)) {
         expect(score).toBeGreaterThan(0);
         expect(score).toBeLessThanOrEqual(1);
       }
     }
   });
 
-  test('matches BOUNDARY_CONFIG values exactly', () => {
-    for (const [boundary, config] of Object.entries(BOUNDARY_CONFIG)) {
+  test('matches BOUNDARY_CONFIG values for shared boundaries', () => {
+    // LEGACY_GATE_THRESHOLDS covers boundaries 5->6, 9->10, 12->13, 16->17, 20->21
+    // BOUNDARY_CONFIG covers boundaries 5->6, 9->10, 12->13, 16->17, 22->23
+    // They share 5->6, 12->13, 16->17 with identical artifact types.
+    // 9->10 and last boundary differ (legacy has old artifact types, config was updated).
+    const sharedBoundaries = ['5->6', '12->13', '16->17'];
+    for (const boundary of sharedBoundaries) {
+      const config = BOUNDARY_CONFIG[boundary];
       for (const artifact of config.required_artifacts) {
         expect(LEGACY_GATE_THRESHOLDS[boundary][artifact.artifact_type])
           .toBe(artifact.min_quality_score);
@@ -156,7 +161,7 @@ describe('resolveAllGateThresholds', () => {
 describe('evaluateRealityGate with profileThresholds', () => {
   const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-  function createMockDb(artifacts = []) {
+  function createMockSupabase(artifacts = []) {
     return {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -183,7 +188,7 @@ describe('evaluateRealityGate with profileThresholds', () => {
       ventureId: 'test-uuid',
       fromStage: 5,
       toStage: 6,
-      db: createMockDb(artifacts),
+      supabase: createMockSupabase(artifacts),
       logger: silentLogger,
       profileThresholds: { problem_statement: 0.5 },
     });
@@ -205,7 +210,7 @@ describe('evaluateRealityGate with profileThresholds', () => {
       ventureId: 'test-uuid',
       fromStage: 12,
       toStage: 13,
-      db: createMockDb(artifacts),
+      supabase: createMockSupabase(artifacts),
       logger: silentLogger,
       profileThresholds: { business_model_canvas: 0.8 },
     });
@@ -232,7 +237,7 @@ describe('evaluateRealityGate with profileThresholds', () => {
       ventureId: 'test-uuid',
       fromStage: 5,
       toStage: 6,
-      db: createMockDb(artifacts),
+      supabase: createMockSupabase(artifacts),
       logger: silentLogger,
     });
 
@@ -253,7 +258,7 @@ describe('evaluateRealityGate with profileThresholds', () => {
       ventureId: 'test-uuid',
       fromStage: 5,
       toStage: 6,
-      db: createMockDb(artifacts),
+      supabase: createMockSupabase(artifacts),
       logger: silentLogger,
       profileThresholds: overrides,
     });

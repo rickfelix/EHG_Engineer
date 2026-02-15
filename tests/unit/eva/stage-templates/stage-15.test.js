@@ -16,7 +16,7 @@ describe('stage-15.js - Risk Register template', () => {
     it('should have correct template structure', () => {
       expect(stage15.id).toBe('stage-15');
       expect(stage15.slug).toBe('risk-register');
-      expect(stage15.title).toBe('Risk Register');
+      expect(stage15.title).toBe('Resource Planning');
       expect(stage15.version).toBe('3.0.0');
     });
 

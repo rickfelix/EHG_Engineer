@@ -297,7 +297,7 @@ describe('stage-23-launch-execution.js', () => {
     it('should throw on unparseable response', async () => {
       const mockComplete = vi.fn().mockResolvedValue('Not JSON');
       getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage23(VALID_PARAMS)).rejects.toThrow('Failed to parse launch execution response');
+      await expect(analyzeStage23(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
     });
   });
 });

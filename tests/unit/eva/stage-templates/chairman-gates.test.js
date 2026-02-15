@@ -7,7 +7,7 @@
  * @module tests/unit/eva/stage-templates/chairman-gates.test
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import stage10 from '../../../../lib/eva/stage-templates/stage-10.js';
 import stage22 from '../../../../lib/eva/stage-templates/stage-22.js';
 import stage25 from '../../../../lib/eva/stage-templates/stage-25.js';
@@ -54,11 +54,11 @@ function validStage25Data(gateOverride = {}) {
   return {
     review_summary: 'Comprehensive venture review covering all categories and outcomes.',
     initiatives: {
-      product: [{ title: 'MVP', status: 'complete', outcome: 'Shipped' }],
-      market: [{ title: 'Launch', status: 'complete', outcome: 'Validated' }],
-      technical: [{ title: 'Platform', status: 'complete', outcome: 'Stable' }],
-      financial: [{ title: 'Revenue', status: 'on-track', outcome: 'Growing' }],
-      team: [{ title: 'Hiring', status: 'complete', outcome: 'Full team' }],
+      product: [{ title: 'MVP', status: 'completed', outcome: 'Shipped' }],
+      market: [{ title: 'Launch', status: 'completed', outcome: 'Validated' }],
+      technical: [{ title: 'Platform', status: 'completed', outcome: 'Stable' }],
+      financial: [{ title: 'Revenue', status: 'in_progress', outcome: 'Growing' }],
+      team: [{ title: 'Hiring', status: 'completed', outcome: 'Full team' }],
     },
     current_vision: 'Building the next generation platform for startups',
     next_steps: [{ action: 'Scale', owner: 'CEO', timeline: 'Q2' }],

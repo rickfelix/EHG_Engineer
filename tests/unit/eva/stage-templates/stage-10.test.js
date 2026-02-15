@@ -19,7 +19,7 @@ describe('stage-10.js - Naming/Brand template', () => {
     it('should have correct template structure', () => {
       expect(stage10.id).toBe('stage-10');
       expect(stage10.slug).toBe('naming-brand');
-      expect(stage10.title).toBe('Naming / Brand');
+      expect(stage10.title).toBe('Naming/Brand');
       expect(stage10.version).toBe('2.0.0');
     });
 

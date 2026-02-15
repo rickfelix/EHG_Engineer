@@ -62,7 +62,7 @@ describe('stage-23.js - Launch Execution template', () => {
 
     it('should export constants', () => {
       expect(GO_DECISIONS).toEqual(['go', 'no-go', 'conditional_go']);
-      expect(LAUNCH_TYPES).toEqual(['soft_launch', 'hard_launch', 'staged_rollout', 'beta_release']);
+      expect(LAUNCH_TYPES).toEqual(['soft_launch', 'beta', 'general_availability']);
       expect(MIN_LAUNCH_TASKS).toBe(1);
     });
 

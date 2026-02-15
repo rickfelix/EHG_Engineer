@@ -10,9 +10,6 @@
 
 import { describe, it, expect } from 'vitest';
 import stage16, { evaluatePromotionGate, MIN_PROJECTION_MONTHS } from '../../../../lib/eva/stage-templates/stage-16.js';
-import { MIN_MILESTONES } from '../../../../lib/eva/stage-templates/stage-13.js';
-import { REQUIRED_LAYERS } from '../../../../lib/eva/stage-templates/stage-14.js';
-import { MIN_TEAM_MEMBERS, MIN_ROLES } from '../../../../lib/eva/stage-templates/stage-15.js';
 
 describe('stage-16.js - Financial Projections template', () => {
   describe('Template metadata', () => {
@@ -20,7 +17,7 @@ describe('stage-16.js - Financial Projections template', () => {
       expect(stage16.id).toBe('stage-16');
       expect(stage16.slug).toBe('financial-projections');
       expect(stage16.title).toBe('Financial Projections');
-      expect(stage16.version).toBe('2.0.0');
+      expect(stage16.version).toBe('3.0.0');
     });
 
     it('should have schema definition', () => {
@@ -41,6 +38,9 @@ describe('stage-16.js - Financial Projections template', () => {
         break_even_month: null,
         total_projected_revenue: 0,
         total_projected_costs: 0,
+        pnl: null,
+        cashBalanceEnd: [],
+        viabilityWarnings: [],
         promotion_gate: null,
       });
     });
@@ -419,16 +419,16 @@ describe('stage-16.js - Financial Projections template', () => {
       },
       stage14: {
         layers: {
-          frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-          backend: { technology: 'Node', components: ['API'], rationale: 'Fast' },
+          presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+          api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+          business_logic: { technology: 'Node', components: ['Services'], rationale: 'Fast' },
           data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-          infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+          infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
         },
       },
       stage15: {
-        team_members: [
-          { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100 },
-          { role: 'Designer', skills: ['Figma'], allocation_pct: 50 },
+        risks: [
+          { name: 'Market risk', severity: 'high', priority: 'high', mitigation: 'Diversify channels' },
         ],
       },
       stage16: {
@@ -486,44 +486,27 @@ describe('stage-16.js - Financial Projections template', () => {
         ...validPrerequisites,
         stage14: {
           layers: {
-            frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-            backend: { technology: 'Node', components: ['API'], rationale: 'Fast' },
+            presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+            api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
           },
         },
       };
       const result = evaluatePromotionGate(prerequisites);
       expect(result.pass).toBe(false);
       expect(result.blockers.some(b => b.includes('data'))).toBe(true);
-      expect(result.blockers.some(b => b.includes('infra'))).toBe(true);
+      expect(result.blockers.some(b => b.includes('infrastructure'))).toBe(true);
     });
 
-    it('should fail for insufficient team members in stage 15', () => {
+    it('should fail for insufficient risks in stage 15', () => {
       const prerequisites = {
         ...validPrerequisites,
         stage15: {
-          team_members: [
-            { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100 },
-          ],
+          risks: [],
         },
       };
       const result = evaluatePromotionGate(prerequisites);
       expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('team member'))).toBe(true);
-    });
-
-    it('should fail for insufficient unique roles in stage 15', () => {
-      const prerequisites = {
-        ...validPrerequisites,
-        stage15: {
-          team_members: [
-            { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100 },
-            { role: 'Engineer', skills: ['Python'], allocation_pct: 100 },
-          ],
-        },
-      };
-      const result = evaluatePromotionGate(prerequisites);
-      expect(result.pass).toBe(false);
-      expect(result.blockers.some(b => b.includes('unique role'))).toBe(true);
+      expect(result.blockers.some(b => b.includes('risk'))).toBe(true);
     });
 
     it('should fail for zero initial_capital in stage 16', () => {
@@ -563,7 +546,7 @@ describe('stage-16.js - Financial Projections template', () => {
       const prerequisites = {
         stage13: { milestones: [], decision: 'kill' },
         stage14: { layers: {} },
-        stage15: { team_members: [] },
+        stage15: { risks: [] },
         stage16: { initial_capital: 0, revenue_projections: [] },
       };
       const result = evaluatePromotionGate(prerequisites);
@@ -595,16 +578,16 @@ describe('stage-16.js - Financial Projections template', () => {
         },
         stage14: {
           layers: {
-            frontend: { technology: 'React', components: ['UI'], rationale: 'Modern' },
-            backend: { technology: 'Node', components: ['API'], rationale: 'Fast' },
+            presentation: { technology: 'React', components: ['UI'], rationale: 'Modern' },
+            api: { technology: 'Express', components: ['REST'], rationale: 'Lightweight' },
+            business_logic: { technology: 'Node', components: ['Services'], rationale: 'Fast' },
             data: { technology: 'PostgreSQL', components: ['DB'], rationale: 'Reliable' },
-            infra: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
+            infrastructure: { technology: 'AWS', components: ['EC2'], rationale: 'Scalable' },
           },
         },
         stage15: {
-          team_members: [
-            { role: 'Engineer', skills: ['JavaScript'], allocation_pct: 100 },
-            { role: 'Designer', skills: ['Figma'], allocation_pct: 50 },
+          risks: [
+            { name: 'Market risk', severity: 'high', priority: 'high', mitigation: 'Diversify channels' },
           ],
         },
       };

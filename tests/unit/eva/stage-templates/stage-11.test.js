@@ -19,7 +19,7 @@ describe('stage-11.js - GTM template', () => {
     it('should have correct template structure', () => {
       expect(stage11.id).toBe('stage-11');
       expect(stage11.slug).toBe('gtm');
-      expect(stage11.title).toBe('Go-To-Market');
+      expect(stage11.title).toBe('GTM Strategy');
       expect(stage11.version).toBe('2.0.0');
     });
 

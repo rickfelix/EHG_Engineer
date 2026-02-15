@@ -91,10 +91,11 @@ describe('Eva Orchestrator Integration', () => {
       const mockSupabase = createIntegrationMockSupabase();
 
       // Use real evaluateDecision (not mocked)
-      // Analysis step returns cost and score within defaults
+      // Analysis step returns cost within default and score >= chairman_review_score (9)
+      // to avoid the two-tier low_score trigger (score < 9 fires MEDIUM low_score)
       const analysisStep = vi.fn().mockResolvedValue({
         artifactType: 'market_analysis',
-        payload: { cost: 5000, score: 8 },
+        payload: { cost: 5000, score: 10 },
         source: 'market-analysis-step',
       });
 
@@ -159,12 +160,14 @@ describe('Eva Orchestrator Integration', () => {
       expect(costTrigger.severity).toBe('HIGH');
     });
 
-    it('should REQUIRE_REVIEW when decision filter detects low score', async () => {
+    it('should REQUIRE_REVIEW when decision filter detects low score (MEDIUM tier)', async () => {
       const mockSupabase = createIntegrationMockSupabase();
 
+      // Score 8 is above min_score (7) but below chairman_review_score (9)
+      // → triggers MEDIUM low_score → maps to REQUIRE_REVIEW (not STOP)
       const lowScoreStep = vi.fn().mockResolvedValue({
         artifactType: 'score_analysis',
-        payload: { score: 3 },
+        payload: { score: 8 },
         source: 'score-step',
       });
 
@@ -225,7 +228,7 @@ describe('Eva Orchestrator Integration', () => {
               ventureId: params.ventureId || params.from,
               fromStage: params.from,
               toStage: params.to,
-              db: deps.db,
+              supabase: deps.supabase,
               logger: silentLogger,
             });
             return { passed: result.status === 'PASS', ...result };
@@ -275,7 +278,7 @@ describe('Eva Orchestrator Integration', () => {
               ventureId: params.ventureId || params.from,
               fromStage: params.from,
               toStage: params.to,
-              db: deps.db,
+              supabase: deps.supabase,
               logger: silentLogger,
             });
             return { passed: result.status === 'PASS', ...result };
@@ -452,7 +455,7 @@ describe('Eva Orchestrator Integration', () => {
       expect(boundaries).toContain('9->10');
       expect(boundaries).toContain('12->13');
       expect(boundaries).toContain('16->17');
-      expect(boundaries).toContain('20->21');
+      expect(boundaries).toContain('22->23');
 
       // Each boundary has 3 required artifacts
       for (const key of boundaries) {

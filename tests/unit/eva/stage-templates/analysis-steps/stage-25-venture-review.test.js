@@ -386,7 +386,7 @@ describe('stage-25-venture-review.js', () => {
     it('should throw on unparseable response', async () => {
       const mockComplete = vi.fn().mockResolvedValue('Garbage data');
       getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage25(VALID_PARAMS)).rejects.toThrow('Failed to parse venture review response');
+      await expect(analyzeStage25(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
     });
   });
 });

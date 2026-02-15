@@ -572,7 +572,7 @@ describe('stage-11-gtm.js - Analysis Step v2.0', () => {
     it('should throw on unparseable LLM response', async () => {
       const mockComplete = vi.fn().mockResolvedValue('Not JSON');
       getLLMClient.mockReturnValue({ complete: mockComplete });
-      await expect(analyzeStage11(VALID_PARAMS)).rejects.toThrow('Failed to parse GTM response');
+      await expect(analyzeStage11(VALID_PARAMS)).rejects.toThrow('Failed to parse LLM response as JSON');
     });
   });
 });

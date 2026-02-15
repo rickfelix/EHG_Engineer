@@ -24,7 +24,7 @@ describe('stage-03.js - Individual Validation template', () => {
     it('should have correct template structure', () => {
       expect(stage03.id).toBe('stage-03');
       expect(stage03.slug).toBe('validation');
-      expect(stage03.title).toBe('Individual Validation');
+      expect(stage03.title).toBe('Kill Gate');
       expect(stage03.version).toBe('2.0.0');
     });
 

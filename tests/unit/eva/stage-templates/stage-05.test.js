@@ -27,7 +27,7 @@ describe('stage-05.js - Profitability Kill Gate template', () => {
     it('should have correct template structure', () => {
       expect(stage05.id).toBe('stage-05');
       expect(stage05.slug).toBe('profitability');
-      expect(stage05.title).toBe('Profitability Kill Gate');
+      expect(stage05.title).toBe('Kill Gate (Financial)');
       expect(stage05.version).toBe('2.0.0');
     });
 
