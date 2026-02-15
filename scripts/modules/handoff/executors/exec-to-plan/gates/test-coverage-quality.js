@@ -97,10 +97,11 @@ export function createTestCoverageQualityGate(_supabase) {
       console.log('\n📊 TEST COVERAGE QUALITY GATE');
       console.log('-'.repeat(50));
 
-      const sdType = ctx.sd?.sd_type || 'feature';
-      console.log(`   📋 SD Type: ${sdType}`);
+      const sdType = ctx.sd?.sd_type || 'unknown';
+      console.log(`   📋 SD Type: ${sdType}${ctx.sd?.sd_type ? '' : ' (defaulted - sd_type not provided in context)'}`);
 
       // Determine thresholds and blocking behavior based on sd_type
+      // Only explicitly listed types use blocking mode; unknown/missing defaults to advisory
       const BLOCKING_TYPES = ['feature', 'bugfix', 'security'];
       const isBlocking = BLOCKING_TYPES.includes(sdType);
       const threshold = isBlocking ? 60 : 40;
