@@ -183,6 +183,11 @@ export async function createPRDWithValidatedContent(
     (llmContent.exploration_summary.files_read?.length > 0 ||
      llmContent.exploration_summary.patterns_identified?.length > 0);
 
+  // Warn when feature/fix PRDs are missing integration_operationalization
+  if (!hasIntegrationSection && ['feature', 'fix'].includes(sdData?.sd_type)) {
+    console.warn(`  ⚠️  PRD for ${sdId} missing integration_operationalization (sd_type: ${sdData.sd_type})`);
+  }
+
   const planChecklist = [
     { text: 'PRD created and saved', checked: true },
     { text: 'SD requirements mapped to technical specs', checked: true },
@@ -418,6 +423,11 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
   const hasExplorationSummary = llmContent.exploration_summary &&
     (llmContent.exploration_summary.files_read?.length > 0 ||
      llmContent.exploration_summary.patterns_identified?.length > 0);
+
+  // Warn when feature/fix PRDs are missing integration_operationalization on update
+  if (!hasIntegrationSection && ['feature', 'fix'].includes(sdData?.sd_type)) {
+    console.warn(`  ⚠️  PRD for ${sdId} missing integration_operationalization (sd_type: ${sdData.sd_type})`);
+  }
 
   // Mark checklist items as complete
   prdUpdate.plan_checklist = [
