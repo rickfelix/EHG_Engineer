@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-14 1:11:38 PM
+**Generated**: 2026-02-16 8:27:51 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -2639,6 +2639,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*Generated from database: 2026-02-14*
+*Generated from database: 2026-02-16*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

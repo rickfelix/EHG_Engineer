@@ -11,15 +11,12 @@
     "_removed_sections_note": "auto_proceed_mode, orchestrator_chaining, sd_continuation_truth_table, migration_execution_protocol_main, work_item_routing, skill_intent_detection, teams_protocol - moved to CORE/phase files, condensed summaries in router generator code"
   },
   "CLAUDE_CORE.md": {
-    "description": "Essential context for ALL sessions (~15-20k chars)",
+    "description": "Essential context for ALL sessions (~11k tokens). Lean Core (2026-02-16).",
     "sections": [
       "migration_execution_protocol",
       "infrastructure",
       "sub_agent_config",
-      "weighted_keyword_scoring",
       "script_anti_patterns",
-      "mandatory_agent_invocation",
-      "sub_agent_prompt_quality",
       "application_architecture",
       "session_verification",
       "session_verification_quick_start",
@@ -29,15 +26,10 @@
       "execution_philosophy",
       "compaction_instructions",
       "critical_term_definitions",
-      "sustainable_issue_resolution",
-      "skill_integration",
       "ui_parity_requirement",
       "stage_7_hard_block",
       "git_commit_guidelines",
       "pr_size_guidelines",
-      "communication_context",
-      "parallel_execution",
-      "development_workflow",
       "database_first_enforcement_expanded",
       "supabase_operations",
       "database_column_reference",
@@ -48,10 +40,9 @@
       "negative_constraints_global",
       "sd_type_workflow_paths",
       "work_tracking_policy",
-      "genesis_codebase",
-      "strunkian_writing_standards",
-      "rca_multi_expert_protocol"
-    ]
+      "genesis_codebase"
+    ],
+    "_removed_sections_note": "weighted_keyword_scoring (implementation detail of keyword-intent-scorer.js, hook handles routing), mandatory_agent_invocation (covered by PreToolUse hook routing advisory), sub_agent_prompt_quality (duplicate of Five-Point Brief in CLAUDE.md router), sustainable_issue_resolution (overlaps RCA mandate and execution philosophy), skill_integration (skills are self-documenting, reference pointer sufficient), communication_context (common sense for Opus 4.6), parallel_execution (common sense - read-safe, write-sequential), development_workflow (duplicate of application_architecture), strunkian_writing_standards (moved to docs/reference/), rca_multi_expert_protocol (RCA agent knows its own collaboration protocol)"
   },
   "CLAUDE_LEAD.md": {
     "description": "LEAD phase operations (~25-30k chars)",

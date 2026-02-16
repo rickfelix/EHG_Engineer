@@ -53,6 +53,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/capture-session-id.cjs",
+            "timeout": 3
+          },
+          {
+            "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/concurrent-session-worktree.cjs",
             "timeout": 10
           }
@@ -179,6 +184,16 @@
             "type": "command",
             "command": "echo [REMINDER] Quality over speed. Follow the LEO protocol diligently.",
             "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/pre-tool-enforce.cjs",
+            "timeout": 3
           }
         ]
       },

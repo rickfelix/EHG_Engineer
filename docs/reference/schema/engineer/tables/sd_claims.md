@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-15T13:25:26.330Z
-**Rows**: 2,806
+**Generated**: 2026-02-15T16:12:10.483Z
+**Rows**: 2,817
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -37,7 +37,7 @@
 - `sd_claims_session_id_fkey`: session_id → claude_sessions(session_id)
 
 ### Check Constraints
-- `sd_claims_release_reason_check`: CHECK ((release_reason = ANY (ARRAY['completed'::text, 'timeout'::text, 'manual'::text, 'conflict'::text, 'session_ended'::text, 'AUTO_REPLACED'::text, 'STALE_CLEANUP'::text])))
+- `sd_claims_release_reason_check`: CHECK ((release_reason = ANY (ARRAY['completed'::text, 'timeout'::text, 'manual'::text, 'conflict'::text, 'session_ended'::text, 'AUTO_REPLACED'::text, 'STALE_CLEANUP'::text, 'claim_switch'::text])))
 
 ## Indexes
 

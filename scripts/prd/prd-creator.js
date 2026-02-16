@@ -13,6 +13,31 @@
 import { formatPRDContent } from './formatters.js';
 
 /**
+ * Truncate goal_summary/executive_summary to 300 characters max.
+ * The goalSummaryValidation gate in PLAN-TO-EXEC fails if > 300 chars.
+ * Cuts at last sentence boundary (period) when possible; falls back to
+ * hard truncation at 297 chars + ellipsis.
+ *
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-018: Fix PAT-AUTO-d69edb81 (5 occurrences)
+ * @param {string} text - The text to truncate
+ * @param {number} [limit=300] - Maximum character limit
+ * @returns {string} Truncated text
+ */
+export function truncateGoalSummary(text, limit = 300) {
+  if (!text || text.length <= limit) return text || '';
+  const original = text.length;
+  const lastPeriod = text.lastIndexOf('.', limit);
+  let truncated;
+  if (lastPeriod > limit * 0.5) {
+    truncated = text.substring(0, lastPeriod + 1);
+  } else {
+    truncated = text.substring(0, limit - 3) + '...';
+  }
+  console.log(`  ⚠️  goal_summary truncated: ${original} → ${truncated.length} chars (limit: ${limit})`);
+  return truncated;
+}
+
+/**
  * Create initial PRD entry in database
  * @param {Object} supabase - Supabase client
  * @param {string} prdId - PRD ID
@@ -152,7 +177,7 @@ export async function createPRDWithValidatedContent(
       .update({
         title: prdTitle || existingPRD.title,
         status: 'approved',
-        executive_summary: llmContent.executive_summary || existingPRD.executive_summary,
+        executive_summary: truncateGoalSummary(llmContent.executive_summary || existingPRD.executive_summary),
         acceptance_criteria: llmContent.acceptance_criteria || undefined,
         functional_requirements: llmContent.functional_requirements || undefined,
         technical_requirements: llmContent.technical_requirements || undefined,
@@ -216,7 +241,7 @@ export async function createPRDWithValidatedContent(
       status: 'approved',  // Auto-approved: grounding validation passed
       category: 'technical',
       priority: 'high',
-      executive_summary: llmContent.executive_summary || `Product requirements document for Strategic Directive ${sdId}`,
+      executive_summary: truncateGoalSummary(llmContent.executive_summary || `Product requirements document for Strategic Directive ${sdId}`),
       phase: 'planning',
       created_by: 'PLAN',
       plan_checklist: planChecklist,
@@ -366,7 +391,7 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
 
   // Update executive_summary
   if (llmContent.executive_summary) {
-    prdUpdate.executive_summary = llmContent.executive_summary;
+    prdUpdate.executive_summary = truncateGoalSummary(llmContent.executive_summary);
   }
 
   // Update functional_requirements
