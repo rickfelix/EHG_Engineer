@@ -69,7 +69,7 @@ function generateAgentSection(agents) {
 }
 
 /**
- * Generate sub-agent section
+ * Generate sub-agent section (full version with keywords)
  * Uses scorer file as single source of truth for keywords (not database triggers table)
  * @param {Array} subAgents - List of sub-agents
  * @returns {string} Formatted markdown
@@ -123,6 +123,35 @@ function generateSubAgentSection(subAgents) {
   section += `
 **Note**: Sub-agent results MUST be persisted to \`sub_agent_execution_results\` table.
 `;
+
+  return section;
+}
+
+/**
+ * Generate compact sub-agent section (no keywords — routing handled by PreToolUse hook)
+ * LEAN CORE (2026-02-16): Keywords removed from CLAUDE_CORE.md.
+ * Routing advisory provided by scripts/hooks/pre-tool-enforce.cjs instead.
+ * @param {Array} subAgents - List of sub-agents
+ * @returns {string} Formatted markdown
+ */
+function generateSubAgentSectionCompact(subAgents) {
+  if (!subAgents || subAgents.length === 0) {
+    return '';
+  }
+
+  let section = `## Available Sub-Agents
+
+Invoke via Task tool with \`subagent_type="<CODE>"\`. Routing hints provided by PreToolUse hook.
+Results MUST be persisted to \`sub_agent_execution_results\` table.
+
+| Code | Name | Purpose |
+|------|------|---------|
+`;
+
+  subAgents.forEach(sa => {
+    const desc = (sa.description || 'N/A').substring(0, 60).replace(/\n/g, ' ');
+    section += `| \`${sa.code || 'N/A'}\` | ${sa.name} | ${desc} |\n`;
+  });
 
   return section;
 }
@@ -348,6 +377,7 @@ export {
   getMetadata,
   generateAgentSection,
   generateSubAgentSection,
+  generateSubAgentSectionCompact,
   generateTriggerQuickReference,
   generateHandoffTemplates,
   generateValidationRules,
