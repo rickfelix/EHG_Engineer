@@ -1,58 +1,11 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-## ⚠️ CRITICAL: Issue Resolution Protocol
-
-**When you encounter ANY issue, error, or unexpected behavior:**
-
-1. **DO NOT work around it** - Workarounds hide problems and create technical debt
-2. **DO NOT ignore it** - Every issue is a signal that something needs attention
-3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
-
-### Sub-Agent Prompt Quality Standard (Five-Point Brief)
-
-**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
-
-Every sub-agent invocation MUST include these five elements:
-
-| Element | What to Include | Example |
-|---------|----------------|---------|
-| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
-| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
-| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
-| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
-| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
-
-**Anti-patterns** (NEVER do these):
-- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
-- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
-- ❌ Omitting prior attempts — agent repeats your failed approaches
-
-**Example invocation (GOOD - RCA agent):**
-```
-Task tool with subagent_type="rca-agent":
-"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
-Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
-Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
-Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
-Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
-```
-
-**Example invocation (BAD - too vague):**
-```
-Task tool with subagent_type="rca-agent":
-"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
-```
-
-**Why this matters:**
-- Root cause fixes prevent recurrence
-- Issues captured in `issue_patterns` table benefit future sessions
-- Systematic analysis produces better solutions than quick fixes
-
-**The only acceptable response to an issue is understanding WHY it happened.**
-
-**Generated**: 2026-02-16 8:27:51 AM
+**Generated**: 2026-02-16 8:39:05 AM
 **Protocol**: LEO 4.3.3
-**Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
+**Purpose**: EXEC agent implementation requirements and testing
+
+> For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
+> For migration execution and phase transitions, see CLAUDE_CORE.md.
 
 ---
 
@@ -87,94 +40,6 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
-
-**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
-
-### ⛔ NEVER DO THIS:
-- Using `database-agent` to directly insert into `sd_phase_handoffs`
-- Creating handoff records without running validation scripts
-- Skipping preflight knowledge retrieval
-
-### ✅ ALWAYS DO THIS:
-
-#### Pre-flight Batch Validation (RECOMMENDED)
-```bash
-# SD-LEO-STREAMS-001: Find ALL issues at once (reduces handoff iterations 60-70%)
-node scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001
-```
-
-#### LEAD → PLAN Transition
-```bash
-# Step 1: MANDATORY - Run preflight (loads context from database)
-node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
-
-# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)
-node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → EXEC Transition
-```bash
-# Step 1: MANDATORY - Run preflight
-node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
-
-# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)
-node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
-```
-
-#### EXEC → PLAN Transition (Verification)
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → LEAD Transition (Final Approval)
-```bash
-node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
-```
-
-### Emergency Bypass (SD-LEARN-010)
-For emergencies ONLY. Bypasses require audit logging and are rate-limited.
-
-```bash
-# Emergency bypass with mandatory justification (min 20 chars)
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \
-  --bypass-validation \
-  --bypass-reason "Production outage requires immediate fix - JIRA-12345"
-```
-
-**Rate Limits:**
-- 3 bypasses per SD maximum
-- 10 bypasses per day globally
-- All bypasses logged to `audit_log` table with severity=warning
-
-### What These Scripts Enforce
-| Script | Validations |
-|--------|-------------|
-| `phase-preflight.js` | Loads context, patterns, and lessons from database |
-| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
-| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
-| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |
-| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |
-| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
-
-### Error Codes (SD-LEARN-010)
-| Code | Meaning | Remediation |
-|------|---------|-------------|
-| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |
-| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |
-| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |
-
-### Compliance Marker
-Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
-
-### Check Compliance
-```bash
-npm run handoff:compliance        # Check all recent handoffs
-npm run handoff:compliance SD-ID  # Check specific SD
-```
-
-**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -494,43 +359,6 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Why Wrong**: LEO v4.3.3 UI Parity Gate blocks features users can't see
 **Correct Approach**: Every backend field must have corresponding UI component
 </negative_constraints>
-
-## Migration Execution - DATABASE Sub-Agent Delegation
-
-### CRITICAL: Delegate Migration Execution to DATABASE Sub-Agent
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Trigger the DATABASE sub-agent when you need to**:
-- Apply a migration file to the database
-- Execute schema changes
-- Run SQL statements against Supabase
-
-**Invocation pattern**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
-
-The DATABASE sub-agent (v1.3.0+) has autonomous execution capability and will:
-1. Determine if operation is safe (AUTO-EXECUTE) or needs routing
-2. Use the correct connection pattern (SUPABASE_POOLER_URL - no password needed)
-3. Split and execute SQL statements properly
-4. Verify success and report results
-
-**Only write your own migration script if**:
-- DATABASE sub-agent is unavailable
-- You need custom pre/post processing logic
-- The migration has special transaction requirements
-
-The next section ("Migration Script Pattern") provides the FALLBACK pattern if sub-agent is unavailable.
 
 ## 📚 Skill Integration (EXEC Phase)
 

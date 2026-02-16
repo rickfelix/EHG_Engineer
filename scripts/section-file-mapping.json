@@ -45,10 +45,8 @@
     "_removed_sections_note": "weighted_keyword_scoring (implementation detail of keyword-intent-scorer.js, hook handles routing), mandatory_agent_invocation (covered by PreToolUse hook routing advisory), sub_agent_prompt_quality (duplicate of Five-Point Brief in CLAUDE.md router), sustainable_issue_resolution (overlaps RCA mandate and execution philosophy), skill_integration (skills are self-documenting, reference pointer sufficient), communication_context (common sense for Opus 4.6), parallel_execution (common sense - read-safe, write-sequential), development_workflow (duplicate of application_architecture), strunkian_writing_standards (moved to docs/reference/), rca_multi_expert_protocol (RCA agent knows its own collaboration protocol)"
   },
   "CLAUDE_LEAD.md": {
-    "description": "LEAD phase operations (~25-30k chars)",
+    "description": "LEAD phase operations (~15-20k chars). Lean LEAD (2026-02-16).",
     "sections": [
-      "migration_execution_protocol_lead",
-      "mandatory_phase_transitions_lead",
       "sd_creation_process",
       "sd_creation_anti_pattern",
       "sd_creation_errors",
@@ -68,13 +66,12 @@
       "parent_child_lead",
       "multi_track_parallel_execution",
       "vision_v2_lead"
-    ]
+    ],
+    "_removed_sections_note": "migration_execution_protocol_lead (duplicate of CORE migration_execution_protocol), mandatory_phase_transitions_lead (duplicate of CORE mandatory_phase_transitions). RCA mandate removed from generator — already in router."
   },
   "CLAUDE_PLAN.md": {
-    "description": "PLAN phase operations (~30-35k chars)",
+    "description": "PLAN phase operations (~20-25k chars). Lean PLAN (2026-02-16).",
     "sections": [
-      "migration_execution_protocol_plan",
-      "mandatory_phase_transitions_plan",
       "workflow",
       "PHASE_2_PLANNING",
       "prd_creation_anti_pattern",
@@ -83,11 +80,9 @@
       "plan_pre_exec_checklist",
       "plan_to_exec_checklist",
       "plan_test_infrastructure_gate",
-      "testing_tier_strategy",
       "testing_tier_strategy_updated",
       "test_evidence_architecture",
       "plan_cicd_verification",
-      "plan_visual_documentation_examples",
       "plan_presentation_template",
       "plan_refactor_brief_guide",
       "PHASE_4_VERIFICATION",
@@ -96,9 +91,6 @@
       "design_database_validation_gates",
       "gate_2_5_human_inspectability",
       "qa_engineering_enhanced",
-      "schema_documentation_access",
-      "schema_documentation_reference",
-      "database_schema_overview",
       "handoff_quality_gates",
       "parent_child_plan",
       "parent_child_validation",
@@ -106,12 +98,12 @@
       "negative_constraints_plan",
       "prd_template_scaffold",
       "documentation_link_validation_gate"
-    ]
+    ],
+    "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
   },
   "CLAUDE_EXEC.md": {
-    "description": "EXEC phase operations (~20-25k chars)",
+    "description": "EXEC phase operations (~15-20k chars). Lean EXEC (2026-02-16).",
     "sections": [
-      "mandatory_phase_transitions_exec",
       "workflow",
       "exec_implementation_requirements",
       "exec_retrospective_anti_patterns",
@@ -132,12 +124,11 @@
       "parent_child_exec",
       "vision_v2_exec",
       "negative_constraints_exec",
-      "workflow",
-      "migration_execution_delegation",
       "migration_script_pattern",
       "test_coverage_quality_gate",
       "integration_test_requirement_gate"
-    ]
+    ],
+    "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol), workflow (was listed twice — removed duplicate). RCA mandate removed from generator — already in router."
   },
   "SHARED": {
     "description": "Sections that appear in multiple files or are general reference",

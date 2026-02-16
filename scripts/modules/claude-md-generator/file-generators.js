@@ -7,6 +7,10 @@
  *   - Removed: duplicate RCA mandate, keyword dumps, implementation details,
  *     common-sense guidance (parallel exec, communication style, Strunkian).
  *   - Sub-agent keywords removed — routing handled by PreToolUse hook.
+ * LEAN PHASE FILES (2026-02-16): LEAD/PLAN/EXEC trimmed.
+ *   - Removed: RCA mandate (already in router), migration/phase-transition
+ *     duplicates (already in CORE), superseded sections, schema reference data.
+ *   - Section exclusions managed in section-file-mapping.json (source of truth).
  * See scripts/hooks/pre-tool-enforce.cjs
  */
 
@@ -45,16 +49,8 @@ function getSectionsByMapping(sections, fileKey, fileMapping) {
   return sections.filter(s => mappedTypes.includes(s.section_type));
 }
 
-/**
- * Get the RCA Issue Resolution Mandate section (appears at top of all files only)
- * SD-LEO-INFRA-DISTILL-CLAUDE-FILES-001: Removed duplicate at bottom to save ~2K chars per file
- * @param {Array} sections - All sections
- * @returns {string} RCA mandate content or empty string if not found
- */
-function getRCAMandate(sections) {
-  const rcaSection = sections.find(s => s.section_type === 'rca_issue_resolution_mandate');
-  return rcaSection?.content || '';
-}
+// getRCAMandate() removed (2026-02-16): RCA mandate lives in CLAUDE.md router only.
+// Phase files now use a reference pointer instead of duplicating ~51 lines each.
 
 /**
  * Generate CLAUDE.md — lean router file
@@ -207,7 +203,10 @@ ${subAgentSection}
 }
 
 /**
- * Generate CLAUDE_LEAD.md file
+ * Generate CLAUDE_LEAD.md file (lean version)
+ * LEAN LEAD (2026-02-16): Removed RCA mandate (in router), migration/phase-transition
+ * duplicates (in CORE). Section exclusions in section-file-mapping.json.
+ *
  * @param {Object} data - All data from database
  * @param {Object} fileMapping - Section to file mapping
  * @returns {string} Generated markdown content
@@ -222,16 +221,16 @@ function generateLead(data, fileMapping) {
 
   const directivesSection = generateAutonomousDirectivesSection(autonomousDirectives, 'LEAD');
 
-  // RCA Mandate appears at top and bottom of all files
-  const rcaMandate = getRCAMandate(sections);
+  // RCA Mandate is in the router — not duplicated here (LEAN LEAD)
 
   return `# CLAUDE_LEAD.md - LEAD Phase Operations
 
-${rcaMandate}
-
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
-**Purpose**: LEAD agent operations and strategic validation (25-30k chars)
+**Purpose**: LEAD agent operations and strategic validation
+
+> For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
+> For migration execution and phase transitions, see CLAUDE_CORE.md.
 
 ---
 
@@ -248,7 +247,11 @@ ${leadContent}
 }
 
 /**
- * Generate CLAUDE_PLAN.md file
+ * Generate CLAUDE_PLAN.md file (lean version)
+ * LEAN PLAN (2026-02-16): Removed RCA mandate (in router), migration/phase-transition
+ * duplicates (in CORE), superseded testing_tier_strategy, schema reference data.
+ * Section exclusions in section-file-mapping.json.
+ *
  * @param {Object} data - All data from database
  * @param {Object} fileMapping - Section to file mapping
  * @returns {string} Generated markdown content
@@ -263,16 +266,17 @@ function generatePlan(data, fileMapping) {
 
   const directivesSection = generateAutonomousDirectivesSection(autonomousDirectives, 'PLAN');
 
-  // RCA Mandate appears at top and bottom of all files
-  const rcaMandate = getRCAMandate(sections);
+  // RCA Mandate is in the router — not duplicated here (LEAN PLAN)
 
   return `# CLAUDE_PLAN.md - PLAN Phase Operations
 
-${rcaMandate}
-
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
-**Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
+**Purpose**: PLAN agent operations, PRD creation, validation gates
+
+> For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
+> For migration execution and phase transitions, see CLAUDE_CORE.md.
+> For database schema reference, see \`docs/reference/database-agent-patterns.md\`.
 
 ---
 
@@ -297,7 +301,11 @@ ${generateValidationRules(validationRules)}
 }
 
 /**
- * Generate CLAUDE_EXEC.md file
+ * Generate CLAUDE_EXEC.md file (lean version)
+ * LEAN EXEC (2026-02-16): Removed RCA mandate (in router), migration/phase-transition
+ * duplicates (in CORE), duplicate workflow entry.
+ * Section exclusions in section-file-mapping.json.
+ *
  * @param {Object} data - All data from database
  * @param {Object} fileMapping - Section to file mapping
  * @returns {string} Generated markdown content
@@ -314,16 +322,16 @@ function generateExec(data, fileMapping) {
   const scriptsSection = generateProcessScriptsSection(processScripts);
   const directivesSection = generateAutonomousDirectivesSection(autonomousDirectives, 'EXEC');
 
-  // RCA Mandate appears at top and bottom of all files
-  const rcaMandate = getRCAMandate(sections);
+  // RCA Mandate is in the router — not duplicated here (LEAN EXEC)
 
   return `# CLAUDE_EXEC.md - EXEC Phase Operations
 
-${rcaMandate}
-
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
-**Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
+**Purpose**: EXEC agent implementation requirements and testing
+
+> For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
+> For migration execution and phase transitions, see CLAUDE_CORE.md.
 
 ---
 
