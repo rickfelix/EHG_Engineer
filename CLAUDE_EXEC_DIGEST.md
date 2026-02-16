@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-16T13:39:05.049Z -->
-<!-- git_commit: b22f9b27 -->
+<!-- generated_at: 2026-02-16T13:44:35.875Z -->
+<!-- git_commit: d86162ab -->
 <!-- db_snapshot_hash: 6c0e5841d5dacd55 -->
 <!-- file_content_hash: pending -->
 
@@ -10,53 +10,6 @@
 **Purpose**: Implementation requirements and constraints (<5k chars)
 
 ---
-
-## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
-
-**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
-
-### ⛔ NEVER DO THIS:
-- Using `database-agent` to directly insert into `sd_phase_handoffs`
-- Creating handoff records without running validation scripts
-- Skipping preflight knowledge retrieval
-
-### ✅ ALWAYS DO THIS:
-
-#### Pre-flight Batch Validation (RECOMMENDED)
-#### LEAD → PLAN Transition
-#### PLAN → EXEC Transition
-#### EXEC → PLAN Transition (Verification)
-#### PLAN → LEAD Transition (Final Approval)
-### Emergency Bypass (SD-LEARN-010)
-For emergencies ONLY. Bypasses require audit logging and are rate-limited.
-
-**Rate Limits:**
-- 3 bypasses per SD maximum
-- 10 bypasses per day globally
-- All bypasses logged to `audit_log` table with severity=warning
-
-### What These Scripts Enforce
-| Script | Validations |
-|--------|-------------|
-| `phase-preflight.js` | Loads context, patterns, and lessons from database |
-| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
-| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
-| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |
-| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |
-| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
-
-### Error Codes (SD-LEARN-010)
-| Code | Meaning | Remediation |
-|------|---------|-------------|
-| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |
-| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |
-| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |
-
-### Compliance Marker
-Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
-
-### Check Compliance
-**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -301,43 +254,6 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Correct Approach**: Every backend field must have corresponding UI component
 </negative_constraints>
 
-## Migration Execution - DATABASE Sub-Agent Delegation
-
-### CRITICAL: Delegate Migration Execution to DATABASE Sub-Agent
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Trigger the DATABASE sub-agent when you need to**:
-- Apply a migration file to the database
-- Execute schema changes
-- Run SQL statements against Supabase
-
-**Invocation pattern**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
-
-The DATABASE sub-agent (v1.3.0+) has autonomous execution capability and will:
-1. Determine if operation is safe (AUTO-EXECUTE) or needs routing
-2. Use the correct connection pattern (SUPABASE_POOLER_URL - no password needed)
-3. Split and execute SQL statements properly
-4. Verify success and report results
-
-**Only write your own migration script if**:
-- DATABASE sub-agent is unavailable
-- You need custom pre/post processing logic
-- The migration has special transaction requirements
-
-The next section ("Migration Script Pattern") provides the FALLBACK pattern if sub-agent is unavailable.
-
 ## EXEC Dual Test Requirement
 
 ### ⚠️ MANDATORY: Dual Test Execution
@@ -449,5 +365,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-02-16 8:39:05 AM*
+*DIGEST generated: 2026-02-16 8:44:35 AM*
 *Protocol: 4.3.3*
