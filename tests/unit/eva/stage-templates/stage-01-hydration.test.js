@@ -17,8 +17,10 @@ vi.mock('../../../../lib/llm/index.js', () => ({
 vi.mock('../../../../lib/eva/utils/parse-json.js', () => ({
   parseJSON: vi.fn((input) => {
     if (typeof input === 'string') return JSON.parse(input);
+    if (input && typeof input === 'object' && typeof input.content === 'string') return JSON.parse(input.content);
     return input;
   }),
+  extractUsage: vi.fn((response) => response?.usage || null),
 }));
 
 import { analyzeStage01, STAGE1_ARCHETYPES } from '../../../../lib/eva/stage-templates/analysis-steps/stage-01-hydration.js';

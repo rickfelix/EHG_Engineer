@@ -50,7 +50,7 @@ Task tool with subagent_type="rca-agent":
 
 **The only acceptable response to an issue is understanding WHY it happened.**
 
-**Generated**: 2026-02-14 1:11:38 PM
+**Generated**: 2026-02-16 7:58:41 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1525,60 +1525,60 @@ Task tool with subagent_type="validation-agent":
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEO-001 Comprehensive Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/17/2026 | **Score**: 100
+### 1. PLAN_TO_EXEC Handoff Retrospective: Enum Validation & Field Naming (SD-EVA-FIX-ENUM-NAMING-001) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
 
 **Key Improvements**:
-- {"text":"SD type validation was missing from LEAD-TO-PLAN handoff - discovered through triangulation...
-- {"text":"Schema dependency validation for validators was reactive (discovered during US-007) rather ...
+- PLAN-TO-EXEC handoff required 7 attempts due to cascading gate failures: PRD status mismatch, target...
+- SD description stated "typeof string checks" but actual codebase used type:string in schemas with va...
 
 **Action Items**:
-- [ ] Document plugin discovery protocol - add 'Check for official Claude Code plugins...
-- [ ] Create systematic quality gate gap analysis tool to audit all handoff validators...
+- [ ] Add enum value validation to Build Loop stage template CI: if a new category is ...
+- [ ] Update SD description writing guidelines to require code-level specificity: refe...
 
-### 2. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
-**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
+### 2. SD Completion Retrospective: Enum Validation & Field Naming (SD-EVA-FIX-ENUM-NAMING-001) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
 
 **Key Improvements**:
-- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
-- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
+- PLAN-TO-EXEC handoff required 7 attempts due to cascading gate failures: PRD status mismatch, target...
+- SD description stated "typeof string checks" but actual codebase used type:string in schemas with va...
 
 **Action Items**:
-- [ ] Create reusable SD lookup utility
-- [ ] Add E2E test CI job for risk-recalibration
+- [ ] Add enum value validation to Build Loop stage template CI: if a new category is ...
+- [ ] Update SD description writing guidelines to require code-level specificity: refe...
 
-### 3. Fix Unicode Surrogate Pair Splitting in Handoff Output - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/12/2026 | **Score**: 100
+### 3. Kill Gate Logic Fixes - EXEC Completion Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-45e4dfb7] Gate 1:userStoryQualityValidation failed: score 209/300
-- [PAT-AUTO-d2c1c285] Gate PREREQUISITE_HANDOFF_CHECK failed: score 841/1000
+- {"issue":"PLAN-TO-EXEC handoff rejected 3 times before passing. First rejection: stale session claim...
+- {"issue":"User story acceptance_criteria format mismatch: BMAD story generator output JSON strings f...
 
 **Action Items**:
-- [ ] No immediate actions required - continue standard workflow
-- [ ] Re-run blocking sub-agents for SD-LEO-FIX-FIX-UNICODE-SURROGATE-001 until PASS v...
+- [ ] Add acceptance_criteria format validation to BMAD story generator output, ensuri...
+- [ ] Implement batch rejection reporting in handoff pre-validation: surface ALL block...
 
-### 4. SD Completion Retrospective: Centralized Claim Guard Eliminates 7 Multi-Session Collision Vectors [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+### 4. Chairman Governance Gates: Pattern Reuse and Cross-SD Test Compatibility [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
 
 **Key Improvements**:
-- The 7 separate claim paths existed because each was added incrementally without recognizing the cros...
-- ESM/CJS compatibility required a wrapper file (claim-guard.cjs) which adds one more file to maintain...
+- [PAT-AUTO-b37be076] Handoff EXEC-TO-LEAD failed with exit code 1
+- [PAT-AUTO-280c5347] Gate PLAN_TO_LEAD_HANDOFF_EXISTS failed: score 0/100
 
 **Action Items**:
-- [ ] Create integration test that spawns 2 concurrent claim attempts on the same SD t...
-- [ ] Add cross-cutting concern detection to LEAD phase checklist: when approving an S...
+- [ ] SD-LEO-FIX-CLAIM-DUAL-TRUTH-001: Unify claim resolution to use sd_claims as sing...
+- [ ] Address 13 pre-existing analysis-steps test failures in a separate SD to prevent...
 
-### 5. LEAD_TO_PLAN Handoff Retrospective: Distill CLAUDE*.md Files for Maximum Token Reduction [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+### 5. SD Completion Retrospective: EVA Event Bus Unit Test Coverage (SD-EVA-FIX-POST-LAUNCH-001) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-c205e83a] Gate 2D:testingSubAgentVerified failed: score 0/100
-- [PAT-AUTO-0bd90c7f] Gate GATE2_IMPLEMENTATION_FIDELITY failed: score 68/100
+- Mock fidelity risk: vi.mock() stubs for Supabase return hardcoded success responses that may not ref...
+- No integration test layer exists to validate event-router against a real Supabase instance - mocks m...
 
 **Action Items**:
-- [ ] Monitor digest token budget utilization over next 5 SDs — current 83% (20,814/25...
-- [ ] Add regression test to verify CLAUDE.md stays under 15K chars after regeneration...
+- [ ] Create integration test suite for event-router that runs processEvent against a ...
+- [ ] Add vitest coverage threshold configuration for eva/event-bus/ modules to preven...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1785,7 +1785,7 @@ Constitutional vetting of proposals using AEGIS framework. Routes feedback throu
 
 ---
 
-*Generated from database: 2026-02-14*
+*Generated from database: 2026-02-16*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
