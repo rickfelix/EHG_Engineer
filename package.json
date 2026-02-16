@@ -323,6 +323,7 @@
     "@babel/traverse": "^7.28.4",
     "@doist/todoist-api-typescript": "^6.4.0",
     "@octokit/rest": "^22.0.1",
+    "@supabase/auth-js": "^2.95.3",
     "@supabase/supabase-js": "^2.95.3",
     "axios": "1.13.5",
     "bullmq": "^5.69.1",

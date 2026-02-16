@@ -17,6 +17,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
 // Mock parseJSON
 vi.mock('../../../../../lib/eva/utils/parse-json.js', () => ({
   parseJSON: vi.fn((str) => JSON.parse(str)),
+  extractUsage: vi.fn((response) => response?.usage || null),
 }));
 
 import { analyzeStage02, PERSONAS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-02-multi-persona.js';
