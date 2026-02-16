@@ -1,0 +1,270 @@
+# Stage Contracts — YAML Format
+# Typed consume/produce specifications per stage
+# Part of SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-K
+#
+# Each stage declares:
+#   consumes: upstream artifacts it requires (stage + fields)
+#   produces: artifacts it generates for downstream stages
+#
+# Field types: string, integer, number, object, array, boolean
+# Constraints: required, minLength, min, max, minItems
+
+stages:
+  1:
+    name: "Venture Intake"
+    consumes: []
+    produces:
+      description: { type: string, minLength: 50 }
+      problemStatement: { type: string, minLength: 20 }
+      valueProp: { type: string, minLength: 20 }
+      targetMarket: { type: string, minLength: 10 }
+      archetype: { type: string }
+
+  2:
+    name: "AI Scoring"
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          problemStatement: { type: string }
+          valueProp: { type: string }
+          targetMarket: { type: string }
+          archetype: { type: string }
+    produces:
+      compositeScore: { type: integer, min: 0, max: 100 }
+
+  3:
+    name: "Viability Kill Gate"
+    consumes:
+      - stage: 1
+        fields:
+          archetype: { type: string }
+          problemStatement: { type: string }
+      - stage: 2
+        fields:
+          compositeScore: { type: integer }
+    produces:
+      overallScore: { type: integer, min: 0, max: 100 }
+      decision: { type: string }
+
+  4:
+    name: "Competitive Intelligence"
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          valueProp: { type: string }
+          targetMarket: { type: string }
+      - stage: 3
+        fields:
+          competitorEntities: { type: array, required: false }
+    produces:
+      competitors: { type: array, minItems: 1 }
+
+  5:
+    name: "Unit Economics Kill Gate"
+    consumes:
+      - stage: 1
+        fields:
+          archetype: { type: string }
+          targetMarket: { type: string }
+    produces:
+      unitEconomics: { type: object }
+      decision: { type: string }
+
+  6:
+    name: "Risk Assessment"
+    consumes:
+      - stage: 5
+        fields:
+          unitEconomics: { type: object }
+    produces:
+      risks: { type: array, minItems: 1 }
+      aggregate_risk_score: { type: number }
+      normalized_risk_score: { type: number }
+
+  7:
+    name: "Pricing Strategy"
+    consumes:
+      - stage: 5
+        fields:
+          unitEconomics: { type: object }
+    produces:
+      pricing_model: { type: string }
+      tiers: { type: array, minItems: 1 }
+
+  8:
+    name: "Business Model Canvas"
+    consumes:
+      - stage: 7
+        fields:
+          pricing_model: { type: string }
+          tiers: { type: array, minItems: 1 }
+    produces:
+      customerSegments: { type: object }
+      valuePropositions: { type: object }
+      revenueStreams: { type: object }
+
+  9:
+    name: "Exit Strategy"
+    consumes:
+      - stage: 6
+        fields:
+          risks: { type: array }
+          aggregate_risk_score: { type: number }
+      - stage: 7
+        fields:
+          tiers: { type: array, minItems: 1 }
+      - stage: 8
+        fields:
+          customerSegments: { type: object }
+    produces:
+      exit_thesis: { type: string, minLength: 20 }
+      exit_paths: { type: array, minItems: 1 }
+      reality_gate: { type: object }
+
+  10:
+    name: "Brand Identity"
+    consumes: []
+    produces:
+      candidates: { type: array, minItems: 5 }
+      brandGenome: { type: object }
+
+  11:
+    name: "Marketing Strategy"
+    consumes: []
+    produces:
+      tiers: { type: array, minItems: 3 }
+      channels: { type: array, minItems: 8 }
+
+  12:
+    name: "Sales Framework"
+    consumes:
+      - stage: 10
+        fields:
+          candidates: { type: array, minItems: 5 }
+      - stage: 11
+        fields:
+          tiers: { type: array, minItems: 3 }
+          channels: { type: array, minItems: 8 }
+    produces:
+      sales_model: { type: string }
+      deal_stages: { type: array, minItems: 3 }
+      funnel_stages: { type: array, minItems: 4 }
+      reality_gate: { type: object }
+
+  13:
+    name: "Product Roadmap"
+    consumes: []
+    produces:
+      vision_statement: { type: string, minLength: 20 }
+      milestones: { type: array, minItems: 3 }
+      decision: { type: string }
+
+  14:
+    name: "Technical Architecture"
+    consumes: []
+    produces:
+      architecture_summary: { type: string, minLength: 20 }
+      layers: { type: object }
+      dataEntities: { type: array, minItems: 1 }
+
+  15:
+    name: "Risk Matrix"
+    consumes: []
+    produces:
+      risks: { type: array, minItems: 1 }
+      total_risks: { type: number }
+
+  16:
+    name: "Financial Projections"
+    consumes:
+      - stage: 13
+        fields:
+          milestones: { type: array, minItems: 3 }
+          decision: { type: string }
+      - stage: 14
+        fields:
+          layers: { type: object }
+      - stage: 15
+        fields:
+          risks: { type: array, minItems: 1 }
+    produces:
+      runway_months: { type: number }
+      promotion_gate: { type: object }
+
+  17:
+    name: "Launch Readiness"
+    consumes: []
+    produces:
+      checklist: { type: object }
+      readiness_pct: { type: number }
+      buildReadiness: { type: object }
+
+  18:
+    name: "Sprint Planning"
+    consumes: []
+    produces:
+      sprint_name: { type: string }
+      items: { type: array, minItems: 1 }
+      total_story_points: { type: number }
+
+  19:
+    name: "Development Execution"
+    consumes:
+      - stage: 18
+        fields:
+          items: { type: array, minItems: 1 }
+    produces:
+      tasks: { type: array, minItems: 1 }
+
+  20:
+    name: "QA & Testing"
+    consumes:
+      - stage: 19
+        fields:
+          tasks: { type: array }
+    produces:
+      testResults: { type: object }
+      coverage: { type: number }
+
+  21:
+    name: "Launch Prep"
+    consumes: []
+    produces:
+      deployment_plan: { type: string, minLength: 20 }
+      monitoring_setup: { type: string }
+
+  22:
+    name: "Go-Live"
+    consumes:
+      - stage: 21
+        fields:
+          deployment_plan: { type: string }
+    produces:
+      launch_date: { type: string }
+      launch_status: { type: string }
+
+  23:
+    name: "Post-Launch Ops"
+    consumes:
+      - stage: 22
+        fields:
+          launch_status: { type: string }
+    produces:
+      incident_response_plan: { type: string }
+      rollback_triggers: { type: array }
+
+  24:
+    name: "Growth Operations"
+    consumes: []
+    produces:
+      growth_metrics: { type: object }
+      optimization_plan: { type: string }
+
+  25:
+    name: "Portfolio Review"
+    consumes: []
+    produces:
+      venture_decision: { type: string }
+      portfolio_score: { type: number }
