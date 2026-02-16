@@ -1,58 +1,12 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-## ⚠️ CRITICAL: Issue Resolution Protocol
-
-**When you encounter ANY issue, error, or unexpected behavior:**
-
-1. **DO NOT work around it** - Workarounds hide problems and create technical debt
-2. **DO NOT ignore it** - Every issue is a signal that something needs attention
-3. **INVOKE the RCA Sub-Agent** - Use `subagent_type="rca-agent"` via the Task tool
-
-### Sub-Agent Prompt Quality Standard (Five-Point Brief)
-
-**CRITICAL**: The prompt you write when spawning ANY sub-agent is the highest-impact point in the entire agent chain. Everything downstream — team composition, investigation direction, finding quality — inherits from it.
-
-Every sub-agent invocation MUST include these five elements:
-
-| Element | What to Include | Example |
-|---------|----------------|---------|
-| **Symptom** | Observable behavior (what IS happening) | "The /users endpoint returns 504 after 30s" |
-| **Location** | Files, endpoints, DB tables involved | "routes/users.js line 45, lib/queries/user-lookup.js" |
-| **Frequency** | How often, when it started, pattern | "Started 2h ago, every 3rd request fails" |
-| **Prior attempts** | What was already tried (so agent doesn't repeat) | "Server restart didn't help, DNS is fine" |
-| **Desired outcome** | What success looks like | "Identify root cause, propose fix with <30min implementation" |
-
-**Anti-patterns** (NEVER do these):
-- ❌ "Analyze why [issue] is occurring" — too vague, agent has nothing to anchor on
-- ❌ Dumping entire conversation context — unrelated tokens waste investigation capacity
-- ❌ Omitting prior attempts — agent repeats your failed approaches
-
-**Example invocation (GOOD - RCA agent):**
-```
-Task tool with subagent_type="rca-agent":
-"Symptom: SD cannot be marked completed. DB trigger rejects with 'Progress: 20% (need 100%)'.
-Location: get_progress_breakdown() function, trigger on strategic_directives_v2, UUID: 7d2aa25e
-Frequency: 6th child of orchestrator. First 5 siblings completed. Only this one stuck.
-Prior attempts: Direct status update blocked. Checked sd_phase_handoffs — empty for all siblings.
-Desired outcome: Identify what mechanism marked sibling phases complete, apply same to this SD."
-```
-
-**Example invocation (BAD - too vague):**
-```
-Task tool with subagent_type="rca-agent":
-"Analyze why the SD completion is failing. Perform 5-whys analysis and identify the root cause."
-```
-
-**Why this matters:**
-- Root cause fixes prevent recurrence
-- Issues captured in `issue_patterns` table benefit future sessions
-- Systematic analysis produces better solutions than quick fixes
-
-**The only acceptable response to an issue is understanding WHY it happened.**
-
-**Generated**: 2026-02-16 8:27:51 AM
+**Generated**: 2026-02-16 8:39:05 AM
 **Protocol**: LEO 4.3.3
-**Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
+**Purpose**: PLAN agent operations, PRD creation, validation gates
+
+> For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
+> For migration execution and phase transitions, see CLAUDE_CORE.md.
+> For database schema reference, see `docs/reference/database-agent-patterns.md`.
 
 ---
 
@@ -87,113 +41,6 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
-
-**CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
-
-The DATABASE sub-agent handles common blockers automatically:
-- **Missing SUPABASE_DB_PASSWORD**: Uses `SUPABASE_POOLER_URL` instead (no password required)
-- **Connection issues**: Uses proven connection patterns
-- **Execution failures**: Tries alternative scripts before giving up
-
-**Never give up on migration execution** - the sub-agent has multiple fallback methods.
-
-**Invocation**:
-```
-Task tool with subagent_type="database-agent":
-"Execute the migration file: database/migrations/YYYYMMDD_name.sql"
-```
-
-## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
-
-**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
-
-### ⛔ NEVER DO THIS:
-- Using `database-agent` to directly insert into `sd_phase_handoffs`
-- Creating handoff records without running validation scripts
-- Skipping preflight knowledge retrieval
-
-### ✅ ALWAYS DO THIS:
-
-#### Pre-flight Batch Validation (RECOMMENDED)
-```bash
-# SD-LEO-STREAMS-001: Find ALL issues at once (reduces handoff iterations 60-70%)
-node scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001
-```
-
-#### LEAD → PLAN Transition
-```bash
-# Step 1: MANDATORY - Run preflight (loads context from database)
-node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
-
-# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)
-node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → EXEC Transition
-```bash
-# Step 1: MANDATORY - Run preflight
-node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
-
-# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)
-node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
-```
-
-#### EXEC → PLAN Transition (Verification)
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → LEAD Transition (Final Approval)
-```bash
-node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
-```
-
-### Emergency Bypass (SD-LEARN-010)
-For emergencies ONLY. Bypasses require audit logging and are rate-limited.
-
-```bash
-# Emergency bypass with mandatory justification (min 20 chars)
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \
-  --bypass-validation \
-  --bypass-reason "Production outage requires immediate fix - JIRA-12345"
-```
-
-**Rate Limits:**
-- 3 bypasses per SD maximum
-- 10 bypasses per day globally
-- All bypasses logged to `audit_log` table with severity=warning
-
-### What These Scripts Enforce
-| Script | Validations |
-|--------|-------------|
-| `phase-preflight.js` | Loads context, patterns, and lessons from database |
-| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
-| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
-| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |
-| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |
-| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
-
-### Error Codes (SD-LEARN-010)
-| Code | Meaning | Remediation |
-|------|---------|-------------|
-| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |
-| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |
-| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |
-
-### Compliance Marker
-Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
-
-### Check Compliance
-```bash
-npm run handoff:compliance        # Check all recent handoffs
-npm run handoff:compliance SD-ID  # Check specific SD
-```
-
-**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
 ## 🎯 Multi-Perspective Planning
 
@@ -653,22 +500,6 @@ This change [describe]. Options:
 Which do you prefer?"
 ```
 
-## Database Schema Documentation
-
-### Database Schema Documentation
-
-Auto-generated schema docs provide quick reference without database queries:
-
-**Paths**:
-- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
-- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
-
-**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
-
-**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
-Use `add-prd-to-database.js` to create PRDs with schema review prompts.
-
-
 ## PLAN Pre-EXEC Checklist
 
 ## PLAN Agent Pre-EXEC Checklist (MANDATORY)
@@ -762,35 +593,6 @@ From retrospectives:
 > "Mock API configuration not planned upfront"
 
 **Time saved**: 2-4 hours per SD by catching infrastructure issues before implementation.
-
-## Testing Tier Strategy
-
-## Testing Requirements - Clear Thresholds
-
-**Evidence from Retrospectives**: Testing confusion appeared in SD-UAT-002, SD-UAT-020, SD-008.
-
-### Three-Tier Testing Strategy
-
-#### Tier 1: Smoke Tests (MANDATORY) ✅
-- **Requirement**: 3-5 tests, <60 seconds execution
-- **Approval**: **SUFFICIENT for PLAN→LEAD approval**
-
-#### Tier 2: Comprehensive E2E (RECOMMENDED) 📋
-- **Requirement**: 30-50 tests covering user flows
-- **Approval**: Nice to have, **NOT blocking for LEAD approval**
-- **Timing**: Can be refined post-deployment
-
-#### Tier 3: Manual Testing (SITUATIONAL) 🔍
-- **UI changes**: Single smoke test recommended (+5 min)
-- **Logic changes <5 lines**: Optional
-- **Logic changes >10 lines**: Required
-
-### Anti-Pattern to Avoid ❌
-
-**DO NOT** create 100+ manual test checklists unless specifically required.
-
-**From SD-UAT-020**:
-> "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
 ## Research Lookup Before PRD Creation
 
@@ -1271,118 +1073,6 @@ node scripts/validate-child-sd-completeness.js --all-children
 | ... | ... |
 ```
 
-## Database Schema Overview
-
-### Core Tables
-- `leo_protocols` - Protocol versions and content
-- `leo_protocol_sections` - Modular protocol sections
-- `leo_agents` - Agent definitions and percentages
-- `leo_handoff_templates` - Standardized handoffs
-- `leo_sub_agents` - Sub-agent definitions
-- `leo_sub_agent_triggers` - Activation rules
-- `leo_validation_rules` - Protocol validation
-
-### Key Queries
-
-**Get Current Protocol**:
-```sql
-SELECT * FROM leo_protocols WHERE status = 'active';
-```
-
-**Check Sub-Agent Triggers**:
-```sql
-SELECT sa.*, t.*
-FROM leo_sub_agents sa
-JOIN leo_sub_agent_triggers t ON sa.id = t.sub_agent_id
-WHERE t.trigger_phrase ILIKE '%keyword%';
-```
-
-**Get Handoff Template**:
-```sql
-SELECT * FROM leo_handoff_templates
-WHERE from_agent = 'EXEC' AND to_agent = 'PLAN';
-```
-
-## API Endpoints (Database-Backed)
-
-- `GET /api/leo/current` - Current active protocol
-- `GET /api/leo/agents` - All agents with percentages
-- `GET /api/leo/sub-agents` - Active sub-agents with triggers
-- `GET /api/leo/handoffs/:from/:to` - Handoff template
-- `POST /api/leo/validate` - Validate against rules
-
-## Key Scripts (Database-Aware)
-
-- `get-latest-leo-protocol-from-db.js` - Get version from database
-- `generate-claude-md-from-db.js` - Generate this file
-- `migrate-leo-protocols-to-database.js` - Migration tool
-- `activate-sub-agents-from-db.js` - Check database triggers
-
-## Compliance Tools
-
-All tools now query database instead of files:
-
-### 1. Version Check
-```bash
-node scripts/get-latest-leo-protocol-from-db.js
-```
-
-### 2. Update CLAUDE.md
-```bash
-node scripts/generate-claude-md-from-db.js
-```
-
-### 3. Validate Handoff
-```bash
-node scripts/leo-checklist-db.js [agent-name]
-```
-
-## 🔍 PLAN Supervisor Verification
-
-### Overview
-PLAN agent now includes supervisor capabilities for final "done done" verification:
-- Queries ALL sub-agents for their verification results
-- Ensures all requirements are truly met
-- Resolves conflicts between sub-agent reports
-- Provides confidence scoring and clear pass/fail verdict
-
-### Activation
-Trigger PLAN supervisor verification via:
-- **Command**: `/leo-verify [what to check]`
-- **Script**: `node scripts/plan-supervisor-verification.js --prd PRD-ID`
-- **Automatic**: When testing phase completes
-
-### Verification Process
-1. **Read-Only Access**: Queries existing sub-agent results (no re-execution)
-2. **Summary-First**: Prevents context explosion with tiered reporting
-3. **Conflict Resolution**: Priority-based rules (Security > Database > Testing)
-4. **Circuit Breakers**: Graceful handling of sub-agent failures
-5. **Maximum 3 Iterations**: Prevents infinite verification loops
-
-### Verdicts
-- **PASS**: All requirements met, high confidence (≥85%)
-- **FAIL**: Critical issues or unmet requirements
-- **CONDITIONAL_PASS**: Minor issues, needs LEAD review
-- **ESCALATE**: Cannot reach consensus, needs LEAD intervention
-
-## Dashboard Integration
-
-Dashboard automatically connects to database:
-- Real-time protocol updates via Supabase subscriptions
-- Version detection from `leo_protocols` table
-- Sub-agent status from `leo_sub_agents` table
-- PLAN supervisor verification status
-- No file scanning needed
-
-## Important Notes
-
-1. **Database is Source of Truth** - Files are deprecated
-2. **Real-time Updates** - Changes reflect immediately
-3. **No Version Conflicts** - Single active version enforced
-4. **Audit Trail** - All changes tracked in database
-5. **WebSocket Updates** - Dashboard stays synchronized
-6. **PLAN Supervisor** - Final verification before LEAD approval
-
 ## Testing Tier Strategy (Updated)
 
 
@@ -1420,32 +1110,6 @@ Dashboard automatically connects to database:
 ### ⚠️ Architecture Note
 **SD-ARCH-EHG-007**: A11y and visual tests moved to EHG unified frontend.
 EHG_Engineer focuses on backend API testing only.
-
-## Database Schema Documentation Access
-
-## Schema Documentation Access
-
-### Quick Reference
-- **Full schema**: `database/schema/` directory
-- **Views**: `v_sd_*` prefix for SD views
-- **RLS**: `database/schema/010_rls_policies.sql`
-
-### Key Tables
-| Table | Purpose |
-|-------|---------|
-| strategic_directives | SDs and their metadata |
-| prds | PRD content and status |
-| retrospectives | Completion retrospectives |
-| deferred_work | Deferred items |
-
-### Querying Schema
-```sql
--- List tables
-SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
-
--- Table columns
-SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'strategic_directives';
-```
 
 ## Branch Should Already Exist (LEO v4.4.1)
 
@@ -1966,51 +1630,6 @@ These are kept for reference but should NEVER be used as templates.
 1. Run `node scripts/add-prd-to-database.js`
 2. Follow the modular PRD creation system in `scripts/prd/`
 3. PRD is properly validated against quality rubrics
-
-## Visual Documentation Best Practices
-
-When creating PRDs and technical specifications, consider adding:
-
-### Architecture Diagrams (Mermaid)
-```mermaid
-graph TD
-    A[User Request] --> B[Validation Layer]
-    B --> C{Valid?}
-    C -->|Yes| D[Business Logic]
-    C -->|No| E[Error Response]
-    D --> F[Database]
-    F --> G[Success Response]
-```
-
-### State Flow Diagrams
-```mermaid
-stateDiagram-v2
-    [*] --> Draft
-    Draft --> Review
-    Review --> Approved
-    Review --> Rejected
-    Rejected --> Draft
-    Approved --> [*]
-```
-
-### Sequence Diagrams (Complex Interactions)
-```mermaid
-sequenceDiagram
-    User->>+Frontend: Submit Form
-    Frontend->>+API: POST /api/submit
-    API->>+Database: INSERT data
-    Database-->>-API: Success
-    API->>+Queue: Enqueue job
-    Queue-->>-API: Acknowledged
-    API-->>-Frontend: 202 Accepted
-    Frontend-->>-User: Show success
-```
-
-**When to Use**:
-- Complex workflows with multiple decision points → Flowchart
-- Multi-component interactions → Sequence diagram
-- State transitions → State diagram
-- System architecture → Component diagram
 
 ## Quality Assessment Integration in Handoffs
 
