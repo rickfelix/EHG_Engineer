@@ -3,7 +3,10 @@
  * Generates content for each CLAUDE file (Router, Core, Lead, Plan, Exec)
  *
  * LEAN ROUTER (2026-02-16): Router trimmed from ~303 to ~100 lines.
- * Sub-agent keyword table removed — enforced by PreToolUse hook instead.
+ * LEAN CORE (2026-02-16): Core trimmed from ~1791 to ~900 lines.
+ *   - Removed: duplicate RCA mandate, keyword dumps, implementation details,
+ *     common-sense guidance (parallel exec, communication style, Strunkian).
+ *   - Sub-agent keywords removed — routing handled by PreToolUse hook.
  * See scripts/hooks/pre-tool-enforce.cjs
  */
 
@@ -11,7 +14,7 @@ import {
   formatSection,
   getMetadata,
   generateAgentSection,
-  generateSubAgentSection,
+  generateSubAgentSectionCompact,
   generateHandoffTemplates,
   generateValidationRules,
   generateSchemaConstraintsSection,
@@ -134,7 +137,11 @@ Escalate to full files (e.g. \`CLAUDE_CORE.md\`) only when digest is insufficien
 }
 
 /**
- * Generate CLAUDE_CORE.md file
+ * Generate CLAUDE_CORE.md file (lean version)
+ * LEAN CORE (2026-02-16): ~42% token reduction.
+ * Section exclusions managed in section-file-mapping.json (source of truth).
+ * Sub-agent routing handled by PreToolUse hook (scripts/hooks/pre-tool-enforce.cjs).
+ *
  * @param {Object} data - All data from database
  * @param {Object} fileMapping - Section to file mapping
  * @returns {string} Generated markdown content
@@ -147,22 +154,24 @@ function generateCore(data, fileMapping) {
   const coreSections = getSectionsByMapping(sections, 'CLAUDE_CORE.md', fileMapping);
   const coreContent = coreSections.map(s => formatSection(s)).join('\n\n');
 
-  const subAgentSection = generateSubAgentSection(subAgents);
+  // Compact sub-agent table (no keywords — hook handles routing)
+  const subAgentSection = generateSubAgentSectionCompact(subAgents);
   const hotPatternsSection = generateHotPatternsSection(hotPatterns);
   const recentLessonsSection = generateRecentLessonsSection(recentRetrospectives);
   const gateHealthSection = generateGateHealthSection(gateHealth);
   const proposalsSection = generateProposalsSection(pendingProposals);
 
-  // RCA Mandate appears at top and bottom of all files
-  const rcaMandate = getRCAMandate(sections);
+  // RCA Mandate is in the router — not duplicated here (LEAN CORE)
 
   return `# CLAUDE_CORE.md - LEO Protocol Core Context
 
-${rcaMandate}
-
 **Generated**: ${today} ${time}
 **Protocol**: LEO ${protocol.version}
-**Purpose**: Essential workflow context for all sessions (15-20k chars)
+**Purpose**: Essential workflow context for all sessions
+
+> Sub-agent routing enforced by PreToolUse hook. See \`scripts/hooks/pre-tool-enforce.cjs\`.
+> For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
+> For Strunkian writing standards, see \`docs/reference/strunkian-writing-standards.md\`.
 
 ---
 
