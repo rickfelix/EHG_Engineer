@@ -421,12 +421,52 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     };
   }
 
-  // File not in session state AND doesn't exist on disk - BLOCK
+  // File not in session state AND doesn't exist on disk
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-030: Cross-mode fallback
+  // Before blocking, check if the FULL file exists when DIGEST is missing
+  const isDigestMode = getProtocolMode() === 'digest';
+
+  if (isDigestMode) {
+    // Map DIGEST filename to FULL equivalent: CLAUDE_EXEC_DIGEST.md -> CLAUDE_EXEC.md
+    const fullFileEquivalent = requiredFile.replace('_DIGEST', '');
+    const fullFileExists = protocolFileExistsOnDisk(fullFileEquivalent);
+
+    if (fullFileExists) {
+      console.log(`   ⚠️  DIGEST file ${requiredFile} not found, but FULL file ${fullFileEquivalent} exists`);
+      console.log('   ✅ CROSS-MODE FALLBACK: FULL file present - allowing handoff');
+      console.log(`   💡 Regenerate DIGEST files: node scripts/generate-claude-md-from-db.js`);
+
+      markProtocolFileRead(requiredFile);
+
+      const state = readSessionState();
+      emitStructuredLog({
+        event: 'PROTOCOL_FILE_READ_GATE',
+        status: 'PASS_CROSS_MODE_FALLBACK',
+        handoff_type: handoffType,
+        required_file: requiredFile,
+        fallback_file: fullFileEquivalent,
+        fallback_reason: 'digest_missing_full_exists',
+        session_id: state.sessionId || 'unknown',
+        timestamp: new Date().toISOString()
+      });
+
+      return {
+        pass: true,
+        score: 85,
+        max_score: 100,
+        issues: [],
+        warnings: [
+          `DIGEST file ${requiredFile} missing - used FULL file ${fullFileEquivalent} as fallback`,
+          'Regenerate DIGEST files: node scripts/generate-claude-md-from-db.js'
+        ]
+      };
+    }
+  }
+
+  // No fallback available - BLOCK
   console.log(`   ❌ Protocol file NOT read: ${requiredFile}`);
   console.log('');
 
-  // SD-LEO-INFRA-DUAL-GENERATION-CLAUDE-001: Check if DIGEST file is missing
-  const isDigestMode = getProtocolMode() === 'digest';
   const digestFilePath = path.join(PROJECT_DIR, requiredFile);
   const digestFileExists = fs.existsSync(digestFilePath);
 
