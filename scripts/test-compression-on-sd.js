@@ -229,7 +229,7 @@ async function testCompressionOnSD(sdId, currentPhase = 'EXEC') {
 }
 
 // CLI Execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const sdId = process.argv[2];
   const phase = process.argv[3] || 'EXEC';
 

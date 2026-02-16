@@ -826,7 +826,7 @@ class LEOStatusLine {
 }
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const args = process.argv.slice(2);
   const statusLine = new LEOStatusLine();
   

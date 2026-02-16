@@ -251,6 +251,6 @@ async function createVentureIdeationMVP() {
 export { createVentureIdeationMVP };
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   createVentureIdeationMVP();
 }

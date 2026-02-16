@@ -173,7 +173,7 @@ class CircuitBreaker {
 export default CircuitBreaker;
 
 // CLI for testing
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const command = process.argv[2];
   const breaker = new CircuitBreaker();
 

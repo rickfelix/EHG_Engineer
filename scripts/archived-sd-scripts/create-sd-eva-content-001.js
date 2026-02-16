@@ -346,6 +346,6 @@ PASS CRITERIA: All 9 success criteria met, E2E test passes, performance targets 
 export { createEVAContentSD };
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   createEVAContentSD();
 }
