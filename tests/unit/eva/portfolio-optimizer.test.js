@@ -4,8 +4,14 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../../../lib/eva/dependency-manager.js', () => ({
+  getDependencyGraph: vi.fn().mockResolvedValue({ dependsOn: [], providesTo: [] }),
+}));
+
 import { optimize, MODULE_VERSION } from '../../../lib/eva/portfolio-optimizer.js';
 import { ServiceError } from '../../../lib/eva/shared-services.js';
+import { getDependencyGraph } from '../../../lib/eva/dependency-manager.js';
 
 // ── Mock Supabase builder ──────────────────────────────────
 
@@ -79,6 +85,7 @@ describe('optimize', () => {
 
     expect(result.ventureCount).toBe(0);
     expect(result.rankings).toEqual([]);
+    expect(result.resolutions).toEqual([]);
     expect(result.contention.hasContention).toBe(false);
     expect(result.balance.rebalanced).toBe(false);
     expect(result.applied).toBe(false);
@@ -121,6 +128,12 @@ describe('optimize', () => {
     expect(engConflict.ventureIds).toContain('v1');
     expect(engConflict.ventureIds).toContain('v2');
     expect(engConflict.totalDemand).toBe(8);
+    expect(engConflict.severity).toBeDefined();
+    expect(engConflict.capacity).toBe(1.0);
+
+    // Should produce resolutions for the contention
+    expect(result.resolutions.length).toBeGreaterThan(0);
+    expect(result.resolutions[0].strategy).toBeDefined();
   });
 
   it('reports no contention when resources are unique', async () => {
@@ -135,9 +148,8 @@ describe('optimize', () => {
 
     const result = await optimize(db, ['v1', 'v2']);
 
-    // total_allocation is shared, engineering and design are not
-    const nonAllocationConflicts = result.contention.conflicts.filter(c => c.resourceType !== 'total_allocation');
-    expect(nonAllocationConflicts).toHaveLength(0);
+    // engineering and design are unique per venture, total_allocation is skipped
+    expect(result.contention.conflicts).toHaveLength(0);
   });
 
   it('enforces portfolio balance cap', async () => {
@@ -544,5 +556,223 @@ describe('time-in-queue tiebreaker', () => {
     // Scores are identical (both baseline 50) so diff is 0 which is NOT > 0
     // tiebreaker applies → older first
     expect(result.rankings[0].ventureId).toBe('v-old');
+  });
+
+  it('classifies contention severity based on demand-to-capacity ratio', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { engineering: 0.7 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { engineering: 0.6 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // totalDemand = 1.3, capacity = 1.0, ratio = 1.3 → medium severity
+    const result = await optimize(db, ['v1', 'v2']);
+
+    const engConflict = result.contention.conflicts.find(c => c.resourceType === 'engineering');
+    expect(engConflict.severity).toBe('medium');
+  });
+
+  it('respects custom capacities for severity scoring', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { engineering: 3 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { engineering: 2 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // totalDemand = 5, capacity = 10, ratio = 0.5 → below 1.0 threshold → low
+    const result = await optimize(db, ['v1', 'v2'], { capacities: { engineering: 10 } });
+
+    const engConflict = result.contention.conflicts.find(c => c.resourceType === 'engineering');
+    expect(engConflict.severity).toBe('low');
+    expect(engConflict.capacity).toBe(10);
+  });
+
+  it('selects escalate strategy for critical severity', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { scheduling: { deadline_days: 5 }, financials: { revenue_growth: 30 }, resources: { engineering: 2.0 } } }),
+      createVenture({ id: 'v2', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 5 }, resources: { engineering: 1.5 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // totalDemand = 3.5, capacity = 1.0, ratio = 3.5 → critical
+    const result = await optimize(db, ['v1', 'v2']);
+
+    const engResolution = result.resolutions.find(r => r.resourceType === 'engineering');
+    expect(engResolution.severity).toBe('critical');
+    expect(engResolution.strategy).toBe('escalate');
+  });
+
+  it('emits contention_detected event when contention found', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { engineering: 3 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { engineering: 2 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    await optimize(db, ['v1', 'v2']);
+
+    // Should emit: optimization_started, contention_detected, optimization_completed
+    const eventCalls = db.from.mock.calls.filter(c => c[0] === 'eva_event_log');
+    expect(eventCalls.length).toBe(3);
+  });
+
+  it('skips total_allocation from contention detection', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { total_allocation: 100, engineering: 5 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { total_allocation: 200, design: 3 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    // total_allocation should be excluded, engineering and design are unique
+    expect(result.contention.hasContention).toBe(false);
+  });
+});
+
+// ── Provider Boost & Deferral Protection ──────────────────────
+
+describe('dependency-aware optimization', () => {
+  it('boosts priority score for provider ventures', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'Provider', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 10 }, resources: { total_allocation: 50 } } }),
+      createVenture({ id: 'v2', name: 'Consumer', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 10 }, resources: { total_allocation: 50 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // v1 provides to 2 dependents → +10 boost
+    getDependencyGraph
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v2', 'v3'] })  // v1
+      .mockResolvedValueOnce({ dependsOn: ['v1'], providesTo: [] });       // v2
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    const provider = result.rankings.find(r => r.ventureId === 'v1');
+    const consumer = result.rankings.find(r => r.ventureId === 'v2');
+
+    expect(provider.providerBoost).toBe(10); // 2 * 5
+    expect(consumer.providerBoost).toBe(0);
+    expect(provider.priorityScore).toBeGreaterThan(consumer.priorityScore);
+  });
+
+  it('caps provider boost at 15 points', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'MegaProvider', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 10 }, resources: { total_allocation: 100 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // v1 provides to 5 dependents → 5*5=25 but capped at 15
+    getDependencyGraph.mockResolvedValueOnce({
+      dependsOn: [],
+      providesTo: ['v2', 'v3', 'v4', 'v5', 'v6'],
+    });
+
+    const result = await optimize(db, ['v1']);
+
+    expect(result.rankings[0].providerBoost).toBe(15);
+  });
+
+  it('applies zero boost when venture has no dependents', async () => {
+    const ventures = [createVenture({ id: 'v1', metadata: { resources: { total_allocation: 50 } } })];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // Default mock returns empty providesTo
+    const result = await optimize(db, ['v1']);
+
+    expect(result.rankings[0].providerBoost).toBe(0);
+  });
+
+  it('protects provider ventures from deferral in contention resolution', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'Provider', metadata: { scheduling: { deadline_days: 90 }, financials: { revenue_growth: 5 }, resources: { engineering: 3, total_allocation: 60 } } }),
+      createVenture({ id: 'v2', name: 'Independent', metadata: { scheduling: { deadline_days: 90 }, financials: { revenue_growth: 5 }, resources: { engineering: 2, total_allocation: 40 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // v1 is a provider, v2 is not
+    getDependencyGraph
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v3'] })  // v1 provider
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: [] });      // v2 independent
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    // Should have contention on engineering
+    expect(result.contention.hasContention).toBe(true);
+
+    // Resolution should target v2 (independent), not v1 (provider)
+    const engResolution = result.resolutions.find(r => r.resourceType === 'engineering');
+    expect(engResolution).toBeDefined();
+    if (engResolution.details.targetVentureId) {
+      expect(engResolution.details.targetVentureId).toBe('v2');
+    }
+  });
+
+  it('escalates when all contending ventures are providers', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'ProvA', metadata: { scheduling: { deadline_days: 30 }, financials: { revenue_growth: 10 }, resources: { engineering: 1.0, total_allocation: 50 } } }),
+      createVenture({ id: 'v2', name: 'ProvB', metadata: { scheduling: { deadline_days: 30 }, financials: { revenue_growth: 10 }, resources: { engineering: 0.5, total_allocation: 50 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // Both ventures are providers
+    getDependencyGraph
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v3'] })  // v1
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v4'] }); // v2
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    expect(result.contention.hasContention).toBe(true);
+
+    const engResolution = result.resolutions.find(r => r.resourceType === 'engineering');
+    expect(engResolution).toBeDefined();
+    // medium severity (ratio 1.5) would normally suggest_realloc, but all are providers → escalate
+    expect(engResolution.strategy).toBe('escalate');
+    expect(engResolution.details.escalatedReason).toBe('all_ventures_are_providers');
+  });
+
+  it('handles getDependencyGraph failures gracefully', async () => {
+    const ventures = [createVenture({ id: 'v1', metadata: { resources: { total_allocation: 50 } } })];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // Promise.allSettled handles rejections — venture should get 0 boost
+    getDependencyGraph.mockRejectedValueOnce(new Error('DB timeout'));
+
+    const result = await optimize(db, ['v1']);
+
+    expect(result.rankings[0].providerBoost).toBe(0);
+    expect(result.rankings).toHaveLength(1);
   });
 });
