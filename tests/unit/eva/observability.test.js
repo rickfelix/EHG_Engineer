@@ -45,9 +45,11 @@ describe('OrchestratorTracer', () => {
       expect(tracer.parentTraceId).toBeNull();
     });
 
-    it('should default to console logger', () => {
+    it('should default to structured logger', () => {
       const t = new OrchestratorTracer();
-      expect(t.logger).toBe(console);
+      expect(t.logger).toBeDefined();
+      expect(typeof t.logger.warn).toBe('function');
+      expect(typeof t.logger.info).toBe('function');
     });
 
     it('should initialize empty spans and events', () => {
@@ -384,7 +386,7 @@ describe('createOrchestratorTracer', () => {
 
 describe('exports', () => {
   it('should export MODULE_VERSION', () => {
-    expect(MODULE_VERSION).toBe('1.0.0');
+    expect(MODULE_VERSION).toBe('1.1.0');
   });
 
   it('should export _internal with DEFAULT_RETENTION_DAYS', () => {
