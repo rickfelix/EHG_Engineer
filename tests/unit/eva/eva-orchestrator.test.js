@@ -16,6 +16,24 @@ vi.mock('../../../lib/eva/stage-templates/index.js', () => ({
   getTemplate: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock('../../../lib/eva/dependency-manager.js', () => ({
+  checkDependencies: vi.fn().mockResolvedValue([]),
+  getDependencyGraph: vi.fn().mockResolvedValue({ dependsOn: [], providesTo: [] }),
+  wouldCreateCycle: vi.fn().mockResolvedValue(false),
+  addDependency: vi.fn(),
+  resolveDependency: vi.fn(),
+  removeDependency: vi.fn(),
+  MODULE_VERSION: '1.0.0',
+}));
+
+vi.mock('../../../lib/eva/shared-services.js', async () => {
+  const actual = await vi.importActual('../../../lib/eva/shared-services.js');
+  return {
+    ...actual,
+    emit: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 vi.mock('../../../lib/eva/devils-advocate.js', () => ({
   isDevilsAdvocateGate: vi.fn().mockReturnValue({ isGate: false, gateType: null }),
   getDevilsAdvocateReview: vi.fn(),
@@ -25,6 +43,8 @@ vi.mock('../../../lib/eva/devils-advocate.js', () => ({
 import { processStage, run, _internal } from '../../../lib/eva/eva-orchestrator.js';
 import { isDevilsAdvocateGate, getDevilsAdvocateReview } from '../../../lib/eva/devils-advocate.js';
 import { getTemplate } from '../../../lib/eva/stage-templates/index.js';
+import { checkDependencies } from '../../../lib/eva/dependency-manager.js';
+import { emit } from '../../../lib/eva/shared-services.js';
 
 const { buildResult, mergeArtifactOutputs, STATUS, FILTER_ACTION } = _internal;
 
@@ -431,6 +451,118 @@ describe('EvaOrchestrator', () => {
 
       // Restore default mock
       isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+    });
+  });
+
+  describe('processStage - dependency checking', () => {
+    it('should return BLOCKED when hard dependencies exist', async () => {
+      const mockSupabase = createMockSupabase();
+      checkDependencies.mockResolvedValueOnce([
+        { id: 'dep-1', providerId: 'v-provider', requiredStage: 3, type: 'hard', blocking: true },
+      ]);
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      expect(result.status).toBe(STATUS.BLOCKED);
+      expect(result.errors[0].code).toBe('DEPENDENCY_BLOCKED');
+      expect(result.errors[0].message).toContain('v-provider');
+    });
+
+    it('should emit dependency_blocked event for hard blocks', async () => {
+      const mockSupabase = createMockSupabase();
+      checkDependencies.mockResolvedValueOnce([
+        { id: 'dep-1', providerId: 'v-provider', requiredStage: 3, type: 'hard', blocking: true },
+      ]);
+
+      await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      expect(emit).toHaveBeenCalledWith(
+        mockSupabase,
+        'dependency_blocked',
+        expect.objectContaining({ ventureId: 'v-1', hardBlocks: expect.any(Array) }),
+        'eva-orchestrator',
+      );
+    });
+
+    it('should proceed with COMPLETED when only soft dependencies exist', async () => {
+      const mockSupabase = createMockSupabase();
+      checkDependencies.mockResolvedValueOnce([
+        { id: 'dep-2', providerId: 'v-other', requiredStage: 2, type: 'soft', blocking: false },
+      ]);
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      expect(result.status).toBe(STATUS.COMPLETED);
+    });
+
+    it('should emit dependency_check_passed on success', async () => {
+      const mockSupabase = createMockSupabase();
+      // Default mock returns [] (no dependencies)
+
+      await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      expect(emit).toHaveBeenCalledWith(
+        mockSupabase,
+        'dependency_check_passed',
+        expect.objectContaining({ ventureId: 'v-1' }),
+        'eva-orchestrator',
+      );
+    });
+
+    it('should return FAILED when checkDependencies throws', async () => {
+      const mockSupabase = createMockSupabase();
+      checkDependencies.mockRejectedValueOnce(new Error('DB connection lost'));
+
+      const result = await processStage(
+        { ventureId: 'v-1', options: { dryRun: true, stageTemplate: { analysisSteps: [] } } },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      expect(result.status).toBe(STATUS.FAILED);
+      expect(result.errors[0].code).toBe('DEPENDENCY_CHECK_FAILED');
+      expect(result.errors[0].message).toContain('DB connection lost');
     });
   });
 

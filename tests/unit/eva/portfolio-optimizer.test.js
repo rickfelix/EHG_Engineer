@@ -4,8 +4,14 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../../../lib/eva/dependency-manager.js', () => ({
+  getDependencyGraph: vi.fn().mockResolvedValue({ dependsOn: [], providesTo: [] }),
+}));
+
 import { optimize, MODULE_VERSION } from '../../../lib/eva/portfolio-optimizer.js';
 import { ServiceError } from '../../../lib/eva/shared-services.js';
+import { getDependencyGraph } from '../../../lib/eva/dependency-manager.js';
 
 // ── Mock Supabase builder ──────────────────────────────────
 
@@ -421,5 +427,137 @@ describe('optimize', () => {
 
     // total_allocation should be excluded, engineering and design are unique
     expect(result.contention.hasContention).toBe(false);
+  });
+});
+
+// ── Provider Boost & Deferral Protection ──────────────────────
+
+describe('dependency-aware optimization', () => {
+  it('boosts priority score for provider ventures', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'Provider', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 10 }, resources: { total_allocation: 50 } } }),
+      createVenture({ id: 'v2', name: 'Consumer', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 10 }, resources: { total_allocation: 50 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // v1 provides to 2 dependents → +10 boost
+    getDependencyGraph
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v2', 'v3'] })  // v1
+      .mockResolvedValueOnce({ dependsOn: ['v1'], providesTo: [] });       // v2
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    const provider = result.rankings.find(r => r.ventureId === 'v1');
+    const consumer = result.rankings.find(r => r.ventureId === 'v2');
+
+    expect(provider.providerBoost).toBe(10); // 2 * 5
+    expect(consumer.providerBoost).toBe(0);
+    expect(provider.priorityScore).toBeGreaterThan(consumer.priorityScore);
+  });
+
+  it('caps provider boost at 15 points', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'MegaProvider', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 10 }, resources: { total_allocation: 100 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // v1 provides to 5 dependents → 5*5=25 but capped at 15
+    getDependencyGraph.mockResolvedValueOnce({
+      dependsOn: [],
+      providesTo: ['v2', 'v3', 'v4', 'v5', 'v6'],
+    });
+
+    const result = await optimize(db, ['v1']);
+
+    expect(result.rankings[0].providerBoost).toBe(15);
+  });
+
+  it('applies zero boost when venture has no dependents', async () => {
+    const ventures = [createVenture({ id: 'v1', metadata: { resources: { total_allocation: 50 } } })];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // Default mock returns empty providesTo
+    const result = await optimize(db, ['v1']);
+
+    expect(result.rankings[0].providerBoost).toBe(0);
+  });
+
+  it('protects provider ventures from deferral in contention resolution', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'Provider', metadata: { scheduling: { deadline_days: 90 }, financials: { revenue_growth: 5 }, resources: { engineering: 3, total_allocation: 60 } } }),
+      createVenture({ id: 'v2', name: 'Independent', metadata: { scheduling: { deadline_days: 90 }, financials: { revenue_growth: 5 }, resources: { engineering: 2, total_allocation: 40 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // v1 is a provider, v2 is not
+    getDependencyGraph
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v3'] })  // v1 provider
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: [] });      // v2 independent
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    // Should have contention on engineering
+    expect(result.contention.hasContention).toBe(true);
+
+    // Resolution should target v2 (independent), not v1 (provider)
+    const engResolution = result.resolutions.find(r => r.resourceType === 'engineering');
+    expect(engResolution).toBeDefined();
+    if (engResolution.details.targetVentureId) {
+      expect(engResolution.details.targetVentureId).toBe('v2');
+    }
+  });
+
+  it('escalates when all contending ventures are providers', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', name: 'ProvA', metadata: { scheduling: { deadline_days: 30 }, financials: { revenue_growth: 10 }, resources: { engineering: 1.0, total_allocation: 50 } } }),
+      createVenture({ id: 'v2', name: 'ProvB', metadata: { scheduling: { deadline_days: 30 }, financials: { revenue_growth: 10 }, resources: { engineering: 0.5, total_allocation: 50 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // Both ventures are providers
+    getDependencyGraph
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v3'] })  // v1
+      .mockResolvedValueOnce({ dependsOn: [], providesTo: ['v4'] }); // v2
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    expect(result.contention.hasContention).toBe(true);
+
+    const engResolution = result.resolutions.find(r => r.resourceType === 'engineering');
+    expect(engResolution).toBeDefined();
+    // medium severity (ratio 1.5) would normally suggest_realloc, but all are providers → escalate
+    expect(engResolution.strategy).toBe('escalate');
+    expect(engResolution.details.escalatedReason).toBe('all_ventures_are_providers');
+  });
+
+  it('handles getDependencyGraph failures gracefully', async () => {
+    const ventures = [createVenture({ id: 'v1', metadata: { resources: { total_allocation: 50 } } })];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // Promise.allSettled handles rejections — venture should get 0 boost
+    getDependencyGraph.mockRejectedValueOnce(new Error('DB timeout'));
+
+    const result = await optimize(db, ['v1']);
+
+    expect(result.rankings[0].providerBoost).toBe(0);
+    expect(result.rankings).toHaveLength(1);
   });
 });
