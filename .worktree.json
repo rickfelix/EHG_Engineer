@@ -1,7 +1,7 @@
 {
-  "sdKey": "SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-E",
-  "expectedBranch": "feat/SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-E-event-bus-activation-and-handler-wiring",
-  "createdAt": "2026-02-16T20:29:59.988Z",
+  "sdKey": "SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-F",
+  "expectedBranch": "feat/SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-F-error-recovery-integration-saga-dlq-circ",
+  "createdAt": "2026-02-16T20:49:33.924Z",
   "hostname": "Legion-Laptop",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
