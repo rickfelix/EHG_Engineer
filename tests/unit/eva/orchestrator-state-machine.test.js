@@ -11,6 +11,7 @@ import {
   acquireProcessingLock,
   releaseProcessingLock,
   getOrchestratorState,
+  markCompleted,
   MODULE_VERSION,
   _internal,
 } from '../../../lib/eva/orchestrator-state-machine.js';
@@ -18,15 +19,16 @@ import {
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 describe('ORCHESTRATOR_STATES', () => {
-  it('should have exactly 4 states', () => {
-    expect(Object.keys(ORCHESTRATOR_STATES)).toHaveLength(4);
+  it('should have exactly 5 states', () => {
+    expect(Object.keys(ORCHESTRATOR_STATES)).toHaveLength(5);
   });
 
-  it('should contain idle, processing, blocked, failed', () => {
+  it('should contain idle, processing, blocked, failed, completed', () => {
     expect(ORCHESTRATOR_STATES.IDLE).toBe('idle');
     expect(ORCHESTRATOR_STATES.PROCESSING).toBe('processing');
     expect(ORCHESTRATOR_STATES.BLOCKED).toBe('blocked');
     expect(ORCHESTRATOR_STATES.FAILED).toBe('failed');
+    expect(ORCHESTRATOR_STATES.COMPLETED).toBe('completed');
   });
 
   it('should be frozen', () => {
@@ -39,11 +41,12 @@ describe('VALID_TRANSITIONS', () => {
     expect(VALID_TRANSITIONS[ORCHESTRATOR_STATES.IDLE]).toContain(ORCHESTRATOR_STATES.PROCESSING);
   });
 
-  it('should allow processing → idle, blocked, failed', () => {
+  it('should allow processing → idle, blocked, failed, completed', () => {
     const targets = VALID_TRANSITIONS[ORCHESTRATOR_STATES.PROCESSING];
     expect(targets).toContain(ORCHESTRATOR_STATES.IDLE);
     expect(targets).toContain(ORCHESTRATOR_STATES.BLOCKED);
     expect(targets).toContain(ORCHESTRATOR_STATES.FAILED);
+    expect(targets).toContain(ORCHESTRATOR_STATES.COMPLETED);
   });
 
   it('should allow blocked → idle, processing', () => {
@@ -56,6 +59,10 @@ describe('VALID_TRANSITIONS', () => {
     const targets = VALID_TRANSITIONS[ORCHESTRATOR_STATES.FAILED];
     expect(targets).toContain(ORCHESTRATOR_STATES.IDLE);
     expect(targets).toContain(ORCHESTRATOR_STATES.PROCESSING);
+  });
+
+  it('should have no outbound transitions from completed (terminal)', () => {
+    expect(VALID_TRANSITIONS[ORCHESTRATOR_STATES.COMPLETED]).toEqual([]);
   });
 
   it('should NOT allow idle → blocked directly', () => {
@@ -131,6 +138,29 @@ describe('validateStateTransition', () => {
     const result = validateStateTransition('idle', 'unknown');
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Unknown state');
+  });
+
+  it('should accept processing → completed', () => {
+    const result = validateStateTransition('processing', 'completed');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should reject completed → idle (terminal state)', () => {
+    const result = validateStateTransition('completed', 'idle');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Invalid transition');
+  });
+
+  it('should reject completed → processing (terminal state)', () => {
+    const result = validateStateTransition('completed', 'processing');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Invalid transition');
+  });
+
+  it('should reject idle → completed (must go through processing)', () => {
+    const result = validateStateTransition('idle', 'completed');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Invalid transition');
   });
 });
 
@@ -463,6 +493,109 @@ describe('getOrchestratorState', () => {
     const result = await getOrchestratorState(mockDb, 'venture-1');
     expect(result.state).toBe('idle');
     expect(result.error).toBe('Boom');
+  });
+});
+
+describe('markCompleted', () => {
+  let mockDb;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should mark venture as completed when in processing state', async () => {
+    mockDb = {
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: 'venture-1', orchestrator_state: 'completed' },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const result = await markCompleted(mockDb, 'venture-1', { logger: silentLogger });
+    expect(result.completed).toBe(true);
+  });
+
+  it('should fail when not in processing state', async () => {
+    mockDb = {
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: 'No rows' },
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const result = await markCompleted(mockDb, 'venture-1', { logger: silentLogger });
+    expect(result.completed).toBe(false);
+    expect(result.error).toContain('Completion failed');
+  });
+
+  it('should verify lockId when provided', async () => {
+    const eqCalls = [];
+    mockDb = {
+      from: vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockImplementation((...args) => {
+            eqCalls.push(args);
+            return {
+              eq: vi.fn().mockImplementation((...args2) => {
+                eqCalls.push(args2);
+                return {
+                  eq: vi.fn().mockImplementation((...args3) => {
+                    eqCalls.push(args3);
+                    return {
+                      select: vi.fn().mockReturnValue({
+                        single: vi.fn().mockResolvedValue({
+                          data: { id: 'venture-1', orchestrator_state: 'completed' },
+                          error: null,
+                        }),
+                      }),
+                    };
+                  }),
+                };
+              }),
+            };
+          }),
+        }),
+      }),
+    };
+
+    await markCompleted(mockDb, 'venture-1', { lockId: 'test-lock', logger: silentLogger });
+    expect(eqCalls.some(c => c[1] === 'test-lock')).toBe(true);
+  });
+
+  it('should return error when no db client', async () => {
+    const result = await markCompleted(null, 'venture-1', { logger: silentLogger });
+    expect(result.completed).toBe(false);
+    expect(result.error).toContain('Missing');
+  });
+
+  it('should handle thrown exceptions', async () => {
+    mockDb = {
+      from: vi.fn().mockImplementation(() => { throw new Error('Connection lost'); }),
+    };
+
+    const result = await markCompleted(mockDb, 'venture-1', { logger: silentLogger });
+    expect(result.completed).toBe(false);
+    expect(result.error).toBe('Connection lost');
   });
 });
 
