@@ -19,8 +19,8 @@ import {
 const silentLogger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 describe('ORCHESTRATOR_STATES', () => {
-  it('should have exactly 5 states', () => {
-    expect(Object.keys(ORCHESTRATOR_STATES)).toHaveLength(5);
+  it('should have exactly 6 states', () => {
+    expect(Object.keys(ORCHESTRATOR_STATES)).toHaveLength(6);
   });
 
   it('should contain idle, processing, blocked, failed, completed', () => {
