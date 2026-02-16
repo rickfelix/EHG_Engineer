@@ -31,35 +31,34 @@
     ]
   },
   "CLAUDE_LEAD_DIGEST.md": {
-    "description": "LEAD phase essentials (~4-5k chars) - approval gates and validation requirements",
+    "description": "LEAD phase essentials (~3-4k chars) - approval gates and validation requirements",
     "sections": [
-      "mandatory_phase_transitions_lead",
       "simplicity_first_enforcement",
       "lead_pre_approval_simplicity_gate",
       "sd_evaluation",
       "sd_creation_anti_pattern"
-    ]
+    ],
+    "_removed_sections_note": "mandatory_phase_transitions_lead (duplicate of CORE_DIGEST mandatory_phase_transitions)"
   },
   "CLAUDE_PLAN_DIGEST.md": {
-    "description": "PLAN phase essentials (~5-6k chars) - PRD requirements and validation gates",
+    "description": "PLAN phase essentials (~4-5k chars) - PRD requirements and validation gates",
     "sections": [
-      "mandatory_phase_transitions_plan",
       "prd_creation_anti_pattern",
       "plan_pre_exec_checklist",
       "handoff_quality_gates",
       "negative_constraints_plan"
-    ]
+    ],
+    "_removed_sections_note": "mandatory_phase_transitions_plan (duplicate of CORE_DIGEST mandatory_phase_transitions)"
   },
   "CLAUDE_EXEC_DIGEST.md": {
-    "description": "EXEC phase essentials (~5-6k chars) - implementation requirements and constraints",
+    "description": "EXEC phase essentials (~4-5k chars) - implementation requirements and constraints",
     "sections": [
-      "mandatory_phase_transitions_exec",
       "exec_implementation_requirements",
       "exec_dual_test_requirement",
       "branch_hygiene_gate",
       "negative_constraints_exec",
-      "migration_execution_delegation",
       "exec_retrospective_anti_patterns"
-    ]
+    ],
+    "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE_DIGEST mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol)"
   }
 }

@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-16T13:39:05.049Z -->
-<!-- git_commit: b22f9b27 -->
+<!-- generated_at: 2026-02-16T13:44:35.875Z -->
+<!-- git_commit: d86162ab -->
 <!-- db_snapshot_hash: 6c0e5841d5dacd55 -->
 <!-- file_content_hash: pending -->
 
@@ -10,53 +10,6 @@
 **Purpose**: PRD requirements and validation gates (<5k chars)
 
 ---
-
-## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
-
-**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
-
-### ⛔ NEVER DO THIS:
-- Using `database-agent` to directly insert into `sd_phase_handoffs`
-- Creating handoff records without running validation scripts
-- Skipping preflight knowledge retrieval
-
-### ✅ ALWAYS DO THIS:
-
-#### Pre-flight Batch Validation (RECOMMENDED)
-#### LEAD → PLAN Transition
-#### PLAN → EXEC Transition
-#### EXEC → PLAN Transition (Verification)
-#### PLAN → LEAD Transition (Final Approval)
-### Emergency Bypass (SD-LEARN-010)
-For emergencies ONLY. Bypasses require audit logging and are rate-limited.
-
-**Rate Limits:**
-- 3 bypasses per SD maximum
-- 10 bypasses per day globally
-- All bypasses logged to `audit_log` table with severity=warning
-
-### What These Scripts Enforce
-| Script | Validations |
-|--------|-------------|
-| `phase-preflight.js` | Loads context, patterns, and lessons from database |
-| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
-| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
-| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |
-| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |
-| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
-
-### Error Codes (SD-LEARN-010)
-| Code | Meaning | Remediation |
-|------|---------|-------------|
-| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |
-| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |
-| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |
-
-### Compliance Marker
-Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
-
-### Check Compliance
-**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
 ## PLAN Phase Negative Constraints
 
@@ -334,5 +287,5 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*DIGEST generated: 2026-02-16 8:39:05 AM*
+*DIGEST generated: 2026-02-16 8:44:35 AM*
 *Protocol: 4.3.3*
