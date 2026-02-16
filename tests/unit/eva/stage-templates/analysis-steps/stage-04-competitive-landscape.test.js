@@ -17,6 +17,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
 // Mock parseJSON
 vi.mock('../../../../../lib/eva/utils/parse-json.js', () => ({
   parseJSON: vi.fn((str) => JSON.parse(str)),
+  extractUsage: vi.fn((response) => response?.usage || null),
 }));
 
 // Mock web-search
