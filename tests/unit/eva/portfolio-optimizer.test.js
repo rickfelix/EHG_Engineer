@@ -1,6 +1,6 @@
 /**
  * Tests for Portfolio Optimizer
- * SD-EVA-FEAT-PORTFOLIO-OPT-001
+ * SD-EVA-FEAT-PORTFOLIO-OPT-001 + SD-MAN-ORCH-EVA-PORTFOLIO-INTELLIGENCE-001-C
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -49,6 +49,7 @@ function createVenture(overrides = {}) {
   return {
     id: 'v1',
     name: 'Venture Alpha',
+    created_at: '2026-01-01T00:00:00Z',
     metadata: {
       scheduling: { deadline_days: 14, time_sensitive: false },
       financials: { revenue_growth: 20, margin_trajectory: 5 },
@@ -57,6 +58,9 @@ function createVenture(overrides = {}) {
     ...overrides,
   };
 }
+
+// All 5 signals with equal weight for testing
+const EQUAL_WEIGHTS = { urgency: 0.20, roi: 0.20, financial: 0.20, market: 0.20, health: 0.20 };
 
 // ── MODULE_VERSION ──────────────────────────────────
 
@@ -94,8 +98,7 @@ describe('optimize', () => {
 
     expect(result.ventureCount).toBe(2);
     expect(result.rankings).toHaveLength(2);
-    expect(result.rankings[0].priorityScore).toBeGreaterThanOrEqual(result.rankings[1].priorityScore);
-    // Urgent venture (5 days, time_sensitive) should rank higher on urgency
+    // Urgent venture (5 days, time_sensitive) should have high urgency
     const urgent = result.rankings.find(r => r.ventureId === 'v1');
     expect(urgent.urgencyScore).toBeGreaterThan(80);
   });
@@ -210,24 +213,33 @@ describe('optimize', () => {
     expect(result.applied).toBe(true);
   });
 
-  it('uses custom weights', async () => {
-    const ventures = [createVenture()];
+  it('uses custom weights with all 5 signals', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        scheduling: { deadline_days: 10 },
+        financials: { revenue_growth: 25, revenue_projections: 40 },
+        market: { tam_score: 80 },
+        health: { composite_score: 70 },
+        resources: { total_allocation: 50 },
+      },
+    })];
 
     const db = createMockDb({
       'ventures:select': { data: ventures, error: null },
     });
 
-    const customWeights = { urgency: 0.30, roi: 0.70 };
-    const result = await optimize(db, ['v1'], { weights: customWeights });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
 
     expect(result.rankings).toHaveLength(1);
-    // With ROI weighted higher, score should reflect that
     expect(result.rankings[0].priorityScore).toBeGreaterThan(0);
+    expect(result.rankings[0].financialScore).toBeDefined();
+    expect(result.rankings[0].marketScore).toBe(80);
+    expect(result.rankings[0].healthScore).toBe(70);
   });
 
   it('throws INVALID_WEIGHTS when weights do not sum to 1.0', async () => {
     const db = createMockDb();
-    const badWeights = { urgency: 0.5, roi: 0.3 };
+    const badWeights = { urgency: 0.5, roi: 0.3, financial: 0.1, market: 0.0, health: 0.0 };
 
     await expect(optimize(db, ['v1'], { weights: badWeights })).rejects.toThrow('must sum to 1.0');
     try {
@@ -329,5 +341,208 @@ describe('optimize', () => {
     expect(result.rankings).toHaveLength(1);
     expect(result.rankings[0].urgencyScore).toBe(50); // baseline
     expect(result.rankings[0].roiScore).toBe(50); // baseline
+    expect(result.rankings[0].financialScore).toBe(50); // baseline
+    expect(result.rankings[0].marketScore).toBe(50); // baseline
+    expect(result.rankings[0].healthScore).toBe(50); // baseline
+  });
+});
+
+// ── Multi-Signal Scoring (US-001) ────────────────────────
+
+describe('multi-signal scoring', () => {
+  it('extracts financial projections score from metadata', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        financials: { revenue_projections: 60 },
+        resources: { total_allocation: 50 },
+      },
+    })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].financialScore).toBe(90); // >50
+  });
+
+  it('extracts market TAM score from metadata', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        market: { tam_score: 75 },
+        resources: { total_allocation: 50 },
+      },
+    })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].marketScore).toBe(75);
+  });
+
+  it('extracts health composite score from metadata', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        health: { composite_score: 85 },
+        resources: { total_allocation: 50 },
+      },
+    })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].healthScore).toBe(85);
+  });
+
+  it('defaults missing signals to baseline 50', async () => {
+    const ventures = [createVenture({ metadata: {} })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].financialScore).toBe(50);
+    expect(result.rankings[0].marketScore).toBe(50);
+    expect(result.rankings[0].healthScore).toBe(50);
+  });
+
+  it('clamps market and health scores to 0-100 range', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        market: { tam_score: 150 },
+        health: { composite_score: -10 },
+        resources: { total_allocation: 50 },
+      },
+    })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].marketScore).toBe(100);
+    expect(result.rankings[0].healthScore).toBe(0);
+  });
+});
+
+// ── Stage Maturity Weighting (US-002) ────────────────────
+
+describe('stage maturity weighting', () => {
+  it('applies full confidence for ventures with all 25 stages', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        stage_progress: 25,
+        scheduling: { deadline_days: 10 },
+        financials: { revenue_growth: 20 },
+        resources: { total_allocation: 50 },
+      },
+    })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].maturity).toBe(1.0);
+  });
+
+  it('reduces confidence for early-stage ventures', async () => {
+    const ventures = [createVenture({
+      metadata: {
+        stage_progress: 3,
+        scheduling: { deadline_days: 10 },
+        financials: { revenue_growth: 20 },
+        resources: { total_allocation: 50 },
+      },
+    })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    // 3/25 = 0.12 ratio → 0.5 + 0.12 * 0.5 = 0.56
+    expect(result.rankings[0].maturity).toBeCloseTo(0.56, 1);
+    // Priority score should be reduced by maturity multiplier
+    expect(result.rankings[0].priorityScore).toBeLessThan(50);
+  });
+
+  it('defaults to full confidence when stage_progress is missing', async () => {
+    const ventures = [createVenture({ metadata: {} })];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v1'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].maturity).toBe(1.0);
+  });
+});
+
+// ── Time-in-Queue Tiebreaker (US-003) ────────────────────
+
+describe('time-in-queue tiebreaker', () => {
+  it('ranks older venture first when scores are within tolerance', async () => {
+    const ventures = [
+      createVenture({
+        id: 'v-new', name: 'Newer',
+        created_at: '2026-02-01T00:00:00Z',
+        metadata: { scheduling: {}, financials: {}, resources: { total_allocation: 50 } },
+      }),
+      createVenture({
+        id: 'v-old', name: 'Older',
+        created_at: '2025-01-01T00:00:00Z',
+        metadata: { scheduling: {}, financials: {}, resources: { total_allocation: 50 } },
+      }),
+    ];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    // Both have identical metadata → same scores → tiebreaker kicks in
+    const result = await optimize(db, ['v-new', 'v-old'], { weights: EQUAL_WEIGHTS });
+
+    expect(result.rankings[0].ventureId).toBe('v-old');
+    expect(result.rankings[1].ventureId).toBe('v-new');
+  });
+
+  it('does not apply tiebreaker when score difference exceeds tolerance', async () => {
+    const ventures = [
+      createVenture({
+        id: 'v-new', name: 'High Score',
+        created_at: '2026-02-01T00:00:00Z',
+        metadata: {
+          scheduling: { deadline_days: 3, time_sensitive: true },
+          financials: { revenue_growth: 50, revenue_projections: 80 },
+          market: { tam_score: 90 },
+          health: { composite_score: 95 },
+          resources: { total_allocation: 50 },
+        },
+      }),
+      createVenture({
+        id: 'v-old', name: 'Low Score',
+        created_at: '2025-01-01T00:00:00Z',
+        metadata: { scheduling: { deadline_days: 200 }, financials: { revenue_growth: 1 }, resources: { total_allocation: 50 } },
+      }),
+    ];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    const result = await optimize(db, ['v-new', 'v-old'], { weights: EQUAL_WEIGHTS });
+
+    // High-scoring newer venture should still rank first despite older competitor
+    expect(result.rankings[0].ventureId).toBe('v-new');
+  });
+
+  it('respects custom tiebreaker tolerance', async () => {
+    const ventures = [
+      createVenture({
+        id: 'v-new', name: 'Newer',
+        created_at: '2026-02-01T00:00:00Z',
+        metadata: { scheduling: {}, financials: {}, resources: { total_allocation: 50 } },
+      }),
+      createVenture({
+        id: 'v-old', name: 'Older',
+        created_at: '2025-01-01T00:00:00Z',
+        metadata: { scheduling: {}, financials: {}, resources: { total_allocation: 50 } },
+      }),
+    ];
+
+    const db = createMockDb({ 'ventures:select': { data: ventures, error: null } });
+    // With tolerance 0, even equal scores should use strict numeric sort
+    const result = await optimize(db, ['v-new', 'v-old'], {
+      weights: EQUAL_WEIGHTS,
+      tiebreakerTolerance: 0,
+    });
+
+    // Scores are identical (both baseline 50) so diff is 0 which is NOT > 0
+    // tiebreaker applies → older first
+    expect(result.rankings[0].ventureId).toBe('v-old');
   });
 });
