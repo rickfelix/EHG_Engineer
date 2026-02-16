@@ -12,6 +12,10 @@ vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({
   normalizeVenturePrefix: vi.fn().mockReturnValue('TEST'),
 }));
 
+vi.mock('../../../lib/eva/stage-templates/index.js', () => ({
+  getTemplate: vi.fn().mockReturnValue(null),
+}));
+
 vi.mock('../../../lib/eva/devils-advocate.js', () => ({
   isDevilsAdvocateGate: vi.fn().mockReturnValue({ isGate: false, gateType: null }),
   getDevilsAdvocateReview: vi.fn(),
@@ -20,6 +24,7 @@ vi.mock('../../../lib/eva/devils-advocate.js', () => ({
 
 import { processStage, run, _internal } from '../../../lib/eva/eva-orchestrator.js';
 import { isDevilsAdvocateGate, getDevilsAdvocateReview } from '../../../lib/eva/devils-advocate.js';
+import { getTemplate } from '../../../lib/eva/stage-templates/index.js';
 
 const { buildResult, mergeArtifactOutputs, STATUS, FILTER_ACTION } = _internal;
 
@@ -426,6 +431,121 @@ describe('EvaOrchestrator', () => {
 
       // Restore default mock
       isDevilsAdvocateGate.mockReturnValue({ isGate: false, gateType: null });
+    });
+  });
+
+  describe('onBeforeAnalysis hook integration', () => {
+    it('should pass hook context to analysis steps when onBeforeAnalysis is defined', async () => {
+      const mockSupabase = createMockSupabase();
+      const stepFn = vi.fn().mockResolvedValue({
+        artifactType: 'test_output',
+        payload: { score: 9 },
+        source: 'step1',
+      });
+
+      getTemplate.mockReturnValue({
+        onBeforeAnalysis: vi.fn().mockResolvedValue({
+          templateContext: { domain: 'saas', metrics: ['mrr', 'churn'] },
+          recommendations: [{ id: 't1', name: 'SaaS Template' }],
+        }),
+      });
+
+      await processStage(
+        {
+          ventureId: 'v-1',
+          stageId: 1,
+          options: {
+            dryRun: true,
+            stageTemplate: { analysisSteps: [{ id: 'step1', execute: stepFn }] },
+          },
+        },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      // Verify step received templateContext from hook
+      expect(stepFn).toHaveBeenCalledWith(expect.objectContaining({
+        templateContext: { domain: 'saas', metrics: ['mrr', 'churn'] },
+        recommendations: [{ id: 't1', name: 'SaaS Template' }],
+      }));
+
+      getTemplate.mockReturnValue(null);
+    });
+
+    it('should gracefully degrade when onBeforeAnalysis throws', async () => {
+      const mockSupabase = createMockSupabase();
+      const stepFn = vi.fn().mockResolvedValue({
+        artifactType: 'test_output',
+        payload: {},
+        source: 'step1',
+      });
+
+      getTemplate.mockReturnValue({
+        onBeforeAnalysis: vi.fn().mockRejectedValue(new Error('Template DB unavailable')),
+      });
+
+      const result = await processStage(
+        {
+          ventureId: 'v-1',
+          stageId: 1,
+          options: {
+            dryRun: true,
+            stageTemplate: { analysisSteps: [{ id: 'step1', execute: stepFn }] },
+          },
+        },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      // Should still complete successfully
+      expect(result.status).toBe(STATUS.COMPLETED);
+      // Step should have been called without hook context
+      expect(stepFn).toHaveBeenCalled();
+
+      getTemplate.mockReturnValue(null);
+    });
+
+    it('should skip hook when JS template has no onBeforeAnalysis', async () => {
+      const mockSupabase = createMockSupabase();
+      const stepFn = vi.fn().mockResolvedValue({
+        artifactType: 'test_output',
+        payload: {},
+        source: 'step1',
+      });
+
+      getTemplate.mockReturnValue({ analysisStep: vi.fn() });
+
+      const result = await processStage(
+        {
+          ventureId: 'v-1',
+          stageId: 1,
+          options: {
+            dryRun: true,
+            stageTemplate: { analysisSteps: [{ id: 'step1', execute: stepFn }] },
+          },
+        },
+        {
+          supabase: mockSupabase,
+          logger: silentLogger,
+          evaluateDecisionFn: vi.fn().mockReturnValue({ auto_proceed: true, triggers: [], recommendation: 'AUTO_PROCEED' }),
+          evaluateRealityGateFn: vi.fn().mockResolvedValue({ passed: true }),
+          validateStageGateFn: vi.fn().mockResolvedValue({ passed: true }),
+        },
+      );
+
+      expect(result.status).toBe(STATUS.COMPLETED);
+
+      getTemplate.mockReturnValue(null);
     });
   });
 });
