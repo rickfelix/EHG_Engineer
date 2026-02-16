@@ -104,14 +104,32 @@ function isBoilerplate(text, patterns) {
 
 /**
  * Fast heuristic validation for PRD (no AI calls)
+ *
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-030: SD-type-aware scoring.
+ * Infrastructure, fix, and documentation SDs get reduced penalties for
+ * optional fields (system_architecture, implementation_approach, risks)
+ * since these fields are less relevant to their scope.
+ *
  * @param {Object} prd - PRD object from database
+ * @param {Object} options - Validation options
+ * @param {string} options.sdType - SD type for type-aware penalty adjustment
  * @returns {Object} { valid: boolean, issues: array, warnings: array, score: number }
  */
-function validatePRDHeuristic(prd) {
+function validatePRDHeuristic(prd, options = {}) {
   const prdId = prd?.id || 'Unknown';
+  const sdType = (options.sdType || '').toLowerCase();
   const issues = [];
   const warnings = [];
   let score = 100;
+
+  // SD types that get reduced penalties for optional fields
+  const reducedPenaltyTypes = [
+    'infrastructure', 'implementation', 'fix', 'bugfix', 'bug_fix',
+    'documentation', 'refactor', 'quality_assurance', 'quality assurance'
+  ];
+  const useReducedPenalty = reducedPenaltyTypes.includes(sdType);
+  // Reduced penalty: 3 pts instead of 5 for optional fields
+  const optionalFieldPenalty = useReducedPenalty ? 3 : 5;
 
   // Check functional requirements
   const funcReqs = prd.functional_requirements || [];
@@ -149,26 +167,26 @@ function validatePRDHeuristic(prd) {
   const testScenarios = prd.test_scenarios || [];
   if (!Array.isArray(testScenarios) || testScenarios.length < 3) {
     warnings.push(`${prdId}: Few test scenarios (${testScenarios.length})`);
-    score -= 5;
+    score -= optionalFieldPenalty;
   }
 
-  // Check system_architecture
+  // Check system_architecture (optional field - reduced penalty for infra/fix)
   if (!prd.system_architecture || Object.keys(prd.system_architecture).length === 0) {
     warnings.push(`${prdId}: Missing system_architecture`);
-    score -= 5;
+    score -= optionalFieldPenalty;
   }
 
-  // Check implementation_approach
+  // Check implementation_approach (optional field - reduced penalty for infra/fix)
   if (!prd.implementation_approach || Object.keys(prd.implementation_approach).length === 0) {
     warnings.push(`${prdId}: Missing implementation_approach`);
-    score -= 5;
+    score -= optionalFieldPenalty;
   }
 
-  // Check risks
+  // Check risks (optional field - reduced penalty for infra/fix)
   const risks = prd.risks || [];
   if (!Array.isArray(risks) || risks.length === 0) {
     warnings.push(`${prdId}: No risks identified`);
-    score -= 5;
+    score -= optionalFieldPenalty;
   }
 
   // Check executive_summary
@@ -193,7 +211,7 @@ function validatePRDHeuristic(prd) {
       acceptance_criteria: { total: accCriteria.length, boilerplate: 0 },
       test_scenarios: { total: testScenarios.length, placeholder: 0 }
     },
-    details: { method: 'heuristic' }
+    details: { method: 'heuristic', sdType, useReducedPenalty }
   };
 }
 
@@ -247,7 +265,7 @@ export async function validatePRDQuality(prd, options = {}) {
 
   if (usesHeuristic) {
     console.log(`   ℹ️  Using heuristic PRD validation (sdType: ${sdType || 'env override'})`);
-    return validatePRDHeuristic(prd);
+    return validatePRDHeuristic(prd, { sdType: sdType || sdCategory });
   }
 
   try {
