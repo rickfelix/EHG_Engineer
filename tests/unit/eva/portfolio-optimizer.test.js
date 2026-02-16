@@ -75,6 +75,7 @@ describe('optimize', () => {
 
     expect(result.ventureCount).toBe(0);
     expect(result.rankings).toEqual([]);
+    expect(result.resolutions).toEqual([]);
     expect(result.contention.hasContention).toBe(false);
     expect(result.balance.rebalanced).toBe(false);
     expect(result.applied).toBe(false);
@@ -118,6 +119,12 @@ describe('optimize', () => {
     expect(engConflict.ventureIds).toContain('v1');
     expect(engConflict.ventureIds).toContain('v2');
     expect(engConflict.totalDemand).toBe(8);
+    expect(engConflict.severity).toBeDefined();
+    expect(engConflict.capacity).toBe(1.0);
+
+    // Should produce resolutions for the contention
+    expect(result.resolutions.length).toBeGreaterThan(0);
+    expect(result.resolutions[0].strategy).toBeDefined();
   });
 
   it('reports no contention when resources are unique', async () => {
@@ -132,9 +139,8 @@ describe('optimize', () => {
 
     const result = await optimize(db, ['v1', 'v2']);
 
-    // total_allocation is shared, engineering and design are not
-    const nonAllocationConflicts = result.contention.conflicts.filter(c => c.resourceType !== 'total_allocation');
-    expect(nonAllocationConflicts).toHaveLength(0);
+    // engineering and design are unique per venture, total_allocation is skipped
+    expect(result.contention.conflicts).toHaveLength(0);
   });
 
   it('enforces portfolio balance cap', async () => {
@@ -329,5 +335,91 @@ describe('optimize', () => {
     expect(result.rankings).toHaveLength(1);
     expect(result.rankings[0].urgencyScore).toBe(50); // baseline
     expect(result.rankings[0].roiScore).toBe(50); // baseline
+  });
+
+  it('classifies contention severity based on demand-to-capacity ratio', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { engineering: 0.7 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { engineering: 0.6 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // totalDemand = 1.3, capacity = 1.0, ratio = 1.3 → medium severity
+    const result = await optimize(db, ['v1', 'v2']);
+
+    const engConflict = result.contention.conflicts.find(c => c.resourceType === 'engineering');
+    expect(engConflict.severity).toBe('medium');
+  });
+
+  it('respects custom capacities for severity scoring', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { engineering: 3 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { engineering: 2 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // totalDemand = 5, capacity = 10, ratio = 0.5 → below 1.0 threshold → low
+    const result = await optimize(db, ['v1', 'v2'], { capacities: { engineering: 10 } });
+
+    const engConflict = result.contention.conflicts.find(c => c.resourceType === 'engineering');
+    expect(engConflict.severity).toBe('low');
+    expect(engConflict.capacity).toBe(10);
+  });
+
+  it('selects escalate strategy for critical severity', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { scheduling: { deadline_days: 5 }, financials: { revenue_growth: 30 }, resources: { engineering: 2.0 } } }),
+      createVenture({ id: 'v2', metadata: { scheduling: { deadline_days: 60 }, financials: { revenue_growth: 5 }, resources: { engineering: 1.5 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    // totalDemand = 3.5, capacity = 1.0, ratio = 3.5 → critical
+    const result = await optimize(db, ['v1', 'v2']);
+
+    const engResolution = result.resolutions.find(r => r.resourceType === 'engineering');
+    expect(engResolution.severity).toBe('critical');
+    expect(engResolution.strategy).toBe('escalate');
+  });
+
+  it('emits contention_detected event when contention found', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { engineering: 3 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { engineering: 2 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    await optimize(db, ['v1', 'v2']);
+
+    // Should emit: optimization_started, contention_detected, optimization_completed
+    const eventCalls = db.from.mock.calls.filter(c => c[0] === 'eva_event_log');
+    expect(eventCalls.length).toBe(3);
+  });
+
+  it('skips total_allocation from contention detection', async () => {
+    const ventures = [
+      createVenture({ id: 'v1', metadata: { resources: { total_allocation: 100, engineering: 5 } } }),
+      createVenture({ id: 'v2', metadata: { resources: { total_allocation: 200, design: 3 } } }),
+    ];
+
+    const db = createMockDb({
+      'ventures:select': { data: ventures, error: null },
+    });
+
+    const result = await optimize(db, ['v1', 'v2']);
+
+    // total_allocation should be excluded, engineering and design are unique
+    expect(result.contention.hasContention).toBe(false);
   });
 });
