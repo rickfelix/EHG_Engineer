@@ -35,6 +35,12 @@ export default defineConfig({
         '**/node_modules/**',
         '**/client/**',
       ],
+      thresholds: {
+        statements: 50,
+        branches: 40,
+        functions: 40,
+        lines: 50,
+      },
     },
   },
 });
