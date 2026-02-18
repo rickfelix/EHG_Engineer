@@ -602,9 +602,17 @@ export class BaseExecutor {
 
       return null; // No conflict - proceed
     } catch (error) {
-      // Non-fatal: fail-open on unexpected errors
-      console.log(`   [MultiSession] ⚠️ Claim check error (non-blocking): ${error.message}`);
-      return null;
+      // SD-LEO-INFRA-CLAIM-GUARD-001: Fail-closed on claim check errors.
+      // Previous behavior was fail-open (return null), which allowed handoffs
+      // to proceed without verified claim ownership.
+      console.log(`   [MultiSession] ❌ Claim check error (BLOCKING): ${error.message}`);
+      return {
+        pass: false,
+        gate: 'GATE_MULTI_SESSION_CLAIM_CONFLICT',
+        score: 0,
+        issues: [`Claim verification failed: ${error.message}. Cannot proceed without verified claim ownership.`],
+        warnings: ['Previous behavior was non-blocking (fail-open). Changed to fail-closed per SD-LEO-INFRA-CLAIM-GUARD-001.']
+      };
     }
   }
 

@@ -184,7 +184,37 @@ function detectCurrentSD() {
     // Extract SD ID from branch name (e.g., feat/SD-XXX-001-description)
     const sdMatch = branch.match(/SD-[A-Z0-9-]+/i);
     if (sdMatch) {
-      return sdMatch[0].toUpperCase();
+      const sdKey = sdMatch[0].toUpperCase();
+      // SD-LEO-INFRA-CLAIM-GUARD-001 (US-006): Verify claim ownership
+      // before allowing branch-based SD detection to store context.
+      // Without this check, any session on the right branch could silently
+      // resume work on a claimed SD.
+      try {
+        const { claimGuard } = require('../../lib/claim-guard.cjs');
+        const os = require('os');
+        const sessionDir = require('path').join(os.homedir(), '.claude-sessions');
+        let sessionId = null;
+        if (require('fs').existsSync(sessionDir)) {
+          const pid = process.ppid || process.pid;
+          const files = require('fs').readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+          for (const file of files) {
+            try {
+              const data = JSON.parse(require('fs').readFileSync(require('path').join(sessionDir, file), 'utf8'));
+              if (data.pid === pid) { sessionId = data.session_id; break; }
+            } catch { /* skip */ }
+          }
+        }
+        if (sessionId) {
+          // Async claim check — we can't await in sync function, so fire-and-forget log
+          // The actual enforcement happens at handoff time via BaseExecutor
+          claimGuard(sdKey, sessionId).then(result => {
+            if (!result.success) {
+              console.log(`[session-init] ⚠️ SD ${sdKey} detected from branch but claimed by another session`);
+            }
+          }).catch(() => { /* best effort */ });
+        }
+      } catch { /* claimGuard not available — skip check */ }
+      return sdKey;
     }
   } catch (error) {
     // Git command failed, try fallback
