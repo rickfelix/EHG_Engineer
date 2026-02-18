@@ -330,7 +330,7 @@
     "feedback:stale:dry": "node scripts/feedback-staleness-check.js --dry-run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.63.1",
+    "@anthropic-ai/sdk": "^0.39.0",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.28.4",
     "@doist/todoist-api-typescript": "^6.4.0",
@@ -379,7 +379,7 @@
     "eslint-plugin-playwright": "^2.3.0",
     "husky": "^9.1.7",
     "minimatch": "^10.1.2",
-    "pg": "^8.16.3",
+    "pg": "^8.11.3",
     "puppeteer": "^24.23.0",
     "typescript": "^5.9.2",
     "vitest": "^4.0.0",
