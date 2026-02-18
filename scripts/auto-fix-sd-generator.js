@@ -36,14 +36,14 @@ class AutoFixSDGenerator {
         test_case: issue.test_case_id
       },
       strategic_objectives: [
-        'Fix the identified issue',
-        'Prevent regression',
-        'Maintain ≥85% pass rate'
+        { objective: 'Fix the identified issue and verify with UAT test', metric: 'UAT test passes after fix' },
+        { objective: 'Prevent regression in related functionality', metric: '0 existing tests broken' },
+        { objective: 'Maintain ≥85% overall UAT pass rate', metric: 'UAT pass rate >= 85%' }
       ],
       success_criteria: [
-        'Issue resolved and test passes',
-        'No regression in other tests',
-        'Fix deployed to production'
+        { criterion: 'Issue resolved and UAT test passes', measure: 'Test status = pass' },
+        { criterion: 'No regression in other tests', measure: '0 previously-passing tests now failing' },
+        { criterion: 'Fix deployed to production', measure: 'Deployment confirmed in prod environment' }
       ],
       dependencies: [issue.issue_key],
       target_application: 'EHG',

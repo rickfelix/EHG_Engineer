@@ -40,6 +40,14 @@ const TIER_CONFIG = {
 // Orchestrator parent UUID (SD-MAN-ORCH-EVA-VISION-GOVERNANCE-001)
 const ORCHESTRATOR_ID = 'da3b936a-3f62-4966-9093-f1c1bdec53e7';
 
+// Minimum number of scoring runs below threshold before generating a corrective SD.
+// Prevents test data or one-off scores from polluting the SD queue.
+// Set to 1 for critical severity overrides (see checkMinOccurrences).
+export const MIN_OCCURRENCES = 2;
+
+// created_by values that identify test/smoke-test score records to skip.
+const TEST_CREATED_BY_PATTERNS = ['test-', 'test-sync', 'vision-scorer-test'];
+
 // ─── Supabase Client ──────────────────────────────────────────────────────────
 
 function getSupabase() {
@@ -72,6 +80,88 @@ function generateCorrectiveSdKey() {
   return `SD-CORR-VIS-${hex}`;
 }
 
+// ─── Occurrence Check ─────────────────────────────────────────────────────────
+
+/**
+ * Check if a dimension has appeared below threshold enough times to warrant an SD.
+ * Queries eva_vision_scores for recent records with total_score < THRESHOLDS.MINOR (70),
+ * excluding test records by created_by.
+ *
+ * @param {Object} supabase
+ * @param {string|null} sdId - SD key/id this score is for (null = portfolio-level)
+ * @param {number} minOccurrences - Minimum count required (default: MIN_OCCURRENCES)
+ * @returns {Promise<{qualifies: boolean, count: number}>}
+ */
+export async function checkMinOccurrences(supabase, sdId, minOccurrences = MIN_OCCURRENCES) {
+  let query = supabase
+    .from('eva_vision_scores')
+    .select('id', { count: 'exact', head: true })
+    .lt('total_score', THRESHOLDS.MINOR);
+
+  if (sdId) {
+    query = query.eq('sd_id', sdId);
+  }
+
+  // Exclude test records
+  for (const pattern of TEST_CREATED_BY_PATTERNS) {
+    query = query.not('created_by', 'like', `${pattern}%`);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    console.warn(`[corrective-sd-generator] Occurrence check failed: ${error.message} — defaulting to qualify`);
+    return { qualifies: true, count: minOccurrences };
+  }
+
+  return { qualifies: (count ?? 0) >= minOccurrences, count: count ?? 0 };
+}
+
+// ─── Enriched Description Builder ─────────────────────────────────────────────
+
+/**
+ * Build an enriched SD description from dimension score data and rubric snapshot.
+ * Pulls LLM reasoning and vision source section for actionable context.
+ *
+ * @param {string} dimensionName - Name of the worst-scoring dimension
+ * @param {string} dimId - Dimension ID (e.g. 'V02', 'A03')
+ * @param {Object} dimensionScores - dimension_scores JSONB from eva_vision_scores
+ * @param {Object} rubricSnapshot - rubric_snapshot JSONB from eva_vision_scores
+ * @param {number} totalScore
+ * @param {string} action - Tier action (escalation/gap-closure/minor)
+ * @returns {string}
+ */
+function buildEnrichedDescription(dimensionName, dimId, dimensionScores, rubricSnapshot, totalScore, action) {
+  const dim = dimensionScores?.[dimId] ?? {};
+  const reasoning = dim.reasoning ? String(dim.reasoning).substring(0, 400) : null;
+
+  const criteria = rubricSnapshot?.criteria ?? [];
+  const rubricEntry = criteria.find(c => c.id === dimId || c.name === dimensionName) ?? {};
+  const sourceSection = rubricEntry.source_section ?? null;
+  const dimDescription = rubricEntry.description ?? null;
+
+  const lines = [
+    `Vision alignment score ${totalScore}/100 is in the "${action}" tier.`,
+    `Lowest-scoring dimension: ${dimensionName} (${dimId})`,
+  ];
+
+  if (dimDescription) {
+    lines.push(`\nDimension measures: ${dimDescription}`);
+  }
+  if (sourceSection) {
+    lines.push(`Vision source: ${sourceSection}`);
+  }
+  if (reasoning) {
+    lines.push(`\nWhy score was low: ${reasoning}`);
+  }
+  if (dim.gaps?.length) {
+    lines.push(`\nIdentified gaps: ${dim.gaps.slice(0, 3).join('; ')}`);
+  }
+
+  lines.push(`\nAddress the ${dimensionName} dimension to improve vision alignment above ${THRESHOLDS.ACCEPT}.`);
+
+  return lines.join('\n');
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 /**
@@ -84,15 +174,29 @@ function generateCorrectiveSdKey() {
 export async function generateCorrectiveSD(scoreId) {
   const supabase = getSupabase();
 
-  // 1. Load the score record
+  // 1. Load the score record (include created_by and rubric_snapshot for quality checks)
   const { data: score, error: scoreErr } = await supabase
     .from('eva_vision_scores')
-    .select('id, vision_id, total_score, threshold_action, generated_sd_ids, dimension_scores')
+    .select('id, vision_id, sd_id, total_score, threshold_action, generated_sd_ids, dimension_scores, rubric_snapshot, created_by')
     .eq('id', scoreId)
     .single();
 
   if (scoreErr || !score) {
     throw new Error(`Score not found: ${scoreId} — ${scoreErr?.message}`);
+  }
+
+  // 1a. Skip test score records (created by smoke tests / manual inserts)
+  const createdBy = score.created_by ?? '';
+  if (TEST_CREATED_BY_PATTERNS.some(p => createdBy.startsWith(p))) {
+    console.log(`[corrective-sd-generator] Skipping test record (created_by: ${createdBy})`);
+    return { created: false, action: 'skipped', reason: 'test-data-filtered', sdKey: null, sdId: null };
+  }
+
+  // 1b. Minimum occurrence threshold — don't create SDs from single-run data
+  const { qualifies, count } = await checkMinOccurrences(supabase, score.sd_id ?? null);
+  if (!qualifies) {
+    console.log(`[corrective-sd-generator] Skipping: only ${count}/${MIN_OCCURRENCES} occurrences below threshold`);
+    return { created: false, action: 'deferred', reason: `min-occurrences-not-met (${count}/${MIN_OCCURRENCES})`, sdKey: null, sdId: null };
   }
 
   // 2. Determine action (prefer stored threshold_action, fall back to classify)
@@ -122,14 +226,14 @@ export async function generateCorrectiveSD(scoreId) {
     }
   }
 
-  // 5. Build corrective SD title from dimension context
+  // 5. Build corrective SD title and enriched description from dimension context
   const tier = TIER_CONFIG[action] ?? TIER_CONFIG.escalation;
   const sdKey = generateCorrectiveSdKey();
-  const dimensionName = _extractDimensionName(score.dimension_scores, score.total_score);
+  const { dimId, dimensionName } = _extractLowestDimension(score.dimension_scores, score.total_score);
   const title = `[${action.toUpperCase()}] Vision Gap: ${dimensionName} (score ${score.total_score ?? '?'}/100)`;
-  const description = `Auto-generated corrective SD from EVA vision scoring. ` +
-    `Score ${score.total_score ?? '?'}/100 is in the "${action}" tier (threshold: ${THRESHOLDS[action.toUpperCase().replace('-', '_')] ?? THRESHOLDS.GAP_CLOSURE}). ` +
-    `Address the gap in dimension "${dimensionName}" to improve vision alignment.`;
+  const description = buildEnrichedDescription(
+    dimensionName, dimId, score.dimension_scores, score.rubric_snapshot, score.total_score, action
+  );
 
   // 6. Insert corrective SD
   const { data: newSD, error: sdErr } = await supabase
@@ -144,7 +248,7 @@ export async function generateCorrectiveSD(scoreId) {
       sd_type: tier.sdType ?? 'feature',
       priority: tier.priority,
       rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required to maintain vision alignment.`,
-      scope: `Address the "${dimensionName}" dimension gap identified by EVA scoring run ${scoreId}.`,
+      scope: `Address the ${dimensionName} (${dimId}) dimension gap. EVA score run: ${scoreId}. Current score: ${score.total_score}/100. Target: >=${THRESHOLDS.ACCEPT}.`,
       current_phase: 'LEAD',
       target_application: 'EHG_Engineer',
       version: '1.0',
@@ -188,15 +292,36 @@ function _normalizeAction(raw) {
   return map[raw?.toLowerCase()] ?? 'escalation';
 }
 
-function _extractDimensionName(dimensionScores, totalScore) {
-  if (!dimensionScores || typeof dimensionScores !== 'object') {
-    return `overall (${totalScore ?? '?'}/100)`;
-  }
-  // Find the lowest-scoring dimension
+/**
+ * Extract the lowest-scoring dimension from dimension_scores JSONB.
+ * Fixed: dimension_scores values are objects {score, weight, reasoning...},
+ * so we compare a.score vs b.score — not a vs b (which compared objects, yielding NaN).
+ *
+ * @returns {{ dimId: string, dimensionName: string }}
+ */
+function _extractLowestDimension(dimensionScores, totalScore) {
+  const fallback = { dimId: 'overall', dimensionName: `overall (${totalScore ?? '?'}/100)` };
+  if (!dimensionScores || typeof dimensionScores !== 'object') return fallback;
+
   const entries = Object.entries(dimensionScores);
-  if (entries.length === 0) return `overall (${totalScore ?? '?'}/100)`;
-  const [name] = entries.sort(([, a], [, b]) => a - b)[0];
-  return name;
+  if (entries.length === 0) return fallback;
+
+  // Values are objects: {score: number, weight: number, reasoning: string, ...}
+  // Sort ascending by .score to find the worst-performing dimension
+  const sorted = entries.sort(([, a], [, b]) => {
+    const scoreA = typeof a === 'object' ? (a?.score ?? 0) : Number(a);
+    const scoreB = typeof b === 'object' ? (b?.score ?? 0) : Number(b);
+    return scoreA - scoreB;
+  });
+
+  const [dimId, dimData] = sorted[0];
+  const dimensionName = (typeof dimData === 'object' ? dimData?.name : null) || dimId;
+  return { dimId, dimensionName };
+}
+
+// Keep old name as alias for external callers during transition
+function _extractDimensionName(dimensionScores, totalScore) {
+  return _extractLowestDimension(dimensionScores, totalScore).dimensionName;
 }
 
 async function _logAudit(supabase, scoreId, action, sdKey, visionId) {
