@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T15:21:29.186Z
-**Rows**: 8,473
+**Generated**: 2026-02-18T19:52:25.488Z
+**Rows**: 8,497
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -95,7 +95,7 @@
   ```
 - `idx_claude_sessions_unique_active_claim`
   ```sql
-  CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim ON public.claude_sessions USING btree (sd_id) WHERE ((sd_id IS NOT NULL) AND (status = 'active'::text))
+  CREATE UNIQUE INDEX idx_claude_sessions_unique_active_claim ON public.claude_sessions USING btree (sd_id) WHERE ((sd_id IS NOT NULL) AND (status = ANY (ARRAY['active'::text, 'idle'::text])))
   ```
 - `idx_claude_sessions_unique_terminal_active`
   ```sql
