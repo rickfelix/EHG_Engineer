@@ -15,6 +15,7 @@
 
 import readline from 'readline';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems } from '../../retrospective-enricher.js';
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -188,13 +189,12 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       whatNeedsImprovement.push('No specific issues identified - handoff executed smoothly');
     }
 
-    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-017: Use SD-specific context instead of metric-only entries
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-021: Use SD-specific context instead of metric-only entries
+    // Metric-only entries (e.g., "quality score: 80%") score 1-2/10 on Learning Specificity (40% weight)
+    // and trigger boilerplate detection, causing RETROSPECTIVE_EXISTS gate to fail at 50/100.
     const sdTitle = safeTruncate(sd?.title || sdId, 80);
     const sdType = sd?.sd_type || 'unknown';
-    const keyLearnings = [
-      { learning: `${retrospectiveType} handoff for ${sdType} SD "${sdTitle}" completed at ${qualityScore}% quality`, is_boilerplate: false },
-      { learning: `SD type '${sdType}' ${retrospectiveType} transition: ratings clarity=${clarityRating}/5, criteria=${criteriaRating}/5, deps=${depsRating}/5, simplicity=${simplicityRating}/5`, is_boilerplate: false }
-    ];
+    const keyLearnings = buildSDSpecificKeyLearnings(sd, retrospectiveType);
 
     if (frictionPoints && frictionPoints !== 'none' && frictionPoints !== 'N/A') {
       keyLearnings.push({ learning: `Friction identified: ${frictionPoints}`, is_boilerplate: false });
@@ -256,9 +256,9 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       }
     }
 
-    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-017: SD-context-aware fallback instead of generic text
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-021: Ensure action items have owner/deadline for quality gate
     if (actionItems.length === 0) {
-      actionItems.push({ action: `Review ${sdType} SD "${sdTitle}" outcomes during next retrospective cycle`, is_boilerplate: false });
+      actionItems.push(...buildSDSpecificActionItems(sd, retrospectiveType));
     }
 
     // Build discovered_issues metadata (PAT-RETRO-BOILERPLATE-001 fix)
