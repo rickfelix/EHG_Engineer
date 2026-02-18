@@ -46,8 +46,15 @@ async function emitSessionSettings() {
       .limit(1)
       .single();
 
+    // Fall back to global defaults from DB if no session metadata
+    let globalChaining = false;
+    if (data?.metadata?.chain_orchestrators === undefined) {
+      const { data: globalData } = await supabase.rpc('get_leo_global_defaults');
+      globalChaining = globalData?.[0]?.chain_orchestrators ?? false;
+    }
+
     const autoProceed = data?.metadata?.auto_proceed ?? true;
-    const chainOrchestrators = data?.metadata?.chain_orchestrators ?? false;
+    const chainOrchestrators = data?.metadata?.chain_orchestrators ?? globalChaining;
     console.log(`SESSION_SETTINGS:${JSON.stringify({ auto_proceed: autoProceed, chain_orchestrators: chainOrchestrators })}`);
   } catch {
     // Non-fatal — settings query failure doesn't block queue display
