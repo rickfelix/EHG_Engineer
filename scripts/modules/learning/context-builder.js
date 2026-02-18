@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { syncVisionScoresToPatterns } from '../../eva/vision-to-patterns.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
@@ -708,17 +709,62 @@ async function getPendingImprovements(limit = TOP_N) {
  * - Shows what was filtered for transparency
  * - Prioritizes actionable items with proven solutions
  */
+/**
+ * Sync vision scoring gaps to issue_patterns and return them for display.
+ * SD-MAN-INFRA-EXTEND-LEARN-COMMAND-001: Vision gap integration.
+ *
+ * Runs syncVisionScoresToPatterns() to ensure fresh data, then returns
+ * patterns from issue_patterns WHERE source = 'vision_scorer'.
+ */
+async function getVisionGapPatterns(limit = TOP_N) {
+  try {
+    // Sync recent vision scores to patterns (idempotent, fast)
+    await syncVisionScoresToPatterns(supabase, { lookbackDays: 30 });
+  } catch (err) {
+    console.warn(`  Warning: Vision-to-patterns sync failed: ${err.message}`);
+    // Continue without blocking — vision gaps are additive
+  }
+
+  // Filter by metadata.type = 'vision_scorer' (source column has a check constraint)
+  // and pattern_id starting with 'VGAP-' for efficient filtering
+  const { data, error } = await supabase
+    .from('issue_patterns')
+    .select('id, pattern_id, issue_summary, severity, occurrence_count, metadata, proven_solutions, trend, created_at')
+    .like('pattern_id', 'VGAP-%')
+    .eq('status', 'active')
+    .order('occurrence_count', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn(`  Warning: Could not fetch vision gap patterns: ${error.message}`);
+    return [];
+  }
+
+  return (data || []).map(p => ({
+    id: p.id,
+    pattern_id: p.pattern_id,
+    content: p.issue_summary,
+    severity: p.severity,
+    occurrence_count: p.occurrence_count,
+    proven_solutions: p.proven_solutions || [],
+    metadata: p.metadata || {},
+    trend: p.trend,
+    source: 'vision_scorer',
+  }));
+}
+
 export async function buildLearningContext(sdId = null) {
   console.log('Building learning context with severity-weighted filtering...');
   console.log(`  Thresholds: Critical/High=1 occ, Medium/Low=3 occ, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
-  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings] = await Promise.all([
+  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns, subAgentLearnings, visionGaps] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
     getIssuePatterns(TOP_N),
     getPendingImprovements(TOP_N),
     getResolvedFeedbackLearnings(TOP_N),
     getRecurringFeedbackPatterns(TOP_N),
-    getSubAgentLearnings(TOP_N)
+    getSubAgentLearnings(TOP_N),
+    getVisionGapPatterns(TOP_N),
   ]);
 
   // Extract patterns and filtered stats
@@ -763,6 +809,9 @@ export async function buildLearningContext(sdId = null) {
       // Sub-agent intelligence
       sub_agent_learning_count: subAgentLearnings.length,
       sub_agent_perf_issues: subAgentLearnings.filter(s => s.source_type === 'sub_agent_performance').length,
+      // Vision gap intelligence (SD-MAN-INFRA-EXTEND-LEARN-COMMAND-001)
+      vision_gap_count: visionGaps.length,
+      vision_gaps: visionGaps,
       // Filtering transparency (v2)
       filtering: {
         patterns_scanned: patternFiltered.total,
@@ -786,6 +835,7 @@ export async function buildLearningContext(sdId = null) {
       total_feedback_learnings: feedbackLearnings.length,
       total_feedback_patterns: feedbackPatterns.length,
       total_sub_agent_learnings: subAgentLearnings.length,
+      total_vision_gaps: visionGaps.length,
       // Filtering summary (v2)
       patterns_filtered_out: totalFiltered,
       generated_at: new Date().toISOString()
@@ -803,6 +853,9 @@ export async function buildLearningContext(sdId = null) {
   console.log(`   Feedback learnings: ${feedbackLearnings.length}`);
   console.log(`   Recurring error types: ${feedbackPatterns.length}`);
   console.log(`   Sub-agent learnings: ${subAgentLearnings.length}`);
+  if (visionGaps.length > 0) {
+    console.log(`   Vision gaps: ${visionGaps.length} low-scoring dimensions surfaced`);
+  }
   if (subAgentLearnings.filter(s => s.source_type === 'sub_agent_performance').length > 0) {
     console.log(`      └─ ${subAgentLearnings.filter(s => s.source_type === 'sub_agent_performance').length} sub-agent(s) flagged for performance review`);
   }
