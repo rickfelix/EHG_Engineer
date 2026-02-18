@@ -1,7 +1,6 @@
 {
-  "sdKey": "SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-F",
-  "expectedBranch": "feat/SD-MAN-ORCH-EVA-CODEBASE-PLUS-001-F-error-recovery-integration-saga-dlq-circ",
-  "createdAt": "2026-02-16T20:49:33.924Z",
-  "hostname": "Legion-Laptop",
+  "sdKey": "SD-MAN-INFRA-DYNAMIC-VISION-ALIGNMENT-001",
+  "expectedBranch": "feat/SD-MAN-INFRA-DYNAMIC-VISION-ALIGNMENT-001",
+  "createdAt": "2026-02-18T17:52:52.413Z",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
