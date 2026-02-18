@@ -37,17 +37,20 @@ export async function validateTransitionReadiness(sd, supabase) {
   if (missingFields.length > 0) {
     issues.push(`Missing required fields: ${missingFields.join(', ')}`);
     console.log(`   ❌ Missing required fields: ${missingFields.join(', ')}`);
+    score -= 25 * missingFields.length;
   } else {
     console.log('   ✅ All required fields present');
   }
 
   // Check 2: SD status allows LEAD→PLAN transition
-  const validStatuses = ['ACTIVE', 'APPROVED', 'PLANNING', 'READY', 'LEAD_APPROVED', null, undefined];
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-019: Added 'DRAFT' - the standard starting state for LEAD-TO-PLAN
+  const validStatuses = ['ACTIVE', 'APPROVED', 'PLANNING', 'READY', 'LEAD_APPROVED', 'DRAFT', null, undefined];
   const blockingStatuses = ['COMPLETED', 'CANCELLED', 'ARCHIVED', 'ON_HOLD'];
 
   if (blockingStatuses.includes(sd.status?.toUpperCase())) {
     issues.push(`SD status '${sd.status}' does not allow handoff - must be active/approved`);
     console.log(`   ❌ Blocking status: ${sd.status}`);
+    score -= 30;
   } else if (!validStatuses.some(s => s === sd.status || (s && sd.status?.toUpperCase() === s))) {
     warnings.push(`Unusual SD status: ${sd.status} - verify this is intentional`);
     console.log(`   ⚠️  Unusual status: ${sd.status}`);
@@ -133,8 +136,18 @@ export async function validateTransitionReadiness(sd, supabase) {
   }
 
   if (!successMetrics || (Array.isArray(successMetrics) && successMetrics.length === 0)) {
-    issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
-    console.log('   ❌ success_metrics and success_criteria are both empty or missing');
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-019: Orchestrator children (with parent_sd_id) may not
+    // have metrics at creation time - they get populated during PLAN phase. Warn instead of block.
+    const isOrchestratorChild = !!sd.parent_sd_id;
+    if (isOrchestratorChild) {
+      warnings.push('success_metrics empty for orchestrator child - will be populated during PLAN phase');
+      console.log('   ⚠️  success_metrics empty (orchestrator child - warning only)');
+      score -= 15;
+    } else {
+      issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
+      console.log('   ❌ success_metrics and success_criteria are both empty or missing');
+      score -= 25;
+    }
   } else if (Array.isArray(successMetrics)) {
     // Validate structure: accept multiple valid formats
     // Format 1 (success_metrics): { metric: "...", target: "..." }
@@ -148,6 +161,7 @@ export async function validateTransitionReadiness(sd, supabase) {
     if (validMetrics.length === 0) {
       issues.push('success_metrics/success_criteria has no valid entries (expected: {metric,target}, {criterion,measure}, or string)');
       console.log('   ❌ No valid metric entries found');
+      score -= 25;
     } else if (validMetrics.length < successMetrics.length) {
       warnings.push(`${successMetrics.length - validMetrics.length} metric entries are invalid`);
       console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} metrics are valid`);
@@ -162,11 +176,15 @@ export async function validateTransitionReadiness(sd, supabase) {
   }
 
   const passed = issues.length === 0;
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-019: Proportional scoring instead of binary 0/70+.
+  // Each issue deducts from the running score rather than zeroing it.
+  const finalScore = Math.max(score, 0);
   console.log(`\n   Result: ${passed ? '✅ READY for LEAD→PLAN transition' : '❌ NOT READY - resolve issues above'}`);
+  console.log(`   Score: ${finalScore}/100 (${issues.length} issue(s), ${warnings.length} warning(s))`);
 
   return {
     pass: passed,
-    score: passed ? Math.max(score, 70) : 0,
+    score: finalScore,
     max_score: 100,
     issues,
     warnings
