@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { runTriageGate } from '../../triage-gate.js';
 
 import {
   buildSDDescription,
@@ -85,6 +86,20 @@ export async function createSDFromLearning(items, type, options = {}) {
       created_via: '/learn apply'
     }
   };
+
+  // Informational triage gate: log tier recommendation (non-blocking — /learn has
+  // already classified this as an SD through its approval flow).
+  try {
+    const triage = await runTriageGate(
+      { title, description: description.substring(0, 300), type: sdData.sd_type, source: 'learn' },
+      supabase
+    );
+    if (triage?.tier <= 2) {
+      console.log(`   ℹ️  Triage suggests Quick-Fix (Tier ${triage.tier}, ~${triage.estimatedLoc} LOC) — proceeding as SD per /learn approval`);
+    }
+  } catch {
+    // Triage gate is informational — never block SD creation
+  }
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
