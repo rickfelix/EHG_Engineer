@@ -91,8 +91,10 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
   const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
   const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
   const title = (item.title || '').substring(0, 40 - indent.length);
+  const visionScore = item.vision_alignment_score;
+  const visionBadge = visionScore != null ?   + colors.cyan + '[V:' + Math.round(visionScore) + ']' + colors.reset : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}... ${statusIcon}`);
+  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${visionBadge}... ${statusIcon}`);
 
   // Show who claimed it with enhanced details (FR-6)
   if (isClaimedByOther) {
@@ -166,8 +168,10 @@ function displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
 
   const workingIcon = item.is_working_on ? `${colors.bgYellow}◆${colors.reset}` : '';
   const title = (item.title || '').substring(0, 30);
+  const simpleVisionScore = item.vision_alignment_score;
+  const simpleVisionBadge = simpleVisionScore != null ? ' ' + colors.cyan + '[V:' + Math.round(simpleVisionScore) + ']' + colors.reset : '';
 
-  console.log(`${prefix}${workingIcon}${sdId} - ${title}... ${statusIcon}`);
+  console.log(`${prefix}${workingIcon}${sdId} - ${title}${simpleVisionBadge}... ${statusIcon}`);
 
   // Recursively show grandchildren
   const children = childItems.get(sdId) || childItems.get(item.id) || [];
