@@ -1,12 +1,17 @@
 # sd_claims Table
 
+> ⚠️ **DROPPED** — This table was removed on 2026-02-18 by SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001.
+> Claim state now lives exclusively in `claude_sessions.sd_id` + `status='active'`.
+> See: `docs/06_deployment/multi-session-coordination-ops.md` for updated operational guidance.
+
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
-**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T15:21:29.186Z
-**Rows**: 2,870
-**RLS**: Enabled (5 policies)
+**Status**: ~~ACTIVE~~ → **DROPPED 2026-02-18**
+**Migration**: `database/migrations/20260218_consolidate_sd_claims_into_claude_sessions.sql`
+**Generated**: 2026-02-18T15:21:29.186Z (historical snapshot before drop)
+**Rows at drop**: 2,875
+**Replacement**: `claude_sessions.sd_id` column with partial unique index `idx_claude_sessions_unique_active_claim`
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
