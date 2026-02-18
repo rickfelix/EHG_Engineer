@@ -2,11 +2,11 @@
 
 **Category**: Deployment
 **Status**: Approved
-**Version**: 4.1.0
+**Version**: 5.0.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-02-13
+**Last Updated**: 2026-02-18
 **Tags**: session-management, operations, monitoring, troubleshooting, ship-safety, git-operations
-**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001, QF-20260213-620
+**SD**: SD-LEO-INFRA-MULTI-SESSION-COORDINATION-001, SD-LEO-FIX-MULTI-SESSION-SHIP-001, SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001
 
 ## Overview
 
@@ -21,12 +21,8 @@ This runbook provides operational guidance for the Multi-Session Coordination sy
 - **Location**: `claude_sessions` table
 - **Condition**: `WHERE sd_id IS NOT NULL AND status = 'active'`
 
-**Unique Partial Index (sd_claims)**: `sd_claims_active_unique`
-- **Purpose**: Enforces single unreleased claim per SD at database level (lifecycle-aware)
-- **Location**: `sd_claims` table
-- **Condition**: `WHERE released_at IS NULL`
-- **Added**: Migration `20260213_fix_sd_claims_lifecycle_aware_unique.sql`
-- **Impact**: Only ONE active claim can exist per SD. Once a claim is released (released_at set), the constraint no longer applies, allowing the same SD to be claimed again later.
+**⚠️ REMOVED**: `sd_claims` table was dropped in SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001 (2026-02-18).
+The `sd_claims_active_unique` partial index no longer exists. All claim state now lives exclusively in `claude_sessions`.
 
 **Trigger**: `sync_is_working_on_trigger`
 - **Purpose**: Automatically syncs `is_working_on` flag when sessions claim/release SDs
@@ -85,10 +81,6 @@ psql "postgresql://postgres.PROJECT:[PASSWORD]@aws-1-us-east-1.pooler.supabase.c
 SELECT indexname, indexdef FROM pg_indexes
 WHERE indexname = 'idx_claude_sessions_unique_active_claim';
 
--- Verify unique partial index exists (sd_claims)
-SELECT indexname, indexdef FROM pg_indexes
-WHERE indexname = 'sd_claims_active_unique';
-
 -- Verify trigger exists
 SELECT trigger_name, event_manipulation, event_object_table
 FROM information_schema.triggers
@@ -111,8 +103,7 @@ DROP FUNCTION IF EXISTS sync_is_working_on_with_session();
 -- Remove unique index (claude_sessions)
 DROP INDEX IF EXISTS idx_claude_sessions_unique_active_claim;
 
--- Remove unique partial index (sd_claims)
-DROP INDEX IF EXISTS sd_claims_active_unique;
+-- Note: sd_claims table was dropped — no sd_claims rollback needed
 
 -- Restore old view (without heartbeat enhancements)
 -- See migration file for full rollback script
@@ -173,29 +164,47 @@ WHERE heartbeat_age_seconds > 180 AND heartbeat_age_seconds <= 300;
 
 ## Troubleshooting
 
-### Issue: Session Claim Rejected
+### Manual Claim Release (Single Table — As of v5.0.0)
 
-**Symptom**: `sd:start` returns "already_claimed" error
+**When**: GATE_MULTI_SESSION_CLAIM_CONFLICT blocks handoff due to stale/mismatch claim.
+
+**Check current claim**:
+```sql
+SELECT session_id, sd_id, status, terminal_id, heartbeat_at
+FROM claude_sessions
+WHERE sd_id = 'SD-XXX-001' AND status = 'active';
+```
+
+**Release claim** (update claude_sessions only — sd_claims no longer exists):
+```sql
+UPDATE claude_sessions
+SET sd_id = NULL, status = 'idle', released_at = NOW(), released_reason = 'manual'
+WHERE session_id = 'session_abc123';
+```
+
+**Verify cleared**:
+```sql
+SELECT * FROM v_active_sessions WHERE sd_id = 'SD-XXX-001';
+-- Should return 0 rows
+```
+
+---
+
+### Issue: Session Claim Rejected (GATE_MULTI_SESSION_CLAIM_CONFLICT)
+
+**Symptom**: `sd:start` or handoff returns "already_claimed" / GATE_MULTI_SESSION_CLAIM_CONFLICT
 
 **Diagnosis**:
 ```sql
-SELECT
-  cs.session_id,
-  cs.sd_id,
-  vas.heartbeat_age_seconds,
-  vas.heartbeat_age_human,
-  vas.hostname,
-  vas.tty,
-  vas.computed_status
-FROM claude_sessions cs
-JOIN v_active_sessions vas ON cs.session_id = vas.session_id
-WHERE cs.sd_id = 'SD-XXX-001'
-  AND vas.computed_status = 'active';
+SELECT session_id, sd_id, heartbeat_age_human, hostname, tty, computed_status
+FROM v_active_sessions
+WHERE sd_id = 'SD-XXX-001' AND computed_status = 'active';
 ```
 
 **Resolution**:
 - **If owner is active (heartbeat <5min)**: Wait for owner to finish
-- **If owner is stale (heartbeat >5min)**: Force release via `release_sd()`
+- **If owner is stale (heartbeat >5min)**: Force release via `release_sd()` RPC
+- **If stale manual release needed**: Use the "Manual Claim Release" steps above
 
 ### Issue: Heartbeat Not Starting
 
@@ -237,13 +246,13 @@ console.log('Healthy:', stats.healthy);
 
 ### Issue: Unique Violation on Claim
 
-**Symptom**: `claim_sd()` returns `race_condition` error or unique constraint violation on `sd_claims_active_unique`
+**Symptom**: `claim_sd()` returns `race_condition` error or unique constraint violation on `idx_claude_sessions_unique_active_claim`
 
-**Explanation**: Another session claimed the SD between check and update (race condition caught by unique partial index on sd_claims)
+**Explanation**: Another session claimed the SD between check and update (race condition caught by the partial unique index on `claude_sessions` WHERE sd_id IS NOT NULL AND status='active').
 
-**Resolution**: This is expected behavior - retry or pick different SD
+**Resolution**: This is expected behavior - retry or pick a different SD. The constraint ensures only ONE active claim per SD. After release (status → idle, sd_id → NULL), the same SD can be claimed again without any manual cleanup.
 
-**Note**: The `sd_claims_active_unique` partial index ensures only ONE unreleased claim exists per SD. Once a claim is released (released_at set), the same SD can be claimed again.
+**Note**: As of SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001 (2026-02-18), `sd_claims` table is dropped. Claim enforcement is entirely via `claude_sessions`.
 
 ### Issue: is_working_on Not Syncing
 
@@ -284,7 +293,7 @@ WHERE session_id = 'session_abc123';
 | Component | Impact | Notes |
 |-----------|--------|-------|
 | Unique Index (claude_sessions) | Minimal | Indexed on primary key (sd_id) |
-| Unique Partial Index (sd_claims) | Minimal | Partial index on sd_id WHERE released_at IS NULL |
+| ~~Unique Partial Index (sd_claims)~~ | Removed | sd_claims table dropped 2026-02-18 |
 | Trigger | Low | Only fires on UPDATE to claude_sessions |
 | View Query | Low | Computed fields calculated on read |
 | Heartbeat RPC | Minimal | One UPDATE every 30s per session |
@@ -339,7 +348,7 @@ SELECT AVG(heartbeat_age_seconds) FROM v_active_sessions WHERE computed_status =
    ```sql
    -- Check index bloat (if performance degrades)
    REINDEX INDEX idx_claude_sessions_unique_active_claim;
-   REINDEX INDEX sd_claims_active_unique;
+   -- sd_claims_active_unique no longer exists (sd_claims dropped 2026-02-18)
    ```
 
 2. **View Performance**:
@@ -1228,7 +1237,8 @@ SELECT prosrc FROM pg_proc WHERE proname = 'create_or_replace_session';
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions), Added sd_claims lifecycle-aware unique constraint (QF-20260213-620) |
+| 5.0.0 | 2026-02-18 | **Breaking**: Dropped sd_claims table (SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001). All claim state now in claude_sessions exclusively. Fixed isSameConversation() for UUID vs port-based terminal_id. v_active_sessions rebuilt without sd_claims JOIN. Manual release is now single-table. |
+| 4.1.0 | 2026-02-13 | Added session creation heartbeat guard (prevents hijacking active sessions), Added sd_claims lifecycle-aware unique constraint (superseded by v5.0.0) |
 | 4.0.0 | 2026-02-11 | Added ship process safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001) |
 | 3.1.0 | 2026-02-09 | Added terminal identity centralization and handoff resolution tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018) |
 | 3.0.0 | 2026-02-07 | Added git worktree automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001) |
