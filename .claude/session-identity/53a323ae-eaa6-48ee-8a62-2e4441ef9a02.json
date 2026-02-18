@@ -1,0 +1,8 @@
+{
+  "session_id": "53a323ae-eaa6-48ee-8a62-2e4441ef9a02",
+  "sse_port": "22495",
+  "cc_pid": "29832",
+  "source": "startup",
+  "model": "claude-sonnet-4-6[1m]",
+  "captured_at": "2026-02-18T15:22:00.098Z"
+}
