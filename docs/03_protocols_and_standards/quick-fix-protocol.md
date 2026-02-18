@@ -81,10 +81,14 @@ Think of it like **emergency surgery** - fast execution, maximum precision.
 
 ## Quick-Fix vs Strategic Directive
 
-| Attribute | Quick-Fix | Strategic Directive |
-|-----------|-----------|-------------------|
-| **Scope** | ≤50 LOC | >50 LOC |
-| **Planning** | Lightweight (auto-triage) | Full LEAD→PLAN→EXEC |
+Thresholds are DB-driven via `work_item_thresholds` table. Defaults: Tier 1 ≤30 LOC, Tier 2 31–75 LOC.
+The [Triage Gate](../../docs/reference/triage-gate-guide.md) (`scripts/modules/triage-gate.js`) proactively recommends QF vs SD before creation.
+
+| Attribute | Tier 1 Quick-Fix | Tier 2 Quick-Fix | Strategic Directive |
+|-----------|-----------------|------------------|-------------------|
+| **Scope** | ≤30 LOC (default) | 31–75 LOC (default) | >75 LOC or risk keyword |
+| **Approval** | Auto-approve (no rubric) | Compliance rubric ≥70 | LEAD approval required |
+| **Planning** | No LEAD, no PRD | No LEAD, no PRD | Full LEAD→PLAN→EXEC |
 | **Approval** | No LEAD approval needed | LEAD approval required |
 | **PRD** | Auto-generated from error | Full PRD creation |
 | **Implementation Speed** | Minutes | Hours to days |
