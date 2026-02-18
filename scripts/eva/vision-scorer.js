@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
+import { sendVisionScoreNotification } from '../../lib/notifications/orchestrator.js';
 
 dotenv.config();
 
@@ -368,6 +369,21 @@ ${rawResponse.substring(0, 1000)}`;
     }
 
     scoreRecord.id = inserted.id;
+
+    // Send notification to Chairman after successful persistence (FR-001)
+    // SD: SD-MAN-INFRA-VISION-SCORE-NOTIFICATIONS-001
+    try {
+      await sendVisionScoreNotification(supabase, {
+        sdKey: sdKey || '(custom scope)',
+        sdTitle: sdContext?.title || '',
+        totalScore: parsed.total_score,
+        dimensionScores,
+        scoreId: inserted.id,
+      });
+    } catch (notifErr) {
+      // Notification failure must not fail the scoring run (AC-005)
+      console.error(`[vision-score-notif] Notification failed: ${notifErr.message}`);
+    }
   }
 
   // Expose summary and latency for callers even though they're in rubric_snapshot
