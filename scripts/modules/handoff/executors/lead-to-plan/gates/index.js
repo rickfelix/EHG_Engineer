@@ -39,3 +39,9 @@ export {
   isPlaceholderText,
   analyzePlaceholderContent
 } from './placeholder-content.js';
+
+// Vision Score Gate (SD-MAN-INFRA-VISION-SCORE-GATE-001)
+export {
+  validateVisionScore,
+  createVisionScoreGate
+} from './vision-score.js';
