@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T15:11:07.799Z
-**Tables**: 481
+**Generated**: 2026-02-18T15:21:29.186Z
+**Tables**: 485
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (481)
+## All Tables (485)
 
 ### LEO Protocol
 
@@ -282,6 +282,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [enhancement_proposals](tables/enhancement_proposals.md)
 - [eva_actions](tables/eva_actions.md)
 - [eva_agent_communications](tables/eva_agent_communications.md)
+- [eva_architecture_plans](tables/eva_architecture_plans.md)
 - [eva_artifact_dependencies](tables/eva_artifact_dependencies.md)
 - [eva_audit_log](tables/eva_audit_log.md)
 - [eva_automation_executions](tables/eva_automation_executions.md)
@@ -306,6 +307,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)
 - [eva_ventures](tables/eva_ventures.md)
+- [eva_vision_documents](tables/eva_vision_documents.md)
+- [eva_vision_iterations](tables/eva_vision_iterations.md)
+- [eva_vision_scores](tables/eva_vision_scores.md)
 - [eva_weekly_review_templates](tables/eva_weekly_review_templates.md)
 - [eva_youtube_intake](tables/eva_youtube_intake.md)
 - [evaluation_profile_outcomes](tables/evaluation_profile_outcomes.md)
