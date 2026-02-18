@@ -196,9 +196,55 @@ function detectWorkType() {
 }
 
 /**
+ * Run a git command via PowerShell to avoid corrupting MSYS2 shared pipe state.
+ * RCA-MSYS2-PIPE-CORRUPTION-001: Direct execSync('git ...') through bash spawns
+ * MSYS2 subprocesses that can corrupt stdio file descriptors for the session.
+ * @param {string} gitArgs - Git command arguments (e.g., 'worktree prune')
+ * @param {object} opts - Options passed to execSync (cwd, timeout, etc.)
+ */
+function gitViaPowerShell(gitArgs, opts = {}) {
+  const escaped = gitArgs.replace(/"/g, '\\"');
+  const cmd = process.platform === 'win32'
+    ? `powershell.exe -NoProfile -Command "git ${escaped}"`
+    : `git ${gitArgs}`;
+  return execSync(cmd, { stdio: 'pipe', ...opts });
+}
+
+// Max worktrees to clean per session start — prevents MSYS2 pipe corruption
+// from subprocess storms (RCA-MSYS2-PIPE-CORRUPTION-001, US-002)
+const MAX_CLEANUP_PER_SESSION = 3;
+
+/**
+ * Check if a worktree is actively used by a running session (US-004).
+ * @param {string} wtPath - Absolute path to the worktree
+ * @returns {boolean} true if an active session is likely using this worktree
+ */
+function isWorktreeInUseBySession(wtPath) {
+  try {
+    const sessionFile = path.join(wtPath, '.ehg-session.json');
+    if (fs.existsSync(sessionFile)) {
+      const meta = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+      if (meta.sessionId) {
+        const mtime = fs.statSync(sessionFile).mtime;
+        if (Date.now() - mtime.getTime() < 10 * 60 * 1000) {
+          return true;
+        }
+      }
+    }
+  } catch { /* best effort */ }
+  return false;
+}
+
+/**
  * Clean up stale concurrent-auto-* worktrees from previous sessions.
  * Runs inline before concurrent detection to prevent accumulation.
  * Uses 1-hour threshold (not 24h) since these are temporary by nature.
+ *
+ * Hardened per RCA-MSYS2-PIPE-CORRUPTION-001:
+ * - PowerShell for git ops (avoids MSYS2 pipe corruption)
+ * - Bounded to MAX_CLEANUP_PER_SESSION (prevents subprocess storms)
+ * - Active session check before deletion (prevents CWD disappearing)
+ * - CWD validation after cleanup (resets to repo root if invalid)
  */
 function cleanupStaleConcurrentWorktrees() {
   const maxAgeMs = 60 * 60 * 1000; // 1 hour
@@ -215,9 +261,15 @@ function cleanupStaleConcurrentWorktrees() {
   if (entries.length === 0) return;
 
   let cleaned = 0;
+  let skipped = 0;
   const repoRoot = path.resolve(__dirname, '../..');
 
   for (const entry of entries) {
+    if (cleaned >= MAX_CLEANUP_PER_SESSION) {
+      skipped += entries.length - entries.indexOf(entry);
+      break;
+    }
+
     const wtPath = path.join(worktreesDir, entry);
 
     // Determine age from metadata or directory mtime
@@ -238,22 +290,26 @@ function cleanupStaleConcurrentWorktrees() {
 
     if (Date.now() - createdAt.getTime() <= maxAgeMs) continue;
 
-    // Unlock if locked (git prune won't remove locked entries)
+    // US-004: Skip if an active session is using this worktree
+    if (isWorktreeInUseBySession(wtPath)) {
+      logEvent('session.cleanup_skipped_active', { entry, reason: 'active_session' });
+      skipped++;
+      continue;
+    }
+
+    // US-001: Use PowerShell for git ops to avoid MSYS2 pipe corruption
     try {
-      execSync(`git worktree unlock "${wtPath}"`, {
-        cwd: repoRoot, stdio: 'pipe', timeout: 2000
+      gitViaPowerShell(`worktree unlock "${wtPath}"`, {
+        cwd: repoRoot, timeout: 3000
       });
     } catch { /* not locked or already unlocked */ }
 
-    // Force remove — concurrent worktrees are throwaway and may have
-    // inherited dirty state from the main repo's uncommitted changes
     try {
-      execSync(`git worktree remove --force "${wtPath}"`, {
-        cwd: repoRoot, stdio: 'pipe', timeout: 3000
+      gitViaPowerShell(`worktree remove --force "${wtPath}"`, {
+        cwd: repoRoot, timeout: 5000
       });
       cleaned++;
     } catch {
-      // git worktree remove can fail — fall back to rm + prune
       try {
         fs.rmSync(wtPath, { recursive: true, force: true });
         cleaned++;
@@ -263,9 +319,22 @@ function cleanupStaleConcurrentWorktrees() {
 
   if (cleaned > 0) {
     try {
-      execSync('git worktree prune', { cwd: repoRoot, stdio: 'pipe', timeout: 3000 });
+      gitViaPowerShell('worktree prune', { cwd: repoRoot, timeout: 3000 });
     } catch { /* best effort */ }
-    logEvent('session.stale_cleanup', { cleaned, total: entries.length });
+  }
+
+  if (cleaned > 0 || skipped > 0) {
+    logEvent('session.stale_cleanup', { cleaned, skipped, total: entries.length });
+  }
+
+  // US-005: Validate CWD still exists after cleanup (Mode A protection)
+  try {
+    process.cwd();
+  } catch {
+    try {
+      process.chdir(repoRoot);
+      logEvent('session.cwd_reset', { reason: 'cwd_deleted_during_cleanup', resetTo: repoRoot });
+    } catch { /* nothing we can do */ }
   }
 }
 
