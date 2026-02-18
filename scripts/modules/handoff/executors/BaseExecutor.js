@@ -536,15 +536,14 @@ export class BaseExecutor {
 
     const claimId = sd.sd_key || sdId;
 
-    // Step 1: Check if a valid claim already exists (from sd:start or parent conversation)
-    // FIX: Query sd_claims directly — v_active_sessions reads claude_sessions.sd_id which
-    // diverges from sd_claims when sessions are reused or terminal identity breaks occur.
-    // See RCA: SD-LEO-FIX-CLAIM-DUAL-TRUTH-001
+    // Step 1: Check if a valid claim already exists (from sd:start or parent conversation).
+    // SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001: sd_claims dropped — claude_sessions is the
+    // single source of truth. Active claims are sessions with sd_id set and status='active'.
     const { data: existingClaims } = await this.supabase
-      .from('sd_claims')
+      .from('claude_sessions')
       .select('session_id, sd_id, claimed_at')
       .eq('sd_id', claimId)
-      .is('released_at', null);
+      .eq('status', 'active');
 
     const activeClaim = (existingClaims || []).find(c => {
       const ageSeconds = (Date.now() - new Date(c.claimed_at).getTime()) / 1000;
