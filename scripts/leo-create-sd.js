@@ -41,6 +41,7 @@ import {
   readPlanFile,
   getDisplayPath
 } from './modules/plan-archiver.js';
+import { runTriageGate, formatTriageSummary } from './modules/triage-gate.js';
 
 dotenv.config();
 
@@ -122,6 +123,19 @@ async function createFromUAT(testId) {
 
   // Determine type from UAT result
   const type = uatResult.status === 'failed' ? 'fix' : 'feature';
+
+  // Triage Gate: soft recommendation for UAT-sourced items
+  try {
+    const triageResult = await runTriageGate({
+      title: uatResult.test_name || uatResult.title || 'UAT Finding',
+      description: uatResult.notes || uatResult.description || '',
+      type,
+      source: 'uat'
+    }, supabase);
+    if (triageResult.tier <= 2) {
+      console.log(`   ℹ️  Triage suggests Quick Fix (Tier ${triageResult.tier}, ~${triageResult.estimatedLoc} LOC). Consider QF workflow for smaller scope.`);
+    }
+  } catch { /* non-fatal */ }
 
   // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
   const venturePrefix = await resolveVenturePrefix();
@@ -245,6 +259,19 @@ async function createFromFeedback(feedbackId) {
   // Map feedback type to SD type
   const typeMap = { issue: 'fix', enhancement: 'enhancement', bug: 'bugfix' };
   const type = typeMap[feedback.type] || 'feature';
+
+  // Triage Gate: soft recommendation for feedback-sourced items
+  try {
+    const triageResult = await runTriageGate({
+      title: feedback.title,
+      description: feedback.description || feedback.title,
+      type,
+      source: 'feedback'
+    }, supabase);
+    if (triageResult.tier <= 2) {
+      console.log(`   ℹ️  Triage suggests Quick Fix (Tier ${triageResult.tier}, ~${triageResult.estimatedLoc} LOC). Consider QF workflow for smaller scope.`);
+    }
+  } catch { /* non-fatal */ }
 
   // Resolve venture context (SD-LEO-INFRA-SD-NAMESPACING-001)
   const venturePrefix = await resolveVenturePrefix();
@@ -1117,6 +1144,23 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
         process.exit(0);
       }
 
+      // Triage Gate: Recommend QF for small work items (soft gate for CLI)
+      const forceCreate = args.includes('--force') || args.includes('-f');
+      if (!forceCreate) {
+        try {
+          const triageResult = await runTriageGate({ title, description: title, type, source: 'interactive' }, supabase);
+          if (triageResult.tier <= 2) {
+            console.log('\n' + formatTriageSummary(triageResult));
+            console.log(`\n   💡 Consider using Quick Fix instead:`);
+            console.log(`      node scripts/create-quick-fix.js --title "${title}" --type ${type}`);
+            console.log('   Continuing with full SD creation...\n');
+          }
+        } catch (triageErr) {
+          // Non-fatal: triage failure should not block SD creation
+          console.warn(`[triage-gate] Warning: ${triageErr.message}`);
+        }
+      }
+
       // Phase 0 not required or complete - proceed with SD creation
       // Check if Phase 0 artifacts are available to enrich metadata
       let phase0Metadata = {};
@@ -1143,9 +1187,6 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
       const venturePrefix = await resolveVenturePrefix(cliVenture);
 
       const sdKey = await generateSDKey({ source, type, title, venturePrefix });
-
-      // QF-CLAIM-CONFLICT-UX-001: Check for --force flag to bypass QF- prefix warning
-      const forceCreate = args.includes('--force') || args.includes('-f');
 
       await createSD({
         sdKey,

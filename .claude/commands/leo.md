@@ -454,6 +454,24 @@ Show the SD queue to determine what to work on next:
 ### If argument starts with "create" or "c":
 Launch the SD creation wizard. Parse additional flags:
 
+**Step 0: Work Item Triage (runs before type inference)**
+
+Before type inference, run the triage gate to check if this work item is better suited as a Quick Fix:
+
+```bash
+node scripts/modules/triage-gate.js --title "<title>" --type "<inferred-or-unknown>" --source "interactive" --output-json
+```
+
+Parse the JSON output and apply these rules:
+- **tier == 3 OR shouldGate == false** → Proceed to type inference (normal SD creation)
+- **tier <= 2 AND shouldGate == true** → Present `askUserQuestionPayload` from result to user:
+  - User picks **"Create Quick Fix"** → run `node scripts/create-quick-fix.js --title "<title>" --type <type>`, then stop
+  - User picks **"Create Full SD (Override)"** → proceed to type inference
+
+**Exemptions:**
+- `--from-plan`, `--child` flags → skip triage entirely (source is exempt)
+- `--from-uat`, `--from-feedback`, `--from-learn` → triage runs as soft recommendation only (logged, not gated)
+
 **Context-Based Type Inference (MANDATORY FIRST STEP):**
 
 Before asking the user anything, analyze the recent conversation context to infer the SD type:
