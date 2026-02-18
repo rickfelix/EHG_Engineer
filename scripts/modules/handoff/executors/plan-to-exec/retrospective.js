@@ -11,6 +11,7 @@
 
 import readline from 'readline';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems } from '../../retrospective-enricher.js';
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -161,7 +162,7 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
     // Build retrospective data (PAT-RETRO-BOILERPLATE-001 fix: pass allIssues)
     const whatWentWell = buildWhatWentWell(prdRating, storiesRating, validationRating, testPlanRating, handoffResult);
     const whatNeedsImprovement = buildWhatNeedsImprovement(prdRating, storiesRating, validationRating, testPlanRating, gapsFound, allIssues);
-    const keyLearnings = buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues, sdIssues);
+    const keyLearnings = buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues, sdIssues, sd);
     const actionItems = buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, allIssues);
 
     // Build discovered_issues metadata (PAT-RETRO-BOILERPLATE-001 fix)
@@ -300,13 +301,17 @@ function buildWhatNeedsImprovement(prdRating, storiesRating, validationRating, t
 
 /**
  * Build "key learnings" array for retrospective
- * PAT-RETRO-BOILERPLATE-001 fix: Use actual issues instead of boilerplate
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-021: Use SD-specific context instead of metric-only entries.
+ * Metric-only entries (e.g., "quality score: 80%") score 1-2/10 on Learning Specificity
+ * and fail RETROSPECTIVE_EXISTS gate at 50/100.
  */
-function buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues = [], sdIssues = []) {
-  const keyLearnings = [
-    { learning: `Average handoff quality rating: ${avgRating.toFixed(1)}/5`, is_boilerplate: false },
-    { learning: `Handoff completed with quality score: ${qualityScore}%`, is_boilerplate: false }
-  ];
+function buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues = [], sdIssues = [], sd = null) {
+  // Use SD-specific content when available; fall back to minimal metrics only if sd is missing
+  const keyLearnings = sd
+    ? buildSDSpecificKeyLearnings(sd, 'PLAN_TO_EXEC')
+    : [
+        { learning: `PLAN-TO-EXEC handoff quality: ${qualityScore}%`, is_boilerplate: false }
+      ];
 
   if (gapsFound && gapsFound !== 'none' && gapsFound !== 'N/A') {
     keyLearnings.push({ learning: `Implementation gap discovered: ${gapsFound}`, is_boilerplate: false });
@@ -384,9 +389,14 @@ function buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, a
     }
   }
 
-  // Only add generic item if we have NO actual content
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-021: action items need owner/deadline for quality gate
   if (actionItems.length === 0) {
-    actionItems.push({ action: 'No immediate actions required - continue standard workflow', is_boilerplate: false });
+    actionItems.push({
+      action: 'Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during implementation',
+      owner: 'EXEC-Agent',
+      deadline: 'EXEC-completion',
+      is_boilerplate: false
+    });
   }
 
   return actionItems;
