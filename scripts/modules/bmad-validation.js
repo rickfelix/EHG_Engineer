@@ -24,6 +24,9 @@ import {
   getTestPlanImprovementGuidance
 } from './test-plan-quality-validation.js';
 
+// SD-LEARN-FIX-ADDRESS-PAT-AUTO-020: SD-type-aware scoring for lightweight SDs
+import { isLightweightSDType } from './handoff/validation/sd-type-applicability-policy.js';
+
 /**
  * Validate BMAD enhancements for PLAN→EXEC handoff
  *
@@ -60,7 +63,7 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
     if (isUUID) {
       const result = await supabase
         .from('strategic_directives_v2')
-        .select('id, title, checkpoint_plan')
+        .select('id, sd_type, title, checkpoint_plan')
         .eq('id', sd_id)
         .single();
       sd = result.data;
@@ -69,7 +72,7 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
       // SD-LEO-ID-NORMALIZE-001: Support id and sd_key lookup
       const result = await supabase
         .from('strategic_directives_v2')
-        .select('id, title, checkpoint_plan')
+        .select('id, sd_type, title, checkpoint_plan')
         .or(`id.eq.${sd_id},sd_key.eq.${sd_id}`)
         .single();
       sd = result.data;
@@ -103,10 +106,31 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
     // ================================================
     console.log('\n   🧪 Checking User Story Context Engineering...');
 
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-020: STORIES is OPTIONAL for lightweight SD types
+    // (infrastructure, documentation, fix, refactor, etc.) per sd-type-applicability-policy.js
+    const sdType = sd.sd_type || '';
+    const isLightweight = isLightweightSDType(sdType);
+
     if (storyCount === 0) {
-      console.log('      ⚠️  No user stories found - STORIES sub-agent not run yet');
-      validation.warnings.push('No user stories found - PRD may not have user stories generated');
-      validation.score += 25; // Partial credit - not blocking
+      if (isLightweight) {
+        // For lightweight SDs, 0 stories is the expected correct state — full credit
+        console.log(`      ℹ️  No user stories (${sdType} SD) - context engineering not required`);
+        validation.warnings.push(`No user stories found - expected for ${sdType} SD type (STORIES is OPTIONAL)`);
+        validation.score += 50; // Full credit: 0 stories is correct for lightweight SDs
+        validation.details.stories_context_engineering = {
+          verdict: 'NOT_REQUIRED',
+          sd_type: sdType,
+          reason: 'STORIES is OPTIONAL for lightweight SD types per sd-type-applicability-policy.js'
+        };
+      } else {
+        console.log('      ⚠️  No user stories found - STORIES sub-agent not run yet');
+        validation.warnings.push('No user stories found - PRD may not have user stories generated');
+        validation.score += 25; // Partial credit - not blocking
+        validation.details.stories_context_engineering = {
+          verdict: 'NOT_FOUND',
+          remediation: `node lib/sub-agent-executor.js STORIES ${sd_id}`
+        };
+      }
     } else {
       // Check how many stories have implementation_context
       const storiesWithContext = userStories.filter(s =>
@@ -127,8 +151,22 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
           stories_with_context: storiesWithContext,
           total_stories: storyCount
         };
+      } else if (isLightweight) {
+        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-020: For lightweight SDs, insufficient context is a
+        // warning only — STORIES is OPTIONAL per sd-type-applicability-policy.js
+        console.log(`      ⚠️  WARNING: Low context coverage for ${sdType} SD (${Math.round(contextCoverage)}%) - advisory only`);
+        validation.warnings.push(`User story context coverage ${Math.round(contextCoverage)}% < 80% (advisory for ${sdType} SD - STORIES is OPTIONAL)`);
+        validation.score += 25; // Partial credit - warning only, not blocking
+        validation.details.stories_context_engineering = {
+          verdict: 'LOW_COVERAGE_WARNING',
+          sd_type: sdType,
+          coverage: contextCoverage,
+          stories_with_context: storiesWithContext,
+          total_stories: storyCount,
+          note: 'STORIES is OPTIONAL for lightweight SD types - low coverage is advisory'
+        };
       } else {
-        // 100% COMPLIANCE ENFORCEMENT: No partial credit below 80%
+        // 100% COMPLIANCE ENFORCEMENT: No partial credit below 80% for non-lightweight SDs
         console.log(`      ❌ FAIL: Insufficient context engineering (${Math.round(contextCoverage)}% coverage)`);
         validation.passed = false;
         validation.issues.push(`User story context engineering requires ≥80% coverage (current: ${Math.round(contextCoverage)}%) - run STORIES sub-agent before PLAN→EXEC handoff`);
