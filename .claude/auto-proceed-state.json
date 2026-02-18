@@ -1,13 +1,12 @@
 {
-  "isActive": true,
+  "isActive": false,
   "wasInterrupted": false,
-  "currentSd": "SD-MAN-ORCH-EVA-GOVERNANCE-POLISH-001-A",
-  "currentPhase": "EXEC",
-  "currentTask": "Implementing Advisory Checkpoints and Scheduled Runtime Improvements",
+  "currentSd": null,
+  "currentPhase": null,
+  "currentTask": null,
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
-  "clearedAt": "2026-02-16T03:07:01.542Z",
-  "lastUpdatedAt": "2026-02-16T12:34:15.489Z"
+  "clearedAt": "2026-02-18T17:31:07.095Z"
 }
