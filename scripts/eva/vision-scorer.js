@@ -23,7 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
-import { sendVisionScoreNotification } from '../../lib/notifications/orchestrator.js';
+import { sendVisionScoreNotification, sendVisionScoreTelegramNotification } from '../../lib/notifications/orchestrator.js';
 
 dotenv.config();
 
@@ -383,6 +383,19 @@ ${rawResponse.substring(0, 1000)}`;
     } catch (notifErr) {
       // Notification failure must not fail the scoring run (AC-005)
       console.error(`[vision-score-notif] Notification failed: ${notifErr.message}`);
+    }
+
+    // Send Telegram notification (SD-MAN-INFRA-TELEGRAM-ADAPTER-VISION-001)
+    try {
+      await sendVisionScoreTelegramNotification(supabase, {
+        sdKey: sdKey || '(custom scope)',
+        sdTitle: sdContext?.title || '',
+        totalScore: parsed.total_score,
+        dimensionScores,
+        scoreId: inserted.id,
+      });
+    } catch (telegramErr) {
+      console.error(`[telegram-vision] Notification failed: ${telegramErr.message}`);
     }
   }
 
