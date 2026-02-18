@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T15:11:07.799Z
+**Generated**: 2026-02-18T15:21:29.186Z
 **Rows**: 8
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (74 total)
+## Columns (76 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -97,6 +97,8 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | build_estimate | `jsonb` | YES | - | - |
 | brief_id | `uuid` | YES | - | - |
 | discovery_strategy | `text` | YES | - | - |
+| vision_id | `uuid` | YES | - | FK to eva_vision_documents. Replaces free-text vision_alignment over time. vision_alignment TEXT kept for backward compatibility until data migration + column drop in a future SD. |
+| architecture_plan_id | `uuid` | YES | - | FK to eva_architecture_plans. Links venture to its formal Architecture Plan. |
 
 ## Constraints
 
@@ -105,10 +107,12 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ### Foreign Keys
 - `ventures_archetype_fkey`: archetype → archetype_benchmarks(archetype)
+- `ventures_architecture_plan_id_fkey`: architecture_plan_id → eva_architecture_plans(id)
 - `ventures_brief_id_fkey`: brief_id → venture_briefs(id)
 - `ventures_ceo_agent_id_fkey`: ceo_agent_id → agents(id)
 - `ventures_company_id_fkey`: company_id → companies(id)
 - `ventures_portfolio_id_fkey`: portfolio_id → portfolios(id)
+- `ventures_vision_id_fkey`: vision_id → eva_vision_documents(id)
 
 ### Check Constraints
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 25)))
@@ -174,6 +178,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_vertical_category`
   ```sql
   CREATE INDEX idx_ventures_vertical_category ON public.ventures USING btree (vertical_category)
+  ```
+- `idx_ventures_vision`
+  ```sql
+  CREATE INDEX idx_ventures_vision ON public.ventures USING btree (vision_id) WHERE (vision_id IS NOT NULL)
   ```
 - `ventures_ceo_agent_id_idx`
   ```sql

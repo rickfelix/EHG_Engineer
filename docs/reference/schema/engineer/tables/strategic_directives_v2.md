@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T15:11:07.799Z
+**Generated**: 2026-02-18T15:21:29.186Z
 **Rows**: 1,099
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (81 total)
+## Columns (84 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -103,6 +103,9 @@ Use the id column instead - it is the canonical identifier. |
 | uuid_internal_pk | `uuid` | **NO** | - | - |
 | type_change_reason | `text` | YES | - | Required explanation when sd_type is changed. Used to document why type was corrected and to detect gaming attempts. |
 | claiming_session_id | `text` | YES | - | Session ID of the Claude instance that owns this SD. Set by claimGuard, cleared by release_sd. Replaces is_working_on boolean. |
+| vision_score | `integer(32)` | YES | - | Vision alignment score (0-100) from most recent eva/score run for this SD. |
+| vision_score_action | `character varying(20)` | YES | - | Action classification from last vision score: accept, minor_sd, gap_closure_sd, or escalate. |
+| vision_origin_score_id | `uuid` | YES | - | If this SD was generated as a corrective action, links back to the eva_vision_scores record that triggered its creation. |
 
 ## Constraints
 
@@ -112,6 +115,7 @@ Use the id column instead - it is the canonical identifier. |
 ### Foreign Keys
 - `strategic_directives_v2_parent_sd_id_fkey`: parent_sd_id → strategic_directives_v2(id)
 - `strategic_directives_v2_target_release_id_fkey`: target_release_id → releases(id)
+- `strategic_directives_v2_vision_origin_score_id_fkey`: vision_origin_score_id → eva_vision_scores(id)
 
 ### Unique Constraints
 - `strategic_directives_v2_sd_code_user_facing_key`: UNIQUE (sd_code_user_facing)
@@ -135,6 +139,8 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child'::text])))
 - `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'in_progress'::character varying, 'planning'::character varying, 'review'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
+- `strategic_directives_v2_vision_score_action_check`: CHECK (((vision_score_action)::text = ANY ((ARRAY['accept'::character varying, 'minor_sd'::character varying, 'gap_closure_sd'::character varying, 'escalate'::character varying])::text[])))
+- `strategic_directives_v2_vision_score_check`: CHECK (((vision_score >= 0) AND (vision_score <= 100)))
 - `success_criteria_is_array`: CHECK (((success_criteria IS NULL) OR (jsonb_typeof(success_criteria) = 'array'::text))) NOT VALID
 - `success_criteria_not_empty`: CHECK (((success_criteria IS NULL) OR (jsonb_array_length(success_criteria) >= 1))) NOT VALID
 - `success_metrics_is_array`: CHECK (((success_metrics IS NULL) OR (jsonb_typeof(success_metrics) = 'array'::text))) NOT VALID
@@ -206,6 +212,14 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_v2_triage`
   ```sql
   CREATE INDEX idx_sd_v2_triage ON public.strategic_directives_v2 USING btree (rolled_triage)
+  ```
+- `idx_sd_v2_vision_action`
+  ```sql
+  CREATE INDEX idx_sd_v2_vision_action ON public.strategic_directives_v2 USING btree (vision_score_action) WHERE (vision_score_action IS NOT NULL)
+  ```
+- `idx_sd_v2_vision_score`
+  ```sql
+  CREATE INDEX idx_sd_v2_vision_score ON public.strategic_directives_v2 USING btree (vision_score) WHERE (vision_score IS NOT NULL)
   ```
 - `idx_sd_version`
   ```sql

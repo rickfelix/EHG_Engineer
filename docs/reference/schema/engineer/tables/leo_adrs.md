@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T15:11:07.799Z
+**Generated**: 2026-02-18T15:21:29.186Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,7 @@
 | superseded_by | `uuid` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| architecture_plan_id | `uuid` | YES | - | FK to eva_architecture_plans. Links individual ADRs to their parent Architecture Plan for traceability. |
 
 ## Constraints
 
@@ -39,6 +40,7 @@
 - `leo_adrs_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `leo_adrs_architecture_plan_id_fkey`: architecture_plan_id → eva_architecture_plans(id)
 - `leo_adrs_superseded_by_fkey`: superseded_by → leo_adrs(id)
 
 ### Check Constraints
