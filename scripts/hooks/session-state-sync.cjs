@@ -34,7 +34,8 @@ try {
   // Supabase not available - skip validation
 }
 
-const STATE_FILE = path.resolve(__dirname, '../../.claude/auto-proceed-state.json');
+const STATE_DIR = path.resolve(__dirname, '../../.claude');
+const LEGACY_STATE_FILE = path.resolve(STATE_DIR, 'auto-proceed-state.json');
 
 /**
  * Get current session ID from local session file
@@ -60,12 +61,28 @@ function getCurrentSessionId() {
 }
 
 /**
- * Read local state file
+ * Get session-scoped state file path (SD-LEO-INFRA-CLAIM-GUARD-001: US-005).
+ * Prevents cross-session contamination of auto-proceed state.
  */
-function readLocalState() {
+function getStateFile(sessionId) {
+  if (sessionId) {
+    return path.resolve(STATE_DIR, `auto-proceed-state.${sessionId}.json`);
+  }
+  return LEGACY_STATE_FILE;
+}
+
+/**
+ * Read local state file (session-scoped with legacy fallback)
+ */
+function readLocalState(sessionId) {
+  const scopedFile = getStateFile(sessionId);
   try {
-    if (fs.existsSync(STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    if (fs.existsSync(scopedFile)) {
+      return JSON.parse(fs.readFileSync(scopedFile, 'utf8'));
+    }
+    // Fallback: read legacy shared file (read-only)
+    if (scopedFile !== LEGACY_STATE_FILE && fs.existsSync(LEGACY_STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(LEGACY_STATE_FILE, 'utf8'));
     }
   } catch {
     // Ignore read errors
@@ -74,15 +91,15 @@ function readLocalState() {
 }
 
 /**
- * Write local state file
+ * Write local state file (always to session-scoped path)
  */
-function writeLocalState(state) {
+function writeLocalState(state, sessionId) {
   try {
-    const dir = path.dirname(STATE_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(STATE_DIR)) {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
     }
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    const targetFile = getStateFile(sessionId);
+    fs.writeFileSync(targetFile, JSON.stringify(state, null, 2));
   } catch {
     // Ignore write errors
   }
@@ -112,7 +129,7 @@ async function main() {
       return; // Session not in database yet
     }
 
-    const localState = readLocalState();
+    const localState = readLocalState(sessionId);
     const dbSdId = session.sd_id;
     const dbExecState = session.metadata?.execution_state || {};
 
@@ -141,7 +158,7 @@ async function main() {
         lastUpdatedAt: new Date().toISOString()
       };
 
-      writeLocalState(fixedState);
+      writeLocalState(fixedState, sessionId);
 
       // Output warning with fix notice
       console.log('');
