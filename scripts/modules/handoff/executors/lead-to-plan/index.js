@@ -15,7 +15,8 @@ import {
   createSdTypeValidationGate,
   createBaselineDebtGate,
   createSmokeTestSpecificationGate,
-  createPlaceholderContentGate
+  createPlaceholderContentGate,
+  createVisionScoreGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -88,6 +89,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // LEO v4.4.1: Proactive Branch Creation Gate (DISABLED)
     // See: ./gates/branch-preparation.js for code preserved for reference
     // Branches are now created on-demand when /ship is invoked.
+
+    // Vision Score Gate (SD-MAN-INFRA-VISION-SCORE-GATE-001)
+    // Soft/informational — displays vision alignment score if available, never blocks
+    gates.push(createVisionScoreGate(this.supabase));
 
     return gates;
   }
