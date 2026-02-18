@@ -122,6 +122,22 @@ async function autoApproveCommand(threshold = 50, sdId = null) {
     }
   }
 
+  // SD-MAN-INFRA-EXTEND-LEARN-COMMAND-001: Include vision gap patterns
+  const visionGaps = context.intelligence?.vision_gaps || [];
+  if (visionGaps.length > 0) {
+    console.log(`\n  Vision Gaps (${visionGaps.length} low-scoring dimensions):`);
+    for (const gap of visionGaps) {
+      const score = gap.occurrence_count >= 2 ? threshold : threshold - 10;
+      const label = gap.severity === 'high' ? '🔴' : '🟡';
+      console.log(`    ${label} ${gap.pattern_id}: ${(gap.content || '').substring(0, 80)}`);
+      if (score >= threshold) {
+        qualifying.push({ ...gap, composite_score: score });
+      } else {
+        deferred.push({ ...gap, composite_score: score, reason: `vision gap score ${score} < ${threshold}` });
+      }
+    }
+  }
+
   // Display what was found
   console.log('  ' + '-'.repeat(40));
   console.log(`  Items found:       ${qualifying.length + deferred.length}`);
