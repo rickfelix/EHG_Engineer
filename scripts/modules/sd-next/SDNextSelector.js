@@ -224,6 +224,15 @@ export class SDNextSelector {
           this.claimedSDs.set(session.sd_id, session.session_id);
         }
       }
+
+      // Supplement with direct claimed-sessions query so idle sessions with
+      // active claims are not shown as available (QF-SD-NEXT-CLAIM-BLIND-SPOT-001)
+      const claimedSessions = await this.sessionManager.getClaimedSessions();
+      for (const session of claimedSessions) {
+        if (session.sd_id && !this.claimedSDs.has(session.sd_id)) {
+          this.claimedSDs.set(session.sd_id, session.session_id);
+        }
+      }
     } catch {
       // Non-fatal - continue without session data
     }
