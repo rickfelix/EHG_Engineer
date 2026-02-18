@@ -11,7 +11,7 @@
 
 import readline from 'readline';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
-import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems } from '../../retrospective-enricher.js';
+import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems, buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js';
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -163,7 +163,18 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
     const whatWentWell = buildWhatWentWell(prdRating, storiesRating, validationRating, testPlanRating, handoffResult);
     const whatNeedsImprovement = buildWhatNeedsImprovement(prdRating, storiesRating, validationRating, testPlanRating, gapsFound, allIssues);
     const keyLearnings = buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues, sdIssues, sd);
-    const actionItems = buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, allIssues);
+    const rawActionItems = buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, allIssues);
+    // Ensure all action items have owner and deadline (required by RETROSPECTIVE_QUALITY_GATE)
+    const actionItems = rawActionItems.map(item => ({
+      ...item,
+      owner: item.owner || 'LEO-Session',
+      deadline: item.deadline || 'next-handoff',
+    }));
+    // Merge SD-specific action items if none of the raw items have owner/deadline set originally
+    if (rawActionItems.every(i => !i.owner) && sd) {
+      const enriched = buildSDSpecificActionItems(sd, 'PLAN_TO_EXEC');
+      if (enriched.length > 0) actionItems.push(...enriched);
+    }
 
     // Build discovered_issues metadata (PAT-RETRO-BOILERPLATE-001 fix)
     const discoveredIssues = allIssues.map(issue => ({
@@ -203,7 +214,15 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
       within_scope: true,
       success_patterns: [`Quality rating: ${avgRating.toFixed(1)}/5`],
       failure_patterns: whatNeedsImprovement.slice(0, 3).map(i => typeof i === 'string' ? i : i.improvement),
-      improvement_areas: whatNeedsImprovement.slice(0, 3).map(i => typeof i === 'string' ? i : i.improvement),
+      // SD-LEARN-FIX-ADDRESS-PAT-AUTO-022: Use structured objects (area, root_cause, prevention)
+      // NOT plain strings — the RETROSPECTIVE_QUALITY_GATE rubric requires objects
+      improvement_areas: sd
+        ? buildSDSpecificImprovementAreas(sd, allIssues)
+        : whatNeedsImprovement.slice(0, 3).map(i => ({
+            area: typeof i === 'string' ? i : (i?.improvement || String(i)),
+            root_cause: 'Auto-detected from retrospective analysis',
+            prevention: 'Monitor for recurrence and address proactively',
+          })),
       // PAT-RETRO-BOILERPLATE-001 fix: Include actual issues in protocol_improvements
       protocol_improvements: discoveredIssues.length > 0
         ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
