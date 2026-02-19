@@ -44,8 +44,8 @@ describe('Decision Filter Engine - Core API', () => {
     expect(ENGINE_VERSION).toBe('1.0.0');
   });
 
-  it('should export 6 trigger types', () => {
-    expect(TRIGGER_TYPES).toHaveLength(6);
+  it('should export 8 trigger types', () => {
+    expect(TRIGGER_TYPES).toHaveLength(8);
     expect(TRIGGER_TYPES).toContain('cost_threshold');
     expect(TRIGGER_TYPES).toContain('new_tech_vendor');
     expect(TRIGGER_TYPES).toContain('strategic_pivot');
@@ -364,5 +364,107 @@ describe('Decision Filter Engine - Structured Logging', () => {
 
     expect(debugLogs.length).toBeGreaterThan(0);
     expect(debugLogs[0].event).toBe('decision_filter_trigger_details');
+  });
+});
+
+// ── SD-MAN-INFRA-DECISION-FILTER-ESCALATION-001 ────────────────────────
+
+describe('Decision Filter Engine - vision_score_signal (US-001, US-002, US-003)', () => {
+  const allPrefs = {
+    'filter.cost_max_usd': 99999,
+    'filter.min_score': 1,
+    'filter.chairman_review_score': 1,
+    'filter.approved_tech_list': ['React'],
+    'filter.approved_vendor_list': [],
+    'filter.pivot_keywords': [],
+    'filter.allow_informational_triggers': false,
+  };
+
+  it('US-001: fires HIGH trigger when visionScore < 50 and sdPhase=EXEC', () => {
+    const result = evaluateDecision(
+      { visionScore: 35, sdPhase: 'EXEC' },
+      { preferences: { ...allPrefs } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(1);
+    expect(vt[0].severity).toBe('HIGH');
+    expect(result.recommendation).toBe('PRESENT_TO_CHAIRMAN');
+    expect(result.auto_proceed).toBe(false);
+  });
+
+  it('US-001: does NOT fire when visionScore >= 50', () => {
+    const result = evaluateDecision(
+      { visionScore: 65, sdPhase: 'EXEC' },
+      { preferences: { ...allPrefs } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(0);
+  });
+
+  it('US-001: does NOT fire when sdPhase is not EXEC', () => {
+    const result = evaluateDecision(
+      { visionScore: 30, sdPhase: 'LEAD_APPROVAL' },
+      { preferences: { ...allPrefs } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(0);
+  });
+
+  it('US-001: does NOT fire when visionScore is absent', () => {
+    const result = evaluateDecision(
+      { sdPhase: 'EXEC' },
+      { preferences: { ...allPrefs } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(0);
+  });
+
+  it('US-001: trigger details include visionScore, threshold, and sdPhase', () => {
+    const result = evaluateDecision(
+      { visionScore: 42, sdPhase: 'EXEC' },
+      { preferences: { ...allPrefs } }
+    );
+    const vt = result.triggers.find(t => t.type === 'vision_score_signal');
+    expect(vt.details.visionScore).toBe(42);
+    expect(vt.details.threshold).toBe(50);
+    expect(vt.details.sdPhase).toBe('EXEC');
+  });
+
+  it('US-001: case-insensitive sdPhase matching (exec lowercase)', () => {
+    const result = evaluateDecision(
+      { visionScore: 30, sdPhase: 'exec' },
+      { preferences: { ...allPrefs } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(1);
+  });
+
+  it('US-003: uses custom threshold from preferences', () => {
+    // With custom threshold=40, visionScore=45 should NOT trigger
+    const result = evaluateDecision(
+      { visionScore: 45, sdPhase: 'EXEC' },
+      { preferences: { ...allPrefs, 'filter.vision_score_exec_threshold': 40 } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(0);
+  });
+
+  it('US-003: custom threshold below score triggers escalation', () => {
+    // With custom threshold=60, visionScore=55 SHOULD trigger
+    const result = evaluateDecision(
+      { visionScore: 55, sdPhase: 'EXEC' },
+      { preferences: { ...allPrefs, 'filter.vision_score_exec_threshold': 60 } }
+    );
+    const vt = result.triggers.filter(t => t.type === 'vision_score_signal');
+    expect(vt).toHaveLength(1);
+    expect(vt[0].details.threshold).toBe(60);
+  });
+
+  it('US-003: default threshold is 50 when preference not set', () => {
+    expect(DEFAULTS['filter.vision_score_exec_threshold']).toBe(50);
+  });
+
+  it('vision_score_signal appears in TRIGGER_TYPES array', () => {
+    expect(TRIGGER_TYPES).toContain('vision_score_signal');
   });
 });
