@@ -370,7 +370,7 @@ export class SDNextSelector {
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
     const { data: allSDs, error: sdError } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score, vision_origin_score_id')
       .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress', 'planning'])
       .order('created_at', { ascending: true });
@@ -455,20 +455,32 @@ export class SDNextSelector {
         }
       }
 
+      // SD-MAN-INFRA-PRIORITY-QUEUE-ROUTING-001: Vision-score-weighted priority
+      // gap_weight = (100 - vision_score) / 100; composite_rank = sequence_rank / (1 + gap_weight)
+      const sequenceRank = baselineItem?.sequence_rank || 9999;
+      const hasVisionOrigin = !!sd.vision_origin_score_id;
+      const visionScoreVal = sd.vision_score ?? null;
+      const gapWeight = (hasVisionOrigin && visionScoreVal !== null)
+        ? (100 - Math.max(0, Math.min(100, visionScoreVal))) / 100
+        : 0;
+      const compositeRank = gapWeight > 0 ? sequenceRank / (1 + gapWeight) : sequenceRank;
+
       tracks[trackKey].push({
         ...(baselineItem || {}),
         ...sd,
         sd_id: sd.sd_key || sd.id,
-        sequence_rank: baselineItem?.sequence_rank || 9999,
+        sequence_rank: sequenceRank,
+        gap_weight: gapWeight,
+        composite_rank: compositeRank,
         deps_resolved: depsResolved,
         childDepStatus,
         actual: this.actuals[sd.sd_key] || this.actuals[sd.id]
       });
     }
 
-    // Sort each track by sequence_rank
+    // Sort each track by composite_rank (vision-weighted) with sequence_rank fallback
     for (const trackKey of Object.keys(tracks)) {
-      tracks[trackKey].sort((a, b) => (a.sequence_rank || 9999) - (b.sequence_rank || 9999));
+      tracks[trackKey].sort((a, b) => (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999));
     }
 
     const sessionContext = this.getSessionContext();

@@ -93,8 +93,11 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
   const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
   const title = (item.title || '').substring(0, 40 - indent.length);
   const visionBadge = formatVisionBadge(item.vision_score ?? item.vision_alignment_score);
+  const gapBadge = (item.gap_weight > 0)
+    ? ` ${colors.cyan}↑gap:${item.gap_weight.toFixed(2)}${colors.reset}`
+    : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${visionBadge}... ${statusIcon}`);
+  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${visionBadge}${gapBadge}... ${statusIcon}`);
 
   // Show who claimed it with enhanced details (FR-6)
   if (isClaimedByOther) {
