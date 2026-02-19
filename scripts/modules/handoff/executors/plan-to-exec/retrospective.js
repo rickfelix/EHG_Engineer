@@ -214,13 +214,12 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
       within_scope: true,
       success_patterns: [`Quality rating: ${avgRating.toFixed(1)}/5`],
       failure_patterns: whatNeedsImprovement.slice(0, 3).map(i => typeof i === 'string' ? i : i.improvement),
-      // SD-LEARN-FIX-ADDRESS-PAT-AUTO-022: Use structured objects (area, root_cause, prevention)
-      // NOT plain strings — the RETROSPECTIVE_QUALITY_GATE rubric requires objects
+      // PAT-AUTO-a7aa772c fix: rubric expects {area, analysis, prevention} — NOT root_cause
       improvement_areas: sd
         ? buildSDSpecificImprovementAreas(sd, allIssues)
         : whatNeedsImprovement.slice(0, 3).map(i => ({
             area: typeof i === 'string' ? i : (i?.improvement || String(i)),
-            root_cause: 'Auto-detected from retrospective analysis',
+            analysis: 'Auto-detected from retrospective analysis — review for systemic pattern',
             prevention: 'Monitor for recurrence and address proactively',
           })),
       // PAT-RETRO-BOILERPLATE-001 fix: Include actual issues in protocol_improvements
