@@ -546,6 +546,77 @@ Auto-captured patterns appear in `/learn` output alongside SD-generated patterns
 
 ---
 
+## Memory-Pattern Lifecycle Closure
+
+**SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001** closes the final gap in the learning loop: when a pattern is resolved, `MEMORY.md` automatically self-heals by removing the stale warning entry.
+
+### The Problem (Before)
+
+```
+issue_patterns.status → 'resolved'  ✓  (DB closes correctly)
+MEMORY.md entry still warns about it ✗  (never pruned)
+```
+
+Memory accumulated stale warnings, wasting the 200-line session prompt budget.
+
+### The Solution
+
+**Tag Convention**: MEMORY.md entries that represent tracked patterns include an inline `[PAT-AUTO-XXXX]` tag in the `##` heading:
+
+```markdown
+## Gate Return Schema Must Use passed/maxScore [PAT-AUTO-0042]
+- gate-result-schema.js requires {passed, score, maxScore} NOT {valid, score}
+```
+
+**Auto-Pruning Hook**: `pruneResolvedMemory()` in `helpers.js` fires inside `resolveLearningItems()` immediately after a successful `issue_patterns` UPDATE. It scans MEMORY.md for tagged headings matching the resolved pattern IDs and removes those sections.
+
+**Event Bus**: A `PATTERN_RESOLVED` event is published on the existing event bus (`VISION_EVENTS.PATTERN_RESOLVED = 'leo.pattern_resolved'`) for future subscribers.
+
+### Full Lifecycle Diagram
+
+```
+Pattern auto-detected (merged PR corrective action)
+        ↓
+issue_patterns row created (PAT-AUTO-XXXX, status='active')
+        ↓
+MEMORY.md entry written with [PAT-AUTO-XXXX] tag
+        ↓
+/learn surfaces pattern (composite score, decay weighting)
+        ↓
+User approves → SD created → assigned_sd_id set → status='assigned'
+        ↓
+SD executes full LEO LEAD→PLAN→EXEC workflow
+        ↓
+LEAD-FINAL-APPROVAL
+  → resolveLearningItems()
+      → issue_patterns.status = 'resolved'          ← DB closure (existing)
+      → pruneResolvedMemory(resolvedPatternIds)       ← NEW: removes [PAT-AUTO-XXXX] sections
+      → publishVisionEvent(PATTERN_RESOLVED, {...})   ← NEW: event bus notification
+        ↓
+MEMORY.md self-healed. No stale warnings.
+```
+
+### Fail-Safe Design
+
+`pruneResolvedMemory()` is wrapped in `try/catch` and never throws. If MEMORY.md is missing, unreadable, or the path resolution fails, it logs a warning and the SD completes normally. Same pattern as the retro auto-population hook.
+
+### Implementation Files
+
+| File | Change |
+|------|--------|
+| `scripts/modules/handoff/executors/lead-final-approval/helpers.js` | `pruneResolvedMemory()` + hook in `resolveLearningItems()` |
+| `lib/eva/event-bus/vision-events.js` | `PATTERN_RESOLVED: 'leo.pattern_resolved'` added to `VISION_EVENTS` |
+| `~/.claude/projects/.../memory/MEMORY.md` | Restructured: tagging convention comment, completed-work history removed |
+
+### MEMORY.md Rules (Post-Implementation)
+
+- **Completed work** → NOT in MEMORY.md. Query `strategic_directives_v2 WHERE status='completed'` instead.
+- **Pattern-level insights** → Tag with `[PAT-AUTO-XXXX]` when documented. Will auto-prune on resolution.
+- **Session hints** (tool quirks, timeouts, preferences) → Kept without tags. Never auto-pruned.
+- **Line budget**: Keep under 200 lines (system prompt hard limit).
+
+---
+
 ## Related Documentation
 
 ### Architecture
