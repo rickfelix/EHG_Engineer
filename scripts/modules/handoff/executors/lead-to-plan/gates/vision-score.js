@@ -150,8 +150,9 @@ export async function validateVisionScore(sd, supabase) {
     console.log('   ❌ No vision alignment score found — handoff BLOCKED');
     console.log(`   💡 Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`);
     return {
-      valid: false,
+      passed: false,
       score: 0,
+      maxScore: 100,
       details: `No vision alignment score found for ${sdKey}. Run vision-scorer.js before LEAD-TO-PLAN.`,
       remediation: `node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`,
       warnings: [],
@@ -171,8 +172,9 @@ export async function validateVisionScore(sd, supabase) {
       const dimWarnings = getDimensionWarnings(dimensionScores);
       dimWarnings.forEach(w => console.log(`   ⚠️  ${w}`));
       return {
-        valid: true,
+        passed: true,
         score: 100,
+        maxScore: 100,
         details: `Vision score ${visionScore}/100 below ${sdType} threshold ${threshold} — OVERRIDDEN (Chairman: ${override.justification})`,
         warnings: dimWarnings,
       };
@@ -182,8 +184,9 @@ export async function validateVisionScore(sd, supabase) {
     console.log(`   💡 Improve vision alignment: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`);
     console.log('   💡 Or request Chairman override via validation_gate_registry');
     return {
-      valid: false,
+      passed: false,
       score: 0,
+      maxScore: 100,
       details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100`,
       remediation: `Score must reach ${threshold}/100 for ${sdType} SDs. Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`,
       warnings: [],
@@ -201,8 +204,9 @@ export async function validateVisionScore(sd, supabase) {
   }
 
   return {
-    valid: true,
+    passed: true,
     score: 100,
+    maxScore: 100,
     details: `Vision score: ${visionScore}/100 (${thresholdAction || 'unknown'}) — meets ${sdType} threshold ${threshold}`,
     warnings: dimWarnings,
   };
