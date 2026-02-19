@@ -24,6 +24,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { publishVisionEvent, VISION_EVENTS } from '../../lib/eva/event-bus/vision-events.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -155,6 +156,16 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
       synced++;
       continue;
     }
+
+    // Publish vision.gap_detected event (SD-MAN-INFRA-EVENT-BUS-BACKBONE-001)
+    publishVisionEvent(VISION_EVENTS.GAP_DETECTED, {
+      dimension: agg.dimName,
+      patternId,
+      score: avgScore,
+      severity,
+      threshold: 70,
+      sdIds: agg.sdIds.slice(0, 5),
+    });
 
     if (existing && existing.length > 0) {
       // UPDATE existing pattern

@@ -24,8 +24,8 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { getValidationClient, isLocalLLMEnabled } from '../../lib/llm/client-factory.js';
 import { spawnSync } from 'child_process';
-import { sendVisionScoreNotification, sendVisionScoreTelegramNotification } from '../../lib/notifications/orchestrator.js';
 import { GRADE } from '../../lib/standards/grade-scale.js';
+import { publishVisionEvent, VISION_EVENTS, registerVisionScoredHandlers } from '../../lib/eva/event-bus/index.js';
 
 dotenv.config();
 
@@ -268,6 +268,11 @@ export async function scoreSD(options = {}) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
+  // Register vision event handlers (idempotent — safe to call on every scoreSD() invocation).
+  // Handlers are subscribed here so they are always registered before vision.scored is published,
+  // even in standalone CLI usage (SD-MAN-INFRA-EVENT-BUS-BACKBONE-001).
+  if (!dryRun) registerVisionScoredHandlers();
+
   // Load dimensions
   const [visionResult, archResult] = await Promise.all([
     loadVisionDimensions(supabase, visionKey),
@@ -396,33 +401,17 @@ ${rawResponse.substring(0, 1000)}`;
 
     scoreRecord.id = inserted.id;
 
-    // Send notification to Chairman after successful persistence (FR-001)
-    // SD: SD-MAN-INFRA-VISION-SCORE-NOTIFICATIONS-001
-    try {
-      await sendVisionScoreNotification(supabase, {
-        sdKey: sdKey || '(custom scope)',
-        sdTitle: sdContext?.title || '',
-        totalScore: parsed.total_score,
-        dimensionScores,
-        scoreId: inserted.id,
-      });
-    } catch (notifErr) {
-      // Notification failure must not fail the scoring run (AC-005)
-      console.error(`[vision-score-notif] Notification failed: ${notifErr.message}`);
-    }
-
-    // Send Telegram notification (SD-MAN-INFRA-TELEGRAM-ADAPTER-VISION-001)
-    try {
-      await sendVisionScoreTelegramNotification(supabase, {
-        sdKey: sdKey || '(custom scope)',
-        sdTitle: sdContext?.title || '',
-        totalScore: parsed.total_score,
-        dimensionScores,
-        scoreId: inserted.id,
-      });
-    } catch (telegramErr) {
-      console.error(`[telegram-vision] Notification failed: ${telegramErr.message}`);
-    }
+    // Publish vision.scored event — notification orchestrator and Telegram adapter
+    // subscribe via event bus (SD-MAN-INFRA-EVENT-BUS-BACKBONE-001).
+    // Errors are caught per-subscriber in the event bus; never fail the scoring run.
+    publishVisionEvent(VISION_EVENTS.SCORED, {
+      supabase,
+      sdKey: sdKey || '(custom scope)',
+      sdTitle: sdContext?.title || '',
+      totalScore: parsed.total_score,
+      dimensionScores,
+      scoreId: inserted.id,
+    });
   }
 
   // Expose summary and latency for callers even though they're in rubric_snapshot
