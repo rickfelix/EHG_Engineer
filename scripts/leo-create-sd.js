@@ -42,6 +42,7 @@ import {
   getDisplayPath
 } from './modules/plan-archiver.js';
 import { runTriageGate, formatTriageSummary } from './modules/triage-gate.js';
+import { scoreSD } from './eva/vision-scorer.js';
 
 dotenv.config();
 
@@ -550,6 +551,60 @@ async function createFromPlan(planPath = null, skipConfirmation = false) {
 }
 
 // ============================================================================
+// Vision Pre-Screen (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
+// ============================================================================
+
+/** Timeout for vision LLM call at SD conception (ms). */
+export const VISION_PRESCREEN_TIMEOUT_MS = 15000;
+
+/**
+ * Score a newly-created SD against the EHG-2028 vision at conception time.
+ *
+ * Non-blocking: errors and timeouts emit a console warning and return null.
+ * The score is persisted to eva_vision_scores so the LEAD-TO-PLAN gate can
+ * read it without requiring a separate manual scoring run.
+ *
+ * @param {string} sdKey  - The sd_key of the just-created SD
+ * @param {string} title  - SD title
+ * @param {string} description - SD description
+ * @param {Object} supabase   - Supabase client (passed to scoreSD to reuse connection)
+ * @returns {Promise<Object|null>} scoreResult or null on failure
+ */
+export async function scoreSDAtConception(sdKey, title, description, supabase) {
+  const ACTION_LABELS = {
+    accept:         '✅ ACCEPT',
+    minor_sd:       '🟡 MINOR GAP',
+    gap_closure_sd: '🟠 GAP',
+    escalate:       '🔴 ESCALATION',
+  };
+
+  try {
+    const visionScope = `Title: ${title}\nDescription: ${description}`;
+    const scoreResult = await Promise.race([
+      scoreSD({ sdKey, scope: visionScope, dryRun: false, supabase }),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Vision scoring timeout (${VISION_PRESCREEN_TIMEOUT_MS / 1000}s)`)),
+          VISION_PRESCREEN_TIMEOUT_MS
+        )
+      ),
+    ]);
+
+    const actionLabel = ACTION_LABELS[scoreResult.threshold_action]
+      || scoreResult.threshold_action?.toUpperCase()
+      || 'SCORED';
+    console.log(`\n   🔍 Vision alignment: ${scoreResult.total_score}/100 — ${actionLabel}`);
+    if (scoreResult.total_score < 50) {
+      console.log('   ⚠️  Score below 50 (ESCALATION tier). Consider revising SD scope before LEAD phase.');
+    }
+    return scoreResult;
+  } catch (err) {
+    console.log(`\n   ⚠️  Vision pre-screen skipped: ${err.message}`);
+    return null;
+  }
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -961,6 +1016,9 @@ async function createSD(options) {
     console.error('Failed to create SD:', error.message);
     process.exit(1);
   }
+
+  // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
+  await scoreSDAtConception(data.sd_key, title, description, supabase);
 
   console.log('\n' + '═'.repeat(60));
   console.log('✅ SD CREATED');
