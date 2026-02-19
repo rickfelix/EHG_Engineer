@@ -23,7 +23,8 @@ import {
   getRecentRetrospectives,
   getGateHealth,
   getPendingProposals,
-  getAutonomousDirectives
+  getAutonomousDirectives,
+  getVisionGapInsights
 } from './db-queries.js';
 
 import {
@@ -165,6 +166,8 @@ class CLAUDEMDGeneratorV3 {
       const gateHealth = await getGateHealth(this.supabase);
       const pendingProposals = await getPendingProposals(this.supabase, 5);
       const autonomousDirectives = await getAutonomousDirectives(this.supabase);
+      // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP data for protocol injection
+      const visionGapInsights = await getVisionGapInsights(this.supabase, 3);
 
       const data = {
         protocol,
@@ -178,7 +181,8 @@ class CLAUDEMDGeneratorV3 {
         recentRetrospectives,
         gateHealth,
         pendingProposals,
-        autonomousDirectives
+        autonomousDirectives,
+        visionGapInsights
       };
 
       // Initialize manifest

@@ -212,7 +212,7 @@ ${subAgentSection}
  * @returns {string} Generated markdown content
  */
 function generateLead(data, fileMapping) {
-  const { protocol, autonomousDirectives } = data;
+  const { protocol, autonomousDirectives, visionGapInsights = [] } = data;
   const sections = protocol.sections;
   const { today, time } = getMetadata(protocol);
 
@@ -220,6 +220,17 @@ function generateLead(data, fileMapping) {
   const leadContent = leadSections.map(s => formatSection(s)).join('\n\n');
 
   const directivesSection = generateAutonomousDirectivesSection(autonomousDirectives, 'LEAD');
+
+  // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP injection
+  const visionGapSection = visionGapInsights.length > 0
+    ? `## ⚠️ Current Vision Gaps (Live — from issue_patterns)\n\n` +
+      `| Pattern ID | Dimension / Summary | Severity |\n` +
+      `|------------|--------------------|-----------|\n` +
+      visionGapInsights.map(g =>
+        `| ${g.pattern_id} | ${g.issue_summary ?? g.category} | ${g.severity?.toUpperCase() ?? 'unknown'} |`
+      ).join('\n') +
+      `\n\n**Action**: When approving SDs, consider whether the SD addresses or exacerbates these gaps.\n`
+    : '';
 
   // RCA Mandate is in the router — not duplicated here (LEAN LEAD)
 
@@ -235,7 +246,7 @@ function generateLead(data, fileMapping) {
 ---
 
 ${directivesSection}
-
+${visionGapSection ? '\n' + visionGapSection : ''}
 ${leadContent}
 
 ---
@@ -311,7 +322,7 @@ ${generateValidationRules(validationRules)}
  * @returns {string} Generated markdown content
  */
 function generateExec(data, fileMapping) {
-  const { protocol, schemaConstraints, processScripts, autonomousDirectives } = data;
+  const { protocol, schemaConstraints, processScripts, autonomousDirectives, visionGapInsights = [] } = data;
   const sections = protocol.sections;
   const { today, time } = getMetadata(protocol);
 
@@ -321,6 +332,15 @@ function generateExec(data, fileMapping) {
   const constraintsSection = generateSchemaConstraintsSection(schemaConstraints);
   const scriptsSection = generateProcessScriptsSection(processScripts);
   const directivesSection = generateAutonomousDirectivesSection(autonomousDirectives, 'EXEC');
+
+  // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP implementation reminders
+  const visionRemindersSection = visionGapInsights.length > 0
+    ? `## 🔍 Implementation Reminders — Active Vision Gaps\n\n` +
+      visionGapInsights.map(g =>
+        `- **${g.pattern_id}** (${g.severity?.toUpperCase() ?? 'UNKNOWN'}): ${g.issue_summary ?? g.category} — ensure implementation does not worsen this gap`
+      ).join('\n') +
+      `\n`
+    : '';
 
   // RCA Mandate is in the router — not duplicated here (LEAN EXEC)
 
@@ -336,7 +356,7 @@ function generateExec(data, fileMapping) {
 ---
 
 ${directivesSection}
-
+${visionRemindersSection ? '\n' + visionRemindersSection : ''}
 ${execContent}
 
 ${constraintsSection}
