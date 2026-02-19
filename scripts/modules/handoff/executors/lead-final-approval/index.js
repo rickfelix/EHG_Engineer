@@ -123,6 +123,58 @@ async function rescoreOriginalSD(sd, supabase) {
   }
 }
 
+/**
+ * Auto-populate retrospective via programmatic retrospective generator.
+ * SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001
+ *
+ * Runs retrospective-generator.js for the completing SD, generating
+ * SD-specific key_learnings, action_items, and improvement_areas that
+ * reference actual changed files. Prevents RETROSPECTIVE_QUALITY_GATE failures.
+ *
+ * Fail-safe: all errors caught and logged; never blocks SD completion.
+ *
+ * @param {Object} sd - The completing SD
+ */
+async function runProgrammaticRetrospective(sd) {
+  const sdKey = sd.sd_key || sd.id;
+  const branch = `feat/${sdKey}`;
+
+  console.log('\n📝 PROGRAMMATIC RETROSPECTIVE: Auto-populating retrospective');
+  console.log('-'.repeat(50));
+  console.log(`   SD: ${sdKey} | Branch: ${branch}`);
+
+  try {
+    const { spawnSync } = await import('child_process');
+    const { fileURLToPath } = await import('url');
+
+    const scriptUrl = new URL(
+      '../../../../programmatic/retrospective-generator.js',
+      import.meta.url
+    );
+    const scriptPath = fileURLToPath(scriptUrl);
+
+    const result = spawnSync(
+      process.execPath,
+      [scriptPath, '--sd-id', sdKey, '--branch', branch],
+      { encoding: 'utf8', timeout: 60000, env: process.env }
+    );
+
+    if (result.status === 0 && result.stdout) {
+      try {
+        const retroData = JSON.parse(result.stdout.trim());
+        console.log(`   ✅ Retrospective generated: ID=${retroData.retrospective_id}, quality=${retroData.quality_score}/100`);
+      } catch {
+        console.log('   ✅ Retrospective generator ran (output parse skipped)');
+      }
+    } else {
+      console.log(`   ⚠️  Retrospective generator exited ${result.status} (non-blocking)`);
+      if (result.stderr) console.log(`   Stderr: ${result.stderr.substring(0, 200)}`);
+    }
+  } catch (retroError) {
+    console.log(`   ⚠️  Programmatic retrospective failed (non-blocking): ${retroError.message}`);
+  }
+}
+
 export class LeadFinalApprovalExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
     super(dependencies);
@@ -257,6 +309,11 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // If this SD was created to fix a vision gap (has vision_origin_score_id), re-score the
     // original SD to measure whether the gap was closed.
     await rescoreOriginalSD(sd, this.supabase);
+
+    // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001: Auto-populate retrospective via programmatic scorer.
+    // Generates SD-specific insights with real file references — avoids RETROSPECTIVE_QUALITY_GATE failures.
+    // Fail-safe: non-blocking, never prevents SD completion.
+    await runProgrammaticRetrospective(sd);
 
     // Release the session claim
     await releaseSessionClaim(sd, this.supabase);
