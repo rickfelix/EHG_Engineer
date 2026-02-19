@@ -3,7 +3,7 @@
  * SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
