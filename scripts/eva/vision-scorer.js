@@ -299,7 +299,7 @@ export async function scoreSD(options = {}) {
   // Route to local programmatic scorer when USE_PROGRAMMATIC=true or local LLM is enabled.
   // This avoids the OpenAI gpt-5.2 timeout that blocks EVA SDs at GATE_VISION_SCORE.
   if (!llmClientOverride && (process.env.USE_PROGRAMMATIC === 'true' || isLocalLLMEnabled())) {
-    const scriptPath = new URL('../../scripts/programmatic/vision-scorer.js', import.meta.url).pathname;
+    const scriptPath = fileURLToPath(new URL('../programmatic/vision-scorer.js', import.meta.url));
     const result = spawnSync(
       process.execPath,
       [scriptPath, '--sd-id', sdKey ?? 'unknown'],
