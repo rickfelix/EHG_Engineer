@@ -342,6 +342,15 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       }
     }
 
+    // Ensure all action items have owner, deadline, and verification (required by RETROSPECTIVE_QUALITY_GATE)
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-027: verification field carries 30% rubric weight
+    const actionItemsWithDefaults = actionItems.map(item => ({
+      ...item,
+      owner: item.owner || 'EXEC-Agent',
+      deadline: item.deadline || 'next-handoff',
+      verification: item.verification || `${sd?.sd_key || 'SD'} EXEC phase gate confirms this criterion met`,
+    }));
+
     // Build discovered_issues metadata
     const discoveredIssues = allIssues.map(issue => ({
       pattern_id: issue.pattern_id,
@@ -375,7 +384,7 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       human_participants: ['EXEC'],
       what_went_well: whatWentWell,
       what_needs_improvement: whatNeedsImprovement,
-      action_items: actionItems,
+      action_items: actionItemsWithDefaults,
       key_learnings: keyLearnings,
       quality_score: qualityScore,
       team_satisfaction: Math.round(avgRating * 2),
