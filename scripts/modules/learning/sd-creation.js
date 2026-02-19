@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { runTriageGate } from '../../triage-gate.js';
+import { runTriageGate } from '../triage-gate.js';
 
 import {
   buildSDDescription,

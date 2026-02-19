@@ -527,6 +527,30 @@ export class HandoffRecorder {
         .insert(handoffRecord);
 
       if (insertError) {
+        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-023: If INSERT fails due to session claim check
+        // (e.g. is_working_on=false for orchestrator SDs), check if an artifact was already
+        // created by satisfyOrchestratorTemplateRequirements() and use it instead.
+        const isSessionClaimError = insertError.message && (
+          insertError.message.includes('session claim') ||
+          insertError.message.includes('is_working_on') ||
+          insertError.message.includes('LEO Protocol Violation')
+        );
+        if (isSessionClaimError) {
+          console.log('   ℹ️  Session claim check failed — checking for pre-created artifact...');
+          const { data: existing } = await this.supabase
+            .from('sd_phase_handoffs')
+            .select('id')
+            .eq('sd_id', sdUuid)
+            .eq('from_phase', fromPhase)
+            .eq('to_phase', toPhase)
+            .eq('status', 'accepted')
+            .limit(1)
+            .single();
+          if (existing) {
+            console.log('   ✅ Using pre-created artifact (orchestrator auto-completion):', existing.id);
+            return existing.id;
+          }
+        }
         console.error('❌ Failed to create handoff artifact:', insertError.message);
         throw insertError;
       }

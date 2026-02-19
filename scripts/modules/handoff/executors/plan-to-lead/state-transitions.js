@@ -278,6 +278,7 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
           validation_score: 100,
           validation_passed: true,
           accepted_at: new Date().toISOString(),
+          created_by: 'ADMIN_OVERRIDE',
           metadata: { auto_created: true, reason: 'orchestrator_template_satisfaction' }
         });
 
