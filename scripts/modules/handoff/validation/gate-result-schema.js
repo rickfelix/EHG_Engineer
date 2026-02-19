@@ -87,6 +87,15 @@ export function validateGateResult(result, gateName = 'unknown', options = {}) {
     warnings.push("Used 'pass' instead of 'passed' - auto-corrected");
   }
 
+  // Handle 'valid' vs 'passed' field (legacy gate result format)
+  // Some older gates returned {valid: true/false} instead of {passed: true/false}.
+  // When present without 'passed', convert to avoid defaulting passed=false (PAT-AUTO-43b23a7d).
+  if (normalized.valid !== undefined && normalized.passed === undefined && typeof normalized.valid === 'boolean') {
+    normalized.passed = normalized.valid;
+    delete normalized.valid;
+    warnings.push("Used 'valid' instead of 'passed' - auto-corrected");
+  }
+
   // Handle 'max_score' vs 'maxScore' (snake_case vs camelCase)
   if (normalized.max_score !== undefined && normalized.maxScore === undefined) {
     normalized.maxScore = normalized.max_score;
