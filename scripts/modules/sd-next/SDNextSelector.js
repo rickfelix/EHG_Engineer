@@ -24,10 +24,12 @@ import {
   loadPendingProposals,
   loadSDHierarchy,
   loadOKRScorecard,
+  loadVisionScores,
   countActionableBaselineItems
 } from './data-loaders.js';
 import {
   displayOKRScorecard,
+  displayVisionPortfolioHeader,
   displayProposals,
   displayTrackSection,
   displayMultiRepoWarning,
@@ -88,6 +90,7 @@ export class SDNextSelector {
     this.multiRepoStatus = null;
     this.sessionManager = null;
     this.ventureContext = null; // Active venture context for SD filtering
+    this.visionScores = new Map(); // Per-SD vision score aggregates (SD-MAN-INFRA-VISION-PORTFOLIO-SCORECARD-001)
   }
 
   /**
@@ -119,6 +122,9 @@ export class SDNextSelector {
     this.vision = okrData.vision;
     this.okrScorecard = okrData.scorecard;
 
+    // Load vision scores for portfolio header + per-SD badges (SD-MAN-INFRA-VISION-PORTFOLIO-SCORECARD-001)
+    this.visionScores = await loadVisionScores(this.supabase);
+
     // Load SD hierarchy for tree display
     const hierarchyData = await loadSDHierarchy(this.supabase);
     this.allSDs = hierarchyData.allSDs;
@@ -138,6 +144,9 @@ export class SDNextSelector {
     await this.loadActiveSessions();
     this.pendingProposals = await loadPendingProposals(this.supabase);
     this.loadMultiRepoStatus();
+
+    // Display vision portfolio header (SD-MAN-INFRA-VISION-PORTFOLIO-SCORECARD-001)
+    displayVisionPortfolioHeader(this.visionScores);
 
     // Display OKR scorecard (strategic visibility)
     displayOKRScorecard(this.vision, this.okrScorecard);
@@ -361,7 +370,7 @@ export class SDNextSelector {
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
     const { data: allSDs, error: sdError } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_alignment_score')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata, vision_score')
       .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress', 'planning'])
       .order('created_at', { ascending: true });

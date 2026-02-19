@@ -6,6 +6,7 @@
 import { colors, trackColors } from '../colors.js';
 import { getPhaseAwareStatus } from '../status-helpers.js';
 import { parseDependencies } from '../dependency-resolver.js';
+import { formatVisionBadge } from './vision-scorecard.js';
 
 /**
  * Display a track section with hierarchical SD items
@@ -91,8 +92,7 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
   const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
   const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
   const title = (item.title || '').substring(0, 40 - indent.length);
-  const visionScore = item.vision_alignment_score;
-  const visionBadge = visionScore != null ?   + colors.cyan + '[V:' + Math.round(visionScore) + ']' + colors.reset : '';
+  const visionBadge = formatVisionBadge(item.vision_score ?? item.vision_alignment_score);
 
   console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${visionBadge}... ${statusIcon}`);
 
@@ -168,8 +168,7 @@ function displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
 
   const workingIcon = item.is_working_on ? `${colors.bgYellow}◆${colors.reset}` : '';
   const title = (item.title || '').substring(0, 30);
-  const simpleVisionScore = item.vision_alignment_score;
-  const simpleVisionBadge = simpleVisionScore != null ? ' ' + colors.cyan + '[V:' + Math.round(simpleVisionScore) + ']' + colors.reset : '';
+  const simpleVisionBadge = formatVisionBadge(item.vision_score ?? item.vision_alignment_score);
 
   console.log(`${prefix}${workingIcon}${sdId} - ${title}${simpleVisionBadge}... ${statusIcon}`);
 

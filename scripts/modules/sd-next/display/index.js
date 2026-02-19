@@ -25,3 +25,4 @@ export {
   isOrchestratorBlocked
 } from './blocked-state.js';
 export { displayTelemetryFindings } from './telemetry-findings.js';
+export { displayVisionPortfolioHeader, formatVisionBadge } from './vision-scorecard.js';
