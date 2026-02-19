@@ -3,11 +3,11 @@
 
 ## Metadata
 - **Category**: Reference
-- **Status**: Draft
-- **Version**: 1.0.0
+- **Status**: Approved
+- **Version**: 1.1.0
 - **Author**: DOCMON
-- **Last Updated**: 2025-12-18
-- **Tags**: database, testing, e2e, migration
+- **Last Updated**: 2026-02-19
+- **Tags**: database, testing, e2e, migration, memory, learn
 
 ## Overview
 
@@ -188,7 +188,7 @@ This:
 ```
 new → stable → increasing → [AUTO-SD CREATED]
                     ↓
-              decreasing → obsolete → resolved
+              decreasing → obsolete → resolved → [MEMORY PRUNED]
 ```
 
 - **new**: First occurrence
@@ -196,12 +196,64 @@ new → stable → increasing → [AUTO-SD CREATED]
 - **increasing**: Getting worse (triggers alerts at 4+)
 - **decreasing**: Not seen recently (90+ days)
 - **obsolete**: Not seen for extended period (180+ days)
-- **resolved**: Root cause fixed
+- **resolved**: Root cause fixed; MEMORY.md entry auto-pruned (see below)
+
+## Memory-Pattern Closure (SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001)
+
+When a pattern transitions to `resolved` via `resolveLearningItems()` at LEAD-FINAL-APPROVAL, the system automatically removes the corresponding entry from `MEMORY.md` so session-start context stays accurate.
+
+### MEMORY.md Tagging Convention
+
+When documenting a tracked pattern in MEMORY.md, add an inline `[PAT-AUTO-XXXX]` tag to the `##` heading:
+
+```markdown
+## Gate Return Schema Must Use passed/maxScore [PAT-AUTO-0042]
+- gate-result-schema.js requires {passed, score, maxScore} NOT {valid, score}
+```
+
+### How Auto-Pruning Works
+
+```
+LEAD-FINAL-APPROVAL
+  → resolveLearningItems()                   (checks metadata.source === 'learn_command')
+      → issue_patterns.status = 'resolved'   (DB update)
+      → pruneResolvedMemory(patternIds)       (removes [PAT-AUTO-XXXX] sections from MEMORY.md)
+      → publishVisionEvent(PATTERN_RESOLVED)  (event bus: 'leo.pattern_resolved')
+```
+
+**Key properties of `pruneResolvedMemory()`:**
+- Only removes sections whose `##` heading contains a matching `[PAT-AUTO-XXXX]` tag
+- Untagged sections are never auto-removed
+- Fail-safe: wrapped in `try/catch`, never blocks SD completion
+- File: `scripts/modules/handoff/executors/lead-final-approval/helpers.js`
+
+### PATTERN_RESOLVED Event
+
+Subscribers can react to pattern resolution without modifying `resolveLearningItems()`:
+
+```javascript
+import { subscribeVisionEvent, VISION_EVENTS } from 'lib/eva/event-bus/vision-events.js';
+
+subscribeVisionEvent(VISION_EVENTS.PATTERN_RESOLVED, async ({ sdKey, resolvedPatternIds, resolvedCount }) => {
+  // e.g., update metrics, notify dashboard, etc.
+});
+```
+
+Event name: `'leo.pattern_resolved'`
+
+### MEMORY.md Rules
+
+| Content type | Tag required? | Auto-pruned? |
+|---|---|---|
+| Tracked issue pattern | YES — `[PAT-AUTO-XXXX]` | YES — on pattern resolution |
+| Session hints (prefs, timeouts) | NO | NEVER |
+| Completed work history | N/A — store in DB instead | N/A |
 
 ## Best Practices
 
 1. **Review auto-created SDs promptly** - They indicate systemic issues
 2. **Update proven_solutions** when fixes work - Helps future occurrences
 3. **Use prevention_checklist** during PLAN phase - Avoid known issues
-4. **Resolve patterns** when root cause is fixed - Keeps system clean
-5. **Run weekly maintenance** - Ensures patterns stay current
+4. **Tag MEMORY.md entries** with `[PAT-AUTO-XXXX]` when documenting tracked patterns
+5. **Resolve patterns** when root cause is fixed — MEMORY.md self-heals automatically
+6. **Run weekly maintenance** - Ensures patterns stay current
