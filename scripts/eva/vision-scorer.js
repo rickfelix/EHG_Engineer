@@ -22,7 +22,8 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { getValidationClient } from '../../lib/llm/client-factory.js';
+import { getValidationClient, isLocalLLMEnabled } from '../../lib/llm/client-factory.js';
+import { spawnSync } from 'child_process';
 import { sendVisionScoreNotification, sendVisionScoreTelegramNotification } from '../../lib/notifications/orchestrator.js';
 import { GRADE } from '../../lib/standards/grade-scale.js';
 
@@ -288,6 +289,30 @@ export async function scoreSD(options = {}) {
   // Build prompts
   const systemPrompt = buildScoringSystemPrompt(visionCriteria, archCriteria);
   const userPrompt = buildScoringUserPrompt(sdContext || {}, customScope);
+
+  // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001:
+  // Route to local programmatic scorer when USE_PROGRAMMATIC=true or local LLM is enabled.
+  // This avoids the OpenAI gpt-5.2 timeout that blocks EVA SDs at GATE_VISION_SCORE.
+  if (!llmClientOverride && (process.env.USE_PROGRAMMATIC === 'true' || isLocalLLMEnabled())) {
+    const scriptPath = new URL('../../scripts/programmatic/vision-scorer.js', import.meta.url).pathname;
+    const result = spawnSync(
+      process.execPath,
+      [scriptPath, '--sd-id', sdKey ?? 'unknown'],
+      { encoding: 'utf8', timeout: 55000, env: process.env }
+    );
+    if (result.status === 0 && result.stdout) {
+      try {
+        const scoreData = JSON.parse(result.stdout.trim());
+        console.log(`   ✅ Programmatic vision scorer: ${scoreData.total_score}/100 (${scoreData.action})`);
+        return scoreData;
+      } catch {
+        console.warn('   ⚠️  Programmatic scorer output parse failed — falling back to cloud LLM');
+      }
+    } else {
+      console.warn(`   ⚠️  Programmatic scorer failed (exit ${result.status}) — falling back to cloud LLM`);
+      if (result.stderr) console.warn('   Stderr:', result.stderr.substring(0, 200));
+    }
+  }
 
   // Get LLM client
   const llmClient = llmClientOverride || getValidationClient();
