@@ -282,6 +282,37 @@ async function getAutonomousDirectives(supabase) {
   }
 }
 
+/**
+ * Get active vision gap insights from issue_patterns.
+ * SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: inject live VGAP data into protocol docs.
+ *
+ * Non-blocking: returns [] on any error so doc generation is never interrupted.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {number} [limit=3] - Max patterns to return
+ * @returns {Promise<Array<{pattern_id: string, issue_summary: string, category: string, severity: string}>>}
+ */
+async function getVisionGapInsights(supabase, limit = 3) {
+  try {
+    const { data, error } = await supabase
+      .from('issue_patterns')
+      .select('pattern_id, issue_summary, category, severity')
+      .like('pattern_id', 'VGAP-%')
+      .eq('status', 'active')
+      .order('severity', { ascending: true }) // critical sorts first alphabetically
+      .limit(limit);
+
+    if (error) {
+      console.warn(`[vision-gap-insights] Query failed: ${error.message} — continuing without gaps`);
+      return [];
+    }
+    return data ?? [];
+  } catch (err) {
+    console.warn(`[vision-gap-insights] Unexpected error: ${err.message} — continuing without gaps`);
+    return [];
+  }
+}
+
 export {
   getActiveProtocol,
   getAgents,
@@ -294,5 +325,6 @@ export {
   getRecentRetrospectives,
   getGateHealth,
   getPendingProposals,
-  getAutonomousDirectives
+  getAutonomousDirectives,
+  getVisionGapInsights
 };
