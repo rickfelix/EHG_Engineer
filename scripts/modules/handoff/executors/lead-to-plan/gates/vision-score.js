@@ -56,23 +56,28 @@ const THRESHOLD_LABELS = {
  * Check for a Chairman override in validation_gate_registry.
  * Returns { active: false } if the table or row is absent (fail-closed: enforce).
  *
- * @param {string} sdKey
+ * Table schema: gate_key, sd_type, applicability, reason, created_at.
+ * Override is per-sd_type (not per-SD). To bypass vision scoring for an
+ * sd_type, insert a row with gate_key='GATE_VISION_SCORE',
+ * applicability='OPTIONAL_OVERRIDE', sd_type=<type>, reason=<justification>.
+ *
+ * @param {string} sdType - The SD's sd_type (e.g. 'infrastructure')
  * @param {Object} supabase
  * @returns {Promise<{active: boolean, justification?: string}>}
  */
-async function checkOverride(sdKey, supabase) {
-  if (!supabase || !sdKey) return { active: false };
+async function checkOverride(sdType, supabase) {
+  if (!supabase || !sdType) return { active: false };
   try {
     const { data } = await supabase
       .from('validation_gate_registry')
-      .select('justification')
-      .eq('gate_name', 'GATE_VISION_SCORE')
+      .select('reason')
+      .eq('gate_key', 'GATE_VISION_SCORE')
       .eq('applicability', 'OPTIONAL_OVERRIDE')
-      .eq('sd_id', sdKey)
+      .eq('sd_type', sdType)
       .limit(1);
 
     if (data && data.length > 0) {
-      const justification = (data[0].justification || '').trim();
+      const justification = (data[0].reason || '').trim();
       if (justification.length > 0) {
         return { active: true, justification };
       }
@@ -145,8 +150,9 @@ export async function validateVisionScore(sd, supabase) {
     console.log('   ❌ No vision alignment score found — handoff BLOCKED');
     console.log(`   💡 Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`);
     return {
-      valid: false,
+      passed: false,
       score: 0,
+      maxScore: 100,
       details: `No vision alignment score found for ${sdKey}. Run vision-scorer.js before LEAD-TO-PLAN.`,
       remediation: `node scripts/eva/vision-scorer.js --sd-id ${sdKey || '<SD-KEY>'}`,
       warnings: [],
@@ -159,15 +165,16 @@ export async function validateVisionScore(sd, supabase) {
 
   // ── Score below threshold → check override, then hard block ─────────────
   if (visionScore < threshold) {
-    const override = await checkOverride(sdKey, supabase);
+    const override = await checkOverride(sdType, supabase);
     if (override.active) {
       console.log(`   ⚠️  Score ${visionScore}/100 below ${sdType} threshold ${threshold} — OVERRIDE ACTIVE`);
       console.log(`   📋 Chairman justification: ${override.justification}`);
       const dimWarnings = getDimensionWarnings(dimensionScores);
       dimWarnings.forEach(w => console.log(`   ⚠️  ${w}`));
       return {
-        valid: true,
+        passed: true,
         score: 100,
+        maxScore: 100,
         details: `Vision score ${visionScore}/100 below ${sdType} threshold ${threshold} — OVERRIDDEN (Chairman: ${override.justification})`,
         warnings: dimWarnings,
       };
@@ -177,8 +184,9 @@ export async function validateVisionScore(sd, supabase) {
     console.log(`   💡 Improve vision alignment: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`);
     console.log('   💡 Or request Chairman override via validation_gate_registry');
     return {
-      valid: false,
+      passed: false,
       score: 0,
+      maxScore: 100,
       details: `Vision score ${visionScore}/100 does not meet ${sdType} threshold ${threshold}/100`,
       remediation: `Score must reach ${threshold}/100 for ${sdType} SDs. Run: node scripts/eva/vision-scorer.js --sd-id ${sdKey}`,
       warnings: [],
@@ -196,8 +204,9 @@ export async function validateVisionScore(sd, supabase) {
   }
 
   return {
-    valid: true,
+    passed: true,
     score: 100,
+    maxScore: 100,
     details: `Vision score: ${visionScore}/100 (${thresholdAction || 'unknown'}) — meets ${sdType} threshold ${threshold}`,
     warnings: dimWarnings,
   };

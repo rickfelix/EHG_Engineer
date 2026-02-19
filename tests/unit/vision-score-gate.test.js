@@ -52,19 +52,21 @@ function makeSupabaseWithOverride(justification) {
       // First call: eva_vision_scores → return low score to trigger threshold check
       // Override call: validation_gate_registry → return override
       if (table === 'eva_vision_scores') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          order: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue({ data: [{ total_score: 40, threshold_action: 'escalate', dimension_scores: null, scored_at: new Date().toISOString() }] }),
+        const obj = {
+          select: () => obj,
+          eq: () => obj,
+          order: () => obj,
+          limit: () => Promise.resolve({ data: [{ total_score: 40, threshold_action: 'escalate', dimension_scores: null, scored_at: new Date().toISOString() }] }),
         };
+        return obj;
       }
-      // validation_gate_registry
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue({ data: justification ? [{ justification }] : [] }),
+      // validation_gate_registry — uses 'reason' column (not 'justification')
+      const obj2 = {
+        select: () => obj2,
+        eq: () => obj2,
+        limit: () => Promise.resolve({ data: justification ? [{ reason: justification }] : [] }),
       };
+      return obj2;
     }),
   };
 }
@@ -115,7 +117,7 @@ describe('validateVisionScore — no score present', () => {
 
     const result = await validateVisionScore(sd, supabase);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
     expect(result.details).toMatch(/no vision alignment score/i);
     expect(result.remediation).toMatch(/vision-scorer\.js/);
@@ -125,7 +127,7 @@ describe('validateVisionScore — no score present', () => {
     const sd = makeSD('SD-TEST-002', 'infrastructure');
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
   });
 
@@ -133,7 +135,7 @@ describe('validateVisionScore — no score present', () => {
     const sd = makeSD('SD-TEST-003', 'infrastructure');
     const result = await validateVisionScore(sd, makeFailingSupabase());
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
   });
 });
@@ -146,7 +148,7 @@ describe('validateVisionScore — score below threshold', () => {
 
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
     expect(result.score).toBe(0);
     expect(result.details).toMatch(/89.+90/);
     expect(result.remediation).toMatch(/vision-scorer/);
@@ -156,7 +158,7 @@ describe('validateVisionScore — score below threshold', () => {
     const sd = makeSD('SD-TEST-005', 'infrastructure', 79);
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
     expect(result.details).toMatch(/79.+80/);
   });
 
@@ -164,7 +166,7 @@ describe('validateVisionScore — score below threshold', () => {
     const sd = makeSD('SD-TEST-006', 'fix', 69);
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
     expect(result.details).toMatch(/69.+70/);
   });
 
@@ -172,7 +174,7 @@ describe('validateVisionScore — score below threshold', () => {
     const sd = makeSD('SD-TEST-007', 'custom_unknown', 79);
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
   });
 });
 
@@ -183,7 +185,7 @@ describe('validateVisionScore — score meets threshold', () => {
     const sd = makeSD('SD-TEST-008', 'feature', 90);
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(result.score).toBe(100);
   });
 
@@ -191,14 +193,14 @@ describe('validateVisionScore — score meets threshold', () => {
     const sd = makeSD('SD-TEST-009', 'infrastructure', 80);
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
   });
 
   it('passes fix SD at exactly 70', async () => {
     const sd = makeSD('SD-TEST-010', 'fix', 70);
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
   });
 
   it('prefers cached score over DB lookup', async () => {
@@ -208,7 +210,7 @@ describe('validateVisionScore — score meets threshold', () => {
     const result = await validateVisionScore(sd, supabase);
 
     // Should use cached 85, not DB 40
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(supabase.from).not.toHaveBeenCalled(); // never hit DB
   });
 });
@@ -222,7 +224,7 @@ describe('validateVisionScore — per-dimension warnings', () => {
 
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toMatch(/strategic_alignment/);
     expect(result.warnings[0]).toMatch(/70/);
@@ -234,7 +236,7 @@ describe('validateVisionScore — per-dimension warnings', () => {
 
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(result.warnings).toHaveLength(2);
   });
 
@@ -244,7 +246,7 @@ describe('validateVisionScore — per-dimension warnings', () => {
 
     const result = await validateVisionScore(sd, null);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(result.warnings).toHaveLength(0);
   });
 
@@ -262,7 +264,7 @@ describe('validateVisionScore — Chairman override', () => {
 
     const result = await validateVisionScore(sd, supabase);
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(result.details).toMatch(/overridden/i);
     expect(result.details).toMatch(/chairman/i);
   });
@@ -273,7 +275,7 @@ describe('validateVisionScore — Chairman override', () => {
 
     const result = await validateVisionScore(sd, supabase);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
   });
 
   it('override does not apply when score already passes threshold', async () => {
@@ -284,7 +286,7 @@ describe('validateVisionScore — Chairman override', () => {
     const result = await validateVisionScore(sd, supabase);
 
     // Valid because score passes, not because of override
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
     expect(result.details).not.toMatch(/overridden/i);
   });
 
@@ -302,7 +304,7 @@ describe('validateVisionScore — Chairman override', () => {
 
     const result = await validateVisionScore(sd, failSupabase);
 
-    expect(result.valid).toBe(false);
+    expect(result.passed).toBe(false);
   });
 });
 
@@ -325,7 +327,7 @@ describe('createVisionScoreGate', () => {
 
     const result = await gate.validator({ sd });
 
-    expect(result.valid).toBe(true);
+    expect(result.passed).toBe(true);
   });
 
   it('remediation message contains vision-scorer.js', () => {
