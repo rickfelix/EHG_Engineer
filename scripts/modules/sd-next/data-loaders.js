@@ -239,6 +239,59 @@ export async function loadOKRScorecard(supabase) {
 }
 
 /**
+ * Load vision scores from eva_vision_scores, aggregated per SD.
+ * Computes average of last 3 runs per SD and 30-day trend direction.
+ * Returns empty Map on any error (graceful degradation).
+ *
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Map<string, {avg: number, trend: string, count: number}>>}
+ */
+export async function loadVisionScores(supabase) {
+  const result = new Map();
+  try {
+    const { data, error } = await supabase
+      .from('eva_vision_scores')
+      .select('sd_id, total_score, scored_at')
+      .order('scored_at', { ascending: false });
+
+    if (error || !data || data.length === 0) return result;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Group rows by sd_id (already sorted descending by scored_at)
+    const bySD = new Map();
+    for (const row of data) {
+      if (!row.sd_id) continue;
+      if (!bySD.has(row.sd_id)) bySD.set(row.sd_id, []);
+      bySD.get(row.sd_id).push(row);
+    }
+
+    // Compute avg of last 3 runs and 30-day trend per SD
+    for (const [sdId, rows] of bySD) {
+      const recent = rows.slice(0, 3);
+      const avg = Math.round(
+        recent.reduce((sum, r) => sum + r.total_score, 0) / recent.length
+      );
+
+      // Trend: compare current avg vs avg of scores older than 30 days
+      const baseline = rows.filter(r => new Date(r.scored_at) < thirtyDaysAgo);
+      let trend = '→';
+      if (baseline.length > 0) {
+        const baselineAvg = baseline.reduce((sum, r) => sum + r.total_score, 0) / baseline.length;
+        if (avg - baselineAvg >= 5) trend = '▲';
+        else if (baselineAvg - avg >= 5) trend = '▼';
+      }
+
+      result.set(sdId, { avg, trend, count: recent.length });
+    }
+  } catch {
+    // Non-fatal — vision scores are optional display data
+  }
+  return result;
+}
+
+/**
  * Count how many baseline items have non-completed SDs
  *
  * @param {Object} supabase - Supabase client

@@ -37,12 +37,15 @@ export {
   loadPendingProposals,
   loadSDHierarchy,
   loadOKRScorecard,
+  loadVisionScores,
   countActionableBaselineItems
 } from './data-loaders.js';
 
 // Display modules
 export {
   displayOKRScorecard,
+  displayVisionPortfolioHeader,
+  formatVisionBadge,
   displayProposals,
   displayTrackSection,
   displayMultiRepoWarning,
