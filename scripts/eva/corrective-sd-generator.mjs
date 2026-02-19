@@ -227,56 +227,93 @@ export async function generateCorrectiveSD(scoreId) {
     }
   }
 
-  // 5. Build corrective SD title and enriched description from dimension context
+  // 5. Multi-dimension extraction and grouping (SD-MAN-INFRA-VISION-CORRECTIVE-MULTI-DIM-001)
   const tier = TIER_CONFIG[action] ?? TIER_CONFIG.escalation;
-  const sdKey = generateCorrectiveSdKey();
-  const { dimId, dimensionName } = _extractLowestDimension(score.dimension_scores, score.total_score);
-  const title = `[${action.toUpperCase()}] Vision Gap: ${dimensionName} (score ${score.total_score ?? '?'}/100)`;
-  const description = buildEnrichedDescription(
-    dimensionName, dimId, score.dimension_scores, score.rubric_snapshot, score.total_score, action
-  );
+  const weakDims = _extractWeakDimensions(score.dimension_scores, 3);
+  const { vDims, aDims, otherDims } = _groupDimensions(weakDims);
 
-  // 6. Insert corrective SD
-  const { data: newSD, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .insert({
-      id: sdKey,
-      sd_key: sdKey,
-      title,
-      description,
-      status: 'draft',
+  // Groups to process: V-dims → governance/feature SD; A-dims → infrastructure SD; other → feature SD
+  const groups = [
+    { dims: vDims,    sdType: 'feature',         category: 'feature',         label: 'Vision' },
+    { dims: aDims,    sdType: 'infrastructure',   category: 'infrastructure',  label: 'Architecture' },
+    { dims: otherDims, sdType: tier.sdType ?? 'feature', category: tier.sdType ?? 'feature', label: 'Vision' },
+  ].filter(g => g.dims.length > 0);
+
+  // Fall back to single lowest-dimension if no weak dims found (e.g. empty dimension_scores)
+  if (groups.length === 0) {
+    const { dimId, dimensionName } = _extractLowestDimension(score.dimension_scores, score.total_score);
+    groups.push({
+      dims: [{ dimId, dimensionName, score: score.total_score }],
+      sdType: tier.sdType ?? 'feature',
       category: tier.sdType ?? 'feature',
-      sd_type: tier.sdType ?? 'feature',
-      priority: tier.priority,
-      rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required to maintain vision alignment.`,
-      scope: `Address the ${dimensionName} (${dimId}) dimension gap. EVA score run: ${scoreId}. Current score: ${score.total_score}/100. Target: >=${THRESHOLDS.ACCEPT}.`,
-      current_phase: 'LEAD',
-      target_application: 'EHG_Engineer',
-      version: '1.0',
-      parent_sd_id: ORCHESTRATOR_ID,
-      vision_origin_score_id: scoreId,
-      key_principles: [{ principle: 'Vision alignment', description: 'Address gap to improve EVA vision score' }],
-      strategic_objectives: [{ objective: `Improve ${dimensionName} dimension score above ${THRESHOLDS.ACCEPT}`, metric: 'EVA dimension score >= 85' }],
-      success_criteria: [{ criterion: 'Dimension gap addressed', measure: `EVA re-score shows ${dimensionName} >= ${THRESHOLDS.ACCEPT}` }],
-      success_metrics: [{ metric: 'EVA dimension score', target: String(THRESHOLDS.ACCEPT), actual: String(score.total_score ?? 0) }],
-    })
-    .select('id, sd_key')
-    .single();
-
-  if (sdErr || !newSD) {
-    throw new Error(`Failed to create corrective SD: ${sdErr?.message}`);
+      label: 'Vision',
+    });
   }
 
-  // 7. Update generated_sd_ids on the score record
+  // 6. Create one SD per group, collecting all new IDs
+  const createdSDs = [];
+  const allGeneratedIds = [...existingIds];
+
+  for (const group of groups) {
+    const { dims, sdType, category, label } = group;
+    const dimSummary = dims.map(d => `${d.dimensionName} (${d.dimId})`).join(', ');
+    const lowestScore = dims[0]?.score ?? score.total_score;
+    const sdKey = generateCorrectiveSdKey();
+    const title = `[${action.toUpperCase()}] ${label} Gap: ${dimSummary} (score ${score.total_score ?? '?'}/100)`;
+    const description = buildEnrichedDescription(
+      dims[0]?.dimensionName, dims[0]?.dimId, score.dimension_scores,
+      score.rubric_snapshot, score.total_score, action
+    );
+
+    const { data: newSD, error: sdErr } = await supabase
+      .from('strategic_directives_v2')
+      .insert({
+        id: sdKey,
+        sd_key: sdKey,
+        title,
+        description,
+        status: 'draft',
+        category,
+        sd_type: sdType,
+        priority: tier.priority,
+        rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required for ${label} dimensions: ${dimSummary}.`,
+        scope: `Address ${label} dimension gap(s): ${dimSummary}. EVA score run: ${scoreId}. Lowest dim score: ${lowestScore}/100. Target: >=${THRESHOLDS.ACCEPT}.`,
+        current_phase: 'LEAD',
+        target_application: 'EHG_Engineer',
+        version: '1.0',
+        parent_sd_id: ORCHESTRATOR_ID,
+        vision_origin_score_id: scoreId,
+        key_principles: [{ principle: 'Vision alignment', description: `Address ${label} gap(s) to improve EVA vision score` }],
+        strategic_objectives: dims.map(d => ({ objective: `Improve ${d.dimensionName} above ${THRESHOLDS.ACCEPT}`, metric: `EVA ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
+        success_criteria: dims.map(d => ({ criterion: `${d.dimensionName} gap addressed`, measure: `EVA re-score shows ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
+        success_metrics: [{ metric: 'EVA dimension score', target: String(THRESHOLDS.ACCEPT), actual: String(lowestScore) }],
+      })
+      .select('id, sd_key')
+      .single();
+
+    if (sdErr || !newSD) {
+      console.warn(`[corrective-sd-generator] Failed to create ${label} SD: ${sdErr?.message}`);
+      continue;
+    }
+
+    createdSDs.push({ sdKey: newSD.sd_key || newSD.id, sdId: newSD.id, dims, label });
+    allGeneratedIds.push(newSD.id);
+    await _logAudit(supabase, scoreId, action, newSD.sd_key || newSD.id, score.vision_id);
+  }
+
+  if (createdSDs.length === 0) {
+    throw new Error('Failed to create any corrective SDs');
+  }
+
+  // 7. Update generated_sd_ids with all created SD IDs
   await supabase
     .from('eva_vision_scores')
-    .update({ generated_sd_ids: [...existingIds, newSD.id] })
+    .update({ generated_sd_ids: allGeneratedIds })
     .eq('id', scoreId);
 
-  // 8. Audit log (non-blocking)
-  await _logAudit(supabase, scoreId, action, newSD.sd_key || newSD.id, score.vision_id);
-
-  return { created: true, action, sdKey: newSD.sd_key || newSD.id, sdId: newSD.id };
+  // Backward-compatible return: primary SD = first created; sds = full list
+  const primary = createdSDs[0];
+  return { created: true, action, sdKey: primary.sdKey, sdId: primary.sdId, sds: createdSDs };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -294,30 +331,52 @@ function _normalizeAction(raw) {
 }
 
 /**
- * Extract the lowest-scoring dimension from dimension_scores JSONB.
- * Fixed: dimension_scores values are objects {score, weight, reasoning...},
- * so we compare a.score vs b.score — not a vs b (which compared objects, yielding NaN).
+ * Extract all dimensions below THRESHOLDS.MINOR, sorted ascending by score.
+ * SD-MAN-INFRA-VISION-CORRECTIVE-MULTI-DIM-001: multi-dimension extraction.
  *
+ * @param {Object|null} dimensionScores - dimension_scores JSONB
+ * @param {number} [maxDims=3] - Maximum weak dimensions to return
+ * @returns {Array<{dimId: string, dimensionName: string, score: number}>}
+ */
+export function _extractWeakDimensions(dimensionScores, maxDims = 3) {
+  if (!dimensionScores || typeof dimensionScores !== 'object') return [];
+  const entries = Object.entries(dimensionScores);
+  if (entries.length === 0) return [];
+
+  return entries
+    .map(([dimId, dimData]) => {
+      const score = typeof dimData === 'object' ? (dimData?.score ?? 100) : Number(dimData);
+      const dimensionName = (typeof dimData === 'object' ? dimData?.name : null) || dimId;
+      return { dimId, dimensionName, score };
+    })
+    .filter(d => d.score < THRESHOLDS.MINOR)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, maxDims);
+}
+
+/**
+ * Group weak dimensions by prefix: V (vision gaps) and A (architecture gaps).
+ * SD-MAN-INFRA-VISION-CORRECTIVE-MULTI-DIM-001
+ *
+ * @param {Array<{dimId: string, dimensionName: string, score: number}>} dims
+ * @returns {{ vDims: Array, aDims: Array, otherDims: Array }}
+ */
+export function _groupDimensions(dims) {
+  const vDims = dims.filter(d => d.dimId.startsWith('V'));
+  const aDims = dims.filter(d => d.dimId.startsWith('A'));
+  const otherDims = dims.filter(d => !d.dimId.startsWith('V') && !d.dimId.startsWith('A'));
+  return { vDims, aDims, otherDims };
+}
+
+/**
+ * Extract the lowest-scoring dimension from dimension_scores JSONB.
+ * @deprecated Use _extractWeakDimensions() for multi-dimension support.
  * @returns {{ dimId: string, dimensionName: string }}
  */
 function _extractLowestDimension(dimensionScores, totalScore) {
-  const fallback = { dimId: 'overall', dimensionName: `overall (${totalScore ?? '?'}/100)` };
-  if (!dimensionScores || typeof dimensionScores !== 'object') return fallback;
-
-  const entries = Object.entries(dimensionScores);
-  if (entries.length === 0) return fallback;
-
-  // Values are objects: {score: number, weight: number, reasoning: string, ...}
-  // Sort ascending by .score to find the worst-performing dimension
-  const sorted = entries.sort(([, a], [, b]) => {
-    const scoreA = typeof a === 'object' ? (a?.score ?? 0) : Number(a);
-    const scoreB = typeof b === 'object' ? (b?.score ?? 0) : Number(b);
-    return scoreA - scoreB;
-  });
-
-  const [dimId, dimData] = sorted[0];
-  const dimensionName = (typeof dimData === 'object' ? dimData?.name : null) || dimId;
-  return { dimId, dimensionName };
+  const weak = _extractWeakDimensions(dimensionScores, 1);
+  if (weak.length > 0) return { dimId: weak[0].dimId, dimensionName: weak[0].dimensionName };
+  return { dimId: 'overall', dimensionName: `overall (${totalScore ?? '?'}/100)` };
 }
 
 // Keep old name as alias for external callers during transition
