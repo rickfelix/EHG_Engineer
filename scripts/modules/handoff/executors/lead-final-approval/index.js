@@ -483,6 +483,7 @@ export {
   checkAndCompleteParentSD,
   recordFailedCompletion,
   resolveLearningItems,
+  pruneResolvedMemory,
   releaseSessionClaim
 } from './helpers.js';
 export { getRemediation, REMEDIATIONS } from './remediations.js';

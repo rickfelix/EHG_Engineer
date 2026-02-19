@@ -5,7 +5,11 @@
  * @module lead-final-approval/helpers
  */
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { executeOrchestratorCompletionHook } from '../../orchestrator-completion-hook.js';
+import { publishVisionEvent, VISION_EVENTS } from '../../../../../lib/eva/event-bus/vision-events.js';
 
 /**
  * Check and complete parent SD when all children are done
@@ -230,6 +234,14 @@ export async function resolveLearningItems(sd, supabase) {
 
       if (!patternUpdateError) {
         console.log(`   ✅ Resolved ${patterns.length} pattern(s)`);
+        // SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001: prune resolved entries from MEMORY.md
+        const resolvedPatternIds = patterns.map(p => p.pattern_id);
+        await pruneResolvedMemory(resolvedPatternIds);
+        publishVisionEvent(VISION_EVENTS.PATTERN_RESOLVED, {
+          sdKey: sdId,
+          resolvedPatternIds,
+          resolvedCount: patterns.length,
+        });
       } else {
         console.log(`   ⚠️  Pattern resolution error: ${patternUpdateError.message}`);
       }
@@ -264,6 +276,56 @@ export async function resolveLearningItems(sd, supabase) {
     }
   } catch (error) {
     console.log(`   ⚠️  Learning item resolution error: ${error.message}`);
+  }
+}
+
+/**
+ * Remove MEMORY.md sections tagged with resolved pattern IDs.
+ * Tags have the format [PAT-AUTO-XXXX] inline in a ## heading.
+ * Fail-safe: never throws, never blocks SD completion.
+ * SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001
+ *
+ * @param {string[]} resolvedPatternIds - Pattern IDs that were just resolved
+ * @param {string} [memoryFilePath] - Override path (for testing)
+ */
+export async function pruneResolvedMemory(resolvedPatternIds, memoryFilePath) {
+  try {
+    if (!resolvedPatternIds || resolvedPatternIds.length === 0) return;
+
+    // Resolve MEMORY.md path: ~/.claude/projects/{encoded-cwd}/memory/MEMORY.md
+    const filePath = memoryFilePath || (() => {
+      const cwd = process.env.INIT_CWD || process.cwd();
+      const encoded = cwd.replace(/[:\\/_ ]/g, '-');
+      return path.join(os.homedir(), '.claude', 'projects', encoded, 'memory', 'MEMORY.md');
+    })();
+
+    if (!fs.existsSync(filePath)) return;
+
+    const content = fs.readFileSync(filePath, 'utf8');
+
+    // Split into sections by top-level ## headings, preserving the delimiter
+    const sections = content.split(/(?=^## )/m);
+
+    // Build set of pattern IDs for O(1) lookup
+    const resolvedSet = new Set(resolvedPatternIds.map(id => id.trim()));
+
+    // Keep a section only if its heading does NOT contain a resolved [PAT-AUTO-XXXX] tag
+    const tagRegex = /\[PAT-AUTO-([^\]]+)\]/;
+    const pruned = sections.filter(section => {
+      const headingLine = section.split('\n')[0];
+      const match = headingLine.match(tagRegex);
+      if (!match) return true; // no tag — keep
+      const taggedId = `PAT-AUTO-${match[1]}`;
+      return !resolvedSet.has(taggedId); // keep if NOT in resolved set
+    });
+
+    if (pruned.length < sections.length) {
+      const removedCount = sections.length - pruned.length;
+      fs.writeFileSync(filePath, pruned.join(''), 'utf8');
+      console.log(`   🧹 Pruned ${removedCount} resolved pattern section(s) from MEMORY.md`);
+    }
+  } catch (err) {
+    console.log(`   ⚠️  pruneResolvedMemory: ${err.message} (non-blocking)`);
   }
 }
 
@@ -316,5 +378,6 @@ export default {
   checkAndCompleteParentSD,
   recordFailedCompletion,
   resolveLearningItems,
+  pruneResolvedMemory,
   releaseSessionClaim
 };
