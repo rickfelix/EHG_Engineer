@@ -24,17 +24,18 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { sendVisionScoreNotification, sendVisionScoreTelegramNotification } from '../../lib/notifications/orchestrator.js';
+import { GRADE } from '../../lib/standards/grade-scale.js';
 
 dotenv.config();
 
 const MAX_CONTENT_CHARS = 8000;
 const MAX_PARSE_RETRIES = 1;
 
-// Score thresholds (FR-004)
+// Score thresholds (FR-004) — standard U.S. grading scale (lib/standards/grade-scale.js)
 const THRESHOLDS = {
-  ACCEPT: 85,
-  MINOR_SD: 70,
-  GAP_CLOSURE_SD: 50,
+  ACCEPT:        GRADE.A,        // 93+ — A grade, no corrective action needed
+  MINOR_SD:      GRADE.B,        // 83-92 — B/A- range, minor enhancement SD
+  GAP_CLOSURE_SD: GRADE.C_MINUS, // 70-82 — C/B- range, gap-closure SD
 };
 
 /**
@@ -148,11 +149,11 @@ SCORING DIMENSIONS:
 ${criteriaList}
 
 SCORING SCALE:
-- 0-20: Poor — SD work fails to address or conflicts with this dimension
-- 21-40: Below Average — SD partially addresses dimension with significant gaps
-- 41-60: Average — SD meets minimum dimension requirements
-- 61-80: Good — SD aligns well with this dimension
-- 81-100: Excellent — SD exemplifies or strongly advances this dimension
+- 0-59:  F — SD fails to address or conflicts with this dimension
+- 60-69: D — SD partially addresses dimension with significant gaps
+- 70-79: C — SD meets minimum dimension requirements
+- 80-89: B — SD aligns well with this dimension
+- 90-100: A — SD exemplifies or strongly advances this dimension (A-: 90-92, A: 93-96, A+: 97-100)
 
 RESPOND WITH ONLY valid JSON matching this exact structure:
 {
