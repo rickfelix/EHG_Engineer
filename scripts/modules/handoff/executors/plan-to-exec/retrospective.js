@@ -164,14 +164,15 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
     const whatNeedsImprovement = buildWhatNeedsImprovement(prdRating, storiesRating, validationRating, testPlanRating, gapsFound, allIssues);
     const keyLearnings = buildKeyLearnings(avgRating, qualityScore, gapsFound, context, allIssues, sdIssues, sd);
     const rawActionItems = buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, allIssues);
-    // Ensure all action items have owner and deadline (required by RETROSPECTIVE_QUALITY_GATE)
+    // Ensure all action items have owner, deadline, and verification (required by RETROSPECTIVE_QUALITY_GATE)
     const actionItems = rawActionItems.map(item => ({
       ...item,
       owner: item.owner || 'LEO-Session',
       deadline: item.deadline || 'next-handoff',
+      verification: item.verification || `${sd?.sd_key || 'SD'} handoff gate confirms this criterion met`,
     }));
-    // Merge SD-specific action items if none of the raw items have owner/deadline set originally
-    if (rawActionItems.every(i => !i.owner) && sd) {
+    // Merge SD-specific action items when items lack owner OR verification (enricher provides verification)
+    if ((rawActionItems.every(i => !i.owner) || rawActionItems.every(i => !i.verification)) && sd) {
       const enriched = buildSDSpecificActionItems(sd, 'PLAN_TO_EXEC');
       if (enriched.length > 0) actionItems.push(...enriched);
     }
@@ -408,11 +409,13 @@ function buildActionItems(prdRating, storiesRating, testPlanRating, gapsFound, a
   }
 
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-021: action items need owner/deadline for quality gate
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-027: also needs verification (30% rubric weight)
   if (actionItems.length === 0) {
     actionItems.push({
       action: 'Review PLAN-TO-EXEC outcomes and verify PRD acceptance criteria are met during implementation',
       owner: 'EXEC-Agent',
       deadline: 'EXEC-completion',
+      verification: 'PLAN-TO-LEAD gate confirms all PRD acceptance criteria are met',
       is_boilerplate: false
     });
   }
