@@ -59,6 +59,92 @@ export function classifyGap(dim) {
 }
 
 /**
+ * Insert a process gap into the feedback table (enhancement) and
+ * protocol_improvement_queue. Fails silently — never blocks the reporter.
+ * SD: SD-LEO-INFRA-VISION-PROCESS-GAP-FEEDBACK-001 (US-002)
+ *
+ * @param {object} supabase
+ * @param {{ dimension: string, avgScore: number, severity: string, description: string, sdIds: string[] }} gap
+ * @param {boolean} dryRun
+ */
+async function insertProcessGapToFeedbackAndQueue(supabase, gap, dryRun) {
+  const title = `[Vision Process Gap] Low alignment on '${gap.dimension}' dimension (avg ${gap.avgScore}/100)`;
+  const feedbackDescription = `${gap.description}. Affects ${gap.sdIds.length} SD(s). This is a systemic LEO process gap — the protocol does not adequately enforce or guide this dimension.`;
+
+  if (dryRun) {
+    console.log(`  [DRY RUN] Would insert feedback + queue entry for process gap: ${gap.dimension}`);
+    return;
+  }
+
+  try {
+    // 1. Insert to feedback table as enhancement
+    const { data: fb, error: fbErr } = await supabase
+      .from('feedback')
+      .insert({
+        type: 'enhancement',
+        source_application: 'EHG_Engineer',
+        source_type: 'auto_capture',
+        title,
+        description: feedbackDescription,
+        severity: gap.severity,
+        value_estimate: 'high',
+        effort_estimate: 'medium',
+        status: 'new',
+        metadata: {
+          dimension: gap.dimension,
+          avg_score: gap.avgScore,
+          affected_sd_ids: gap.sdIds.slice(0, 10),
+          gap_type: 'process_gap',
+          source: 'vision-process-gap-reporter',
+        },
+      })
+      .select('id')
+      .single();
+
+    if (fbErr) {
+      console.error(`  [ProcessGapReporter] Feedback insert failed for ${gap.dimension}: ${fbErr.message}`);
+    } else {
+      console.log(`  [ProcessGapReporter] Feedback inserted: ${fb.id} for ${gap.dimension}`);
+    }
+
+    // 2. Insert to protocol_improvement_queue
+    const { error: qErr } = await supabase
+      .from('protocol_improvement_queue')
+      .insert({
+        source_type: 'SD_COMPLETION',
+        improvement_type: 'PROTOCOL_SECTION',
+        target_table: 'leo_validation_rules',
+        target_operation: 'INSERT',
+        description: `Add validation rule or checklist for vision dimension '${gap.dimension}' — currently under-enforced in LEO protocol`,
+        payload: {
+          category: 'vision_alignment',
+          dimension: gap.dimension,
+          avg_score: gap.avgScore,
+          severity: gap.severity,
+          impact: `Vision dimension '${gap.dimension}' scored avg ${gap.avgScore}/100 across ${gap.sdIds.length} SDs — protocol does not enforce this dimension`,
+          improvement: `Add a LEO protocol rule or checklist item to ensure '${gap.dimension}' is addressed during SD planning`,
+          evidence: gap.description,
+          affected_phase: 'ALL',
+          affected_sd_ids: gap.sdIds.slice(0, 5),
+        },
+        status: 'PENDING',
+        target_phase: 'ALL',
+        risk_tier: 'GOVERNED',
+        auto_applicable: false,
+      });
+
+    if (qErr) {
+      console.error(`  [ProcessGapReporter] Queue insert failed for ${gap.dimension}: ${qErr.message}`);
+    } else {
+      console.log(`  [ProcessGapReporter] Protocol improvement queued for dimension: ${gap.dimension}`);
+    }
+  } catch (err) {
+    // Fail silently — process gap reporting is best-effort
+    console.error(`  [ProcessGapReporter] Unexpected error inserting gap for ${gap.dimension}: ${err.message}`);
+  }
+}
+
+/**
  * Scan eva_vision_scores for systemic process gaps and publish events.
  *
  * @param {object} supabase
@@ -112,11 +198,26 @@ export async function reportProcessGaps(supabase, options = {}) {
       const severity = avgScore < 40 ? 'high' : 'medium';
       const description = `Dimension '${dimension}' averaged ${avgScore}/100 across ${uniqueSDs.length} SDs in last ${lookbackDays}d`;
 
-      console.log(`[ProcessGapReporter] Process gap: ${dimension} (avg=${avgScore}, sds=${uniqueSDs.length}, severity=${severity})`);
+      // Classify: process_gap vs dimension_gap (US-001)
+      const classification = classifyGap({ name: dimension, score: avgScore });
+      console.log(`[ProcessGapReporter] ${classification.type}: ${dimension} (avg=${avgScore}, sds=${uniqueSDs.length}, severity=${severity})`);
+      console.log(`  → ${classification.reason}`);
 
+      if (classification.type === 'process_gap') {
+        // US-002: Insert process gaps to feedback table + protocol_improvement_queue
+        await insertProcessGapToFeedbackAndQueue(supabase, {
+          dimension,
+          avgScore,
+          severity,
+          description,
+          sdIds: uniqueSDs.slice(0, 10),
+        }, dryRun);
+      }
+
+      // Always publish event (both gap types get the event for observability)
       if (!dryRun) {
         publishVisionEvent(VISION_EVENTS.PROCESS_GAP_DETECTED, {
-          gapType: 'dimension_systemic',
+          gapType: classification.type,
           dimension,
           description,
           severity,
@@ -126,7 +227,7 @@ export async function reportProcessGaps(supabase, options = {}) {
         });
         eventsPublished++;
       } else {
-        console.log(`  [DRY RUN] Would publish vision.process_gap_detected for ${dimension}`);
+        console.log(`  [DRY RUN] Would publish vision.process_gap_detected (${classification.type}) for ${dimension}`);
       }
     }
   }
