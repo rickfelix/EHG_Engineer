@@ -29,6 +29,35 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const SCORE_THRESHOLD = 60;      // Dimensions below this are "process gaps"
 const MIN_OCCURRENCES = 2;       // Must appear in at least N SDs to be systemic
 
+// Keywords that indicate a process gap (systemic enforcement issue, not SD-specific)
+const PROCESS_GAP_KEYWORDS = [
+  'gate', 'routing', 'escalation', 'dashboard', 'enforcement',
+  'protocol', 'workflow', 'guardrail', 'validation', 'oversight',
+  'review_process', 'approval', 'governance',
+];
+
+/**
+ * Classify a dimension gap as dimension_gap or process_gap.
+ * Pure function — deterministic, no side effects. (US-001)
+ *
+ * @param {{ name: string, score: number }} dim - Dimension info
+ * @returns {{ type: 'dimension_gap'|'process_gap', reason: string }}
+ */
+export function classifyGap(dim) {
+  const nameLower = (dim.name || '').toLowerCase();
+  const matchedKeyword = PROCESS_GAP_KEYWORDS.find(kw => nameLower.includes(kw));
+  if (matchedKeyword) {
+    return {
+      type: 'process_gap',
+      reason: `Dimension '${dim.name}' contains process keyword '${matchedKeyword}' — systemic protocol gap`,
+    };
+  }
+  return {
+    type: 'dimension_gap',
+    reason: `Dimension '${dim.name}' is SD-specific — routes to corrective SD path`,
+  };
+}
+
 /**
  * Scan eva_vision_scores for systemic process gaps and publish events.
  *
@@ -104,6 +133,18 @@ export async function reportProcessGaps(supabase, options = {}) {
 
   console.log(`[ProcessGapReporter] Complete: ${gapsFound} gap(s) found, ${eventsPublished} event(s) published`);
   return { gapsFound, eventsPublished };
+}
+
+/**
+ * Alias for reportProcessGaps — expected by eva-master-scheduler.js dynamic import. (US-003)
+ * Called from lib/eva/eva-master-scheduler.js _runProcessGapReporter().
+ *
+ * @param {object} supabase
+ * @param {{ dryRun?: boolean, lookbackDays?: number }} [options]
+ * @returns {Promise<{ gapsFound: number, eventsPublished: number }>}
+ */
+export async function syncProcessGaps(supabase, options = {}) {
+  return reportProcessGaps(supabase, options);
 }
 
 // CLI entry point
