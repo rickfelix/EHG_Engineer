@@ -15,6 +15,7 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { randomBytes } from 'crypto';
+import { GRADE } from '../../lib/standards/grade-scale.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -23,10 +24,10 @@ config({ path: join(__dirname, '../../.env') });
 // Exported so callers can inspect and tests can reference without magic numbers.
 
 export const THRESHOLDS = {
-  ACCEPT: 85,      // >=85: no action needed
-  MINOR: 70,       // 70-84: minor enhancement SD (medium priority)
-  GAP_CLOSURE: 50, // 50-69: gap-closure SD (high priority)
-  ESCALATION: 0,   // <50:  critical escalation SD
+  ACCEPT:      GRADE.A,        // >=93: A grade — no action needed
+  MINOR:       GRADE.B,        // 83-92: B/A- range — minor enhancement SD (medium priority)
+  GAP_CLOSURE: GRADE.C_MINUS,  // 70-82: C/B- range — gap-closure SD (high priority)
+  ESCALATION:  GRADE.F,        // <70:  D or F — critical escalation SD
 };
 
 // SD type and priority per tier
