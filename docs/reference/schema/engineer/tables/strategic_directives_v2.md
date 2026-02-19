@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T19:52:25.488Z
-**Rows**: 1,100
+**Generated**: 2026-02-19T23:26:50.288Z
+**Rows**: 1,145
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (84 total)
+## Columns (85 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -106,6 +106,7 @@ Use the id column instead - it is the canonical identifier. |
 | vision_score | `integer(32)` | YES | - | Vision alignment score (0-100) from most recent eva/score run for this SD. |
 | vision_score_action | `character varying(20)` | YES | - | Action classification from last vision score: accept, minor_sd, gap_closure_sd, or escalate. |
 | vision_origin_score_id | `uuid` | YES | - | If this SD was generated as a corrective action, links back to the eva_vision_scores record that triggered its creation. |
+| vision_alignment_score | `numeric` | YES | - | Vision alignment score (0-100), populated by SD-MAN-INFRA-DYNAMIC-VISION-ALIGNMENT-001 scoring engine |
 
 ## Constraints
 

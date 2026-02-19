@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-18T19:52:25.488Z
-**Rows**: 955
+**Generated**: 2026-02-19T23:26:50.288Z
+**Rows**: 1,003
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (57 total)
+## Columns (58 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -84,6 +84,7 @@
 - runtime_config: Configuration and deployment concerns (array of { name, env, default })
 - observability_rollout: Monitoring, rollout, and rollback plans (object with metrics, alerts, rollback_plan)
 Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integration requirements. |
+| goal_summary | `character varying(300)` | YES | - | - |
 
 ## Constraints
 
