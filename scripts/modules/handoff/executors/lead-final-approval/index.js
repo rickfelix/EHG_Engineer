@@ -25,6 +25,104 @@ import { recordSdCompleted } from '../../../../../lib/learning/outcome-tracker.j
 // Worktree cleanup (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
 import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-manager.js';
 
+/**
+ * Auto-rescore the original SD after a corrective SD completes.
+ * SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001
+ *
+ * Only fires when the completing SD has a vision_origin_score_id — indicating
+ * it was created by the EVA corrective-sd-generator to address a vision gap.
+ * Fail-safe: all errors are caught and logged; never blocks SD completion.
+ *
+ * @param {Object} sd - The completing SD (must have vision_origin_score_id field)
+ * @param {Object} supabase - Supabase client
+ */
+async function rescoreOriginalSD(sd, supabase) {
+  if (!sd.vision_origin_score_id) return; // Not a corrective SD
+
+  console.log('\n🔄 AUTO-RESCORE: Corrective SD completion detected');
+  console.log('-'.repeat(50));
+  console.log(`   Corrective SD: ${sd.sd_key || sd.id}`);
+  console.log(`   Origin score ID: ${sd.vision_origin_score_id}`);
+
+  try {
+    // Fetch the original score record to find which SD was scored
+    const { data: originScore, error: originErr } = await supabase
+      .from('eva_vision_scores')
+      .select('sd_id, total_score, dimension_scores, scored_at')
+      .eq('id', sd.vision_origin_score_id)
+      .single();
+
+    if (originErr || !originScore) {
+      console.log(`   ⚠️  Origin score record not found (${sd.vision_origin_score_id}) — skipping rescore`);
+      return;
+    }
+
+    const originalSdKey = originScore.sd_id;
+    const previousScore = originScore.total_score;
+    console.log(`   Original SD: ${originalSdKey} (previous score: ${previousScore}/100)`);
+
+    // Import scoreSD lazily to avoid circular dep issues at module load time
+    const { scoreSD } = await import('../../../../eva/vision-scorer.js').catch(() => {
+      // Fallback: try absolute path structure
+      return import('../../../../../scripts/eva/vision-scorer.js').catch(() => null);
+    });
+
+    if (!scoreSD) {
+      console.log('   ⚠️  Could not import scoreSD — skipping rescore');
+      return;
+    }
+
+    console.log('   🔍 Running vision re-score...');
+    const rescoreResult = await scoreSD({
+      sdKey: originalSdKey,
+      supabase,
+    });
+
+    if (!rescoreResult || !rescoreResult.totalScore) {
+      console.log('   ⚠️  Rescore returned no result — skipping persistence');
+      return;
+    }
+
+    const newScore = rescoreResult.totalScore;
+
+    // Persist new score with corrective_sd_id link
+    const { error: insertErr } = await supabase
+      .from('eva_vision_scores')
+      .insert({
+        sd_id: originalSdKey,
+        total_score: newScore,
+        threshold_action: rescoreResult.thresholdAction || null,
+        dimension_scores: rescoreResult.dimensionScores || null,
+        rubric_snapshot: {
+          ...(rescoreResult.rubricSnapshot || {}),
+          corrective_sd_id: sd.sd_key || sd.id,
+          rescore_triggered_by: 'LEAD-FINAL-APPROVAL-HOOK',
+        },
+        created_by: 'auto-rescore-hook',
+        scored_at: new Date().toISOString(),
+      });
+
+    if (insertErr) {
+      // Try without corrective_sd_id in rubric_snapshot if column missing
+      console.log(`   ⚠️  Score persist failed: ${insertErr.message}`);
+      return;
+    }
+
+    const delta = newScore - previousScore;
+    if (delta > 0) {
+      console.log(`   ✅ Vision gap closed: ${previousScore} → ${newScore}/100 (+${delta})`);
+      console.log(`   📊 SD ${originalSdKey} improved by corrective SD ${sd.sd_key || sd.id}`);
+    } else if (delta === 0) {
+      console.log(`   ℹ️  Score unchanged: ${newScore}/100 (no improvement detected)`);
+    } else {
+      console.log(`   ⚠️  Score decreased: ${previousScore} → ${newScore}/100 (${delta})`);
+    }
+  } catch (rescoreError) {
+    // Non-blocking: log and continue
+    console.log(`   ⚠️  Auto-rescore failed (non-blocking): ${rescoreError.message}`);
+  }
+}
+
 export class LeadFinalApprovalExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
     super(dependencies);
@@ -154,6 +252,11 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     // Resolve patterns/improvements if this SD was created from /learn
     await resolveLearningItems(sd, this.supabase);
+
+    // SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001: Auto-rescore after corrective SD completion
+    // If this SD was created to fix a vision gap (has vision_origin_score_id), re-score the
+    // original SD to measure whether the gap was closed.
+    await rescoreOriginalSD(sd, this.supabase);
 
     // Release the session claim
     await releaseSessionClaim(sd, this.supabase);
