@@ -1002,6 +1002,9 @@ describe('EvaMasterScheduler', () => {
         config: { observeOnly: true },
       });
 
+      // Stub _executeScheduledRounds to isolate dispatch-only OBSERVE logs
+      vi.spyOn(scheduler, '_executeScheduledRounds').mockResolvedValue();
+
       const ventures = [
         makeVentureEntry({ venture_id: 'v-observe-log', max_stages_per_cycle: 2 }),
       ];
@@ -1044,6 +1047,9 @@ describe('EvaMasterScheduler', () => {
         circuitBreaker: mockCB,
         config: { observeOnly: true },
       });
+
+      // Stub _executeScheduledRounds to isolate dispatch-only OBSERVE logs
+      vi.spyOn(scheduler, '_executeScheduledRounds').mockResolvedValue();
 
       const ventures = [
         makeVentureEntry({ venture_id: 'v-obs-cadence', max_stages_per_cycle: 2 }),
@@ -1387,6 +1393,240 @@ describe('EvaMasterScheduler', () => {
       expect(mockLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Heartbeat update failed'),
       );
+    });
+  });
+
+  // ── Round Registry (FR-1, FR-2, FR-3) ───────────────────────
+
+  describe('Round Registry', () => {
+    beforeEach(() => {
+      scheduler = new EvaMasterScheduler({
+        supabase: mockSupabase,
+        logger: mockLogger,
+        circuitBreaker: mockCB,
+      });
+    });
+
+    test('should register default rounds on construction (FR-3)', () => {
+      const rounds = scheduler.listRounds();
+      const types = rounds.map(r => r.type);
+      expect(types).toContain('vision_rescore');
+      expect(types).toContain('gap_analysis');
+      expect(types).toContain('stage_health');
+      expect(types).toContain('corrective_generation');
+    });
+
+    test('should register notification rounds on construction (FR-4)', () => {
+      const rounds = scheduler.listRounds();
+      const types = rounds.map(r => r.type);
+      expect(types).toContain('daily_digest');
+      expect(types).toContain('weekly_summary');
+    });
+
+    test('registerRound should add a round to the registry (FR-1)', () => {
+      scheduler.registerRound('test_round', {
+        description: 'A test round',
+        handler: async () => ({ ok: true }),
+        cadence: 'hourly',
+      });
+
+      const rounds = scheduler.listRounds();
+      const testRound = rounds.find(r => r.type === 'test_round');
+      expect(testRound).toBeDefined();
+      expect(testRound.description).toBe('A test round');
+      expect(testRound.cadence).toBe('hourly');
+    });
+
+    test('registerRound should throw if roundType or handler is missing', () => {
+      expect(() => scheduler.registerRound(null, { handler: async () => {} })).toThrow();
+      expect(() => scheduler.registerRound('valid', {})).toThrow();
+    });
+
+    test('runRound should execute the handler and return result', async () => {
+      scheduler.registerRound('quick_test', {
+        description: 'Quick',
+        handler: async () => ({ answer: 42 }),
+      });
+
+      mockSupabase.from.mockReturnValue(mockSupabase);
+      mockSupabase.insert.mockReturnValue(mockSupabase);
+
+      const result = await scheduler.runRound('quick_test');
+      expect(result.success).toBe(true);
+      expect(result.result.answer).toBe(42);
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    });
+
+    test('runRound should return failure result when handler throws', async () => {
+      scheduler.registerRound('failing_round', {
+        description: 'Fails',
+        handler: async () => { throw new Error('boom'); },
+      });
+
+      mockSupabase.from.mockReturnValue(mockSupabase);
+      mockSupabase.insert.mockReturnValue(mockSupabase);
+
+      const result = await scheduler.runRound('failing_round');
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('boom');
+    });
+
+    test('runRound should increment _totalRoundErrors on failure (FR-5)', async () => {
+      scheduler.registerRound('err_round', {
+        description: 'Errors',
+        handler: async () => { throw new Error('fail'); },
+      });
+
+      mockSupabase.from.mockReturnValue(mockSupabase);
+      mockSupabase.insert.mockReturnValue(mockSupabase);
+
+      await scheduler.runRound('err_round');
+      expect(scheduler._totalRoundErrors).toBe(1);
+    });
+
+    test('runRound should throw for unregistered round type', async () => {
+      await expect(scheduler.runRound('nonexistent')).rejects.toThrow('not registered');
+    });
+
+    test('runRound should emit scheduler_round metric (FR-6)', async () => {
+      scheduler.registerRound('metric_round', {
+        description: 'Emits metric',
+        handler: async () => ({ done: true }),
+      });
+
+      mockSupabase.from.mockReturnValue(mockSupabase);
+      mockSupabase.insert.mockReturnValue(mockSupabase);
+
+      await scheduler.runRound('metric_round');
+
+      const insertCalls = mockSupabase.insert.mock.calls;
+      const roundMetric = insertCalls.find(
+        call => call[0]?.event_type === 'scheduler_round',
+      );
+      expect(roundMetric).toBeDefined();
+      expect(roundMetric[0].metadata.round_type).toBe('metric_round');
+      expect(roundMetric[0].metadata.outcome).toBe('success');
+    });
+
+    test('listRounds should return all registered rounds', () => {
+      const rounds = scheduler.listRounds();
+      expect(rounds.length).toBeGreaterThanOrEqual(6); // 4 default + 2 notification
+      for (const round of rounds) {
+        expect(round).toHaveProperty('type');
+        expect(round).toHaveProperty('description');
+        expect(round).toHaveProperty('cadence');
+      }
+    });
+  });
+
+  // ── _executeScheduledRounds (FR-2) ────────────────────────
+
+  describe('_executeScheduledRounds', () => {
+    beforeEach(() => {
+      scheduler = new EvaMasterScheduler({
+        supabase: mockSupabase,
+        logger: mockLogger,
+        circuitBreaker: mockCB,
+      });
+      // Clear default rounds for controlled testing
+      scheduler._roundRegistry.clear();
+      scheduler._lastRoundRun.clear();
+      mockSupabase.from.mockReturnValue(mockSupabase);
+      mockSupabase.insert.mockReturnValue(mockSupabase);
+    });
+
+    test('should execute rounds whose cadence has elapsed', async () => {
+      const handler = vi.fn().mockResolvedValue({ ok: true });
+      scheduler.registerRound('hourly_test', {
+        description: 'Test',
+        handler,
+        cadence: 'hourly',
+      });
+      // lastRoundRun not set → should run
+
+      await scheduler._executeScheduledRounds();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    test('should skip rounds whose cadence has not elapsed', async () => {
+      const handler = vi.fn().mockResolvedValue({ ok: true });
+      scheduler.registerRound('hourly_test', {
+        description: 'Test',
+        handler,
+        cadence: 'hourly',
+      });
+      // Mark as just run
+      scheduler._lastRoundRun.set('hourly_test', Date.now());
+
+      await scheduler._executeScheduledRounds();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    test('should skip on_demand rounds', async () => {
+      const handler = vi.fn().mockResolvedValue({ ok: true });
+      scheduler.registerRound('manual_only', {
+        description: 'Manual',
+        handler,
+        cadence: 'on_demand',
+      });
+
+      await scheduler._executeScheduledRounds();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    test('should skip rounds when circuit breaker is OPEN (FR-5)', async () => {
+      const openCB = createMockCircuitBreaker('OPEN');
+      scheduler.circuitBreaker = openCB;
+
+      const handler = vi.fn().mockResolvedValue({ ok: true });
+      scheduler.registerRound('hourly_cb', {
+        description: 'Test',
+        handler,
+        cadence: 'hourly',
+      });
+
+      await scheduler._executeScheduledRounds();
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    test('should log OBSERVE and skip execution in observe-only mode', async () => {
+      scheduler.observeOnly = true;
+      const handler = vi.fn().mockResolvedValue({ ok: true });
+      scheduler.registerRound('hourly_obs', {
+        description: 'Test',
+        handler,
+        cadence: 'hourly',
+      });
+
+      await scheduler._executeScheduledRounds();
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(mockLogger.log).toHaveBeenCalledWith(
+        expect.stringContaining('OBSERVE: Would run round hourly_obs'),
+      );
+    });
+  });
+
+  // ── poll() executes rounds (FR-2 integration) ──────────────
+
+  describe('poll() round integration', () => {
+    test('should call _executeScheduledRounds at end of poll cycle', async () => {
+      scheduler = new EvaMasterScheduler({
+        supabase: mockSupabase,
+        logger: mockLogger,
+        circuitBreaker: mockCB,
+      });
+
+      configureMockForPoll(mockSupabase, { ventures: [], queueDepth: 0 });
+
+      const spy = vi.spyOn(scheduler, '_executeScheduledRounds').mockResolvedValue();
+      await scheduler.poll();
+
+      expect(spy).toHaveBeenCalledTimes(1);
     });
   });
 
