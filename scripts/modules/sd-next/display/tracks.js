@@ -96,8 +96,13 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
   const gapBadge = (item.gap_weight > 0)
     ? ` ${colors.cyan}↑gap:${item.gap_weight.toFixed(2)}${colors.reset}`
     : '';
+  // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A: Urgency band badge
+  const urgencyBadgeColors = { P0: colors.red, P1: colors.yellow, P2: colors.cyan, P3: colors.dim };
+  const urgencyBadge = item.urgency_band
+    ? ` ${urgencyBadgeColors[item.urgency_band] || colors.dim}[${item.urgency_band}]${colors.reset}`
+    : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${visionBadge}${gapBadge}... ${statusIcon}`);
+  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
 
   // Show who claimed it with enhanced details (FR-6)
   if (isClaimedByOther) {
