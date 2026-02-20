@@ -157,13 +157,13 @@ function main() {
           const markerFile = path.join(markerDir, `${sessionId}.json`);
           fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
 
-          // Cleanup old markers (keep last 10 of each type)
+          // Cleanup old markers (keep last 3 of each type)
           const cleanup = (prefix) => {
             const files = fs.readdirSync(markerDir)
               .filter(f => f.startsWith(prefix) && f.endsWith('.json'))
               .map(f => ({ name: f, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs }))
               .sort((a, b) => b.mtime - a.mtime);
-            for (const old of files.slice(10)) {
+            for (const old of files.slice(3)) {
               try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
             }
           };
@@ -173,7 +173,7 @@ function main() {
             .filter(f => !f.startsWith('pid-') && !f.startsWith('port-') && f.endsWith('.json'))
             .map(f => ({ name: f, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs }))
             .sort((a, b) => b.mtime - a.mtime);
-          for (const old of sessionMarkers.slice(10)) {
+          for (const old of sessionMarkers.slice(3)) {
             try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
           }
         } catch {

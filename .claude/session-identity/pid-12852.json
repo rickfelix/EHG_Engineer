@@ -1,8 +1,0 @@
-{
-  "session_id": "73994138-7710-4bf1-a7c3-7b67c0c9e622",
-  "sse_port": "22495",
-  "cc_pid": "12852",
-  "source": "startup",
-  "model": "claude-opus-4-6[1m]",
-  "captured_at": "2026-02-18T13:07:35.061Z"
-}
