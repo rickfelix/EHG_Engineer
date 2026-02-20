@@ -327,7 +327,8 @@
     "test:pipeline:smoke": "node scripts/test-pipeline-smoke.js",
     "pipeline:status": "node scripts/pipeline-status.js",
     "feedback:stale": "node scripts/feedback-staleness-check.js",
-    "feedback:stale:dry": "node scripts/feedback-staleness-check.js --dry-run"
+    "feedback:stale:dry": "node scripts/feedback-staleness-check.js --dry-run",
+    "test:vision-governance": "vitest run tests/vision-governance/"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -379,7 +380,7 @@
     "eslint-plugin-playwright": "^2.3.0",
     "husky": "^9.1.7",
     "minimatch": "^10.1.2",
-    "pg": "^8.11.3",
+    "pg": "^8.18.0",
     "puppeteer": "^24.23.0",
     "typescript": "^5.9.2",
     "vitest": "^4.0.0",
