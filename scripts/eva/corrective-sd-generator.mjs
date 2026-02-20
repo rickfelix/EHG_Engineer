@@ -18,6 +18,8 @@ import { GRADE } from '../../lib/standards/grade-scale.js';
 import { publishVisionEvent, VISION_EVENTS } from '../../lib/eva/event-bus/vision-events.js';
 import { generateSDKey } from '../modules/sd-key-generator.js';
 import { createSD } from '../leo-create-sd.js';
+import { loadIntelligenceSignals } from '../../lib/eva/intelligence-loader.js';
+import { calculateCorrectivePriority } from '../../lib/eva/corrective-priority-calculator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -227,6 +229,24 @@ export async function generateCorrectiveSD(scoreId) {
   const weakDims = _extractWeakDimensions(score.dimension_scores, 3);
   const { vDims, aDims, otherDims } = _groupDimensions(weakDims);
 
+  // 5a. Load intelligence signals for dynamic priority (SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-C)
+  let intelligenceSignals = null;
+  let priorityResult = null;
+  try {
+    intelligenceSignals = await loadIntelligenceSignals(supabase, score.sd_id ?? '', { sdUuid: score.sd_id });
+    priorityResult = calculateCorrectivePriority({
+      tier: action,
+      okrImpact: intelligenceSignals.okrImpact,
+      patterns: intelligenceSignals.patterns,
+      blocking: intelligenceSignals.blocking,
+      visionScore: score.total_score,
+    });
+  } catch (err) {
+    console.warn(`[corrective-sd-generator] Intelligence loading failed, using static priority: ${err.message}`);
+    // Fall back to static tier priority
+    priorityResult = { priority: tier.priority, band: null, score: null, reason_codes: ['static_fallback'], source: 'tier-fallback' };
+  }
+
   // Groups to process: V-dims → governance/feature SD; A-dims → infrastructure SD; other → feature SD
   const groups = [
     { dims: vDims,    sdType: 'feature',         category: 'feature',         label: 'Vision' },
@@ -263,12 +283,13 @@ export async function generateCorrectiveSD(scoreId) {
     const sdKey = await generateSDKey({ source: 'CORR', type: sdType, title });
 
     try {
+      const dynamicPriority = priorityResult?.priority ?? tier.priority;
       const newSD = await createSD({
         sdKey,
         title,
         description,
         type: sdType,
-        priority: tier.priority,
+        priority: dynamicPriority,
         category,
         parentId: ORCHESTRATOR_ID,
         rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required for ${label} dimensions: ${dimSummary}.`,
@@ -282,6 +303,13 @@ export async function generateCorrectiveSD(scoreId) {
           vision_origin_score_id: scoreId,
           action_tier: action,
           dimensions: dims.map(d => d.dimId),
+          intelligence_priority: {
+            priority: dynamicPriority,
+            band: priorityResult?.band ?? null,
+            score: priorityResult?.score ?? null,
+            reason_codes: priorityResult?.reason_codes ?? [],
+            source: priorityResult?.source ?? 'static',
+          },
         },
       });
 
