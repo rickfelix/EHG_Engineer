@@ -4,10 +4,12 @@
  * Calculates compliance scores across 5 dimensions:
  * 1. Handoff Completeness (25%) - Required handoffs per SD type present
  * 2. Handoff Quality (25%) - All 7 mandatory elements filled
- * 3. Gate Compliance (25%) - Met 85% threshold, 70% PRD quality
+ * 3. Gate Compliance (25%) - Met B grade (83%) threshold, C- (70%) PRD quality
  * 4. Sequence Compliance (15%) - Correct phase order maintained
  * 5. Duration Efficiency (10%) - Reasonable time per phase
  */
+
+import { GRADE } from '../../../lib/standards/grade-scale.js';
 
 // Dimension weights (must sum to 1.0)
 const WEIGHTS = {
@@ -196,12 +198,12 @@ function calcGateCompliance(data) {
   let checks = [];
   let passed = 0;
 
-  // Check 1: Handoff validation scores >= 85%
+  // Check 1: Handoff validation scores >= B grade (83%)
   const handoffsWithScores = acceptedHandoffs.filter(h => h.validation_score !== null);
   if (handoffsWithScores.length > 0) {
     const avgScore = handoffsWithScores.reduce((sum, h) => sum + h.validation_score, 0) / handoffsWithScores.length;
-    const handoffPass = avgScore >= 85;
-    checks.push({ name: 'Handoff Validation (>=85%)', passed: handoffPass, value: Math.round(avgScore) });
+    const handoffPass = avgScore >= GRADE.B;
+    checks.push({ name: 'Handoff Validation (>=83% / B)', passed: handoffPass, value: Math.round(avgScore) });
     if (handoffPass) passed++;
   }
 
@@ -440,7 +442,7 @@ export function calculateComplianceScores(data) {
  * Get status label based on score
  */
 export function getScoreStatus(score) {
-  if (score >= 85) return 'PASS';
-  if (score >= 70) return 'WARN';
+  if (score >= GRADE.B)       return 'PASS';  // B (83) or better
+  if (score >= GRADE.C_MINUS) return 'WARN';  // C- (70) to B-
   return 'FAIL';
 }

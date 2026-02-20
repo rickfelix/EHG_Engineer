@@ -13,6 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import chalk from 'chalk';
+import { GRADE } from '../lib/standards/grade-scale.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,12 +28,12 @@ class QualityGateChecker {
       ...options
     };
 
-    // Quality gate thresholds (configurable)
+    // Quality gate thresholds (configurable) — A grade (93) per lib/standards/grade-scale.js
     this.thresholds = {
       overall_pass_rate: {
-        target: 85,
+        target: GRADE.A,
         critical: true,
-        description: 'Overall test pass rate must be >= 85%'
+        description: `Overall test pass rate must be >= ${GRADE.A}% (A grade)`
       },
       authentication_failures: {
         target: 0,
