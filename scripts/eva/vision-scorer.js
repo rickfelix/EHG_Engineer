@@ -463,6 +463,23 @@ ${rawResponse.substring(0, 1000)}`;
         console.warn(`[vision-scorer] Gap write failed for ${sdKey}: ${err.message}`)
       );
     }
+
+    // SD-CORR-VIS-A05-EVENT-BUS-001: Publish gap_detected for low-scoring dimensions
+    if (sdKey && dimensionScores) {
+      for (const [dimId, dim] of Object.entries(dimensionScores)) {
+        if (typeof dim.score === 'number' && dim.score < 60) {
+          publishVisionEvent(VISION_EVENTS.GAP_DETECTED, {
+            sdKey,
+            dimension: dim.name || dimId,
+            dimId,
+            score: dim.score,
+            threshold: 60,
+            scoreId: inserted.id,
+            supabase,
+          });
+        }
+      }
+    }
   }
 
   // Expose summary and latency for callers even though they're in rubric_snapshot
