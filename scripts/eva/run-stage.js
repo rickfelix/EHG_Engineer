@@ -13,6 +13,7 @@
 
 import { executeStage, loadStageTemplate } from '../../lib/eva/stage-execution-engine.js';
 import { validateContracts } from '../../lib/eva/contract-validator.js';
+import { outputInlineContext, persistInlineResult } from '../../lib/eva/inline-analysis-adapter.js';
 import { readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -79,11 +80,29 @@ const getArg = (flag) => {
 const ventureId = getArg('--venture-id');
 const stageNumber = parseInt(getArg('--stage') || '0', 10);
 const dryRun = args.includes('--dry-run');
+const inlineMode = args.includes('--inline');
+const persistJson = getArg('--persist');
 
 if (!ventureId || !stageNumber) {
-  console.error('Usage: node scripts/eva/run-stage.js --venture-id <UUID> --stage <N> [--dry-run] [--check]');
+  console.error('Usage: node scripts/eva/run-stage.js --venture-id <UUID> --stage <N> [--dry-run] [--inline] [--persist <JSON>] [--check]');
   process.exit(1);
 }
+
+// Inline mode: output context for Claude Code
+if (inlineMode) {
+  outputInlineContext({ stageNumber, ventureId }).catch(err => {
+    console.error(`\n❌ Inline mode failed: ${err.message}`);
+    process.exit(1);
+  });
+  // Don't fall through to standard execution
+} else if (persistJson) {
+  // Persist mode: write Claude Code's inline result
+  persistInlineResult({ stageNumber, ventureId, resultJson: persistJson }).catch(err => {
+    console.error(`\n❌ Persist failed: ${err.message}`);
+    process.exit(1);
+  });
+} else {
+// Standard execution mode (original code below)
 
 console.log('\n🔧 Stage Execution Engine');
 console.log(`   Venture: ${ventureId}`);
@@ -139,3 +158,4 @@ console.log('');
   console.error(`\n❌ Stage execution failed: ${err.message}`);
   process.exit(1);
 });
+} // end standard execution mode
