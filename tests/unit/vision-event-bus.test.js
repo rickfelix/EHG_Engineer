@@ -174,15 +174,15 @@ describe('registerVisionGapDetectedHandlers', () => {
     _resetVisionGapDetectedHandlers();
   });
 
-  it('registers 1 subscriber for gap detected events', () => {
+  it('registers 2 subscribers for gap detected events (log + DB write)', () => {
     registerVisionGapDetectedHandlers();
-    expect(getSubscriberCount(VISION_EVENTS.GAP_DETECTED)).toBe(1);
+    expect(getSubscriberCount(VISION_EVENTS.GAP_DETECTED)).toBe(2);
   });
 
-  it('is idempotent — double registration stays at 1', () => {
+  it('is idempotent — double registration stays at 2', () => {
     registerVisionGapDetectedHandlers();
     registerVisionGapDetectedHandlers();
-    expect(getSubscriberCount(VISION_EVENTS.GAP_DETECTED)).toBe(1);
+    expect(getSubscriberCount(VISION_EVENTS.GAP_DETECTED)).toBe(2);
   });
 
   it('logs gap info when event is published', async () => {
@@ -209,15 +209,15 @@ describe('registerVisionProcessGapDetectedHandlers', () => {
     _resetVisionProcessGapDetectedHandlers();
   });
 
-  it('registers 1 subscriber for process gap events', () => {
+  it('registers 2 subscribers for process gap events (log + DB write)', () => {
     registerVisionProcessGapDetectedHandlers();
-    expect(getSubscriberCount(VISION_EVENTS.PROCESS_GAP_DETECTED)).toBe(1);
+    expect(getSubscriberCount(VISION_EVENTS.PROCESS_GAP_DETECTED)).toBe(2);
   });
 
   it('is idempotent', () => {
     registerVisionProcessGapDetectedHandlers();
     registerVisionProcessGapDetectedHandlers();
-    expect(getSubscriberCount(VISION_EVENTS.PROCESS_GAP_DETECTED)).toBe(1);
+    expect(getSubscriberCount(VISION_EVENTS.PROCESS_GAP_DETECTED)).toBe(2);
   });
 
   it('logs process gap when event fires', async () => {
