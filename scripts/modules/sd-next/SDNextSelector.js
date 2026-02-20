@@ -15,6 +15,7 @@ import { checkDependencyStatus } from '../../child-sd-preflight.js';
 import { VentureContextManager } from '../../../lib/eva/venture-context-manager.js';
 import { normalizeVenturePrefix } from '../sd-key-generator.js';
 
+import { scoreToBand, bandToNumeric } from '../auto-proceed/urgency-scorer.js';
 import { colors } from './colors.js';
 import { checkDependenciesResolved, scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
 import {
@@ -465,6 +466,11 @@ export class SDNextSelector {
         : 0;
       const compositeRank = gapWeight > 0 ? sequenceRank / (1 + gapWeight) : sequenceRank;
 
+      // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A: Extract urgency from metadata
+      const urgencyScore = sd.metadata?.urgency_score ?? null;
+      const urgencyBand = sd.metadata?.urgency_band ?? (urgencyScore !== null ? scoreToBand(urgencyScore) : 'P3');
+      const urgencyNumeric = bandToNumeric(urgencyBand);
+
       tracks[trackKey].push({
         ...(baselineItem || {}),
         ...sd,
@@ -472,15 +478,24 @@ export class SDNextSelector {
         sequence_rank: sequenceRank,
         gap_weight: gapWeight,
         composite_rank: compositeRank,
+        urgency_score: urgencyScore,
+        urgency_band: urgencyBand,
+        urgency_numeric: urgencyNumeric,
         deps_resolved: depsResolved,
         childDepStatus,
         actual: this.actuals[sd.sd_key] || this.actuals[sd.id]
       });
     }
 
-    // Sort each track by composite_rank (vision-weighted) with sequence_rank fallback
+    // Sort each track: urgency band (P0 first) → urgency score (desc) → composite_rank fallback
     for (const trackKey of Object.keys(tracks)) {
-      tracks[trackKey].sort((a, b) => (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999));
+      tracks[trackKey].sort((a, b) => {
+        const bandDiff = (a.urgency_numeric ?? 3) - (b.urgency_numeric ?? 3);
+        if (bandDiff !== 0) return bandDiff;
+        const scoreDiff = (b.urgency_score ?? 0) - (a.urgency_score ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (a.composite_rank ?? a.sequence_rank ?? 9999) - (b.composite_rank ?? b.sequence_rank ?? 9999);
+      });
     }
 
     const sessionContext = this.getSessionContext();
