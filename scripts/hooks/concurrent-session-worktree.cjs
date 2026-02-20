@@ -210,11 +210,9 @@ function gitViaPowerShell(gitArgs, opts = {}) {
   return execSync(cmd, { stdio: 'pipe', ...opts });
 }
 
-// Max worktrees to clean per session start.
-// Originally capped at 3 to prevent MSYS2 pipe corruption (RCA-MSYS2-PIPE-CORRUPTION-001),
-// but that caused accumulation over time (37+ stale worktrees with only 2 active sessions).
-// Now that git ops use PowerShell (avoiding MSYS2), a higher cap is safe.
-const MAX_CLEANUP_PER_SESSION = 50;
+// No numeric cap on cleanup — the 4.5s hook timeout (see bottom of file) is the
+// natural throttle. Originally capped at 3 (RCA-MSYS2-PIPE-CORRUPTION-001) but that
+// caused accumulation. Now that git ops use PowerShell, subprocess storms aren't a risk.
 
 /**
  * Check if a worktree is actively used by a running session (US-004).
@@ -244,7 +242,7 @@ function isWorktreeInUseBySession(wtPath) {
  *
  * Hardened per RCA-MSYS2-PIPE-CORRUPTION-001:
  * - PowerShell for git ops (avoids MSYS2 pipe corruption)
- * - Bounded to MAX_CLEANUP_PER_SESSION (prevents subprocess storms)
+ * - Bounded by 4.5s hook timeout (natural throttle, no numeric cap)
  * - Active session check before deletion (prevents CWD disappearing)
  * - CWD validation after cleanup (resets to repo root if invalid)
  */
@@ -273,10 +271,6 @@ function cleanupStaleConcurrentWorktrees() {
   const repoRoot = path.resolve(__dirname, '../..');
 
   for (const entry of entries) {
-    if (cleaned >= MAX_CLEANUP_PER_SESSION) {
-      skipped += entries.length - entries.indexOf(entry);
-      break;
-    }
 
     const wtPath = path.join(worktreesDir, entry);
 
