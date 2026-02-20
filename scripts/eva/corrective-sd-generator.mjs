@@ -14,9 +14,10 @@ import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { randomBytes } from 'crypto';
 import { GRADE } from '../../lib/standards/grade-scale.js';
 import { publishVisionEvent, VISION_EVENTS } from '../../lib/eva/event-bus/vision-events.js';
+import { generateSDKey } from '../modules/sd-key-generator.js';
+import { createSD } from '../leo-create-sd.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -73,13 +74,6 @@ export function classifyScore(score) {
   if (score >= THRESHOLDS.MINOR)      return 'minor';
   if (score >= THRESHOLDS.GAP_CLOSURE) return 'gap-closure';
   return 'escalation';
-}
-
-// ─── SD Key Generator ─────────────────────────────────────────────────────────
-
-function generateCorrectiveSdKey() {
-  const hex = randomBytes(3).toString('hex').toUpperCase(); // 6 chars
-  return `SD-CORR-VIS-${hex}`;
 }
 
 // ─── Occurrence Check ─────────────────────────────────────────────────────────
@@ -251,7 +245,7 @@ export async function generateCorrectiveSD(scoreId) {
     });
   }
 
-  // 6. Create one SD per group, collecting all new IDs
+  // 6. Create one SD per group via createSD (standard LEO creation pipeline)
   const createdSDs = [];
   const allGeneratedIds = [...existingIds];
 
@@ -259,57 +253,61 @@ export async function generateCorrectiveSD(scoreId) {
     const { dims, sdType, category, label } = group;
     const dimSummary = dims.map(d => `${d.dimensionName} (${d.dimId})`).join(', ');
     const lowestScore = dims[0]?.score ?? score.total_score;
-    const sdKey = generateCorrectiveSdKey();
-    const title = `[${action.toUpperCase()}] ${label} Gap: ${dimSummary} (score ${score.total_score ?? '?'}/100)`;
+    const title = `Corrective: ${label} Gap — ${dimSummary} (score ${score.total_score ?? '?'}/100)`;
     const description = buildEnrichedDescription(
       dims[0]?.dimensionName, dims[0]?.dimId, score.dimension_scores,
       score.rubric_snapshot, score.total_score, action
     );
 
-    const { data: newSD, error: sdErr } = await supabase
-      .from('strategic_directives_v2')
-      .insert({
-        id: sdKey,
-        sd_key: sdKey,
+    // Generate SD key through standard pipeline
+    const sdKey = await generateSDKey({ source: 'CORR', type: sdType, title });
+
+    try {
+      const newSD = await createSD({
+        sdKey,
         title,
         description,
-        status: 'draft',
-        category,
-        sd_type: sdType,
+        type: sdType,
         priority: tier.priority,
+        category,
+        parentId: ORCHESTRATOR_ID,
         rationale: `Vision score of ${score.total_score ?? '?'}/100 is below the ${action} threshold. Corrective action required for ${label} dimensions: ${dimSummary}.`,
-        scope: `Address ${label} dimension gap(s): ${dimSummary}. EVA score run: ${scoreId}. Lowest dim score: ${lowestScore}/100. Target: >=${THRESHOLDS.ACCEPT}.`,
-        current_phase: 'LEAD',
-        target_application: 'EHG_Engineer',
-        version: '1.0',
-        parent_sd_id: ORCHESTRATOR_ID,
-        vision_origin_score_id: scoreId,
-        key_principles: [{ principle: 'Vision alignment', description: `Address ${label} gap(s) to improve EVA vision score` }],
         strategic_objectives: dims.map(d => ({ objective: `Improve ${d.dimensionName} above ${THRESHOLDS.ACCEPT}`, metric: `EVA ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
         success_criteria: dims.map(d => ({ criterion: `${d.dimensionName} gap addressed`, measure: `EVA re-score shows ${d.dimId} >= ${THRESHOLDS.ACCEPT}` })),
         success_metrics: [{ metric: 'EVA dimension score', target: String(THRESHOLDS.ACCEPT), actual: String(lowestScore) }],
-      })
-      .select('id, sd_key')
-      .single();
+        key_principles: [{ principle: 'Vision alignment', description: `Address ${label} gap(s) to improve EVA vision score` }],
+        metadata: {
+          source: 'corrective_sd_generator',
+          score_id: scoreId,
+          vision_origin_score_id: scoreId,
+          action_tier: action,
+          dimensions: dims.map(d => d.dimId),
+        },
+      });
 
-    if (sdErr || !newSD) {
+      // Set vision_origin_score_id (not handled by createSD)
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ vision_origin_score_id: scoreId })
+        .eq('sd_key', newSD.sd_key);
+
+      createdSDs.push({ sdKey: newSD.sd_key, sdId: newSD.id, dims, label });
+      allGeneratedIds.push(newSD.id);
+      await _logAudit(supabase, scoreId, action, newSD.sd_key, score.vision_id);
+
+      // Publish corrective SD created event
+      publishVisionEvent(VISION_EVENTS.CORRECTIVE_SD_CREATED, {
+        originSdKey: score.sd_id || null,
+        correctiveSdKey: newSD.sd_key,
+        scoreId,
+        action,
+        dimensions: dims.map(d => d.dimId),
+        label,
+      });
+    } catch (sdErr) {
       console.warn(`[corrective-sd-generator] Failed to create ${label} SD: ${sdErr?.message}`);
       continue;
     }
-
-    createdSDs.push({ sdKey: newSD.sd_key || newSD.id, sdId: newSD.id, dims, label });
-    allGeneratedIds.push(newSD.id);
-    await _logAudit(supabase, scoreId, action, newSD.sd_key || newSD.id, score.vision_id);
-
-    // SD-CORR-VIS-A05-EVENT-BUS-001: Publish corrective SD created event
-    publishVisionEvent(VISION_EVENTS.CORRECTIVE_SD_CREATED, {
-      originSdKey: score.sd_id || null,
-      correctiveSdKey: newSD.sd_key || newSD.id,
-      scoreId,
-      action,
-      dimensions: dims.map(d => d.dimId),
-      label,
-    });
   }
 
   if (createdSDs.length === 0) {

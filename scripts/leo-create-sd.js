@@ -1069,6 +1069,9 @@ async function createSD(options) {
   return data;
 }
 
+// Export for programmatic use (e.g., corrective-sd-generator)
+export { createSD };
+
 // ============================================================================
 // CLI Handler
 // ============================================================================
@@ -1209,7 +1212,7 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
           const triageResult = await runTriageGate({ title, description: title, type, source: 'interactive' }, supabase);
           if (triageResult.tier <= 2) {
             console.log('\n' + formatTriageSummary(triageResult));
-            console.log(`\n   💡 Consider using Quick Fix instead:`);
+            console.log('\n   💡 Consider using Quick Fix instead:');
             console.log(`      node scripts/create-quick-fix.js --title "${title}" --type ${type}`);
             console.log('   Continuing with full SD creation...\n');
           }
