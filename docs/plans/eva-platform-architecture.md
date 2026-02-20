@@ -10,7 +10,7 @@
 > **v1.3 Changes**: Codebase reconciliation — 10 components previously listed as "Needs Building" already exist and are production-ready. Inventory corrected, Phase A resequenced to reflect actual state.
 > **v1.4 Changes**: Added Architectural Principles (Section 7) defining 5 binding design constraints derived from multi-AI triangulation consensus (Claude Opus 4.6 + OpenAI GPT 5.3 + AntiGravity/Gemini). Added 25-Stage Lifecycle Specifications (Section 8) with full target schemas, gate definitions, cross-stage contracts, and enum definitions per stage. Corrected "~6 passive stages" claim to "all 25 stages need active analysisSteps." Sections 7-14 renumbered to 9-16.
 > **v1.5 Changes**: OpenClaw-informed platform capabilities. New Phase C (5 items) inserted between Phase B and former Phase C. Security section expanded with dashboard threat model and tool policy enforcement. Phase renumbering: former C→D, former D→E. GUI deprecation noted: 25-stage GUI components removed, EHG App retained for Chairman governance only.
-> **v1.6 Changes**: Marketing Distribution Engine (Section 17). Complete marketing pipeline architecture derived from 4-source deep research triangulation (Claude agents + Google Deep Research + OpenAI Deep Research + Anthropic Deep Research) plus follow-up I2V model research. Binding decisions: Thompson Sampling feedback loop, direct API for X/YouTube, Late aggregator for LinkedIn/TikTok, Nano Banana Pro for images (replaces ComfyUI — API simpler than local GPU pipeline), Kling 3.0 primary + Veo 3.1 secondary for I2V video (replaces Remotion — AI-generated content more engaging than programmatic templates), Resend + custom SQL for email, PostHog Cloud for analytics, hybrid cron + BullMQ for orchestration. Marketing Service entry in Service Registry updated from "TBD" to full specification. Marketing pipeline added to Phase C implementation sequence (items 16-17). Monthly incremental cost: $443-639/mo (includes X API $200, Late $33-49, Resend $20-90, Nano Banana ~$0-200, I2V ~$50-200, PostHog free tier).
+> **v1.6 Changes**: Marketing Distribution Engine (Section 17). Complete marketing pipeline architecture derived from 4-source deep research triangulation (Claude agents + Google Deep Research + OpenAI Deep Research + Anthropic Deep Research) plus follow-up I2V model research. Binding decisions: Thompson Sampling feedback loop, direct API for X/YouTube, Late aggregator for LinkedIn/TikTok, Nano Banana Pro for images (replaces ComfyUI — API simpler than local GPU pipeline), Kling 3.0 primary + Veo 3.1 secondary for I2V video (replaces Remotion — AI-generated content more engaging than programmatic templates), Resend + custom SQL for email, PostHog Cloud for analytics, hybrid cron + event bus for orchestration. Marketing Service entry in Service Registry updated from "TBD" to full specification. Marketing pipeline added to Phase C implementation sequence (items 16-17). Monthly incremental cost: $443-639/mo (includes X API $200, Late $33-49, Resend $20-90, Nano Banana ~$0-200, I2V ~$50-200, PostHog free tier).
 
 ---
 
@@ -95,7 +95,7 @@ No service maintains state between invocations. A CEO Service invocation for Ven
 | **CEO Service** | Strategy & coordination | Stage orchestration, analysisStep execution (Stages 1-25), cross-stage synthesis, advisory generation | `lib/eva/eva-orchestrator.js` (`processStage()`, `run()`), `ai_ceo_agents` table, stage templates (1-25), DFE + Reality Gates + Devil's Advocate integrated |
 | **LEO Service** | Engineering execution | SD creation, PRD generation, code implementation, QA, deployment | Full LEO Protocol (EHG_Engineer), SD Bridge at Stage 18 |
 | **Finance Service** | Financial analysis | Unit economics (Stage 5), P&L (Stage 16), token budget management, cost tracking | `venture_token_budgets`, `venture_phase_budgets`, `venture_budget_transactions` |
-| **Marketing Service** | GTM & growth | GTM strategy (Stage 11), channel analysis, growth optimization (Stage 25 expand), content generation + variant testing, multi-platform distribution, AI feedback loop (Thompson Sampling), cross-venture intelligence transfer | Marketing Distribution Engine (Section 17): Nano Banana Pro (images) + Sharp.js (brand overlay), Kling 3.0 + Veo 3.1 (I2V video), Resend (email), direct API (X/YouTube) + Late aggregator (LinkedIn/TikTok), PostHog Cloud (analytics), hybrid cron + BullMQ (orchestration) |
+| **Marketing Service** | GTM & growth | GTM strategy (Stage 11), channel analysis, growth optimization (Stage 25 expand), content generation + variant testing, multi-platform distribution, AI feedback loop (Thompson Sampling), cross-venture intelligence transfer | Marketing Distribution Engine (Section 17): Nano Banana Pro (images) + Sharp.js (brand overlay), Kling 3.0 + Veo 3.1 (I2V video), Resend (email), direct API (X/YouTube) + Late aggregator (LinkedIn/TikTok), PostHog Cloud (analytics), hybrid cron + event bus (orchestration) |
 | **Legal Service** | Compliance | ToS/privacy generation, GDPR/CCPA compliance, regulatory checks | Template library approach (Vision Decision #22) |
 | **Sales Service** | Revenue operations | Sales model (Stage 12), pricing optimization, conversion tracking | Stage 12 template exists |
 | **Analytics Service** | Metrics & insights | AARRR metrics (Stage 24), venture health scoring, cross-venture pattern detection | `orchestration_metrics`, health_score columns |
@@ -1592,8 +1592,7 @@ Phase C: Platform Capabilities — OpenClaw-Inspired (P2)
       └── Publisher abstraction layer (direct API + Late aggregator)
       └── Platform integrations: X API (Basic $200/mo), YouTube Data API v3,
           Late ($33-49/mo for LinkedIn/TikTok), Bluesky/Mastodon/Threads (free)
-      └── Rate limiting via BullMQ (6 queues: generate, review, schedule,
-          dispatch, metrics, maintenance)
+      └── Rate limiting via unified event bus (replaces former BullMQ design)
       └── UTM-based attribution + PostHog Cloud analytics
   17. Marketing Distribution Engine — AI feedback loop + assets
       └── Thompson Sampling optimizer (Beta distributions, composite reward)
@@ -2260,22 +2259,9 @@ PostHog subsumes Umami (web analytics), provides product analytics, UTM attribut
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | **Scheduling** | PostgreSQL + Node.js cron | Job scheduling (existing pattern: 165+ scripts in codebase) |
-| **Posting pipeline** | BullMQ + Redis | Rate limiting, retries, concurrency control, backpressure management |
+| **Posting pipeline** | Unified Event Bus | Rate limiting, retries, concurrency control (replaced BullMQ+Redis; no Redis dependency) |
 
-**6 BullMQ queues**:
-
-| Queue | Purpose | Concurrency | Rate Limit |
-|-------|---------|:-----------:|-----------|
-| `content:generate` | LLM content creation | 3 | None (LLM-bound) |
-| `content:review` | AI brand compliance check (automated, no human review) | 5 | None |
-| `content:schedule` | Queue posts for optimal send times | 1 | None |
-| `post:dispatch` | Actual platform API calls | Per-platform | Per-platform limits (X: 50/15min, LinkedIn: 100/day via Late) |
-| `metrics:collect` | Platform API polling for engagement data | 2 | Hourly per platform |
-| `maintenance` | Rollup materialization, stale arm pruning, audit log rotation | 1 | Daily |
-
-**Idempotency**: Every job has an idempotency key (`{venture_id}:{content_id}:{platform}:{timestamp}`). Duplicate dispatch is impossible.
-
-**Dead letter queue**: Failed jobs after 3 retries move to DLQ. Daily cron alerts if DLQ depth > 10.
+**Note**: The original design specified 6 BullMQ queues requiring Redis. This was replaced by the unified event bus (SD-EHG-ORCH-FOUNDATION-CLEANUP-001-D) which provides equivalent async processing without requiring Redis infrastructure.
 
 ### 17.8 Webhook Delivery (Local Setup)
 
@@ -2400,7 +2386,7 @@ CREATE TABLE marketing_channel_budgets (
 ```
 IDEATE → GENERATE → REVIEW → SCHEDULE → DISPATCH → MEASURE → OPTIMIZE
    │         │          │          │           │          │          │
-   │    LLM creates  AI checks   BullMQ     Platform   Metrics    Thompson
+   │    LLM creates  AI checks   Event bus  Platform   Metrics    Thompson
    │    text + visual  brand     schedules   API call   ingestor   Sampling
    │    variants      compliance  optimal               polls      updates
    │                  (automated) send time              hourly     arms
@@ -2435,7 +2421,7 @@ Each transition writes to `marketing_content.metadata.lifecycle_state`. Failed r
 | Nano Banana Pro (images) | $0-200/mo | Free tier covers 1,500/mo; batch API at $0.067/image beyond |
 | I2V video (Kling + Veo) | $50-200/mo | Volume-dependent; governor caps per-venture spend |
 | PostHog Cloud | $0 | Free tier: 1M events/mo |
-| BullMQ / Redis | $0 | Runs locally |
+| Event Bus (built-in) | $0 | No external dependencies |
 | Cloudflare Tunnel | $0 | Free tier sufficient |
 | **Total incremental** | **$303-739/mo** | Lower end: few active ventures. Upper end: 50 ventures posting daily. |
 
@@ -2466,7 +2452,7 @@ Week 1: Data Foundation + First Publish
 Week 2: Multi-Platform + Measure
   ├── YouTube integration (Data API v3 — video upload + metadata)
   ├── Late integration (LinkedIn + TikTok via aggregator API)
-  ├── BullMQ setup (6 queues, rate limiters, DLQ)
+  ├── Event bus queue setup (rate limiters, error handling)
   ├── Metrics ingestor (platform API polling, hourly cron)
   ├── Daily rollup materialization
   └── Cloudflare Tunnel for webhook ingestion (PostHog, Resend)
@@ -2514,4 +2500,4 @@ The Marketing Service loads venture context (Section 2 pattern), executes domain
 *v1.2: Added Stage 0 Venture Ideation Pipeline (Section 16) documenting the fully-implemented pre-lifecycle module. Updated Service Registry to include Stage 0 Pipeline. Extended Phase A test scenario to start from Stage 0 ideation. Identified Chairman Review interactivity gap: `conductChairmanReview()` is currently a non-interactive passthrough — wiring to `chairman_decisions` table is P0 item #1. Added Stage 0 as fourth mandatory Chairman blocking gate (alongside Stages 10, 22, 25). Documented 15+ existing database tables, 8 synthesis components, 3 entry paths, 4 discovery strategies, evaluation profile system, counterfactual engine, stage-of-death predictor, gate signal service, and venture nursery.*
 *v1.3: Codebase reconciliation against `lib/eva/` and CLI-vs-GUI triangulation analysis (Stages 1-25). Discovered 10 components listed as "Needs Building" that already exist in production: Decision Filter Engine, Reality Gate Evaluator, Chairman Preferences Store, CEO Service (EVA Orchestrator), Saga Coordinator, Devil's Advocate, Constraint Drift Detector, Orchestrator Tracer, Orchestrator State Machine, and Cross-Venture Learning. Corrected Section 13 inventory: "Exists and Active" grew from 15 to 27 entries; "Needs Building" shrunk from 17 to 13 items. Added CLI service ports and venture scripts. Phase A resequenced from 10 items to 6 remaining work items (5 were already built). Added "Stage template gap-fill" as new P0 item based on triangulation finding that all 25 stage templates are passive containers needing active analysisSteps. Phase C reduced from 3 to 2 items (cross-venture learning already built).*
 *v1.5: OpenClaw-informed platform capabilities. Inserted new Phase C: Platform Capabilities (5 items) between Phase B and former Phase C. Items: (1) Event-driven venture monitor — Supabase Realtime listener + cron scheduler implementing hybrid runtime model from Vision D2; (2) Chairman dashboard wiring — EHG App DecisionsInbox/EscalationPanel → chairman_decisions table, 25-stage GUI removal per Vision D3; (3) Per-agent tool policy profiles — full/coding/readonly/minimal enforced at spawn time per D4; (4) Skill packaging system — SKILL.md format with versioned bundles and selective injection per D5; (5) Hybrid semantic search — SQLite vector index + Ollama embeddings for cross-venture learning per D6. Former Phase C (Portfolio Intelligence) → Phase D. Former Phase D (Optimization) → Phase E. Security section expanded with dashboard interaction threat model (6 threats with mitigations) and agent tool policy enforcement (4 profiles). Companion reference updated to Vision v4.7.*
-*v1.6: Marketing Distribution Engine (Section 17). 15 sub-sections covering the complete marketing pipeline architecture. Derived from 4-source deep research triangulation + 3-source peer review. Stack: Nano Banana Pro (images, replaces ComfyUI), Kling 3.0 primary + Veo 3.1 secondary + Runway fallback (I2V video, replaces Remotion), Resend + custom SQL (email), direct API + Late aggregator (social posting), PostHog Cloud (analytics), Thompson Sampling feedback loop (AI optimizer), hybrid cron + BullMQ (orchestration). Includes: database schema (8 new tables), content lifecycle state machine, cron manifest (10 scheduled jobs), 30-day build plan, budget governors, lock-in exceptions table, venture lifecycle integration map. Monthly incremental cost: $303-739/mo. Service Registry Marketing Service updated from "TBD" to full specification. Marketing pipeline added to Phase C implementation sequence (items 16-17). Peer review refinements: X spend-cap governor, Reddit category-gated, Veo hero-only routing rules, decay factor pinned at 0.97, webhook tunneling requirement.*
+*v1.6: Marketing Distribution Engine (Section 17). 15 sub-sections covering the complete marketing pipeline architecture. Derived from 4-source deep research triangulation + 3-source peer review. Stack: Nano Banana Pro (images, replaces ComfyUI), Kling 3.0 primary + Veo 3.1 secondary + Runway fallback (I2V video, replaces Remotion), Resend + custom SQL (email), direct API + Late aggregator (social posting), PostHog Cloud (analytics), Thompson Sampling feedback loop (AI optimizer), hybrid cron + event bus (orchestration). Includes: database schema (8 new tables), content lifecycle state machine, cron manifest (10 scheduled jobs), 30-day build plan, budget governors, lock-in exceptions table, venture lifecycle integration map. Monthly incremental cost: $303-739/mo. Service Registry Marketing Service updated from "TBD" to full specification. Marketing pipeline added to Phase C implementation sequence (items 16-17). Peer review refinements: X spend-cap governor, Reddit category-gated, Veo hero-only routing rules, decay factor pinned at 0.97, webhook tunneling requirement.*
