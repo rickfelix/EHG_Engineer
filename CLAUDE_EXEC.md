@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-02-20 1:40:12 PM
+**Generated**: 2026-02-20 4:50:55 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -40,6 +40,11 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
+
+## 🔍 Implementation Reminders — Active Vision Gaps
+
+- **VGAP-V10** (MEDIUM): Vision gap: okr_driven_prioritization scored 52/100 — 1 occurrences in last 30d — ensure implementation does not worsen this gap
+- **VGAP-V11** (MEDIUM): Vision gap: governance_guardrail_enforcement scored 55/100 — 1 occurrences in last 30d — ensure implementation does not worsen this gap
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -360,6 +365,41 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Correct Approach**: Every backend field must have corresponding UI component
 </negative_constraints>
 
+## Migration Script Pattern (MANDATORY)
+
+**Issue Pattern**: PAT-DB-MIGRATION-001
+
+When writing migration scripts, you MUST use the established pattern:
+
+### Correct Pattern
+```javascript
+import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
+import { readFileSync } from 'fs';
+
+const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
+const client = await createDatabaseClient('engineer', { verify: true });
+const statements = splitPostgreSQLStatements(migrationSQL);
+
+for (const statement of statements) {
+  await client.query(statement);
+}
+
+await client.end();
+```
+
+### NEVER Use This Pattern
+```javascript
+// WRONG - exec_sql RPC does not exist
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key);
+await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
+```
+
+### Before Writing Migration Scripts
+1. Search for existing patterns: `Glob *migration*.js`
+2. Read `scripts/run-sql-migration.js` as canonical template
+3. Use `lib/supabase-connection.js` utilities
+
 ## 📚 Skill Integration (EXEC Phase)
 
 ## Skill Integration During EXEC
@@ -436,41 +476,6 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 Skills are for **creative guidance** (how to build).
 Sub-agents are for **validation** (did you build it right).
 Use skills during EXEC, save sub-agents for PLAN_VERIFY.
-
-## Migration Script Pattern (MANDATORY)
-
-**Issue Pattern**: PAT-DB-MIGRATION-001
-
-When writing migration scripts, you MUST use the established pattern:
-
-### Correct Pattern
-```javascript
-import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
-import { readFileSync } from 'fs';
-
-const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
-const client = await createDatabaseClient('engineer', { verify: true });
-const statements = splitPostgreSQLStatements(migrationSQL);
-
-for (const statement of statements) {
-  await client.query(statement);
-}
-
-await client.end();
-```
-
-### NEVER Use This Pattern
-```javascript
-// WRONG - exec_sql RPC does not exist
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(url, key);
-await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
-```
-
-### Before Writing Migration Scripts
-1. Search for existing patterns: `Glob *migration*.js`
-2. Read `scripts/run-sql-migration.js` as canonical template
-3. Use `lib/supabase-connection.js` utilities
 
 ## Multi-Instance Coordination (MANDATORY)
 
@@ -627,24 +632,6 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
-
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -728,6 +715,24 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
+
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -1587,6 +1592,27 @@ All Vision V2 SDs have this implementation guidance:
 - [ ] Gate types (auto/advisory/hard) respected
 - [ ] E2E test verifies no direct writes to stage tables
 - [ ] No new columns added to existing stage tables
+
+## KR Progress Tracking in EXEC
+
+After shipping implementation code, update relevant KR metrics to reflect progress.
+
+### Post-Ship KR Update Workflow
+1. **Identify linked KRs**: Check PRD metadata for `kr_linkages` or SD description for KR references
+2. **Measure impact**: Determine the new `current_value` based on what was implemented
+3. **Update via CLI**: `node scripts/eva/okr-command.mjs link --kr <KR-CODE> --value <new-value>`
+4. **Log in retrospective**: Include KR progress in the retrospective's key_learnings
+
+### When to Update
+- **After EXEC-TO-PLAN**: When implementation is verified and ready for review
+- **After LEAD-FINAL-APPROVAL**: Confirmed completion, final KR update
+- **Monthly snapshots**: OKR monthly handler automatically captures progress via `okr-monthly-handler.js`
+
+### Example
+If SD implements a feature that reduces legacy references from 243 to 200:
+- KR-GOV-1.1 baseline: 243, target: 0
+- After ship: update current_value to 200
+- Monthly snapshot captures this automatically
 
 ## Database Schema Constraints Reference
 

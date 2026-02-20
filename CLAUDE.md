@@ -57,6 +57,14 @@ When the user says any of the following, run `npm run sd:next` FIRST:
 - "continue work", "resume", "pick up where we left off"
 - "show queue", "show priorities", "what's ready"
 
+### Claim Management Keywords
+When the user mentions any of the following, invoke /claim (or suggest it):
+- "claim status", "my claim", "what am I working on", "what's claimed"
+- "release claim", "release SD", "free SD", "unclaim", "drop claim"
+- "who has", "who is working on", "active claims", "active sessions", "show claims"
+- "claim stuck", "claim conflict", "stale claim", "claimed by another"
+- "claim list", "list claims", "all claims"
+
 ### Automatic SD Queue Loading
 ```bash
 npm run sd:next
@@ -111,4 +119,4 @@ Escalate to full files (e.g. `CLAUDE_CORE.md`) only when digest is insufficient.
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-02-20 1:40:12 PM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-02-20 4:50:55 PM | Protocol: LEO 4.3.3 | Source: Database*

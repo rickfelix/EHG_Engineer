@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-20T18:40:12.279Z -->
-<!-- git_commit: 0f099db7 -->
-<!-- db_snapshot_hash: 48d945e119e4c835 -->
+<!-- generated_at: 2026-02-20T21:50:55.269Z -->
+<!-- git_commit: b4930caf -->
+<!-- db_snapshot_hash: 1787835840a9ee3a -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -103,6 +103,14 @@ When the user says any of the following, run `npm run sd:next` FIRST:
 - "continue work", "resume", "pick up where we left off"
 - "show queue", "show priorities", "what's ready"
 
+### Claim Management Keywords
+When the user mentions any of the following, invoke /claim (or suggest it):
+- "claim status", "my claim", "what am I working on", "what's claimed"
+- "release claim", "release SD", "free SD", "unclaim", "drop claim"
+- "who has", "who is working on", "active claims", "active sessions", "show claims"
+- "claim stuck", "claim conflict", "stale claim", "claimed by another"
+- "claim list", "list claims", "all claims"
+
 ### Automatic SD Queue Loading
 This command provides:
 1. **Track View** - Three parallel execution tracks (A: Infrastructure, B: Features, C: Quality)
@@ -145,5 +153,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-02-20 1:40:12 PM*
+*DIGEST generated: 2026-02-20 4:50:55 PM*
 *Protocol: 4.3.3*
