@@ -18,6 +18,7 @@ import os from 'os';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
+import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
@@ -390,6 +391,22 @@ async function main() {
       console.log('═'.repeat(50));
       process.exit(1);
     }
+  }
+
+  // 4. Cross-path verification via v_active_sessions VIEW (independent of direct table query)
+  // Non-blocking: logs warning on mismatch, doesn't abort (view can lag behind direct table)
+  try {
+    const viewCheck = await isSDClaimed(effectiveId, session.session_id);
+    if (viewCheck.claimed) {
+      console.log(`${colors.yellow}[Verify] ⚠️  Cross-path mismatch: v_active_sessions shows ${effectiveId} claimed by ${viewCheck.claimedBy}${colors.reset}`);
+      console.log(`${colors.dim}   (View may lag — direct table query took precedence)${colors.reset}`);
+    } else if (viewCheck.queryFailed) {
+      console.log(`${colors.dim}[Verify] View query failed (non-blocking): ${viewCheck.error}${colors.reset}`);
+    } else {
+      console.log(`${colors.green}[Verify] Independent claim verification passed${colors.reset}`);
+    }
+  } catch {
+    // Non-blocking — cross-path verification is defense-in-depth
   }
 
   // 4.5. Resolve worktree (creates if needed in claim mode)

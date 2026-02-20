@@ -543,7 +543,7 @@ export class BaseExecutor {
       .from('claude_sessions')
       .select('session_id, sd_id, claimed_at')
       .eq('sd_id', claimId)
-      .eq('status', 'active');
+      .in('status', ['active', 'idle']);
 
     const activeClaim = (existingClaims || []).find(c => {
       const ageSeconds = (Date.now() - new Date(c.claimed_at).getTime()) / 1000;
