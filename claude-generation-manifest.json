@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-02-20T18:24:52.197Z",
-  "git_commit": "c41a0fe6",
+  "generated_at": "2026-02-20T18:40:12.279Z",
+  "git_commit": "0f099db7",
   "db_snapshot_hash": "48d945e119e4c835",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 5343,
       "estimated_tokens": 1336,
-      "content_hash": "9c71e520479a7f09",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE.md"
+      "content_hash": "87526b2117561f7c",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 45219,
-      "estimated_tokens": 11305,
-      "content_hash": "aeba135fa3c97622",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_CORE.md"
+      "chars": 46016,
+      "estimated_tokens": 11504,
+      "content_hash": "f822cb4c32cf8ab5",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 52377,
       "estimated_tokens": 13095,
-      "content_hash": "5911844a7346be9d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_LEAD.md"
+      "content_hash": "d398d48dc42784a9",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 77342,
       "estimated_tokens": 19336,
-      "content_hash": "3afafb8a72f0d6a3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_PLAN.md"
+      "content_hash": "2762662d05774f76",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 61824,
       "estimated_tokens": 15456,
-      "content_hash": "e804db7de81f36f0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_EXEC.md"
+      "content_hash": "34a0e98f449d7013",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 6358,
       "estimated_tokens": 1590,
-      "content_hash": "42d24ae0e3619af3",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_DIGEST.md"
+      "content_hash": "d630dd0f939936bc",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 36391,
       "estimated_tokens": 9098,
-      "content_hash": "59cb8331253e3715",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "13bf5e0fc7a25d93",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "fa9255bae9f0b4ed",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "6fcc6944990a1432",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 12771,
       "estimated_tokens": 3193,
-      "content_hash": "6a06b9bd5ac95750",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "fb59d8d0b27163c6",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 14966,
       "estimated_tokens": 3742,
-      "content_hash": "d60fc86fe08137ef",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "5102ef5d29e8da28",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
