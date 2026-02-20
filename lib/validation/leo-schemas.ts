@@ -281,7 +281,7 @@ export type WSDriftDetectedEventType = z.infer<typeof WSDriftDetectedEvent>;
 // ============================================
 
 export const ComplianceSeverityEnum = z.enum(['critical', 'high', 'medium', 'low', 'info']);
-export const ComplianceCategoryEnum = z.enum(['crewai', 'dossier', 'session', 'integration', 'custom']);
+export const ComplianceCategoryEnum = z.enum(['governance', 'dossier', 'session', 'integration', 'custom']);
 export const ComplianceEventTypeEnum = z.enum([
   'check_started', 'check_completed', 'check_failed',
   'violation_detected', 'violation_resolved',
