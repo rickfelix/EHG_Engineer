@@ -187,6 +187,9 @@ src/client/dist/
 # Account handoff exchange (local session state between account switches)
 .claude/handoff/
 
+# Claude session identity markers (generated per-session, never commit)
+.claude/session-identity/
+
 # Claude session state (modified during protocol operations, local only)
 .claude/unified-session-state.json
 .claude/auto-proceed-state.json
