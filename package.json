@@ -102,6 +102,8 @@
     "llm:canary:quality": "node scripts/llm-canary-control.js quality",
     "llm:canary:history": "node scripts/llm-canary-control.js history",
     "eva:run": "node scripts/eva-run.js",
+    "eva:stage": "node scripts/eva/run-stage.js",
+    "eva:heal": "node scripts/eva/vision-heal.js",
     "eva:decisions": "node scripts/eva-decisions.js",
     "eva:venture:new": "node scripts/eva-venture-new.js",
     "eva:ideas:sync": "node scripts/eva-idea-sync.js",
