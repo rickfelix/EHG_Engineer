@@ -8,15 +8,69 @@
  * Usage:
  *   node scripts/eva/run-stage.js --venture-id <UUID> --stage <N>
  *   node scripts/eva/run-stage.js --venture-id <UUID> --stage <N> --dry-run
+ *   node scripts/eva/run-stage.js --check
  */
 
-import { executeStage } from '../../lib/eva/stage-execution-engine.js';
+import { executeStage, loadStageTemplate } from '../../lib/eva/stage-execution-engine.js';
 import { validateContracts } from '../../lib/eva/contract-validator.js';
+import { readdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
+
+// --check mode: scan stage templates
+if (args.includes('--check')) {
+  const templatesDir = join(__dirname, '../../lib/eva/stage-templates');
+  console.log('\n📋 Stage Template Health Check');
+  console.log('═'.repeat(50));
+
+  let found = 0;
+  let missing = 0;
+  let incomplete = 0;
+
+  for (let i = 1; i <= 25; i++) {
+    const padded = String(i).padStart(2, '0');
+    const fileName = `stage-${padded}.js`;
+
+    try {
+      const files = readdirSync(templatesDir);
+      if (!files.includes(fileName)) {
+        console.log(`   ❌ Stage ${padded}: MISSING`);
+        missing++;
+        continue;
+      }
+
+      const template = await loadStageTemplate(i);
+      const hasValidate = typeof template.validate === 'function';
+      const hasCompute = typeof template.computeDerived === 'function';
+      const hasAnalysis = typeof template.analysisStep === 'function';
+
+      if (hasValidate && hasCompute && hasAnalysis) {
+        console.log(`   ✅ Stage ${padded}: ${template.title || template.id} (validate + compute + analysis)`);
+        found++;
+      } else {
+        const funcs = [hasValidate && 'validate', hasCompute && 'compute', hasAnalysis && 'analysis'].filter(Boolean);
+        console.log(`   ⚠️  Stage ${padded}: ${template.title || template.id} (${funcs.join(', ') || 'no functions'})`);
+        incomplete++;
+      }
+    } catch {
+      console.log(`   ❌ Stage ${padded}: ERROR loading`);
+      missing++;
+    }
+  }
+
+  console.log('\n' + '═'.repeat(50));
+  console.log(`   Complete: ${found}  Incomplete: ${incomplete}  Missing: ${missing}`);
+  console.log(`   Coverage: ${Math.round(((found + incomplete) / 25) * 100)}%`);
+  console.log('');
+  process.exit(0);
+}
+
 const getArg = (flag) => {
   const idx = args.indexOf(flag);
   return idx !== -1 ? args[idx + 1] : null;
@@ -27,7 +81,7 @@ const stageNumber = parseInt(getArg('--stage') || '0', 10);
 const dryRun = args.includes('--dry-run');
 
 if (!ventureId || !stageNumber) {
-  console.error('Usage: node scripts/eva/run-stage.js --venture-id <UUID> --stage <N> [--dry-run]');
+  console.error('Usage: node scripts/eva/run-stage.js --venture-id <UUID> --stage <N> [--dry-run] [--check]');
   process.exit(1);
 }
 
