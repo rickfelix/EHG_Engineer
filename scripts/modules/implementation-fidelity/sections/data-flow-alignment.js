@@ -36,34 +36,60 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
       sd = sdBySdKey;
     }
 
-    if (sd?.sd_type === 'database') {
-      let scopeToCheck = '';
-      if (typeof sd.scope === 'object' && sd.scope?.included) {
-        scopeToCheck = Array.isArray(sd.scope.included)
-          ? sd.scope.included.join(' ')
-          : String(sd.scope.included);
-      } else if (typeof sd.scope === 'string') {
-        try {
-          const parsed = JSON.parse(sd.scope);
-          if (parsed?.included) {
-            scopeToCheck = Array.isArray(parsed.included)
-              ? parsed.included.join(' ')
-              : String(parsed.included);
-          }
-        } catch {
-          scopeToCheck = sd.scope;
+    // Extract scope text for analysis (moved above database-type check for reuse)
+    let scopeToCheck = '';
+    if (typeof sd?.scope === 'object' && sd.scope?.included) {
+      scopeToCheck = Array.isArray(sd.scope.included)
+        ? sd.scope.included.join(' ')
+        : String(sd.scope.included);
+    } else if (typeof sd?.scope === 'string') {
+      try {
+        const parsed = JSON.parse(sd.scope);
+        if (parsed?.included) {
+          scopeToCheck = Array.isArray(parsed.included)
+            ? parsed.included.join(' ')
+            : String(parsed.included);
         }
+      } catch {
+        scopeToCheck = sd.scope;
       }
+    }
 
-      const hasUIScope = /component|ui\s|frontend|form|page|view/i.test(scopeToCheck);
+    const hasUIScope = /component|ui\s|frontend|form|page|view/i.test(scopeToCheck);
 
-      if (!hasUIScope) {
-        console.log('   ✅ Database SD without UI/form requirements - Section C not applicable (25/25)');
+    // SD types that never require UI/form data flow validation
+    if (sd?.sd_type === 'database' && !hasUIScope) {
+      console.log('   ✅ Database SD without UI/form requirements - Section C not applicable (25/25)');
+      validation.score += 25;
+      validation.gate_scores.data_flow_alignment = 25;
+      validation.details.data_flow_alignment = {
+        skipped: true,
+        reason: 'Database SD without UI/form requirements - data flow alignment not applicable'
+      };
+      return;
+    }
+
+    // PAT-GATE2-BE-001: target_application-aware exemption for Section C
+    // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has form/UI integration
+    // Mirrors the same exemption already applied in Section A (design-fidelity.js)
+    if (!hasUIScope) {
+      let targetApp = null;
+      try {
+        const { data: fullSd } = await supabase
+          .from('strategic_directives_v2')
+          .select('target_application')
+          .or(`id.eq.${sd_id},sd_key.eq.${sd_id}`)
+          .single();
+        targetApp = fullSd?.target_application;
+      } catch { /* continue with other checks */ }
+
+      if (targetApp === 'EHG_Engineer') {
+        console.log('   ✅ EHG_Engineer target application (backend-only) - Section C not applicable (25/25)');
         validation.score += 25;
         validation.gate_scores.data_flow_alignment = 25;
         validation.details.data_flow_alignment = {
           skipped: true,
-          reason: 'Database SD without UI/form requirements - data flow alignment not applicable'
+          reason: 'EHG_Engineer target application - backend-only repo, no form/UI integration expected'
         };
         return;
       }
