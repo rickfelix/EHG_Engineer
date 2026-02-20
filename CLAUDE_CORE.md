@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-02-20 1:40:12 PM
+**Generated**: 2026-02-20 4:49:25 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -454,6 +454,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -486,38 +518,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 

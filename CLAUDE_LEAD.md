@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-02-20 1:40:12 PM
+**Generated**: 2026-02-20 4:49:25 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -30,6 +30,15 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
+
+## ⚠️ Current Vision Gaps (Live — from issue_patterns)
+
+| Pattern ID | Dimension / Summary | Severity |
+|------------|--------------------|-----------|
+| VGAP-V10 | Vision gap: okr_driven_prioritization scored 52/100 — 1 occurrences in last 30d | MEDIUM |
+| VGAP-V11 | Vision gap: governance_guardrail_enforcement scored 55/100 — 1 occurrences in last 30d | MEDIUM |
+
+**Action**: When approving SDs, consider whether the SD addresses or exacerbates these gaps.
 
 ## Baseline Issues Management
 
@@ -456,81 +465,6 @@ node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 - **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`, `scripts/leo-create-sd.js`
 - **Plan-Aware Creation**: `docs/reference/sd-key-generator-guide.md` (--from-plan section)
 
-## Child SD Context Loading (MANDATORY)
-
-**CRITICAL**: When starting work on a child SD (any SD with a parent_sd_id), you MUST load context files before beginning work.
-
-### Why This Applies to Children
-
-Child SDs are **independent Strategic Directives** that require their own full LEAD→PLAN→EXEC workflow. Each child:
-- Has its own PRD
-- Has its own handoffs
-- Has its own retrospective
-- Must meet its own gate thresholds
-
-**Children are NOT sub-tasks.** They are first-class SDs that happen to be coordinated by a parent orchestrator.
-
-### Required Context Loading Sequence
-
-Before starting ANY work on a child SD:
-
-1. **Run child preflight validation**:
-   ```bash
-   node scripts/child-sd-preflight.js SD-XXX-001
-   ```
-
-2. **Read CLAUDE_CORE_DIGEST.md** (provides SD type requirements):
-   ```
-   Read tool: CLAUDE_CORE_DIGEST.md
-   ```
-
-3. **Read phase-specific file** based on current_phase:
-   | Phase | File |
-   |-------|------|
-   | LEAD_APPROVAL | CLAUDE_LEAD_DIGEST.md |
-   | PLAN_*, PRD_* | CLAUDE_PLAN_DIGEST.md |
-   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC_DIGEST.md |
-
-### What CLAUDE_CORE_DIGEST.md Provides
-
-- SD type definitions (feature, bugfix, infrastructure, etc.)
-- Gate pass thresholds per SD type
-- Required handoff counts
-- Required sub-agents per SD type
-- Global negative constraints
-
-### Consequences of Skipping Context Loading
-
-Without loading CLAUDE_CORE_DIGEST.md before child SD work:
-- **Unknown requirements**: May not know PRD is required
-- **Wrong thresholds**: May target 70% when 85% is required
-- **Missing sub-agents**: May skip TESTING, DESIGN, etc.
-- **Incomplete handoffs**: May not execute full chain
-
-### Enforcement
-
-The `child-sd-preflight.js` script now displays a reminder:
-```
-⚠️  CONTEXT LOADING REMINDER:
-   Before starting work, you MUST read:
-   1. CLAUDE_CORE_DIGEST.md (SD type requirements, gates, thresholds)
-   2. Phase-specific file (CLAUDE_LEAD_DIGEST.md, CLAUDE_PLAN_DIGEST.md, or CLAUDE_EXEC_DIGEST.md)
-```
-
-**This reminder is advisory.** The actual context loading must be performed by reading the files.
-
-### Quick Reference
-
-| Child SD Type | Gate Threshold | Min Handoffs | PRD Required |
-|---------------|----------------|--------------|--------------|
-| feature | 85% | 5 | YES |
-| bugfix | 85% | 5 | YES |
-| infrastructure | 80% | 4 | YES |
-| documentation | 60% | 4 | NO |
-| refactor | 75-90% | 5 | Brief |
-
-*Always verify current requirements from CLAUDE_CORE_DIGEST.md as they may be updated.*
-
 ## Common SD Creation Errors and Solutions
 
 ### Database Constraint Errors
@@ -803,6 +737,81 @@ const sdKey = await generateSDKey({ source, type, title });
 4. `scripts/create-sd.js`
 5. `scripts/modules/learning/executor.js`
 
+
+## Child SD Context Loading (MANDATORY)
+
+**CRITICAL**: When starting work on a child SD (any SD with a parent_sd_id), you MUST load context files before beginning work.
+
+### Why This Applies to Children
+
+Child SDs are **independent Strategic Directives** that require their own full LEAD→PLAN→EXEC workflow. Each child:
+- Has its own PRD
+- Has its own handoffs
+- Has its own retrospective
+- Must meet its own gate thresholds
+
+**Children are NOT sub-tasks.** They are first-class SDs that happen to be coordinated by a parent orchestrator.
+
+### Required Context Loading Sequence
+
+Before starting ANY work on a child SD:
+
+1. **Run child preflight validation**:
+   ```bash
+   node scripts/child-sd-preflight.js SD-XXX-001
+   ```
+
+2. **Read CLAUDE_CORE_DIGEST.md** (provides SD type requirements):
+   ```
+   Read tool: CLAUDE_CORE_DIGEST.md
+   ```
+
+3. **Read phase-specific file** based on current_phase:
+   | Phase | File |
+   |-------|------|
+   | LEAD_APPROVAL | CLAUDE_LEAD_DIGEST.md |
+   | PLAN_*, PRD_* | CLAUDE_PLAN_DIGEST.md |
+   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC_DIGEST.md |
+
+### What CLAUDE_CORE_DIGEST.md Provides
+
+- SD type definitions (feature, bugfix, infrastructure, etc.)
+- Gate pass thresholds per SD type
+- Required handoff counts
+- Required sub-agents per SD type
+- Global negative constraints
+
+### Consequences of Skipping Context Loading
+
+Without loading CLAUDE_CORE_DIGEST.md before child SD work:
+- **Unknown requirements**: May not know PRD is required
+- **Wrong thresholds**: May target 70% when 85% is required
+- **Missing sub-agents**: May skip TESTING, DESIGN, etc.
+- **Incomplete handoffs**: May not execute full chain
+
+### Enforcement
+
+The `child-sd-preflight.js` script now displays a reminder:
+```
+⚠️  CONTEXT LOADING REMINDER:
+   Before starting work, you MUST read:
+   1. CLAUDE_CORE_DIGEST.md (SD type requirements, gates, thresholds)
+   2. Phase-specific file (CLAUDE_LEAD_DIGEST.md, CLAUDE_PLAN_DIGEST.md, or CLAUDE_EXEC_DIGEST.md)
+```
+
+**This reminder is advisory.** The actual context loading must be performed by reading the files.
+
+### Quick Reference
+
+| Child SD Type | Gate Threshold | Min Handoffs | PRD Required |
+|---------------|----------------|--------------|--------------|
+| feature | 85% | 5 | YES |
+| bugfix | 85% | 5 | YES |
+| infrastructure | 80% | 4 | YES |
+| documentation | 60% | 4 | NO |
+| refactor | 75-90% | 5 | Brief |
+
+*Always verify current requirements from CLAUDE_CORE_DIGEST.md as they may be updated.*
 
 ## 📋 Directive Submission Review Process
 
@@ -1256,33 +1265,6 @@ Sequential LEAD approval allows learning from earlier children to inform later d
 
 > **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
-
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1324,6 +1306,33 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
+
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 
