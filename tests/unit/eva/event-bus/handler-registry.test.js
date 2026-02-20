@@ -1,14 +1,15 @@
 /**
- * Unit tests for Event Bus Handler Registry
- * SD: SD-EVA-FIX-POST-LAUNCH-001 (FR-2)
+ * Unit tests for Event Bus Handler Registry (Unified)
+ * SD: SD-EHG-ORCH-FOUNDATION-CLEANUP-001-D (updated from SD-EVA-FIX-POST-LAUNCH-001)
  *
- * Tests: register, get, list, clear, count, re-register overwrites
+ * Tests: register (append + singleton), get, getHandlers, list, clear, count
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerHandler,
   getHandler,
+  getHandlers,
   getRegistryCounts,
   listRegisteredTypes,
   clearHandlers,
@@ -67,6 +68,61 @@ describe('handler-registry', () => {
     });
   });
 
+  describe('multi-handler (default append mode)', () => {
+    it('appends handlers for the same event type', () => {
+      const fn1 = async () => 'first';
+      const fn2 = async () => 'second';
+
+      registerHandler('stage.completed', fn1, { name: 'first' });
+      registerHandler('stage.completed', fn2, { name: 'second' });
+
+      const handlers = getHandlers('stage.completed');
+      expect(handlers).toHaveLength(2);
+      expect(handlers[0].name).toBe('first');
+      expect(handlers[1].name).toBe('second');
+      expect(getHandlerCount()).toBe(2);
+    });
+
+    it('getHandler returns the first registered handler', () => {
+      const fn1 = async () => 'first';
+      const fn2 = async () => 'second';
+
+      registerHandler('stage.completed', fn1, { name: 'first' });
+      registerHandler('stage.completed', fn2, { name: 'second' });
+
+      const handler = getHandler('stage.completed');
+      expect(handler.name).toBe('first');
+      expect(handler.handlerFn).toBe(fn1);
+    });
+  });
+
+  describe('singleton mode (EVA pattern)', () => {
+    it('overwrites all handlers when singleton: true', () => {
+      const fn1 = async () => 'first';
+      const fn2 = async () => 'second';
+
+      registerHandler('stage.completed', fn1, { name: 'first' });
+      registerHandler('stage.completed', fn2, { name: 'second', singleton: true });
+
+      const handler = getHandler('stage.completed');
+      expect(handler.name).toBe('second');
+      expect(handler.handlerFn).toBe(fn2);
+      expect(getHandlerCount()).toBe(1);
+    });
+
+    it('singleton re-registration replaces previous', () => {
+      const fn1 = async () => 'first';
+      const fn2 = async () => 'second';
+
+      registerHandler('stage.completed', fn1, { name: 'first', singleton: true });
+      registerHandler('stage.completed', fn2, { name: 'second', singleton: true });
+
+      const handlers = getHandlers('stage.completed');
+      expect(handlers).toHaveLength(1);
+      expect(handlers[0].name).toBe('second');
+    });
+  });
+
   describe('getHandler', () => {
     it('returns null for unregistered types', () => {
       expect(getHandler('nonexistent')).toBeNull();
@@ -83,18 +139,19 @@ describe('handler-registry', () => {
     });
   });
 
-  describe('re-registration (idempotent)', () => {
-    it('overwrites previous handler on re-register', () => {
-      const fn1 = async () => 'first';
-      const fn2 = async () => 'second';
+  describe('getHandlers', () => {
+    it('returns empty array for unregistered types', () => {
+      expect(getHandlers('nonexistent')).toEqual([]);
+    });
 
-      registerHandler('stage.completed', fn1, { name: 'first' });
-      registerHandler('stage.completed', fn2, { name: 'second' });
+    it('returns all handlers for a type', () => {
+      registerHandler('vision.scored', async () => {}, { name: 'sub1' });
+      registerHandler('vision.scored', async () => {}, { name: 'sub2' });
+      registerHandler('vision.scored', async () => {}, { name: 'sub3' });
 
-      const handler = getHandler('stage.completed');
-      expect(handler.name).toBe('second');
-      expect(handler.handlerFn).toBe(fn2);
-      expect(getHandlerCount()).toBe(1);
+      const handlers = getHandlers('vision.scored');
+      expect(handlers).toHaveLength(3);
+      expect(handlers.map(h => h.name)).toEqual(['sub1', 'sub2', 'sub3']);
     });
   });
 
@@ -104,12 +161,13 @@ describe('handler-registry', () => {
       expect(counts.size).toBe(0);
     });
 
-    it('returns 1 per registered event type', () => {
+    it('returns correct count per event type', () => {
+      registerHandler('type.a', async () => {});
       registerHandler('type.a', async () => {});
       registerHandler('type.b', async () => {});
 
       const counts = getRegistryCounts();
-      expect(counts.get('type.a')).toBe(1);
+      expect(counts.get('type.a')).toBe(2);
       expect(counts.get('type.b')).toBe(1);
     });
   });
@@ -149,10 +207,10 @@ describe('handler-registry', () => {
       expect(getHandlerCount()).toBe(0);
     });
 
-    it('returns correct count', () => {
+    it('returns total count across all types', () => {
+      registerHandler('a', async () => {});
       registerHandler('a', async () => {});
       registerHandler('b', async () => {});
-      registerHandler('c', async () => {});
       expect(getHandlerCount()).toBe(3);
     });
   });

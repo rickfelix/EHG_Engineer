@@ -1,9 +1,8 @@
 #!/bin/bash
 # LEO Stack Management Script - Cross-Platform Version
-# Manages all three servers in the LEO Stack:
+# Manages the LEO Stack servers:
 #   - EHG_Engineer (port 3000): LEO Protocol Framework & Backend API
 #   - EHG App (port 8080): Unified Frontend (User + Admin with /admin routes)
-#   - Agent Platform (port 8000): AI Research Backend for Venture Creation
 #
 # NOTE: On Windows, use the PowerShell version (leo-stack.ps1) instead.
 # The cross-platform runner (node scripts/cross-platform-run.js leo-stack)
@@ -33,14 +32,12 @@ FAST_RESTART_COOLDOWN=2
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINEER_DIR="$(dirname "$SCRIPT_DIR")"
 APP_DIR="$(dirname "$ENGINEER_DIR")/ehg"
-AGENT_DIR="$APP_DIR/agent-platform"
 
 # PID file locations
 PID_DIR="$ENGINEER_DIR/.pids"
 mkdir -p "$PID_DIR"
 ENGINEER_PID="$PID_DIR/engineer.pid"
 APP_PID="$PID_DIR/app.pid"
-AGENT_PID="$PID_DIR/agent.pid"
 
 # Log directory
 LOG_DIR="$ENGINEER_DIR/.logs"
@@ -159,49 +156,6 @@ start_app() {
     fi
 }
 
-# Function to start Agent Platform backend (port 8000)
-start_agent() {
-    log "INFO" "${BLUE}[AGENT] Starting Agent Platform backend (port 8000)...${NC}"
-
-    if port_in_use 8000; then
-        log "WARN" "${YELLOW}[WARN] Port 8000 already in use - cleaning up...${NC}"
-        clean_port 8000 "Agent Platform" || return 1
-    fi
-
-    cd "$AGENT_DIR"
-
-    # Check for virtual environment
-    local venv_path=""
-    if [ -f "venv/bin/python" ]; then
-        venv_path="venv"
-    elif [ -f "venv_linux/bin/python" ]; then
-        venv_path="venv_linux"
-    fi
-
-    if [ -z "$venv_path" ]; then
-        log "ERROR" "${YELLOW}[WARN] Virtual environment not found. Run: python -m venv venv && pip install -r requirements.txt${NC}"
-        return 1
-    fi
-
-    source "$venv_path/bin/activate"
-    local agent_log="$LOG_DIR/agent-$(date +%Y%m%d-%H%M%S).log"
-    uvicorn main:app --host 0.0.0.0 --port 8000 >> "$agent_log" 2>&1 &
-    local pid=$!
-    echo $pid > "$AGENT_PID"
-
-    sleep 5
-    if ps -p $pid > /dev/null 2>&1; then
-        log "INFO" "${GREEN}[OK] Agent Platform backend started (PID: $pid)${NC}"
-        log "INFO" "   * http://localhost:8000"
-        log "INFO" "   * API Docs: http://localhost:8000/api/docs"
-        log "INFO" "   * Log: $agent_log"
-        return 0
-    else
-        log "ERROR" "${RED}[ERROR] Agent Platform failed to start! Check log: $agent_log${NC}"
-        return 1
-    fi
-}
-
 # Function to stop a server by PID file
 stop_server() {
     local pid_file=$1
@@ -239,8 +193,6 @@ stop_all() {
     log "INFO" "${RED}[STOP] Stopping all servers...${NC}"
     echo "=================================="
 
-    stop_server "$AGENT_PID" "Agent Platform"
-    sleep 1
     stop_server "$APP_PID" "EHG App"
     sleep 1
     stop_server "$ENGINEER_PID" "EHG_Engineer"
@@ -248,7 +200,7 @@ stop_all() {
     echo "=================================="
 
     # Clean any remaining processes on ports
-    for port in 3000 8080 8000; do
+    for port in 3000 8080; do
         if port_in_use $port; then
             log "WARN" "${YELLOW}[WARN] Port $port still in use, cleaning up...${NC}"
             clean_port $port "Port $port"
@@ -285,7 +237,6 @@ status() {
 
     check_status "$ENGINEER_PID" 3000 "EHG_Engineer (3000)"
     check_status "$APP_PID" 8080 "EHG App (8080)"
-    check_status "$AGENT_PID" 8000 "Agent Platform (8000)"
     echo "=================================="
 
     # Show memory if available
@@ -308,7 +259,6 @@ start_all() {
     log "INFO" "${BLUE}Cleaning ports...${NC}"
     clean_port 3000 "EHG_Engineer"
     clean_port 8080 "EHG App"
-    clean_port 8000 "Agent Platform"
 
     echo "=================================="
     log "INFO" "${BLUE}Starting servers (${STARTUP_DELAY}s delay between each)...${NC}"
@@ -319,10 +269,6 @@ start_all() {
     sleep $STARTUP_DELAY
 
     start_app || { log "ERROR" "${RED}Failed to start EHG App${NC}"; return 1; }
-    log "INFO" "${YELLOW}Waiting ${STARTUP_DELAY}s...${NC}"
-    sleep $STARTUP_DELAY
-
-    start_agent || { log "ERROR" "${RED}Failed to start Agent Platform${NC}"; return 1; }
 
     echo "=================================="
     log "INFO" "${GREEN}[DONE] LEO Stack startup complete!${NC}"
@@ -348,7 +294,7 @@ restart_all() {
 
     # Verify ports are free
     local ports_clear=true
-    for port in 3000 8080 8000; do
+    for port in 3000 8080; do
         if port_in_use $port; then
             log "ERROR" "${RED}[WARN] Port $port still in use!${NC}"
             ports_clear=false
@@ -401,16 +347,12 @@ case "${1:-}" in
         log "INFO" "${BLUE}[CLEAN] Cleaning all ports...${NC}"
         clean_port 3000 "EHG_Engineer"
         clean_port 8080 "EHG App"
-        clean_port 8000 "Agent Platform"
         ;;
     start-engineer)
         start_engineer
         ;;
     start-app)
         start_app
-        ;;
-    start-agent)
-        start_agent
         ;;
     *)
         echo "LEO Stack Management Script - Cross-Platform Version"
@@ -432,12 +374,10 @@ case "${1:-}" in
         echo "Advanced Commands:"
         echo "  start-engineer   - Start only EHG_Engineer (3000)"
         echo "  start-app        - Start only EHG App (8080)"
-        echo "  start-agent      - Start only Agent Platform (8000)"
         echo ""
         echo "Servers:"
         echo "  Port 3000 - EHG_Engineer (LEO Protocol Framework, Backend API)"
         echo "  Port 8080 - EHG App (Frontend UI with Vite)"
-        echo "  Port 8000 - Agent Platform (AI Research Backend)"
         echo ""
         echo "NOTE: On Windows, use 'node scripts/cross-platform-run.js leo-stack'"
         echo "      which automatically uses the PowerShell version (leo-stack.ps1)"
