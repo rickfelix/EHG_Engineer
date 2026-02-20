@@ -30,7 +30,7 @@ import { publishVisionEvent, VISION_EVENTS, registerVisionScoredHandlers } from 
 dotenv.config();
 
 const MAX_CONTENT_CHARS = 8000;
-const MAX_PARSE_RETRIES = 1;
+const _MAX_PARSE_RETRIES = 1;
 
 // Score thresholds (FR-004) — standard U.S. grading scale (lib/standards/grade-scale.js)
 const THRESHOLDS = {
@@ -327,10 +327,8 @@ export async function scoreSD(options = {}) {
 
   // Load SD context (unless custom scope provided)
   let sdContext = null;
-  let sdUuid = null;
   if (sdKey) {
     sdContext = await loadSDContext(supabase, sdKey);
-    sdUuid = sdContext.uuid;
   }
 
   // Build prompts
@@ -496,6 +494,159 @@ ${rawResponse.substring(0, 1000)}`;
 const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
                      import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
 
+/**
+ * Inline mode: output context for Claude Code to process in-conversation.
+ * No API key required — Claude Code IS the LLM.
+ *
+ * Usage: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> --inline
+ *
+ * Output: JSON context block that Claude Code reads, scores, then writes
+ * the result back via: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> --persist <JSON>
+ */
+async function runInlineMode(sdKey, visionKey, archKey) {
+  const supabase = createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  const [visionResult, archResult] = await Promise.all([
+    loadVisionDimensions(supabase, visionKey),
+    loadArchDimensions(supabase, archKey),
+  ]);
+
+  const visionCriteria = dimensionsToCriteria(visionResult.dimensions, 'V');
+  const archCriteria = dimensionsToCriteria(archResult.dimensions, 'A');
+
+  let sdContext = null;
+  if (sdKey) {
+    sdContext = await loadSDContext(supabase, sdKey);
+  }
+
+  const output = {
+    mode: 'INLINE_SCORING',
+    instruction: 'Claude Code: score this SD against the dimensions below. Return JSON via --persist flag.',
+    sd: sdContext,
+    visionCriteria,
+    archCriteria,
+    visionId: visionResult.id,
+    archPlanId: archResult.id,
+    responseFormat: {
+      dimensions: [{ id: 'V01', name: '...', score: 0, reasoning: '...', gaps: [] }],
+      total_score: 0,
+      summary: '...',
+    },
+  };
+
+  console.log('===INLINE_VISION_SCORE_CONTEXT===');
+  console.log(JSON.stringify(output, null, 2));
+  console.log('===END_INLINE_CONTEXT===');
+  console.log('');
+  console.log('Claude Code: evaluate the SD against all dimensions, then run:');
+  console.log(`  node scripts/eva/vision-scorer.js --sd-id ${sdKey} --persist '<JSON>'`);
+}
+
+/**
+ * Persist mode: write a pre-computed score to the database.
+ * Used after Claude Code inline scoring.
+ *
+ * Usage: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> --persist '<JSON>'
+ */
+async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
+  const supabase = createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  registerVisionScoredHandlers();
+
+  const parsed = JSON.parse(scoreJson);
+
+  const [visionResult, archResult] = await Promise.all([
+    loadVisionDimensions(supabase, visionKey),
+    loadArchDimensions(supabase, archKey),
+  ]);
+
+  const visionCriteria = dimensionsToCriteria(visionResult.dimensions, 'V');
+  const archCriteria = dimensionsToCriteria(archResult.dimensions, 'A');
+  const allCriteria = [...visionCriteria, ...archCriteria];
+
+  // Build dimension scores JSONB
+  const dimensionScores = {};
+  for (const dim of parsed.dimensions) {
+    const criterion = allCriteria.find(c => c.id === dim.id);
+    dimensionScores[dim.id] = {
+      name: dim.name,
+      score: dim.score,
+      weight: criterion?.weight || 0,
+      reasoning: dim.reasoning,
+      gaps: dim.gaps || [],
+      source: dim.id.startsWith('V') ? 'vision' : 'architecture',
+    };
+  }
+
+  const thresholdAction = classifyScore(parsed.total_score);
+
+  let sdContext = null;
+  if (sdKey) {
+    sdContext = await loadSDContext(supabase, sdKey);
+  }
+
+  const scoreRecord = {
+    vision_id: visionResult.id,
+    arch_plan_id: archResult.id,
+    sd_id: sdKey || null,
+    total_score: parsed.total_score,
+    dimension_scores: dimensionScores,
+    threshold_action: thresholdAction,
+    rubric_snapshot: {
+      vision_key: visionKey,
+      arch_key: archKey,
+      criteria_count: allCriteria.length,
+      criteria: allCriteria.map(c => ({ id: c.id, name: c.name, weight: c.weight })),
+      summary: parsed.summary,
+      scored_by: 'claude-code-inline',
+    },
+  };
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('eva_vision_scores')
+    .insert(scoreRecord)
+    .select('id')
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to persist score: ${insertError.message}`);
+  }
+
+  // Publish events
+  publishVisionEvent(VISION_EVENTS.SCORED, {
+    supabase,
+    sdKey: sdKey || '(inline)',
+    sdTitle: sdContext?.title || '',
+    totalScore: parsed.total_score,
+    dimensionScores,
+    scoreId: inserted.id,
+  });
+
+  // Write gaps
+  if (sdKey && thresholdAction !== 'accept') {
+    await writeVisionGaps(supabase, sdKey, inserted.id, dimensionScores).catch(err =>
+      console.warn(`[vision-scorer] Gap write failed: ${err.message}`)
+    );
+  }
+
+  console.log(`✅ Vision Alignment Score: ${parsed.total_score}/100`);
+  console.log(`   Action: ${thresholdAction.toUpperCase()}`);
+  console.log(`   Score ID: ${inserted.id}`);
+  console.log('   Scored by: claude-code-inline');
+  console.log('');
+  console.log('   Per-Dimension Scores:');
+  for (const [id, dim] of Object.entries(dimensionScores)) {
+    const bar = '█'.repeat(Math.round(dim.score / 10)) + '░'.repeat(10 - Math.round(dim.score / 10));
+    console.log(`   ${id} [${dim.source[0].toUpperCase()}] ${bar} ${dim.score}/100 — ${dim.name}`);
+  }
+}
+
 if (isMainModule) {
   const args = process.argv.slice(2);
 
@@ -509,49 +660,68 @@ if (isMainModule) {
   const archKey = getArg('--arch-key') || 'ARCH-EHG-L1-001';
   const scope = getArg('--scope');
   const dryRun = args.includes('--dry-run');
+  const inline = args.includes('--inline');
+  const persistJson = getArg('--persist');
 
   if (!sdKey && !scope) {
-    console.error('Usage: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> [--vision-key <KEY>] [--arch-key <KEY>] [--dry-run]');
+    console.error('Usage: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> [--inline] [--persist <JSON>] [--dry-run]');
     process.exit(1);
   }
 
-  console.log('\n🔍 EVA Vision Alignment Scorer');
-  console.log(`   SD:       ${sdKey || '(custom scope)'}`);
-  console.log(`   Vision:   ${visionKey}`);
-  console.log(`   Arch:     ${archKey}`);
-  console.log(`   Dry Run:  ${dryRun}`);
-  console.log('');
-
-  scoreSD({ sdKey, visionKey, archKey, scope, dryRun })
-    .then((result) => {
-      console.log(`✅ Vision Alignment Score: ${result.total_score}/100`);
-      console.log(`   Action: ${result.threshold_action.toUpperCase()}`);
-      console.log(`   Dimensions scored: ${Object.keys(result.dimension_scores).length}`);
-      if (result.summary) {
-        console.log(`   Summary: ${result.summary}`);
-      }
-      if (dryRun) {
-        console.log('\n   [DRY RUN] Score NOT persisted to database');
-      } else {
-        console.log(`   Score ID: ${result.id}`);
-      }
-      console.log('');
-
-      // Print per-dimension scores
-      console.log('   Per-Dimension Scores:');
-      for (const [id, dim] of Object.entries(result.dimension_scores)) {
-        const bar = '█'.repeat(Math.round(dim.score / 10)) + '░'.repeat(10 - Math.round(dim.score / 10));
-        console.log(`   ${id} [${dim.source[0].toUpperCase()}] ${bar} ${dim.score}/100 — ${dim.name}`);
-      }
-    })
-    .catch((err) => {
-      // Graceful exit for "not found" errors (AC-004)
-      if (err.message.includes('not found') || err.message.includes('no rows')) {
-        console.warn('\n⚠️  Vision/Architecture document not found — scoring skipped');
-        console.warn(`   Reason: ${err.message}`);
-        process.exit(0);
-      }
-      console.error(`\n❌ Scoring failed: ${err.message}`);
+  // Inline mode: output context for Claude Code
+  if (inline) {
+    runInlineMode(sdKey, visionKey, archKey).catch(err => {
+      console.error(`❌ Inline mode failed: ${err.message}`);
       process.exit(1);
     });
+  }
+  // Persist mode: write Claude Code's score to DB
+  else if (persistJson) {
+    runPersistMode(sdKey, visionKey, archKey, persistJson).catch(err => {
+      console.error(`❌ Persist failed: ${err.message}`);
+      process.exit(1);
+    });
+  }
+  // Standard mode: LLM API call
+  else {
+    console.log('\n🔍 EVA Vision Alignment Scorer');
+    console.log(`   SD:       ${sdKey || '(custom scope)'}`);
+    console.log(`   Vision:   ${visionKey}`);
+    console.log(`   Arch:     ${archKey}`);
+    console.log(`   Dry Run:  ${dryRun}`);
+    console.log('');
+
+    scoreSD({ sdKey, visionKey, archKey, scope, dryRun })
+      .then((result) => {
+        console.log(`✅ Vision Alignment Score: ${result.total_score}/100`);
+        console.log(`   Action: ${result.threshold_action.toUpperCase()}`);
+        console.log(`   Dimensions scored: ${Object.keys(result.dimension_scores).length}`);
+        if (result.summary) {
+          console.log(`   Summary: ${result.summary}`);
+        }
+        if (dryRun) {
+          console.log('\n   [DRY RUN] Score NOT persisted to database');
+        } else {
+          console.log(`   Score ID: ${result.id}`);
+        }
+        console.log('');
+
+        // Print per-dimension scores
+        console.log('   Per-Dimension Scores:');
+        for (const [id, dim] of Object.entries(result.dimension_scores)) {
+          const bar = '█'.repeat(Math.round(dim.score / 10)) + '░'.repeat(10 - Math.round(dim.score / 10));
+          console.log(`   ${id} [${dim.source[0].toUpperCase()}] ${bar} ${dim.score}/100 — ${dim.name}`);
+        }
+      })
+      .catch((err) => {
+        // Graceful exit for "not found" errors (AC-004)
+        if (err.message.includes('not found') || err.message.includes('no rows')) {
+          console.warn('\n⚠️  Vision/Architecture document not found — scoring skipped');
+          console.warn(`   Reason: ${err.message}`);
+          process.exit(0);
+        }
+        console.error(`\n❌ Scoring failed: ${err.message}`);
+        process.exit(1);
+      });
+  }
 }
