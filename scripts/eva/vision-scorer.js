@@ -26,8 +26,14 @@ import { getValidationClient, isLocalLLMEnabled } from '../../lib/llm/client-fac
 import { spawnSync } from 'child_process';
 import { GRADE } from '../../lib/standards/grade-scale.js';
 import { publishVisionEvent, VISION_EVENTS, registerVisionScoredHandlers } from '../../lib/eva/event-bus/index.js';
+import { aggregateFeedbackQuality } from '../../lib/eva/feedback-dimension-aggregator.js';
 
 dotenv.config();
+
+// SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E: Feedback quality signal weight (0-1).
+// Controls how much feedback quality influences the final dimension score.
+// Formula: adjustedScore = (llmScore * (1 - weight)) + (feedbackSignal * weight)
+const FEEDBACK_QUALITY_WEIGHT = parseFloat(process.env.EVA_FEEDBACK_QUALITY_WEIGHT || '0.10');
 
 const MAX_CONTENT_CHARS = 8000;
 const _MAX_PARSE_RETRIES = 1;
@@ -405,6 +411,53 @@ ${rawResponse.substring(0, 1000)}`;
       gaps: dim.gaps || [],
       source: dim.id.startsWith('V') ? 'vision' : 'architecture',
     };
+  }
+
+  // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E (FR-003): Blend feedback quality signal.
+  // For each dimension with feedback data, adjust the LLM score by the configured weight.
+  let feedbackAdjusted = false;
+  if (!dryRun && FEEDBACK_QUALITY_WEIGHT > 0) {
+    try {
+      const dimIds = Object.keys(dimensionScores);
+      const feedbackAgg = await aggregateFeedbackQuality(supabase, dimIds);
+
+      for (const [dimId, agg] of Object.entries(feedbackAgg)) {
+        if (!dimensionScores[dimId] || agg.count < 2) continue;
+
+        const llmScore = dimensionScores[dimId].score;
+        const feedbackSignal = agg.avgScore;
+        const adjusted = Math.round(
+          (llmScore * (1 - FEEDBACK_QUALITY_WEIGHT)) + (feedbackSignal * FEEDBACK_QUALITY_WEIGHT)
+        );
+
+        dimensionScores[dimId].score = Math.max(0, Math.min(100, adjusted));
+        dimensionScores[dimId].feedback_quality = {
+          avgScore: agg.avgScore,
+          count: agg.count,
+          trend: agg.trend,
+          weight: FEEDBACK_QUALITY_WEIGHT,
+          llmOriginal: llmScore,
+        };
+        feedbackAdjusted = true;
+      }
+
+      if (feedbackAdjusted) {
+        // Recompute total_score as weighted average of adjusted dimension scores
+        let totalWeightedScore = 0;
+        let totalWeight = 0;
+        for (const dim of Object.values(dimensionScores)) {
+          totalWeightedScore += dim.score * (dim.weight || 0);
+          totalWeight += dim.weight || 0;
+        }
+        if (totalWeight > 0) {
+          parsed.total_score = Math.round(totalWeightedScore / totalWeight);
+        }
+        console.log(`   📊 Feedback quality signal applied to ${Object.keys(feedbackAgg).length} dimension(s)`);
+      }
+    } catch (err) {
+      // Feedback quality blending is supplementary — never fail the scoring run
+      console.warn(`[vision-scorer] Feedback quality blend skipped: ${err.message}`);
+    }
   }
 
   const thresholdAction = classifyScore(parsed.total_score);
