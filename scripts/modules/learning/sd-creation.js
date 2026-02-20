@@ -116,14 +116,16 @@ export async function createSDFromLearning(items, type, options = {}) {
   console.log(`✅ Created ${type === 'quick-fix' ? 'Quick-Fix' : 'SD'}: ${data.sd_key}`);
 
   // SD-MAN-INFRA-VISION-SCORING-COVERAGE-001: score at conception so GATE_VISION_SCORE doesn't block LEAD-TO-PLAN
+  // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-F: await scoring to prevent race condition
   // Non-blocking — failure logs a warning but never fails SD creation
-  import('../../leo-create-sd.js')
-    .then(({ scoreSDAtConception }) => {
-      if (typeof scoreSDAtConception === 'function') {
-        return scoreSDAtConception(data.sd_key, data.title, sdData.description || '', supabase);
-      }
-    })
-    .catch(err => console.warn(`⚠️  Vision scoring skipped for ${data.sd_key}: ${err.message}`));
+  try {
+    const { scoreSDAtConception } = await import('../../leo-create-sd.js');
+    if (typeof scoreSDAtConception === 'function') {
+      await scoreSDAtConception(data.sd_key, data.title, sdData.description || '', supabase);
+    }
+  } catch (err) {
+    console.warn(`⚠️  Vision scoring skipped for ${data.sd_key}: ${err.message}`);
+  }
 
   return { id: data.id, sd_key: data.sd_key, success: true };
 }
