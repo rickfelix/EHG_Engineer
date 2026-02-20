@@ -368,9 +368,59 @@ function cleanupStaleConcurrentWorktrees() {
   }
 }
 
+/**
+ * Prune local branches that are fully merged into main.
+ * Runs on every SessionStart to prevent branch accumulation.
+ * Uses `git branch -d` (safe delete) — only removes branches whose
+ * commits are reachable from main. Never touches the current branch.
+ */
+function pruneStaleLocalBranches() {
+  const repoRoot = path.resolve(__dirname, '../..');
+  try {
+    const merged = gitViaPowerShell('branch --merged main', {
+      cwd: repoRoot, timeout: 5000
+    }).toString();
+
+    const branches = merged.split('\n')
+      .map(b => b.trim())
+      .filter(b => b && !b.startsWith('*') && b !== 'main');
+
+    if (branches.length === 0) return;
+
+    // Delete in batches to avoid command-line length limits
+    const BATCH_SIZE = 20;
+    let deleted = 0;
+    for (let i = 0; i < branches.length; i += BATCH_SIZE) {
+      const batch = branches.slice(i, i + BATCH_SIZE);
+      try {
+        gitViaPowerShell(`branch -d ${batch.join(' ')}`, {
+          cwd: repoRoot, timeout: 10000
+        });
+        deleted += batch.length;
+      } catch {
+        // Some branches may fail (checked out elsewhere, etc.) — that's fine
+        // Try individually to maximize cleanup
+        for (const b of batch) {
+          try {
+            gitViaPowerShell(`branch -d ${b}`, { cwd: repoRoot, timeout: 3000 });
+            deleted++;
+          } catch { /* skip */ }
+        }
+      }
+    }
+
+    if (deleted > 0) {
+      logEvent('session.branch_prune', { deleted, total: branches.length });
+    }
+  } catch {
+    // Non-critical — skip silently
+  }
+}
+
 async function main() {
-  // Clean up stale concurrent worktrees before doing anything else
+  // Clean up stale worktrees and branches before doing anything else
   cleanupStaleConcurrentWorktrees();
+  pruneStaleLocalBranches();
 
   // Skip if already inside a worktree — prevents nested worktree creation.
   // Must be checked BEFORE concurrent detection, not after.
