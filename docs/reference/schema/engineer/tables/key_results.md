@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-20T19:58:57.591Z
+**Generated**: 2026-02-20T20:49:31.394Z
 **Rows**: 19
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,8 @@
 | created_by | `text` | YES | `'system'::text` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| vision_dimension_code | `text` | YES | - | EVA vision dimension code (A01-A10, V01-V08) this KR maps to |
+| source_type | `text` | YES | `'manual'::text` | How this KR was generated: top_down (vision gaps), bottom_up (SD retrospectives), manual |
 
 ## Constraints
 
@@ -53,6 +55,7 @@
 - `key_results_confidence_check`: CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))
 - `key_results_direction_check`: CHECK ((direction = ANY (ARRAY['increase'::text, 'decrease'::text, 'maintain'::text])))
 - `key_results_metric_type_check`: CHECK ((metric_type = ANY (ARRAY['percentage'::text, 'number'::text, 'currency'::text, 'duration'::text, 'boolean'::text, 'stage'::text])))
+- `key_results_source_type_check`: CHECK ((source_type = ANY (ARRAY['top_down'::text, 'bottom_up'::text, 'manual'::text])))
 - `key_results_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'on_track'::text, 'at_risk'::text, 'off_track'::text, 'achieved'::text, 'missed'::text])))
 
 ## Indexes
@@ -68,6 +71,10 @@
 - `idx_key_results_status`
   ```sql
   CREATE INDEX idx_key_results_status ON public.key_results USING btree (status)
+  ```
+- `idx_key_results_vision_dimension`
+  ```sql
+  CREATE INDEX idx_key_results_vision_dimension ON public.key_results USING btree (vision_dimension_code) WHERE (vision_dimension_code IS NOT NULL)
   ```
 - `key_results_code_key`
   ```sql
