@@ -3,10 +3,9 @@
     LEO Stack Management Script - Windows PowerShell Version
 
 .DESCRIPTION
-    Manages all three servers in the LEO Stack:
+    Manages the LEO Stack servers:
     - EHG_Engineer (port 3000): LEO Protocol Framework & Backend API
     - EHG App (port 8080): Unified Frontend (User + Admin with /admin routes)
-    - Agent Platform (port 8000): AI Research Backend for Venture Creation
 
 .PARAMETER Command
     The command to execute: start, stop, restart, status, clean, emergency
@@ -24,7 +23,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet("start", "stop", "restart", "status", "clean", "emergency", "start-engineer", "start-app", "start-agent", "help")]
+    [ValidateSet("start", "stop", "restart", "status", "clean", "emergency", "start-engineer", "start-app", "help")]
     [string]$Command = "help",
 
     [Alias("f")]
@@ -37,7 +36,6 @@ $ErrorActionPreference = "Continue"
 # Directories
 $EngineerDir = "C:\Users\rickf\Projects\_EHG\EHG_Engineer"
 $AppDir = "C:\Users\rickf\Projects\_EHG\ehg"
-$AgentDir = "C:\Users\rickf\Projects\_EHG\ehg\agent-platform"
 
 # PID file locations
 $PidDir = Join-Path $EngineerDir ".pids"
@@ -45,7 +43,6 @@ if (-not (Test-Path $PidDir)) { New-Item -ItemType Directory -Path $PidDir -Forc
 
 $EngineerPidFile = Join-Path $PidDir "engineer.pid"
 $AppPidFile = Join-Path $PidDir "app.pid"
-$AgentPidFile = Join-Path $PidDir "agent.pid"
 
 # Log directory
 $LogDir = Join-Path $EngineerDir ".logs"
@@ -193,62 +190,6 @@ function Start-App {
     }
 }
 
-# Function to start Agent Platform backend (port 8000)
-function Start-Agent {
-    Write-Log "INFO" "[AGENT] Starting Agent Platform backend (port 8000)..." "Blue"
-
-    if (Test-PortInUse -Port 8000) {
-        Write-Log "WARN" "[WARN] Port 8000 already in use - cleaning up..." "Yellow"
-        if (-not (Clear-Port -Port 8000 -Name "Agent Platform")) {
-            return $false
-        }
-    }
-
-    Push-Location $AgentDir
-
-    # Check for virtual environment
-    $venvWin = Join-Path $AgentDir "venv_win"
-    $venvLinux = Join-Path $AgentDir "venv"
-
-    $venvPath = $null
-    if (Test-Path (Join-Path $venvWin "Scripts\python.exe")) {
-        $venvPath = $venvWin
-    } elseif (Test-Path (Join-Path $venvLinux "Scripts\python.exe")) {
-        $venvPath = $venvLinux
-    }
-
-    if (-not $venvPath) {
-        Write-Log "ERROR" "[WARN] Virtual environment not found. Run: .\agent-platform\INSTALL.ps1" "Yellow"
-        Pop-Location
-        return $false
-    }
-
-    $pythonExe = Join-Path $venvPath "Scripts\python.exe"
-    $agentLog = Join-Path $LogDir "agent-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-
-    $process = Start-Process -FilePath $pythonExe `
-        -ArgumentList "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000" `
-        -WorkingDirectory $AgentDir -RedirectStandardOutput $agentLog -RedirectStandardError "$agentLog.err" `
-        -WindowStyle Hidden -PassThru
-
-    $process.Id | Out-File -FilePath $AgentPidFile -Encoding ASCII
-
-    Start-Sleep -Seconds 5
-
-    if (-not $process.HasExited) {
-        Write-Log "INFO" "[OK] Agent Platform backend started (PID: $($process.Id))" "Green"
-        Write-Log "INFO" "   * http://localhost:8000" "White"
-        Write-Log "INFO" "   * API Docs: http://localhost:8000/api/docs" "White"
-        Write-Log "INFO" "   * Log: $agentLog" "White"
-        Pop-Location
-        return $true
-    } else {
-        Write-Log "ERROR" "[ERROR] Agent Platform failed to start! Check log: $agentLog" "Red"
-        Pop-Location
-        return $false
-    }
-}
-
 # Function to stop a server by PID file
 function Stop-Server {
     param(
@@ -292,9 +233,6 @@ function Stop-AllServers {
     Write-Log "INFO" "[STOP] Stopping all servers..." "Red"
     Write-Host "=================================="
 
-    Stop-Server -PidFile $AgentPidFile -Name "Agent Platform"
-    Start-Sleep -Seconds 1
-
     Stop-Server -PidFile $AppPidFile -Name "EHG App"
     Start-Sleep -Seconds 1
 
@@ -304,7 +242,7 @@ function Stop-AllServers {
     Write-Host "=================================="
 
     # Clean any remaining processes on ports
-    foreach ($port in @(3000, 8080, 8000)) {
+    foreach ($port in @(3000, 8080)) {
         if (Test-PortInUse -Port $port) {
             Write-Log "WARN" "[WARN] Port $port still in use, cleaning up..." "Yellow"
             Clear-Port -Port $port -Name "Port $port"
@@ -345,7 +283,6 @@ function Show-Status {
 
     Check-ServerStatus -PidFile $EngineerPidFile -Port 3000 -Name "EHG_Engineer (3000)"
     Check-ServerStatus -PidFile $AppPidFile -Port 8080 -Name "EHG App (8080)"
-    Check-ServerStatus -PidFile $AgentPidFile -Port 8000 -Name "Agent Platform (8000)"
 
     Write-Host "=================================="
 
@@ -366,7 +303,6 @@ function Start-AllServers {
     Write-Log "INFO" "Cleaning ports..." "Blue"
     Clear-Port -Port 3000 -Name "EHG_Engineer" | Out-Null
     Clear-Port -Port 8080 -Name "EHG App" | Out-Null
-    Clear-Port -Port 8000 -Name "Agent Platform" | Out-Null
 
     Write-Host "=================================="
     Write-Log "INFO" "Starting servers (${StartupDelay}s delay between each)..." "Blue"
@@ -381,13 +317,6 @@ function Start-AllServers {
 
     if (-not (Start-App)) {
         Write-Log "ERROR" "Failed to start EHG App" "Red"
-        return
-    }
-    Write-Log "INFO" "Waiting ${StartupDelay}s..." "Yellow"
-    Start-Sleep -Seconds $StartupDelay
-
-    if (-not (Start-Agent)) {
-        Write-Log "ERROR" "Failed to start Agent Platform" "Red"
         return
     }
 
@@ -413,7 +342,7 @@ function Restart-AllServers {
 
     # Verify ports are free
     $portsClear = $true
-    foreach ($port in @(3000, 8080, 8000)) {
+    foreach ($port in @(3000, 8080)) {
         if (Test-PortInUse -Port $port) {
             Write-Log "ERROR" "[WARN] Port $port still in use!" "Red"
             $portsClear = $false
@@ -452,15 +381,11 @@ function Invoke-EmergencyCleanup {
     Get-Process -Name "npm" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 
-    # Kill all python/uvicorn processes
-    Get-Process -Name "python", "uvicorn" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-
     # Clean PID files
-    Remove-Item $EngineerPidFile, $AppPidFile, $AgentPidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $EngineerPidFile, $AppPidFile -Force -ErrorAction SilentlyContinue
 
     # Verify ports are clear
-    foreach ($port in @(3000, 8080, 8000)) {
+    foreach ($port in @(3000, 8080)) {
         if (Test-PortInUse -Port $port) {
             Write-Log "ERROR" "[WARN] Port $port still in use" "Red"
         } else {
@@ -491,15 +416,13 @@ function Show-Help {
     Write-Host "  restart -Fast    - Quick restart with shorter cooldown" -ForegroundColor White
     Write-Host ""
     Write-Host "Advanced Commands:" -ForegroundColor Yellow
-    Write-Host "  emergency        - FORCE kill all node/python processes" -ForegroundColor White
+    Write-Host "  emergency        - FORCE kill all node processes" -ForegroundColor White
     Write-Host "  start-engineer   - Start only EHG_Engineer (3000)" -ForegroundColor White
     Write-Host "  start-app        - Start only EHG App (8080)" -ForegroundColor White
-    Write-Host "  start-agent      - Start only Agent Platform (8000)" -ForegroundColor White
     Write-Host ""
     Write-Host "Servers:" -ForegroundColor Yellow
     Write-Host "  Port 3000 - EHG_Engineer (LEO Protocol Framework, Backend API)" -ForegroundColor White
     Write-Host "  Port 8080 - EHG App (Frontend UI with Vite)" -ForegroundColor White
-    Write-Host "  Port 8000 - Agent Platform (AI Research Backend)" -ForegroundColor White
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Yellow
     Write-Host "  .\scripts\leo-stack.ps1 start" -ForegroundColor Gray
@@ -517,12 +440,10 @@ switch ($Command) {
     "clean" {
         Clear-Port -Port 3000 -Name "EHG_Engineer"
         Clear-Port -Port 8080 -Name "EHG App"
-        Clear-Port -Port 8000 -Name "Agent Platform"
     }
     "emergency" { Invoke-EmergencyCleanup }
     "start-engineer" { Start-Engineer }
     "start-app" { Start-App }
-    "start-agent" { Start-Agent }
     "help" { Show-Help }
     default { Show-Help }
 }
