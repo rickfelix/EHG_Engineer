@@ -197,9 +197,12 @@ async function cmdPersist(scoreJson) {
     console.log(`\n   🎉 All dimensions at or above ${ACCEPT_THRESHOLD}! No corrective action needed.`);
   }
 
-  // Output machine-readable status
+  // Output machine-readable status (consumed by Claude Code auto-proceed protocol)
   console.log(`\nHEAL_STATUS=${thresholdAction === 'accept' ? 'PASS' : 'NEEDS_CORRECTION'}`);
   console.log(`HEAL_SCORE_ID=${inserted.id}`);
+  if (thresholdAction !== 'accept') {
+    console.log(`HEAL_NEXT_CMD=node scripts/eva/vision-heal.js generate ${inserted.id}`);
+  }
 }
 
 // ─── GENERATE: Create corrective SDs from a score ────────────────────────────

@@ -27,6 +27,20 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 AUTO-PROCEED is **ON by default**. Phase transitions execute automatically, no confirmation prompts.
 **Pause points** (even when ON): Orchestrator completion, blocking errors, test failures (2 retries), merge conflicts, all children blocked.
 
+## Vision Heal Loop (Auto-Continue)
+
+When running the vision self-healing loop (`vision-heal.js`), parse output signals and auto-continue:
+
+| Signal | Action (AUTO-PROCEED ON) |
+|--------|--------------------------|
+| `HEAL_STATUS=NEEDS_CORRECTION` + `HEAL_SCORE_ID=<id>` | Run `node scripts/eva/vision-heal.js generate <id>` |
+| Corrective SDs generated | Work each SD through LEAD→PLAN→EXEC→completion |
+| All corrective SDs completed | Run `node scripts/eva/vision-heal.js score` → inline score → persist |
+| `HEAL_STATUS=PASS` | Loop complete. Report final scores. Stop. |
+
+**DO NOT ASK** between rounds when AUTO-PROCEED is ON. Parse signals and proceed.
+Max 10 rounds safety limit. Use `npm run eva:heal status` to check state.
+
 ## SD Continuation
 
 | Transition | AUTO-PROCEED | Chaining | Behavior |
