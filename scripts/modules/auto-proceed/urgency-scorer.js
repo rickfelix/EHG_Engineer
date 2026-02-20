@@ -79,7 +79,8 @@ export function calculateUrgencyScore({
   sd,
   patterns = [],
   _retrospectives = [],
-  learningUpdate = null
+  learningUpdate = null,
+  okrImpact = null
 }) {
   let score = 0.5; // Base score (medium priority)
   const reason_codes = [];
@@ -130,29 +131,38 @@ export function calculateUrgencyScore({
     }
   }
 
-  // Factor 5: Learning Update Override (weight: dynamic)
+  // Factor 5: Learning Update Override (weight: 0.20, reduced from 0.40 for OKR blend)
   if (learningUpdate?.urgency_score != null) {
-    // Direct learning signal - blend with computed score
-    const learningWeight = 0.40; // Learning signals get 40% weight
+    const learningWeight = 0.20;
     score = score * (1 - learningWeight) + learningUpdate.urgency_score * learningWeight;
     reason_codes.push(...(learningUpdate.reason_codes || ['learning_signal']));
   }
 
   // Factor 6: Current Phase Progress (weight: 0.10)
-  // Prioritize SDs that are nearly complete
   if (sd?.progress_percentage != null && sd.progress_percentage >= 80) {
     score += 0.10;
     reason_codes.push('near_completion');
+  }
+
+  // Factor 7: OKR Impact (weight: 0.20)
+  // Blends OKR alignment into urgency instead of overriding it.
+  // okrImpact can be provided directly or read from sd.metadata.okr_impact_score
+  const okrScore = okrImpact?.totalScore ?? sd?.metadata?.okr_impact_score ?? null;
+  if (okrScore != null && okrScore > 0) {
+    // Normalize: priority-scorer.js OKR impact is 0-50, normalize to 0-1
+    const normalizedOkr = Math.min(okrScore / 50, 1.0);
+    score += normalizedOkr * 0.20;
+    reason_codes.push('okr_priority');
   }
 
   // Clamp final score to valid range
   score = Math.max(0, Math.min(1, score));
 
   return {
-    score: Math.round(score * 100) / 100, // Round to 2 decimals
+    score: Math.round(score * 100) / 100,
     band: scoreToBand(score),
     reason_codes: reason_codes.length > 0 ? reason_codes : ['baseline'],
-    model_version: 'v1.0.0'
+    model_version: 'v1.1.0'
   };
 }
 
