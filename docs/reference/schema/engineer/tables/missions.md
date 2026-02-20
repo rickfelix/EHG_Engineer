@@ -1,4 +1,4 @@
-# leo_audit_config Table
+# missions Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -6,7 +6,7 @@
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-20T19:27:37.470Z
 **Rows**: 1
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,40 +14,46 @@
 
 ---
 
-## Columns (9 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| enabled | `boolean` | **NO** | `true` | Master switch for audit execution |
-| schedule_cron | `text` | **NO** | - | Cron expression for audit schedule (e.g., "0 2 * * 1" for Mondays at 2 AM) |
-| timezone | `text` | **NO** | `'UTC'::text` | Timezone for cron schedule interpretation |
-| stale_after_days | `integer(32)` | **NO** | `14` | Days before SD marked as stale/abandoned |
-| warn_after_days | `integer(32)` | **NO** | `7` | Days before warning about stale SD |
-| max_findings_per_sd | `integer(32)` | **NO** | `25` | Maximum findings to report per SD |
+| venture_id | `uuid` | YES | - | - |
+| mission_text | `text` | **NO** | - | - |
+| version | `integer(32)` | **NO** | `1` | - |
+| status | `text` | **NO** | `'draft'::text` | - |
+| proposed_by | `text` | YES | - | - |
+| approved_by | `text` | YES | - | - |
+| reasoning | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `leo_audit_config_pkey`: PRIMARY KEY (id)
+- `missions_pkey`: PRIMARY KEY (id)
+
+### Foreign Keys
+- `missions_venture_id_fkey`: venture_id → ventures(id)
+
+### Check Constraints
+- `missions_status_check`: CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'archived'::text])))
 
 ## Indexes
 
-- `leo_audit_config_pkey`
+- `idx_missions_active_per_venture`
   ```sql
-  CREATE UNIQUE INDEX leo_audit_config_pkey ON public.leo_audit_config USING btree (id)
+  CREATE UNIQUE INDEX idx_missions_active_per_venture ON public.missions USING btree (venture_id) WHERE (status = 'active'::text)
+  ```
+- `missions_pkey`
+  ```sql
+  CREATE UNIQUE INDEX missions_pkey ON public.missions USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. leo_audit_config_authenticated_select (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. leo_audit_config_service_role_all (ALL)
+### 1. service_role_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
@@ -55,10 +61,10 @@
 
 ## Triggers
 
-### trigger_leo_audit_config_updated_at
+### set_missions_updated_at
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION update_leo_audit_config_updated_at()`
+- **Action**: `EXECUTE FUNCTION update_updated_at_column()`
 
 ---
 
