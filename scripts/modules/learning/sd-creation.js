@@ -117,7 +117,7 @@ export async function createSDFromLearning(items, type, options = {}) {
 
   // SD-MAN-INFRA-VISION-SCORING-COVERAGE-001: score at conception so GATE_VISION_SCORE doesn't block LEAD-TO-PLAN
   // Non-blocking — failure logs a warning but never fails SD creation
-  import('../../../leo-create-sd.js')
+  import('../../leo-create-sd.js')
     .then(({ scoreSDAtConception }) => {
       if (typeof scoreSDAtConception === 'function') {
         return scoreSDAtConception(data.sd_key, data.title, sdData.description || '', supabase);
