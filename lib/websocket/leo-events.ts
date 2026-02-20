@@ -73,7 +73,7 @@ export function emitGateUpdated(event: Omit<WSGateUpdatedEventType, 'v' | 'ts'>)
     v: 1,
     ts: new Date().toISOString(),
     ...event,
-    passed: event.score >= 85  // Add passed flag
+    passed: event.score >= 83  // B grade minimum (lib/standards/grade-scale.js GRADE.B)
   };
   
   queueEvent('leo/gate:updated', payload, `gate:${event.prd_id}:${event.gate}`);
