@@ -20,7 +20,9 @@ export function registerGate2Validators(registry) {
     const sectionA = result?.sections?.A || result?.sectionScores?.A ||
       result?.details?.design_fidelity || {};
     const scoreFromGateScores = result?.gate_scores?.design_fidelity;
-    const finalScore = sectionA.score ?? scoreFromGateScores ?? 0;
+    // Normalize section score (max 25) to 0-100 scale
+    const rawScore = sectionA.score ?? scoreFromGateScores ?? 0;
+    const finalScore = Math.round((rawScore / 25) * 100);
     const passed = result?.passed ?? (finalScore >= 70);
 
     return {
@@ -49,7 +51,9 @@ export function registerGate2Validators(registry) {
     const sectionB = result?.sections?.B || result?.sectionScores?.B ||
       result?.details?.database_fidelity || {};
     const scoreFromGateScores = result?.gate_scores?.database_fidelity;
-    const finalScore = sectionB.score ?? scoreFromGateScores ?? 0;
+    // Normalize section score (max 35) to 0-100 scale
+    const rawScore = sectionB.score ?? scoreFromGateScores ?? 0;
+    const finalScore = Math.round((rawScore / 35) * 100);
     const passed = result?.passed ?? (finalScore >= 50); // Lower threshold for DB
 
     return {
@@ -76,9 +80,11 @@ export function registerGate2Validators(registry) {
     const result = await validateGate2ExecToPlan(sd_id, supabase);
 
     const sectionC = result?.sections?.C || result?.sectionScores?.C ||
-      result?.details?.data_flow || {};
-    const scoreFromGateScores = result?.gate_scores?.data_flow;
-    const finalScore = sectionC.score ?? scoreFromGateScores ?? 0;
+      result?.details?.data_flow_alignment || {};
+    const scoreFromGateScores = result?.gate_scores?.data_flow_alignment;
+    // Normalize section score (max 25) to 0-100 scale
+    const rawScore = sectionC.score ?? scoreFromGateScores ?? 0;
+    const finalScore = Math.round((rawScore / 25) * 100);
     const passed = result?.passed ?? (finalScore >= 70);
 
     return {
@@ -105,9 +111,11 @@ export function registerGate2Validators(registry) {
     const result = await validateGate2ExecToPlan(sd_id, supabase);
 
     const sectionD = result?.sections?.D || result?.sectionScores?.D ||
-      result?.details?.testing || {};
-    const scoreFromGateScores = result?.gate_scores?.testing;
-    const finalScore = sectionD.score ?? scoreFromGateScores ?? 0;
+      result?.details?.enhanced_testing || {};
+    const scoreFromGateScores = result?.gate_scores?.enhanced_testing;
+    // Normalize section score (max 25) to 0-100 scale
+    const rawScore = sectionD.score ?? scoreFromGateScores ?? 0;
+    const finalScore = Math.round((rawScore / 25) * 100);
     const passed = result?.passed ?? (finalScore >= 70);
 
     return {
