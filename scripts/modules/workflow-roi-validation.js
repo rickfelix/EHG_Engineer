@@ -673,10 +673,24 @@ async function validateExecutiveApproval(sd_id, gateResults, validation, supabas
 
   // Check if retrospective exists
   // NOTE: Table is 'retrospectives' not 'sd_retrospectives'
+  // sd_id in retrospectives is a UUID FK, but sd_id param may be an SD key string
+  // Resolve UUID first for FK-compatible lookup
+  let retroSdId = sd_id;
+  try {
+    const { data: sdRow } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('sd_key', sd_id)
+      .single();
+    if (sdRow?.id) retroSdId = sdRow.id;
+  } catch { /* continue with original sd_id */ }
+
   const { data: retroData } = await supabase
     .from('retrospectives')
     .select('id, quality_score')
-    .eq('sd_id', sd_id)
+    .eq('sd_id', retroSdId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single();
 
   if (retroData) {
