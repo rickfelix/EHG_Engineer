@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-20T19:58:57.591Z
+**Generated**: 2026-02-20T20:49:31.394Z
 **Rows**: 6
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (13 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -31,6 +31,7 @@
 | created_by | `text` | YES | `'system'::text` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| generation_id | `uuid` | YES | - | References okr_generation_log.id if this objective was auto-generated |
 
 ## Constraints
 
