@@ -430,7 +430,7 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
         if (typeof area === 'string') {
           return `${idx + 1}. ${area}`;
         } else if (area.area) {
-          const rootCause = area.root_cause ? `\n   Root Cause: ${area.root_cause}` : '';
+          const rootCause = (area.analysis || area.root_cause) ? `\n   Root Cause: ${area.analysis || area.root_cause}` : '';
           const prevention = area.prevention ? `\n   Prevention: ${area.prevention}` : '';
           return `${idx + 1}. ${area.area}${rootCause}${prevention}`;
         }

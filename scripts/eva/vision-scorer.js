@@ -252,6 +252,48 @@ function classifyScore(totalScore) {
  * @param {Object} [options.llmClient] - LLM client override (for testing)
  * @returns {Promise<Object>} Scoring result
  */
+
+/**
+ * Write dimension-level gaps to eva_vision_gaps after a below-threshold score.
+ * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-034 / PAT-MAN-17c94d08
+ *
+ * Only writes dimensions that score below the escalate threshold (70).
+ * Skips dimensions that already have an open gap to avoid duplicates.
+ */
+async function writeVisionGaps(supabase, sdKey, scoreId, dimensionScores) {
+  const ESCALATE_THRESHOLD = 70;
+  const weakDims = Object.entries(dimensionScores)
+    .filter(([, score]) => typeof score === 'number' && score < ESCALATE_THRESHOLD);
+
+  if (weakDims.length === 0) return;
+
+  // Check existing open gaps for this SD to avoid duplicates
+  const { data: existing } = await supabase
+    .from('eva_vision_gaps')
+    .select('dimension_key')
+    .eq('sd_id', sdKey)
+    .eq('status', 'open');
+  const existingDims = new Set((existing || []).map(r => r.dimension_key));
+
+  const gaps = weakDims
+    .filter(([key]) => !existingDims.has(key))
+    .map(([key, score]) => ({
+      sd_id: sdKey,
+      vision_score_id: scoreId,
+      dimension_key: key,
+      dimension_score: score,
+      severity: score < 50 ? 'high' : 'medium',
+      status: 'open',
+      gap_description: `Dimension ${key} scored ${score}/100 (below escalate threshold of ${ESCALATE_THRESHOLD})`,
+    }));
+
+  if (gaps.length === 0) return;
+
+  const { error } = await supabase.from('eva_vision_gaps').insert(gaps);
+  if (error) throw new Error(`eva_vision_gaps insert failed: ${error.message}`);
+  console.log(`   📊 Wrote ${gaps.length} gap(s) to eva_vision_gaps for ${sdKey}`);
+}
+
 export async function scoreSD(options = {}) {
   const {
     sdKey,
@@ -413,6 +455,15 @@ ${rawResponse.substring(0, 1000)}`;
       scoreId: inserted.id,
     });
 
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-034: write gaps to eva_vision_gaps when dimensions
+    // score below threshold. Non-blocking — never fail the scoring run.
+    // PAT-MAN-17c94d08: eva_vision_gaps table had no writer; this closes the loop.
+    if (sdKey && thresholdAction !== 'accept' && dimensionScores) {
+      writeVisionGaps(supabase, sdKey, inserted.id, dimensionScores).catch(err =>
+        console.warn(`[vision-scorer] Gap write failed for ${sdKey}: ${err.message}`)
+      );
+    }
+
     // SD-CORR-VIS-A05-EVENT-BUS-001: Publish gap_detected for low-scoring dimensions
     if (sdKey && dimensionScores) {
       for (const [dimId, dim] of Object.entries(dimensionScores)) {
@@ -464,7 +515,7 @@ if (isMainModule) {
     process.exit(1);
   }
 
-  console.log(`\n🔍 EVA Vision Alignment Scorer`);
+  console.log('\n🔍 EVA Vision Alignment Scorer');
   console.log(`   SD:       ${sdKey || '(custom scope)'}`);
   console.log(`   Vision:   ${visionKey}`);
   console.log(`   Arch:     ${archKey}`);
@@ -496,7 +547,7 @@ if (isMainModule) {
     .catch((err) => {
       // Graceful exit for "not found" errors (AC-004)
       if (err.message.includes('not found') || err.message.includes('no rows')) {
-        console.warn(`\n⚠️  Vision/Architecture document not found — scoring skipped`);
+        console.warn('\n⚠️  Vision/Architecture document not found — scoring skipped');
         console.warn(`   Reason: ${err.message}`);
         process.exit(0);
       }
