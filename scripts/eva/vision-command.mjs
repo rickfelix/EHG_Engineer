@@ -128,7 +128,7 @@ async function cmdExtract({ source }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
   if (!source) { console.error('--source is required'); process.exit(1); }
@@ -173,6 +173,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     source_file_path: source,
     created_by: 'eva-vision-command',
     ...(ventureId ? { venture_id: ventureId } : {}),
+    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
   };
 
   const { data, error } = await supabase
@@ -192,7 +193,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
 }
 
-async function cmdAddendum({ visionKey, section }) {
+async function cmdAddendum({ visionKey, section, brainstormId }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!section) { console.error('--section is required (the addendum text)'); process.exit(1); }
 
@@ -215,6 +216,7 @@ async function cmdAddendum({ visionKey, section }) {
     section,
     added_at: new Date().toISOString(),
     added_by: 'eva-vision-command',
+    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
   };
 
   const currentAddendums = existing.addendums || [];
@@ -225,14 +227,17 @@ async function cmdAddendum({ visionKey, section }) {
   console.error(`\n🤖 Re-extracting dimensions from updated content...`);
   const dimensions = await extractDimensions(combinedContent);
 
+  const updatePayload = {
+    addendums: updatedAddendums,
+    extracted_dimensions: dimensions,
+    content: combinedContent,
+    updated_at: new Date().toISOString(),
+  };
+  if (brainstormId) updatePayload.source_brainstorm_id = brainstormId;
+
   const { data, error } = await supabase
     .from('eva_vision_documents')
-    .update({
-      addendums: updatedAddendums,
-      extracted_dimensions: dimensions,
-      content: combinedContent,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('vision_key', visionKey)
     .select('id, vision_key, version')
     .single();
