@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-02-20 4:49:25 PM
+**Generated**: 2026-02-20 4:53:28 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -1822,6 +1822,30 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 - `user_stories`: User Stories linked to PRDs
 - `ai_quality_assessments`: Assessment history and scores
 - `handoffs`: Handoff status tracking (includes quality gate results)
+
+## KR Linkage in PRD Creation
+
+When creating a PRD during PLAN phase, connect functional requirements to relevant Key Results where applicable.
+
+### How to Link
+1. **Check active KRs**: Query `key_results` for `status` in ('pending', 'on_track', 'at_risk')
+2. **Match by scope**: Which KR's `baseline_value` → `target_value` does this SD's work advance?
+3. **Add to PRD metadata**: Include `kr_linkages` array in PRD metadata: `[{ kr_code: "KR-GOV-1.1", impact: "Reduces from 243 to ~200 references" }]`
+
+### KR Fields Reference
+| Column | Description |
+|--------|-------------|
+| `code` | KR identifier (e.g., KR-GOV-1.1) |
+| `baseline_value` | Starting metric |
+| `current_value` | Current progress |
+| `target_value` | Goal metric |
+| `direction` | 'increase' or 'decrease' |
+| `vision_dimension_code` | Linked EVA dimension (A01-A10, V01-V08) |
+
+### When to Skip
+- Bug fixes and urgent patches: KR linkage is optional
+- Infrastructure SDs: Link if the work measurably advances a KR
+- Feature SDs: Always attempt KR linkage
 
 ## Handoff Templates
 

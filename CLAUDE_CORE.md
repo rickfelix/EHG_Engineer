@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-02-20 4:49:25 PM
+**Generated**: 2026-02-20 4:53:28 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -1046,6 +1046,48 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - Rubrics: `/scripts/modules/rubrics/*.js`
 - Base: `/scripts/modules/ai-quality-evaluator.js`
 - Full documentation: `docs/reference/ai-quality-rubrics.md`
+
+## Strategic Governance Hierarchy
+
+The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
+
+| Layer | Purpose | Database Table | CLI Command |
+|-------|---------|---------------|-------------|
+| **Mission** | Permanent organizational purpose | `missions` | `node scripts/eva/mission-command.mjs view` |
+| **Constitution** | Immutable operating rules (CONST-001–009) | `protocol_constitution` | `node scripts/eva/constitution-command.mjs view` |
+| **Vision** | 2-5 year strategic direction with scoring dimensions | `eva_vision_documents` | (managed via EVA scoring) |
+| **Strategy** | Annual themes derived from vision | `strategic_themes` | `node scripts/eva/strategy-command.mjs view` |
+| **OKRs** | Quarterly/monthly objectives with measurable KRs | `objectives` + `key_results` | `node scripts/eva/okr-command.mjs review` |
+| **KRs** | Quantitative targets (baseline → target) linked to vision dimensions | `key_results` | `node scripts/eva/okr-command.mjs link` |
+| **SDs** | Implementation units following LEAD→PLAN→EXEC | `strategic_directives_v2` | `npm run sd:next` |
+
+**Hierarchy flow**: Mission → Constitution → Vision → Strategy → OKRs → KRs → SDs
+
+Each SD should trace upward through this hierarchy. When evaluating or creating SDs, consider which OKR/KR the work advances.
+
+## Chairman and CEO Governance Roles
+
+### Chairman (Human Owner)
+- **Owns**: Mission statement and Constitution rules
+- **Approves**: Mission revisions (`mission-command.mjs propose`), constitutional amendments (`constitution-command.mjs amend`)
+- **Authority**: Final say on strategic direction; immutable rules cannot be changed without Chairman approval
+
+### CEO Agent (EVA)
+- **Owns**: Strategy derivation, OKR generation, brainstorm-to-vision pipeline
+- **Generates**: Monthly OKRs via `okr-command.mjs generate` (40% top-down from vision gaps, 60% bottom-up from retrospectives)
+- **Derives**: Annual themes from vision dimensions via `strategy-command.mjs derive`
+- **Wires**: Brainstorm session outcomes to vision documents via `brainstorm-to-vision.mjs`
+- **Reports**: OKR progress snapshots, objective scoring, KR status tracking
+
+### Separation of Concerns
+| Action | Owner | Requires Approval? |
+|--------|-------|--------------------|
+| Change mission | Chairman | Yes (propose → approve) |
+| Amend constitution | Chairman | Yes (draft → active) |
+| Derive strategy themes | CEO (EVA) | No (automated from vision) |
+| Generate monthly OKRs | CEO (EVA) | No (automated, logged in `okr_generation_log`) |
+| Link KRs to vision dimensions | CEO (EVA) | No (via `okr-command.mjs link`) |
+| Create/approve SDs | LEO Protocol | Yes (LEAD phase gates) |
 
 
 

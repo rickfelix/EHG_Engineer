@@ -40,7 +40,9 @@
       "negative_constraints_global",
       "sd_type_workflow_paths",
       "work_tracking_policy",
-      "genesis_codebase"
+      "genesis_codebase",
+      "governance_strategic_hierarchy",
+      "governance_chairman_ceo_roles"
     ],
     "_removed_sections_note": "weighted_keyword_scoring (implementation detail of keyword-intent-scorer.js, hook handles routing), mandatory_agent_invocation (covered by PreToolUse hook routing advisory), sub_agent_prompt_quality (duplicate of Five-Point Brief in CLAUDE.md router), sustainable_issue_resolution (overlaps RCA mandate and execution philosophy), skill_integration (skills are self-documenting, reference pointer sufficient), communication_context (common sense for Opus 4.6), parallel_execution (common sense - read-safe, write-sequential), development_workflow (duplicate of application_architecture), strunkian_writing_standards (moved to docs/reference/), rca_multi_expert_protocol (RCA agent knows its own collaboration protocol)"
   },
@@ -65,7 +67,8 @@
       "parent_child_sd_governance",
       "parent_child_lead",
       "multi_track_parallel_execution",
-      "vision_v2_lead"
+      "vision_v2_lead",
+      "governance_okr_alignment_lead"
     ],
     "_removed_sections_note": "migration_execution_protocol_lead (duplicate of CORE migration_execution_protocol), mandatory_phase_transitions_lead (duplicate of CORE mandatory_phase_transitions). RCA mandate removed from generator — already in router."
   },
@@ -97,7 +100,8 @@
       "vision_v2_plan",
       "negative_constraints_plan",
       "prd_template_scaffold",
-      "documentation_link_validation_gate"
+      "documentation_link_validation_gate",
+      "governance_kr_linkage_plan"
     ],
     "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
   },
@@ -126,7 +130,8 @@
       "negative_constraints_exec",
       "migration_script_pattern",
       "test_coverage_quality_gate",
-      "integration_test_requirement_gate"
+      "integration_test_requirement_gate",
+      "governance_kr_progress_exec"
     ],
     "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol), workflow (was listed twice — removed duplicate). RCA mandate removed from generator — already in router."
   },
