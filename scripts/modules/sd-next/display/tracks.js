@@ -64,7 +64,7 @@ export function displayTrackSection(trackKey, trackName, items, sessionContext =
  * @param {Object} sessionContext - Session context
  */
 function displaySDItem(item, indent, childItems, allItems, sessionContext) {
-  const { claimedSDs = new Map(), currentSession = null, activeSessions = [] } = sessionContext;
+  const { claimedSDs = new Map(), currentSession = null, activeSessions = [], localSignals = new Map() } = sessionContext;
 
   const sdId = item.sd_key || item.sd_id;
   const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
@@ -77,6 +77,10 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
   const isClaimedByMe = claimedBySession &&
     currentSession &&
     claimedBySession === currentSession.session_id;
+
+  // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Check local signals
+  const localSignal = localSignals.get(sdId);
+  const hasLocalActivity = localSignal && !localSignal.staleWorktree && !isClaimedByOther && !isClaimedByMe;
 
   // Status icon logic - now phase-aware (Control Gap Fix)
   let statusIcon;
@@ -91,6 +95,8 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
 
   const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
   const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
+  // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Local activity warning badge
+  const localActivityIcon = hasLocalActivity ? `${colors.bgYellow} LOCAL_ACTIVITY ${colors.reset} ` : '';
   const title = (item.title || '').substring(0, 40 - indent.length);
   const visionBadge = formatVisionBadge(item.vision_score ?? item.vision_alignment_score);
   const gapBadge = (item.gap_weight > 0)
@@ -102,7 +108,7 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
     ? ` ${urgencyBadgeColors[item.urgency_band] || colors.dim}[${item.urgency_band}]${colors.reset}`
     : '';
 
-  console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
+  console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
 
   // Show who claimed it with enhanced details (FR-6)
   if (isClaimedByOther) {
@@ -128,6 +134,14 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
     }
 
     console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${heartbeatInfo}${colors.reset}`);
+  }
+
+  // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Show local activity warning
+  if (hasLocalActivity) {
+    const signals = [];
+    if (localSignal.worktree) signals.push('worktree exists');
+    if (localSignal.autoProceedState) signals.push('auto-proceed-state active');
+    console.log(`${colors.yellow}${indent}        └─ Local activity detected: ${signals.join(', ')} (may be from compacted session)${colors.reset}`);
   }
 
   // Show blockers if not resolved and not claimed
