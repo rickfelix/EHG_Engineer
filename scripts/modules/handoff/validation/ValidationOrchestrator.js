@@ -61,6 +61,62 @@ export class ValidationOrchestrator {
       verbose: options.verbose || false
     });
     this.oivEnabled = options.oivEnabled !== false; // Default: enabled
+
+    // SD_TYPE_THRESHOLD registry override cache
+    this._thresholdOverrideCache = null;
+    this._thresholdOverrideCacheExpiry = 0;
+  }
+
+  /**
+   * Check if SD_TYPE_THRESHOLD is DISABLED in validation_gate_registry for a given sd_type.
+   * Uses caching to avoid repeated DB queries within a single validation run.
+   *
+   * @param {string} sdType - The SD type to check (e.g., 'bugfix')
+   * @returns {Promise<{disabled: boolean, reason: string|null}>}
+   */
+  async _isThresholdDisabledByRegistry(sdType) {
+    if (!sdType) return { disabled: false, reason: null };
+
+    const now = Date.now();
+    const CACHE_TTL_MS = 60 * 1000; // 1 minute
+
+    // Check cache
+    if (this._thresholdOverrideCache && now < this._thresholdOverrideCacheExpiry) {
+      const cached = this._thresholdOverrideCache[sdType];
+      if (cached !== undefined) return cached;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('validation_gate_registry')
+        .select('applicability, reason')
+        .eq('gate_key', 'SD_TYPE_THRESHOLD')
+        .eq('sd_type', sdType)
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        // No override found — threshold applies
+        if (!this._thresholdOverrideCache) this._thresholdOverrideCache = {};
+        this._thresholdOverrideCache[sdType] = { disabled: false, reason: null };
+        this._thresholdOverrideCacheExpiry = now + CACHE_TTL_MS;
+        return { disabled: false, reason: null };
+      }
+
+      const row = data[0];
+      const result = {
+        disabled: row.applicability === 'DISABLED',
+        reason: row.reason || null
+      };
+
+      if (!this._thresholdOverrideCache) this._thresholdOverrideCache = {};
+      this._thresholdOverrideCache[sdType] = result;
+      this._thresholdOverrideCacheExpiry = now + CACHE_TTL_MS;
+      return result;
+    } catch (err) {
+      // On error, fail-open (don't block handoff due to registry lookup failure)
+      console.log(`   [ValidationOrchestrator] Warning: SD_TYPE_THRESHOLD registry check failed: ${err.message}`);
+      return { disabled: false, reason: null };
+    }
   }
 
   /**
@@ -224,23 +280,31 @@ export class ValidationOrchestrator {
 
     // SD-LEO-INFRA-HARDENING-001: Enforce SD-type-specific thresholds
     // This ensures security SDs require 90%, features require 85%, etc.
+    // SD-MAN-FEAT-VISION-DASHBOARD-VALIDATE-001: Check registry for DISABLED override
     if (results.passed && context.sd?.sd_type) {
       const sdType = context.sd.sd_type;
-      const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
-      const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
 
-      if (results.normalizedScore < threshold) {
-        results.passed = false;
-        results.failedGate = 'SD_TYPE_THRESHOLD';
-        results.thresholdViolation = {
-          sdType,
-          required: threshold,
-          actual: results.normalizedScore
-        };
-        results.issues.push(
-          `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
-        );
-        console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+      // Check if SD_TYPE_THRESHOLD is DISABLED in validation_gate_registry
+      const thresholdOverride = await this._isThresholdDisabledByRegistry(sdType);
+      if (thresholdOverride.disabled) {
+        console.log(`   [GatePolicyResolver] DISABLED: SD_TYPE_THRESHOLD (sd_type: ${thresholdOverride.reason})`);
+      } else {
+        const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
+        const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
+
+        if (results.normalizedScore < threshold) {
+          results.passed = false;
+          results.failedGate = 'SD_TYPE_THRESHOLD';
+          results.thresholdViolation = {
+            sdType,
+            required: threshold,
+            actual: results.normalizedScore
+          };
+          results.issues.push(
+            `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
+          );
+          console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+        }
       }
     }
 
@@ -311,25 +375,33 @@ export class ValidationOrchestrator {
     }
 
     // Re-check SD-type threshold with combined score
+    // SD-MAN-FEAT-VISION-DASHBOARD-VALIDATE-001: Check registry for DISABLED override
     if (standardResults.passed && context.sd?.sd_type) {
       const sdType = context.sd.sd_type;
-      const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
-      const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
 
-      if (combinedScore < threshold) {
-        standardResults.passed = false;
-        standardResults.failedGate = 'SD_TYPE_THRESHOLD_WITH_OIV';
-        standardResults.thresholdViolation = {
-          sdType,
-          required: threshold,
-          actual: combinedScore,
-          standardScore: standardResults.normalizedScore,
-          oivScore: oivResult.score
-        };
-        standardResults.issues.push(
-          `Combined score (${combinedScore}%) below threshold (${threshold}%) for SD type '${sdType}'`
-        );
-        console.log(`   ❌ Combined Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${combinedScore}%`);
+      // Check if SD_TYPE_THRESHOLD is DISABLED in validation_gate_registry
+      const thresholdOverride = await this._isThresholdDisabledByRegistry(sdType);
+      if (thresholdOverride.disabled) {
+        console.log(`   [GatePolicyResolver] DISABLED: SD_TYPE_THRESHOLD_WITH_OIV (sd_type: ${thresholdOverride.reason})`);
+      } else {
+        const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
+        const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
+
+        if (combinedScore < threshold) {
+          standardResults.passed = false;
+          standardResults.failedGate = 'SD_TYPE_THRESHOLD_WITH_OIV';
+          standardResults.thresholdViolation = {
+            sdType,
+            required: threshold,
+            actual: combinedScore,
+            standardScore: standardResults.normalizedScore,
+            oivScore: oivResult.score
+          };
+          standardResults.issues.push(
+            `Combined score (${combinedScore}%) below threshold (${threshold}%) for SD type '${sdType}'`
+          );
+          console.log(`   ❌ Combined Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${combinedScore}%`);
+        }
       }
     }
 
@@ -491,6 +563,8 @@ export class ValidationOrchestrator {
     this.constraintsCacheExpiry = 0;
     this.rulesCache.clear();
     this.rulesCacheExpiry.clear();
+    this._thresholdOverrideCache = null;
+    this._thresholdOverrideCacheExpiry = 0;
   }
 
   // ============================================

@@ -29,6 +29,7 @@ import {
   checkExistingAssignments
 } from './classification.js';
 
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -113,6 +114,17 @@ export async function createSDFromLearning(items, type, options = {}) {
   }
 
   console.log(`✅ Created ${type === 'quick-fix' ? 'Quick-Fix' : 'SD'}: ${data.sd_key}`);
+
+  // SD-MAN-INFRA-VISION-SCORING-COVERAGE-001: score at conception so GATE_VISION_SCORE doesn't block LEAD-TO-PLAN
+  // Non-blocking — failure logs a warning but never fails SD creation
+  import('../../../leo-create-sd.js')
+    .then(({ scoreSDAtConception }) => {
+      if (typeof scoreSDAtConception === 'function') {
+        return scoreSDAtConception(data.sd_key, data.title, sdData.description || '', supabase);
+      }
+    })
+    .catch(err => console.warn(`⚠️  Vision scoring skipped for ${data.sd_key}: ${err.message}`));
+
   return { id: data.id, sd_key: data.sd_key, success: true };
 }
 

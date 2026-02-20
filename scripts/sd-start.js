@@ -155,8 +155,25 @@ async function getOrchestratorChildren(sdKey) {
 }
 
 /**
+ * Get the set of session IDs that currently hold an active claim in claude_sessions.
+ * A session is "active" if status is 'active' or 'idle' (not released/stale).
+ * This is the source of truth — the claiming_session_id on the SD can be stale.
+ */
+async function getActiveClaimSessionIds() {
+  const { data } = await supabase
+    .from('claude_sessions')
+    .select('session_id')
+    .not('sd_id', 'is', null)
+    .in('status', ['active', 'idle']);
+  return new Set((data || []).map(r => r.session_id));
+}
+
+/**
  * Find the first unclaimed child SD that's ready to work on.
  * Uses child-sd-selector for urgency-based sorting, then filters out claimed children.
+ *
+ * FIX: validates claiming_session_id against active claude_sessions rows.
+ * A child with a stale/released claiming_session_id is treated as unclaimed.
  */
 async function findUnclaimedChild(parentSdKey) {
   // Use the existing getNextReadyChild which handles urgency sorting and blocker filtering
@@ -166,12 +183,19 @@ async function findUnclaimedChild(parentSdKey) {
     return { child: null, allComplete: result.allComplete, reason: result.reason };
   }
 
-  // Check if the selected child is already claimed by another session
-  if (result.sd.claiming_session_id) {
+  // Get sessions that genuinely hold an active claim in claude_sessions
+  const activeSessionIds = await getActiveClaimSessionIds();
+
+  // A child is truly claimed only if its claiming_session_id maps to an active session
+  const isTrulyClaimed = (child) =>
+    child.claiming_session_id && activeSessionIds.has(child.claiming_session_id);
+
+  // Check if the selected child is already claimed by another active session
+  if (isTrulyClaimed(result.sd)) {
     // The top-priority child is claimed — check all children for an unclaimed one
     const children = await getOrchestratorChildren(parentSdKey);
     const readyChildren = children.filter(c =>
-      !c.claiming_session_id &&
+      !isTrulyClaimed(c) &&
       c.status !== 'completed' &&
       c.status !== 'blocked'
     );
@@ -180,13 +204,13 @@ async function findUnclaimedChild(parentSdKey) {
       return { child: readyChildren[0], allComplete: false, reason: 'First unclaimed child' };
     }
 
-    // All children are either claimed or not ready
-    const allClaimed = children.filter(c => c.claiming_session_id && c.status !== 'completed');
+    // All children are either truly claimed or not ready
+    const allClaimed = children.filter(c => isTrulyClaimed(c) && c.status !== 'completed');
     if (allClaimed.length > 0) {
       return {
         child: null,
         allComplete: false,
-        reason: `All ready children are claimed by other sessions (${allClaimed.length} active)`
+        reason: `No ready children: ${allClaimed.length} active`
       };
     }
   }
