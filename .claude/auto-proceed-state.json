@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-MAN-INFRA-EVA-RESEARCH-COMMAND-001",
+  "currentSd": "SD-EHG-ORCH-INTERFACE-AGENTS-001-B",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing EVA Research Command - Tiered Research with Rubric Routing PRD",
+  "currentTask": "Implementing CEO Agent Enhancements -- OKR, Mission, Reporting",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
   "clearedAt": "2026-02-18T17:31:07.095Z",
-  "lastUpdatedAt": "2026-02-18T20:45:23.977Z"
+  "lastUpdatedAt": "2026-02-20T22:38:54.864Z"
 }
