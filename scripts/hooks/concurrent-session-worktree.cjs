@@ -210,9 +210,11 @@ function gitViaPowerShell(gitArgs, opts = {}) {
   return execSync(cmd, { stdio: 'pipe', ...opts });
 }
 
-// Max worktrees to clean per session start — prevents MSYS2 pipe corruption
-// from subprocess storms (RCA-MSYS2-PIPE-CORRUPTION-001, US-002)
-const MAX_CLEANUP_PER_SESSION = 3;
+// Max worktrees to clean per session start.
+// Originally capped at 3 to prevent MSYS2 pipe corruption (RCA-MSYS2-PIPE-CORRUPTION-001),
+// but that caused accumulation over time (37+ stale worktrees with only 2 active sessions).
+// Now that git ops use PowerShell (avoiding MSYS2), a higher cap is safe.
+const MAX_CLEANUP_PER_SESSION = 50;
 
 /**
  * Check if a worktree is actively used by a running session (US-004).
@@ -255,7 +257,13 @@ function cleanupStaleConcurrentWorktrees() {
   let entries;
   try {
     entries = fs.readdirSync(worktreesDir)
-      .filter(e => e.startsWith('concurrent-'));
+      .filter(e => {
+        // Clean concurrent-* worktrees (temporary by nature)
+        if (e.startsWith('concurrent-')) return true;
+        // Clean SD worktrees whose branch is already merged to main
+        if (e.startsWith('SD-')) return true;
+        return false;
+      });
   } catch { return; }
 
   if (entries.length === 0) return;
@@ -288,13 +296,35 @@ function cleanupStaleConcurrentWorktrees() {
       try { createdAt = fs.statSync(wtPath).mtime; } catch { continue; }
     }
 
-    if (Date.now() - createdAt.getTime() <= maxAgeMs) continue;
-
     // US-004: Skip if an active session is using this worktree
     if (isWorktreeInUseBySession(wtPath)) {
       logEvent('session.cleanup_skipped_active', { entry, reason: 'active_session' });
       skipped++;
       continue;
+    }
+
+    // For concurrent-* worktrees: stale if older than 1 hour
+    if (entry.startsWith('concurrent-')) {
+      if (Date.now() - createdAt.getTime() <= maxAgeMs) continue;
+    }
+
+    // For SD-* worktrees: stale if branch is fully merged to main
+    if (entry.startsWith('SD-')) {
+      try {
+        // Get the branch this worktree is on
+        const wtBranch = gitViaPowerShell(`-C "${wtPath}" rev-parse --abbrev-ref HEAD`, {
+          cwd: repoRoot, timeout: 3000
+        }).toString().trim();
+        // Check if that branch is merged into main
+        const merged = gitViaPowerShell(`branch --merged main`, {
+          cwd: repoRoot, timeout: 3000
+        }).toString();
+        if (!merged.includes(wtBranch)) {
+          continue; // Branch not merged — still active work, skip
+        }
+      } catch {
+        continue; // Can't determine merge status — skip to be safe
+      }
     }
 
     // US-001: Use PowerShell for git ops to avoid MSYS2 pipe corruption
@@ -342,6 +372,12 @@ async function main() {
   // Clean up stale concurrent worktrees before doing anything else
   cleanupStaleConcurrentWorktrees();
 
+  // Skip if already inside a worktree — prevents nested worktree creation.
+  // Must be checked BEFORE concurrent detection, not after.
+  if (isInsideWorktree()) {
+    return;
+  }
+
   // FR-5: Check feature flag (default: true)
   const featureFlag = process.env.AUTO_WORKTREE_ON_CONCURRENT_SESSION;
   if (featureFlag === 'false' || featureFlag === '0') {
@@ -351,11 +387,6 @@ async function main() {
   // Check override (FR-3: EHG_CONCURRENT_OVERRIDE)
   if (process.env.EHG_CONCURRENT_OVERRIDE === '1') {
     logEvent('session.concurrent_check.override', { overrideUsed: true });
-    return;
-  }
-
-  // Skip if already inside a worktree
-  if (isInsideWorktree()) {
     return;
   }
 

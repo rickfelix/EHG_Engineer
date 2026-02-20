@@ -38,6 +38,21 @@ describe('Worktree Manager', () => {
       expect(getRepoRoot()).toBe('/home/user/project');
       expect(execSync).toHaveBeenCalledWith('git rev-parse --show-toplevel', { encoding: 'utf8' });
     });
+
+    it('should strip .worktrees/ path when called from inside a worktree', () => {
+      execSync.mockReturnValue('/home/user/project/.worktrees/SD-XXX-001\n');
+      expect(getRepoRoot()).toBe('/home/user/project');
+    });
+
+    it('should strip nested .worktrees/ path', () => {
+      execSync.mockReturnValue('/home/user/project/.worktrees/SD-A/.worktrees/SD-B\n');
+      expect(getRepoRoot()).toBe('/home/user/project');
+    });
+
+    it('should handle Windows backslash paths inside worktrees', () => {
+      execSync.mockReturnValue('C:\\Users\\user\\project\\.worktrees\\SD-XXX\n');
+      expect(getRepoRoot()).toBe('C:\\Users\\user\\project');
+    });
   });
 
   describe('getWorktreesDir', () => {
