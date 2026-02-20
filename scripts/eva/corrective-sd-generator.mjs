@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { GRADE } from '../../lib/standards/grade-scale.js';
+import { publishVisionEvent, VISION_EVENTS } from '../../lib/eva/event-bus/vision-events.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -299,6 +300,16 @@ export async function generateCorrectiveSD(scoreId) {
     createdSDs.push({ sdKey: newSD.sd_key || newSD.id, sdId: newSD.id, dims, label });
     allGeneratedIds.push(newSD.id);
     await _logAudit(supabase, scoreId, action, newSD.sd_key || newSD.id, score.vision_id);
+
+    // SD-CORR-VIS-A05-EVENT-BUS-001: Publish corrective SD created event
+    publishVisionEvent(VISION_EVENTS.CORRECTIVE_SD_CREATED, {
+      originSdKey: score.sd_id || null,
+      correctiveSdKey: newSD.sd_key || newSD.id,
+      scoreId,
+      action,
+      dimensions: dims.map(d => d.dimId),
+      label,
+    });
   }
 
   if (createdSDs.length === 0) {

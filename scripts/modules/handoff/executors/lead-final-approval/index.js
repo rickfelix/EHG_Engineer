@@ -117,6 +117,30 @@ async function rescoreOriginalSD(sd, supabase) {
     } else {
       console.log(`   ⚠️  Score decreased: ${previousScore} → ${newScore}/100 (${delta})`);
     }
+
+    // SD-CORR-VIS-A05-EVENT-BUS-001: Publish rescore completed event
+    try {
+      const { publishVisionEvent, VISION_EVENTS } = await import('../../../../../lib/eva/event-bus/vision-events.js');
+      const dimensionDelta = {};
+      if (rescoreResult.dimensionScores && originScore.dimension_scores) {
+        for (const [dimId, dim] of Object.entries(rescoreResult.dimensionScores)) {
+          const oldDim = originScore.dimension_scores[dimId];
+          if (oldDim && typeof dim.score === 'number' && typeof oldDim.score === 'number') {
+            dimensionDelta[dimId] = dim.score - oldDim.score;
+          }
+        }
+      }
+      publishVisionEvent(VISION_EVENTS.RESCORE_COMPLETED, {
+        sdKey: originalSdKey,
+        previousScore,
+        newScore,
+        dimensionDelta,
+        correctiveSdKey: sd.sd_key || sd.id,
+      });
+    } catch (eventErr) {
+      // Non-blocking: event publishing should never fail the rescore
+      console.warn(`   ⚠️  Rescore event publish failed: ${eventErr.message}`);
+    }
   } catch (rescoreError) {
     // Non-blocking: log and continue
     console.log(`   ⚠️  Auto-rescore failed (non-blocking): ${rescoreError.message}`);
