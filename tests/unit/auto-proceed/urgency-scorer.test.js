@@ -70,7 +70,7 @@ describe('Urgency Scorer', () => {
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
       expect(result.band).toBeDefined();
-      expect(result.model_version).toBe('v1.0.0');
+      expect(result.model_version).toBe('v1.1.0');
     });
 
     it('should boost score for critical priority', () => {
@@ -112,9 +112,47 @@ describe('Urgency Scorer', () => {
           reason_codes: ['deadline_detected']
         }
       });
-      // Learning signal should significantly boost the score
-      expect(result.score).toBeGreaterThan(0.6);
+      // Learning signal should boost the score (weight 0.20)
+      expect(result.score).toBeGreaterThan(0.45);
       expect(result.reason_codes).toContain('deadline_detected');
+    });
+
+    it('should boost score with OKR impact via parameter', () => {
+      const result = calculateUrgencyScore({
+        sd: { priority: 'medium' },
+        okrImpact: { totalScore: 40 }
+      });
+      // OKR weight 0.20, normalized 40/50 = 0.8, boost = 0.16
+      expect(result.score).toBeGreaterThan(0.5);
+      expect(result.reason_codes).toContain('okr_priority');
+    });
+
+    it('should boost score with OKR impact from metadata', () => {
+      const result = calculateUrgencyScore({
+        sd: { priority: 'medium', metadata: { okr_impact_score: 50 } }
+      });
+      // Max OKR: 50/50 = 1.0, boost = 0.20
+      expect(result.score).toBeGreaterThan(0.6);
+      expect(result.reason_codes).toContain('okr_priority');
+    });
+
+    it('should not boost when OKR impact is zero or absent', () => {
+      const withoutOkr = calculateUrgencyScore({ sd: { priority: 'medium' } });
+      const withZeroOkr = calculateUrgencyScore({
+        sd: { priority: 'medium', metadata: { okr_impact_score: 0 } }
+      });
+      expect(withoutOkr.score).toBe(withZeroOkr.score);
+      expect(withoutOkr.reason_codes).not.toContain('okr_priority');
+    });
+
+    it('should cap OKR impact normalization at 1.0', () => {
+      const result = calculateUrgencyScore({
+        sd: { priority: 'medium' },
+        okrImpact: { totalScore: 100 }
+      });
+      // 100/50 = 2.0, capped to 1.0, boost = 0.20
+      expect(result.score).toBeLessThanOrEqual(1.0);
+      expect(result.reason_codes).toContain('okr_priority');
     });
   });
 

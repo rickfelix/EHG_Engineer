@@ -351,6 +351,32 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
   }
 
   /**
+   * Normalize an acceptance_criteria value to a displayable string.
+   * Handles: string, array of strings, array of objects, or arbitrary objects.
+   * @param {*} ac - acceptance_criteria value (string, array, or object)
+   * @returns {string} Semicolon-separated criteria text
+   */
+  static normalizeAcceptanceCriteria(ac) {
+    if (!ac) return '';
+    if (typeof ac === 'string') return ac;
+    if (Array.isArray(ac)) {
+      return ac.map(item => {
+        if (typeof item === 'string') return item;
+        if (item.criterion) return item.criterion;
+        if (item.description) return item.description;
+        return JSON.stringify(item);
+      }).join('; ');
+    }
+    // Object with nested structure
+    if (typeof ac === 'object') {
+      if (ac.criterion) return ac.criterion;
+      if (ac.description) return ac.description;
+      return JSON.stringify(ac);
+    }
+    return String(ac);
+  }
+
+  /**
    * Format functional requirements for evaluation
    */
   formatFunctionalRequirements(requirements) {
@@ -365,8 +391,9 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
         } else if (req.requirement) {
           const priority = req.priority ? ` [${req.priority}]` : '';
           const desc = req.description ? `\n   Description: ${req.description}` : '';
-          const ac = req.acceptance_criteria && req.acceptance_criteria.length > 0
-            ? `\n   Acceptance Criteria: ${req.acceptance_criteria.join('; ')}`
+          const acText = PRDQualityRubric.normalizeAcceptanceCriteria(req.acceptance_criteria);
+          const ac = acText
+            ? `\n   Acceptance Criteria: ${acText}`
             : '';
           return `${idx + 1}. ${req.requirement}${priority}${desc}${ac}`;
         }
@@ -391,8 +418,9 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
           return `${idx + 1}. ${req}`;
         } else if (req.component) {
           const desc = req.description ? `\n   ${req.description}` : '';
-          const ac = req.acceptance_criteria && req.acceptance_criteria.length > 0
-            ? `\n   Acceptance Criteria: ${req.acceptance_criteria.join('; ')}`
+          const acText = PRDQualityRubric.normalizeAcceptanceCriteria(req.acceptance_criteria);
+          const ac = acText
+            ? `\n   Acceptance Criteria: ${acText}`
             : '';
           return `${idx + 1}. ${req.component}${desc}${ac}`;
         }
@@ -513,14 +541,31 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
 
   /**
    * Format acceptance criteria for evaluation
+   * Handles: array of strings, array of objects ({id, criterion, verification_method}), or string
    */
   formatAcceptanceCriteria(criteria) {
     if (!criteria || criteria.length === 0) {
       return 'No acceptance criteria defined';
     }
 
+    if (typeof criteria === 'string') {
+      return criteria;
+    }
+
     if (Array.isArray(criteria)) {
-      return criteria.map((criterion, idx) => `${idx + 1}. ${criterion}`).join('\n');
+      return criteria.map((criterion, idx) => {
+        if (typeof criterion === 'string') {
+          return `${idx + 1}. ${criterion}`;
+        } else if (criterion.criterion) {
+          const verification = criterion.verification_method
+            ? `\n   Verification: ${criterion.verification_method}`
+            : '';
+          return `${idx + 1}. ${criterion.criterion}${verification}`;
+        } else if (criterion.description) {
+          return `${idx + 1}. ${criterion.description}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(criterion)}`;
+      }).join('\n');
     }
 
     return JSON.stringify(criteria);
