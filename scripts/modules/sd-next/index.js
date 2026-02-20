@@ -67,3 +67,6 @@ export {
   persistAllBlockedState,
   recordUserDecision
 } from './blocked-state-detector.js';
+
+// Local signal detection (SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001)
+export { detectLocalSignals } from './local-signals.js';

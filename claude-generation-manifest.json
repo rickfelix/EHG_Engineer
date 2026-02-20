@@ -1,76 +1,76 @@
 {
-  "generated_at": "2026-02-20T21:50:55.269Z",
-  "git_commit": "b4930caf",
+  "generated_at": "2026-02-20T21:53:28.254Z",
+  "git_commit": "58a9f184",
   "db_snapshot_hash": "1787835840a9ee3a",
   "files": {
     "CLAUDE.md": {
       "type": "full",
       "chars": 5788,
       "estimated_tokens": 1447,
-      "content_hash": "9ba8b30b8114f739",
+      "content_hash": "c631db3a3cd0bae5",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
       "chars": 48743,
       "estimated_tokens": 12186,
-      "content_hash": "94672eecd809c35e",
+      "content_hash": "19aff232ae3d0ef1",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
       "chars": 53693,
       "estimated_tokens": 13424,
-      "content_hash": "9225a770df979fe1",
+      "content_hash": "a85cdf579ea42905",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
       "chars": 78370,
       "estimated_tokens": 19593,
-      "content_hash": "8b395cbfb9e6c218",
+      "content_hash": "017e80165afef4cf",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
       "chars": 63208,
       "estimated_tokens": 15802,
-      "content_hash": "47bf4f6209362984",
+      "content_hash": "3ef2e46ca8081fe1",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
       "chars": 6803,
       "estimated_tokens": 1701,
-      "content_hash": "421b2bbaa3873929",
+      "content_hash": "d109ab9feb88697c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
       "chars": 37758,
       "estimated_tokens": 9440,
-      "content_hash": "4843589a7f40f692",
+      "content_hash": "ca8ab6160c3d3507",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
       "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "ca2f4a515f10e00f",
+      "content_hash": "af2375b4181eba26",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
       "chars": 12771,
       "estimated_tokens": 3193,
-      "content_hash": "df6e73b4372db011",
+      "content_hash": "6d5b879ba158e3ba",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
       "chars": 14966,
       "estimated_tokens": 3742,
-      "content_hash": "a849164c06aef858",
+      "content_hash": "e78d6343661a1b11",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-E\\CLAUDE_EXEC_DIGEST.md"
     }
   }
