@@ -504,6 +504,23 @@ async function main() {
   const contextFile = getPhaseContextFile(sd.current_phase);
   console.log(`\n${colors.bold}Load context:${colors.reset} ${colors.cyan}${contextFile}${colors.reset}`);
 
+  // 6.7. Handoff count warning (SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001)
+  // Warns when claiming an SD with extensive prior work — possible compacted session
+  try {
+    const { data: handoffRows } = await supabase
+      .from('sd_phase_handoffs')
+      .select('id', { count: 'exact', head: false })
+      .eq('sd_id', sd.id);
+    const handoffCount = handoffRows?.length || 0;
+    if (handoffCount >= 3) {
+      console.log(`\n${colors.yellow}⚠️  PRIOR WORK WARNING: This SD has ${handoffCount} prior handoffs.${colors.reset}`);
+      console.log(`${colors.dim}   Another session may have been working on this before context compaction.${colors.reset}`);
+      console.log(`${colors.dim}   Check for local worktree: .worktrees/${effectiveId}${colors.reset}`);
+    }
+  } catch {
+    // Non-blocking — handoff count warning is advisory
+  }
+
   // 7. Show warnings if any
   if (claimResult.warnings?.length > 0) {
     console.log(`\n${colors.yellow}Warnings:${colors.reset}`);

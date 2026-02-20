@@ -18,6 +18,7 @@ import { normalizeVenturePrefix } from '../sd-key-generator.js';
 import { scoreToBand, bandToNumeric } from '../auto-proceed/urgency-scorer.js';
 import { colors } from './colors.js';
 import { checkDependenciesResolved, scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
+import { detectLocalSignals } from './local-signals.js';
 import {
   loadActiveBaseline,
   loadRecentActivity,
@@ -92,6 +93,7 @@ export class SDNextSelector {
     this.sessionManager = null;
     this.ventureContext = null; // Active venture context for SD filtering
     this.visionScores = new Map(); // Per-SD vision score aggregates (SD-MAN-INFRA-VISION-PORTFOLIO-SCORECARD-001)
+    this.localSignals = new Map(); // Local filesystem signals (worktrees, auto-proceed-state) SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
   }
 
   /**
@@ -145,6 +147,14 @@ export class SDNextSelector {
     await this.loadActiveSessions();
     this.pendingProposals = await loadPendingProposals(this.supabase);
     this.loadMultiRepoStatus();
+
+    // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Detect local signals
+    try {
+      const repoRoot = path.resolve(__dirname, '../../..');
+      this.localSignals = detectLocalSignals(repoRoot);
+    } catch {
+      this.localSignals = new Map();
+    }
 
     // Display vision portfolio header (SD-MAN-INFRA-VISION-PORTFOLIO-SCORECARD-001)
     displayVisionPortfolioHeader(this.visionScores);
@@ -337,7 +347,8 @@ export class SDNextSelector {
     return {
       claimedSDs: this.claimedSDs,
       currentSession: this.currentSession,
-      activeSessions: this.activeSessions
+      activeSessions: this.activeSessions,
+      localSignals: this.localSignals // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
     };
   }
 
