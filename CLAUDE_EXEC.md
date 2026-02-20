@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-02-20 4:49:25 PM
+**Generated**: 2026-02-20 4:53:28 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -1592,6 +1592,27 @@ All Vision V2 SDs have this implementation guidance:
 - [ ] Gate types (auto/advisory/hard) respected
 - [ ] E2E test verifies no direct writes to stage tables
 - [ ] No new columns added to existing stage tables
+
+## KR Progress Tracking in EXEC
+
+After shipping implementation code, update relevant KR metrics to reflect progress.
+
+### Post-Ship KR Update Workflow
+1. **Identify linked KRs**: Check PRD metadata for `kr_linkages` or SD description for KR references
+2. **Measure impact**: Determine the new `current_value` based on what was implemented
+3. **Update via CLI**: `node scripts/eva/okr-command.mjs link --kr <KR-CODE> --value <new-value>`
+4. **Log in retrospective**: Include KR progress in the retrospective's key_learnings
+
+### When to Update
+- **After EXEC-TO-PLAN**: When implementation is verified and ready for review
+- **After LEAD-FINAL-APPROVAL**: Confirmed completion, final KR update
+- **Monthly snapshots**: OKR monthly handler automatically captures progress via `okr-monthly-handler.js`
+
+### Example
+If SD implements a feature that reduces legacy references from 243 to 200:
+- KR-GOV-1.1 baseline: 243, target: 0
+- After ship: update current_value to 200
+- Monthly snapshot captures this automatically
 
 ## Database Schema Constraints Reference
 

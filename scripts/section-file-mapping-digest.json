@@ -27,7 +27,8 @@
       "mandatory_agent_invocation",
       "sub_agent_prompt_quality",
       "auto_proceed_mode",
-      "sd_continuation_truth_table"
+      "sd_continuation_truth_table",
+      "governance_strategic_hierarchy"
     ]
   },
   "CLAUDE_LEAD_DIGEST.md": {

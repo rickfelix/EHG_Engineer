@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-02-20 4:49:25 PM
+**Generated**: 2026-02-20 4:53:28 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -1459,6 +1459,23 @@ npm run sd:next      # Shows all tracks with READY SDs
 npm run sd:status    # Overall progress by track
 ```
 
+
+## OKR Alignment in LEAD Evaluation
+
+When evaluating an SD during LEAD phase, check alignment with active OKRs:
+
+### Quick Alignment Check
+1. **Review active objectives**: `node scripts/eva/okr-command.mjs review`
+2. **Identify relevant KRs**: Which Key Results will this SD advance?
+3. **Document alignment**: Note the KR code(s) in SD metadata or description
+
+### Alignment Query Pattern
+Check `objectives` (active, current period) and `key_results` (status != 'achieved') to find KRs the SD might impact. KRs have `vision_dimension_code` linking them to EVA vision dimensions (A01-A10, V01-V08).
+
+### When No Alignment Exists
+- Not every SD must align to an OKR (e.g., bug fixes, urgent infrastructure)
+- If an SD does align, documenting the KR connection improves traceability
+- Misaligned SDs are not rejected — alignment is advisory, not blocking
 
 ---
 

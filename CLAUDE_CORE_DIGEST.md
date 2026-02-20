@@ -1,6 +1,6 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-20T21:49:25.719Z -->
-<!-- git_commit: 47183717 -->
+<!-- generated_at: 2026-02-20T21:53:28.254Z -->
+<!-- git_commit: 58a9f184 -->
 <!-- db_snapshot_hash: 1787835840a9ee3a -->
 <!-- file_content_hash: pending -->
 
@@ -779,6 +779,24 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
 
+## Strategic Governance Hierarchy
+
+The EHG platform operates under a 7-layer strategic governance stack. Each layer has a database table, CLI command, and clear purpose.
+
+| Layer | Purpose | Database Table | CLI Command |
+|-------|---------|---------------|-------------|
+| **Mission** | Permanent organizational purpose | `missions` | `node scripts/eva/mission-command.mjs view` |
+| **Constitution** | Immutable operating rules (CONST-001–009) | `protocol_constitution` | `node scripts/eva/constitution-command.mjs view` |
+| **Vision** | 2-5 year strategic direction with scoring dimensions | `eva_vision_documents` | (managed via EVA scoring) |
+| **Strategy** | Annual themes derived from vision | `strategic_themes` | `node scripts/eva/strategy-command.mjs view` |
+| **OKRs** | Quarterly/monthly objectives with measurable KRs | `objectives` + `key_results` | `node scripts/eva/okr-command.mjs review` |
+| **KRs** | Quantitative targets (baseline → target) linked to vision dimensions | `key_results` | `node scripts/eva/okr-command.mjs link` |
+| **SDs** | Implementation units following LEAD→PLAN→EXEC | `strategic_directives_v2` | `npm run sd:next` |
+
+**Hierarchy flow**: Mission → Constitution → Vision → Strategy → OKRs → KRs → SDs
+
+Each SD should trace upward through this hierarchy. When evaluating or creating SDs, consider which OKR/KR the work advances.
+
 ## Sub-Agent Trigger Keywords (Quick Reference)
 
 **CRITICAL**: When user query contains these keywords, PROACTIVELY invoke the corresponding sub-agent via Task tool.
@@ -826,5 +844,5 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 
 ---
 
-*DIGEST generated: 2026-02-20 4:49:25 PM*
+*DIGEST generated: 2026-02-20 4:53:28 PM*
 *Protocol: 4.3.3*
