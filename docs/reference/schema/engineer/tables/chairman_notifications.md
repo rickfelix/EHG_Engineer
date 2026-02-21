@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-21T13:23:45.333Z
+**Generated**: 2026-02-21T15:06:05.923Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -44,7 +44,7 @@
 - `chairman_notifications_decision_id_fkey`: decision_id → chairman_decisions(id)
 
 ### Check Constraints
-- `chairman_notifications_notification_type_check`: CHECK ((notification_type = ANY (ARRAY['immediate'::text, 'daily_digest'::text, 'weekly_summary'::text])))
+- `chairman_notifications_notification_type_check`: CHECK ((notification_type = ANY (ARRAY['immediate'::text, 'daily_digest'::text, 'weekly_summary'::text, 'telegram_vision_score'::text, 'telegram_release_monitor'::text])))
 - `chairman_notifications_status_check`: CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'rate_limited'::text, 'deferred'::text])))
 
 ## Indexes

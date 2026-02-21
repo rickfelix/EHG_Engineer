@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-21T13:23:45.333Z
+**Generated**: 2026-02-21T15:06:05.923Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -46,7 +46,7 @@
 - `eva_scheduler_metrics_venture_id_fkey`: venture_id → eva_ventures(id)
 
 ### Check Constraints
-- `eva_scheduler_metrics_event_type_check`: CHECK ((event_type = ANY (ARRAY['scheduler_poll'::text, 'scheduler_dispatch'::text, 'scheduler_cadence_limited'::text, 'scheduler_circuit_breaker_pause'::text, 'scheduler_error'::text])))
+- `eva_scheduler_metrics_event_type_check`: CHECK ((event_type = ANY (ARRAY['scheduler_poll'::text, 'scheduler_dispatch'::text, 'scheduler_cadence_limited'::text, 'scheduler_circuit_breaker_pause'::text, 'scheduler_error'::text, 'okr.objective.scored'::text, 'okr.snapshot.completed'::text, 'okr.mid_month_review.completed'::text])))
 - `eva_scheduler_metrics_outcome_check`: CHECK ((outcome = ANY (ARRAY['success'::text, 'failure'::text, 'skipped'::text, NULL::text])))
 
 ## Indexes
