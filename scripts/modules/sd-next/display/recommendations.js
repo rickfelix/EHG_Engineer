@@ -185,7 +185,14 @@ async function displayWorkingOnSD(supabase, workingOn, sessionContext = {}) {
     console.log(`  ${workingOn.title}`);
     console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}`);
     console.log(`  ${colors.red}Claimed by session ${shortId} (${heartbeatAge}) on ${hostname}${colors.reset}`);
-    console.log(`  ${colors.yellow}Pick a different SD or wait for the session to release.${colors.reset}\n`);
+    // SD-LEO-INFRA-CLAIM-SYSTEM-IMPROVEMENTS-001 (FR-002/FR-005): Suggest /claim release for stale sessions
+    const heartbeatSeconds = claimingSession?.heartbeat_age_seconds || 0;
+    if (heartbeatSeconds >= 300) {
+      console.log(`  ${colors.yellow}Session appears stale. Release with: /claim release ${workingOn._claimingSessionId}${colors.reset}`);
+    } else {
+      console.log(`  ${colors.yellow}Pick a different SD or wait for the session to release.${colors.reset}`);
+    }
+    console.log('');
     return;
   }
 
