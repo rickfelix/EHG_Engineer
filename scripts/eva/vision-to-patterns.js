@@ -107,6 +107,15 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
     const archKey = scoreRecord.rubric_snapshot?.arch_key || 'unknown';
 
     for (const [dimId, dim] of Object.entries(scoreRecord.dimension_scores)) {
+      // SD-LEARN-FIX-ADDRESS-VGAP-A05EVENTBUSINT-001: Guard against malformed dimensions
+      // Some dimension_scores entries have undefined/NaN scores (e.g., key "A05_event_bus_integration"
+      // with {name: undefined, score: undefined}). Skip these to prevent garbage patterns.
+      if (dim.score == null || typeof dim.score !== 'number' || isNaN(dim.score)) {
+        console.warn(`  ⚠️  Skipping malformed dimension "${dimId}": score=${dim.score}, name=${dim.name}`);
+        skipped++;
+        continue;
+      }
+
       if (dim.score >= SCORE_THRESHOLD) {
         skipped++;
         continue; // Only process low-scoring dimensions (AC-005)
@@ -114,11 +123,14 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
 
       const patternId = buildPatternId(dimId);
 
+      // Extract name from dimension key if dim.name is undefined (e.g., "A05_event_bus_integration" → "event bus integration")
+      const dimName = dim.name || dimId.replace(/^[A-Z]\d+_?/i, '').replace(/_/g, ' ') || dimId;
+
       if (!dimAggregates[patternId]) {
         dimAggregates[patternId] = {
           patternId,
           dimId,
-          dimName: dim.name,
+          dimName,
           scores: [],
           sdIds: [],
           visionKey,
