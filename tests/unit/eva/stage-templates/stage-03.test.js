@@ -34,10 +34,11 @@ describe('stage-03.js - Individual Validation template', () => {
       expect(METRIC_THRESHOLD).toBe(50);
     });
 
-    it('should have all 6 metrics defined', () => {
+    it('should have all 7 metrics defined', () => {
       expect(METRICS).toEqual([
         'marketFit', 'customerNeed', 'momentum',
         'revenuePotential', 'competitiveBarrier', 'executionFeasibility',
+        'designQuality',
       ]);
     });
 
@@ -53,6 +54,7 @@ describe('stage-03.js - Individual Validation template', () => {
   const makeValidMetrics = (overrides = {}) => ({
     marketFit: 75, customerNeed: 80, momentum: 70,
     revenuePotential: 85, competitiveBarrier: 65, executionFeasibility: 90,
+    designQuality: 70,
     ...overrides,
   });
 
@@ -67,6 +69,7 @@ describe('stage-03.js - Individual Validation template', () => {
       const data = {
         marketFit: 0, customerNeed: 100, momentum: 0,
         revenuePotential: 100, competitiveBarrier: 0, executionFeasibility: 100,
+        designQuality: 50,
       };
       const result = stage03.validate(data);
       expect(result.valid).toBe(true);
@@ -148,6 +151,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 70, customerNeed: 75, momentum: 80,
           revenuePotential: 75, competitiveBarrier: 70, executionFeasibility: 80,
+          designQuality: 70,
         },
       });
       expect(result.decision).toBe('pass');
@@ -161,6 +165,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 50, customerNeed: 50, momentum: 50,
           revenuePotential: 50, competitiveBarrier: 50, executionFeasibility: 50,
+          designQuality: 50,
         },
       });
       expect(result.decision).toBe('pass');
@@ -173,6 +178,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 65, customerNeed: 65, momentum: 65,
           revenuePotential: 65, competitiveBarrier: 65, executionFeasibility: 65,
+          designQuality: 65,
         },
       });
       expect(result.decision).toBe('revise');
@@ -187,6 +193,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 50, customerNeed: 50, momentum: 50,
           revenuePotential: 50, competitiveBarrier: 50, executionFeasibility: 50,
+          designQuality: 50,
         },
       });
       expect(result.decision).toBe('revise');
@@ -199,6 +206,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 50, customerNeed: 50, momentum: 50,
           revenuePotential: 50, competitiveBarrier: 50, executionFeasibility: 50,
+          designQuality: 50,
         },
       });
       expect(result.decision).toBe('kill');
@@ -212,6 +220,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 90, customerNeed: 90, momentum: 90,
           revenuePotential: 90, competitiveBarrier: 90, executionFeasibility: 49,
+          designQuality: 90,
         },
       });
       expect(result.decision).toBe('kill');
@@ -226,6 +235,7 @@ describe('stage-03.js - Individual Validation template', () => {
         metrics: {
           marketFit: 49, customerNeed: 48, momentum: 90,
           revenuePotential: 90, competitiveBarrier: 90, executionFeasibility: 90,
+          designQuality: 90,
         },
       });
       expect(result.decision).toBe('kill');
@@ -237,7 +247,8 @@ describe('stage-03.js - Individual Validation template', () => {
       const input = {
         overallScore: 75,
         metrics: { marketFit: 70, customerNeed: 75, momentum: 80,
-          revenuePotential: 75, competitiveBarrier: 70, executionFeasibility: 80 },
+          revenuePotential: 75, competitiveBarrier: 70, executionFeasibility: 80,
+          designQuality: 70 },
       };
       const original = JSON.parse(JSON.stringify(input));
       evaluateKillGate(input);
@@ -248,8 +259,8 @@ describe('stage-03.js - Individual Validation template', () => {
   describe('computeDerived()', () => {
     it('should compute overallScore as rounded average', () => {
       const result = stage03.computeDerived(makeValidMetrics());
-      // (75+80+70+85+65+90)/6 = 465/6 = 77.5 → 78
-      expect(result.overallScore).toBe(78);
+      // (75+80+70+85+65+90+70)/7 = 535/7 = 76.43 → 76
+      expect(result.overallScore).toBe(76);
     });
 
     it('should compute rollupDimensions', () => {
@@ -257,6 +268,7 @@ describe('stage-03.js - Individual Validation template', () => {
       expect(result.rollupDimensions.market).toBe(Math.round((75 + 70) / 2)); // marketFit + momentum
       expect(result.rollupDimensions.technical).toBe(Math.round((90 + 65) / 2)); // executionFeasibility + competitiveBarrier
       expect(result.rollupDimensions.financial).toBe(Math.round((85 + 80) / 2)); // revenuePotential + customerNeed
+      expect(result.rollupDimensions.experience).toBe(70); // designQuality
     });
 
     it('should include pass decision when all criteria met', () => {
@@ -269,6 +281,7 @@ describe('stage-03.js - Individual Validation template', () => {
       const data = {
         marketFit: 60, customerNeed: 60, momentum: 60,
         revenuePotential: 60, competitiveBarrier: 60, executionFeasibility: 60,
+        designQuality: 60,
       };
       const result = stage03.computeDerived(data);
       expect(result.overallScore).toBe(60);

@@ -25,6 +25,7 @@ describe('stage-02.js - Idea Validation template', () => {
       expect(METRIC_NAMES).toEqual([
         'marketFit', 'customerNeed', 'momentum',
         'revenuePotential', 'competitiveBarrier', 'executionFeasibility',
+        'designQuality',
       ]);
     });
 
@@ -60,12 +61,14 @@ describe('stage-02.js - Idea Validation template', () => {
     metrics: {
       marketFit: 75, customerNeed: 80, momentum: 70,
       revenuePotential: 85, competitiveBarrier: 65, executionFeasibility: 90,
+      designQuality: 70,
     },
     evidence: {
       market: 'Market evidence here',
       customer: 'Customer evidence here',
       competitive: 'Competitive evidence here',
       execution: 'Execution evidence here',
+      design: 'Design evidence here',
     },
     suggestions: [],
     ...overrides,
@@ -217,11 +220,11 @@ describe('stage-02.js - Idea Validation template', () => {
   });
 
   describe('computeDerived() - compositeScore', () => {
-    it('should compute compositeScore as rounded average of 6 metrics', () => {
+    it('should compute compositeScore as rounded average of 7 metrics', () => {
       const data = makeValid();
-      // (75+80+70+85+65+90)/6 = 465/6 = 77.5 → 78
+      // (75+80+70+85+65+90+70)/7 = 535/7 = 76.43 → 76
       const result = stage02.computeDerived(data);
-      expect(result.compositeScore).toBe(78);
+      expect(result.compositeScore).toBe(76);
     });
 
     it('should be deterministic across metric orderings', () => {
@@ -236,10 +239,11 @@ describe('stage-02.js - Idea Validation template', () => {
       data.metrics = {
         marketFit: 76, customerNeed: 77, momentum: 76,
         revenuePotential: 77, competitiveBarrier: 76, executionFeasibility: 77,
+        designQuality: 76,
       };
-      // (76+77+76+77+76+77)/6 = 459/6 = 76.5 → 77
+      // (76+77+76+77+76+77+76)/7 = 535/7 = 76.43 → 76
       const result = stage02.computeDerived(data);
-      expect(result.compositeScore).toBe(77);
+      expect(result.compositeScore).toBe(76);
     });
 
     it('should return null when no valid metrics', () => {
@@ -254,6 +258,7 @@ describe('stage-02.js - Idea Validation template', () => {
       allZero.metrics = {
         marketFit: 0, customerNeed: 0, momentum: 0,
         revenuePotential: 0, competitiveBarrier: 0, executionFeasibility: 0,
+        designQuality: 0,
       };
       expect(stage02.computeDerived(allZero).compositeScore).toBe(0);
 
@@ -261,6 +266,7 @@ describe('stage-02.js - Idea Validation template', () => {
       allMax.metrics = {
         marketFit: 100, customerNeed: 100, momentum: 100,
         revenuePotential: 100, competitiveBarrier: 100, executionFeasibility: 100,
+        designQuality: 100,
       };
       expect(stage02.computeDerived(allMax).compositeScore).toBe(100);
     });
@@ -288,7 +294,7 @@ describe('stage-02.js - Idea Validation template', () => {
       expect(validation.valid).toBe(true);
 
       const computed = stage02.computeDerived(data);
-      expect(computed.compositeScore).toBe(78);
+      expect(computed.compositeScore).toBe(76);
     });
   });
 });

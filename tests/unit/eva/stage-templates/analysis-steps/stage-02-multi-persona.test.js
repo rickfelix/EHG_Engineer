@@ -39,8 +39,8 @@ function makePersonaResponse(personaId, score = 75) {
 }
 
 describe('PERSONAS', () => {
-  it('has exactly 6 personas', () => {
-    expect(PERSONAS).toHaveLength(6);
+  it('has exactly 7 personas', () => {
+    expect(PERSONAS).toHaveLength(7);
   });
 
   it('each persona has required fields', () => {
@@ -92,9 +92,9 @@ describe('analyzeStage02', () => {
     ).rejects.toThrow();
   });
 
-  it('runs all 6 personas and returns critiques with composite score', async () => {
+  it('runs all 7 personas and returns critiques with composite score', async () => {
     // Each persona call returns a different score
-    const scores = [80, 70, 60, 90, 50, 75];
+    const scores = [80, 70, 60, 90, 50, 75, 65];
     PERSONAS.forEach((persona, i) => {
       mockComplete.mockResolvedValueOnce(makePersonaResponse(persona.id, scores[i]));
     });
@@ -105,8 +105,8 @@ describe('analyzeStage02', () => {
       logger,
     });
 
-    expect(result.critiques).toHaveLength(6);
-    expect(mockComplete).toHaveBeenCalledTimes(6);
+    expect(result.critiques).toHaveLength(7);
+    expect(mockComplete).toHaveBeenCalledTimes(7);
 
     // Composite = average of scores, rounded
     const expectedComposite = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
