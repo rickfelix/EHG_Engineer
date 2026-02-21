@@ -17,6 +17,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
+import { resolveOwnSession } from '../lib/resolve-own-session.js';
 import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
 import { isSDClaimed } from '../lib/session-conflict-checker.mjs';
 import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
@@ -316,8 +317,24 @@ async function main() {
     }
   }
 
-  // 2. Get or create session
-  const session = await getOrCreateSession();
+  // 2. Get existing session by terminal_id first, then fall back to creating new one.
+  // After context compaction, the old session's DB row still exists with the same
+  // terminal_id — reuse it instead of creating a duplicate.
+  let session = null;
+  try {
+    const resolved = await resolveOwnSession(supabase, {
+      select: 'session_id, sd_id, status, heartbeat_at, terminal_id',
+      warnOnFallback: false
+    });
+    if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+      session = resolved.data;
+      console.log(`${colors.dim}(Reusing session ${session.session_id} via ${resolved.source})${colors.reset}`);
+    }
+  } catch { /* fall through */ }
+
+  if (!session) {
+    session = await getOrCreateSession();
+  }
 
   if (!session) {
     console.log(`${colors.red}Error: Could not create session${colors.reset}`);

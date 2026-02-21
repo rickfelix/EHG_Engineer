@@ -227,7 +227,24 @@ export class SDNextSelector {
     try {
       await this.sessionManager.cleanupStaleSessions();
       await warnIfTempFilesExceedThreshold(10);
-      this.currentSession = await this.sessionManager.getOrCreateSession();
+
+      // Try resolveOwnSession() first to reuse existing DB session,
+      // avoiding duplicate session creation after context compaction.
+      let resolved = null;
+      try {
+        const { resolveOwnSession } = await import('../../../lib/resolve-own-session.js');
+        resolved = await resolveOwnSession(this.supabase, {
+          select: 'session_id, sd_id, status, heartbeat_at, terminal_id',
+          warnOnFallback: false
+        });
+        if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+          this.currentSession = resolved.data;
+        }
+      } catch { /* fall through */ }
+
+      if (!this.currentSession) {
+        this.currentSession = await this.sessionManager.getOrCreateSession();
+      }
     } catch (e) {
       console.log(`${colors.dim}(Session init warning: ${e.message})${colors.reset}\n`);
     }

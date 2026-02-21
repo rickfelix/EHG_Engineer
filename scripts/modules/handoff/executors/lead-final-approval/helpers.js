@@ -337,11 +337,27 @@ export async function pruneResolvedMemory(resolvedPatternIds, memoryFilePath) {
  */
 export async function releaseSessionClaim(sd, supabase) {
   try {
-    const sessionManager = await import('../../../../../lib/session-manager.mjs');
     // FR-5: Import heartbeat manager to stop heartbeat on release
     const heartbeatManager = await import('../../../../../lib/heartbeat-manager.mjs');
 
-    const session = await sessionManager.getOrCreateSession();
+    // Use resolveOwnSession() to find existing session by terminal_id first,
+    // avoiding duplicate session creation after context compaction.
+    let session = null;
+    try {
+      const { resolveOwnSession } = await import('../../../../../lib/resolve-own-session.js');
+      const resolved = await resolveOwnSession(supabase, {
+        select: 'session_id, sd_id, status',
+        warnOnFallback: false
+      });
+      if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+        session = resolved.data;
+      }
+    } catch { /* fall through */ }
+
+    if (!session) {
+      const sessionManager = await import('../../../../../lib/session-manager.mjs');
+      session = await sessionManager.getOrCreateSession();
+    }
 
     if (!session) {
       console.log('   [Release] No session to release');

@@ -571,12 +571,29 @@ export class BaseExecutor {
       return;
     }
 
-    // Step 2: No active claim found — fall back to creating one (backward compatibility)
-    // This handles the case where someone runs handoff without sd:start first
-    console.log('   [Claim] ⚠️  No existing claim found — creating one (run sd:start first next time)');
+    // Step 2: No active claim found — resolve existing session before creating new one.
+    // After context compaction, the old session's heartbeat goes stale but the DB row
+    // still exists with the same terminal_id. Reuse it instead of creating a duplicate.
+    console.log('   [Claim] ⚠️  No existing claim found — resolving session identity...');
 
-    const sessionManager = await import('../../../../lib/session-manager.mjs');
-    const session = await sessionManager.getOrCreateSession();
+    let session = null;
+    try {
+      const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
+      const resolved = await resolveOwnSession(this.supabase, {
+        select: 'session_id, sd_id, status, heartbeat_at',
+        warnOnFallback: false
+      });
+      if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+        session = resolved.data;
+        console.log(`   [Claim] Reusing existing session ${session.session_id} (via ${resolved.source})`);
+      }
+    } catch { /* resolve-own-session not available, fall back */ }
+
+    if (!session) {
+      console.log('   [Claim] No existing session found — creating new one');
+      const sessionManager = await import('../../../../lib/session-manager.mjs');
+      session = await sessionManager.getOrCreateSession();
+    }
 
     if (!session) {
       console.log('   [Claim] ❌ No session available - cannot proceed without claim');
@@ -630,14 +647,28 @@ export class BaseExecutor {
    */
   async _checkMultiSessionClaimConflict(sdId, sd) {
     try {
-      // Get current session ID for self-exclusion
+      // Get current session ID for self-exclusion.
+      // Use resolveOwnSession() first to find existing DB session by terminal_id,
+      // avoiding duplicate session creation after context compaction.
       let currentSessionId = null;
       try {
-        const sessionManager = await import('../../../../lib/session-manager.mjs');
-        const session = await sessionManager.getOrCreateSession();
-        currentSessionId = session?.session_id || null;
-      } catch (_err) {
-        // If session manager unavailable, proceed without self-exclusion
+        const { resolveOwnSession } = await import('../../../../lib/resolve-own-session.js');
+        const resolved = await resolveOwnSession(this.supabase, {
+          select: 'session_id',
+          warnOnFallback: false
+        });
+        if (resolved.data && resolved.source !== 'heartbeat_fallback') {
+          currentSessionId = resolved.data.session_id;
+        }
+      } catch { /* fall through to session manager */ }
+      if (!currentSessionId) {
+        try {
+          const sessionManager = await import('../../../../lib/session-manager.mjs');
+          const session = await sessionManager.getOrCreateSession();
+          currentSessionId = session?.session_id || null;
+        } catch (_err) {
+          // If session manager unavailable, proceed without self-exclusion
+        }
       }
 
       // Use sd_key for claim lookup (matches how claims are stored)
