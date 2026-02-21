@@ -305,7 +305,7 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
           title: `Orchestrator Completion: ${sdTitle}`,
           retro_type: 'orchestrator_completion',
           status: 'PUBLISHED',
-          generated_by: 'AUTO_GUARDIAN',
+          generated_by: 'SUB_AGENT',
           trigger_event: 'ORCHESTRATOR_TEMPLATE_SATISFACTION',
           auto_generated: true,
           quality_score: 70,

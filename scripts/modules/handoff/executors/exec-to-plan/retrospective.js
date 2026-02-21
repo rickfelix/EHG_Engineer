@@ -407,7 +407,7 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       protocol_improvements: discoveredIssues.length > 0
         ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
         : null,
-      generated_by: 'AUTO_HANDOFF',
+      generated_by: 'SUB_AGENT',
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
       performance_impact: 'Standard',

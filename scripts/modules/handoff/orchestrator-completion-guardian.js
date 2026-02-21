@@ -519,7 +519,7 @@ export class OrchestratorCompletionGuardian {
         action_items: [],
         status: 'PUBLISHED',
         quality_score: 80,
-        generated_by: 'ORCHESTRATOR-GUARDIAN',
+        generated_by: 'SUB_AGENT',
         trigger_event: 'Orchestrator auto-completion',
         target_application: 'EHG_Engineer',
         learning_category: 'PROCESS_IMPROVEMENT',

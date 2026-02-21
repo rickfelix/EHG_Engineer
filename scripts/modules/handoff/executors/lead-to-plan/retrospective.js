@@ -316,7 +316,7 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       protocol_improvements: discoveredIssues.length > 0
         ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
         : null,
-      generated_by: isInteractive ? 'MANUAL' : 'AUTO_HANDOFF',
+      generated_by: isInteractive ? 'MANUAL' : 'SUB_AGENT',
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
       performance_impact: 'Standard',
