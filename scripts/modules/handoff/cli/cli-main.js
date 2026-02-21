@@ -14,6 +14,9 @@ import dotenv from 'dotenv';
 import { getNextReadyChild, getOrchestratorContext } from '../child-sd-selector.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
 
+// SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Handoff sequence enforcement
+import { getWorkflowForType } from './workflow-definitions.js';
+
 // Status line integration (SD-LEO-ENH-AUTO-PROCEED-001-13)
 import LEOStatusLine from '../../../../scripts/leo-status-line.js';
 
@@ -413,6 +416,70 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     const bypassCheck = await checkBypassRateLimits(sdId, handoffType, bypassReason);
     if (!bypassCheck.success) {
       return { success: false };
+    }
+  }
+
+  // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 5 - Handoff Sequence Enforcement
+  // Verify that prerequisite handoffs have been completed before allowing execution
+  if (!bypassValidation) {
+    const workflowCheck = await getSDWorkflow(sdId);
+    if (!workflowCheck.error && workflowCheck.sd) {
+      const sdType = workflowCheck.sd.sd_type || 'feature';
+      const workflow = getWorkflowForType(sdType);
+      const requiredHandoffs = workflow.required;
+      const requestedHandoff = normalizedHandoffType;
+      const handoffIndex = requiredHandoffs.indexOf(requestedHandoff);
+
+      if (handoffIndex > 0) {
+        // Check that all prior required handoffs have been accepted
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseForCheck = createClient(
+          process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY
+        );
+
+        const { data: completedHandoffs } = await supabaseForCheck
+          .from('sd_phase_handoffs')
+          .select('handoff_type, status')
+          .eq('sd_id', workflowCheck.sd.id)
+          .eq('status', 'accepted');
+
+        const completedTypes = new Set((completedHandoffs || []).map(h => h.handoff_type));
+        const missingPrereqs = [];
+
+        for (let i = 0; i < handoffIndex; i++) {
+          const prereq = requiredHandoffs[i];
+          if (!completedTypes.has(prereq)) {
+            missingPrereqs.push(prereq);
+          }
+        }
+
+        if (missingPrereqs.length > 0) {
+          console.error('');
+          console.error('❌ HANDOFF SEQUENCE VIOLATION (Guardrail V06)');
+          console.error('═'.repeat(50));
+          console.error(`   Requested: ${requestedHandoff}`);
+          console.error(`   SD Type:   ${sdType} (${workflow.name})`);
+          console.error('');
+          console.error('   Missing prerequisite handoff(s):');
+          for (const missing of missingPrereqs) {
+            console.error(`     ✗ ${missing} — not yet accepted`);
+          }
+          console.error('');
+          console.error(`   Required sequence for ${sdType}:`);
+          for (let i = 0; i < requiredHandoffs.length; i++) {
+            const h = requiredHandoffs[i];
+            const done = completedTypes.has(h);
+            const marker = done ? '✓' : (h === requestedHandoff ? '→' : '✗');
+            console.error(`     ${marker} ${i + 1}. ${h}`);
+          }
+          console.error('');
+          console.error('   Complete the missing handoff(s) first:');
+          console.error(`   node scripts/handoff.js execute ${missingPrereqs[0]} ${sdId}`);
+          console.error('═'.repeat(50));
+          return { success: false };
+        }
+      }
     }
   }
 
