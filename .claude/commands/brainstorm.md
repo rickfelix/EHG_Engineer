@@ -11,6 +11,7 @@ Universal thinking tool with domain-specific question banks, multi-venture aware
 Parse `$ARGUMENTS` for:
 - **Topic**: Everything that isn't a flag (e.g., "AI-powered customer support chatbot")
 - **`--structured`**: If present, use Structured Mode (full Phase 0 rigor). Otherwise, use Conversational Mode (default).
+- **`--no-team`**: If present, skip multi-perspective team analysis. Default: team analysis is ON.
 - **`--domain <domain>`**: One of `venture`, `protocol`, `integration`, `architecture`. If not provided, auto-detect or ask.
 - **`--stage <stage>`**: Phase within the selected domain (see Step 3). If not provided, ask the user.
 
@@ -234,6 +235,81 @@ Evaluate the crystallization of the idea on a 0.0-1.0 scale:
 
 Present the score breakdown to the user.
 
+### 6D.1: Multi-Perspective Team Analysis (Default ON)
+
+**Skip this step if `--no-team` flag is present.**
+
+After discovery and crystallization, spawn a 3-agent team for multi-perspective analysis:
+
+```
+Use TeamCreate tool:
+  team_name: "brainstorm-analysis"
+  description: "Multi-perspective brainstorm analysis"
+```
+
+Then spawn 3 teammates using the Task tool with `team_name: "brainstorm-analysis"`:
+
+**Challenger** (subagent_type: "general-purpose"):
+```
+You are the Challenger - a devil's advocate analyst. Your job is to find weaknesses, blind spots, and flawed assumptions.
+
+Topic: [TOPIC]
+Domain: [DOMAIN]
+Discovery Summary: [KEY INSIGHTS FROM 6A]
+
+Analyze this brainstorm from a [DOMAIN]-specific lens:
+[See Role Prompts section below for domain-specific instructions]
+
+Output format:
+- BLIND SPOTS: 2-3 things the brainstorm is not considering
+- ASSUMPTIONS AT RISK: 2-3 assumptions that could be wrong
+- WORST CASE: What happens if this fails?
+```
+
+**Visionary** (subagent_type: "general-purpose"):
+```
+You are the Visionary - a strategic opportunities analyst. Your job is to find upside potential, synergies, and transformative possibilities.
+
+Topic: [TOPIC]
+Domain: [DOMAIN]
+Discovery Summary: [KEY INSIGHTS FROM 6A]
+
+Analyze this brainstorm from a [DOMAIN]-specific lens:
+[See Role Prompts section below for domain-specific instructions]
+
+Output format:
+- OPPORTUNITIES: 2-3 strategic opportunities this enables
+- SYNERGIES: How this connects to or amplifies other initiatives
+- UPSIDE SCENARIO: What does outsized success look like?
+```
+
+**Pragmatist** (subagent_type: "general-purpose"):
+```
+You are the Pragmatist - a feasibility and constraints analyst. Your job is to assess what's realistic, what resources are needed, and what the practical path forward is.
+
+Topic: [TOPIC]
+Domain: [DOMAIN]
+Discovery Summary: [KEY INSIGHTS FROM 6A]
+
+Analyze this brainstorm from a [DOMAIN]-specific lens:
+[See Role Prompts section below for domain-specific instructions]
+
+Output format:
+- FEASIBILITY: Realistic assessment of implementation difficulty (1-10)
+- RESOURCE REQUIREMENTS: What's needed (time, people, tools, money)
+- CONSTRAINTS: 2-3 practical constraints to plan around
+- RECOMMENDED PATH: Suggested first step and timeline
+```
+
+**Timeout**: 60 seconds per agent. If an agent fails or times out, proceed with available perspectives (2/3 or 1/3).
+
+**Synthesis**: After all agents respond, synthesize their outputs:
+- **Consensus Points**: Where 2+ perspectives agree
+- **Tension Points**: Where perspectives conflict (these are the most valuable insights)
+- **Composite Risk**: Low/Medium/High based on Challenger concerns weighted against Pragmatist feasibility
+
+Store the team perspectives for document generation (Step 9).
+
 ### 6E: Domain-Specific Evaluation
 
 Based on domain, use the appropriate evaluation framework:
@@ -347,6 +423,14 @@ Ask 2-3 phase-appropriate questions from the domain's question bank (pick the re
 
 Based on the answers, ask 1-2 follow-up questions to deepen understanding. These can be from optional questions in the bank or generated based on the conversation.
 
+### 7B.1: Multi-Perspective Team Analysis (Default ON)
+
+**Skip this step if `--no-team` flag is present.**
+
+Same team analysis as Step 6D.1 — spawn Challenger, Visionary, and Pragmatist agents with the discovery insights from Step 7A/7B. Use TeamCreate and Task tools identically to 6D.1.
+
+Present synthesized team perspectives (consensus/tension/risk) to the user before proceeding to arguments.
+
 ### 7C: Arguments For and Against
 
 Based on answers so far, present:
@@ -457,6 +541,7 @@ Write the document using the Write tool with this structure:
 - **Mode**: [Conversational / Structured]
 - **Crystallization Score**: [score/1.0] (structured mode only)
 - **Outcome Classification**: [bucket from Step 8]
+- **Team Analysis**: [Yes (3/3 perspectives) / Yes (2/3 perspectives) / Skipped (--no-team)]
 - **Related Ventures**: [venture names, if any identified]
 
 ---
@@ -498,6 +583,30 @@ Write the document using the Write tool with this structure:
 
 ### Architecture: Tradeoff Matrix
 (Option comparison table from Step 6I)
+
+## Team Perspectives
+(Included when team analysis is performed, omitted with --no-team)
+
+### Challenger
+- **Blind Spots**: [items from Challenger agent]
+- **Assumptions at Risk**: [items from Challenger agent]
+- **Worst Case**: [scenario from Challenger agent]
+
+### Visionary
+- **Opportunities**: [items from Visionary agent]
+- **Synergies**: [items from Visionary agent]
+- **Upside Scenario**: [scenario from Visionary agent]
+
+### Pragmatist
+- **Feasibility**: [score/10 from Pragmatist agent]
+- **Resource Requirements**: [items from Pragmatist agent]
+- **Constraints**: [items from Pragmatist agent]
+- **Recommended Path**: [from Pragmatist agent]
+
+### Synthesis
+- **Consensus Points**: [where 2+ perspectives agree]
+- **Tension Points**: [where perspectives conflict]
+- **Composite Risk**: [Low/Medium/High]
 
 ## Out of Scope
 (Structured mode only)
@@ -546,6 +655,9 @@ supabase.from('brainstorm_sessions').insert({
     questions_asked: <count>,
     questions_skipped: <count>,
     evaluation_performed: <true|false>,
+    team_used: <true|false>,
+    team_perspectives: <{challenger: {...}, visionary: {...}, pragmatist: {...}, synthesis: {...}} or null>,
+    team_agents_responded: <0|1|2|3>,
     related_ventures: [<venture_names>]
   }
 }).select().single().then(({data, error}) => {
@@ -612,6 +724,36 @@ options:
 ```
 
 **Auto-invoke behavior**: When user selects a command option, immediately invoke that skill using the Skill tool.
+
+---
+
+## Role Prompts - Domain-Specific Lenses
+
+Each team role adapts its analysis based on the brainstorm domain:
+
+### Challenger Lenses
+| Domain | Focus Areas |
+|--------|-------------|
+| Venture | Market assumptions, competitive blind spots, unit economics risks |
+| Protocol | Backward compatibility risks, adoption friction, edge cases in workflow |
+| Integration | API reliability assumptions, data quality risks, vendor lock-in |
+| Architecture | Scalability limits, maintenance burden, migration complexity |
+
+### Visionary Lenses
+| Domain | Focus Areas |
+|--------|-------------|
+| Venture | Market expansion, network effects, platform potential |
+| Protocol | Automation opportunities, cross-SD synergies, developer experience gains |
+| Integration | Data enrichment possibilities, real-time capabilities, ecosystem play |
+| Architecture | Future-proofing, composability, performance breakthroughs |
+
+### Pragmatist Lenses
+| Domain | Focus Areas |
+|--------|-------------|
+| Venture | Time-to-market, resource constraints, MVP scope |
+| Protocol | Implementation complexity, testing burden, rollout strategy |
+| Integration | Rate limits, error handling, monitoring requirements |
+| Architecture | Migration path, team skill match, operational complexity |
 
 ---
 
