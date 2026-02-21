@@ -1,827 +1,1138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LEO Visual Playground - SD Execution Dashboard</title>
-  <style>
-    :root {
-      --bg-primary: #0a0a1a;
-      --bg-panel: rgba(15, 15, 35, 0.92);
-      --text-primary: #e0e0e0;
-      --text-secondary: #9e9e9e;
-      --border: rgba(255, 255, 255, 0.08);
-      --accent: #4FC3F7;
-      --feature-color: #4FC3F7;
-      --infra-color: #FFB74D;
-      --fix-color: #EF5350;
-      --enhance-color: #66BB6A;
-      --doc-color: #AB47BC;
-      --unknown-color: #9E9E9E;
-      --status-draft: #78909C;
-      --status-planning: #42A5F5;
-      --status-exec: #FFA726;
-      --status-completed: #66BB6A;
-      --status-blocked: #EF5350;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEO Visual Playground — Geometric Forge</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=JetBrains+Mono:wght@300;400&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#040408;color:#e0dcd4;font-family:'Cormorant Garamond',serif;overflow:hidden;height:100vh;width:100vw}
+  #app{display:flex;height:100vh;width:100vw}
+  #scene{flex:7;position:relative;min-width:0}
+  #panel{flex:3;min-width:220px;display:flex;flex-direction:column;
+    background:rgba(4,4,16,0.95);border-left:1px solid rgba(0,200,255,0.1);
+    font-family:'JetBrains Mono',monospace;overflow:hidden}
+  canvas#c{width:100%;height:100%;display:block}
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+  .vi{position:absolute;top:0;left:0;width:100%;height:100%;z-index:4;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 30%,rgba(4,4,8,0.65) 100%)}
 
-    body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      overflow: hidden;
-      height: 100vh;
-      width: 100vw;
-    }
+  .ov{position:absolute;z-index:10;pointer-events:none}
+  .ti{top:26px;left:34px}
+  .ti h1{font-size:12px;font-weight:300;letter-spacing:6px;text-transform:uppercase;color:rgba(0,200,255,0.9)}
+  .ti h2{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:300;color:rgba(224,220,212,0.54);letter-spacing:1px;margin-top:2px}
 
-    #app { display: flex; height: 100vh; width: 100vw; }
+  .stt{bottom:34px;left:34px}
+  .sr{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .sl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:rgba(224,220,212,0.48);min-width:82px}
+  .svl{font-size:14px;font-weight:300;color:rgba(0,200,255,1.0)}
 
-    #scene-container {
-      width: 60%; height: 100%; position: relative;
-      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a1a2a 100%);
-    }
+  .phi{bottom:34px;left:50%;transform:translateX(-50%);text-align:center;width:500px}
+  .phi-shape{font-size:16px;font-weight:300;color:rgba(0,200,255,1.0);font-style:italic;margin-bottom:4px}
+  .phi-key{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;color:rgba(224,220,212,0.78);margin-bottom:8px}
+  .phi-bar{display:flex;justify-content:center;gap:3px;margin-bottom:8px}
+  .phi-dot{width:60px;height:3px;border-radius:2px;background:rgba(224,220,212,0.18);transition:background .5s,box-shadow .5s}
+  .phi-dot.on{background:rgba(0,200,255,0.96);box-shadow:0 0 10px rgba(0,200,255,0.48)}
+  .phi-dot.dn{background:rgba(0,191,165,0.6)}
+  .phi-labels{display:flex;justify-content:center}
+  .phi-lbl{width:63px;font-family:'JetBrains Mono',monospace;font-size:6.5px;letter-spacing:.6px;text-transform:uppercase;color:rgba(224,220,212,0.48);text-align:center;transition:color .4s}
+  .phi-lbl.on{color:rgba(0,200,255,1.0)}
+  .phi-lbl.dn{color:rgba(0,191,165,0.66)}
 
-    #dashboard {
-      width: 40%; height: 100%; overflow-y: auto;
-      background: var(--bg-panel); border-left: 1px solid var(--border);
-      padding: 12px; display: flex; flex-direction: column; gap: 12px;
-    }
+  .conn{bottom:34px;right:34px;text-align:right}
+  .conn-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .conn-dot.ok{background:#4a9e7d;box-shadow:0 0 6px rgba(74,158,125,0.4)}
+  .conn-dot.err{background:#c4626a;box-shadow:0 0 6px rgba(196,98,106,0.4)}
+  .conn-dot.wait{background:#ffab40;animation:pu 1.5s ease-in-out infinite}
+  .conn-text{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1px;color:rgba(224,220,212,0.48)}
 
-    #canvas-3d { width: 100%; height: 100%; display: block; }
+  .cb{position:absolute;top:50%;left:34px;transform:translateY(-50%);z-index:10;pointer-events:all}
+  .bt{display:block;background:none;border:1px solid rgba(0,200,255,0.12);color:rgba(224,220,212,0.6);
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;text-transform:uppercase;
+    padding:6px 11px;margin-bottom:4px;cursor:pointer;transition:all .3s;min-width:110px;text-align:left}
+  .bt:hover{border-color:rgba(0,200,255,0.3);color:#00c8ff}
+  .bt.ac{border-color:rgba(0,200,255,0.4);color:#00c8ff;background:rgba(0,200,255,0.06)}
+  .dvd{height:1px;background:rgba(0,200,255,0.06);margin:6px 0;width:110px}
 
-    #status-bar {
-      position: absolute; top: 8px; left: 8px; right: 8px;
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 6px 12px; background: rgba(0,0,0,0.6); border-radius: 6px;
-      font-size: 12px; z-index: 10;
-    }
+  #slideProg{position:absolute;bottom:0;left:0;height:2px;background:rgba(0,200,255,0.3);z-index:10;transition:width .3s linear}
 
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      display: inline-block; margin-right: 6px;
-    }
-    .status-dot.connected { background: #66BB6A; }
-    .status-dot.disconnected { background: #EF5350; }
-    .status-dot.reconnecting { background: #FFA726; animation: pulse 1s infinite; }
+  .p-section{padding:10px 12px;border-bottom:1px solid rgba(0,200,255,0.1)}
+  .p-header{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:rgba(224,220,212,0.48);margin-bottom:8px}
 
-    #fps-counter { font-family: monospace; color: var(--text-secondary); }
+  #activity{flex:0 0 auto;max-height:35%;overflow-y:auto}
+  .log-entry{font-size:9px;line-height:1.5;color:rgba(224,220,212,0.54);margin-bottom:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .5s}
+  .log-entry.fresh{color:rgba(0,200,255,1.0)}
+  .log-cs{color:#4a9e7d}.log-cp{color:#00c8ff}
 
-    #controls-hint {
-      position: absolute; bottom: 8px; left: 8px;
-      padding: 6px 10px; background: rgba(0,0,0,0.5); border-radius: 4px;
-      font-size: 11px; color: var(--text-secondary); z-index: 10;
-    }
+  #filter-row{padding:8px 12px;border-bottom:1px solid rgba(0,200,255,0.08)}
+  #filter-row select{width:100%;padding:4px 6px;background:rgba(8,8,24,0.8);color:rgba(224,220,212,0.72);
+    border:1px solid rgba(0,200,255,0.12);border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:9px}
 
-    #tooltip {
-      position: absolute; display: none; padding: 10px 14px;
-      background: rgba(10, 10, 30, 0.95); border: 1px solid var(--accent);
-      border-radius: 6px; font-size: 12px; pointer-events: none;
-      z-index: 20; max-width: 280px; line-height: 1.5;
-    }
+  #estimate{padding:10px 12px;border-top:1px solid rgba(0,200,255,0.1)}
+  #est-dur{font-size:16px;font-weight:300;color:rgba(0,200,255,1.0)}
+  #est-detail{font-size:8.5px;line-height:1.6;color:rgba(224,220,212,0.48);margin-top:4px}
+  #est-conf{font-size:8px;color:rgba(224,220,212,0.28);margin-top:2px}
 
-    .panel {
-      background: rgba(20, 20, 50, 0.6); border: 1px solid var(--border);
-      border-radius: 8px; overflow: hidden;
-    }
+  #queue{flex:1;overflow-y:auto;padding:0}
+  .q-item{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;transition:background .2s;border-left:2px solid transparent}
+  .q-item:hover{background:rgba(0,200,255,0.03)}
+  .q-item.active{background:rgba(0,200,255,0.05);border-left-color:rgba(0,200,255,0.3)}
+  .q-item.claimed{background:rgba(0,191,165,0.06);border-left-color:rgba(0,191,165,0.4)}
+  .q-item.claimed .q-key{color:rgba(0,220,180,0.9)}
+  .q-item.claimed.active{background:rgba(0,200,255,0.07);border-left-color:rgba(0,200,255,0.4)}
+  .q-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .q-key{font-size:9px;color:rgba(224,220,212,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .q-item.active .q-key{color:rgba(0,200,255,0.96)}
+  #no-data{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:5;font-size:14px;font-weight:300;color:rgba(224,220,212,0.42)}
+  #fallback{display:none;width:100%;padding:16px;overflow:auto;height:100%;font-family:'JetBrains Mono',monospace}
+  #fallback table{width:100%;border-collapse:collapse;font-size:10px;color:rgba(224,220,212,0.48)}
+  #fallback th,#fallback td{padding:6px 8px;border:1px solid rgba(0,200,255,0.1);text-align:left}
+  #fallback th{background:rgba(8,8,24,0.8);color:rgba(224,220,212,0.3);text-transform:uppercase;letter-spacing:1px;font-size:8px}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
-    .panel-header {
-      padding: 8px 12px; font-size: 13px; font-weight: 600;
-      border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
+  #dup-alert{display:none;position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:100;
+    background:rgba(40,4,4,0.92);border:2px solid rgba(255,60,60,0.7);border-radius:8px;
+    padding:16px 24px;max-width:520px;width:90%;backdrop-filter:blur(8px);
+    box-shadow:0 0 30px rgba(255,40,40,0.3),inset 0 0 20px rgba(255,40,40,0.05);
+    animation:alertPulse 2s ease-in-out infinite}
+  #dup-alert.show{display:block}
+  #dup-alert-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    letter-spacing:3px;text-transform:uppercase;color:#ff4444;margin-bottom:8px;
+    text-shadow:0 0 10px rgba(255,40,40,0.5)}
+  #dup-alert-msg{font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.6;
+    color:rgba(255,200,200,0.9)}
+  #dup-alert-list{margin:8px 0 0;padding:0;list-style:none}
+  #dup-alert-list li{padding:3px 0;color:#ff8888;font-family:'JetBrains Mono',monospace;font-size:9px;
+    border-bottom:1px solid rgba(255,60,60,0.1)}
+  #dup-alert-list li:last-child{border:none}
+  #dup-alert-close{position:absolute;top:8px;right:12px;background:none;border:none;
+    color:rgba(255,100,100,0.6);font-size:16px;cursor:pointer;font-family:monospace;padding:4px}
+  #dup-alert-close:hover{color:#ff4444}
+  #dup-alert-countdown{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:rgba(255,180,180,0.7);letter-spacing:1px}
+  @keyframes alertPulse{0%,100%{border-color:rgba(255,60,60,0.7);box-shadow:0 0 30px rgba(255,40,40,0.3)}
+    50%{border-color:rgba(255,60,60,0.4);box-shadow:0 0 15px rgba(255,40,40,0.15)}}
 
-    .panel-body { padding: 8px; }
-
-    .panel-collapsible .panel-body { display: none; }
-    .panel-collapsible.expanded .panel-body { display: block; }
-    .panel-header .toggle { cursor: pointer; user-select: none; }
-
-    #sd-queue { flex: 0 0 auto; max-height: 40%; }
-    #sd-queue .panel-body { overflow-y: auto; max-height: 250px; }
-
-    .sd-row {
-      display: grid; grid-template-columns: 1fr 70px 60px;
-      gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border);
-      cursor: pointer; font-size: 12px; align-items: center;
-      transition: background 0.15s;
-    }
-    .sd-row:hover { background: rgba(79, 195, 247, 0.08); }
-    .sd-row.selected { background: rgba(79, 195, 247, 0.15); border-left: 2px solid var(--accent); }
-
-    .sd-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sd-key { color: var(--text-secondary); font-size: 10px; font-family: monospace; }
-
-    .badge {
-      display: inline-block; padding: 2px 6px; border-radius: 3px;
-      font-size: 10px; font-weight: 600; text-transform: uppercase;
-    }
-    .badge.draft { background: rgba(120,144,156,0.3); color: var(--status-draft); }
-    .badge.planning { background: rgba(66,165,245,0.2); color: var(--status-planning); }
-    .badge.in_progress { background: rgba(255,167,38,0.2); color: var(--status-exec); }
-    .badge.completed { background: rgba(102,187,106,0.2); color: var(--status-completed); }
-    .badge.blocked { background: rgba(239,83,80,0.2); color: var(--status-blocked); }
-
-    .type-icon {
-      display: inline-block; width: 14px; height: 14px; border-radius: 2px;
-      vertical-align: middle; margin-right: 4px;
-    }
-
-    #burndown-panel { flex: 1 1 auto; min-height: 180px; }
-    #burndown-panel canvas { width: 100% !important; height: 150px !important; }
-
-    #stats-bar {
-      display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 8px; flex: 0 0 auto;
-    }
-
-    .stat-card {
-      background: rgba(20, 20, 50, 0.6); border: 1px solid var(--border);
-      border-radius: 6px; padding: 8px; text-align: center;
-    }
-    .stat-value { font-size: 20px; font-weight: 700; }
-    .stat-label { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
-
-    #error-banner {
-      display: none; padding: 8px 12px; background: rgba(239, 83, 80, 0.15);
-      border: 1px solid var(--fix-color); border-radius: 6px; font-size: 12px;
-    }
-    #error-banner button {
-      margin-left: 8px; padding: 2px 8px; border: 1px solid var(--fix-color);
-      background: transparent; color: var(--fix-color); border-radius: 3px; cursor: pointer;
-    }
-
-    #fallback-table {
-      display: none; width: 100%; padding: 16px;
-      overflow: auto; height: 100%;
-    }
-    #fallback-table table {
-      width: 100%; border-collapse: collapse; font-size: 12px;
-    }
-    #fallback-table th, #fallback-table td {
-      padding: 6px 8px; border: 1px solid var(--border); text-align: left;
-    }
-    #fallback-table th { background: rgba(20,20,50,0.8); }
-
-    #no-data-msg {
-      display: none; position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%); text-align: center;
-      color: var(--text-secondary); font-size: 14px; z-index: 5;
-    }
-
-    /* Accessibility: reduced motion */
-    @media (prefers-reduced-motion: reduce) {
-      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    /* Summary for screen readers */
-    .sr-only {
-      position: absolute; width: 1px; height: 1px;
-      padding: 0; margin: -1px; overflow: hidden;
-      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
-    }
-
-    @media (max-width: 1024px) {
-      #app { flex-direction: column; }
-      #scene-container { width: 100%; height: 50%; }
-      #dashboard { width: 100%; height: 50%; }
-    }
-  </style>
+  #idle-alert{display:none;position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:99;
+    background:rgba(40,32,4,0.92);border:2px solid rgba(255,200,40,0.7);border-radius:8px;
+    padding:16px 24px;max-width:520px;width:90%;backdrop-filter:blur(8px);
+    box-shadow:0 0 30px rgba(255,200,40,0.2),inset 0 0 20px rgba(255,200,40,0.05);
+    animation:idlePulse 3s ease-in-out infinite}
+  #idle-alert.show{display:block}
+  #idle-alert-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    letter-spacing:3px;text-transform:uppercase;color:#ffcc33;margin-bottom:8px;
+    text-shadow:0 0 10px rgba(255,200,40,0.5)}
+  #idle-alert-msg{font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1.6;
+    color:rgba(255,230,180,0.9)}
+  #idle-alert-close{position:absolute;top:8px;right:12px;background:none;border:none;
+    color:rgba(255,200,100,0.6);font-size:16px;cursor:pointer;font-family:monospace;padding:4px}
+  #idle-alert-close:hover{color:#ffcc33}
+  #idle-alert-duration{margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:rgba(255,220,150,0.7);letter-spacing:1px}
+  @keyframes idlePulse{0%,100%{border-color:rgba(255,200,40,0.7);box-shadow:0 0 30px rgba(255,200,40,0.2)}
+    50%{border-color:rgba(255,200,40,0.35);box-shadow:0 0 12px rgba(255,200,40,0.1)}}
+  @keyframes pu{0%,100%{opacity:1}50%{opacity:.4}}
+  @media(prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
+  @media(max-width:900px){#app{flex-direction:column}#scene{flex:3}#panel{flex:1;min-width:0;max-width:none}}
+</style>
 </head>
 <body>
-  <div id="app">
-    <div id="scene-container">
-      <canvas id="canvas-3d" aria-label="3D visualization of Strategic Directives"></canvas>
-      <div id="status-bar">
-        <div>
-          <span class="status-dot disconnected" id="conn-dot"></span>
-          <span id="conn-text">Disconnected</span>
-          <span style="margin-left: 12px" id="sd-count">0 SDs</span>
-        </div>
-        <div id="fps-counter">-- FPS</div>
-      </div>
-      <div id="controls-hint">R: Reset camera | Scroll: Zoom | Drag: Orbit</div>
-      <div id="tooltip"></div>
-      <div id="no-data-msg">No Strategic Directives found.<br>SDs will appear here in real-time.</div>
-      <div id="fallback-table">
-        <h3 style="margin-bottom: 12px;">SD List (2D Fallback)</h3>
-        <table><thead><tr>
-          <th>Key</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>Progress</th>
-        </tr></thead><tbody id="fallback-tbody"></tbody></table>
-      </div>
+<div id="app">
+  <div id="scene">
+    <canvas id="c" aria-label="3D visualization of Strategic Directives"></canvas>
+    <div class="vi"></div>
+    <div class="ov ti"><h1>LEO Visual Playground</h1><h2 id="subtitle">connecting…</h2></div>
+    <div class="ov stt">
+      <div class="sr"><span class="sl">Total</span><span class="svl" id="st-total">0</span></div>
+      <div class="sr"><span class="sl">Active</span><span class="svl" id="st-active">0</span></div>
+      <div class="sr"><span class="sl">Completed</span><span class="svl" id="st-done">0</span></div>
     </div>
-
-    <div id="dashboard" role="complementary" aria-label="SD Dashboard">
-      <div id="sr-summary" class="sr-only" aria-live="polite" role="status"></div>
-
-      <div id="error-banner">
-        <span id="error-msg"></span>
-        <button onclick="retryConnection()">Retry</button>
-      </div>
-
-      <div id="stats-bar">
-        <div class="stat-card"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
-        <div class="stat-card"><div class="stat-value" id="stat-active" style="color:var(--status-exec)">0</div><div class="stat-label">Active</div></div>
-        <div class="stat-card"><div class="stat-value" id="stat-completed" style="color:var(--status-completed)">0</div><div class="stat-label">Done</div></div>
-        <div class="stat-card"><div class="stat-value" id="stat-blocked" style="color:var(--status-blocked)">0</div><div class="stat-label">Blocked</div></div>
-      </div>
-
-      <div class="panel" id="sd-queue">
-        <div class="panel-header">
-          <span>SD Queue</span>
-          <span id="queue-count" style="font-size:11px; color:var(--text-secondary)">0 items</span>
-        </div>
-        <div class="panel-body" id="queue-body"></div>
-      </div>
-
-      <div class="panel" id="burndown-panel">
-        <div class="panel-header">
-          <span>Status Distribution</span>
-          <select id="chart-range" style="background:transparent; color:var(--text-secondary); border:1px solid var(--border); border-radius:3px; font-size:11px; padding:2px 4px;">
-            <option value="all">All</option>
-          </select>
-        </div>
-        <div class="panel-body">
-          <canvas id="status-chart"></canvas>
-        </div>
-      </div>
+    <div class="ov phi">
+      <div class="phi-shape" id="sdTitle">—</div>
+      <div class="phi-key" id="sdKey"></div>
+      <div class="phi-bar" id="dotBar"></div>
+      <div class="phi-labels" id="lblBar"></div>
+    </div>
+    <div class="ov conn"><span class="conn-dot err" id="connDot"></span><span class="conn-text" id="connText">Offline</span></div>
+    <div class="cb">
+      <button class="bt ac" id="btnPlay" onclick="setSlide('play')">Play</button>
+      <button class="bt" id="btnPause" onclick="setSlide('pause')">Pause</button>
+      <button class="bt" id="btnNext" onclick="setSlide('next')">Next</button>
+      <div class="dvd"></div>
+      <button class="bt" id="btnFast" onclick="setSlide('fast')">Fast</button>
+    </div>
+    <div id="slideProg"></div>
+    <div id="dup-alert"><button id="dup-alert-close" onclick="dismissDupAlert()">&times;</button><div id="dup-alert-title">CLAIM CONFLICT DETECTED</div><div id="dup-alert-msg">Multiple sessions have claimed the same SD. This can cause conflicts.</div><ul id="dup-alert-list"></ul><div id="dup-alert-countdown"></div></div>
+    <div id="idle-alert"><button id="idle-alert-close" onclick="dismissIdleAlert()">&times;</button><div id="idle-alert-title">ALL SESSIONS IDLE</div><div id="idle-alert-msg">No active sessions detected for 15+ minutes. LEO workflow may be stalled.</div><div id="idle-alert-duration"></div></div>
+    <div id="no-data">No Strategic Directives found.<br>SDs will appear here in real-time.</div>
+    <div id="fallback"><table><thead><tr><th>Key</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>Progress</th></tr></thead><tbody id="fb-body"></tbody></table></div>
+  </div>
+  <div id="panel">
+    <div class="sr-only" id="sr-summary" aria-live="polite" role="status"></div>
+    <div class="p-section" id="activity"><div class="p-header">Activity</div><div id="logList"></div></div>
+    <div id="filter-row">
+      <select id="filterSel">
+        <option value="active" selected>Active (draft, review, in-progress)</option>
+        <option value="not-done">Not Done</option>
+        <option value="draft">Drafts</option>
+        <option value="review">Review</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="all">All</option>
+      </select>
+    </div>
+    <div class="p-section" style="padding:0;flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <div class="p-header" style="padding:10px 12px 8px" id="queueHeader">Queue · 0</div>
+      <div id="queue"></div>
+    </div>
+    <div id="estimate">
+      <div class="p-header">Estimated Remaining</div>
+      <div id="est-dur">--</div>
+      <div id="est-detail"></div>
+      <div id="est-conf"></div>
     </div>
   </div>
+</div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const _params = new URLSearchParams(window.location.search);
+const CONFIG = {
+  SUPABASE_URL: _params.get('sb_url') || '',
+  SUPABASE_KEY: _params.get('sb_key') || '',
+  RECONNECT_MAX: 5,
+  RECONNECT_BASE_MS: 1000,
+  POLL_INTERVAL_MS: 60000,
+  MAX_SDS: 500,
+  DEFAULT_FILTER: 'active',
+  SLIDE_DURATION: 24,
+};
+
+// ═══════════════════════════════════════════════
+// SHAPE DEFINITIONS (SD type → geometry)
+// ═══════════════════════════════════════════════
+const SHAPE_DEFS = {
+  infrastructure: { name:'Torus Knot',   makeLo:()=>new THREE.TorusKnotGeometry(3,0.9,32,6), makeHi:()=>new THREE.TorusKnotGeometry(3,0.9,100,20), color:new THREE.Color(0xffcc66) },
+  feature:        { name:'Icosahedron',  makeLo:()=>new THREE.IcosahedronGeometry(4,1),      makeHi:()=>new THREE.IcosahedronGeometry(4,3),     color:new THREE.Color(0x40efff) },
+  documentation:  { name:'Dodecahedron', makeLo:()=>new THREE.DodecahedronGeometry(4,1),     makeHi:()=>new THREE.DodecahedronGeometry(4,3),    color:new THREE.Color(0xf0a0ff) },
+  bugfix:         { name:'Octahedron',   makeLo:()=>new THREE.OctahedronGeometry(4.5,1),     makeHi:()=>new THREE.OctahedronGeometry(4.5,3),    color:new THREE.Color(0xff8a90) },
+  fix:            { name:'Octahedron',   makeLo:()=>new THREE.OctahedronGeometry(4.5,1),     makeHi:()=>new THREE.OctahedronGeometry(4.5,3),    color:new THREE.Color(0xff8a90) },
+  database:       { name:'Box',          makeLo:()=>new THREE.BoxGeometry(5,5,5,2,2,2),      makeHi:()=>new THREE.BoxGeometry(5,5,5,6,6,6),     color:new THREE.Color(0x66d9ff) },
+  enhancement:    { name:'Torus',        makeLo:()=>new THREE.TorusGeometry(3.5,1.2,8,16),   makeHi:()=>new THREE.TorusGeometry(3.5,1.2,24,48), color:new THREE.Color(0x90ffcc) },
+  docs:           { name:'Sphere',       makeLo:()=>new THREE.SphereGeometry(4,10,8),        makeHi:()=>new THREE.SphereGeometry(4,32,24),      color:new THREE.Color(0xd0a8ff) },
+  implementation: { name:'Sphere',       makeLo:()=>new THREE.SphereGeometry(4,10,8),        makeHi:()=>new THREE.SphereGeometry(4,32,24),      color:new THREE.Color(0xb0efea) },
+  discovery_spike:{ name:'Sphere',       makeLo:()=>new THREE.SphereGeometry(4,10,8),        makeHi:()=>new THREE.SphereGeometry(4,32,24),      color:new THREE.Color(0xffe070) },
+  refactor:       { name:'Sphere',       makeLo:()=>new THREE.SphereGeometry(4,10,8),        makeHi:()=>new THREE.SphereGeometry(4,32,24),      color:new THREE.Color(0x80f0f0) },
+  unknown:        { name:'Sphere',       makeLo:()=>new THREE.SphereGeometry(4,10,8),        makeHi:()=>new THREE.SphereGeometry(4,32,24),      color:new THREE.Color(0x60e8cc) },
+};
+
+const STATUS_COLORS = { draft:'#78909C', review:'#42A5F5', in_progress:'#FFA726', completed:'#66BB6A', blocked:'#EF5350', cancelled:'#616161' };
+const PHASE_NAMES = ['Draft','Lead','Plan','Execute'];
+const PHASE_DUR = [0.08, 0.12, 0.12, 0.68];
+
+// Map LEO workflow phase + progress to forge animation target (0..1)
+// 4 phases: Draft(0–0.08) Lead(0.08–0.20) Plan(0.20–0.32) Execute(0.32–1.0)
+function computeForgeTarget(sd) {
+  const status = sd.status || 'draft';
+  const phase = (sd.current_phase || '').toUpperCase();
+  const pct = (sd.progress_percentage ?? sd.progress ?? 0) / 100;
+
+  if (status === 'completed') return 1.0;
+  if (status === 'cancelled') return 0.04;
+
+  // Draft phase: 0.0 → 0.08
+  if (status === 'draft' && !phase) return 0.04;
+
+  // LEAD phases: 0.08 → 0.20
+  if (phase.startsWith('LEAD')) return 0.08 + pct * 0.12;
+
+  // PLAN/PRD phases: 0.20 → 0.32
+  if (phase.startsWith('PLAN') || phase.startsWith('PRD')) return 0.20 + pct * 0.12;
+
+  // EXEC/IMPLEMENTATION phases: 0.32 → 1.0 (the big Execute fill)
+  if (phase.startsWith('EXEC') || phase.startsWith('IMPL')) return 0.32 + pct * 0.68;
+
+  // Fallback by status if phase is missing/unknown
+  if (status === 'draft') return 0.04;
+  if (status === 'review') return 0.20;
+  if (status === 'in_progress') return 0.32 + pct * 0.68;
+  if (status === 'blocked') return 0.32 + pct * 0.68;
+
+  return 0.04;
+}
+
+// Floor = start of the current phase (prior phases shown as already complete)
+function computeForgeFloor(sd) {
+  const status = sd.status || 'draft';
+  const phase = (sd.current_phase || '').toUpperCase();
+
+  if (status === 'completed') return 0.32;
+  if (status === 'cancelled') return 0;
+
+  if (phase.startsWith('EXEC') || phase.startsWith('IMPL')) return 0.32;
+  if (phase.startsWith('PLAN') || phase.startsWith('PRD')) return 0.20;
+  if (phase.startsWith('LEAD')) return 0.08;
+
+  if (status === 'in_progress') return 0.32;
+  if (status === 'review') return 0.20;
+  if (status === 'blocked') return 0.32;
+
+  return 0;
+}
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const state = {
+  sds: new Map(), filter: CONFIG.DEFAULT_FILTER, channel: null,
+  reconnectAttempts: 0, supabase: null, webglOk: true,
+  slideQueue: [], slideIndex: 0, slidePaused: false, slideSpeed: 1,
+  slideElapsed: 0, currentSDId: null, claimedIds: new Set(),
+  liveSessions: 0, burnRate: { avgHours: null, confidence: 'default', sampleSize: 0 },
+};
+
+const TYPE_BASELINES_MIN = {
+  infrastructure: 50, orchestrator: 155, documentation: 20, bugfix: 35,
+  database: 100, feature: 145, refactor: 80, qa: 75, security: 120, default: 60
+};
+
+// ═══════════════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════════════
+const cnv = document.getElementById('c');
+let renderer, scene, camera, controls;
+const clock = new THREE.Clock();
+let shapeGroup, ghostMesh, wireMesh, facetedFillMesh, smoothMesh, outerGlow;
+let faceColors, faceFillOrder, totalFaces, filledFaces, facetedNormals, smoothNormals;
+const retiredShapes = [], sparks = [], orbitShapes = [];
+let outgoingGroup = null, outgoingFade = 0;
+let dustGeo, dustPos, dustVel;
+const DUST_COUNT = 300;
+let coreLight, rimLight, warmLight, groundMat;
+let shapeProg = 0, slidePhase = 'animate', prevPh = -1, frame = 0;
+
+function initThree() {
+  if (!(() => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch { return false; } })()) {
+    state.webglOk = false; cnv.style.display = 'none';
+    document.getElementById('fallback').style.display = 'block'; return;
+  }
+  const W = cnv.parentElement.clientWidth, H = cnv.parentElement.clientHeight;
+  renderer = new THREE.WebGLRenderer({ canvas: cnv, antialias: true });
+  renderer.setSize(W, H); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.85;
+
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x040410, 0.008);
+  camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 300);
+  camera.position.set(0, 2, 18);
+
+  controls = new OrbitControls(camera, cnv);
+  controls.enableDamping = true; controls.dampingFactor = 0.05;
+  controls.autoRotate = true; controls.autoRotateSpeed = 0.2;
+  controls.maxDistance = 60; controls.minDistance = 8;
+  let iTimer;
+  const onInteract = () => { controls.autoRotate = false; clearTimeout(iTimer); iTimer = setTimeout(() => { controls.autoRotate = true; }, 5000); };
+  cnv.addEventListener('pointerdown', onInteract); cnv.addEventListener('wheel', onInteract);
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0x101028, 0.6));
+  const dirL = new THREE.DirectionalLight(0x334466, 0.5); dirL.position.set(10, 20, -10); scene.add(dirL);
+  coreLight = new THREE.PointLight(0x00c8ff, 0, 50); scene.add(coreLight);
+  rimLight = new THREE.PointLight(0xb388ff, 0, 40); rimLight.position.set(-8, 5, 8); scene.add(rimLight);
+  warmLight = new THREE.PointLight(0x00bfa5, 0, 35); warmLight.position.set(5, -3, -5); scene.add(warmLight);
+
+  // Ground + grid
+  groundMat = new THREE.MeshStandardMaterial({ color: 0x0a0a1a, roughness: 0.95, metalness: 0.05 });
+  const gr = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), groundMat);
+  gr.rotation.x = -Math.PI / 2; gr.position.y = -6; scene.add(gr);
+  const grid = new THREE.GridHelper(40, 40, 0x141428, 0x101020); grid.position.y = -6; scene.add(grid);
+
+  // Dust
+  dustGeo = new THREE.BufferGeometry();
+  dustPos = new Float32Array(DUST_COUNT * 3); dustVel = new Float32Array(DUST_COUNT * 3);
+  for (let i = 0; i < DUST_COUNT; i++) {
+    dustPos[i*3]=(Math.random()-.5)*40; dustPos[i*3+1]=(Math.random()-.5)*30; dustPos[i*3+2]=(Math.random()-.5)*40;
+    dustVel[i*3]=(Math.random()-.5)*.0012; dustVel[i*3+1]=(Math.random()-.5)*.0008; dustVel[i*3+2]=(Math.random()-.5)*.0012;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  scene.add(new THREE.Points(dustGeo, new THREE.PointsMaterial({ color:0x00c8ff, size:.03, transparent:true, opacity:.28, blending:THREE.AdditiveBlending })));
+
+  shapeGroup = new THREE.Group(); scene.add(shapeGroup);
+
+  new ResizeObserver(() => {
+    const w = cnv.parentElement.clientWidth, h = cnv.parentElement.clientHeight;
+    camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+  }).observe(cnv.parentElement);
+}
+
+// ═══════════════════════════════════════════════
+// FORGE: SHAPE BUILDING
+// ═══════════════════════════════════════════════
+function computeFlatNormals(geo) {
+  const pos = geo.attributes.position.array, normals = new Float32Array(pos.length);
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+  const cb = new THREE.Vector3(), ab = new THREE.Vector3();
+  for (let i = 0; i < pos.length; i += 9) {
+    vA.set(pos[i],pos[i+1],pos[i+2]); vB.set(pos[i+3],pos[i+4],pos[i+5]); vC.set(pos[i+6],pos[i+7],pos[i+8]);
+    cb.subVectors(vC, vB); ab.subVectors(vA, vB); cb.cross(ab).normalize();
+    for (let v = 0; v < 3; v++) { normals[i+v*3]=cb.x; normals[i+v*3+1]=cb.y; normals[i+v*3+2]=cb.z; }
+  }
+  geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+}
+
+function buildShape(sd) {
+  while (shapeGroup.children.length) shapeGroup.remove(shapeGroup.children[0]);
+  const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  const isBlocked = sd.status === 'blocked';
+  const col = isBlocked ? new THREE.Color(0xc4626a) : def.color.clone();
+
+  const loGeo = def.makeLo();
+  const loNonIdx = loGeo.index ? loGeo.toNonIndexed() : loGeo.clone();
+  loNonIdx.computeVertexNormals();
+  const loFlat = loNonIdx.clone(); computeFlatNormals(loFlat);
+  totalFaces = loFlat.attributes.position.count / 3;
+
+  const hiGeo = def.makeHi();
+  const hiNonIdx = hiGeo.index ? hiGeo.toNonIndexed() : hiGeo.clone();
+  hiNonIdx.computeVertexNormals();
+
+  // Ghost
+  ghostMesh = new THREE.Mesh(loFlat.clone(), new THREE.MeshBasicMaterial({ color:col.clone(), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false }));
+  shapeGroup.add(ghostMesh);
+
+  // Wireframe
+  wireMesh = new THREE.LineSegments(new THREE.WireframeGeometry(loFlat), new THREE.LineBasicMaterial({ color:col.clone(), transparent:true, opacity:0, blending:THREE.AdditiveBlending }));
+  shapeGroup.add(wireMesh);
+
+  // Faceted fill
+  const fillGeo = loFlat.clone();
+  const colors = new Float32Array(fillGeo.attributes.position.count * 3);
+  fillGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  faceColors = colors;
+  facetedFillMesh = new THREE.Mesh(fillGeo, new THREE.MeshStandardMaterial({ vertexColors:true, transparent:true, opacity:0, roughness:0.5, metalness:0.1, flatShading:true, emissive:0x000000, emissiveIntensity:0, side:THREE.DoubleSide }));
+  shapeGroup.add(facetedFillMesh);
+
+  facetedNormals = fillGeo.attributes.normal.array.slice();
+  const smNormGeo = loFlat.clone(); smNormGeo.computeVertexNormals();
+  smoothNormals = smNormGeo.attributes.normal.array.slice();
+
+  // Smooth mesh
+  smoothMesh = new THREE.Mesh(hiNonIdx, new THREE.MeshStandardMaterial({ color:col.clone(), transparent:true, opacity:0, roughness:0.2, metalness:0.25, emissive:col.clone(), emissiveIntensity:0, side:THREE.DoubleSide }));
+  shapeGroup.add(smoothMesh);
+
+  // Outer glow
+  const glowGeo = hiNonIdx.clone();
+  const gp = glowGeo.attributes.position.array, gn = hiNonIdx.attributes.normal.array;
+  for (let i = 0; i < gp.length; i += 3) { gp[i]+=gn[i]*0.18; gp[i+1]+=gn[i+1]*0.18; gp[i+2]+=gn[i+2]*0.18; }
+  outerGlow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color:col.clone(), transparent:true, opacity:0, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, depthWrite:false }));
+  shapeGroup.add(outerGlow);
+
+  // Face fill order
+  faceFillOrder = []; for (let i = 0; i < totalFaces; i++) faceFillOrder.push(i);
+  for (let i = faceFillOrder.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [faceFillOrder[i],faceFillOrder[j]]=[faceFillOrder[j],faceFillOrder[i]]; }
+  filledFaces = 0;
+}
+
+function emitSparks(pos, color, n = 8) {
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1, blending:THREE.AdditiveBlending });
+    const s = new THREE.Mesh(new THREE.SphereGeometry(.025,4,4), m);
+    s.position.copy(pos); scene.add(s);
+    sparks.push({ mesh:s, vel:new THREE.Vector3((Math.random()-.5)*.15, Math.random()*.1+.03, (Math.random()-.5)*.15), life:1 });
+  }
+}
+
+function retireShape(sd) {
+  if (!sd) return;
+  const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  const mini = new THREE.Mesh(def.makeHi(), new THREE.MeshBasicMaterial({ color:def.color, transparent:true, opacity:0.14, blending:THREE.AdditiveBlending }));
+  const ang = retiredShapes.length * 1.0 + 0.5, rad = 14 + retiredShapes.length * 1.8;
+  mini.position.set(Math.sin(ang)*rad, (Math.random()-.5)*5, Math.cos(ang)*rad);
+  mini.scale.set(.25,.25,.25); scene.add(mini);
+  retiredShapes.push({ mesh:mini, rs:0.15+Math.random()*0.25 });
+  if (retiredShapes.length > 20) { const old = retiredShapes.shift(); scene.remove(old.mesh); old.mesh.geometry.dispose(); old.mesh.material.dispose(); }
+}
+
+function buildOrbitShapes() {
+  // Clear existing orbit shapes
+  orbitShapes.forEach(o => { scene.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); });
+  orbitShapes.length = 0;
+
+  // Get all filtered SDs that are NOT the currently forging one
+  const pending = getFilteredSDs().filter(sd => sd.id !== state.currentSDId);
+  const maxOrbiters = Math.min(pending.length, 30);
+
+  for (let i = 0; i < maxOrbiters; i++) {
+    const sd = pending[i];
+    const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+    const mesh = new THREE.Mesh(
+      def.makeLo(),
+      new THREE.MeshBasicMaterial({ color: def.color.clone(), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+
+    // Distribute in a spherical shell around center
+    const golden = 2.399963; // golden angle in radians
+    const theta = golden * i;
+    const y = 1 - (2 * i / (maxOrbiters - 1 || 1)); // -1 to 1
+    const radiusAtY = Math.sqrt(1 - y * y);
+    const orbitRadius = 16 + Math.random() * 10;
+    mesh.position.set(
+      Math.cos(theta) * radiusAtY * orbitRadius,
+      y * 8 + (Math.random() - 0.5) * 3,
+      Math.sin(theta) * radiusAtY * orbitRadius
+    );
+
+    const sc = 0.28 + Math.random() * 0.14;
+    mesh.scale.set(sc, sc, sc);
+    scene.add(mesh);
+
+    orbitShapes.push({
+      mesh,
+      orbitRadius,
+      angle: theta,
+      yBase: mesh.position.y,
+      spinSpeed: 0.08 + Math.random() * 0.12,
+      orbitSpeed: 0.01 + Math.random() * 0.015,
+      bobSpeed: 0.15 + Math.random() * 0.2,
+      bobAmp: 0.3 + Math.random() * 0.5,
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════
+// FORGE PHASE SYSTEM
+// ═══════════════════════════════════════════════
+function getPhase(p) {
+  let acc = 0;
+  for (let i = 0; i < 4; i++) { acc += PHASE_DUR[i]; if (p <= acc) return { ph:i, loc:(p-(acc-PHASE_DUR[i]))/PHASE_DUR[i] }; }
+  return { ph:3, loc:1 };
+}
+function pulse(t, r=1) { return Math.pow(Math.sin(t*r*Math.PI)*.5+.5, 4); }
+
+function updateForge(t, dt) {
+  if (!state.currentSDId || !shapeGroup.children.length) return;
+  const sd = state.sds.get(state.currentSDId);
+  if (!sd) return;
+
+  const isBlocked = sd.status === 'blocked';
+  const col = isBlocked ? new THREE.Color(0xc4626a) : (SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown).color.clone();
+  const floor = computeForgeFloor(sd);
+  const target = computeForgeTarget(sd);
+
+  if (!state.slidePaused) state.slideElapsed += dt * state.slideSpeed;
+
+  const ANIM_END = CONFIG.SLIDE_DURATION * 0.5;
+  const HOLD_END = CONFIG.SLIDE_DURATION * 0.65;
+  const TOTAL = CONFIG.SLIDE_DURATION;
+
+  if (state.slideElapsed < ANIM_END) {
+    slidePhase = 'animate'; shapeProg = floor + (target - floor) * (state.slideElapsed / ANIM_END);
+  } else if (state.slideElapsed < HOLD_END) {
+    slidePhase = 'hold'; shapeProg = target;
+  } else if (state.slideElapsed < TOTAL) {
+    slidePhase = 'fade'; shapeProg = target;
+  } else { advanceSlide(); return; }
+
+  // Progress bar
+  document.getElementById('slideProg').style.width = (state.slideElapsed / TOTAL * 100) + '%';
+
+  const { ph, loc } = getPhase(shapeProg);
+  const p = pulse(t, 0.7 + ph * 0.15);
+
+  if (ph !== prevPh) {
+    prevPh = ph;
+    if (ph === 0) filledFaces = 0;
+    const msgs = ['Draft — sensing the form…','Lead — projecting strategy…','Plan — locking specification…','Execute — forging implementation…'];
+    if (ph <= 3) addLog(msgs[ph], 'phase');
+  }
+
+  let fadeMul = 1;
+  if (slidePhase === 'fade') fadeMul = Math.max(0, 1 - (state.slideElapsed - HOLD_END) / (TOTAL - HOLD_END));
+
+  updatePhaseBar(ph);
+
+  // Phase 0: Ghost
+  if (ghostMesh) {
+    const gA = ph >= 0 ? Math.min(1, ph === 0 ? loc : 1) : 0;
+    ghostMesh.material.opacity = gA * 0.12 * (1+p*0.5) * fadeMul;
+    const gs = .85+gA*.15+Math.sin(t*.5)*.02; ghostMesh.scale.set(gs,gs,gs);
+    // Fade ghost out in late Execute (polish sub-phase)
+    if (ph === 3 && loc > 0.7) ghostMesh.material.opacity *= Math.max(0, 1-(loc-0.7)/0.3);
+  }
+
+  // Phase 1: Wireframe
+  if (wireMesh) {
+    let wo = 0;
+    if (ph===1) wo=loc*0.22; else if (ph===2) wo=0.22+loc*0.58;
+    else if (ph===3) {
+      // Wireframe fades during Execute: visible early, fades by mid-Execute
+      if (loc < 0.5) wo=0.8*(1-loc*1.2); else wo=Math.max(0, 0.2*(1-loc));
+    }
+    wireMesh.material.opacity = wo*(1+p*0.2)*fadeMul;
+  }
+
+  // Phase 3: Execute — three sub-phases: fill faces (0-0.6), polish (0.6-0.85), glow (0.85-1.0)
+  if (ph === 3 && faceColors && faceFillOrder) {
+    const fillLoc = Math.min(loc / 0.6, 1); // 0→1 over first 60% of Execute
+    const tgtFilled = Math.floor(fillLoc * totalFaces);
+    while (filledFaces < tgtFilled && filledFaces < totalFaces) {
+      const fi = faceFillOrder[filledFaces], vi = fi*3;
+      for (let v=0; v<3; v++) { const ci=(vi+v)*3; faceColors[ci]=col.r; faceColors[ci+1]=col.g; faceColors[ci+2]=col.b; }
+      filledFaces++;
+      if (filledFaces%10===0 && facetedFillMesh) {
+        const pos=facetedFillMesh.geometry.attributes.position.array, idx=fi*9;
+        emitSparks(new THREE.Vector3((pos[idx]+pos[idx+3]+pos[idx+6])/3,(pos[idx+1]+pos[idx+4]+pos[idx+7])/3,(pos[idx+2]+pos[idx+5]+pos[idx+8])/3), isBlocked?0xc4626a:col, 3);
+      }
+    }
+    if (facetedFillMesh) {
+      facetedFillMesh.geometry.attributes.color.needsUpdate = true;
+      facetedFillMesh.material.emissive.copy(col);
+      if (isBlocked && slidePhase==='hold') facetedFillMesh.material.emissiveIntensity = 0.15+Math.sin(t*3)*0.15;
+
+      if (loc < 0.6) {
+        // Fill sub-phase: faces appearing
+        facetedFillMesh.material.opacity = Math.min(1, fillLoc*2.5) * fadeMul;
+        facetedFillMesh.material.emissiveIntensity = p*0.04;
+      } else if (loc < 0.85) {
+        // Polish sub-phase: faceted→smooth normals transition
+        const sT = (loc - 0.6) / 0.25; // 0→1
+        if (facetedNormals && smoothNormals) {
+          const norms = facetedFillMesh.geometry.attributes.normal.array;
+          for (let i=0; i<Math.min(norms.length,facetedNormals.length,smoothNormals.length); i++) norms[i]=facetedNormals[i]+(smoothNormals[i]-facetedNormals[i])*sT;
+          facetedFillMesh.geometry.attributes.normal.needsUpdate = true;
+        }
+        facetedFillMesh.material.roughness = 0.5-sT*0.3; facetedFillMesh.material.metalness = 0.1+sT*0.15;
+        facetedFillMesh.material.emissiveIntensity = sT*0.15+p*0.1;
+        facetedFillMesh.material.opacity = (sT>0.5 ? 1-(sT-0.5)*2 : 1) * fadeMul;
+        if (smoothMesh) { smoothMesh.material.opacity=Math.max(0,(sT-0.3)/0.7)*fadeMul; smoothMesh.material.emissiveIntensity=sT*0.2+p*0.12; smoothMesh.material.roughness=0.3-sT*0.15; }
+        if (frame%25===0) { const ang=Math.random()*Math.PI*2,r=3+Math.random()*1.5; emitSparks(new THREE.Vector3(Math.cos(ang)*r,(Math.random()-.5)*4,Math.sin(ang)*r),0xffab40,4); }
+      } else {
+        // Glow sub-phase: final radiance
+        const gT = (loc - 0.85) / 0.15; // 0→1
+        facetedFillMesh.material.opacity = 0;
+        if (smoothMesh) { smoothMesh.material.opacity=1*fadeMul; smoothMesh.material.emissiveIntensity=0.25+p*0.35; smoothMesh.material.roughness=0.12; smoothMesh.material.metalness=0.3; }
+        if (outerGlow) { outerGlow.material.opacity=gT*0.2*(1+p*0.5)*fadeMul; const gs=1+gT*0.1+p*0.04; outerGlow.scale.set(gs,gs,gs); }
+      }
+    }
+  } else if (ph < 3) {
+    if (smoothMesh) smoothMesh.material.opacity = 0;
+    if (outerGlow) outerGlow.material.opacity = 0;
+  }
+
+  // Lighting
+  const li = ph===3 ? loc : ph*0.15;
+  coreLight.intensity=li*2.5*(1+p*0.4)*fadeMul; coreLight.color.copy(col);
+  rimLight.intensity=li*1*fadeMul; warmLight.intensity=li*0.7*fadeMul;
+
+  shapeGroup.rotation.y = t*0.04; shapeGroup.rotation.x = Math.sin(t*0.028)*0.06;
+}
+
+// ═══════════════════════════════════════════════
+// SLIDESHOW
+// ═══════════════════════════════════════════════
+function rebuildSlideQueue() {
+  state.slideQueue = getFilteredSDs().filter(sd => state.claimedIds.has(sd.id) || state.claimedIds.has(sd.sd_key)).map(sd => sd.id);
+  if (state.slideIndex >= state.slideQueue.length) state.slideIndex = 0;
+  const claimCount = state.slideQueue.length;
+  document.getElementById('subtitle').textContent = claimCount > 0
+    ? `${state.sds.size} directives · ${claimCount} claimed`
+    : `${state.sds.size} directives · none claimed`;
+}
+
+function crossfadeOut() {
+  if (shapeGroup && shapeGroup.children.length > 0) {
+    if (outgoingGroup) { scene.remove(outgoingGroup); disposeGroup(outgoingGroup); }
+    outgoingGroup = shapeGroup;
+    outgoingFade = 1;
+    shapeGroup = new THREE.Group(); scene.add(shapeGroup);
+  }
+}
+
+function advanceSlide() {
+  crossfadeOut();
+  if (state.slideQueue.length === 0) { state.currentSDId = null; document.getElementById('sdTitle').textContent = 'Awaiting claimed directives…'; document.getElementById('sdKey').textContent = ''; return; }
+  state.slideIndex = (state.slideIndex + 1) % state.slideQueue.length;
+  startSlide();
+}
+
+function startSlide() {
+  if (state.slideQueue.length === 0) { state.currentSDId = null; return; }
+  const id = state.slideQueue[state.slideIndex], sd = state.sds.get(id);
+  if (!sd) { advanceSlide(); return; }
+  state.currentSDId = id; state.slideElapsed = 0; shapeProg = 0; prevPh = -1; filledFaces = 0;
+  buildShape(sd);
+  const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  document.getElementById('sdTitle').textContent = sd.title || def.name;
+  document.getElementById('sdKey').textContent = sd.sd_key;
+  addLog(`Forging ${sd.sd_key}`, 'system');
+  updateQueueHighlight();
+  buildOrbitShapes();
+}
+
+function disposeGroup(group) {
+  group.traverse(child => {
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════
+window.setSlide = function(mode) {
+  document.querySelectorAll('.cb .bt').forEach(b => b.classList.remove('ac'));
+  if (mode==='play') { state.slidePaused=false; state.slideSpeed=1; document.getElementById('btnPlay').classList.add('ac'); }
+  else if (mode==='pause') { state.slidePaused=true; document.getElementById('btnPause').classList.add('ac'); }
+  else if (mode==='fast') { state.slidePaused=false; state.slideSpeed=2.5; document.getElementById('btnFast').classList.add('ac'); }
+  else if (mode==='next') { advanceSlide(); document.getElementById(state.slidePaused?'btnPause':(state.slideSpeed>1?'btnFast':'btnPlay')).classList.add('ac'); }
+};
+
+let claimRetryTimer = null, claimCountdownSec = 0;
+window.dismissDupAlert = function() {
+  document.getElementById('dup-alert').classList.remove('show');
+  if (claimRetryTimer) { clearInterval(claimRetryTimer); claimRetryTimer = null; }
+};
+
+function startClaimCountdown() {
+  if (claimRetryTimer) return; // already counting
+  claimCountdownSec = 60;
+  const cdEl = document.getElementById('dup-alert-countdown');
+  cdEl.textContent = 'Rechecking in 60s…';
+  claimRetryTimer = setInterval(() => {
+    claimCountdownSec--;
+    if (claimCountdownSec <= 0) {
+      clearInterval(claimRetryTimer); claimRetryTimer = null;
+      cdEl.textContent = 'Rechecking…';
+      loadClaimedSDs(); // retry — will clear alert if resolved, or restart countdown if still conflicting
+    } else {
+      cdEl.textContent = `Rechecking in ${claimCountdownSec}s…`;
+    }
+  }, 1000);
+}
+
+// Emergency alert sound — 3 short warning beeps via Web Audio API
+let audioCtx = null;
+function playAlertSound() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const beep = (startTime, freq) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(startTime); osc.stop(startTime + 0.2);
+    };
+    const now = audioCtx.currentTime;
+    beep(now, 880); beep(now + 0.25, 880); beep(now + 0.5, 660);
+  } catch (e) { /* audio not available */ }
+}
+
+// ═══════════════════════════════════════════════
+// IDLE SESSION MONITORING — yellow alert after 15min of no active sessions
+// ═══════════════════════════════════════════════
+let idleCheckTimer = null;
+let lastActivitySeen = Date.now();
+let idleDismissed = false;
+
+window.dismissIdleAlert = function() {
+  document.getElementById('idle-alert').classList.remove('show');
+  idleDismissed = true;
+  // Reset — will re-alert if still idle after another 15 minutes
+  setTimeout(() => { idleDismissed = false; }, 15 * 60 * 1000);
+};
+
+function formatIdleDuration(ms) {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins + ' minute' + (mins !== 1 ? 's' : '');
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return hrs + 'h ' + rem + 'm';
+}
+
+function checkIdleSessions() {
+  if (!state.supabase) return;
+  state.supabase.from('claude_sessions')
+    .select('session_id, status, heartbeat_at')
+    .in('status', ['active', 'idle'])
+    .then(function(result) {
+      const sessions = result.data || [];
+      const now = Date.now();
+      // A session is "active" if heartbeat is within 10 minutes
+      const activeSessions = sessions.filter(function(s) {
+        return (now - new Date(s.heartbeat_at).getTime()) < 600000;
+      });
+
+      if (activeSessions.length > 0) {
+        // Activity detected — reset idle tracking
+        lastActivitySeen = now;
+        document.getElementById('idle-alert').classList.remove('show');
+        return;
+      }
+
+      // No active sessions — check how long
+      const idleMs = now - lastActivitySeen;
+      const idleThreshold = 15 * 60 * 1000; // 15 minutes
+
+      if (idleMs >= idleThreshold && !idleDismissed) {
+        const durEl = document.getElementById('idle-alert-duration');
+        durEl.textContent = 'Idle for ' + formatIdleDuration(idleMs);
+        if (!document.getElementById('idle-alert').classList.contains('show')) {
+          document.getElementById('idle-alert').classList.add('show');
+        }
+      }
+    })
+    .catch(function(err) { console.warn('Idle check failed:', err); });
+}
+
+function startIdleMonitoring() {
+  if (idleCheckTimer) return;
+  lastActivitySeen = Date.now();
+  idleCheckTimer = setInterval(checkIdleSessions, 60000); // check every 60 seconds
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if (e.key===' ') { e.preventDefault(); setSlide(state.slidePaused?'play':'pause'); }
+  else if (e.key==='ArrowRight') setSlide('next');
+  else if (e.key==='r'||e.key==='R') { camera.position.set(0,2,18); controls.target.set(0,0,0); controls.update(); }
+});
+
+// ═══════════════════════════════════════════════
+// UI: PHASE BAR
+// ═══════════════════════════════════════════════
+const dotBar = document.getElementById('dotBar'), lblBar = document.getElementById('lblBar');
+PHASE_NAMES.forEach((n, i) => {
+  const d = document.createElement('div'); d.className='phi-dot'; d.id='dot'+i; dotBar.appendChild(d);
+  const l = document.createElement('div'); l.className='phi-lbl'; l.id='lbl'+i; l.textContent=n; lblBar.appendChild(l);
+});
+function updatePhaseBar(ph) { for(let i=0;i<4;i++){document.getElementById('dot'+i).className='phi-dot'+(i===ph?' on':'')+(i<ph?' dn':'');document.getElementById('lbl'+i).className='phi-lbl'+(i===ph?' on':'')+(i<ph?' dn':'');} }
+
+// ═══════════════════════════════════════════════
+// UI: ACTIVITY LOG
+// ═══════════════════════════════════════════════
+function addLog(msg, type='info') {
+  const el = document.createElement('div'); el.className = 'log-entry fresh';
+  const cls = type==='system'?'log-cs':type==='phase'?'log-cp':'';
+  el.innerHTML = cls ? `<span class="${cls}">[${type}]</span> ${msg}` : msg;
+  const list = document.getElementById('logList'); list.prepend(el);
+  setTimeout(() => el.classList.remove('fresh'), 700);
+  while (list.children.length > 12) list.removeChild(list.lastChild);
+}
+
+// ═══════════════════════════════════════════════
+// FILTER + UI UPDATES
+// ═══════════════════════════════════════════════
+function passesFilter(sd) {
+  switch (state.filter) {
+    case 'active': return !['completed','cancelled'].includes(sd.status);
+    case 'not-done': return !['completed','cancelled'].includes(sd.status);
+    case 'all': return true;
+    default: return sd.status === state.filter;
+  }
+}
+function getFilteredSDs() { return [...state.sds.values()].filter(passesFilter); }
+
+document.getElementById('filterSel').addEventListener('change', (e) => {
+  state.filter = e.target.value; rebuildSlideQueue(); updateUI();
+  crossfadeOut(); state.slideIndex = 0; startSlide();
+});
+
+let uiTimer = null;
+function scheduleUI() { if (uiTimer) return; uiTimer = setTimeout(() => { uiTimer = null; updateUI(); }, 200); }
+
+function updateUI() {
+  const all = [...state.sds.values()], filtered = getFilteredSDs();
+  document.getElementById('st-total').textContent = all.length;
+  document.getElementById('st-active').textContent = all.filter(s => !['completed','cancelled'].includes(s.status)).length;
+  document.getElementById('st-done').textContent = all.filter(s => s.status==='completed').length;
+  document.getElementById('queueHeader').textContent = `Queue · ${filtered.length}`;
+
+  const sorted = [...filtered].sort((a,b) => {
+    const aClaimed = state.claimedIds.has(a.id) || state.claimedIds.has(a.sd_key) ? 0 : 1;
+    const bClaimed = state.claimedIds.has(b.id) || state.claimedIds.has(b.sd_key) ? 0 : 1;
+    if (aClaimed !== bClaimed) return aClaimed - bClaimed;
+    const o = {in_progress:0,review:1,planning:2,blocked:3,draft:4,completed:5,cancelled:6};
+    return (o[a.status]??6)-(o[b.status]??6);
+  });
+  const queueEl = document.getElementById('queue');
+  queueEl.innerHTML = sorted.map(sd => {
+    const c = STATUS_COLORS[sd.status]||'#9E9E9E', act = sd.id===state.currentSDId;
+    const claimed = state.claimedIds.has(sd.id) || state.claimedIds.has(sd.sd_key);
+    return `<div class="q-item${act?' active':''}${claimed?' claimed':''}" data-id="${sd.id}" title="${sd.title||''}\nType: ${sd.sd_type||'unknown'}\nStatus: ${sd.status}\nProgress: ${sd.progress_percentage??sd.progress??0}%${claimed?'\n⚡ Claimed':''}"><span class="q-dot" style="background:${c}${claimed?';box-shadow:0 0 6px '+c:''}"></span><span class="q-key">${sd.sd_key}</span></div>`;
+  }).join('');
+  queueEl.querySelectorAll('.q-item').forEach(el => el.addEventListener('click', () => {
+    const idx = state.slideQueue.indexOf(el.dataset.id);
+    if (idx !== -1) { crossfadeOut(); state.slideIndex=idx; startSlide(); }
+  }));
+  document.getElementById('sr-summary').textContent = `${all.length} strategic directives. Showing ${filtered.length}.`;
+  document.getElementById('no-data').style.display = all.length===0?'block':'none';
+  updateEstimate();
+  if (!state.webglOk) { const tb=document.getElementById('fb-body'); tb.innerHTML=[...state.sds.values()].map(sd=>`<tr><td>${sd.sd_key}</td><td>${sd.title||''}</td><td>${sd.sd_type||''}</td><td>${sd.status}</td><td>${sd.priority||''}</td><td>${sd.progress_percentage??sd.progress??0}%</td></tr>`).join(''); }
+}
+
+function updateQueueHighlight() { document.querySelectorAll('.q-item').forEach(el => el.classList.toggle('active', el.dataset.id===state.currentSDId)); }
+
+// ═══════════════════════════════════════════════
+// MAIN ANIMATION LOOP
+// ═══════════════════════════════════════════════
+function animate() {
+  if (!state.webglOk) return;
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta(), t = clock.getElapsedTime(); frame++;
+  // Slow camera breathe: gentle zoom in/out over ~60s cycle
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const breathe = Math.sin(t * 0.1) * 3;
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    const baseDist = camera.position.distanceTo(controls.target);
+    const targetDist = Math.max(controls.minDistance, Math.min(controls.maxDistance, baseDist + breathe * 0.008));
+    camera.position.copy(controls.target).addScaledVector(dir, targetDist);
+  }
+  controls.update();
+  updateForge(t, dt);
+  // Crossfade: fade out outgoing shape over ~4 seconds
+  if (outgoingGroup) {
+    outgoingFade -= dt * 1.0;
+    if (outgoingFade <= 0) {
+      scene.remove(outgoingGroup); disposeGroup(outgoingGroup); outgoingGroup = null; outgoingFade = 0;
+    } else {
+      outgoingGroup.rotation.y = t*0.04;
+      outgoingGroup.traverse(child => { if (child.material && child.material.opacity !== undefined) child.material.opacity = Math.min(child.material.opacity, outgoingFade * 0.5); });
     }
   }
-  </script>
+  retiredShapes.forEach(cs => { cs.mesh.rotation.y=t*cs.rs*0.4; cs.mesh.material.opacity=0.12+pulse(t,0.12)*0.04; });
+  // Orbit shapes: orbit, spin, bob
+  orbitShapes.forEach(o => {
+    o.angle += o.orbitSpeed * dt;
+    o.mesh.position.x = Math.cos(o.angle) * o.orbitRadius;
+    o.mesh.position.z = Math.sin(o.angle) * o.orbitRadius;
+    o.mesh.position.y = o.yBase + Math.sin(t * o.bobSpeed) * o.bobAmp;
+    o.mesh.rotation.y += o.spinSpeed * dt;
+    o.mesh.rotation.x += o.spinSpeed * dt * 0.3;
+  });
+  for (let i=sparks.length-1; i>=0; i--) { const s=sparks[i]; s.vel.y-=.002; s.mesh.position.add(s.vel); s.life-=.02; s.mesh.material.opacity=Math.max(0,s.life); if(s.life<=0){scene.remove(s.mesh);s.mesh.geometry.dispose();s.mesh.material.dispose();sparks.splice(i,1);} }
+  const dp=dustGeo.attributes.position.array;
+  for(let i=0;i<DUST_COUNT;i++){dp[i*3]+=dustVel[i*3];dp[i*3+1]+=dustVel[i*3+1];dp[i*3+2]+=dustVel[i*3+2];if(Math.abs(dp[i*3])>20)dustVel[i*3]*=-1;if(Math.abs(dp[i*3+1])>15)dustVel[i*3+1]*=-1;if(Math.abs(dp[i*3+2])>20)dustVel[i*3+2]*=-1;}
+  dustGeo.attributes.position.needsUpdate=true;
+  renderer.render(scene, camera);
+}
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+document.addEventListener('visibilitychange', () => { if(document.hidden) clock.stop(); else { clock.start(); if(state.webglOk) animate(); } });
 
-    // ── Configuration ──
-    const CONFIG = {
-      SUPABASE_URL: '',     // Set your Supabase URL
-      SUPABASE_KEY: '',     // Set your Supabase anon key
-      RECONNECT_MAX: 5,
-      RECONNECT_BASE_MS: 1000,
-      POLL_INTERVAL_MS: 60000,
-      DEBOUNCE_MS: 200,
-      MAX_SDS: 500,
-    };
+// ═══════════════════════════════════════════════
+// SUPABASE CONNECTION
+// ═══════════════════════════════════════════════
+function addOrUpdateSD(sd) {
+  state.sds.set(sd.id, sd); rebuildSlideQueue(); scheduleUI();
+  if (!state.currentSDId && state.slideQueue.length > 0) { state.slideIndex = 0; startSlide(); }
+}
+function removeSD(id) {
+  state.sds.delete(id); rebuildSlideQueue(); scheduleUI();
+  if (state.currentSDId === id) advanceSlide();
+}
 
-    // ── State ──
-    const state = {
-      sds: new Map(),
-      meshes: new Map(),
-      selected: null,
-      channel: null,
-      reconnectAttempts: 0,
-      usePolling: false,
-      supabase: null,
-      webglAvailable: true,
-    };
+async function loadClaimedSDs() {
+  if (!state.supabase) return;
+  try {
+    // Load ALL active/idle sessions (with and without claims)
+    const { data: allSessions } = await state.supabase.from('claude_sessions')
+      .select('sd_id, session_id, status, heartbeat_at')
+      .in('status', ['active', 'idle']);
 
-    // ── Type → Geometry + Color ──
-    const TYPE_CONFIG = {
-      feature:        { color: 0x4FC3F7, geometry: 'sphere' },
-      infrastructure: { color: 0xFFB74D, geometry: 'cube' },
-      fix:            { color: 0xEF5350, geometry: 'tetra' },
-      enhancement:    { color: 0x66BB6A, geometry: 'torus' },
-      documentation:  { color: 0xAB47BC, geometry: 'cylinder' },
-    };
-    const DEFAULT_TYPE = { color: 0x9E9E9E, geometry: 'octa' };
+    const withClaims = (allSessions || []).filter(s => s.sd_id);
+    const claimedKeys = withClaims.map(s => s.sd_id);
+    state.claimedIds = new Set(claimedKeys);
 
-    // ── Status → Emissive ──
-    const STATUS_EMISSIVE = {
-      completed: 0x66BB6A,
-      blocked: 0xEF5350,
-      draft: 0x000000,
-    };
+    // Detect claim conflict: multiple live sessions + at least one claim
+    // When a claim is taken over, the bumped session loses sd_id but is still active.
+    // If 2+ sessions are alive and any SD is claimed, another session may have been bumped.
+    const liveSessions = (allSessions || []).filter(s => {
+      const age = (Date.now() - new Date(s.heartbeat_at).getTime()) / 1000;
+      return age < 600; // active within last 10 minutes
+    });
+    const claimedSDs = liveSessions.filter(s => s.sd_id);
+    const unclaimedLive = liveSessions.filter(s => !s.sd_id);
 
-    // ── Three.js Setup ──
-    const canvas = document.getElementById('canvas-3d');
-    let renderer, scene, camera, controls, raycaster, mouse;
-    const clock = new THREE.Clock();
-    let frameCount = 0, lastFpsTime = 0;
-    const fpsEl = document.getElementById('fps-counter');
-
-    function checkWebGL() {
-      try {
-        const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
-      } catch { return false; }
-    }
-
-    function initThree() {
-      if (!checkWebGL()) {
-        state.webglAvailable = false;
-        document.getElementById('scene-container').querySelector('#canvas-3d').style.display = 'none';
-        document.getElementById('fallback-table').style.display = 'block';
-        document.getElementById('status-bar').style.display = 'none';
-        document.getElementById('controls-hint').style.display = 'none';
-        return;
+    // Reset idle tracker when any live sessions exist
+    if (liveSessions.length > 0) {
+      lastActivitySeen = Date.now();
+      if (document.getElementById('idle-alert').classList.contains('show')) {
+        document.getElementById('idle-alert').classList.remove('show');
       }
-
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setSize(canvas.parentElement.clientWidth, canvas.parentElement.clientHeight);
-
-      scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x0a0a1a, 0.008);
-
-      camera = new THREE.PerspectiveCamera(60, canvas.parentElement.clientWidth / canvas.parentElement.clientHeight, 0.1, 1000);
-      camera.position.set(0, 15, 30);
-
-      controls = new OrbitControls(camera, canvas);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.maxDistance = 100;
-      controls.minDistance = 5;
-
-      // Lights
-      scene.add(new THREE.AmbientLight(0x404060, 0.6));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      dirLight.position.set(10, 20, 10);
-      scene.add(dirLight);
-
-      // Grid
-      const grid = new THREE.GridHelper(60, 30, 0x1a1a3a, 0x111130);
-      grid.position.y = -0.5;
-      scene.add(grid);
-
-      raycaster = new THREE.Raycaster();
-      mouse = new THREE.Vector2();
-
-      canvas.addEventListener('mousemove', onMouseMove);
-      canvas.addEventListener('click', onCanvasClick);
-
-      const ro = new ResizeObserver(() => {
-        const w = canvas.parentElement.clientWidth;
-        const h = canvas.parentElement.clientHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      });
-      ro.observe(canvas.parentElement);
     }
 
-    // ── Geometry Factories ──
-    const GEO_CACHE = {};
-    function getGeometry(type) {
-      if (GEO_CACHE[type]) return GEO_CACHE[type];
-      let g;
-      switch (type) {
-        case 'sphere':   g = new THREE.SphereGeometry(0.7, 24, 24); break;
-        case 'cube':     g = new THREE.BoxGeometry(1.2, 1.2, 1.2); break;
-        case 'tetra':    g = new THREE.TetrahedronGeometry(0.8); break;
-        case 'torus':    g = new THREE.TorusGeometry(0.6, 0.25, 12, 24); break;
-        case 'cylinder': g = new THREE.CylinderGeometry(0.5, 0.5, 1.2, 16); break;
-        case 'octa':     g = new THREE.OctahedronGeometry(0.7); break;
-        default:         g = new THREE.OctahedronGeometry(0.7); break;
-      }
-      GEO_CACHE[type] = g;
-      return g;
-    }
-
-    function createSDMesh(sd) {
-      const tc = TYPE_CONFIG[sd.sd_type] || DEFAULT_TYPE;
-      const geo = getGeometry(tc.geometry);
-      const mat = new THREE.MeshPhongMaterial({
-        color: tc.color,
-        emissive: STATUS_EMISSIVE[sd.status] || 0x000000,
-        emissiveIntensity: sd.status === 'blocked' ? 0.4 : 0.15,
-        wireframe: sd.status === 'draft',
-        transparent: sd.status === 'draft',
-        opacity: sd.status === 'draft' ? 0.6 : 1.0,
-        shininess: 80,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.userData = { sdId: sd.id, sdKey: sd.sd_key };
-
-      // Position: priority on Y, hash-based spread on X/Z
-      const hash = hashStr(sd.sd_key || sd.id);
-      const priorityY = { critical: 6, high: 4, medium: 2, low: 0 };
-      mesh.position.set(
-        ((hash % 200) - 100) / 5,
-        priorityY[sd.priority] || 1,
-        (((hash >> 8) % 200) - 100) / 5
+    if (claimedSDs.length > 0 && unclaimedLive.length > 0) {
+      // There are live sessions without claims alongside sessions with claims — possible takeover
+      const listEl = document.getElementById('dup-alert-list');
+      const items = claimedSDs.map(s =>
+        `<li>${s.sd_id} — claimed by 1 session, ${unclaimedLive.length} other live session${unclaimedLive.length > 1 ? 's' : ''} without claims</li>`
       );
-
-      return mesh;
-    }
-
-    function hashStr(s) {
-      let h = 0;
-      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-      return Math.abs(h);
-    }
-
-    // ── SD Management ──
-    function addOrUpdateSD(sd) {
-      state.sds.set(sd.id, sd);
-
-      if (!state.webglAvailable) { updateFallbackTable(); return; }
-
-      if (state.meshes.has(sd.id)) {
-        const mesh = state.meshes.get(sd.id);
-        const tc = TYPE_CONFIG[sd.sd_type] || DEFAULT_TYPE;
-        mesh.material.color.setHex(tc.color);
-        mesh.material.emissive.setHex(STATUS_EMISSIVE[sd.status] || 0x000000);
-        mesh.material.emissiveIntensity = sd.status === 'blocked' ? 0.4 : 0.15;
-        mesh.material.wireframe = sd.status === 'draft';
-        mesh.material.opacity = sd.status === 'draft' ? 0.6 : 1.0;
-      } else {
-        const mesh = createSDMesh(sd);
-        scene.add(mesh);
-        state.meshes.set(sd.id, mesh);
+      listEl.innerHTML = items.join('');
+      document.getElementById('dup-alert-title').textContent = 'CLAIM CONFLICT DETECTED';
+      document.getElementById('dup-alert-msg').textContent =
+        `${liveSessions.length} active sessions detected. A claim may have been silently taken over.`;
+      if (!document.getElementById('dup-alert').classList.contains('show')) {
+        document.getElementById('dup-alert').classList.add('show');
+        playAlertSound();
       }
-
-      document.getElementById('no-data-msg').style.display = 'none';
-      updateDashboard();
+      startClaimCountdown();
+    } else {
+      document.getElementById('dup-alert').classList.remove('show');
+      if (claimRetryTimer) { clearInterval(claimRetryTimer); claimRetryTimer = null; }
     }
 
-    function removeSD(id) {
-      state.sds.delete(id);
-      const mesh = state.meshes.get(id);
-      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); state.meshes.delete(id); }
-      if (state.sds.size === 0) document.getElementById('no-data-msg').style.display = 'block';
-      updateDashboard();
+    // Ensure claimed SDs are loaded even if they weren't in the initial batch
+    const missing = claimedKeys.filter(k => ![...state.sds.values()].some(sd => sd.sd_key === k || sd.id === k));
+    if (missing.length > 0) {
+      const { data: extras } = await state.supabase.from('strategic_directives_v2')
+        .select('id, sd_key, title, sd_type, status, current_phase, priority, progress_percentage, created_at, updated_at')
+        .in('sd_key', missing);
+      (extras || []).forEach(sd => state.sds.set(sd.id, sd));
     }
 
-    // ── Dashboard Updates ──
-    let updateTimer = null;
-    function updateDashboard() {
-      if (updateTimer) return;
-      updateTimer = setTimeout(() => { updateTimer = null; renderDashboard(); }, CONFIG.DEBOUNCE_MS);
-    }
+    rebuildSlideQueue(); updateUI();
+    if (state.slideQueue.length > 0 && !state.currentSDId) { state.slideIndex = 0; startSlide(); }
+    else { buildOrbitShapes(); }
+  } catch (err) { console.warn('Failed to load claims:', err); }
+}
 
-    function renderDashboard() {
-      const sds = [...state.sds.values()];
-      const total = sds.length;
-      const active = sds.filter(s => s.status === 'in_progress').length;
-      const completed = sds.filter(s => s.status === 'completed').length;
-      const blocked = sds.filter(s => s.status === 'blocked').length;
+async function initSupabase() {
+  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
+    setConn('err', 'Not configured');
+    addLog('Add ?sb_url=...&sb_key=... to connect', 'system');
+    return;
+  }
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    state.supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+    const { data, error } = await state.supabase.from('strategic_directives_v2')
+      .select('id, sd_key, title, sd_type, status, current_phase, priority, progress_percentage, created_at, updated_at')
+      .not('status', 'in', '("completed","cancelled")')
+      .order('updated_at', { ascending: false })
+      .limit(CONFIG.MAX_SDS);
+    if (error) throw error;
+    data.forEach(sd => addOrUpdateSD(sd));
+    await loadClaimedSDs();
+    setConn('ok', 'Connected');
+    subscribeRealtime();
+    startIdleMonitoring();
+    fetchBurnRate(); fetchLiveSessions();
+    setInterval(fetchLiveSessions, 60000);
+    setInterval(fetchBurnRate, 300000);
+  } catch (err) { console.error('Supabase init failed:', err); setConn('err', 'Offline'); addLog('Connection failed: '+err.message, 'system'); }
+}
 
-      document.getElementById('stat-total').textContent = total;
-      document.getElementById('stat-active').textContent = active;
-      document.getElementById('stat-completed').textContent = completed;
-      document.getElementById('stat-blocked').textContent = blocked;
-      document.getElementById('sd-count').textContent = `${total} SDs`;
-      document.getElementById('queue-count').textContent = `${total} items`;
-
-      // SR summary
-      document.getElementById('sr-summary').textContent =
-        `${total} strategic directives: ${active} active, ${completed} completed, ${blocked} blocked.`;
-
-      // Queue list
-      const sorted = sds.sort((a, b) => {
-        const statusOrder = { blocked: 0, in_progress: 1, planning: 2, draft: 3, completed: 4 };
-        return (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
-      });
-
-      const queueBody = document.getElementById('queue-body');
-      queueBody.innerHTML = sorted.map(sd => {
-        const tc = TYPE_CONFIG[sd.sd_type] || DEFAULT_TYPE;
-        const colorHex = '#' + tc.color.toString(16).padStart(6, '0');
-        const isSelected = state.selected === sd.id ? ' selected' : '';
-        return `<div class="sd-row${isSelected}" data-id="${sd.id}" onclick="window.selectSD('${sd.id}')" title="${sd.title || sd.sd_key}">
-          <div>
-            <span class="type-icon" style="background:${colorHex}"></span>
-            <span class="sd-title">${sd.title || sd.sd_key}</span>
-            <div class="sd-key">${sd.sd_key}</div>
-          </div>
-          <span class="badge ${sd.status}">${sd.status}</span>
-          <span style="font-size:11px;color:var(--text-secondary)">${sd.progress ?? 0}%</span>
-        </div>`;
-      }).join('');
-
-      updateChart(sds);
-    }
-
-    // ── Chart ──
-    let chart = null;
-    async function updateChart(sds) {
-      if (typeof Chart === 'undefined') return;
-      const statusCounts = {};
-      sds.forEach(sd => { statusCounts[sd.status] = (statusCounts[sd.status] || 0) + 1; });
-      const labels = Object.keys(statusCounts);
-      const data = Object.values(statusCounts);
-      const colors = labels.map(s => {
-        const map = { draft: '#78909C', planning: '#42A5F5', in_progress: '#FFA726', completed: '#66BB6A', blocked: '#EF5350' };
-        return map[s] || '#9E9E9E';
-      });
-
-      if (chart) { chart.destroy(); }
-      const ctx = document.getElementById('status-chart').getContext('2d');
-      chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right', labels: { color: '#9e9e9e', font: { size: 11 } } } },
-          animation: { duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300 },
-        }
-      });
-    }
-
-    // ── Interaction ──
-    function onMouseMove(e) {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-      raycaster.setFromCamera(mouse, camera);
-      const meshArr = [...state.meshes.values()];
-      const hits = raycaster.intersectObjects(meshArr);
-
-      const tooltip = document.getElementById('tooltip');
-      if (hits.length > 0) {
-        const sd = state.sds.get(hits[0].object.userData.sdId);
-        if (sd) {
-          tooltip.style.display = 'block';
-          tooltip.style.left = (e.clientX - canvas.parentElement.getBoundingClientRect().left + 12) + 'px';
-          tooltip.style.top = (e.clientY - canvas.parentElement.getBoundingClientRect().top + 12) + 'px';
-          tooltip.innerHTML = `<strong>${sd.sd_key}</strong><br>${sd.title || ''}<br>
-            <span style="color:var(--text-secondary)">Type:</span> ${sd.sd_type || 'unknown'}<br>
-            <span style="color:var(--text-secondary)">Status:</span> ${sd.status}<br>
-            <span style="color:var(--text-secondary)">Progress:</span> ${sd.progress ?? 0}%<br>
-            <span style="color:var(--text-secondary)">Phase:</span> ${sd.current_phase || '—'}`;
-        }
-        canvas.style.cursor = 'pointer';
-      } else {
-        tooltip.style.display = 'none';
-        canvas.style.cursor = 'default';
-      }
-    }
-
-    function onCanvasClick() {
-      raycaster.setFromCamera(mouse, camera);
-      const hits = raycaster.intersectObjects([...state.meshes.values()]);
-      if (hits.length > 0) {
-        selectSD(hits[0].object.userData.sdId);
-      }
-    }
-
-    window.selectSD = function(id) {
-      // Deselect previous
-      if (state.selected && state.meshes.has(state.selected)) {
-        const prev = state.meshes.get(state.selected);
-        prev.scale.set(1, 1, 1);
-      }
-
-      state.selected = id;
-      const mesh = state.meshes.get(id);
-      if (mesh) {
-        mesh.scale.set(1.3, 1.3, 1.3);
-        // Orbit camera to focus
-        const target = mesh.position.clone();
-        controls.target.copy(target);
-      }
-      renderDashboard();
-    };
-
-    // ── Keyboard Shortcuts ──
-    document.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-      switch (e.key.toLowerCase()) {
-        case 'r':
-          camera.position.set(0, 15, 30);
-          controls.target.set(0, 0, 0);
-          controls.update();
-          break;
-      }
+function subscribeRealtime() {
+  if (!state.supabase) return;
+  state.channel = state.supabase.channel('sd-changes')
+    .on('postgres_changes', { event:'*', schema:'public', table:'strategic_directives_v2' }, (payload) => {
+      if (payload.eventType==='DELETE') removeSD(payload.old.id);
+      else { addOrUpdateSD(payload.new); addLog(`${payload.eventType}: ${payload.new.sd_key}`, 'system'); }
+    })
+    .on('postgres_changes', { event:'*', schema:'public', table:'claude_sessions' }, () => {
+      loadClaimedSDs();
+    })
+    .subscribe((status) => {
+      if (status==='SUBSCRIBED') { setConn('ok','Live'); state.reconnectAttempts=0; }
+      else if (status==='CLOSED'||status==='CHANNEL_ERROR') handleDisconnect();
     });
+}
 
-    // ── Animation Loop ──
-    function animate() {
-      if (!state.webglAvailable) return;
-      requestAnimationFrame(animate);
+function handleDisconnect() {
+  state.reconnectAttempts++;
+  if (state.reconnectAttempts > CONFIG.RECONNECT_MAX) { setConn('err','Polling'); startPolling(); return; }
+  setConn('wait','Reconnecting');
+  const delay = Math.min(CONFIG.RECONNECT_BASE_MS * Math.pow(2, state.reconnectAttempts-1), 30000);
+  setTimeout(() => { if(state.channel) state.channel.unsubscribe(); subscribeRealtime(); }, delay);
+}
 
-      // Only render when needed (dirty flag approach)
-      controls.update();
+function startPolling() {
+  setInterval(async () => {
+    if (!state.supabase) return;
+    const { data } = await state.supabase.from('strategic_directives_v2')
+      .select('id, sd_key, title, sd_type, status, current_phase, priority, progress_percentage, created_at, updated_at')
+      .limit(CONFIG.MAX_SDS);
+    if (data) { const ids=new Set(data.map(d=>d.id)); state.sds.forEach((_,id)=>{if(!ids.has(id))removeSD(id);}); data.forEach(sd=>addOrUpdateSD(sd)); }
+  }, CONFIG.POLL_INTERVAL_MS);
+}
 
-      // Animate blocked SDs (pulse) — respect prefers-reduced-motion
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (!reducedMotion) {
-        const t = clock.getElapsedTime();
-        state.meshes.forEach((mesh, id) => {
-          const sd = state.sds.get(id);
-          if (sd && sd.status === 'blocked') {
-            mesh.material.emissiveIntensity = 0.2 + Math.sin(t * Math.PI * 2) * 0.3;
-          }
-        });
-      }
+function setConn(type, text) { document.getElementById('connDot').className='conn-dot '+type; document.getElementById('connText').textContent=text; }
 
-      renderer.render(scene, camera);
+// ═══════════════════════════════════════════════
+// ESTIMATED REMAINING DURATION
+// ═══════════════════════════════════════════════
+async function fetchBurnRate() {
+  if (!state.supabase) return;
+  try {
+    const { data, error } = await state.supabase.from('sd_execution_actuals')
+      .select('actual_effort_hours').eq('status', 'completed').not('actual_effort_hours', 'is', null);
+    if (error || !data || data.length === 0) return;
+    const total = data.reduce((sum, r) => sum + r.actual_effort_hours, 0);
+    state.burnRate = { avgHours: total / data.length, confidence: data.length >= 10 ? 'high' : 'low', sampleSize: data.length };
+  } catch (e) { console.warn('fetchBurnRate:', e); }
+  updateEstimate();
+}
 
-      // FPS counter
-      frameCount++;
-      const now = performance.now();
-      if (now - lastFpsTime >= 1000) {
-        fpsEl.textContent = frameCount + ' FPS';
-        frameCount = 0;
-        lastFpsTime = now;
-      }
-    }
+async function fetchLiveSessions() {
+  if (!state.supabase) return;
+  try {
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data, error } = await state.supabase.from('claude_sessions')
+      .select('session_id').in('status', ['active', 'idle']).gte('last_heartbeat', cutoff);
+    if (!error && data) state.liveSessions = data.length;
+  } catch (e) { console.warn('fetchLiveSessions:', e); }
+  updateEstimate();
+}
 
-    // ── Visibility API: Pause rendering when tab hidden ──
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clock.stop();
-      } else {
-        clock.start();
-        if (state.webglAvailable) animate();
-      }
-    });
+function updateEstimate() {
+  const sds = [...state.sds.values()];
+  const remaining = sds.filter(s => s.status !== 'completed' && s.status !== 'cancelled');
+  const remainingCount = remaining.length;
+  const sessions = Math.max(1, state.liveSessions);
+  const durEl = document.getElementById('est-dur');
+  const detailEl = document.getElementById('est-detail');
+  const confEl = document.getElementById('est-conf');
 
-    // ── Fallback Table ──
-    function updateFallbackTable() {
-      const tbody = document.getElementById('fallback-tbody');
-      const sds = [...state.sds.values()];
-      tbody.innerHTML = sds.map(sd =>
-        `<tr><td>${sd.sd_key}</td><td>${sd.title || ''}</td><td>${sd.sd_type || ''}</td>
-         <td>${sd.status}</td><td>${sd.priority || ''}</td><td>${sd.progress ?? 0}%</td></tr>`
-      ).join('');
-    }
+  if (remainingCount === 0) { durEl.textContent = 'All SDs complete'; durEl.style.color = '#66BB6A'; detailEl.textContent = ''; confEl.textContent = ''; return; }
+  durEl.style.color = 'rgba(0,200,255,1.0)';
 
-    // ── Supabase Connection ──
-    async function initSupabase() {
-      if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
-        showError('Supabase not configured. Set SUPABASE_URL and SUPABASE_KEY in the script config.');
-        // Load demo data
-        loadDemoData();
-        return;
-      }
+  let avgHours, confidenceLabel;
+  if (state.burnRate.avgHours !== null) {
+    avgHours = state.burnRate.avgHours;
+    confidenceLabel = `${state.burnRate.confidence} confidence (${state.burnRate.sampleSize} SDs)`;
+  } else {
+    let totalMin = 0;
+    remaining.forEach(sd => { totalMin += TYPE_BASELINES_MIN[sd.sd_type] || TYPE_BASELINES_MIN.default; });
+    avgHours = (totalMin / remainingCount) / 60;
+    confidenceLabel = 'estimate (default baselines)';
+  }
 
-      try {
-        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-        state.supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+  const totalHours = (remainingCount * avgHours) / sessions;
+  durEl.textContent = `~${totalHours.toFixed(1)}h`;
+  const sessionText = state.liveSessions === 0 ? 'no active sessions' : `${sessions} session${sessions > 1 ? 's' : ''}`;
+  detailEl.textContent = `${remainingCount} remaining · ${sessionText} · ~${avgHours.toFixed(1)}h avg`;
+  confEl.textContent = confidenceLabel;
+}
 
-        // Initial fetch
-        const { data, error } = await state.supabase
-          .from('strategic_directives_v2')
-          .select('id, sd_key, title, sd_type, status, current_phase, priority, progress, created_at, updated_at')
-          .limit(CONFIG.MAX_SDS);
-
-        if (error) throw error;
-
-        data.forEach(sd => addOrUpdateSD(sd));
-        setConnectionStatus('connected');
-
-        // Realtime subscription
-        subscribeRealtime();
-      } catch (err) {
-        console.error('Supabase init failed:', err);
-        showError(`Connection failed: ${err.message}`);
-        setConnectionStatus('disconnected');
-      }
-    }
-
-    function subscribeRealtime() {
-      if (!state.supabase) return;
-
-      state.channel = state.supabase
-        .channel('sd-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'strategic_directives_v2' }, (payload) => {
-          if (payload.eventType === 'DELETE') {
-            removeSD(payload.old.id);
-          } else {
-            addOrUpdateSD(payload.new);
-          }
-        })
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            setConnectionStatus('connected');
-            state.reconnectAttempts = 0;
-          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-            handleDisconnect();
-          }
-        });
-    }
-
-    function handleDisconnect() {
-      state.reconnectAttempts++;
-      if (state.reconnectAttempts > CONFIG.RECONNECT_MAX) {
-        state.usePolling = true;
-        setConnectionStatus('disconnected');
-        showError('Realtime connection failed. Falling back to polling.');
-        startPolling();
-        return;
-      }
-
-      setConnectionStatus('reconnecting');
-      const delay = Math.min(CONFIG.RECONNECT_BASE_MS * Math.pow(2, state.reconnectAttempts - 1), 30000);
-      setTimeout(() => {
-        if (state.channel) state.channel.unsubscribe();
-        subscribeRealtime();
-      }, delay);
-    }
-
-    function startPolling() {
-      setInterval(async () => {
-        if (!state.supabase) return;
-        const { data } = await state.supabase
-          .from('strategic_directives_v2')
-          .select('id, sd_key, title, sd_type, status, current_phase, priority, progress, created_at, updated_at')
-          .limit(CONFIG.MAX_SDS);
-        if (data) {
-          const currentIds = new Set(data.map(d => d.id));
-          // Remove deleted
-          state.sds.forEach((_, id) => { if (!currentIds.has(id)) removeSD(id); });
-          // Add/update
-          data.forEach(sd => addOrUpdateSD(sd));
-        }
-      }, CONFIG.POLL_INTERVAL_MS);
-    }
-
-    window.retryConnection = function() {
-      document.getElementById('error-banner').style.display = 'none';
-      state.reconnectAttempts = 0;
-      state.usePolling = false;
-      initSupabase();
-    };
-
-    function setConnectionStatus(status) {
-      const dot = document.getElementById('conn-dot');
-      const text = document.getElementById('conn-text');
-      dot.className = 'status-dot ' + status;
-      text.textContent = status === 'connected' ? 'Connected' : status === 'reconnecting' ? 'Reconnecting...' : 'Disconnected';
-    }
-
-    function showError(msg) {
-      const banner = document.getElementById('error-banner');
-      document.getElementById('error-msg').textContent = msg;
-      banner.style.display = 'block';
-    }
-
-    // ── Demo Data ──
-    function loadDemoData() {
-      const types = ['feature', 'infrastructure', 'fix', 'enhancement', 'documentation'];
-      const statuses = ['draft', 'planning', 'in_progress', 'completed', 'blocked'];
-      const priorities = ['critical', 'high', 'medium', 'low'];
-      const titles = [
-        'Real-time 3D Dashboard', 'Database Migration System', 'Fix Login Redirect',
-        'Performance Optimization', 'API Documentation Update', 'User Auth Refactor',
-        'CI/CD Pipeline Enhancement', 'Bug: Chart Rendering', 'Feature: Dark Mode',
-        'Infra: Log Aggregation', 'Fix: Memory Leak', 'Enhancement: Search UX',
-        'Docs: Getting Started', 'Feature: Export CSV', 'Fix: Date Parsing',
-      ];
-
-      titles.forEach((title, i) => {
-        addOrUpdateSD({
-          id: `demo-${i}`,
-          sd_key: `SD-DEMO-${String(i + 1).padStart(3, '0')}`,
-          title,
-          sd_type: types[i % types.length],
-          status: statuses[i % statuses.length],
-          current_phase: 'EXEC',
-          priority: priorities[i % priorities.length],
-          progress: Math.floor(Math.random() * 100),
-          created_at: new Date().toISOString(),
-        });
-      });
-
-      document.getElementById('conn-text').textContent = 'Demo Mode';
-    }
-
-    // ── Background Gradient ──
-    function updateBackground() {
-      if (!state.webglAvailable) return;
-      const sds = [...state.sds.values()];
-      if (sds.length === 0) return;
-      const completed = sds.filter(s => s.status === 'completed').length;
-      const blocked = sds.filter(s => s.status === 'blocked').length;
-      const health = sds.length > 0 ? (completed / sds.length) : 0.5;
-      const problemRatio = blocked / Math.max(sds.length, 1);
-
-      // Interpolate background: green (healthy) → yellow → red (problems)
-      const r = Math.round(10 + problemRatio * 30);
-      const g = Math.round(10 + health * 20);
-      const b = Math.round(26 + health * 20);
-      document.getElementById('scene-container').style.background =
-        `linear-gradient(135deg, rgb(${r},${g},${b}) 0%, #1a1a3a 50%, #0a1a2a 100%)`;
-    }
-
-    // ── Init ──
-    initThree();
-    if (state.webglAvailable) animate();
-    initSupabase();
-
-    // Periodic background update
-    setInterval(updateBackground, 2000);
-  </script>
-
-  <!-- Chart.js (loaded separately, non-blocking) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" defer></script>
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+initThree();
+if (state.webglOk) animate();
+initSupabase();
+addLog('Forge initialized — awaiting directives', 'system');
+</script>
 </body>
 </html>
