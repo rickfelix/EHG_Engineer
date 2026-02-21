@@ -44,6 +44,7 @@ import {
   _markIncomplete
 } from '../../modules/handoff/continuation-state.js';
 import { writeContinuationPrompt } from '../../modules/handoff/continuation-prompt-generator.js';
+import { resolveOwnSession } from '../../../lib/resolve-own-session.js';
 
 dotenv.config();
 
@@ -295,14 +296,11 @@ export async function main() {
   // 8. AUTO-PROCEED Cross-Session Continuation (SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001)
   // Check if AUTO-PROCEED is enabled and continuation is needed
   const autoProceedResult = await safeAsync(async () => {
-    // Check if AUTO-PROCEED is enabled in session
-    const { data: sessionData } = await supabase
-      .from('claude_sessions')
-      .select('metadata')
-      .eq('status', 'active')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Check if AUTO-PROCEED is enabled — deterministic session resolution
+    const { data: sessionData } = await resolveOwnSession(supabase, {
+      select: 'metadata',
+      warnOnFallback: false
+    });
 
     const autoProceed = sessionData?.metadata?.auto_proceed ?? true;
 

@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { resolveOwnSession } from '../../../lib/resolve-own-session.js';
 
 /**
  * Resolution sources in precedence order
@@ -93,20 +94,12 @@ export function parseEnvVar() {
  */
 export async function readFromSession(supabase) {
   try {
-    const { data, error } = await supabase
-      .from('claude_sessions')
-      .select('session_id, metadata')
-      .eq('status', 'active')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data, source: resolveSource } = await resolveOwnSession(supabase, {
+      select: 'session_id, metadata',
+      warnOnFallback: false
+    });
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No active session found
-        return { value: null, source: null, sessionId: null };
-      }
-      console.warn(`⚠️  AUTO-PROCEED: Session read error: ${error.message}`);
+    if (!data) {
       return { value: null, source: null, sessionId: null };
     }
 
@@ -372,20 +365,12 @@ export function createHandoffMetadata(autoProceed, source) {
  */
 export async function getChainOrchestrators(supabase) {
   try {
-    const { data, error } = await supabase
-      .from('claude_sessions')
-      .select('session_id, metadata')
-      .eq('status', 'active')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data } = await resolveOwnSession(supabase, {
+      select: 'session_id, metadata',
+      warnOnFallback: false
+    });
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No active session found - default to false (pause at boundary)
-        return { chainOrchestrators: false, sessionId: null };
-      }
-      console.warn(`⚠️  CHAIN_ORCHESTRATORS: Session read error: ${error.message}`);
+    if (!data) {
       return { chainOrchestrators: false, sessionId: null };
     }
 
@@ -413,14 +398,11 @@ export async function getChainOrchestrators(supabase) {
  */
 export async function setChainOrchestrators(supabase, chainOrchestrators, sessionId = null) {
   try {
-    // First get existing session to preserve other metadata
-    const { data: existingSession } = await supabase
-      .from('claude_sessions')
-      .select('session_id, metadata')
-      .eq('status', 'active')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Get existing session to preserve other metadata — use deterministic resolution
+    const { data: existingSession } = await resolveOwnSession(supabase, {
+      select: 'session_id, metadata',
+      warnOnFallback: false
+    });
 
     const targetSessionId = sessionId || existingSession?.session_id || `session_${Date.now()}`;
     const existingMetadata = existingSession?.metadata || {};

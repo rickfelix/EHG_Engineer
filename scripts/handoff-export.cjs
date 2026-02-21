@@ -95,14 +95,12 @@ async function getActiveSD() {
       return workingOn[0];
     }
 
-    // Check for active session claim
-    const { data: session } = await supabase
-      .from('claude_sessions')
-      .select('sd_id, metadata')
-      .eq('status', 'active')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Check for active session claim — deterministic resolution
+    const { resolveOwnSession } = require('../lib/resolve-own-session.cjs');
+    const { data: session } = await resolveOwnSession(supabase, {
+      select: 'sd_id, metadata',
+      warnOnFallback: false
+    });
 
     if (session && session.sd_id) {
       const { data: sd } = await supabase
