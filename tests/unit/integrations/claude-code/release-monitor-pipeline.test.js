@@ -415,12 +415,9 @@ describe('release-monitor (mock-based)', () => {
     chainable.select = mockSelect;
     // Return empty known IDs (all releases are new)
     // Need to handle the from('eva_claude_code_intake').select('github_release_id') chain
-    const selectChain = { ...chainable };
     // First call: from('eva_sync_state') for circuit check → maybeSingle
     // Second call: from('eva_claude_code_intake').select('github_release_id') → data
-    let fromCallCount = 0;
     mockFrom.mockImplementation((table) => {
-      fromCallCount++;
       if (table === 'eva_sync_state') {
         return {
           ...chainable,
@@ -470,7 +467,6 @@ describe('release-monitor (mock-based)', () => {
 describe('approval-handler (mock-based)', () => {
   it('processApprovals returns expected shape', async () => {
     // Build a deep mock that supports the full chain: from().select().eq().eq().lt()
-    const mockTerminal = vi.fn().mockResolvedValue({ data: [], error: null });
     const mockLtFn = vi.fn().mockResolvedValue({ data: [], error: null });
     const mockEq2 = vi.fn().mockImplementation(() => ({
       lt: mockLtFn,
