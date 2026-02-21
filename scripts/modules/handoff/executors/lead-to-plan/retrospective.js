@@ -310,17 +310,13 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
         ...(handoffResult.success ? [`All ${retrospectiveType} gates passed for ${sdType} type`] : [])
       ],
       failure_patterns: whatNeedsImprovement.slice(0, 3),
-      // PAT-AUTO-a7aa772c fix: rubric expects {area, analysis, prevention} — NOT root_cause
-      improvement_areas: whatNeedsImprovement.slice(0, 3).map(item =>
-        typeof item === 'string'
-          ? { area: item, analysis: 'Identified during handoff analysis — review for systemic pattern', prevention: 'Monitor for recurrence and address proactively' }
-          : (item.root_cause && !item.analysis ? { ...item, analysis: item.root_cause } : item)
-      ),
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-035: Use enricher for SD-specific improvement areas
+      improvement_areas: buildSDSpecificImprovementAreas(sd, allIssues),
       // PAT-RETRO-BOILERPLATE-001 fix: Include actual issues in protocol_improvements
       protocol_improvements: discoveredIssues.length > 0
         ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
         : null,
-      generated_by: 'MANUAL',
+      generated_by: isInteractive ? 'MANUAL' : 'AUTO_HANDOFF',
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
       performance_impact: 'Standard',

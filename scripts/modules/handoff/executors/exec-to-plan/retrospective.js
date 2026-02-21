@@ -21,6 +21,7 @@
 
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 import { execSync } from 'child_process';
+import { buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-035
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -400,27 +401,12 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       within_scope: true,
       success_patterns: [`EXEC quality: ${qualityScore}%`],
       failure_patterns: whatNeedsImprovement.slice(0, 3),
-      improvement_areas: whatNeedsImprovement.slice(0, 3).map(item => {
-        // Enrich each improvement area with root cause analysis
-        if (item.includes('Test coverage')) {
-          return `${item}. Root cause: test evidence scored ${testRating}/5 — gate expects comprehensive scenario coverage including edge cases and error paths. Remediation: add explicit test files covering each PRD acceptance criterion, targeting ≥4/5 on next iteration.`;
-        }
-        if (item.includes('Implementation fidelity')) {
-          return `${item}. Root cause: PRD alignment scored ${implRating}/5 — implementation may have deviated from functional requirements or missed acceptance criteria. Remediation: cross-reference each FR in the PRD against delivered code and close gaps.`;
-        }
-        if (item.includes('Sub-agent orchestration')) {
-          return `${item}. Root cause: sub-agent usage scored ${subAgentRating}/5 — required sub-agents may have been skipped or invoked without the Five-Point Brief standard. Remediation: verify all trigger-keyword sub-agents were invoked per CLAUDE_CORE.md and review prompt quality.`;
-        }
-        if (item.includes('No specific issues')) {
-          return `${item}. All gates passed above threshold — focus on maintaining quality by documenting implementation patterns for reuse in similar SDs.`;
-        }
-        // Issue-pattern items: already contain pattern_id and summary
-        return `${item}. Remediation: check issue_patterns table for proven_solutions and apply the highest-rated fix to prevent recurrence.`;
-      }),
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-035: Use enricher for SD-specific {area, analysis, prevention} objects
+      improvement_areas: buildSDSpecificImprovementAreas(sd, allIssues),
       protocol_improvements: discoveredIssues.length > 0
         ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
         : null,
-      generated_by: 'MANUAL',
+      generated_by: 'AUTO_HANDOFF',
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
       performance_impact: 'Standard',
