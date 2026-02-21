@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-21T07:05:42.917Z
+**Generated**: 2026-02-21T07:38:02.749Z
 **Rows**: 1,214
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (85 total)
+## Columns (86 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -107,6 +107,7 @@ Use the id column instead - it is the canonical identifier. |
 | vision_score_action | `character varying(20)` | YES | - | Action classification from last vision score: accept, minor_sd, gap_closure_sd, or escalate. |
 | vision_origin_score_id | `uuid` | YES | - | If this SD was generated as a corrective action, links back to the eva_vision_scores record that triggered its creation. |
 | vision_alignment_score | `numeric` | YES | - | Vision alignment score (0-100), populated by SD-MAN-INFRA-DYNAMIC-VISION-ALIGNMENT-001 scoring engine |
+| venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this SD to a specific venture for multi-venture isolation. NULL = unscoped (legacy/infrastructure SDs). |
 
 ## Constraints
 
@@ -116,6 +117,7 @@ Use the id column instead - it is the canonical identifier. |
 ### Foreign Keys
 - `strategic_directives_v2_parent_sd_id_fkey`: parent_sd_id → strategic_directives_v2(id)
 - `strategic_directives_v2_target_release_id_fkey`: target_release_id → releases(id)
+- `strategic_directives_v2_venture_id_fkey`: venture_id → ventures(id)
 - `strategic_directives_v2_vision_origin_score_id_fkey`: vision_origin_score_id → eva_vision_scores(id)
 
 ### Unique Constraints
@@ -270,6 +272,10 @@ Use the id column instead - it is the canonical identifier. |
   ```sql
   CREATE INDEX idx_strategic_directives_v2_status ON public.strategic_directives_v2 USING btree (status)
   ```
+- `idx_strategic_directives_v2_venture_id`
+  ```sql
+  CREATE INDEX idx_strategic_directives_v2_venture_id ON public.strategic_directives_v2 USING btree (venture_id) WHERE (venture_id IS NOT NULL)
+  ```
 - `strategic_directives_v2_pkey`
   ```sql
   CREATE UNIQUE INDEX strategic_directives_v2_pkey ON public.strategic_directives_v2 USING btree (id)
@@ -310,6 +316,22 @@ Use the id column instead - it is the canonical identifier. |
 - **Roles**: {authenticated}
 - **Using**: `fn_is_service_role()`
 - **With Check**: `fn_is_service_role()`
+
+### 5. venture_insert_strategic_directives_v2 (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+
+### 6. venture_select_strategic_directives_v2 (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+
+### 7. venture_update_strategic_directives_v2 (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+- **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
 
 ## Triggers
 

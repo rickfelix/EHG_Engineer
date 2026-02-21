@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-21T07:05:42.917Z
-**Rows**: 8,328
-**RLS**: Enabled (8 policies)
+**Generated**: 2026-02-21T07:38:02.749Z
+**Rows**: 8,332
+**RLS**: Enabled (11 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (26 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -44,6 +44,7 @@
 | resolved_at | `timestamp with time zone` | YES | - | - |
 | resolution_type | `text` | YES | - | - |
 | resolution_notes | `text` | YES | - | - |
+| venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this handoff to a specific venture. Should match the parent SD venture_id. |
 
 ## Constraints
 
@@ -52,6 +53,7 @@
 
 ### Foreign Keys
 - `sd_phase_handoffs_sd_id_fkey`: sd_id → strategic_directives_v2(id)
+- `sd_phase_handoffs_venture_id_fkey`: venture_id → ventures(id)
 
 ### Unique Constraints
 - `sd_phase_handoffs_sd_id_from_phase_to_phase_created_at_key`: UNIQUE (sd_id, from_phase, to_phase, created_at)
@@ -102,6 +104,10 @@
 - `idx_sd_phase_handoffs_validation_status`
   ```sql
   CREATE INDEX idx_sd_phase_handoffs_validation_status ON public.sd_phase_handoffs USING btree (validation_passed, validation_score) WHERE (validation_passed IS NOT NULL)
+  ```
+- `idx_sd_phase_handoffs_venture_id`
+  ```sql
+  CREATE INDEX idx_sd_phase_handoffs_venture_id ON public.sd_phase_handoffs USING btree (venture_id) WHERE (venture_id IS NOT NULL)
   ```
 - `sd_phase_handoffs_pkey`
   ```sql
@@ -156,6 +162,22 @@
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 9. venture_insert_sd_phase_handoffs (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+
+### 10. venture_select_sd_phase_handoffs (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+
+### 11. venture_update_sd_phase_handoffs (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+- **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
 
 ## Triggers
 

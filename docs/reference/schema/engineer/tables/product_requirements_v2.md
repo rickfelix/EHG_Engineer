@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-21T07:05:42.917Z
-**Rows**: 1,069
-**RLS**: Enabled (3 policies)
+**Generated**: 2026-02-21T07:38:02.749Z
+**Rows**: 1,070
+**RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (58 total)
+## Columns (59 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -85,6 +85,7 @@
 - observability_rollout: Monitoring, rollout, and rollback plans (object with metrics, alerts, rollback_plan)
 Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integration requirements. |
 | goal_summary | `character varying(300)` | YES | - | - |
+| venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this PRD to a specific venture. Should match the parent SD venture_id. |
 
 ## Constraints
 
@@ -94,6 +95,7 @@ Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integ
 ### Foreign Keys
 - `fk_prd_sd_id`: sd_id → strategic_directives_v2(id)
 - `prd_sd_fk`: sd_id → strategic_directives_v2(id)
+- `product_requirements_v2_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
 - `acceptance_criteria_required`: CHECK (((acceptance_criteria IS NOT NULL) AND ((acceptance_criteria -> 0) IS NOT NULL)))
@@ -151,6 +153,10 @@ Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integ
   ```sql
   CREATE UNIQUE INDEX idx_product_requirements_v2_unique_sd_id ON public.product_requirements_v2 USING btree (sd_id) WHERE (sd_id IS NOT NULL)
   ```
+- `idx_product_requirements_v2_venture_id`
+  ```sql
+  CREATE INDEX idx_product_requirements_v2_venture_id ON public.product_requirements_v2 USING btree (venture_id) WHERE (venture_id IS NOT NULL)
+  ```
 - `product_requirements_v2_pkey`
   ```sql
   CREATE UNIQUE INDEX product_requirements_v2_pkey ON public.product_requirements_v2 USING btree (id)
@@ -174,6 +180,22 @@ Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integ
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 4. venture_insert_product_requirements_v2 (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+
+### 5. venture_select_product_requirements_v2 (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+
+### 6. venture_update_product_requirements_v2 (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
+- **With Check**: `((venture_id IS NULL) OR fn_user_has_venture_access(venture_id))`
 
 ## Triggers
 
