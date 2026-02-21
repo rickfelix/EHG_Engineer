@@ -134,6 +134,11 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
     }
 
     console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${heartbeatInfo}${colors.reset}`);
+    // SD-LEO-INFRA-CLAIM-SYSTEM-IMPROVEMENTS-001 (FR-002): Suggest /claim release for stale claims
+    const heartbeatSeconds = Math.round(claimingSession?.heartbeat_age_seconds || 0);
+    if (heartbeatSeconds >= 300) {
+      console.log(`${colors.yellow}${indent}        └─ Stale claim. Release: /claim release ${claimedBySession}${colors.reset}`);
+    }
   }
 
   // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Show local activity warning

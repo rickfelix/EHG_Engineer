@@ -450,6 +450,19 @@ async function main() {
     return; // Supabase not available - skip silently
   }
 
+  // SD-LEO-INFRA-CLAIM-SYSTEM-IMPROVEMENTS-001 (FR-003): Clean up stale sessions on startup.
+  // Fire-and-forget — does not block session initialization.
+  const staleThreshold = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS || '300', 10);
+  supabase.rpc('cleanup_stale_sessions', { p_stale_threshold_seconds: staleThreshold })
+    .then(({ error }) => {
+      if (error) {
+        logEvent('session.stale_cleanup_rpc.error', { error: error.message });
+      } else {
+        logEvent('session.stale_cleanup_rpc.success', { threshold_seconds: staleThreshold });
+      }
+    })
+    .catch(() => { /* non-blocking */ });
+
   const mySessionId = getCurrentSessionId();
   const codebase = getCodebase();
   const branch = getBranch();
