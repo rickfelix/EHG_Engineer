@@ -208,6 +208,9 @@ src/client/dist/
 # Archived bootstrap scripts (local reference only)
 /docs/archive/
 
+# Playground config (generated from .env, contains credentials)
+playground.config.js
+
 # Claude Code temp files (Windows migration artifacts)
 tmpclaude-*-cwd
 nul

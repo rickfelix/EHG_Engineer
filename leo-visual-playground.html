@@ -196,6 +196,7 @@
   </div>
 </div>
 
+<script src="playground.config.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
 </script>
@@ -207,9 +208,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // CONFIG
 // ═══════════════════════════════════════════════
 const _params = new URLSearchParams(window.location.search);
+const _pc = window.__PLAYGROUND_CONFIG || {};
 const CONFIG = {
-  SUPABASE_URL: _params.get('sb_url') || '',
-  SUPABASE_KEY: _params.get('sb_key') || '',
+  SUPABASE_URL: _params.get('sb_url') || _pc.SUPABASE_URL || '',
+  SUPABASE_KEY: _params.get('sb_key') || _pc.SUPABASE_KEY || '',
   RECONNECT_MAX: 5,
   RECONNECT_BASE_MS: 1000,
   POLL_INTERVAL_MS: 60000,
@@ -299,6 +301,7 @@ const state = {
   slideQueue: [], slideIndex: 0, slidePaused: false, slideSpeed: 1,
   slideElapsed: 0, currentSDId: null, claimedIds: new Set(),
   liveSessions: 0, burnRate: { avgHours: null, confidence: 'default', sampleSize: 0 },
+  animationFrameId: null, intervalIds: [],
 };
 
 const TYPE_BASELINES_MIN = {
@@ -391,7 +394,12 @@ function computeFlatNormals(geo) {
 }
 
 function buildShape(sd) {
-  while (shapeGroup.children.length) shapeGroup.remove(shapeGroup.children[0]);
+  while (shapeGroup.children.length) {
+    const child = shapeGroup.children[0];
+    shapeGroup.remove(child);
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  }
   const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
   const isBlocked = sd.status === 'blocked';
   const col = isBlocked ? new THREE.Color(0xc4626a) : def.color.clone();
@@ -436,6 +444,11 @@ function buildShape(sd) {
   for (let i = 0; i < gp.length; i += 3) { gp[i]+=gn[i]*0.18; gp[i+1]+=gn[i+1]*0.18; gp[i+2]+=gn[i+2]*0.18; }
   outerGlow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ color:col.clone(), transparent:true, opacity:0, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, depthWrite:false }));
   shapeGroup.add(outerGlow);
+
+  // Dispose intermediate geometries no longer needed
+  // Note: hiNonIdx is used by smoothMesh, glowGeo by outerGlow — keep those
+  loGeo.dispose(); loNonIdx.dispose(); loFlat.dispose();
+  hiGeo.dispose(); smNormGeo.dispose();
 
   // Face fill order
   faceFillOrder = []; for (let i = 0; i < totalFaces; i++) faceFillOrder.push(i);
@@ -890,7 +903,7 @@ function updateQueueHighlight() { document.querySelectorAll('.q-item').forEach(e
 // ═══════════════════════════════════════════════
 function animate() {
   if (!state.webglOk) return;
-  requestAnimationFrame(animate);
+  state.animationFrameId = requestAnimationFrame(animate);
   const dt = clock.getDelta(), t = clock.getElapsedTime(); frame++;
   // Slow camera breathe: gentle zoom in/out over ~60s cycle
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -929,7 +942,15 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-document.addEventListener('visibilitychange', () => { if(document.hidden) clock.stop(); else { clock.start(); if(state.webglOk) animate(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    clock.stop();
+    if (state.animationFrameId) { cancelAnimationFrame(state.animationFrameId); state.animationFrameId = null; }
+  } else {
+    clock.start();
+    if (state.webglOk && !state.animationFrameId) animate();
+  }
+});
 
 // ═══════════════════════════════════════════════
 // SUPABASE CONNECTION
@@ -1011,8 +1032,14 @@ async function loadClaimedSDs() {
 async function initSupabase() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
     setConn('err', 'Not configured');
-    addLog('Add ?sb_url=...&sb_key=... to connect', 'system');
+    addLog('Run: npm run playground:config  (or add ?sb_url=...&sb_key=... to URL)', 'system');
     return;
+  }
+  // Strip credentials from URL bar/history if passed as query params
+  if (_params.get('sb_url') || _params.get('sb_key')) {
+    _params.delete('sb_url'); _params.delete('sb_key');
+    const clean = _params.toString() ? `${location.pathname}?${_params}` : location.pathname;
+    history.replaceState(null, '', clean);
   }
   try {
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
@@ -1029,8 +1056,8 @@ async function initSupabase() {
     subscribeRealtime();
     startIdleMonitoring();
     fetchBurnRate(); fetchLiveSessions();
-    setInterval(fetchLiveSessions, 60000);
-    setInterval(fetchBurnRate, 300000);
+    state.intervalIds.push(setInterval(fetchLiveSessions, 60000));
+    state.intervalIds.push(setInterval(fetchBurnRate, 300000));
   } catch (err) { console.error('Supabase init failed:', err); setConn('err', 'Offline'); addLog('Connection failed: '+err.message, 'system'); }
 }
 
@@ -1059,13 +1086,13 @@ function handleDisconnect() {
 }
 
 function startPolling() {
-  setInterval(async () => {
+  state.intervalIds.push(setInterval(async () => {
     if (!state.supabase) return;
     const { data } = await state.supabase.from('strategic_directives_v2')
       .select('id, sd_key, title, sd_type, status, current_phase, priority, progress_percentage, created_at, updated_at')
       .limit(CONFIG.MAX_SDS);
     if (data) { const ids=new Set(data.map(d=>d.id)); state.sds.forEach((_,id)=>{if(!ids.has(id))removeSD(id);}); data.forEach(sd=>addOrUpdateSD(sd)); }
-  }, CONFIG.POLL_INTERVAL_MS);
+  }, CONFIG.POLL_INTERVAL_MS));
 }
 
 function setConn(type, text) { document.getElementById('connDot').className='conn-dot '+type; document.getElementById('connText').textContent=text; }
@@ -1090,7 +1117,7 @@ async function fetchLiveSessions() {
   try {
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data, error } = await state.supabase.from('claude_sessions')
-      .select('session_id').in('status', ['active', 'idle']).gte('last_heartbeat', cutoff);
+      .select('session_id').in('status', ['active', 'idle']).gte('heartbeat_at', cutoff);
     if (!error && data) state.liveSessions = data.length;
   } catch (e) { console.warn('fetchLiveSessions:', e); }
   updateEstimate();
@@ -1133,6 +1160,10 @@ initThree();
 if (state.webglOk) animate();
 initSupabase();
 addLog('Forge initialized — awaiting directives', 'system');
+window.addEventListener('beforeunload', () => {
+  state.intervalIds.forEach(id => clearInterval(id));
+  if (state.animationFrameId) cancelAnimationFrame(state.animationFrameId);
+});
 </script>
 </body>
 </html>
