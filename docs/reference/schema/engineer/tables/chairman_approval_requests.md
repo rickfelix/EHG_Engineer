@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-21T13:23:45.333Z
+**Generated**: 2026-02-21T15:06:05.923Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -19,7 +19,7 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| venture_id | `uuid` | **NO** | - | - |
+| venture_id | `uuid` | YES | - | - |
 | request_type | `character varying(50)` | **NO** | - | - |
 | request_title | `character varying(200)` | **NO** | - | - |
 | request_description | `text` | **NO** | - | - |
@@ -44,7 +44,7 @@
 
 ### Check Constraints
 - `chairman_approval_requests_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'urgent'::character varying])::text[])))
-- `chairman_approval_requests_request_type_check`: CHECK (((request_type)::text = ANY ((ARRAY['valuation_approval'::character varying, 'substage_override'::character varying, 'exit_strategy_approval'::character varying, 'investor_approach'::character varying, 'kill_switch'::character varying])::text[])))
+- `chairman_approval_requests_request_type_check`: CHECK (((request_type)::text = ANY (ARRAY['valuation_approval'::text, 'substage_override'::text, 'exit_strategy_approval'::text, 'investor_approach'::text, 'kill_switch'::text, 'release_enhancement'::text])))
 - `chairman_approval_requests_status_check`: CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'under_review'::character varying, 'approved'::character varying, 'rejected'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
 - `valid_decision_rationale`: CHECK ((((status)::text <> ALL ((ARRAY['approved'::character varying, 'rejected'::character varying])::text[])) OR (char_length(decision_rationale) >= 50)))
 
