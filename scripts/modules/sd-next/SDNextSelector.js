@@ -424,6 +424,34 @@ export class SDNextSelector {
       }
     }
 
+    // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 4 - OKR-Driven Queue Prioritization
+    // Batch-load KR alignments to boost SDs linked to at-risk/off-track KRs
+    const okrBoostMap = new Map(); // sd_id (UUID) -> boost factor
+    try {
+      const sdUUIDs = filteredSDs.map(sd => sd.id);
+      const { data: krAlignments } = await this.supabase
+        .from('sd_key_result_alignment')
+        .select('sd_id, key_result_id, contribution_type, key_results!inner(status)')
+        .in('sd_id', sdUUIDs);
+
+      if (krAlignments && krAlignments.length > 0) {
+        for (const alignment of krAlignments) {
+          const krStatus = alignment.key_results?.status;
+          // Boost SDs linked to at-risk or off-track KRs
+          if (krStatus === 'at_risk' || krStatus === 'off_track') {
+            const boostFactor = krStatus === 'off_track' ? 0.5 : 0.7; // Lower = higher priority
+            const existing = okrBoostMap.get(alignment.sd_id);
+            // Keep the strongest boost (lowest factor)
+            if (!existing || boostFactor < existing) {
+              okrBoostMap.set(alignment.sd_id, boostFactor);
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-fatal: OKR boost is additive, not blocking
+    }
+
     // Create baseline lookup map for ordering and track assignment
     const baselineMap = new Map();
     for (const item of this.baselineItems) {
@@ -492,7 +520,12 @@ export class SDNextSelector {
       const gapWeight = (hasVisionOrigin && visionScoreVal !== null)
         ? (100 - Math.max(0, Math.min(100, visionScoreVal))) / 100
         : 0;
-      const compositeRank = gapWeight > 0 ? sequenceRank / (1 + gapWeight) : sequenceRank;
+      let compositeRank = gapWeight > 0 ? sequenceRank / (1 + gapWeight) : sequenceRank;
+
+      // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 4 - OKR boost
+      // SDs linked to at-risk/off-track KRs get priority boost (lower rank = higher priority)
+      const okrBoost = okrBoostMap.get(sd.id) || 1.0;
+      compositeRank = compositeRank * okrBoost;
 
       // SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A: Extract urgency from metadata
       const urgencyScore = sd.metadata?.urgency_score ?? null;
@@ -506,6 +539,7 @@ export class SDNextSelector {
         sequence_rank: sequenceRank,
         gap_weight: gapWeight,
         composite_rank: compositeRank,
+        okr_boost: okrBoost < 1.0 ? okrBoost : null, // Only set if boosted
         urgency_score: urgencyScore,
         urgency_band: urgencyBand,
         urgency_numeric: urgencyNumeric,

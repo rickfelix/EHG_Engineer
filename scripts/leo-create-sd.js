@@ -974,6 +974,92 @@ async function createSD(options) {
     ? smoke_test_steps
     : buildDefaultSmokeTestSteps(type, title);
 
+  // ========================================================================
+  // GOVERNANCE GUARDRAILS (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007)
+  // ========================================================================
+
+  // Guardrail 2: OKR Monthly Hard Stop
+  // Warn when no active OKRs exist - SDs should align to strategic objectives
+  if (!parentId) { // Skip for child SDs (they inherit parent's OKR alignment)
+    try {
+      const { count: okrCount } = await supabase
+        .from('objectives')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true);
+
+      if (okrCount === 0) {
+        console.log('\n' + '⚠'.repeat(30));
+        console.log('⚠️  OKR ALIGNMENT WARNING (Guardrail V10)');
+        console.log('⚠'.repeat(30));
+        console.log('   No active OKRs found in the objectives table.');
+        console.log('   SDs should align to strategic objectives for prioritization.');
+        console.log('');
+        console.log('   To create OKRs: /leo eva okr');
+        console.log('   Proceeding without OKR alignment...');
+        console.log('⚠'.repeat(30));
+      }
+    } catch {
+      // Non-fatal: OKR check should not block SD creation
+    }
+  }
+
+  // Guardrail 1: Brainstorm Intent Validation
+  // Warn when feature/enhancement SDs are created without a prior brainstorm session
+  const brainstormTypes = ['feature', 'enhancement'];
+  if (brainstormTypes.includes(dbType) && !parentId && !metadata?.source?.includes('brainstorm')) {
+    try {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentSessions } = await supabase
+        .from('brainstorm_sessions')
+        .select('id, topic, created_sd_id, crystallization_score')
+        .gte('created_at', thirtyDaysAgo)
+        .is('created_sd_id', null) // Sessions not yet linked to an SD
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!recentSessions || recentSessions.length === 0) {
+        console.log('\n' + '💡'.repeat(15));
+        console.log('💡 BRAINSTORM INTENT CHECK (Guardrail V11)');
+        console.log('💡'.repeat(15));
+        console.log(`   Creating a "${type}" SD without a prior brainstorm session.`);
+        console.log('   Brainstorming helps crystallize requirements and reduce scope creep.');
+        console.log('');
+        console.log('   To start a brainstorm: /brainstorm');
+        console.log('   Proceeding with SD creation...');
+        console.log('💡'.repeat(15));
+      }
+    } catch {
+      // Non-fatal: brainstorm check should not block SD creation
+    }
+  }
+
+  // Guardrail 3: Bulk SD Draft Limit
+  // Warn when too many draft SDs already exist (prevents backlog sprawl)
+  const DRAFT_LIMIT = 10;
+  try {
+    const { count: draftCount } = await supabase
+      .from('strategic_directives_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'draft')
+      .eq('is_active', true);
+
+    if (draftCount >= DRAFT_LIMIT) {
+      console.log('\n' + '🚧'.repeat(15));
+      console.log('🚧 DRAFT BACKLOG WARNING (Guardrail V06)');
+      console.log('🚧'.repeat(15));
+      console.log(`   ${draftCount} draft SDs already exist (limit: ${DRAFT_LIMIT}).`);
+      console.log('   Consider completing existing drafts before creating new ones.');
+      console.log('');
+      console.log('   View queue: npm run sd:next');
+      console.log('   Proceeding with SD creation...');
+      console.log('🚧'.repeat(15));
+    }
+  } catch {
+    // Non-fatal: draft count check should not block SD creation
+  }
+
+  // ========================================================================
+
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
