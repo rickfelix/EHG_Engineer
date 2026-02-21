@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LEO Visual Playground - SD Execution Dashboard</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a1a;
+      --bg-panel: rgba(15, 15, 35, 0.92);
+      --text-primary: #e0e0e0;
+      --text-secondary: #9e9e9e;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #4FC3F7;
+      --feature-color: #4FC3F7;
+      --infra-color: #FFB74D;
+      --fix-color: #EF5350;
+      --enhance-color: #66BB6A;
+      --doc-color: #AB47BC;
+      --unknown-color: #9E9E9E;
+      --status-draft: #78909C;
+      --status-planning: #42A5F5;
+      --status-exec: #FFA726;
+      --status-completed: #66BB6A;
+      --status-blocked: #EF5350;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #app { display: flex; height: 100vh; width: 100vw; }
+
+    #scene-container {
+      width: 60%; height: 100%; position: relative;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a1a2a 100%);
+    }
+
+    #dashboard {
+      width: 40%; height: 100%; overflow-y: auto;
+      background: var(--bg-panel); border-left: 1px solid var(--border);
+      padding: 12px; display: flex; flex-direction: column; gap: 12px;
+    }
+
+    #canvas-3d { width: 100%; height: 100%; display: block; }
+
+    #status-bar {
+      position: absolute; top: 8px; left: 8px; right: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 12px; background: rgba(0,0,0,0.6); border-radius: 6px;
+      font-size: 12px; z-index: 10;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; margin-right: 6px;
+    }
+    .status-dot.connected { background: #66BB6A; }
+    .status-dot.disconnected { background: #EF5350; }
+    .status-dot.reconnecting { background: #FFA726; animation: pulse 1s infinite; }
+
+    #fps-counter { font-family: monospace; color: var(--text-secondary); }
+
+    #controls-hint {
+      position: absolute; bottom: 8px; left: 8px;
+      padding: 6px 10px; background: rgba(0,0,0,0.5); border-radius: 4px;
+      font-size: 11px; color: var(--text-secondary); z-index: 10;
+    }
+
+    #tooltip {
+      position: absolute; display: none; padding: 10px 14px;
+      background: rgba(10, 10, 30, 0.95); border: 1px solid var(--accent);
+      border-radius: 6px; font-size: 12px; pointer-events: none;
+      z-index: 20; max-width: 280px; line-height: 1.5;
+    }
+
+    .panel {
+      background: rgba(20, 20, 50, 0.6); border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 8px 12px; font-size: 13px; font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .panel-body { padding: 8px; }
+
+    .panel-collapsible .panel-body { display: none; }
+    .panel-collapsible.expanded .panel-body { display: block; }
+    .panel-header .toggle { cursor: pointer; user-select: none; }
+
+    #sd-queue { flex: 0 0 auto; max-height: 40%; }
+    #sd-queue .panel-body { overflow-y: auto; max-height: 250px; }
+
+    .sd-row {
+      display: grid; grid-template-columns: 1fr 70px 60px;
+      gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border);
+      cursor: pointer; font-size: 12px; align-items: center;
+      transition: background 0.15s;
+    }
+    .sd-row:hover { background: rgba(79, 195, 247, 0.08); }
+    .sd-row.selected { background: rgba(79, 195, 247, 0.15); border-left: 2px solid var(--accent); }
+
+    .sd-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sd-key { color: var(--text-secondary); font-size: 10px; font-family: monospace; }
+
+    .badge {
+      display: inline-block; padding: 2px 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+    }
+    .badge.draft { background: rgba(120,144,156,0.3); color: var(--status-draft); }
+    .badge.planning { background: rgba(66,165,245,0.2); color: var(--status-planning); }
+    .badge.in_progress { background: rgba(255,167,38,0.2); color: var(--status-exec); }
+    .badge.completed { background: rgba(102,187,106,0.2); color: var(--status-completed); }
+    .badge.blocked { background: rgba(239,83,80,0.2); color: var(--status-blocked); }
+
+    .type-icon {
+      display: inline-block; width: 14px; height: 14px; border-radius: 2px;
+      vertical-align: middle; margin-right: 4px;
+    }
+
+    #burndown-panel { flex: 1 1 auto; min-height: 180px; }
+    #burndown-panel canvas { width: 100% !important; height: 150px !important; }
+
+    #stats-bar {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; flex: 0 0 auto;
+    }
+
+    .stat-card {
+      background: rgba(20, 20, 50, 0.6); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px; text-align: center;
+    }
+    .stat-value { font-size: 20px; font-weight: 700; }
+    .stat-label { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+
+    #error-banner {
+      display: none; padding: 8px 12px; background: rgba(239, 83, 80, 0.15);
+      border: 1px solid var(--fix-color); border-radius: 6px; font-size: 12px;
+    }
+    #error-banner button {
+      margin-left: 8px; padding: 2px 8px; border: 1px solid var(--fix-color);
+      background: transparent; color: var(--fix-color); border-radius: 3px; cursor: pointer;
+    }
+
+    #fallback-table {
+      display: none; width: 100%; padding: 16px;
+      overflow: auto; height: 100%;
+    }
+    #fallback-table table {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    #fallback-table th, #fallback-table td {
+      padding: 6px 8px; border: 1px solid var(--border); text-align: left;
+    }
+    #fallback-table th { background: rgba(20,20,50,0.8); }
+
+    #no-data-msg {
+      display: none; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); text-align: center;
+      color: var(--text-secondary); font-size: 14px; z-index: 5;
+    }
+
+    /* Accessibility: reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Summary for screen readers */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    @media (max-width: 1024px) {
+      #app { flex-direction: column; }
+      #scene-container { width: 100%; height: 50%; }
+      #dashboard { width: 100%; height: 50%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="scene-container">
+      <canvas id="canvas-3d" aria-label="3D visualization of Strategic Directives"></canvas>
+      <div id="status-bar">
+        <div>
+          <span class="status-dot disconnected" id="conn-dot"></span>
+          <span id="conn-text">Disconnected</span>
+          <span style="margin-left: 12px" id="sd-count">0 SDs</span>
+        </div>
+        <div id="fps-counter">-- FPS</div>
+      </div>
+      <div id="controls-hint">R: Reset camera | Scroll: Zoom | Drag: Orbit</div>
+      <div id="tooltip"></div>
+      <div id="no-data-msg">No Strategic Directives found.<br>SDs will appear here in real-time.</div>
+      <div id="fallback-table">
+        <h3 style="margin-bottom: 12px;">SD List (2D Fallback)</h3>
+        <table><thead><tr>
+          <th>Key</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>Progress</th>
+        </tr></thead><tbody id="fallback-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div id="dashboard" role="complementary" aria-label="SD Dashboard">
+      <div id="sr-summary" class="sr-only" aria-live="polite" role="status"></div>
+
+      <div id="error-banner">
+        <span id="error-msg"></span>
+        <button onclick="retryConnection()">Retry</button>
+      </div>
+
+      <div id="stats-bar">
+        <div class="stat-card"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-active" style="color:var(--status-exec)">0</div><div class="stat-label">Active</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-completed" style="color:var(--status-completed)">0</div><div class="stat-label">Done</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-blocked" style="color:var(--status-blocked)">0</div><div class="stat-label">Blocked</div></div>
+      </div>
+
+      <div class="panel" id="sd-queue">
+        <div class="panel-header">
+          <span>SD Queue</span>
+          <span id="queue-count" style="font-size:11px; color:var(--text-secondary)">0 items</span>
+        </div>
+        <div class="panel-body" id="queue-body"></div>
+      </div>
+
+      <div class="panel" id="burndown-panel">
+        <div class="panel-header">
+          <span>Status Distribution</span>
+          <select id="chart-range" style="background:transparent; color:var(--text-secondary); border:1px solid var(--border); border-radius:3px; font-size:11px; padding:2px 4px;">
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div class="panel-body">
+          <canvas id="status-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ── Configuration ──
+    const CONFIG = {
+      SUPABASE_URL: '',     // Set your Supabase URL
+      SUPABASE_KEY: '',     // Set your Supabase anon key
+      RECONNECT_MAX: 5,
+      RECONNECT_BASE_MS: 1000,
+      POLL_INTERVAL_MS: 60000,
+      DEBOUNCE_MS: 200,
+      MAX_SDS: 500,
+    };
+
+    // ── State ──
+    const state = {
+      sds: new Map(),
+      meshes: new Map(),
+      selected: null,
+      channel: null,
+      reconnectAttempts: 0,
+      usePolling: false,
+      supabase: null,
+      webglAvailable: true,
+    };
+
+    // ── Type → Geometry + Color ──
+    const TYPE_CONFIG = {
+      feature:        { color: 0x4FC3F7, geometry: 'sphere' },
+      infrastructure: { color: 0xFFB74D, geometry: 'cube' },
+      fix:            { color: 0xEF5350, geometry: 'tetra' },
+      enhancement:    { color: 0x66BB6A, geometry: 'torus' },
+      documentation:  { color: 0xAB47BC, geometry: 'cylinder' },
+    };
+    const DEFAULT_TYPE = { color: 0x9E9E9E, geometry: 'octa' };
+
+    // ── Status → Emissive ──
+    const STATUS_EMISSIVE = {
+      completed: 0x66BB6A,
+      blocked: 0xEF5350,
+      draft: 0x000000,
+    };
+
+    // ── Three.js Setup ──
+    const canvas = document.getElementById('canvas-3d');
+    let renderer, scene, camera, controls, raycaster, mouse;
+    const clock = new THREE.Clock();
+    let frameCount = 0, lastFpsTime = 0;
+    const fpsEl = document.getElementById('fps-counter');
+
+    function checkWebGL() {
+      try {
+        const c = document.createElement('canvas');
+        return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+      } catch { return false; }
+    }
+
+    function initThree() {
+      if (!checkWebGL()) {
+        state.webglAvailable = false;
+        document.getElementById('scene-container').querySelector('#canvas-3d').style.display = 'none';
+        document.getElementById('fallback-table').style.display = 'block';
+        document.getElementById('status-bar').style.display = 'none';
+        document.getElementById('controls-hint').style.display = 'none';
+        return;
+      }
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(canvas.parentElement.clientWidth, canvas.parentElement.clientHeight);
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x0a0a1a, 0.008);
+
+      camera = new THREE.PerspectiveCamera(60, canvas.parentElement.clientWidth / canvas.parentElement.clientHeight, 0.1, 1000);
+      camera.position.set(0, 15, 30);
+
+      controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 100;
+      controls.minDistance = 5;
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0x404060, 0.6));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(10, 20, 10);
+      scene.add(dirLight);
+
+      // Grid
+      const grid = new THREE.GridHelper(60, 30, 0x1a1a3a, 0x111130);
+      grid.position.y = -0.5;
+      scene.add(grid);
+
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      canvas.addEventListener('mousemove', onMouseMove);
+      canvas.addEventListener('click', onCanvasClick);
+
+      const ro = new ResizeObserver(() => {
+        const w = canvas.parentElement.clientWidth;
+        const h = canvas.parentElement.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+      ro.observe(canvas.parentElement);
+    }
+
+    // ── Geometry Factories ──
+    const GEO_CACHE = {};
+    function getGeometry(type) {
+      if (GEO_CACHE[type]) return GEO_CACHE[type];
+      let g;
+      switch (type) {
+        case 'sphere':   g = new THREE.SphereGeometry(0.7, 24, 24); break;
+        case 'cube':     g = new THREE.BoxGeometry(1.2, 1.2, 1.2); break;
+        case 'tetra':    g = new THREE.TetrahedronGeometry(0.8); break;
+        case 'torus':    g = new THREE.TorusGeometry(0.6, 0.25, 12, 24); break;
+        case 'cylinder': g = new THREE.CylinderGeometry(0.5, 0.5, 1.2, 16); break;
+        case 'octa':     g = new THREE.OctahedronGeometry(0.7); break;
+        default:         g = new THREE.OctahedronGeometry(0.7); break;
+      }
+      GEO_CACHE[type] = g;
+      return g;
+    }
+
+    function createSDMesh(sd) {
+      const tc = TYPE_CONFIG[sd.sd_type] || DEFAULT_TYPE;
+      const geo = getGeometry(tc.geometry);
+      const mat = new THREE.MeshPhongMaterial({
+        color: tc.color,
+        emissive: STATUS_EMISSIVE[sd.status] || 0x000000,
+        emissiveIntensity: sd.status === 'blocked' ? 0.4 : 0.15,
+        wireframe: sd.status === 'draft',
+        transparent: sd.status === 'draft',
+        opacity: sd.status === 'draft' ? 0.6 : 1.0,
+        shininess: 80,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData = { sdId: sd.id, sdKey: sd.sd_key };
+
+      // Position: priority on Y, hash-based spread on X/Z
+      const hash = hashStr(sd.sd_key || sd.id);
+      const priorityY = { critical: 6, high: 4, medium: 2, low: 0 };
+      mesh.position.set(
+        ((hash % 200) - 100) / 5,
+        priorityY[sd.priority] || 1,
+        (((hash >> 8) % 200) - 100) / 5
+      );
+
+      return mesh;
+    }
+
+    function hashStr(s) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+
+    // ── SD Management ──
+    function addOrUpdateSD(sd) {
+      state.sds.set(sd.id, sd);
+
+      if (!state.webglAvailable) { updateFallbackTable(); return; }
+
+      if (state.meshes.has(sd.id)) {
+        const mesh = state.meshes.get(sd.id);
+        const tc = TYPE_CONFIG[sd.sd_type] || DEFAULT_TYPE;
+        mesh.material.color.setHex(tc.color);
+        mesh.material.emissive.setHex(STATUS_EMISSIVE[sd.status] || 0x000000);
+        mesh.material.emissiveIntensity = sd.status === 'blocked' ? 0.4 : 0.15;
+        mesh.material.wireframe = sd.status === 'draft';
+        mesh.material.opacity = sd.status === 'draft' ? 0.6 : 1.0;
+      } else {
+        const mesh = createSDMesh(sd);
+        scene.add(mesh);
+        state.meshes.set(sd.id, mesh);
+      }
+
+      document.getElementById('no-data-msg').style.display = 'none';
+      updateDashboard();
+    }
+
+    function removeSD(id) {
+      state.sds.delete(id);
+      const mesh = state.meshes.get(id);
+      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); state.meshes.delete(id); }
+      if (state.sds.size === 0) document.getElementById('no-data-msg').style.display = 'block';
+      updateDashboard();
+    }
+
+    // ── Dashboard Updates ──
+    let updateTimer = null;
+    function updateDashboard() {
+      if (updateTimer) return;
+      updateTimer = setTimeout(() => { updateTimer = null; renderDashboard(); }, CONFIG.DEBOUNCE_MS);
+    }
+
+    function renderDashboard() {
+      const sds = [...state.sds.values()];
+      const total = sds.length;
+      const active = sds.filter(s => s.status === 'in_progress').length;
+      const completed = sds.filter(s => s.status === 'completed').length;
+      const blocked = sds.filter(s => s.status === 'blocked').length;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-active').textContent = active;
+      document.getElementById('stat-completed').textContent = completed;
+      document.getElementById('stat-blocked').textContent = blocked;
+      document.getElementById('sd-count').textContent = `${total} SDs`;
+      document.getElementById('queue-count').textContent = `${total} items`;
+
+      // SR summary
+      document.getElementById('sr-summary').textContent =
+        `${total} strategic directives: ${active} active, ${completed} completed, ${blocked} blocked.`;
+
+      // Queue list
+      const sorted = sds.sort((a, b) => {
+        const statusOrder = { blocked: 0, in_progress: 1, planning: 2, draft: 3, completed: 4 };
+        return (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
+      });
+
+      const queueBody = document.getElementById('queue-body');
+      queueBody.innerHTML = sorted.map(sd => {
+        const tc = TYPE_CONFIG[sd.sd_type] || DEFAULT_TYPE;
+        const colorHex = '#' + tc.color.toString(16).padStart(6, '0');
+        const isSelected = state.selected === sd.id ? ' selected' : '';
+        return `<div class="sd-row${isSelected}" data-id="${sd.id}" onclick="window.selectSD('${sd.id}')" title="${sd.title || sd.sd_key}">
+          <div>
+            <span class="type-icon" style="background:${colorHex}"></span>
+            <span class="sd-title">${sd.title || sd.sd_key}</span>
+            <div class="sd-key">${sd.sd_key}</div>
+          </div>
+          <span class="badge ${sd.status}">${sd.status}</span>
+          <span style="font-size:11px;color:var(--text-secondary)">${sd.progress ?? 0}%</span>
+        </div>`;
+      }).join('');
+
+      updateChart(sds);
+    }
+
+    // ── Chart ──
+    let chart = null;
+    async function updateChart(sds) {
+      if (typeof Chart === 'undefined') return;
+      const statusCounts = {};
+      sds.forEach(sd => { statusCounts[sd.status] = (statusCounts[sd.status] || 0) + 1; });
+      const labels = Object.keys(statusCounts);
+      const data = Object.values(statusCounts);
+      const colors = labels.map(s => {
+        const map = { draft: '#78909C', planning: '#42A5F5', in_progress: '#FFA726', completed: '#66BB6A', blocked: '#EF5350' };
+        return map[s] || '#9E9E9E';
+      });
+
+      if (chart) { chart.destroy(); }
+      const ctx = document.getElementById('status-chart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'right', labels: { color: '#9e9e9e', font: { size: 11 } } } },
+          animation: { duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300 },
+        }
+      });
+    }
+
+    // ── Interaction ──
+    function onMouseMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const meshArr = [...state.meshes.values()];
+      const hits = raycaster.intersectObjects(meshArr);
+
+      const tooltip = document.getElementById('tooltip');
+      if (hits.length > 0) {
+        const sd = state.sds.get(hits[0].object.userData.sdId);
+        if (sd) {
+          tooltip.style.display = 'block';
+          tooltip.style.left = (e.clientX - canvas.parentElement.getBoundingClientRect().left + 12) + 'px';
+          tooltip.style.top = (e.clientY - canvas.parentElement.getBoundingClientRect().top + 12) + 'px';
+          tooltip.innerHTML = `<strong>${sd.sd_key}</strong><br>${sd.title || ''}<br>
+            <span style="color:var(--text-secondary)">Type:</span> ${sd.sd_type || 'unknown'}<br>
+            <span style="color:var(--text-secondary)">Status:</span> ${sd.status}<br>
+            <span style="color:var(--text-secondary)">Progress:</span> ${sd.progress ?? 0}%<br>
+            <span style="color:var(--text-secondary)">Phase:</span> ${sd.current_phase || '—'}`;
+        }
+        canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        canvas.style.cursor = 'default';
+      }
+    }
+
+    function onCanvasClick() {
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects([...state.meshes.values()]);
+      if (hits.length > 0) {
+        selectSD(hits[0].object.userData.sdId);
+      }
+    }
+
+    window.selectSD = function(id) {
+      // Deselect previous
+      if (state.selected && state.meshes.has(state.selected)) {
+        const prev = state.meshes.get(state.selected);
+        prev.scale.set(1, 1, 1);
+      }
+
+      state.selected = id;
+      const mesh = state.meshes.get(id);
+      if (mesh) {
+        mesh.scale.set(1.3, 1.3, 1.3);
+        // Orbit camera to focus
+        const target = mesh.position.clone();
+        controls.target.copy(target);
+      }
+      renderDashboard();
+    };
+
+    // ── Keyboard Shortcuts ──
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      switch (e.key.toLowerCase()) {
+        case 'r':
+          camera.position.set(0, 15, 30);
+          controls.target.set(0, 0, 0);
+          controls.update();
+          break;
+      }
+    });
+
+    // ── Animation Loop ──
+    function animate() {
+      if (!state.webglAvailable) return;
+      requestAnimationFrame(animate);
+
+      // Only render when needed (dirty flag approach)
+      controls.update();
+
+      // Animate blocked SDs (pulse) — respect prefers-reduced-motion
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reducedMotion) {
+        const t = clock.getElapsedTime();
+        state.meshes.forEach((mesh, id) => {
+          const sd = state.sds.get(id);
+          if (sd && sd.status === 'blocked') {
+            mesh.material.emissiveIntensity = 0.2 + Math.sin(t * Math.PI * 2) * 0.3;
+          }
+        });
+      }
+
+      renderer.render(scene, camera);
+
+      // FPS counter
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsTime >= 1000) {
+        fpsEl.textContent = frameCount + ' FPS';
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+    }
+
+    // ── Visibility API: Pause rendering when tab hidden ──
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clock.stop();
+      } else {
+        clock.start();
+        if (state.webglAvailable) animate();
+      }
+    });
+
+    // ── Fallback Table ──
+    function updateFallbackTable() {
+      const tbody = document.getElementById('fallback-tbody');
+      const sds = [...state.sds.values()];
+      tbody.innerHTML = sds.map(sd =>
+        `<tr><td>${sd.sd_key}</td><td>${sd.title || ''}</td><td>${sd.sd_type || ''}</td>
+         <td>${sd.status}</td><td>${sd.priority || ''}</td><td>${sd.progress ?? 0}%</td></tr>`
+      ).join('');
+    }
+
+    // ── Supabase Connection ──
+    async function initSupabase() {
+      if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
+        showError('Supabase not configured. Set SUPABASE_URL and SUPABASE_KEY in the script config.');
+        // Load demo data
+        loadDemoData();
+        return;
+      }
+
+      try {
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+        state.supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+
+        // Initial fetch
+        const { data, error } = await state.supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_key, title, sd_type, status, current_phase, priority, progress, created_at, updated_at')
+          .limit(CONFIG.MAX_SDS);
+
+        if (error) throw error;
+
+        data.forEach(sd => addOrUpdateSD(sd));
+        setConnectionStatus('connected');
+
+        // Realtime subscription
+        subscribeRealtime();
+      } catch (err) {
+        console.error('Supabase init failed:', err);
+        showError(`Connection failed: ${err.message}`);
+        setConnectionStatus('disconnected');
+      }
+    }
+
+    function subscribeRealtime() {
+      if (!state.supabase) return;
+
+      state.channel = state.supabase
+        .channel('sd-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'strategic_directives_v2' }, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            removeSD(payload.old.id);
+          } else {
+            addOrUpdateSD(payload.new);
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setConnectionStatus('connected');
+            state.reconnectAttempts = 0;
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            handleDisconnect();
+          }
+        });
+    }
+
+    function handleDisconnect() {
+      state.reconnectAttempts++;
+      if (state.reconnectAttempts > CONFIG.RECONNECT_MAX) {
+        state.usePolling = true;
+        setConnectionStatus('disconnected');
+        showError('Realtime connection failed. Falling back to polling.');
+        startPolling();
+        return;
+      }
+
+      setConnectionStatus('reconnecting');
+      const delay = Math.min(CONFIG.RECONNECT_BASE_MS * Math.pow(2, state.reconnectAttempts - 1), 30000);
+      setTimeout(() => {
+        if (state.channel) state.channel.unsubscribe();
+        subscribeRealtime();
+      }, delay);
+    }
+
+    function startPolling() {
+      setInterval(async () => {
+        if (!state.supabase) return;
+        const { data } = await state.supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_key, title, sd_type, status, current_phase, priority, progress, created_at, updated_at')
+          .limit(CONFIG.MAX_SDS);
+        if (data) {
+          const currentIds = new Set(data.map(d => d.id));
+          // Remove deleted
+          state.sds.forEach((_, id) => { if (!currentIds.has(id)) removeSD(id); });
+          // Add/update
+          data.forEach(sd => addOrUpdateSD(sd));
+        }
+      }, CONFIG.POLL_INTERVAL_MS);
+    }
+
+    window.retryConnection = function() {
+      document.getElementById('error-banner').style.display = 'none';
+      state.reconnectAttempts = 0;
+      state.usePolling = false;
+      initSupabase();
+    };
+
+    function setConnectionStatus(status) {
+      const dot = document.getElementById('conn-dot');
+      const text = document.getElementById('conn-text');
+      dot.className = 'status-dot ' + status;
+      text.textContent = status === 'connected' ? 'Connected' : status === 'reconnecting' ? 'Reconnecting...' : 'Disconnected';
+    }
+
+    function showError(msg) {
+      const banner = document.getElementById('error-banner');
+      document.getElementById('error-msg').textContent = msg;
+      banner.style.display = 'block';
+    }
+
+    // ── Demo Data ──
+    function loadDemoData() {
+      const types = ['feature', 'infrastructure', 'fix', 'enhancement', 'documentation'];
+      const statuses = ['draft', 'planning', 'in_progress', 'completed', 'blocked'];
+      const priorities = ['critical', 'high', 'medium', 'low'];
+      const titles = [
+        'Real-time 3D Dashboard', 'Database Migration System', 'Fix Login Redirect',
+        'Performance Optimization', 'API Documentation Update', 'User Auth Refactor',
+        'CI/CD Pipeline Enhancement', 'Bug: Chart Rendering', 'Feature: Dark Mode',
+        'Infra: Log Aggregation', 'Fix: Memory Leak', 'Enhancement: Search UX',
+        'Docs: Getting Started', 'Feature: Export CSV', 'Fix: Date Parsing',
+      ];
+
+      titles.forEach((title, i) => {
+        addOrUpdateSD({
+          id: `demo-${i}`,
+          sd_key: `SD-DEMO-${String(i + 1).padStart(3, '0')}`,
+          title,
+          sd_type: types[i % types.length],
+          status: statuses[i % statuses.length],
+          current_phase: 'EXEC',
+          priority: priorities[i % priorities.length],
+          progress: Math.floor(Math.random() * 100),
+          created_at: new Date().toISOString(),
+        });
+      });
+
+      document.getElementById('conn-text').textContent = 'Demo Mode';
+    }
+
+    // ── Background Gradient ──
+    function updateBackground() {
+      if (!state.webglAvailable) return;
+      const sds = [...state.sds.values()];
+      if (sds.length === 0) return;
+      const completed = sds.filter(s => s.status === 'completed').length;
+      const blocked = sds.filter(s => s.status === 'blocked').length;
+      const health = sds.length > 0 ? (completed / sds.length) : 0.5;
+      const problemRatio = blocked / Math.max(sds.length, 1);
+
+      // Interpolate background: green (healthy) → yellow → red (problems)
+      const r = Math.round(10 + problemRatio * 30);
+      const g = Math.round(10 + health * 20);
+      const b = Math.round(26 + health * 20);
+      document.getElementById('scene-container').style.background =
+        `linear-gradient(135deg, rgb(${r},${g},${b}) 0%, #1a1a3a 50%, #0a1a2a 100%)`;
+    }
+
+    // ── Init ──
+    initThree();
+    if (state.webglAvailable) animate();
+    initSupabase();
+
+    // Periodic background update
+    setInterval(updateBackground, 2000);
+  </script>
+
+  <!-- Chart.js (loaded separately, non-blocking) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" defer></script>
+</body>
+</html>
