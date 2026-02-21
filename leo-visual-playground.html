@@ -196,6 +196,7 @@
   </div>
 </div>
 
+<script src="playground.config.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
 </script>
@@ -207,9 +208,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // CONFIG
 // ═══════════════════════════════════════════════
 const _params = new URLSearchParams(window.location.search);
+const _pc = window.__PLAYGROUND_CONFIG || {};
 const CONFIG = {
-  SUPABASE_URL: _params.get('sb_url') || '',
-  SUPABASE_KEY: _params.get('sb_key') || '',
+  SUPABASE_URL: _params.get('sb_url') || _pc.SUPABASE_URL || '',
+  SUPABASE_KEY: _params.get('sb_key') || _pc.SUPABASE_KEY || '',
   RECONNECT_MAX: 5,
   RECONNECT_BASE_MS: 1000,
   POLL_INTERVAL_MS: 60000,
@@ -1030,8 +1032,14 @@ async function loadClaimedSDs() {
 async function initSupabase() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) {
     setConn('err', 'Not configured');
-    addLog('Add ?sb_url=...&sb_key=... to connect', 'system');
+    addLog('Run: npm run playground:config  (or add ?sb_url=...&sb_key=... to URL)', 'system');
     return;
+  }
+  // Strip credentials from URL bar/history if passed as query params
+  if (_params.get('sb_url') || _params.get('sb_key')) {
+    _params.delete('sb_url'); _params.delete('sb_key');
+    const clean = _params.toString() ? `${location.pathname}?${_params}` : location.pathname;
+    history.replaceState(null, '', clean);
   }
   try {
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');

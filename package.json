@@ -343,7 +343,9 @@
     "pipeline:status": "node scripts/pipeline-status.js",
     "feedback:stale": "node scripts/feedback-staleness-check.js",
     "feedback:stale:dry": "node scripts/feedback-staleness-check.js --dry-run",
-    "test:vision-governance": "vitest run tests/vision-governance/"
+    "test:vision-governance": "vitest run tests/vision-governance/",
+    "playground:config": "node scripts/generate-playground-config.cjs",
+    "playground": "node scripts/generate-playground-config.cjs --open"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
