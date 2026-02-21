@@ -13,7 +13,16 @@ import { shouldSkipCodeValidation } from '../../../../../../lib/utils/sd-type-va
 export function registerGate2Validators(registry) {
   // Section A: UI Components Implementation
   registry.register('uiComponentsImplemented', async (context) => {
-    const { sd_id, supabase } = context;
+    const { sd_id, supabase, sd } = context;
+
+    // PAT-AUTO-4fa618ac: Skip UI validation for non-code SDs (infrastructure, documentation)
+    if (sd && shouldSkipCodeValidation(sd)) {
+      return {
+        passed: true, score: 100, max_score: 100, issues: [],
+        warnings: [`UI component validation skipped for ${sd.sd_type} SD`]
+      };
+    }
+
     const result = await validateGate2ExecToPlan(sd_id, supabase);
 
     // Extract Section A score - check multiple paths for compatibility
@@ -45,7 +54,16 @@ export function registerGate2Validators(registry) {
 
   // Section B: Database Migrations
   registry.register('migrationsCreatedAndExecuted', async (context) => {
-    const { sd_id, supabase } = context;
+    const { sd_id, supabase, sd } = context;
+
+    // PAT-AUTO-0bd90c7f: Skip DB migration validation for non-code SDs
+    if (sd && shouldSkipCodeValidation(sd)) {
+      return {
+        passed: true, score: 100, max_score: 100, issues: [],
+        warnings: [`Database migration validation skipped for ${sd.sd_type} SD`]
+      };
+    }
+
     const result = await validateGate2ExecToPlan(sd_id, supabase);
 
     const sectionB = result?.sections?.B || result?.sectionScores?.B ||
@@ -76,7 +94,16 @@ export function registerGate2Validators(registry) {
 
   // Section C: Data Flow
   registry.register('databaseQueriesIntegrated', async (context) => {
-    const { sd_id, supabase } = context;
+    const { sd_id, supabase, sd } = context;
+
+    // PAT-AUTO-0bd90c7f: Skip data flow validation for non-code SDs
+    if (sd && shouldSkipCodeValidation(sd)) {
+      return {
+        passed: true, score: 100, max_score: 100, issues: [],
+        warnings: [`Data flow validation skipped for ${sd.sd_type} SD`]
+      };
+    }
+
     const result = await validateGate2ExecToPlan(sd_id, supabase);
 
     const sectionC = result?.sections?.C || result?.sectionScores?.C ||
@@ -107,7 +134,16 @@ export function registerGate2Validators(registry) {
 
   // Section D: E2E Testing
   registry.register('e2eTestCoverage', async (context) => {
-    const { sd_id, supabase } = context;
+    const { sd_id, supabase, sd } = context;
+
+    // PAT-AUTO-0bd90c7f: Skip E2E test validation for non-code SDs
+    if (sd && shouldSkipCodeValidation(sd)) {
+      return {
+        passed: true, score: 100, max_score: 100, issues: [],
+        warnings: [`E2E test validation skipped for ${sd.sd_type} SD`]
+      };
+    }
+
     const result = await validateGate2ExecToPlan(sd_id, supabase);
 
     const sectionD = result?.sections?.D || result?.sectionScores?.D ||
