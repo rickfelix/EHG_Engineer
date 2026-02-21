@@ -21,7 +21,7 @@
 
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 import { execSync } from 'child_process';
-import { buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-035
+import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems, buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PAT-AUTO-030
 
 /**
  * Query issue_patterns table for issues related to this SD
@@ -195,7 +195,8 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
     // Get git context for concrete implementation details
     const gitContext = getGitContext(sdId);
 
-    const keyLearnings = [];
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-030: Prepend enricher key_learnings (40% rubric weight)
+    const keyLearnings = buildSDSpecificKeyLearnings(sd, 'EXEC_TO_PLAN').map(l => l);
 
     // SD-specific learning: what was implemented and why
     const sdDescription = safeTruncate(sd.description || '', 150);
@@ -258,8 +259,8 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       }
     }
 
-    // Build action items (SD-specific, not generic)
-    const actionItems = [];
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-030: Prepend enricher action_items (30% rubric weight)
+    const actionItems = [...buildSDSpecificActionItems(sd, 'EXEC_TO_PLAN')];
 
     // Add action items from issue pattern proven_solutions
     for (const issue of allIssues) {
