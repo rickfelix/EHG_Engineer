@@ -9,6 +9,7 @@
 import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
+import { enrichRetrospectivePreGate } from '../../retrospective-enricher.js';
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
@@ -82,6 +83,18 @@ export class PlanToLeadExecutor extends BaseExecutor {
         console.warn(`   ⚠️  RETRO sub-agent invocation failed (non-fatal): ${retroErr.message}`);
         console.warn('   📝 Run manually: node scripts/execute-subagent.js --code RETRO --sd-id <SD_UUID>');
       }
+    }
+
+    // PAT-AUTO-19335057: Pre-gate retrospective enrichment
+    // Re-enrich the newest retrospective with git context, handoff scores,
+    // and pattern details before RETROSPECTIVE_QUALITY_GATE evaluates.
+    try {
+      const enrichResult = await enrichRetrospectivePreGate(this.supabase, sd.id || sdId, sd);
+      if (enrichResult.enriched) {
+        console.log(`   ✅ Pre-gate enrichment: updated ${enrichResult.fieldsUpdated.join(', ')}`);
+      }
+    } catch (enrichErr) {
+      console.warn(`   ⚠️  Pre-gate enrichment failed (non-fatal): ${enrichErr.message}`);
     }
 
     return null;
