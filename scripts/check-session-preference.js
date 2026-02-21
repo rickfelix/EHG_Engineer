@@ -1,19 +1,17 @@
 #!/usr/bin/env node
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { resolveOwnSession } from '../lib/resolve-own-session.js';
 
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function checkSession() {
-  const { data, _error } = await supabase
-    .from('claude_sessions')
-    .select('metadata')
-    .eq('status', 'active')
-    .order('heartbeat_at', { ascending: false })
-    .limit(1)
-    .single();
+  const { data } = await resolveOwnSession(supabase, {
+    select: 'metadata',
+    warnOnFallback: false
+  });
 
   if (data && data.metadata && data.metadata.auto_proceed !== undefined) {
     console.log('SESSION_AUTO_PROCEED=' + data.metadata.auto_proceed);

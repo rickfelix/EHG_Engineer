@@ -25,6 +25,7 @@
 
 import { runSDNext, colors } from './modules/sd-next/index.js';
 import { createClient } from '@supabase/supabase-js';
+import { resolveOwnSession } from '../lib/resolve-own-session.js';
 
 /**
  * Query session settings (auto_proceed + chain_orchestrators) and emit
@@ -38,13 +39,10 @@ async function emitSessionSettings() {
     if (!url || !key) return;
 
     const supabase = createClient(url, key);
-    const { data } = await supabase
-      .from('claude_sessions')
-      .select('metadata')
-      .eq('status', 'active')
-      .order('heartbeat_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data } = await resolveOwnSession(supabase, {
+      select: 'metadata',
+      warnOnFallback: false
+    });
 
     // Fall back to global defaults from DB if no session metadata
     let globalChaining = false;
