@@ -54,11 +54,25 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
   };
 
   try {
+    // Resolve sd_key and UUID for proper lookups
+    // PRD.directive_id stores sd_key; sd_phase_handoffs.sd_id stores UUID (strategic_directives_v2.id)
+    let prdLookupId = sd_id;
+    let handoffLookupId = sd_id;
+    const { data: sdLookup } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key')
+      .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
+      .single();
+    if (sdLookup) {
+      prdLookupId = sdLookup.sd_key || sd_id;
+      handoffLookupId = sdLookup.id || sd_id;
+    }
+
     // Fetch PRD metadata with DESIGN and DATABASE analyses
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title, created_at')
-      .eq('directive_id', sd_id)
+      .eq('directive_id', prdLookupId)
       .single();
 
     if (prdError) {
@@ -85,11 +99,11 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-002: Track data sources for audit trail
     const gateDataSources = { gate1: 'none', gate2: 'none', gate3: 'none' };
     if (!gateResults.gate1 && !gateResults.gate2 && !gateResults.gate3) {
-      // Try to fetch from handoff metadata
+      // Try to fetch from handoff metadata (use UUID for handoff lookup)
       const { data: handoffs } = await supabase
         .from('sd_phase_handoffs')
         .select('handoff_type, metadata, status, created_at')
-        .eq('sd_id', sd_id)
+        .eq('sd_id', handoffLookupId)
         .order('created_at', { ascending: false });
 
       if (handoffs) {

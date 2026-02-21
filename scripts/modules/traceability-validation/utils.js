@@ -21,10 +21,11 @@ export const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
  * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
  * @param {string} sd_id - SD ID (may be sd_key or UUID)
  * @param {Object} supabase - Supabase client
- * @returns {Promise<{sdUuid: string, sdCategory: string|null, sdType: string|null, gitRepoPath: string}>}
+ * @returns {Promise<{sdUuid: string, sdKey: string, sdCategory: string|null, sdType: string|null, gitRepoPath: string}>}
  */
 export async function resolveSDContext(sd_id, supabase) {
   let sdUuid = sd_id;
+  let sdKey = sd_id;
   let sdCategory = null;
   let sdType = null;
   let gitRepoPath = process.cwd();
@@ -37,6 +38,7 @@ export async function resolveSDContext(sd_id, supabase) {
 
   if (sdData) {
     sdUuid = sdData.id;
+    sdKey = sdData.sd_key || sdData.id;
     sdCategory = sdData.category?.toLowerCase() || sdData.metadata?.category?.toLowerCase() || null;
     sdType = sdData.sd_type?.toLowerCase() || null;
     console.log(`   SD Category: ${sdCategory || 'unknown'} | Type: ${sdType || 'unknown'}`);
@@ -50,5 +52,5 @@ export async function resolveSDContext(sd_id, supabase) {
     console.log(`   Git Repo: ${gitRepoPath}`);
   }
 
-  return { sdUuid, sdCategory, sdType, gitRepoPath };
+  return { sdUuid, sdKey, sdCategory, sdType, gitRepoPath };
 }

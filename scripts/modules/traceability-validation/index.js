@@ -46,8 +46,8 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   console.log('\n GATE 3: End-to-End Traceability Validation (PLAN->LEAD)');
   console.log('='.repeat(60));
 
-  // Resolve SD context (UUID, category, type, repo path)
-  const { sdUuid, sdCategory, sdType, gitRepoPath } = await resolveSDContext(sd_id, supabase);
+  // Resolve SD context (UUID, key, category, type, repo path)
+  const { sdUuid, sdKey, sdCategory, sdType, gitRepoPath } = await resolveSDContext(sd_id, supabase);
 
   const validation = {
     passed: true,
@@ -71,11 +71,11 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   console.log('-'.repeat(60));
 
   try {
-    // Fetch PRD metadata
+    // Fetch PRD metadata (use sdKey for directive_id, which stores sd_key not UUID)
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title')
-      .eq('directive_id', sd_id)
+      .eq('directive_id', sdKey)
       .single();
 
     if (prdError) {
@@ -88,9 +88,25 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     const databaseAnalysis = prdData?.metadata?.database_analysis;
 
     if (!designAnalysis && !databaseAnalysis) {
+      console.log('   [DEBUG] No design/database analysis - returning skip with full section scores');
       validation.warnings.push('No DESIGN or DATABASE analysis found - skipping Gate 3');
       validation.score = 100;
       validation.passed = true;
+      // Populate section scores so sub-gate validators get proper skip scores
+      validation.gate_scores = {
+        recommendation_adherence: 30,
+        implementation_quality: 30,
+        traceability_mapping: 25,
+        sub_agent_effectiveness: 10,
+        lessons_captured: 5
+      };
+      validation.sections = {
+        A: { score: 30, max: 30, passed: true },
+        B: { score: 30, max: 30, passed: true },
+        C: { score: 25, max: 25, passed: true },
+        D: { score: 10, max: 10, passed: true },
+        E: { score: 5, max: 5, passed: true }
+      };
       return validation;
     }
 
