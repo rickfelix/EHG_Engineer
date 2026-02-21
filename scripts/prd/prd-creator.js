@@ -11,6 +11,7 @@
  */
 
 import { formatPRDContent } from './formatters.js';
+import { validatePRDFields } from './validate-prd-fields.js';
 
 /**
  * Truncate goal_summary/executive_summary to 300 characters max.
@@ -230,6 +231,15 @@ export async function createPRDWithValidatedContent(
   // Calculate progress
   const checkedCount = planChecklist.filter(item => item.checked).length;
   const progress = Math.round((checkedCount / planChecklist.length) * 100);
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-036: Pre-validate PRD fields before insertion
+  // Surfaces missing/boilerplate fields early to prevent prdQualityValidation gate failures
+  const preValidation = validatePRDFields(llmContent);
+  if (!preValidation.valid) {
+    console.warn(`\n⚠️  PRD pre-validation warnings for ${sdId}:`);
+    preValidation.warnings.forEach(w => console.warn(`   ${w}`));
+    console.warn('   These may cause prdQualityValidation gate failure at PLAN-TO-EXEC\n');
+  }
 
   const { data, error } = await supabase
     .from('product_requirements_v2')

@@ -42,6 +42,16 @@ export function registerGate1Validators(registry) {
       return { passed: false, score: 0, max_score: 100, issues: ['No user stories found in PRD or user_stories table'] };
     }
 
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-036: Pre-check for empty acceptance_criteria
+    // Surfaces warnings early to prevent userStoryQualityValidation failures
+    const storiesWithoutAC = stories.filter(s =>
+      !s.acceptance_criteria || (Array.isArray(s.acceptance_criteria) && s.acceptance_criteria.length === 0)
+    );
+    const acWarnings = [];
+    if (storiesWithoutAC.length > 0) {
+      acWarnings.push(`${storiesWithoutAC.length}/${stories.length} user stories lack acceptance_criteria`);
+    }
+
     // SD-LEO-001: Pass SD type to enable heuristic validation for infrastructure/database SDs
     // FIX: Compute SD-type-aware minimumScore instead of relying on default (70%)
     const sdType = sd?.sd_type || '';
@@ -62,7 +72,7 @@ export function registerGate1Validators(registry) {
       score: result.averageScore,
       max_score: 100,
       issues: result.issues,
-      warnings: result.warnings,
+      warnings: [...(result.warnings || []), ...acWarnings],
       details: result
     });
   }, 'User story quality validation');
