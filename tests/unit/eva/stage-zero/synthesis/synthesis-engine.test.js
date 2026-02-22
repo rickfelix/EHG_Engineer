@@ -45,6 +45,9 @@ vi.mock('../../../../../lib/eva/stage-zero/synthesis/virality.js', () => ({
 vi.mock('../../../../../lib/eva/stage-zero/synthesis/design-evaluation.js', () => ({
   evaluateDesignPotential: vi.fn().mockResolvedValue({ component: 'design_evaluation', dimensions: {}, composite_score: 66, recommendation: 'design_standard', summary: 'ok' }),
 }));
+vi.mock('../../../../../lib/eva/stage-zero/synthesis/narrative-risk.js', () => ({
+  analyzeNarrativeRisk: vi.fn().mockResolvedValue({ component: 'narrative_risk', nr_score: 35, nr_band: 'NR-Moderate', nr_interpretation: 'Watch assumptions', component_scores: { decision_sensitivity: 40, demand_distortion: 30, hype_persistence: 25, influence_exposure: 20 }, narrative_flags: [], confidence: 0.7, confidence_caveat: 'Test caveat', summary: 'ok' }),
+}));
 vi.mock('../../../../../lib/eva/stage-zero/profile-service.js', () => ({
   resolveProfile: vi.fn().mockResolvedValue(null),
   calculateWeightedScore: vi.fn().mockReturnValue({ total_score: 75, breakdown: {} }),
@@ -67,6 +70,7 @@ import { classifyArchetype } from '../../../../../lib/eva/stage-zero/synthesis/a
 import { estimateBuildCost } from '../../../../../lib/eva/stage-zero/synthesis/build-cost-estimation.js';
 import { analyzeVirality } from '../../../../../lib/eva/stage-zero/synthesis/virality.js';
 import { evaluateDesignPotential } from '../../../../../lib/eva/stage-zero/synthesis/design-evaluation.js';
+import { analyzeNarrativeRisk } from '../../../../../lib/eva/stage-zero/synthesis/narrative-risk.js';
 import { resolveProfile, calculateWeightedScore } from '../../../../../lib/eva/stage-zero/profile-service.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
@@ -91,7 +95,7 @@ beforeEach(() => {
 });
 
 describe('runSynthesis', () => {
-  test('runs all 10 synthesis components', async () => {
+  test('runs all 11 synthesis components', async () => {
     const result = await runSynthesis(validPathOutput, { logger: silentLogger });
 
     expect(crossReferenceIntellectualCapital).toHaveBeenCalledWith(validPathOutput, expect.anything());
@@ -104,9 +108,10 @@ describe('runSynthesis', () => {
     expect(estimateBuildCost).toHaveBeenCalledWith(validPathOutput, expect.anything());
     expect(analyzeVirality).toHaveBeenCalledWith(validPathOutput, expect.anything());
     expect(evaluateDesignPotential).toHaveBeenCalledWith(validPathOutput, expect.anything());
+    expect(analyzeNarrativeRisk).toHaveBeenCalledWith(validPathOutput, expect.anything());
 
-    expect(result.metadata.synthesis.components_run).toBe(10);
-    expect(result.metadata.synthesis.components_total).toBe(10);
+    expect(result.metadata.synthesis.components_run).toBe(11);
+    expect(result.metadata.synthesis.components_total).toBe(11);
   });
 
   test('handles component failure gracefully', async () => {
