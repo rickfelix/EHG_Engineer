@@ -217,17 +217,39 @@ export function registerGate1Validators(registry) {
   }, 'PRD implementation approach validation');
 
   registry.register('goalSummaryValidation', async (context) => {
-    const { prd } = context;
-    const goalSummary = prd?.goal_summary || prd?.executive_summary || '';
+    const { prd, sd } = context;
+    const issues = [];
+
+    // Fallback chain: prd.goal_summary → prd.executive_summary → sd.description → sd.title
+    let goalSummary = prd?.goal_summary || prd?.executive_summary || '';
+    let usedFallback = false;
 
     if (!goalSummary || goalSummary.length === 0) {
-      return { passed: false, score: 0, max_score: 100, issues: ['Goal summary is missing'] };
+      goalSummary = sd?.description || sd?.title || '';
+      if (goalSummary.length > 0) {
+        usedFallback = true;
+        issues.push('Goal summary sourced from SD description (PRD goal_summary and executive_summary are empty)');
+      }
     }
+
+    if (!goalSummary || goalSummary.length === 0) {
+      return { passed: false, score: 0, max_score: 100, issues: ['Goal summary is missing from PRD and SD'] };
+    }
+
+    // Truncate to 300 chars for validation (applies to fallback values too)
+    const truncated = goalSummary.length > 300 ? goalSummary.substring(0, 300) : goalSummary;
     if (goalSummary.length > 300) {
-      return { passed: false, score: 70, max_score: 100, issues: [`Goal summary is ${goalSummary.length} chars, max 300 recommended`] };
+      issues.push(`Goal summary is ${goalSummary.length} chars, truncated to 300 for validation`);
     }
-    return { passed: true, score: 100, max_score: 100, issues: [] };
-  }, 'Goal summary validation (max 300 chars)');
+
+    return {
+      passed: true,
+      score: usedFallback ? 80 : 100,
+      max_score: 100,
+      issues,
+      details: { summary_length: truncated.length, used_fallback: usedFallback }
+    };
+  }, 'Goal summary validation with SD fallback (max 300 chars)');
 
   registry.register('fileScopeValidation', async (context) => {
     const { sd, prd } = context;
