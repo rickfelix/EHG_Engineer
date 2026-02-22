@@ -25,7 +25,7 @@
 
   .stt{bottom:34px;left:34px}
   .sr{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
-  .sl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:rgba(224,220,212,0.48);min-width:82px}
+  .sl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:rgba(224,220,212,0.65);min-width:82px}
   .svl{font-size:14px;font-weight:300;color:rgba(0,200,255,1.0)}
 
   .phi{bottom:34px;left:50%;transform:translateX(-50%);text-align:center;width:500px}
@@ -36,7 +36,7 @@
   .phi-dot.on{background:rgba(0,200,255,0.96);box-shadow:0 0 10px rgba(0,200,255,0.48)}
   .phi-dot.dn{background:rgba(0,191,165,0.6)}
   .phi-labels{display:flex;justify-content:center}
-  .phi-lbl{width:63px;font-family:'JetBrains Mono',monospace;font-size:6.5px;letter-spacing:.6px;text-transform:uppercase;color:rgba(224,220,212,0.48);text-align:center;transition:color .4s}
+  .phi-lbl{width:63px;font-family:'JetBrains Mono',monospace;font-size:6.5px;letter-spacing:.6px;text-transform:uppercase;color:rgba(224,220,212,0.65);text-align:center;transition:color .4s}
   .phi-lbl.on{color:rgba(0,200,255,1.0)}
   .phi-lbl.dn{color:rgba(0,191,165,0.66)}
 
@@ -45,7 +45,7 @@
   .conn-dot.ok{background:#4a9e7d;box-shadow:0 0 6px rgba(74,158,125,0.4)}
   .conn-dot.err{background:#c4626a;box-shadow:0 0 6px rgba(196,98,106,0.4)}
   .conn-dot.wait{background:#ffab40;animation:pu 1.5s ease-in-out infinite}
-  .conn-text{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1px;color:rgba(224,220,212,0.48)}
+  .conn-text{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:1px;color:rgba(224,220,212,0.65)}
 
   .cb{position:absolute;top:50%;left:34px;transform:translateY(-50%);z-index:10;pointer-events:all}
   .bt{display:block;background:none;border:1px solid rgba(0,200,255,0.12);color:rgba(224,220,212,0.6);
@@ -85,6 +85,32 @@
   .q-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
   .q-key{font-size:9px;color:rgba(224,220,212,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .q-item.active .q-key{color:rgba(0,200,255,0.96)}
+  .q-est{float:right;font-size:8px;color:rgba(224,220,212,0.36);font-style:italic}
+  #history-panel{display:none;flex:1;overflow-y:auto;padding:0}
+  .h-group{padding:8px 12px;border-bottom:1px solid rgba(0,200,255,0.06)}
+  .h-group-title{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,200,255,0.6);margin-bottom:6px}
+  .h-item{font-size:9px;color:rgba(224,220,212,0.5);padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .h-item .h-date{color:rgba(224,220,212,0.28);margin-left:6px}
+  .h-filters{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid rgba(0,200,255,0.08)}
+  .h-filters select{flex:1;padding:4px 6px;background:rgba(8,8,24,0.8);color:rgba(224,220,212,0.72);
+    border:1px solid rgba(0,200,255,0.12);border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:9px}
+  .q-toggle{float:right;font-size:8px;cursor:pointer;color:rgba(0,200,255,0.5);text-decoration:none;letter-spacing:1px}
+  .q-toggle:hover{color:rgba(0,200,255,0.9)}
+  #diag-card{display:none;position:absolute;z-index:50;pointer-events:all;
+    background:rgba(8,8,24,0.94);border:1px solid rgba(0,200,255,0.25);border-radius:6px;
+    padding:14px 16px;min-width:260px;max-width:380px;backdrop-filter:blur(8px);
+    box-shadow:0 4px 20px rgba(0,0,0,0.5),0 0 15px rgba(0,200,255,0.08);
+    font-family:'JetBrains Mono',monospace}
+  #diag-card.show{display:block}
+  #diag-card-close{position:absolute;top:6px;right:10px;background:none;border:none;
+    color:rgba(0,200,255,0.5);font-size:14px;cursor:pointer;font-family:monospace;padding:2px}
+  #diag-card-close:hover{color:#00c8ff}
+  .dc-title{font-size:11px;font-weight:600;color:rgba(0,200,255,0.95);margin-bottom:6px;padding-right:16px}
+  .dc-key{font-size:9px;color:rgba(224,220,212,0.5);margin-bottom:8px;letter-spacing:1px}
+  .dc-row{display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-bottom:1px solid rgba(0,200,255,0.06)}
+  .dc-label{color:rgba(224,220,212,0.55);text-transform:uppercase;letter-spacing:1px}
+  .dc-value{color:rgba(224,220,212,0.85);text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+  .dc-loading{font-size:9px;color:rgba(0,200,255,0.4);font-style:italic;margin-top:6px}
   #no-data{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:5;font-size:14px;font-weight:300;color:rgba(224,220,212,0.42)}
   #fallback{display:none;width:100%;padding:16px;overflow:auto;height:100%;font-family:'JetBrains Mono',monospace}
   #fallback table{width:100%;border-collapse:collapse;font-size:10px;color:rgba(224,220,212,0.48)}
@@ -166,14 +192,15 @@
     <div id="slideProg"></div>
     <div id="dup-alert"><button id="dup-alert-close" onclick="dismissDupAlert()">&times;</button><div id="dup-alert-title">CLAIM CONFLICT DETECTED</div><div id="dup-alert-msg">Multiple sessions have claimed the same SD. This can cause conflicts.</div><ul id="dup-alert-list"></ul><div id="dup-alert-countdown"></div></div>
     <div id="idle-alert"><button id="idle-alert-close" onclick="dismissIdleAlert()">&times;</button><div id="idle-alert-title">ALL SESSIONS IDLE</div><div id="idle-alert-msg">No active sessions detected for 15+ minutes. LEO workflow may be stalled.</div><div id="idle-alert-duration"></div></div>
+    <div id="diag-card"><button id="diag-card-close" onclick="closeDiagCard()">&times;</button><div class="dc-title" id="dc-title"></div><div class="dc-key" id="dc-key"></div><div id="dc-body"></div></div>
     <div id="no-data">No Strategic Directives found.<br>SDs will appear here in real-time.</div>
     <div id="fallback"><table><thead><tr><th>Key</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>Progress</th></tr></thead><tbody id="fb-body"></tbody></table></div>
   </div>
   <div id="panel">
     <div class="sr-only" id="sr-summary" aria-live="polite" role="status"></div>
     <div class="p-section" id="activity"><div class="p-header">Activity</div><div id="logList"></div></div>
-    <div id="filter-row">
-      <select id="filterSel">
+    <div id="filter-row" style="display:flex;gap:6px;flex-wrap:wrap">
+      <select id="filterSel" style="flex:1;min-width:100px">
         <option value="active" selected>Active (draft, review, in-progress)</option>
         <option value="not-done">Not Done</option>
         <option value="draft">Drafts</option>
@@ -182,10 +209,32 @@
         <option value="cancelled">Cancelled</option>
         <option value="all">All</option>
       </select>
+      <select id="typeSel" style="flex:1;min-width:100px">
+        <option value="all" selected>All Types</option>
+        <option value="feature">Feature</option>
+        <option value="bugfix">Bugfix</option>
+        <option value="enhancement">Enhancement</option>
+        <option value="infrastructure">Infrastructure</option>
+        <option value="documentation">Documentation</option>
+        <option value="database">Database</option>
+        <option value="refactor">Refactor</option>
+      </select>
     </div>
     <div class="p-section" style="padding:0;flex:1;overflow:hidden;display:flex;flex-direction:column">
-      <div class="p-header" style="padding:10px 12px 8px" id="queueHeader">Queue · 0</div>
+      <div class="p-header" style="padding:10px 12px 8px" id="queueHeader">Queue · 0 <a class="q-toggle" id="historyToggle" onclick="toggleHistory()">History</a></div>
       <div id="queue"></div>
+      <div id="history-panel">
+        <div class="h-filters">
+          <select id="histVenture" onchange="loadHistory()"><option value="">All Ventures</option></select>
+          <select id="histPeriod" onchange="loadHistory()">
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">90 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div id="histList"></div>
+      </div>
     </div>
     <div id="estimate">
       <div class="p-header">Estimated Remaining</div>
@@ -238,7 +287,49 @@ const SHAPE_DEFS = {
   unknown:        { name:'Sphere',       makeLo:()=>new THREE.SphereGeometry(4,10,8),        makeHi:()=>new THREE.SphereGeometry(4,32,24),      color:new THREE.Color(0x60e8cc) },
 };
 
-const STATUS_COLORS = { draft:'#78909C', review:'#42A5F5', in_progress:'#FFA726', completed:'#66BB6A', blocked:'#EF5350', cancelled:'#616161' };
+// Procedural ShaderMaterial patterns for sphere-sharing types (WCAG differentiation)
+const SPHERE_PATTERNS = {
+  docs: { label:'Rings', fragBody:`float ring = step(0.45, abs(fract(vUv.y * 6.0) - 0.5)); gl_FragColor = vec4(baseColor * (0.6 + ring * 0.4), alpha);` },
+  implementation: { label:'Dots', fragBody:`float d = length(fract(vUv * 5.0) - 0.5); float dot = 1.0 - smoothstep(0.15, 0.2, d); gl_FragColor = vec4(baseColor * (0.6 + dot * 0.4), alpha);` },
+  discovery_spike: { label:'Diagonal', fragBody:`float diag = step(0.45, abs(fract((vUv.x + vUv.y) * 5.0) - 0.5)); gl_FragColor = vec4(baseColor * (0.6 + diag * 0.4), alpha);` },
+  refactor: { label:'Checker', fragBody:`float ch = step(0.5, fract(vUv.x * 4.0)) * step(0.5, fract(vUv.y * 4.0)) + (1.0 - step(0.5, fract(vUv.x * 4.0))) * (1.0 - step(0.5, fract(vUv.y * 4.0))); gl_FragColor = vec4(baseColor * (0.55 + ch * 0.45), alpha);` },
+  unknown: { label:'Noise', fragBody:`float n = fract(sin(dot(vUv, vec2(12.9898,78.233))) * 43758.5453); gl_FragColor = vec4(baseColor * (0.65 + n * 0.35), alpha);` },
+};
+
+function makePatternMaterial(sdType, color) {
+  const pat = SPHERE_PATTERNS[sdType];
+  if (!pat) return null;
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    uniforms: { baseColor: { value: new THREE.Vector3(color.r, color.g, color.b) }, alpha: { value: 0.0 } },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 baseColor; uniform float alpha; varying vec2 vUv; void main() { ${pat.fragBody} }`,
+  });
+}
+
+// FNV-1a hash for stable per-SD shape selection
+function hashString(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+const GEOMETRY_POOL = [
+  { makeLo:()=>new THREE.TorusKnotGeometry(3,0.9,32,6), makeHi:()=>new THREE.TorusKnotGeometry(3,0.9,100,20) },
+  { makeLo:()=>new THREE.IcosahedronGeometry(4,1), makeHi:()=>new THREE.IcosahedronGeometry(4,3) },
+  { makeLo:()=>new THREE.DodecahedronGeometry(4,1), makeHi:()=>new THREE.DodecahedronGeometry(4,3) },
+  { makeLo:()=>new THREE.OctahedronGeometry(4.5,1), makeHi:()=>new THREE.OctahedronGeometry(4.5,3) },
+  { makeLo:()=>new THREE.BoxGeometry(5,5,5,2,2,2), makeHi:()=>new THREE.BoxGeometry(5,5,5,6,6,6) },
+  { makeLo:()=>new THREE.TorusGeometry(3.5,1.2,8,16), makeHi:()=>new THREE.TorusGeometry(3.5,1.2,24,48) },
+  { makeLo:()=>new THREE.SphereGeometry(4,10,8), makeHi:()=>new THREE.SphereGeometry(4,32,24) },
+];
+function getShapeForSD(sd) {
+  const typeDef = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  const poolIdx = hashString(sd.id || sd.sd_key || '') % GEOMETRY_POOL.length;
+  const geo = GEOMETRY_POOL[poolIdx];
+  return { makeLo: geo.makeLo, makeHi: geo.makeHi, color: typeDef.color, name: typeDef.name };
+}
+
+const STATUS_COLORS = { draft:'#78909C', review:'#42A5F5', in_progress:'#FFA726', completed:'#66BB6A', blocked:'#EF5350', cancelled:'#808080' };
 const PHASE_NAMES = ['Draft','Lead','Plan','Execute'];
 const PHASE_DUR = [0.08, 0.12, 0.12, 0.68];
 
@@ -296,12 +387,13 @@ function computeForgeFloor(sd) {
 // STATE
 // ═══════════════════════════════════════════════
 const state = {
-  sds: new Map(), filter: CONFIG.DEFAULT_FILTER, channel: null,
+  sds: new Map(), filter: CONFIG.DEFAULT_FILTER, typeFilter: 'all', channel: null,
   reconnectAttempts: 0, supabase: null, webglOk: true,
   slideQueue: [], slideIndex: 0, slidePaused: false, slideSpeed: 1,
   slideElapsed: 0, currentSDId: null, claimedIds: new Set(),
   liveSessions: 0, burnRate: { avgHours: null, confidence: 'default', sampleSize: 0 },
   animationFrameId: null, intervalIds: [],
+  slideDurations: new Map(), sessionOrbs: [],
 };
 
 const TYPE_BASELINES_MIN = {
@@ -322,7 +414,7 @@ let outgoingGroup = null, outgoingFade = 0;
 let dustGeo, dustPos, dustVel;
 const DUST_COUNT = 300;
 let coreLight, rimLight, warmLight, groundMat;
-let shapeProg = 0, slidePhase = 'animate', prevPh = -1, frame = 0;
+let shapeProg = 0, slidePhase = 'animate', prevPh = -1, frame = 0, cameraBaseDistance = 18;
 
 function initThree() {
   if (!(() => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl'))); } catch { return false; } })()) {
@@ -344,7 +436,8 @@ function initThree() {
   controls.autoRotate = true; controls.autoRotateSpeed = 0.2;
   controls.maxDistance = 60; controls.minDistance = 8;
   let iTimer;
-  const onInteract = () => { controls.autoRotate = false; clearTimeout(iTimer); iTimer = setTimeout(() => { controls.autoRotate = true; }, 5000); };
+  cameraBaseDistance = camera.position.distanceTo(controls.target);
+  const onInteract = () => { controls.autoRotate = false; clearTimeout(iTimer); iTimer = setTimeout(() => { controls.autoRotate = true; cameraBaseDistance = camera.position.distanceTo(controls.target); }, 5000); };
   cnv.addEventListener('pointerdown', onInteract); cnv.addEventListener('wheel', onInteract);
 
   // Lighting
@@ -400,7 +493,7 @@ function buildShape(sd) {
     if (child.geometry) child.geometry.dispose();
     if (child.material) child.material.dispose();
   }
-  const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  const def = getShapeForSD(sd);
   const isBlocked = sd.status === 'blocked';
   const col = isBlocked ? new THREE.Color(0xc4626a) : def.color.clone();
 
@@ -467,7 +560,7 @@ function emitSparks(pos, color, n = 8) {
 
 function retireShape(sd) {
   if (!sd) return;
-  const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  const def = getShapeForSD(sd);
   const mini = new THREE.Mesh(def.makeHi(), new THREE.MeshBasicMaterial({ color:def.color, transparent:true, opacity:0.14, blending:THREE.AdditiveBlending }));
   const ang = retiredShapes.length * 1.0 + 0.5, rad = 14 + retiredShapes.length * 1.8;
   mini.position.set(Math.sin(ang)*rad, (Math.random()-.5)*5, Math.cos(ang)*rad);
@@ -477,8 +570,8 @@ function retireShape(sd) {
 }
 
 function buildOrbitShapes() {
-  // Clear existing orbit shapes
-  orbitShapes.forEach(o => { scene.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); });
+  // Clear existing orbit shapes and their mesh→SD mappings
+  orbitShapes.forEach(o => { meshToSD.delete(o.mesh); scene.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); });
   orbitShapes.length = 0;
 
   // Get all filtered SDs that are NOT the currently forging one
@@ -487,7 +580,7 @@ function buildOrbitShapes() {
 
   for (let i = 0; i < maxOrbiters; i++) {
     const sd = pending[i];
-    const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+    const def = getShapeForSD(sd);
     const mesh = new THREE.Mesh(
       def.makeLo(),
       new THREE.MeshBasicMaterial({ color: def.color.clone(), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })
@@ -509,6 +602,7 @@ function buildOrbitShapes() {
     mesh.scale.set(sc, sc, sc);
     scene.add(mesh);
 
+    meshToSD.set(mesh, sd.id);
     orbitShapes.push({
       mesh,
       orbitRadius,
@@ -518,6 +612,28 @@ function buildOrbitShapes() {
       orbitSpeed: 0.01 + Math.random() * 0.015,
       bobSpeed: 0.15 + Math.random() * 0.2,
       bobAmp: 0.3 + Math.random() * 0.5,
+    });
+  }
+}
+
+function buildSessionOrbs() {
+  state.sessionOrbs.forEach(o => { scene.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); });
+  state.sessionOrbs.length = 0;
+  for (let i = 0; i < state.liveSessions; i++) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffab40, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    const angle = (i / Math.max(state.liveSessions, 1)) * Math.PI * 2;
+    const radius = 6 + i * 1.5;
+    mesh.position.set(Math.cos(angle) * radius, 8 + Math.random() * 4, Math.sin(angle) * radius);
+    scene.add(mesh);
+    state.sessionOrbs.push({
+      mesh, angle, radius, yBase: mesh.position.y,
+      orbitSpeed: 0.03 + Math.random() * 0.02,
+      bobSpeed: 0.3 + Math.random() * 0.2,
+      bobAmp: 0.5 + Math.random() * 0.3,
+      pulseSpeed: 1.5 + Math.random() * 0.5,
     });
   }
 }
@@ -544,9 +660,10 @@ function updateForge(t, dt) {
 
   if (!state.slidePaused) state.slideElapsed += dt * state.slideSpeed;
 
-  const ANIM_END = CONFIG.SLIDE_DURATION * 0.5;
-  const HOLD_END = CONFIG.SLIDE_DURATION * 0.65;
-  const TOTAL = CONFIG.SLIDE_DURATION;
+  const slideDur = state.slideDurations.get(state.currentSDId) || CONFIG.SLIDE_DURATION;
+  const ANIM_END = slideDur * 0.5;
+  const HOLD_END = slideDur * 0.65;
+  const TOTAL = slideDur;
 
   if (state.slideElapsed < ANIM_END) {
     slidePhase = 'animate'; shapeProg = floor + (target - floor) * (state.slideElapsed / ANIM_END);
@@ -653,9 +770,33 @@ function updateForge(t, dt) {
 // ═══════════════════════════════════════════════
 // SLIDESHOW
 // ═══════════════════════════════════════════════
+function computeSlideDurations() {
+  state.slideDurations.clear();
+  if (state.slideQueue.length === 0) return;
+  const TARGET_CYCLE = 300, MIN_SLIDE = 10, MAX_SLIDE = 40;
+  let totalEffort = 0;
+  const efforts = new Map();
+  state.slideQueue.forEach(id => {
+    const sd = state.sds.get(id);
+    if (!sd) return;
+    const base = TYPE_BASELINES_MIN[sd.sd_type] || TYPE_BASELINES_MIN.default;
+    const pct = (sd.progress_percentage ?? sd.progress ?? 0) / 100;
+    const remaining = base * (1 - pct);
+    efforts.set(id, remaining);
+    totalEffort += remaining;
+  });
+  if (totalEffort === 0) totalEffort = 1;
+  efforts.forEach((effort, id) => {
+    const proportion = effort / totalEffort;
+    const dur = Math.max(MIN_SLIDE, Math.min(MAX_SLIDE, Math.round(TARGET_CYCLE * proportion)));
+    state.slideDurations.set(id, dur);
+  });
+}
+
 function rebuildSlideQueue() {
   state.slideQueue = getFilteredSDs().filter(sd => state.claimedIds.has(sd.id) || state.claimedIds.has(sd.sd_key)).map(sd => sd.id);
   if (state.slideIndex >= state.slideQueue.length) state.slideIndex = 0;
+  computeSlideDurations();
   const claimCount = state.slideQueue.length;
   document.getElementById('subtitle').textContent = claimCount > 0
     ? `${state.sds.size} directives · ${claimCount} claimed`
@@ -684,7 +825,7 @@ function startSlide() {
   if (!sd) { advanceSlide(); return; }
   state.currentSDId = id; state.slideElapsed = 0; shapeProg = 0; prevPh = -1; filledFaces = 0;
   buildShape(sd);
-  const def = SHAPE_DEFS[sd.sd_type] || SHAPE_DEFS.unknown;
+  const def = getShapeForSD(sd);
   document.getElementById('sdTitle').textContent = sd.title || def.name;
   document.getElementById('sdKey').textContent = sd.sd_key;
   addLog(`Forging ${sd.sd_key}`, 'system');
@@ -816,7 +957,101 @@ function startIdleMonitoring() {
   idleCheckTimer = setInterval(checkIdleSessions, 60000); // check every 60 seconds
 }
 
+// ═══════════════════════════════════════════════
+// DIAGNOSTIC CARD — click-to-inspect
+// ═══════════════════════════════════════════════
+const meshToSD = new Map(); // Mesh → sd.id
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let diagCardSDId = null;
+
+window.closeDiagCard = function() {
+  document.getElementById('diag-card').classList.remove('show');
+  diagCardSDId = null;
+};
+
+function showDiagCard(sdId, screenX, screenY) {
+  const sd = state.sds.get(sdId);
+  if (!sd) return;
+  diagCardSDId = sdId;
+  const card = document.getElementById('diag-card');
+  document.getElementById('dc-title').textContent = sd.title || sd.sd_key;
+  document.getElementById('dc-key').textContent = sd.sd_key;
+
+  const pct = sd.progress_percentage ?? sd.progress ?? 0;
+  const statusColor = STATUS_COLORS[sd.status] || '#9E9E9E';
+  let rows = `
+    <div class="dc-row"><span class="dc-label">Status</span><span class="dc-value" style="color:${statusColor}">${sd.status}</span></div>
+    <div class="dc-row"><span class="dc-label">Type</span><span class="dc-value">${sd.sd_type || 'unknown'}</span></div>
+    <div class="dc-row"><span class="dc-label">Phase</span><span class="dc-value">${sd.current_phase || '—'}</span></div>
+    <div class="dc-row"><span class="dc-label">Progress</span><span class="dc-value">${pct}%</span></div>
+    <div class="dc-row"><span class="dc-label">Priority</span><span class="dc-value">${sd.priority || '—'}</span></div>
+  `;
+  document.getElementById('dc-body').innerHTML = rows + '<div class="dc-loading" id="dc-extra">Loading details…</div>';
+
+  // Position card near click (clamp to viewport)
+  const sceneRect = document.getElementById('scene').getBoundingClientRect();
+  let left = screenX - sceneRect.left + 12;
+  let top = screenY - sceneRect.top + 12;
+  if (left + 300 > sceneRect.width) left = Math.max(8, left - 320);
+  if (top + 200 > sceneRect.height) top = Math.max(8, top - 220);
+  card.style.left = left + 'px';
+  card.style.top = top + 'px';
+  card.classList.add('show');
+
+  // Lazy-load extra details from Supabase
+  if (state.supabase) {
+    state.supabase.from('strategic_directives_v2')
+      .select('description, dependencies, target_application, created_at, updated_at')
+      .eq('id', sdId).single()
+      .then(({ data }) => {
+        if (!data || diagCardSDId !== sdId) return;
+        let extra = '';
+        if (data.target_application) extra += `<div class="dc-row"><span class="dc-label">App</span><span class="dc-value">${data.target_application}</span></div>`;
+        if (data.created_at) extra += `<div class="dc-row"><span class="dc-label">Created</span><span class="dc-value">${new Date(data.created_at).toLocaleDateString()}</span></div>`;
+        if (data.description) extra += `<div class="dc-row"><span class="dc-label">Desc</span><span class="dc-value" title="${data.description}">${(data.description||'').slice(0,80)}${(data.description||'').length>80?'…':''}</span></div>`;
+        const el = document.getElementById('dc-extra');
+        if (el) el.outerHTML = extra || '';
+      })
+      .catch(() => { const el = document.getElementById('dc-extra'); if (el) el.outerHTML = ''; });
+  } else {
+    const el = document.getElementById('dc-extra'); if (el) el.outerHTML = '';
+  }
+}
+
+// Raycaster on pointerup (not pointerdown, to avoid conflicting with OrbitControls drag)
+let pointerDownPos = null;
+cnv.addEventListener('pointerdown', (e) => { pointerDownPos = { x: e.clientX, y: e.clientY }; });
+cnv.addEventListener('pointerup', (e) => {
+  if (!pointerDownPos) return;
+  // Only trigger if it wasn't a drag (< 5px movement)
+  const dx = e.clientX - pointerDownPos.x, dy = e.clientY - pointerDownPos.y;
+  if (Math.sqrt(dx*dx + dy*dy) > 5) return;
+
+  const rect = cnv.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+
+  // Check orbit shapes first, then main shape group
+  const allMeshes = [];
+  orbitShapes.forEach(o => allMeshes.push(o.mesh));
+  shapeGroup.traverse(c => { if (c.isMesh) allMeshes.push(c); });
+
+  const hits = raycaster.intersectObjects(allMeshes, false);
+  if (hits.length > 0) {
+    const hitMesh = hits[0].object;
+    const sdId = meshToSD.get(hitMesh);
+    if (sdId) showDiagCard(sdId, e.clientX, e.clientY);
+    else if (state.currentSDId) showDiagCard(state.currentSDId, e.clientX, e.clientY);
+  } else {
+    closeDiagCard();
+  }
+});
+
+// Close card on Escape
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && diagCardSDId) { closeDiagCard(); return; }
   if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
   if (e.key===' ') { e.preventDefault(); setSlide(state.slidePaused?'play':'pause'); }
   else if (e.key==='ArrowRight') setSlide('next');
@@ -849,12 +1084,17 @@ function addLog(msg, type='info') {
 // FILTER + UI UPDATES
 // ═══════════════════════════════════════════════
 function passesFilter(sd) {
+  // Status filter
+  let statusOk;
   switch (state.filter) {
-    case 'active': return !['completed','cancelled'].includes(sd.status);
-    case 'not-done': return !['completed','cancelled'].includes(sd.status);
-    case 'all': return true;
-    default: return sd.status === state.filter;
+    case 'active': statusOk = !['completed','cancelled'].includes(sd.status); break;
+    case 'not-done': statusOk = !['completed','cancelled'].includes(sd.status); break;
+    case 'all': statusOk = true; break;
+    default: statusOk = sd.status === state.filter;
   }
+  // Type filter (AND logic)
+  const typeOk = state.typeFilter === 'all' || sd.sd_type === state.typeFilter;
+  return statusOk && typeOk;
 }
 function getFilteredSDs() { return [...state.sds.values()].filter(passesFilter); }
 
@@ -862,16 +1102,28 @@ document.getElementById('filterSel').addEventListener('change', (e) => {
   state.filter = e.target.value; rebuildSlideQueue(); updateUI();
   crossfadeOut(); state.slideIndex = 0; startSlide();
 });
+document.getElementById('typeSel').addEventListener('change', (e) => {
+  state.typeFilter = e.target.value; rebuildSlideQueue(); updateUI();
+  crossfadeOut(); state.slideIndex = 0; startSlide();
+});
 
 let uiTimer = null;
 function scheduleUI() { if (uiTimer) return; uiTimer = setTimeout(() => { uiTimer = null; updateUI(); }, 200); }
+
+function formatSDEstimate(sd) {
+  const base = TYPE_BASELINES_MIN[sd.sd_type] || TYPE_BASELINES_MIN.default;
+  const pct = (sd.progress_percentage ?? sd.progress ?? 0) / 100;
+  const remain = base * (1 - pct);
+  if (remain >= 60) return `~${(remain / 60).toFixed(1)}h`;
+  return `~${Math.round(remain)}m`;
+}
 
 function updateUI() {
   const all = [...state.sds.values()], filtered = getFilteredSDs();
   document.getElementById('st-total').textContent = all.length;
   document.getElementById('st-active').textContent = all.filter(s => !['completed','cancelled'].includes(s.status)).length;
   document.getElementById('st-done').textContent = all.filter(s => s.status==='completed').length;
-  document.getElementById('queueHeader').textContent = `Queue · ${filtered.length}`;
+  document.getElementById('queueHeader').innerHTML = `Queue · ${filtered.length} <a class="q-toggle" id="historyToggle" onclick="toggleHistory()">${historyVisible ? 'Queue' : 'History'}</a>`;
 
   const sorted = [...filtered].sort((a,b) => {
     const aClaimed = state.claimedIds.has(a.id) || state.claimedIds.has(a.sd_key) ? 0 : 1;
@@ -884,7 +1136,7 @@ function updateUI() {
   queueEl.innerHTML = sorted.map(sd => {
     const c = STATUS_COLORS[sd.status]||'#9E9E9E', act = sd.id===state.currentSDId;
     const claimed = state.claimedIds.has(sd.id) || state.claimedIds.has(sd.sd_key);
-    return `<div class="q-item${act?' active':''}${claimed?' claimed':''}" data-id="${sd.id}" title="${sd.title||''}\nType: ${sd.sd_type||'unknown'}\nStatus: ${sd.status}\nProgress: ${sd.progress_percentage??sd.progress??0}%${claimed?'\n⚡ Claimed':''}"><span class="q-dot" style="background:${c}${claimed?';box-shadow:0 0 6px '+c:''}"></span><span class="q-key">${sd.sd_key}</span></div>`;
+    return `<div class="q-item${act?' active':''}${claimed?' claimed':''}" data-id="${sd.id}" title="${sd.title||''}\nType: ${sd.sd_type||'unknown'}\nStatus: ${sd.status}\nProgress: ${sd.progress_percentage??sd.progress??0}%${claimed?'\n⚡ Claimed':''}"><span class="q-dot" style="background:${c}${claimed?';box-shadow:0 0 6px '+c:''}"></span><span class="q-key">${sd.sd_key}</span><span class="q-est">${formatSDEstimate(sd)}</span></div>`;
   }).join('');
   queueEl.querySelectorAll('.q-item').forEach(el => el.addEventListener('click', () => {
     const idx = state.slideQueue.indexOf(el.dataset.id);
@@ -905,12 +1157,10 @@ function animate() {
   if (!state.webglOk) return;
   state.animationFrameId = requestAnimationFrame(animate);
   const dt = clock.getDelta(), t = clock.getElapsedTime(); frame++;
-  // Slow camera breathe: gentle zoom in/out over ~60s cycle
+  // Smooth camera breathe: oscillate around stored base distance
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const breathe = Math.sin(t * 0.1) * 3;
     const dir = camera.position.clone().sub(controls.target).normalize();
-    const baseDist = camera.position.distanceTo(controls.target);
-    const targetDist = Math.max(controls.minDistance, Math.min(controls.maxDistance, baseDist + breathe * 0.008));
+    const targetDist = Math.max(controls.minDistance, Math.min(controls.maxDistance, cameraBaseDistance + Math.sin(t * 0.1) * 0.5));
     camera.position.copy(controls.target).addScaledVector(dir, targetDist);
   }
   controls.update();
@@ -934,6 +1184,14 @@ function animate() {
     o.mesh.position.y = o.yBase + Math.sin(t * o.bobSpeed) * o.bobAmp;
     o.mesh.rotation.y += o.spinSpeed * dt;
     o.mesh.rotation.x += o.spinSpeed * dt * 0.3;
+  });
+  // Session orbs: drift + bob + pulse
+  state.sessionOrbs.forEach(o => {
+    o.angle += o.orbitSpeed * dt;
+    o.mesh.position.x = Math.cos(o.angle) * o.radius;
+    o.mesh.position.z = Math.sin(o.angle) * o.radius;
+    o.mesh.position.y = o.yBase + Math.sin(t * o.bobSpeed) * o.bobAmp;
+    o.mesh.material.opacity = 0.4 + Math.sin(t * o.pulseSpeed) * 0.2;
   });
   for (let i=sparks.length-1; i>=0; i--) { const s=sparks[i]; s.vel.y-=.002; s.mesh.position.add(s.vel); s.life-=.02; s.mesh.material.opacity=Math.max(0,s.life); if(s.life<=0){scene.remove(s.mesh);s.mesh.geometry.dispose();s.mesh.material.dispose();sparks.splice(i,1);} }
   const dp=dustGeo.attributes.position.array;
@@ -1066,7 +1324,12 @@ function subscribeRealtime() {
   state.channel = state.supabase.channel('sd-changes')
     .on('postgres_changes', { event:'*', schema:'public', table:'strategic_directives_v2' }, (payload) => {
       if (payload.eventType==='DELETE') removeSD(payload.old.id);
-      else { addOrUpdateSD(payload.new); addLog(`${payload.eventType}: ${payload.new.sd_key}`, 'system'); }
+      else {
+        // Payload trim: keep only the 7 columns we use (Supabase realtime sends full rows)
+        const r = payload.new;
+        const trimmed = { id:r.id, sd_key:r.sd_key, title:r.title, sd_type:r.sd_type, status:r.status, current_phase:r.current_phase, progress_percentage:r.progress_percentage, priority:r.priority, created_at:r.created_at, updated_at:r.updated_at };
+        addOrUpdateSD(trimmed); addLog(`${payload.eventType}: ${trimmed.sd_key}`, 'system');
+      }
     })
     .on('postgres_changes', { event:'*', schema:'public', table:'claude_sessions' }, () => {
       loadClaimedSDs();
@@ -1118,7 +1381,7 @@ async function fetchLiveSessions() {
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data, error } = await state.supabase.from('claude_sessions')
       .select('session_id').in('status', ['active', 'idle']).gte('heartbeat_at', cutoff);
-    if (!error && data) state.liveSessions = data.length;
+    if (!error && data) { state.liveSessions = data.length; if (state.webglOk) buildSessionOrbs(); }
   } catch (e) { console.warn('fetchLiveSessions:', e); }
   updateEstimate();
 }
@@ -1151,6 +1414,64 @@ function updateEstimate() {
   const sessionText = state.liveSessions === 0 ? 'no active sessions' : `${sessions} session${sessions > 1 ? 's' : ''}`;
   detailEl.textContent = `${remainingCount} remaining · ${sessionText} · ~${avgHours.toFixed(1)}h avg`;
   confEl.textContent = confidenceLabel;
+}
+
+// ═══════════════════════════════════════════════
+// HISTORY VIEW
+// ═══════════════════════════════════════════════
+let historyVisible = false;
+window.toggleHistory = function() {
+  historyVisible = !historyVisible;
+  document.getElementById('queue').style.display = historyVisible ? 'none' : '';
+  document.getElementById('history-panel').style.display = historyVisible ? 'block' : 'none';
+  document.getElementById('historyToggle').textContent = historyVisible ? 'Queue' : 'History';
+  if (historyVisible) loadHistory();
+};
+
+async function loadHistory() {
+  if (!state.supabase) return;
+  const venture = document.getElementById('histVenture').value;
+  const period = document.getElementById('histPeriod').value;
+  try {
+    let query = state.supabase.from('strategic_directives_v2')
+      .select('id, sd_key, title, sd_type, target_application, completion_date, updated_at')
+      .eq('status', 'completed')
+      .order('updated_at', { ascending: false })
+      .limit(100);
+    if (venture) query = query.eq('target_application', venture);
+    if (period !== 'all') {
+      const since = new Date(Date.now() - parseInt(period) * 86400000).toISOString();
+      query = query.gte('updated_at', since);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    populateVentureDropdown(data || []);
+    renderHistory(data || []);
+  } catch (e) { console.warn('loadHistory:', e); }
+}
+
+function populateVentureDropdown(items) {
+  const sel = document.getElementById('histVenture');
+  const current = sel.value;
+  const ventures = [...new Set(items.map(d => d.target_application).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All Ventures</option>' + ventures.map(v => `<option value="${v}"${v === current ? ' selected' : ''}>${v}</option>`).join('');
+}
+
+function renderHistory(items) {
+  const grouped = {};
+  items.forEach(sd => {
+    const key = sd.target_application || 'Unassigned';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(sd);
+  });
+  const html = Object.entries(grouped).map(([venture, sds]) =>
+    `<div class="h-group"><div class="h-group-title">${venture} (${sds.length})</div>${sds.map(sd => {
+      const date = sd.completion_date || sd.updated_at;
+      const dateStr = date ? new Date(date).toLocaleDateString() : '';
+      return `<div class="h-item">${sd.sd_key} — ${sd.title || ''}<span class="h-date">${dateStr}</span></div>`;
+    }).join('')}</div>`
+  ).join('');
+  document.getElementById('histList').innerHTML = html || '<div style="padding:12px;font-size:9px;color:rgba(224,220,212,0.36)">No completed SDs found for this period.</div>';
 }
 
 // ═══════════════════════════════════════════════
