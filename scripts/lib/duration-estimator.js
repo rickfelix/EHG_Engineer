@@ -58,26 +58,52 @@ export async function getHistoricalDurations(supabase, sdType = null, category =
   }
 
   const { data: sds, error } = await query;
-  if (error || !sds) return [];
+  if (error || !sds || sds.length === 0) return [];
 
-  const results = [];
-
+  // Build SD lookup map
+  const sdMap = new Map();
   for (const sd of sds) {
-    // Get first and last accepted handoff for this SD
+    sdMap.set(sd.id, sd);
+  }
+  const sdIds = Array.from(sdMap.keys());
+
+  // Batch fetch ALL accepted handoffs for all completed SDs in one query
+  // Supabase .in() has a practical limit, so chunk if needed
+  const CHUNK_SIZE = 200;
+  const allHandoffs = [];
+  for (let i = 0; i < sdIds.length; i += CHUNK_SIZE) {
+    const chunk = sdIds.slice(i, i + CHUNK_SIZE);
     const { data: handoffs } = await supabase
       .from('sd_phase_handoffs')
-      .select('created_at')
-      .eq('sd_id', sd.id)
+      .select('sd_id, created_at')
+      .in('sd_id', chunk)
       .eq('status', 'accepted')
       .order('created_at', { ascending: true });
+    if (handoffs) {
+      allHandoffs.push(...handoffs);
+    }
+  }
 
-    if (handoffs && handoffs.length >= 2) {
-      const first = new Date(handoffs[0].created_at);
-      const last = new Date(handoffs[handoffs.length - 1].created_at);
+  // Group handoffs by sd_id
+  const handoffsBySd = new Map();
+  for (const h of allHandoffs) {
+    if (!handoffsBySd.has(h.sd_id)) {
+      handoffsBySd.set(h.sd_id, []);
+    }
+    handoffsBySd.get(h.sd_id).push(h.created_at);
+  }
+
+  // Compute durations from first/last handoff timestamps
+  const results = [];
+  for (const [sdId, timestamps] of handoffsBySd) {
+    if (timestamps.length >= 2) {
+      const first = new Date(timestamps[0]);
+      const last = new Date(timestamps[timestamps.length - 1]);
       const minutes = Math.round((last - first) / (1000 * 60));
 
       // Filter out invalid durations (negative, zero, or > 24 hours)
       if (minutes > 0 && minutes < 1440) {
+        const sd = sdMap.get(sdId);
         results.push({
           sdId: sd.id,
           sdType: sd.sd_type,
