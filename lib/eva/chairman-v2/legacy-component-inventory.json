@@ -1,0 +1,169 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-02-22T21:40:00.000Z",
+  "generatedBy": "SD-MAN-FEAT-CORRECTIVE-VISION-GAP-008",
+  "description": "Inventory of legacy per-stage GUI components in the EHG app superseded by Chairman V2 or Stages V2 architecture",
+  "ehgAppPath": "applications/registry.json:local_path",
+  "components": [
+    {
+      "componentPath": "src/components/stages/Stage1DraftIdea.tsx",
+      "componentName": "Stage1DraftIdea",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage01DraftIdea.tsx",
+      "classification": "deprecated",
+      "rationale": "Superseded by V2 Stage01DraftIdea with improved form validation. Component itself is marked DEPRECATED in source."
+    },
+    {
+      "componentPath": "src/components/stages/Stage2AIReview.tsx",
+      "componentName": "Stage2AIReview",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage02AiReview.tsx",
+      "classification": "deprecated",
+      "rationale": "V2 Stage02AiReview provides THE_TRUTH architecture integration. V1 version lacks standardized data flow."
+    },
+    {
+      "componentPath": "src/components/stages/Stage3ComprehensiveValidation.tsx",
+      "componentName": "Stage3ComprehensiveValidation",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage03ComprehensiveValidation.tsx",
+      "classification": "deprecated",
+      "rationale": "V2 version integrates market validation with THE_TRUTH architecture pattern."
+    },
+    {
+      "componentPath": "src/components/stages/Stage5ProfitabilityForecasting.tsx",
+      "componentName": "Stage5ProfitabilityForecasting",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage05ProfitabilityForecasting.tsx",
+      "classification": "deprecated",
+      "rationale": "V2 version with improved financial modeling and THE_TRUTH integration."
+    },
+    {
+      "componentPath": "src/components/stages/Stage10TechnicalReview.tsx",
+      "componentName": "Stage10TechnicalReview",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage10TechnicalReview.tsx",
+      "classification": "deprecated",
+      "rationale": "V2 version integrates with THE_IDENTITY architecture. Chairman V2 StageOKRPanel provides executive oversight."
+    },
+    {
+      "componentPath": "src/components/stages/Stage13ExitOrientedDesign.tsx",
+      "componentName": "Stage13ExitOrientedDesign",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage13TechStackInterrogation.tsx",
+      "classification": "deprecated",
+      "rationale": "Exit-oriented design replaced by tech stack interrogation in V2. Chairman V2 DecisionQueuePanel handles exit decisions."
+    },
+    {
+      "componentPath": "src/components/stages/Stage16AICEOAgent.tsx",
+      "componentName": "Stage16AICEOAgent",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/stages/v2/Stage16AiCeoAgent.tsx",
+      "classification": "deprecated",
+      "rationale": "V2 AiCeoAgent integrates with THE_BUILD architecture. Chairman V2 DecisionStack provides executive-level AI oversight."
+    },
+    {
+      "componentPath": "src/components/stages/Stage23GoNoGoDecision.tsx",
+      "componentName": "Stage23GoNoGoDecision",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/chairman-v2/DecisionStack.tsx",
+      "classification": "deprecated",
+      "rationale": "Go/no-go decisions now handled through Chairman V2 DecisionStack with portfolio-wide context."
+    },
+    {
+      "componentPath": "src/components/stages/Stage25ScalePlanning.tsx",
+      "componentName": "Stage25ScalePlanning",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/chairman-v2/panels/OKRPortfolioAnalytics.tsx",
+      "classification": "deprecated",
+      "rationale": "Scale planning aggregated into OKRPortfolioAnalytics which provides cross-venture scaling insights."
+    },
+    {
+      "componentPath": "src/components/chairman/ChairmanFeedbackPanel.tsx",
+      "componentName": "ChairmanFeedbackPanel",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/chairman-v2/panels/EventFeedPanel.tsx",
+      "classification": "deprecated",
+      "rationale": "V1 Chairman feedback replaced by V2 EventFeedPanel with real-time event streaming."
+    },
+    {
+      "componentPath": "src/components/chairman/ChairmanOverridePanel.tsx",
+      "componentName": "ChairmanOverridePanel",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/chairman-v2/DecisionStack.tsx",
+      "classification": "deprecated",
+      "rationale": "V1 override panel replaced by V2 DecisionStack with structured decision queuing."
+    },
+    {
+      "componentPath": "src/components/chairman/ChairmanOverrideInterface.tsx",
+      "componentName": "ChairmanOverrideInterface",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": "src/components/chairman-v2/DecisionStack.tsx",
+      "classification": "deprecated",
+      "rationale": "Duplicate of ChairmanOverridePanel functionality. Both superseded by DecisionStack."
+    },
+    {
+      "componentPath": "src/components/chairman/AIInsightsEngine.tsx",
+      "componentName": "AIInsightsEngine",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/chairman-v2/EVAGreeting.tsx",
+      "classification": "deprecated",
+      "rationale": "AI insights now surfaced through EVAGreeting and BriefingDashboard in Chairman V2."
+    },
+    {
+      "componentPath": "src/components/chairman/ExecutiveAlerts.tsx",
+      "componentName": "ExecutiveAlerts",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/chairman-v2/AttentionQueueSidebar.tsx",
+      "classification": "deprecated",
+      "rationale": "Executive alerts replaced by AttentionQueueSidebar with prioritized attention items."
+    },
+    {
+      "componentPath": "src/components/chairman/StrategicKPIMonitor.tsx",
+      "componentName": "StrategicKPIMonitor",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/chairman-v2/panels/KillGateOKRDashboard.tsx",
+      "classification": "deprecated",
+      "rationale": "KPI monitoring consolidated into KillGateOKRDashboard with integrated kill gate signals."
+    },
+    {
+      "componentPath": "src/components/chairman/tabs/AnalyticsTab.tsx",
+      "componentName": "AnalyticsTab",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/chairman-v2/panels/OKRPortfolioAnalytics.tsx",
+      "classification": "deprecated",
+      "rationale": "Analytics tab consolidated into OKRPortfolioAnalytics with dimension-level drill-down."
+    },
+    {
+      "componentPath": "src/components/chairman/AlertConfiguration.tsx",
+      "componentName": "AlertConfiguration",
+      "category": "stage-editor",
+      "chairmanV2Equivalent": null,
+      "classification": "retain",
+      "rationale": "Alert configuration has no direct V2 equivalent. Retained for backward compatibility until notification system redesign."
+    },
+    {
+      "componentPath": "src/components/stage-outputs/StageOutputViewer.tsx",
+      "componentName": "StageOutputViewer",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": null,
+      "classification": "retain",
+      "rationale": "Stage output viewing is still needed for historical stage result inspection. No direct Chairman V2 replacement."
+    },
+    {
+      "componentPath": "src/components/stage-outputs/StageNavigationSidebar.tsx",
+      "componentName": "StageNavigationSidebar",
+      "category": "stage-navigation",
+      "chairmanV2Equivalent": "src/components/chairman-v2/StageTimeline.tsx",
+      "classification": "migrate",
+      "rationale": "Navigation sidebar to be migrated to use StageTimeline component for consistent navigation experience."
+    },
+    {
+      "componentPath": "src/components/workflow/DynamicStageRenderer.tsx",
+      "componentName": "DynamicStageRenderer",
+      "category": "stage-viewer",
+      "chairmanV2Equivalent": "src/components/stages/v2/StageRouter.tsx",
+      "classification": "migrate",
+      "rationale": "Dynamic stage rendering to be migrated to V2 StageRouter which uses React.lazy() code splitting."
+    }
+  ]
+}

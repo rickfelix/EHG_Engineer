@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-02-22T21:40:00.000Z",
+  "generatedBy": "SD-MAN-FEAT-CORRECTIVE-VISION-GAP-008",
+  "description": "Phased removal plan for legacy per-stage GUI components, ordered by dependency relationships",
+  "totalComponents": 16,
+  "metadata": {
+    "inventorySource": "lib/eva/chairman-v2/legacy-component-inventory.json",
+    "createdAt": "2026-02-22T21:40:00.000Z",
+    "lastValidated": "2026-02-22T21:40:00.000Z"
+  },
+  "phases": [
+    {
+      "name": "phase-1-standalone-v1-chairman",
+      "description": "Remove legacy Chairman V1 components that have direct V2 replacements and no cross-dependencies",
+      "riskLevel": "low",
+      "components": [
+        "src/components/chairman/AIInsightsEngine.tsx",
+        "src/components/chairman/ExecutiveAlerts.tsx",
+        "src/components/chairman/StrategicKPIMonitor.tsx",
+        "src/components/chairman/tabs/AnalyticsTab.tsx",
+        "src/components/chairman/ChairmanFeedbackPanel.tsx"
+      ],
+      "prerequisites": [
+        "Verify no active routes reference these components",
+        "Confirm Chairman V2 equivalents are fully functional"
+      ],
+      "dependsOn": []
+    },
+    {
+      "name": "phase-2-v1-chairman-interactive",
+      "description": "Remove Chairman V1 interactive components (override panels) after confirming DecisionStack handles all override scenarios",
+      "riskLevel": "medium",
+      "components": [
+        "src/components/chairman/ChairmanOverridePanel.tsx",
+        "src/components/chairman/ChairmanOverrideInterface.tsx"
+      ],
+      "prerequisites": [
+        "Phase 1 complete",
+        "Chairman V2 DecisionStack covers all override use cases",
+        "No direct imports from other components"
+      ],
+      "dependsOn": ["phase-1-standalone-v1-chairman"]
+    },
+    {
+      "name": "phase-3-v1-stage-components",
+      "description": "Remove V1 stage components that have V2 equivalents. Must verify V2 StageRouter handles all routing correctly first.",
+      "riskLevel": "medium",
+      "components": [
+        "src/components/stages/Stage1DraftIdea.tsx",
+        "src/components/stages/Stage2AIReview.tsx",
+        "src/components/stages/Stage3ComprehensiveValidation.tsx",
+        "src/components/stages/Stage5ProfitabilityForecasting.tsx",
+        "src/components/stages/Stage10TechnicalReview.tsx",
+        "src/components/stages/Stage13ExitOrientedDesign.tsx",
+        "src/components/stages/Stage16AICEOAgent.tsx",
+        "src/components/stages/Stage23GoNoGoDecision.tsx",
+        "src/components/stages/Stage25ScalePlanning.tsx"
+      ],
+      "prerequisites": [
+        "Phase 2 complete",
+        "V2 StageRouter verified for all stage numbers",
+        "No page components directly importing V1 stage components",
+        "Route configuration updated to use V2 components"
+      ],
+      "dependsOn": ["phase-2-v1-chairman-interactive"]
+    }
+  ]
+}
