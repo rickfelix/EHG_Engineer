@@ -17,6 +17,7 @@ class RealtimeDashboard {
     this.dbLoader = dbLoader;
     this.subscriptions = new Map();
     this.isConnected = false;
+    this._debounceTimers = new Map(); // Per-type trailing-edge debounce
     
     // Initialize Supabase client for realtime
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,6 +36,26 @@ class RealtimeDashboard {
     } else {
       console.log('⚠️ Realtime disabled - missing Supabase credentials');
     }
+  }
+
+  /**
+   * Trailing-edge debounce: coalesces rapid events into a single reload
+   * @param {string} key - Debounce group key (e.g., 'sd', 'prd')
+   * @param {Function} fn - The function to debounce
+   * @param {number} delayMs - Delay in milliseconds (default 1500)
+   */
+  _debouncedReload(key, fn, delayMs = 1500) {
+    if (this._debounceTimers.has(key)) {
+      clearTimeout(this._debounceTimers.get(key));
+    }
+    this._debounceTimers.set(key, setTimeout(async () => {
+      this._debounceTimers.delete(key);
+      try {
+        await fn();
+      } catch (err) {
+        console.error(`❌ Debounced reload failed (${key}):`, err.message);
+      }
+    }, delayMs));
   }
 
   /**
@@ -58,14 +79,14 @@ class RealtimeDashboard {
           schema: 'public',
           table: 'strategic_directives_v2'
         },
-        async (payload) => {
+        (payload) => {
           console.log('📡 SD change detected:', payload.eventType);
-          
-          // Reload SDs from database
-          if (this.dbLoader) {
-            const sds = await this.dbLoader.loadStrategicDirectives();
-            onUpdate('strategicDirectives', sds);
-          }
+          this._debouncedReload('sd', async () => {
+            if (this.dbLoader) {
+              const sds = await this.dbLoader.loadStrategicDirectives();
+              onUpdate('strategicDirectives', sds);
+            }
+          });
         }
       )
       .subscribe((status) => {
@@ -86,14 +107,14 @@ class RealtimeDashboard {
           schema: 'public',
           table: 'product_requirements_v2'
         },
-        async (payload) => {
+        (payload) => {
           console.log('📡 PRD change detected:', payload.eventType);
-          
-          // Reload PRDs from database
-          if (this.dbLoader) {
-            const prds = await this.dbLoader.loadPRDs();
-            onUpdate('prds', prds);
-          }
+          this._debouncedReload('prd', async () => {
+            if (this.dbLoader) {
+              const prds = await this.dbLoader.loadPRDs();
+              onUpdate('prds', prds);
+            }
+          });
         }
       )
       .subscribe((status) => {
@@ -114,14 +135,14 @@ class RealtimeDashboard {
           schema: 'public',
           table: 'execution_sequences_v2'
         },
-        async (payload) => {
+        (payload) => {
           console.log('📡 EES change detected:', payload.eventType);
-          
-          // Reload EES from database
-          if (this.dbLoader) {
-            const ees = await this.dbLoader.loadExecutionSequences();
-            onUpdate('executionSequences', ees);
-          }
+          this._debouncedReload('ees', async () => {
+            if (this.dbLoader) {
+              const ees = await this.dbLoader.loadExecutionSequences();
+              onUpdate('executionSequences', ees);
+            }
+          });
         }
       )
       .subscribe((status) => {
@@ -142,20 +163,15 @@ class RealtimeDashboard {
           schema: 'public',
           table: 'agentic_reviews'
         },
-        async (payload) => {
+        (payload) => {
           console.log('📡 PR review change detected:', payload.eventType);
-
-          // Load fresh PR review data
-          if (this.dbLoader) {
-            const reviews = await this.dbLoader.loadPRReviews();
-            const metrics = await this.dbLoader.calculatePRMetrics();
-
-            // Send both reviews and metrics
-            onUpdate('prReviews', {
-              reviews: reviews,
-              metrics: metrics
-            });
-          }
+          this._debouncedReload('prReviews', async () => {
+            if (this.dbLoader) {
+              const reviews = await this.dbLoader.loadPRReviews();
+              const metrics = await this.dbLoader.calculatePRMetrics();
+              onUpdate('prReviews', { reviews, metrics });
+            }
+          });
         }
       )
       .subscribe((status) => {
@@ -199,12 +215,16 @@ class RealtimeDashboard {
    */
   stopSubscriptions() {
     console.log('🛑 Stopping real-time subscriptions...');
-    
+
+    // Clear pending debounce timers
+    this._debounceTimers.forEach((timer) => clearTimeout(timer));
+    this._debounceTimers.clear();
+
     this.subscriptions.forEach((channel, name) => {
       channel.unsubscribe();
       console.log(`  ✅ Unsubscribed from ${name}`);
     });
-    
+
     this.subscriptions.clear();
   }
 

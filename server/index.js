@@ -29,7 +29,7 @@ import {
   PORT,
   PROJECT_ROOT,
   dbLoader,
-  realtimeManager,
+  realtimeDashboard,
   initializeOpenAI
 } from './config.js';
 
@@ -209,34 +209,7 @@ if (process.env.NODE_ENV !== 'production') {
 // =============================================================================
 // REALTIME SUBSCRIPTIONS
 // =============================================================================
-
-if (dbLoader.isConnected && realtimeManager.isConnected) {
-  realtimeManager.subscribeToSDs((payload) => {
-    console.log('📡 Realtime update: Strategic Directive');
-    loadState(broadcastUpdate).then(() => {
-      broadcastUpdate('database', { table: 'strategic_directives_v2', payload });
-    });
-  });
-
-  realtimeManager.subscribeToPRDs((payload) => {
-    console.log('📡 Realtime update: PRD');
-    loadState(broadcastUpdate).then(() => {
-      broadcastUpdate('database', { table: 'product_requirements_v2', payload });
-    });
-  });
-
-  realtimeManager.subscribeToEES((payload) => {
-    console.log('📡 Realtime update: Execution Sequence');
-    loadState(broadcastUpdate).then(() => {
-      broadcastUpdate('database', { table: 'execution_sequences_v2', payload });
-    });
-  });
-
-  realtimeManager.subscribeToIntegrityMetrics((payload) => {
-    console.log('📡 Realtime update: Integrity Metrics');
-    broadcastUpdate('integrity-metrics', payload);
-  });
-}
+// Handled by realtimeDashboard in server/state.js — no duplicate subscriptions
 
 // =============================================================================
 // EVA ERROR HANDLER
@@ -271,7 +244,7 @@ async function startServer() {
     console.log('🚀 EHG_Engineer Unified Application Server');
     console.log('=============================================================');
     console.log(`📍 Local:            http://localhost:${PORT}`);
-    console.log(`🔒 Bind:             127.0.0.1 (localhost only)`);
+    console.log('🔒 Bind:             127.0.0.1 (localhost only)');
     console.log(`📊 Dashboard:        http://localhost:${PORT}/dashboard`);
     console.log('🎙️  EVA Voice:       http://localhost:8080/eva-assistant (EHG App) ✅');
     console.log('-------------------------------------------------------------');
@@ -279,7 +252,7 @@ async function startServer() {
     console.log(`📋 LEO Protocol:    ${dashboardState.leoProtocol.version}`);
     console.log(`🔍 Strategic Dirs:  ${dashboardState.strategicDirectives.length} loaded`);
     console.log(`📄 PRDs:            ${dashboardState.prds.length} loaded`);
-    console.log(`⚡ Realtime:        ${realtimeManager.isConnected ? 'Active' : 'Inactive'}`);
+    console.log(`⚡ Realtime:        ${realtimeDashboard.isConnected ? 'Active' : 'Inactive'}`);
     console.log('=============================================================\n');
 
     const sd2025 = dashboardState.strategicDirectives.find(sd => sd.id === 'SD-2025-001');

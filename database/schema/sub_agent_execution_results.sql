@@ -29,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_sub_agent_results_sub_agent_code ON sub_agent_exe
 CREATE INDEX IF NOT EXISTS idx_sub_agent_results_verdict ON sub_agent_execution_results(verdict);
 CREATE INDEX IF NOT EXISTS idx_sub_agent_results_created_at ON sub_agent_execution_results(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sub_agent_results_sd_created ON sub_agent_execution_results(sd_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sub_agent_results_metadata_gin ON sub_agent_execution_results USING gin(metadata);
 
 -- Comments
 COMMENT ON TABLE sub_agent_execution_results IS 'Full sub-agent execution reports for compression system';
