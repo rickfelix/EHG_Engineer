@@ -439,7 +439,54 @@ interface AgentPerformanceAnalytics {
 }
 ```
 
-## 12. Future Evolution & Roadmap
+## 12. Department Organizational Structure
+
+### Overview
+
+The department system provides a hierarchical organizational structure for grouping and managing AI agents. Departments use PostgreSQL LTREE for efficient hierarchy queries and support capability inheritance from parent to child departments.
+
+### Data Model
+
+| Table | Purpose |
+|-------|---------|
+| `departments` | Department registry with LTREE hierarchy (id, name, slug, hierarchy_path, parent_department_id, is_active) |
+| `department_agents` | Many-to-many junction linking agents to departments with roles (lead, member, advisor) |
+| `department_capabilities` | Capabilities assigned to departments, inherited down the hierarchy |
+| `agent_registry` | Source of agent identity (display_name, agent_type, status) |
+
+### Database Views
+
+| View | Perspective | Description |
+|------|-------------|-------------|
+| `v_department_membership` | Department-centric | "Who is in this department?" — lists agents per department |
+| `v_agent_departments` | Agent-centric | "Which departments does this agent belong to?" — lists departments per agent with count |
+
+### Capability Inheritance
+
+Departments inherit capabilities from ancestor departments via the LTREE hierarchy. The `get_effective_capabilities()` RPC function returns both direct and inherited capabilities for a given department.
+
+### CLI Commands
+
+| Command | Script | Description |
+|---------|--------|-------------|
+| `npm run dept:list` | `scripts/list-departments.cjs` | Tabular listing of all departments |
+| `npm run dept:hierarchy` | `scripts/department-hierarchy.cjs` | ASCII tree visualization with agent/capability counts |
+| `npm run dept:create` | `scripts/create-department.js` | Interactive wizard to create a new department |
+| `npm run dept:manage` | `scripts/manage-department-agents.cjs` | Assign/remove/list agents in departments |
+| `npm run dept:capabilities` | `scripts/manage-department-capabilities.cjs` | Add/remove/list department capabilities |
+
+### RPC Functions
+
+| Function | Purpose |
+|----------|---------|
+| `assign_agent_to_department(agent_id, dept_id, role)` | Assign agent with upsert on conflict |
+| `remove_agent_from_department(agent_id, dept_id)` | Remove agent from department |
+| `get_department_agents(dept_id)` | List agents in a department with roles |
+| `add_department_capability(dept_id, name, description)` | Add a capability |
+| `remove_department_capability(dept_id, name)` | Remove a capability |
+| `get_effective_capabilities(dept_id)` | Get direct + inherited capabilities |
+
+## 13. Future Evolution & Roadmap
 
 ### Phase 1: Foundation (Months 1-3)
 - Core AI agent framework implementation
