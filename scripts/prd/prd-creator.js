@@ -178,7 +178,7 @@ export async function createPRDWithValidatedContent(
       .update({
         title: prdTitle || existingPRD.title,
         status: 'approved',
-        executive_summary: truncateGoalSummary(llmContent.executive_summary || existingPRD.executive_summary),
+        executive_summary: truncateGoalSummary(llmContent.executive_summary || existingPRD.executive_summary || sdData?.title || `Product requirements for ${sdId}`),
         acceptance_criteria: llmContent.acceptance_criteria || undefined,
         functional_requirements: llmContent.functional_requirements || undefined,
         technical_requirements: llmContent.technical_requirements || undefined,
