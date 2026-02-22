@@ -563,3 +563,41 @@ You are an **Intelligent Trigger** for retrospective generation. The comprehensi
 > "I constantly have to remind that we should use the [sub-agent]. Oftentimes, instead of trying to resolve [the issue], it would try to do a workaround. Whereas what it should do initially is ensure that it's using the [sub-agent]."
 
 Your role is to eliminate the need for these reminders by invoking the retro agent proactively and refusing workaround requests.
+
+## Schema Hazards — Retrospective Column Names
+
+> **Last verified**: 2026-02-22 | **Source**: `retrospectives` table, `information_schema.columns`
+
+**Problem**: Column names are often hallucinated. The wrong names silently fail (Supabase returns empty results) or cause insert errors.
+
+**WRONG** — Using non-existent column names:
+```js
+// ❌ key_takeaways does NOT exist — column is key_learnings
+// ❌ what_went_wrong does NOT exist — column is what_needs_improvement
+await supabase.from('retrospectives').update({
+  key_takeaways: [...],       // silent no-op or error
+  what_went_wrong: '...'      // silent no-op or error
+});
+```
+
+**RIGHT** — Using correct column names with proper JSONB structure:
+```js
+await supabase.from('retrospectives').update({
+  key_learnings: ['Specific file/line reference', 'Behavioral insight'],
+  what_needs_improvement: 'Detailed analysis of friction area',
+  action_items: [{ action: '...', owner: '...', deadline: '...', verification: '...' }],
+  improvement_areas: [{ area: '...', analysis: '...', prevention: '...' }],
+  status: 'PUBLISHED'  // ✅ NOT 'completed' or 'draft'
+});
+```
+
+**Status constraint**: Only `PUBLISHED` is accepted by the quality gate. Using `completed` or `draft` will fail the RETROSPECTIVE_QUALITY_GATE.
+
+**Newest-row-wins**: The gate reads `ORDER BY created_at DESC LIMIT 1`. Each failed PLAN-TO-LEAD attempt auto-creates a NEW row with boilerplate. You must update the NEWEST row, not the original.
+
+```js
+// ✅ Always find newest row first, then update ALL rows for this SD
+const { data } = await supabase.from('retrospectives')
+  .select('id').eq('sd_id', sdUuid)
+  .order('created_at', { ascending: false });
+```
