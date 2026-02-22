@@ -309,6 +309,7 @@ export async function generateCorrectiveSD(scoreId) {
           vision_origin_score_id: scoreId,
           action_tier: action,
           dimensions: dims.map(d => d.dimId),
+          gate_exemptions: ['GATE_VISION_SCORE'],
           intelligence_priority: {
             priority: dynamicPriority,
             band: priorityResult?.band ?? null,
