@@ -7,13 +7,15 @@
  *   node scripts/query-capabilities.cjs --agent-id <UUID>
  *   node scripts/query-capabilities.cjs --all
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getClient() {
+  require('dotenv').config();
+  const { createClient } = require('@supabase/supabase-js');
+  return createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -35,7 +37,7 @@ Usage:
 `);
 }
 
-async function queryAgentCapabilities(agentId) {
+async function queryAgentCapabilities(supabase, agentId) {
   const { data, error } = await supabase.rpc('get_effective_capabilities', {
     p_agent_id: agentId
   });
@@ -82,7 +84,7 @@ async function queryAgentCapabilities(agentId) {
   console.log('='.repeat(80) + '\n');
 }
 
-async function queryAllCapabilities() {
+async function queryAllCapabilities(supabase) {
   const { data, error } = await supabase
     .from('v_agent_effective_capabilities')
     .select('*')
@@ -132,7 +134,8 @@ async function queryAllCapabilities() {
   console.log('='.repeat(90) + '\n');
 }
 
-async function main() {
+async function main(supabase) {
+  if (!supabase) supabase = getClient();
   const args = parseArgs();
 
   if (args.help) {
@@ -141,15 +144,19 @@ async function main() {
   }
 
   if (args.agentId) {
-    await queryAgentCapabilities(args.agentId);
+    await queryAgentCapabilities(supabase, args.agentId);
   } else if (args.all) {
-    await queryAllCapabilities();
+    await queryAllCapabilities(supabase);
   } else {
     showUsage();
   }
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { main, parseArgs };
