@@ -91,7 +91,8 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Branches are now created on-demand when /ship is invoked.
 
     // Vision Score Gate (SD-MAN-INFRA-VISION-SCORE-GATE-001)
-    // Soft/informational — displays vision alignment score if available, never blocks
+    // Hard enforcement — blocks when vision score below sd_type threshold or absent
+    // Corrective SDs (with vision_origin_score_id) are exempt (PAT-CORR-VISION-GATE-001)
     gates.push(createVisionScoreGate(this.supabase));
 
     return gates;

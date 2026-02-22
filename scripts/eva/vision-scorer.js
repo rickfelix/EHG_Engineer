@@ -214,6 +214,16 @@ function parseAndValidateResponse(text, allCriteria) {
   }
   cleaned = cleaned.trim();
 
+  // Extract JSON object if surrounded by non-JSON text
+  const jsonStart = cleaned.indexOf('{');
+  const jsonEnd = cleaned.lastIndexOf('}');
+  if (jsonStart >= 0 && jsonEnd > jsonStart) {
+    cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+  }
+
+  // Fix trailing commas before closing brackets (common LLM issue)
+  cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+
   const parsed = JSON.parse(cleaned);
 
   if (!Array.isArray(parsed.dimensions)) {
@@ -374,7 +384,7 @@ export async function scoreSD(options = {}) {
   const startTime = Date.now();
 
   try {
-    const result = await llmClient.complete(systemPrompt, userPrompt, { maxTokens: 4000 });
+    const result = await llmClient.complete(systemPrompt, userPrompt, { maxTokens: 8000, timeout: 180000 });
     rawResponse = result.content;
   } catch (err) {
     throw new Error(`LLM call failed: ${err.message}`);
@@ -390,7 +400,7 @@ export async function scoreSD(options = {}) {
 Fix and return ONLY valid JSON with all ${allCriteria.length} dimensions.
 Previous response (truncated):
 ${rawResponse.substring(0, 1000)}`;
-      const retry = await llmClient.complete(systemPrompt, repairPrompt, { maxTokens: 4000 });
+      const retry = await llmClient.complete(systemPrompt, repairPrompt, { maxTokens: 8000, timeout: 180000 });
       parsed = parseAndValidateResponse(retry.content, allCriteria);
     } catch {
       throw new Error(`LLM response parse failed after retry: ${parseErr.message}`);
