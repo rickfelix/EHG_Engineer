@@ -21,6 +21,7 @@ import {
   resolveAutoProceed,
   createHandoffMetadata
 } from './auto-proceed-resolver.js';
+import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
 
 export class HandoffOrchestrator {
   constructor(options = {}) {
@@ -148,6 +149,10 @@ export class HandoffOrchestrator {
       } else if (!result.systemError) {
         await this.recorder.recordFailure(normalizedType, sdId, result, template);
       }
+
+      // SD-LEO-FEAT-DATA-FLYWHEEL-001: Fire-and-forget capture to eva_interactions
+      captureHandoffGate(result, normalizedType, sdId, enhancedOptions.autoProceedSessionId)
+        .catch(err => console.warn(`[flywheel] Capture error (non-blocking): ${err.message}`));
 
       return result;
 

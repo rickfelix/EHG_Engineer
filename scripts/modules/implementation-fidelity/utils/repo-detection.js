@@ -61,7 +61,13 @@ export async function detectImplementationRepo(sd_id, supabase) {
     for (const term of searchTerms) {
       try {
         // Check if this repo has commits for this SD
-        const { stdout } = await execAsync(`git -C "${repo}" log --all --grep="${term}" --format="%H" -n 1 2>/dev/null || echo ""`);
+        // Windows fix: Shell fallbacks like `|| echo ""` and `|| true` don't work
+        // correctly with Node's exec on Windows (cmd.exe vs bash semantics).
+        // Instead, run git directly and rely on the catch block for errors.
+        const { stdout } = await execAsync(
+          `git -C "${repo}" log --all --grep="${term}" --format="%H" -n 1`,
+          { timeout: 10000 }
+        );
         if (stdout.trim()) {
           console.log(`   💡 Implementation detected in: ${repo} (matched: ${term})`);
           return repo;
