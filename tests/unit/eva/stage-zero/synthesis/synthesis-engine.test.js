@@ -48,6 +48,9 @@ vi.mock('../../../../../lib/eva/stage-zero/synthesis/design-evaluation.js', () =
 vi.mock('../../../../../lib/eva/stage-zero/synthesis/narrative-risk.js', () => ({
   analyzeNarrativeRisk: vi.fn().mockResolvedValue({ component: 'narrative_risk', nr_score: 35, nr_band: 'NR-Moderate', nr_interpretation: 'Watch assumptions', component_scores: { decision_sensitivity: 40, demand_distortion: 30, hype_persistence: 25, influence_exposure: 20 }, narrative_flags: [], confidence: 0.7, confidence_caveat: 'Test caveat', summary: 'ok' }),
 }));
+vi.mock('../../../../../lib/eva/stage-zero/synthesis/tech-trajectory.js', () => ({
+  analyzeTechTrajectory: vi.fn().mockResolvedValue({ component: 'tech_trajectory', trajectory_score: 67, axes: { reasoning_autonomy: { current: 65, bull_6m: 85, base_6m: 75, bear_6m: 68, venture_impact: 'test' }, cost_deflation: { current: 50, bull_6m: 80, base_6m: 65, bear_6m: 45, venture_impact: 'test' }, multimodal_expansion: { current: 40, bull_6m: 70, base_6m: 55, bear_6m: 42, venture_impact: 'test' } }, competitive_timing: { signal: 'opening', confidence: 0.7, window_months: 6, rationale: 'test' }, next_disruption_event: { event: 'Test', estimated_months: 4, invalidation_scope: 'test' }, gap_windows: [], confidence_caveat: 'Test caveat', summary: 'ok', data_feed_active: false }),
+}));
 vi.mock('../../../../../lib/eva/stage-zero/profile-service.js', () => ({
   resolveProfile: vi.fn().mockResolvedValue(null),
   calculateWeightedScore: vi.fn().mockReturnValue({ total_score: 75, breakdown: {} }),
@@ -71,6 +74,7 @@ import { estimateBuildCost } from '../../../../../lib/eva/stage-zero/synthesis/b
 import { analyzeVirality } from '../../../../../lib/eva/stage-zero/synthesis/virality.js';
 import { evaluateDesignPotential } from '../../../../../lib/eva/stage-zero/synthesis/design-evaluation.js';
 import { analyzeNarrativeRisk } from '../../../../../lib/eva/stage-zero/synthesis/narrative-risk.js';
+import { analyzeTechTrajectory } from '../../../../../lib/eva/stage-zero/synthesis/tech-trajectory.js';
 import { resolveProfile, calculateWeightedScore } from '../../../../../lib/eva/stage-zero/profile-service.js';
 
 const silentLogger = { log: vi.fn(), warn: vi.fn() };
@@ -95,7 +99,7 @@ beforeEach(() => {
 });
 
 describe('runSynthesis', () => {
-  test('runs all 11 synthesis components', async () => {
+  test('runs all 12 synthesis components', async () => {
     const result = await runSynthesis(validPathOutput, { logger: silentLogger });
 
     expect(crossReferenceIntellectualCapital).toHaveBeenCalledWith(validPathOutput, expect.anything());
@@ -109,9 +113,10 @@ describe('runSynthesis', () => {
     expect(analyzeVirality).toHaveBeenCalledWith(validPathOutput, expect.anything());
     expect(evaluateDesignPotential).toHaveBeenCalledWith(validPathOutput, expect.anything());
     expect(analyzeNarrativeRisk).toHaveBeenCalledWith(validPathOutput, expect.anything());
+    expect(analyzeTechTrajectory).toHaveBeenCalledWith(validPathOutput, expect.anything());
 
-    expect(result.metadata.synthesis.components_run).toBe(11);
-    expect(result.metadata.synthesis.components_total).toBe(11);
+    expect(result.metadata.synthesis.components_run).toBe(12);
+    expect(result.metadata.synthesis.components_total).toBe(12);
   });
 
   test('handles component failure gracefully', async () => {
