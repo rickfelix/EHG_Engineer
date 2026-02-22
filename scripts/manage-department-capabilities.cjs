@@ -96,13 +96,47 @@ async function removeCapability(departmentId, name) {
 }
 
 async function listCapabilities(departmentId) {
-  const { data, error } = await supabase.rpc('get_effective_capabilities', {
-    p_department_id: departmentId
-  });
+  // Query direct capabilities for this department
+  const { data: direct, error: directErr } = await supabase
+    .from('department_capabilities')
+    .select('capability_name, description')
+    .eq('department_id', departmentId);
 
-  if (error) {
-    console.error('Error listing capabilities:', error.message);
+  if (directErr) {
+    console.error('Error listing capabilities:', directErr.message);
     process.exit(1);
+  }
+
+  // Get parent chain for inherited capabilities
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('hierarchy_path')
+    .eq('id', departmentId)
+    .single();
+
+  let inherited = [];
+  if (dept && dept.hierarchy_path && dept.hierarchy_path.includes('.')) {
+    const parts = dept.hierarchy_path.split('.');
+    const parentSlugs = parts.slice(0, -1);
+    // Walk up the hierarchy and collect ancestor capabilities
+    for (let i = parentSlugs.length; i > 0; i--) {
+      const ancestorPath = parentSlugs.slice(0, i).join('.');
+      const { data: ancestor } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('hierarchy_path', ancestorPath)
+        .eq('is_active', true)
+        .single();
+      if (ancestor) {
+        const { data: caps } = await supabase
+          .from('department_capabilities')
+          .select('capability_name, description')
+          .eq('department_id', ancestor.id);
+        if (caps) {
+          inherited.push(...caps.map(c => ({ ...c, inherited_from: ancestor.name })));
+        }
+      }
+    }
   }
 
   const deptName = await getDeptName(departmentId);
@@ -111,7 +145,12 @@ async function listCapabilities(departmentId) {
   console.log(`  CAPABILITIES: ${deptName}`);
   console.log('='.repeat(70));
 
-  if (!data || data.length === 0) {
+  const all = [
+    ...(direct || []).map(c => ({ ...c, source: 'direct' })),
+    ...inherited.map(c => ({ ...c, source: 'inherited' }))
+  ];
+
+  if (all.length === 0) {
     console.log('  No capabilities found for this department.');
   } else {
     const nameW = 25;
@@ -121,14 +160,13 @@ async function listCapabilities(departmentId) {
     console.log('  ' + 'Name'.padEnd(nameW) + 'Description'.padEnd(descW) + 'Source'.padEnd(srcW));
     console.log('  ' + '-'.repeat(nameW + descW + srcW));
 
-    for (const cap of data) {
+    for (const cap of all) {
       const desc = (cap.description || '').substring(0, descW - 1);
-      const source = cap.is_inherited ? 'inherited' : 'direct';
       console.log(
         '  ' +
         (cap.capability_name || '').substring(0, nameW - 1).padEnd(nameW) +
         desc.padEnd(descW) +
-        source.padEnd(srcW)
+        cap.source.padEnd(srcW)
       );
     }
   }
