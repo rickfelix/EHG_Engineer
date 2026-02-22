@@ -365,7 +365,8 @@ export class SDNextSelector {
       claimedSDs: this.claimedSDs,
       currentSession: this.currentSession,
       activeSessions: this.activeSessions,
-      localSignals: this.localSignals // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
+      localSignals: this.localSignals, // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
+      supabase: this.supabase // Needed for auto-release of stale dead claims
     };
   }
 
@@ -561,11 +562,11 @@ export class SDNextSelector {
     }
 
     const sessionContext = this.getSessionContext();
-    displayTrackSection('A', 'Infrastructure/Safety', tracks.A, sessionContext);
-    displayTrackSection('B', 'Feature/Stages', tracks.B, sessionContext);
-    displayTrackSection('C', 'Quality', tracks.C, sessionContext);
+    await displayTrackSection('A', 'Infrastructure/Safety', tracks.A, sessionContext);
+    await displayTrackSection('B', 'Feature/Stages', tracks.B, sessionContext);
+    await displayTrackSection('C', 'Quality', tracks.C, sessionContext);
     if (tracks.STANDALONE.length > 0) {
-      displayTrackSection('STANDALONE', 'Standalone', tracks.STANDALONE, sessionContext);
+      await displayTrackSection('STANDALONE', 'Standalone', tracks.STANDALONE, sessionContext);
     }
 
     // Display misplaced dependency warnings

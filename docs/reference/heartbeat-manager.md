@@ -2,10 +2,10 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.1.0
+**Version**: 1.2.0
 **Author**: Claude (Infrastructure Agent)
-**Last Updated**: 2026-02-13
-**Tags**: session-management, heartbeat, liveness, monitoring, lifecycle
+**Last Updated**: 2026-02-22
+**Tags**: session-management, heartbeat, liveness, monitoring, lifecycle, claim-analysis
 **SD**: SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001 (v2.0.0), QF-20260213-620
 
 ## Overview
@@ -153,7 +153,9 @@ Validates if a process ID is still running using OS-level checks.
 
 **Implementation**: Uses `process.kill(pid, 0)` which checks process existence without sending a signal.
 
-**Use Case**: Detect orphaned sessions where the process has terminated but the session wasn't properly released.
+**Use Cases**:
+- Detect orphaned sessions where the process has terminated but the session was not properly released.
+- Classify claim staleness in the `sd:next` display layer (see [Display-Layer Integration](#display-layer-claim-analysis)).
 
 **Example**:
 ```javascript
@@ -251,6 +253,30 @@ if (heartbeatStatus.active && heartbeatStatus.sessionId === session.session_id) 
 }
 ```
 
+### Display-Layer Claim Analysis
+
+The `sd:next` queue display integrates heartbeat and PID liveness data to provide intelligent claim status badges. The display wrapper module (`scripts/modules/sd-next/claim-analysis.js`) imports `isProcessRunning()` from the heartbeat manager and `isSameConversation()` from the claim guard to classify claim relationships.
+
+**Claim Relationship Classification**:
+
+| Relationship | Conditions | Display Label | Auto-Release |
+|--------------|-----------|---------------|:---:|
+| `same_conversation` | Terminal ID match (post-compaction recovery) | `YOURS (recovered)` | No |
+| `other_active` | Heartbeat fresh (< stale threshold) | `CLAIMED` | No |
+| `stale_dead` | Stale heartbeat + same host + PID dead | `STALE (dead)` | Yes |
+| `stale_alive` | Stale heartbeat + same host + PID alive | `STALE (busy)` | No |
+| `stale_remote` | Stale heartbeat + different host or no PID | `STALE` | No |
+
+**Auto-Release Behavior**: When the display layer detects a `stale_dead` claim (triple-confirmed: heartbeat stale, same host, PID not running), it automatically releases the claim via the `release_sd` RPC with reason `auto_release_dead_pid`. This cleans up orphaned claims during `npm run sd:next` without manual intervention.
+
+**Key Files**:
+- `scripts/modules/sd-next/claim-analysis.js` - Claim relationship analysis and auto-release
+- `scripts/modules/sd-next/display/tracks.js` - Track display with claim-aware badges
+- `scripts/modules/sd-next/display/recommendations.js` - Recommendations with claim filtering
+- `lib/claim-guard.mjs` - `isSameConversation()` for terminal identity comparison
+- `lib/heartbeat-manager.mjs` - `isProcessRunning()` for PID liveness checks
+- `lib/claim/stale-threshold.js` - `getStaleThresholdSeconds()` for configurable threshold
+
 ### Database RPC Functions
 
 The heartbeat manager calls several database RPC functions:
@@ -300,12 +326,13 @@ SELECT report_pid_validation_failure('session_abc123_tty1_1234', 'machine_xyz');
 | `GRACEFUL_EXIT_TIMEOUT_MS` | 5000 | Timeout for graceful release (5 seconds) |
 | `GRACEFUL_EXIT_RETRIES` | 3 | Number of retry attempts for release |
 
-**Stale Threshold** (not in heartbeat manager, defined in database view):
-- **5 minutes** (300 seconds) - Sessions with no heartbeat for >5 min are marked stale
+**Stale Threshold** (configurable via `lib/claim/stale-threshold.js`):
+- **Default**: 5 minutes (300 seconds) - Sessions with no heartbeat for >5 min are marked stale
+- The threshold is used by both the database view and the display-layer claim analysis
 
 **Exit Handlers** (registered once per session):
-- **SIGINT** (Ctrl+C): Graceful release → exit(0)
-- **SIGTERM**: Graceful release → exit(0)
+- **SIGINT** (Ctrl+C): Graceful release -> exit(0)
+- **SIGTERM**: Graceful release -> exit(0)
 - **beforeExit**: Async-safe release attempt
 - **exit**: Sync cleanup (clears interval, logs exit)
 
@@ -411,7 +438,7 @@ if (!isRunning) {
 }
 ```
 
-**Automatic Cleanup**: Cleanup workers will detect and mark these sessions using `report_pid_validation_failure()`
+**Automatic Cleanup**: Cleanup workers will detect and mark these sessions using `report_pid_validation_failure()`. Additionally, `npm run sd:next` now auto-releases stale-dead claims during display (see [Display-Layer Claim Analysis](#display-layer-claim-analysis)).
 
 ### Graceful Exit Failures
 
@@ -482,38 +509,40 @@ Stale status line files (>5 min old, no matching active session) are automatical
 StatusLine.cleanupStaleFiles();  // Static method
 ```
 
-## SD Claims Lifecycle Awareness (QF-20260213-620)
+## SD Claims via claude_sessions (Updated 2026-02-22)
 
-### Integration with sd_claims Table
+### Single-Table Claim Model
 
-The heartbeat manager and session lifecycle system integrate with the `sd_claims` table to provide lifecycle-aware claim tracking.
+Claims are now managed exclusively through the `claude_sessions` table. The former `sd_claims` table has been dropped.
 
-**Key Concept**: An "active" claim is defined as one where `released_at IS NULL`. The database enforces uniqueness on active claims via the `sd_claims_active_unique` partial unique index.
+**Key Concept**: An "active" claim is a `claude_sessions` row where `sd_id IS NOT NULL` and `status IN ('active', 'idle')`. The database enforces uniqueness on active claims via a partial unique index.
 
 **How It Works**:
-1. **Session claims SD**: Insert into `sd_claims` with `released_at = NULL` (active claim)
+1. **Session claims SD**: `claim_sd()` RPC sets `claude_sessions.sd_id` (active claim)
 2. **Heartbeat maintains liveness**: Heartbeat updates on `claude_sessions` indicate session is alive
-3. **Session releases SD**: Update `sd_claims` set `released_at = NOW()` (claim becomes inactive)
-4. **Same session can reclaim**: After releasing, the same session can claim again (unique constraint only applies to unreleased claims)
+3. **Session releases SD**: `release_sd()` RPC sets `sd_id = NULL`, `released_at = NOW()` (claim released)
+4. **Display layer classifies**: `sd:next` uses `analyzeClaimRelationship()` to show rich status badges
 
 **Benefits**:
-- Sessions can reclaim SDs they previously worked on (common in iterative development)
-- Database enforces single active claim per SD (integrity protection)
-- Claim history preserved for auditing and retrospectives
+- Single source of truth for both session and claim state
+- No cross-table synchronization needed
+- Display layer provides real-time claim health via PID liveness checks
+- Stale-dead claims auto-released during `sd:next` display
 
 **Related Files**:
-- **Migration**: `database/migrations/20260213_fix_sd_claims_lifecycle_aware_unique.sql`
-- **Schema Doc**: `docs/reference/schema/engineer/tables/sd_claims.md`
+- **Claim Guard**: `lib/claim-guard.mjs` - `isSameConversation()`, claim acquisition
+- **Claim Analysis**: `scripts/modules/sd-next/claim-analysis.js` - Display-layer classification
+- **Stale Threshold**: `lib/claim/stale-threshold.js` - Configurable stale threshold
 - **Ops Doc**: `docs/06_deployment/multi-session-coordination-ops.md`
 
 ## Related Documentation
 
 - Migration: [20260201_intelligent_session_lifecycle.sql](../database/migrations/20260201_intelligent_session_lifecycle.sql)
-- Migration: [20260213_fix_sd_claims_lifecycle_aware_unique.sql](../database/migrations/20260213_fix_sd_claims_lifecycle_aware_unique.sql)
 - Session Management: [session-manager.mjs](../../lib/session-manager.mjs)
 - Status Line Integration: [leo-status-line.js](../../scripts/leo-status-line.js)
 - Operations: [Multi-Session Coordination Ops](../06_deployment/multi-session-coordination-ops.md)
 - Database View: [v_session_metrics](../database/README.md#v_session_metrics)
+- NPM Scripts: [npm-scripts-guide.md](./npm-scripts-guide.md) - `sd:next` command reference
 
 ## References
 
@@ -523,3 +552,11 @@ The heartbeat manager and session lifecycle system integrate with the `sd_claims
 - **FR-3**: Graceful exit with 5s timeout and exponential backoff
 - **FR-4**: PID validation for orphaned session detection
 - **FR-5**: Heartbeat auto-update mechanism (30s interval, 5min stale threshold)
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.2.0 | 2026-02-22 | Added display-layer claim analysis section; updated SD claims section to reflect single-table model (claude_sessions only, sd_claims dropped); documented claim relationship classification and auto-release behavior in sd:next |
+| 1.1.0 | 2026-02-13 | Added SD claims lifecycle awareness (QF-20260213-620), session-specific status line files |
+| 1.0.0 | 2026-02-01 | Initial heartbeat manager documentation |

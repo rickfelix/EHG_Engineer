@@ -7,6 +7,7 @@ import { colors, trackColors } from '../colors.js';
 import { getPhaseAwareStatus } from '../status-helpers.js';
 import { parseDependencies } from '../dependency-resolver.js';
 import { formatVisionBadge } from './vision-scorecard.js';
+import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../claim-analysis.js';
 
 /**
  * Display a track section with hierarchical SD items
@@ -14,9 +15,9 @@ import { formatVisionBadge } from './vision-scorecard.js';
  * @param {string} trackKey - Track key (A, B, C, STANDALONE, UNASSIGNED)
  * @param {string} trackName - Track display name
  * @param {Array} items - SD items in this track
- * @param {Object} sessionContext - Session context {claimedSDs, currentSession, activeSessions}
+ * @param {Object} sessionContext - Session context {claimedSDs, currentSession, activeSessions, supabase}
  */
-export function displayTrackSection(trackKey, trackName, items, sessionContext = {}) {
+export async function displayTrackSection(trackKey, trackName, items, sessionContext = {}) {
   if (items.length === 0) return;
 
   console.log(`\n${trackColors[trackKey]}${colors.bold}TRACK ${trackKey}: ${trackName}${colors.reset}`);
@@ -50,7 +51,7 @@ export function displayTrackSection(trackKey, trackName, items, sessionContext =
 
   // Display hierarchically
   for (const item of rootItems) {
-    displaySDItem(item, '', childItems, items, sessionContext);
+    await displaySDItem(item, '', childItems, items, sessionContext);
   }
 }
 
@@ -63,31 +64,68 @@ export function displayTrackSection(trackKey, trackName, items, sessionContext =
  * @param {Array} allItems - All items in the track
  * @param {Object} sessionContext - Session context
  */
-function displaySDItem(item, indent, childItems, allItems, sessionContext) {
-  const { claimedSDs = new Map(), currentSession = null, activeSessions = [], localSignals = new Map() } = sessionContext;
+async function displaySDItem(item, indent, childItems, allItems, sessionContext) {
+  const { claimedSDs = new Map(), currentSession = null, activeSessions = [], localSignals = new Map(), supabase = null } = sessionContext;
 
   const sdId = item.sd_key || item.sd_id;
   const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
 
   // Check if claimed by another session
   const claimedBySession = claimedSDs.get(sdId);
-  const isClaimedByOther = claimedBySession &&
+  let isClaimedByOther = claimedBySession &&
     currentSession &&
     claimedBySession !== currentSession.session_id;
-  const isClaimedByMe = claimedBySession &&
+  let isClaimedByMe = claimedBySession &&
     currentSession &&
     claimedBySession === currentSession.session_id;
+
+  // Use claim analysis for richer classification when claimed by another session
+  let claimAnalysis = null;
+  if (isClaimedByOther) {
+    const claimingSession = activeSessions.find(s => s.session_id === claimedBySession);
+    if (claimingSession) {
+      claimAnalysis = analyzeClaimRelationship({
+        claimingSessionId: claimedBySession,
+        claimingSession,
+        currentSession
+      });
+
+      // Post-compaction same conversation → treat as ours
+      if (claimAnalysis.relationship === 'same_conversation') {
+        isClaimedByOther = false;
+        isClaimedByMe = true;
+      }
+    }
+  }
 
   // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Check local signals
   const localSignal = localSignals.get(sdId);
   const hasLocalActivity = localSignal && !localSignal.staleWorktree && !isClaimedByOther && !isClaimedByMe;
 
-  // Status icon logic - now phase-aware (Control Gap Fix)
+  // Status icon logic - now phase-aware with claim analysis
   let statusIcon;
-  if (isClaimedByOther) {
+  if (isClaimedByOther && claimAnalysis) {
+    // Richer status badges based on claim analysis
+    switch (claimAnalysis.relationship) {
+      case 'stale_dead':
+        statusIcon = `${colors.red}STALE (dead)${colors.reset}`;
+        break;
+      case 'stale_alive':
+        statusIcon = `${colors.yellow}STALE (busy)${colors.reset}`;
+        break;
+      case 'stale_remote':
+        statusIcon = `${colors.yellow}STALE${colors.reset}`;
+        break;
+      default: // other_active
+        statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
+    }
+  } else if (isClaimedByOther) {
     statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
   } else if (isClaimedByMe) {
-    statusIcon = `${colors.green}YOURS${colors.reset}`;
+    // Show recovery badge for post-compaction same-conversation
+    statusIcon = claimAnalysis?.relationship === 'same_conversation'
+      ? `${colors.green}YOURS (recovered)${colors.reset}`
+      : `${colors.green}YOURS${colors.reset}`;
   } else {
     // Use phase-aware status to prevent showing READY for SDs needing verification
     statusIcon = getPhaseAwareStatus(item);
@@ -110,34 +148,74 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
 
   console.log(`${indent}${claimedIcon}${workingIcon}${localActivityIcon}${rankStr} ${sdId} - ${title}${urgencyBadge}${visionBadge}${gapBadge}... ${statusIcon}`);
 
-  // Show who claimed it with enhanced details (FR-6)
+  // Show claim details with PID-aware output
   if (isClaimedByOther) {
     const claimingSession = activeSessions.find(s => s.session_id === claimedBySession);
     const shortId = claimedBySession.substring(0, 12) + '...';
     const ageMin = claimingSession ? Math.round(claimingSession.claim_duration_minutes || 0) : '?';
 
-    // FR-6: Show heartbeat age to indicate session freshness
-    let heartbeatInfo = '';
-    if (claimingSession) {
-      const heartbeatAge = claimingSession.heartbeat_age_human ||
-        formatHeartbeatAge(claimingSession.heartbeat_age_seconds);
-      const heartbeatSeconds = Math.round(claimingSession.heartbeat_age_seconds || 0);
-
-      // Color code heartbeat status
-      if (heartbeatSeconds >= 180) {
-        heartbeatInfo = ` ${colors.red}(heartbeat: ${heartbeatAge} - may be stale)${colors.reset}`;
-      } else if (heartbeatSeconds >= 60) {
-        heartbeatInfo = ` ${colors.yellow}(heartbeat: ${heartbeatAge})${colors.reset}`;
-      } else {
-        heartbeatInfo = ` ${colors.green}(heartbeat: ${heartbeatAge})${colors.reset}`;
+    if (claimAnalysis) {
+      switch (claimAnalysis.relationship) {
+        case 'stale_dead': {
+          console.log(`${colors.red}${indent}        └─ Session ${shortId} (${ageMin}m) — PID ${claimAnalysis.pid} is dead${colors.reset}`);
+          // Auto-release dead claims
+          if (supabase) {
+            const released = await autoReleaseStaleDeadClaim(supabase, claimedBySession);
+            if (released) {
+              console.log(`${colors.green}${indent}        └─ Auto-released stale dead claim${colors.reset}`);
+              claimedSDs.delete(sdId);
+            }
+          } else {
+            console.log(`${colors.yellow}${indent}        └─ Release: /claim release ${claimedBySession}${colors.reset}`);
+          }
+          break;
+        }
+        case 'stale_alive':
+          console.log(`${colors.yellow}${indent}        └─ Session ${shortId} (${ageMin}m) — PID ${claimAnalysis.pid} is alive, likely busy${colors.reset}`);
+          console.log(`${colors.dim}${indent}        └─ Heartbeat stale but process running — risky to release${colors.reset}`);
+          break;
+        case 'stale_remote':
+          console.log(`${colors.yellow}${indent}        └─ Session ${shortId} (${ageMin}m) — different host, cannot verify PID${colors.reset}`);
+          console.log(`${colors.yellow}${indent}        └─ Release: /claim release ${claimedBySession}${colors.reset}`);
+          break;
+        default: {
+          // other_active — show heartbeat info as before
+          let heartbeatInfo = '';
+          if (claimingSession) {
+            const heartbeatAge = claimingSession.heartbeat_age_human ||
+              formatHeartbeatAge(claimingSession.heartbeat_age_seconds);
+            const heartbeatSeconds = Math.round(claimingSession.heartbeat_age_seconds || 0);
+            if (heartbeatSeconds >= 180) {
+              heartbeatInfo = ` ${colors.red}(heartbeat: ${heartbeatAge} - may be stale)${colors.reset}`;
+            } else if (heartbeatSeconds >= 60) {
+              heartbeatInfo = ` ${colors.yellow}(heartbeat: ${heartbeatAge})${colors.reset}`;
+            } else {
+              heartbeatInfo = ` ${colors.green}(heartbeat: ${heartbeatAge})${colors.reset}`;
+            }
+          }
+          console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${heartbeatInfo}${colors.reset}`);
+        }
       }
-    }
-
-    console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${heartbeatInfo}${colors.reset}`);
-    // SD-LEO-INFRA-CLAIM-SYSTEM-IMPROVEMENTS-001 (FR-002): Suggest /claim release for stale claims
-    const heartbeatSeconds = Math.round(claimingSession?.heartbeat_age_seconds || 0);
-    if (heartbeatSeconds >= 300) {
-      console.log(`${colors.yellow}${indent}        └─ Stale claim. Release: /claim release ${claimedBySession}${colors.reset}`);
+    } else {
+      // Fallback: no claim analysis available (no claimingSession found in activeSessions)
+      let heartbeatInfo = '';
+      if (claimingSession) {
+        const heartbeatAge = claimingSession.heartbeat_age_human ||
+          formatHeartbeatAge(claimingSession.heartbeat_age_seconds);
+        const heartbeatSeconds = Math.round(claimingSession.heartbeat_age_seconds || 0);
+        if (heartbeatSeconds >= 180) {
+          heartbeatInfo = ` ${colors.red}(heartbeat: ${heartbeatAge} - may be stale)${colors.reset}`;
+        } else if (heartbeatSeconds >= 60) {
+          heartbeatInfo = ` ${colors.yellow}(heartbeat: ${heartbeatAge})${colors.reset}`;
+        } else {
+          heartbeatInfo = ` ${colors.green}(heartbeat: ${heartbeatAge})${colors.reset}`;
+        }
+      }
+      console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${heartbeatInfo}${colors.reset}`);
+      const heartbeatSeconds = Math.round(claimingSession?.heartbeat_age_seconds || 0);
+      if (heartbeatSeconds >= 300) {
+        console.log(`${colors.yellow}${indent}        └─ Stale claim. Release: /claim release ${claimedBySession}${colors.reset}`);
+      }
     }
   }
 

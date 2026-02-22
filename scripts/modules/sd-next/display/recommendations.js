@@ -7,6 +7,7 @@ import { colors } from '../colors.js';
 import { isActionableForLead } from '../status-helpers.js';
 import { checkDependenciesResolved, checkMetadataDependency, resolveMetadataBlocker } from '../dependency-resolver.js';
 import { getEstimatedDuration, formatEstimateShort } from '../../../lib/duration-estimator.js';
+import { analyzeClaimRelationship } from '../claim-analysis.js';
 
 /**
  * Display recommendations section and return structured action data.
@@ -141,7 +142,8 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
 }
 
 /**
- * Get SD marked as "working on", cross-referenced with session claims
+ * Get SD marked as "working on", cross-referenced with session claims.
+ * Uses analyzeClaimRelationship for same-conversation detection.
  */
 async function getWorkingOnSD(supabase, sessionContext = {}) {
   // SD-LEO-INFRA-CLAIM-GUARD-001: Use claiming_session_id as primary, fall back to is_working_on
@@ -155,11 +157,25 @@ async function getWorkingOnSD(supabase, sessionContext = {}) {
 
   if (!workingOn) return null;
 
-  // Use claiming_session_id directly (no need to cross-reference session claims map)
-  const { currentSession } = sessionContext;
+  const { currentSession, activeSessions = [] } = sessionContext;
   const currentSessionId = currentSession?.session_id;
 
   if (workingOn.claiming_session_id && workingOn.claiming_session_id !== currentSessionId) {
+    // Check if this is the same conversation post-compaction
+    const claimingSession = activeSessions.find(s => s.session_id === workingOn.claiming_session_id);
+    if (claimingSession && currentSession) {
+      const analysis = analyzeClaimRelationship({
+        claimingSessionId: workingOn.claiming_session_id,
+        claimingSession,
+        currentSession
+      });
+      if (analysis.relationship === 'same_conversation') {
+        // Same conversation — treat as ours, not claimed by other
+        workingOn._recoveredFromCompaction = true;
+        return workingOn;
+      }
+    }
+
     workingOn._claimedByOther = true;
     workingOn._claimingSessionId = workingOn.claiming_session_id;
   }
@@ -220,13 +236,14 @@ async function displayWorkingOnSD(supabase, workingOn, sessionContext = {}) {
 }
 
 /**
- * Categorize baseline SDs into ready and needs verification
+ * Categorize baseline SDs into ready and needs verification.
+ * Uses analyzeClaimRelationship to include same_conversation and stale_dead SDs in the queue.
  */
 async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {}) {
   const readySDs = [];
   const needsVerificationSDs = [];
   const metadataBlockedSDs = [];
-  const { claimedSDs, currentSession } = sessionContext;
+  const { currentSession, activeSessions = [] } = sessionContext;
   const currentSessionId = currentSession?.session_id;
 
   for (const item of baselineItems) {
@@ -239,7 +256,20 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
       // SD-LEO-INFRA-CLAIM-GUARD-001: Skip SDs claimed by OTHER sessions (use claiming_session_id)
       if (sd.claiming_session_id && sd.claiming_session_id !== currentSessionId) {
-        continue;
+        // Check if this is same conversation or stale-dead — these are actionable
+        let actionable = false;
+        const claimingSession = activeSessions.find(s => s.session_id === sd.claiming_session_id);
+        if (claimingSession && currentSession) {
+          const analysis = analyzeClaimRelationship({
+            claimingSessionId: sd.claiming_session_id,
+            claimingSession,
+            currentSession
+          });
+          if (analysis.relationship === 'same_conversation' || analysis.relationship === 'stale_dead') {
+            actionable = true;
+          }
+        }
+        if (!actionable) continue;
       }
 
       const depsResolved = await checkDependenciesResolved(supabase, sd.dependencies);

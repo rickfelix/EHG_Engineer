@@ -4,9 +4,9 @@
 ## Metadata
 - **Category**: Guide
 - **Status**: Draft
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-02-11
+- **Last Updated**: 2026-02-22
 - **Tags**: database, api, testing, e2e, gap-analysis, integration
 
 This guide documents all 140+ npm scripts available in EHG_Engineer.
@@ -155,6 +155,27 @@ npm run sd:status        # View SD progress
 npm run sd:burnrate      # View velocity and forecasting
 ```
 
+#### sd:next Claim-Aware Display
+
+The `sd:next` command provides an intelligent SD queue with **claim-aware status badges** that integrate PID liveness checks and post-compaction same-conversation detection. When displaying the track view, each claimed SD receives a classified badge:
+
+| Badge | Meaning | Action |
+|-------|---------|--------|
+| `YOURS (recovered)` | Post-compaction same conversation (terminal ID match) | Safe to resume |
+| `CLAIMED` | Different session, heartbeat fresh | Pick a different SD |
+| `STALE (dead)` | Stale heartbeat + same host + PID dead | Auto-released during display |
+| `STALE (busy)` | Stale heartbeat + same host + PID still alive | Wait or investigate |
+| `STALE` | Stale heartbeat + different host or no PID | Cannot verify liveness |
+
+**Auto-Release**: When `sd:next` detects a `STALE (dead)` claim (triple-confirmed: heartbeat stale, same host, PID not running), it automatically releases the claim via `release_sd` RPC. The SD then appears as available in recommendations.
+
+**Key Files**:
+- `scripts/modules/sd-next/claim-analysis.js` - Claim relationship analysis
+- `scripts/modules/sd-next/display/tracks.js` - Track display with claim badges
+- `scripts/modules/sd-next/display/recommendations.js` - Claim-filtered recommendations
+
+**See also**: [Heartbeat Manager Reference](heartbeat-manager.md#display-layer-claim-analysis)
+
 ### Baseline Management
 
 ```bash
@@ -243,7 +264,7 @@ npm run gap:analyze -- --sd SD-LEO-FEAT-001 --create-sds
 **Use Cases**:
 - **Post-Completion Validation**: Automatic via orchestrator-completion-hook
 - **Retroactive Audit**: Analyze historical SDs to validate completeness
-- **Quality Metrics**: Track PRD → implementation alignment over time
+- **Quality Metrics**: Track PRD -> implementation alignment over time
 
 **See**: `docs/04_features/post-completion-integration-gap-detector.md` for full documentation.
 
@@ -705,7 +726,7 @@ npm run leo                  # LEO CLI (alias)
 ### Starting a New Session
 
 ```bash
-npm run sd:next              # See what to work on
+npm run sd:next              # See what to work on (claim-aware display)
 npm run session:prologue     # Generate session context
 npm run prio:top3            # Check priorities
 ```
@@ -772,7 +793,8 @@ Many scripts respect these environment variables:
 - [API Documentation](../02_api/api-documentation-overview.md)
 - [Database README](../../database/README.md)
 - [LEO Protocol](../../CLAUDE.md)
+- [Heartbeat Manager](heartbeat-manager.md) - Session lifecycle and claim analysis
 
 ---
 
-*Last Updated: 2026-01-19*
+*Last Updated: 2026-02-22*
