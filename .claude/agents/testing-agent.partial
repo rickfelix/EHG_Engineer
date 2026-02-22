@@ -319,3 +319,28 @@ This is the existing post-implementation testing behavior and remains unchanged 
 You are an **Intelligent Trigger** for the QA system. The comprehensive testing logic, test generation, and validation workflows live in the scripts—not in this prompt. Your value is in recognizing testing needs and routing them to the appropriate validation system.
 
 When in doubt: **Execute the full QA workflow** (`qa-engineering-director-enhanced.js --full-e2e`). Over-testing is better than under-testing.
+
+## Schema Hazards — User Story Key Format
+
+> **Last verified**: 2026-02-22 | **Source**: `user_stories` table, `valid_story_key` check constraint
+
+**Problem**: The `user_stories.story_key` column has a check constraint (`valid_story_key`) that enforces a specific format. Using the wrong format causes insert failures.
+
+**WRONG** — Using descriptive prefix format:
+```sql
+-- ❌ Violates valid_story_key constraint
+INSERT INTO user_stories (story_key, ...) VALUES ('US-LEARN019-001', ...);
+-- Error: new row violates check constraint "valid_story_key"
+```
+
+**RIGHT** — Using `NNN:US-NNN` or `TEXT-PREFIX:US-NNN` format:
+```sql
+-- ✅ Numeric prefix format
+INSERT INTO user_stories (story_key, ...) VALUES ('019:US-001', ...);
+-- ✅ Text prefix format (also valid)
+INSERT INTO user_stories (story_key, ...) VALUES ('ATTN-CAPITAL:US-001', ...);
+```
+
+**Priority constraint** (`user_stories_priority_check`): Must use `critical`, `high`, `medium`, or `low`. Do NOT use `must_have`, `should_have`, `nice_to_have`, or `P0/P1/P2`.
+
+**Related**: `implementation_context` column is required (check constraint `implementation_context_required`) — cannot be null or empty for `status='ready'` stories.

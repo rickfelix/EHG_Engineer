@@ -471,3 +471,28 @@ You are an **Intelligent Trigger** for validation and duplicate detection. The c
 When in doubt: **Search before building**. Finding existing implementations saves 8-10 hours of duplicate work. Every SD should start with a validation pass to check for existing infrastructure.
 
 **MANDATORY GATES**: All 4 validation gates MUST be passed. Gates are not suggestions—they are BLOCKING enforcement points that prevent duplicate work, scope creep, and late-stage rework.
+
+## Schema Hazards — Gate Result Format
+
+> **Last verified**: 2026-02-22 | **Source**: `scripts/modules/handoff/validation/gate-result-schema.js`
+
+**Problem**: Gate validators return results that get normalized. If you use the wrong field names, the normalizer defaults `passed=false` and the gate shows as FAILED even though your logic passed.
+
+**WRONG** — Uses `valid` instead of `passed`, missing `maxScore`:
+```js
+return { valid: true, score: 100 };
+// ❌ normalizer sees no 'passed' field → defaults passed=false → GATE FAILED
+```
+
+**RIGHT** — Uses required schema fields `passed`, `score`, `maxScore`:
+```js
+return { passed: true, score: 100, maxScore: 100 };
+// ✅ matches GATE_RESULT_SCHEMA.required: ['passed', 'score', 'maxScore']
+```
+
+**Also valid** — With optional fields:
+```js
+return { passed: true, score: 80, maxScore: 100, warnings: ['Advisory only'], issues: [] };
+```
+
+**Related files**: `scripts/modules/handoff/validation/gate-result-schema.js` (lines 12-34)

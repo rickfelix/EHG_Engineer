@@ -48,3 +48,20 @@ For full Teams Protocol details, see the `Teams Protocol` section in CLAUDE.md.
 - If blocked by a dependency or error, report to team lead immediately via SendMessage
 - Do NOT modify files outside your worktree
 - Do NOT push to remote unless explicitly instructed
+
+## Schema Hazards — Common Child SD Pitfalls
+
+> **Last verified**: 2026-02-22
+
+### Gate Result Format
+Gate validators must return `{ passed, score, maxScore }`, NOT `{ valid, score }`.
+```js
+// ❌ WRONG: return { valid: true, score: 100 };        → normalizer defaults passed=false
+// ✅ RIGHT: return { passed: true, score: 100, maxScore: 100 };
+```
+**Source**: `scripts/modules/handoff/validation/gate-result-schema.js`
+
+### SD Column: id vs sd_key
+- `sd_phase_handoffs.sd_id` expects **UUID** (`id` column), not text `sd_key`
+- `product_requirements_v2.directive_id` expects **sd_key** (text), not UUID
+- Always resolve: `SELECT id FROM strategic_directives_v2 WHERE sd_key = '...'` before using in FK relationships
