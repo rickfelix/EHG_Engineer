@@ -8,13 +8,15 @@
  *   node scripts/manage-department-capabilities.cjs --remove --department-id <UUID> --name <name>
  *   node scripts/manage-department-capabilities.cjs --list --department-id <UUID>
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getClient() {
+  require('dotenv').config();
+  const { createClient } = require('@supabase/supabase-js');
+  return createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -49,7 +51,7 @@ Options:
 `);
 }
 
-async function getDeptName(departmentId) {
+async function getDeptName(supabase, departmentId) {
   const { data } = await supabase
     .from('departments')
     .select('name')
@@ -58,7 +60,7 @@ async function getDeptName(departmentId) {
   return data ? data.name : departmentId;
 }
 
-async function addCapability(departmentId, name, description) {
+async function addCapability(supabase, departmentId, name, description) {
   const { data, error } = await supabase.rpc('add_department_capability', {
     p_department_id: departmentId,
     p_capability_name: name,
@@ -70,13 +72,13 @@ async function addCapability(departmentId, name, description) {
     process.exit(1);
   }
 
-  const deptName = await getDeptName(departmentId);
+  const deptName = await getDeptName(supabase, departmentId);
   console.log(`\n  Capability "${name}" added to ${deptName}`);
   if (description) console.log(`  Description: ${description}`);
   console.log(`  ID: ${data}\n`);
 }
 
-async function removeCapability(departmentId, name) {
+async function removeCapability(supabase, departmentId, name) {
   const { data, error } = await supabase.rpc('remove_department_capability', {
     p_department_id: departmentId,
     p_capability_name: name
@@ -87,7 +89,7 @@ async function removeCapability(departmentId, name) {
     process.exit(1);
   }
 
-  const deptName = await getDeptName(departmentId);
+  const deptName = await getDeptName(supabase, departmentId);
   if (data) {
     console.log(`\n  Capability "${name}" removed from ${deptName}\n`);
   } else {
@@ -95,7 +97,7 @@ async function removeCapability(departmentId, name) {
   }
 }
 
-async function listCapabilities(departmentId) {
+async function listCapabilities(supabase, departmentId) {
   // Query direct capabilities for this department
   const { data: direct, error: directErr } = await supabase
     .from('department_capabilities')
@@ -139,7 +141,7 @@ async function listCapabilities(departmentId) {
     }
   }
 
-  const deptName = await getDeptName(departmentId);
+  const deptName = await getDeptName(supabase, departmentId);
 
   console.log('\n' + '='.repeat(70));
   console.log(`  CAPABILITIES: ${deptName}`);
@@ -174,7 +176,8 @@ async function listCapabilities(departmentId) {
   console.log('='.repeat(70) + '\n');
 }
 
-async function main() {
+async function main(supabase) {
+  if (!supabase) supabase = getClient();
   const args = parseArgs();
 
   if (args.help || !args.action) {
@@ -188,23 +191,27 @@ async function main() {
   }
 
   if (args.action === 'list') {
-    await listCapabilities(args.departmentId);
+    await listCapabilities(supabase, args.departmentId);
   } else if (args.action === 'add') {
     if (!args.name) {
       console.error('Error: --name is required for --add');
       process.exit(1);
     }
-    await addCapability(args.departmentId, args.name, args.description);
+    await addCapability(supabase, args.departmentId, args.name, args.description);
   } else if (args.action === 'remove') {
     if (!args.name) {
       console.error('Error: --name is required for --remove');
       process.exit(1);
     }
-    await removeCapability(args.departmentId, args.name);
+    await removeCapability(supabase, args.departmentId, args.name);
   }
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { main, parseArgs };

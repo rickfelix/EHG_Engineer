@@ -8,13 +8,15 @@
  *   node scripts/manage-department-agents.cjs --remove --agent-id <UUID> --department-id <UUID>
  *   node scripts/manage-department-agents.cjs --list --department-id <UUID>
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getClient() {
+  require('dotenv').config();
+  const { createClient } = require('@supabase/supabase-js');
+  return createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -49,7 +51,7 @@ Options:
 `);
 }
 
-async function assignAgent(agentId, departmentId, role) {
+async function assignAgent(supabase, agentId, departmentId, role) {
   const { data, error } = await supabase.rpc('assign_agent_to_department', {
     p_agent_id: agentId,
     p_department_id: departmentId,
@@ -65,7 +67,7 @@ async function assignAgent(agentId, departmentId, role) {
   console.log(`Assignment ID: ${data}`);
 }
 
-async function removeAgent(agentId, departmentId) {
+async function removeAgent(supabase, agentId, departmentId) {
   const { data, error } = await supabase.rpc('remove_agent_from_department', {
     p_agent_id: agentId,
     p_department_id: departmentId
@@ -83,7 +85,7 @@ async function removeAgent(agentId, departmentId) {
   }
 }
 
-async function listAgents(departmentId) {
+async function listAgents(supabase, departmentId) {
   const { data, error } = await supabase.rpc('get_department_agents', {
     p_department_id: departmentId
   });
@@ -131,7 +133,8 @@ async function listAgents(departmentId) {
   console.log('='.repeat(70) + '\n');
 }
 
-async function main() {
+async function main(supabase) {
+  if (!supabase) supabase = getClient();
   const args = parseArgs();
 
   if (args.help || !args.action) {
@@ -144,23 +147,27 @@ async function main() {
       console.error('Error: --department-id is required for --list');
       process.exit(1);
     }
-    await listAgents(args.departmentId);
+    await listAgents(supabase, args.departmentId);
   } else if (args.action === 'assign') {
     if (!args.agentId || !args.departmentId) {
       console.error('Error: --agent-id and --department-id are required for --assign');
       process.exit(1);
     }
-    await assignAgent(args.agentId, args.departmentId, args.role);
+    await assignAgent(supabase, args.agentId, args.departmentId, args.role);
   } else if (args.action === 'remove') {
     if (!args.agentId || !args.departmentId) {
       console.error('Error: --agent-id and --department-id are required for --remove');
       process.exit(1);
     }
-    await removeAgent(args.agentId, args.departmentId);
+    await removeAgent(supabase, args.agentId, args.departmentId);
   }
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { main, parseArgs };

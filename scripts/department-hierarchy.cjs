@@ -6,15 +6,18 @@
  * Usage:
  *   node scripts/department-hierarchy.cjs
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+function getClient() {
+  require('dotenv').config();
+  const { createClient } = require('@supabase/supabase-js');
+  return createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
-async function main() {
+async function main(supabase) {
+  if (!supabase) supabase = getClient();
   // Fetch all departments ordered by hierarchy path
   const { data: departments, error } = await supabase
     .from('departments')
@@ -134,7 +137,11 @@ async function main() {
   console.log('='.repeat(70) + '\n');
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { main };
