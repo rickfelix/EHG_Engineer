@@ -46,8 +46,9 @@ const validLLMResponse = {
     adoption_friction: 6,
     design_scalability: 7,
     aesthetic_moat: 5,
+    machine_interface_quality: 6,
   },
-  composite_score: 66,
+  composite_score: 65,
   design_risks: ['Complex onboarding flow'],
   design_opportunities: ['AI-driven personalization'],
   recommendation: 'design_standard',
@@ -72,7 +73,7 @@ describe('evaluateDesignPotential', () => {
     expect(result.dimensions.adoption_friction).toBe(6);
     expect(result.dimensions.design_scalability).toBe(7);
     expect(result.dimensions.aesthetic_moat).toBe(5);
-    expect(result.composite_score).toBe(66);
+    expect(result.composite_score).toBe(65);
     expect(result.recommendation).toBe('design_standard');
     expect(result.design_risks).toEqual(['Complex onboarding flow']);
     expect(result.design_opportunities).toEqual(['AI-driven personalization']);
@@ -192,8 +193,8 @@ describe('evaluateDesignPotential', () => {
       llmClient: client,
     });
 
-    // Falls back to computeComposite: (8+7+6+7+5)/5 * 10 = 66
-    expect(result.composite_score).toBe(66);
+    // Falls back to computeComposite: (8+7+6+7+5+6)/6 * 10 = 65
+    expect(result.composite_score).toBe(65);
   });
 
   test('infers recommendation when LLM returns invalid value', async () => {
@@ -313,8 +314,8 @@ describe('evaluateDesignPotential', () => {
 });
 
 describe('DESIGN_DIMENSIONS', () => {
-  test('contains exactly 5 dimensions', () => {
-    expect(DESIGN_DIMENSIONS).toHaveLength(5);
+  test('contains exactly 6 dimensions', () => {
+    expect(DESIGN_DIMENSIONS).toHaveLength(6);
   });
 
   test('includes all expected dimension keys', () => {
@@ -323,6 +324,7 @@ describe('DESIGN_DIMENSIONS', () => {
     expect(DESIGN_DIMENSIONS).toContain('adoption_friction');
     expect(DESIGN_DIMENSIONS).toContain('design_scalability');
     expect(DESIGN_DIMENSIONS).toContain('aesthetic_moat');
+    expect(DESIGN_DIMENSIONS).toContain('machine_interface_quality');
   });
 });
 
