@@ -100,10 +100,11 @@ export async function checkMinOccurrences(supabase, sdId, minOccurrences = MIN_O
     query = query.eq('sd_id', sdId);
   }
 
-  // Exclude test records
-  for (const pattern of TEST_CREATED_BY_PATTERNS) {
-    query = query.not('created_by', 'like', `${pattern}%`);
-  }
+  // Exclude test records (allow NULL created_by through — NOT LIKE excludes NULLs in PostgreSQL)
+  const testFilter = TEST_CREATED_BY_PATTERNS
+    .map(p => `created_by.not.like.${p}%`)
+    .join(',');
+  query = query.or(`created_by.is.null,${testFilter}`);
 
   const { count, error } = await query;
   if (error) {
@@ -191,10 +192,15 @@ export async function generateCorrectiveSD(scoreId) {
   }
 
   // 1b. Minimum occurrence threshold — don't create SDs from single-run data
-  const { qualifies, count } = await checkMinOccurrences(supabase, score.sd_id ?? null);
+  // Critical severity override: escalation-level scores (<70) require only 1 occurrence.
+  // SD heal scores (mode='sd-heal') also require only 1 occurrence since they are one-shot.
+  const isEscalation = (score.total_score ?? 0) < THRESHOLDS.GAP_CLOSURE;
+  const isSDHeal = score.rubric_snapshot?.mode === 'sd-heal';
+  const effectiveMinOccurrences = (isEscalation || isSDHeal) ? 1 : MIN_OCCURRENCES;
+  const { qualifies, count } = await checkMinOccurrences(supabase, score.sd_id ?? null, effectiveMinOccurrences);
   if (!qualifies) {
-    console.log(`[corrective-sd-generator] Skipping: only ${count}/${MIN_OCCURRENCES} occurrences below threshold`);
-    return { created: false, action: 'deferred', reason: `min-occurrences-not-met (${count}/${MIN_OCCURRENCES})`, sdKey: null, sdId: null };
+    console.log(`[corrective-sd-generator] Skipping: only ${count}/${effectiveMinOccurrences} occurrences below threshold`);
+    return { created: false, action: 'deferred', reason: `min-occurrences-not-met (${count}/${effectiveMinOccurrences})`, sdKey: null, sdId: null };
   }
 
   // 2. Determine action (prefer stored threshold_action, fall back to classify)
