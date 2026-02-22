@@ -16,7 +16,20 @@ import { getSDSearchTerms, gitLogForSD, detectImplementationRepo } from '../util
  * @param {Object} supabase - Supabase client
  */
 export async function validateDesignFidelity(sd_id, designAnalysis, validation, supabase) {
-  // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI requirements
+  // Database-driven exemption check (mirrors Section B pattern from database-fidelity.js)
+  const exemptSections = validation.details.gate2_exempt_sections || [];
+  if (exemptSections.includes('A_design')) {
+    validation.score += 25;
+    validation.gate_scores.design_fidelity = 25;
+    validation.details.design_fidelity = {
+      exempt: true,
+      reason: 'Section A exempt via gate2_exempt_sections (A_design)'
+    };
+    console.log('   ✅ Section A exempt via gate2_exempt_sections (25/25)');
+    return;
+  }
+
+  // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI requirements (hardcoded fallback)
   try {
     let sd = null;
     const { data: sdById } = await supabase
