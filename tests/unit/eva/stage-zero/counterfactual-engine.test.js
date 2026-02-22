@@ -26,18 +26,20 @@ const MOCK_RESULTS = {
   archetypes: { primary_confidence: 0.85 },
   build_cost: { complexity: 'simple' },
   virality: { virality_score: 75 },
+  tech_trajectory: { trajectory_score: 67 },
 };
 
 const LEGACY_WEIGHTS = {
   cross_reference: 0.10,
   portfolio_evaluation: 0.10,
   problem_reframing: 0.05,
-  moat_architecture: 0.15,
-  chairman_constraints: 0.15,
+  moat_architecture: 0.13,
+  chairman_constraints: 0.14,
   time_horizon: 0.10,
   archetypes: 0.10,
   build_cost: 0.10,
-  virality: 0.15,
+  virality: 0.13,
+  tech_trajectory: 0.05,
 };
 
 const AGGRESSIVE_WEIGHTS = {
@@ -49,7 +51,8 @@ const AGGRESSIVE_WEIGHTS = {
   time_horizon: 0.05,
   archetypes: 0.10,
   build_cost: 0.05,
-  virality: 0.35,
+  virality: 0.30,
+  tech_trajectory: 0.05,
 };
 
 describe('counterfactual-engine', () => {
@@ -79,14 +82,14 @@ describe('counterfactual-engine', () => {
       expect(result.delta).toBe(result.counterfactual_score - result.original_score);
     });
 
-    it('breakdown contains all 9 components', () => {
+    it('breakdown contains all 10 components', () => {
       const result = generateCounterfactual({
         synthesisResults: MOCK_RESULTS,
         currentWeights: LEGACY_WEIGHTS,
         scenarioWeights: AGGRESSIVE_WEIGHTS,
       });
 
-      expect(result.breakdown).toHaveLength(9);
+      expect(result.breakdown).toHaveLength(10);
       const components = result.breakdown.map(b => b.component);
       expect(components).toContain('moat_architecture');
       expect(components).toContain('virality');
