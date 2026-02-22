@@ -196,6 +196,17 @@
   .an-toast.show{opacity:1}
   .an-empty{font-size:9px;color:rgba(224,220,212,0.36);text-align:center;padding:40px 12px}
   #btnAnalytics{margin-top:4px}
+
+  /* ═══ Session Timeline ═══ */
+  #session-timeline{max-height:120px;overflow-y:auto}
+  .st-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:8.5px}
+  .st-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+  .st-dot.alive{background:#4a9e7d;box-shadow:0 0 4px rgba(74,158,125,0.4)}
+  .st-dot.stale{background:#ffab40}.st-dot.dead{background:#c4626a}
+  .st-id{color:rgba(224,220,212,0.5);width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .st-age{color:rgba(224,220,212,0.36);margin-left:auto;white-space:nowrap}
+  .st-bar{display:flex;gap:1px;height:8px;margin-top:6px;border-radius:2px;overflow:hidden}
+  .st-bar-seg{min-width:2px;transition:flex .4s}
 </style>
 </head>
 <body>
@@ -235,6 +246,13 @@
   <div id="panel">
     <div class="sr-only" id="sr-summary" aria-live="polite" role="status"></div>
     <div class="p-section" id="activity"><div class="p-header">Activity</div><div id="logList"></div></div>
+    <div class="p-section" id="session-timeline-section">
+      <div class="p-header" style="cursor:pointer" onclick="document.getElementById('session-timeline').style.display=document.getElementById('session-timeline').style.display==='none'?'':'none'">Sessions ▾</div>
+      <div id="session-timeline">
+        <div class="st-bar" id="st-bar"></div>
+        <div id="st-list"></div>
+      </div>
+    </div>
     <div id="filter-row" style="display:flex;gap:6px;flex-wrap:wrap">
       <select id="filterSel" style="flex:1;min-width:100px">
         <option value="active" selected>Active (draft, review, in-progress)</option>
@@ -288,6 +306,8 @@
       <button class="an-tab active" role="tab" data-tab="burndown" onclick="switchAnalyticsTab('burndown')">Burndown</button>
       <button class="an-tab" role="tab" data-tab="gates" onclick="switchAnalyticsTab('gates')">Gate Failures</button>
       <button class="an-tab" role="tab" data-tab="phases" onclick="switchAnalyticsTab('phases')">Time-in-Phase</button>
+      <button class="an-tab" role="tab" data-tab="blocking" onclick="switchAnalyticsTab('blocking')">Blocking</button>
+      <button class="an-tab" role="tab" data-tab="sankey" onclick="switchAnalyticsTab('sankey')">Inbox Flow</button>
     </div>
     <div class="an-body">
       <div id="an-burndown">
@@ -299,6 +319,12 @@
       </div>
       <div id="an-phases" style="display:none">
         <div class="an-chart-wrap"><canvas id="phasesCanvas"></canvas></div>
+      </div>
+      <div id="an-blocking" style="display:none">
+        <div class="an-chart-wrap"><canvas id="blockingCanvas"></canvas></div>
+      </div>
+      <div id="an-sankey" style="display:none">
+        <div class="an-chart-wrap"><canvas id="sankeyCanvas" style="min-height:280px"></canvas></div>
       </div>
       <div class="an-export"><button class="an-export-btn" onclick="exportChartPNG()">Export PNG</button></div>
     </div>
@@ -1227,6 +1253,8 @@ function animate() {
   }
   controls.update();
   updateForge(t, dt);
+  updateErrorCascade(t);
+  updateBananaParticles(dt);
   // Crossfade: fade out outgoing shape over ~4 seconds
   if (outgoingGroup) {
     outgoingFade -= dt * 1.0;
@@ -1443,7 +1471,12 @@ async function fetchLiveSessions() {
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data, error } = await state.supabase.from('claude_sessions')
       .select('session_id').in('status', ['active', 'idle']).gte('heartbeat_at', cutoff);
-    if (!error && data) { state.liveSessions = data.length; if (state.webglOk) buildSessionOrbs(); }
+    if (!error && data) {
+      const prev = state.liveSessions;
+      state.liveSessions = data.length;
+      if (state.webglOk) buildSessionOrbs();
+      if (data.length > prev && prev > 0) spawnBananas(Math.min(data.length * 8, BANANA_MAX));
+    }
   } catch (e) { console.warn('fetchLiveSessions:', e); }
   updateEstimate();
 }
@@ -1542,7 +1575,7 @@ function renderHistory(items) {
 const anState = {
   open: false,
   tab: 'burndown',
-  charts: { burndown: null, gates: null, phases: null },
+  charts: { burndown: null, gates: null, phases: null, blocking: null },
   channel: null,
   initialized: false,
 };
@@ -1570,8 +1603,9 @@ window.toggleAnalytics = function() {
 window.switchAnalyticsTab = function(tab) {
   anState.tab = tab;
   document.querySelectorAll('.an-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  ['burndown','gates','phases'].forEach(t => {
-    document.getElementById('an-'+t).style.display = t === tab ? '' : 'none';
+  ['burndown','gates','phases','blocking','sankey'].forEach(t => {
+    const el = document.getElementById('an-'+t);
+    if (el) el.style.display = t === tab ? '' : 'none';
   });
 };
 
@@ -1598,6 +1632,8 @@ async function initAnalytics() {
   await loadBurndownData();
   await loadGateFailuresData();
   await loadTimeInPhaseData();
+  await loadBlockingCausesData();
+  await loadSankeyData();
   subscribeAnalytics();
 }
 
@@ -1840,7 +1876,7 @@ function subscribeAnalytics() {
   const dot = document.getElementById('anConnDot');
   anState.channel = state.supabase.channel('analytics-changes')
     .on('postgres_changes', { event:'*', schema:'public', table:'sd_phase_handoffs' }, () => {
-      loadGateFailuresData(); loadTimeInPhaseData();
+      loadGateFailuresData(); loadTimeInPhaseData(); loadBlockingCausesData();
     })
     .on('postgres_changes', { event:'*', schema:'public', table:'claude_sessions' }, () => {
       // Session changes can affect burndown velocity
@@ -1852,12 +1888,352 @@ function subscribeAnalytics() {
 }
 
 // ═══════════════════════════════════════════════
+// ERROR COLOR CASCADE
+// ═══════════════════════════════════════════════
+const errorCascade = { ratio: 0, targetRatio: 0, lastCheck: 0 };
+const CASCADE_NORMAL = new THREE.Color(0x040408);
+const CASCADE_ERROR = new THREE.Color(0x1a0808);
+const CASCADE_LERP = new THREE.Color();
+
+function updateErrorCascade(t) {
+  // Recompute every 30s from state data
+  if (t - errorCascade.lastCheck > 30) {
+    errorCascade.lastCheck = t;
+    let total = 0, failed = 0;
+    state.sds.forEach(sd => {
+      if (sd.status !== 'completed' && sd.status !== 'cancelled') {
+        total++;
+        if (sd.status === 'blocked') failed++;
+      }
+    });
+    errorCascade.targetRatio = total > 0 ? Math.min(1, failed / total) : 0;
+  }
+  // Smooth lerp
+  errorCascade.ratio += (errorCascade.targetRatio - errorCascade.ratio) * 0.02;
+  const r = errorCascade.ratio;
+  if (r > 0.01 && scene && scene.fog) {
+    CASCADE_LERP.copy(CASCADE_NORMAL).lerp(CASCADE_ERROR, r);
+    scene.fog.color.copy(CASCADE_LERP);
+    scene.background.copy(CASCADE_LERP);
+    if (groundMat) groundMat.color.lerp(new THREE.Color(0.15, 0.04, 0.04), r * 0.3);
+  } else if (scene && scene.fog) {
+    scene.fog.color.copy(CASCADE_NORMAL);
+    scene.background.copy(CASCADE_NORMAL);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// NANO BANANA PARTICLES
+// ═══════════════════════════════════════════════
+let bananaParticles = null;
+const BANANA_MAX = 50;
+
+function initBananaParticles() {
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(BANANA_MAX * 3);
+  const velocities = new Float32Array(BANANA_MAX * 3);
+  const lifetimes = new Float32Array(BANANA_MAX);
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xffe066, size: 0.12, transparent: true, opacity: 0.7,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const mesh = new THREE.Points(geo, mat);
+  scene.add(mesh);
+  bananaParticles = { geo, mat, mesh, velocities, lifetimes, active: 0 };
+}
+
+function spawnBananas(count) {
+  if (!bananaParticles) return;
+  const pos = bananaParticles.geo.attributes.position.array;
+  const vel = bananaParticles.velocities;
+  const life = bananaParticles.lifetimes;
+  for (let i = 0; i < Math.min(count, BANANA_MAX); i++) {
+    const idx = i * 3;
+    pos[idx] = (Math.random() - 0.5) * 2;
+    pos[idx+1] = 3 + Math.random() * 2;
+    pos[idx+2] = (Math.random() - 0.5) * 2;
+    vel[idx] = (Math.random() - 0.5) * 0.03;
+    vel[idx+1] = 0.02 + Math.random() * 0.04;
+    vel[idx+2] = (Math.random() - 0.5) * 0.03;
+    life[i] = 1.0;
+  }
+  bananaParticles.active = Math.min(count, BANANA_MAX);
+  bananaParticles.geo.attributes.position.needsUpdate = true;
+}
+
+function updateBananaParticles(dt) {
+  if (!bananaParticles || bananaParticles.active === 0) return;
+  const pos = bananaParticles.geo.attributes.position.array;
+  const vel = bananaParticles.velocities;
+  const life = bananaParticles.lifetimes;
+  let anyAlive = false;
+  for (let i = 0; i < bananaParticles.active; i++) {
+    if (life[i] <= 0) continue;
+    anyAlive = true;
+    const idx = i * 3;
+    vel[idx+1] -= 0.001 * dt * 60; // gravity
+    pos[idx] += vel[idx]; pos[idx+1] += vel[idx+1]; pos[idx+2] += vel[idx+2];
+    life[i] -= 0.008 * dt * 60;
+    if (life[i] <= 0) { pos[idx+1] = -100; } // hide
+  }
+  bananaParticles.mat.opacity = 0.7;
+  bananaParticles.geo.attributes.position.needsUpdate = true;
+  if (!anyAlive) bananaParticles.active = 0;
+}
+
+// ═══════════════════════════════════════════════
+// SESSION TIMELINE
+// ═══════════════════════════════════════════════
+let sessionTimelineInterval = null;
+
+async function loadSessionTimeline() {
+  if (!state.supabase) return;
+  try {
+    const { data } = await state.supabase.from('claude_sessions')
+      .select('session_id, status, heartbeat_at, sd_id, metadata')
+      .order('heartbeat_at', { ascending: false })
+      .limit(20);
+    if (!data) return;
+    renderSessionTimeline(data);
+  } catch(e) { console.warn('loadSessionTimeline:', e); }
+}
+
+function renderSessionTimeline(sessions) {
+  const now = Date.now();
+  const list = document.getElementById('st-list');
+  const bar = document.getElementById('st-bar');
+  if (!list || !bar) return;
+
+  // Status bar
+  let alive = 0, stale = 0, dead = 0;
+  sessions.forEach(s => {
+    const age = now - new Date(s.heartbeat_at).getTime();
+    if (s.status === 'active' && age < 120000) alive++;
+    else if (s.status === 'active' && age < 900000) stale++;
+    else dead++;
+  });
+  const total = sessions.length || 1;
+  bar.innerHTML =
+    (alive ? `<div class="st-bar-seg" style="flex:${alive};background:#4a9e7d" title="${alive} active"></div>` : '') +
+    (stale ? `<div class="st-bar-seg" style="flex:${stale};background:#ffab40" title="${stale} stale"></div>` : '') +
+    (dead ? `<div class="st-bar-seg" style="flex:${dead};background:rgba(196,98,106,0.5)" title="${dead} ended"></div>` : '');
+
+  // Session rows (show top 8)
+  list.innerHTML = sessions.slice(0, 8).map(s => {
+    const age = now - new Date(s.heartbeat_at).getTime();
+    const cls = s.status === 'active' && age < 120000 ? 'alive' : s.status === 'active' && age < 900000 ? 'stale' : 'dead';
+    const ageStr = age < 60000 ? '<1m' : age < 3600000 ? Math.round(age/60000) + 'm' : Math.round(age/3600000) + 'h';
+    const id = s.session_id?.slice(-8) || '?';
+    return `<div class="st-row"><span class="st-dot ${cls}"></span><span class="st-id" title="${s.session_id}">${id}</span><span class="st-age">${ageStr} ago</span></div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// BLOCKING CAUSES (Analytics Tab 4)
+// ═══════════════════════════════════════════════
+async function loadBlockingCausesData() {
+  if (!state.supabase) return;
+  try {
+    const { data, error } = await state.supabase.from('sd_phase_handoffs')
+      .select('handoff_type, validation_details, status')
+      .in('status', ['failed', 'rejected'])
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    renderBlockingCausesChart(data || []);
+  } catch(e) { console.warn('loadBlockingCausesData:', e); }
+}
+
+function renderBlockingCausesChart(handoffs) {
+  const causes = {};
+  handoffs.forEach(h => {
+    const reason = h.validation_details?.reason || h.validation_details?.message || h.handoff_type || 'unknown';
+    // Extract short cause from reason string
+    const short = reason.length > 40 ? reason.slice(0, 40) + '...' : reason;
+    causes[short] = (causes[short] || 0) + 1;
+  });
+  const sorted = Object.entries(causes).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+  if (!sorted.length) {
+    document.getElementById('an-blocking').innerHTML = '<div class="an-empty">No blocking causes recorded</div><div class="an-chart-wrap"><canvas id="blockingCanvas"></canvas></div>';
+    return;
+  }
+
+  // Pareto chart
+  const total = sorted.reduce((s, e) => s + e[1], 0);
+  let cum = 0;
+  const cumData = sorted.map(e => { cum += e[1]; return Math.round(cum / total * 100); });
+  const colors = sorted.map((_, i) => `hsla(${350 - i * 20}, 60%, 55%, 0.7)`);
+
+  if (anState.charts.blocking) anState.charts.blocking.destroy();
+  anState.charts.blocking = new Chart(document.getElementById('blockingCanvas'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(e => e[0]),
+      datasets: [
+        { label: 'Count', data: sorted.map(e => e[1]), backgroundColor: colors, borderRadius: 2, barPercentage: 0.7 },
+        { label: 'Cumulative %', data: cumData, type: 'line', borderColor: 'rgba(255,200,100,0.8)', borderWidth: 2,
+          pointRadius: 3, pointBackgroundColor: 'rgba(255,200,100,0.8)', fill: false, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: 'rgba(224,220,212,0.4)', font: { size: 8 } }, grid: { color: 'rgba(0,200,255,0.06)' } },
+        y: { ticks: { color: 'rgba(224,220,212,0.4)', font: { size: 7 } }, grid: { color: 'rgba(0,200,255,0.06)' } },
+        y1: { position: 'right', min: 0, max: 100, ticks: { color: 'rgba(255,200,100,0.5)', font: { size: 8 }, callback: v => v + '%' }, grid: { display: false } }
+      },
+      plugins: {
+        legend: { labels: { color: 'rgba(224,220,212,0.6)', font: { size: 8 }, boxWidth: 10 } },
+        tooltip: { titleFont: { size: 9 }, bodyFont: { size: 9 } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// SANKEY INBOX FLOW (Analytics Tab 5)
+// ═══════════════════════════════════════════════
+async function loadSankeyData() {
+  if (!state.supabase) return;
+  try {
+    const { data, error } = await state.supabase.from('issue_patterns')
+      .select('category, severity, status')
+      .limit(500);
+    if (error) throw error;
+    renderSankey(data || []);
+  } catch(e) { console.warn('loadSankeyData:', e); }
+}
+
+function renderSankey(patterns) {
+  const canvas = document.getElementById('sankeyCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = 280 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = canvas.offsetWidth, H = 280;
+  ctx.clearRect(0, 0, W, H);
+
+  if (!patterns.length) {
+    ctx.fillStyle = 'rgba(224,220,212,0.36)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('No issue pattern data', W / 2, H / 2);
+    return;
+  }
+
+  // Build flows: Category → Severity → Status
+  const catCounts = {}, sevCounts = {}, statusCounts = {};
+  const catToSev = {}, sevToStatus = {};
+  patterns.forEach(p => {
+    const cat = p.category || 'unknown';
+    const sev = p.severity || 'medium';
+    const st = p.status || 'open';
+    catCounts[cat] = (catCounts[cat] || 0) + 1;
+    sevCounts[sev] = (sevCounts[sev] || 0) + 1;
+    statusCounts[st] = (statusCounts[st] || 0) + 1;
+    const csKey = cat + '→' + sev;
+    catToSev[csKey] = (catToSev[csKey] || 0) + 1;
+    const ssKey = sev + '→' + st;
+    sevToStatus[ssKey] = (sevToStatus[ssKey] || 0) + 1;
+  });
+
+  const cats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const sevs = Object.entries(sevCounts).sort((a, b) => b[1] - a[1]);
+  const stats = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
+  const total = patterns.length;
+
+  // Column positions
+  const colX = [30, W / 2 - 20, W - 80];
+  const nodeW = 14;
+
+  // Draw nodes and compute y positions
+  const nodeColor = { critical: '#c4626a', high: '#ff8844', medium: '#ffab40', low: '#4a9e7d', unknown: '#666',
+    open: '#ffab40', resolved: '#4a9e7d', investigating: '#00c8ff', monitoring: '#64b4ff' };
+
+  function drawColumn(entries, x, totalN) {
+    const gap = 4;
+    const available = H - 30 - (entries.length - 1) * gap;
+    const positions = [];
+    let y = 15;
+    entries.forEach(([name, count]) => {
+      const h = Math.max(8, (count / totalN) * available);
+      const color = nodeColor[name] || 'rgba(0,200,255,0.5)';
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, nodeW, h);
+      ctx.fillStyle = 'rgba(224,220,212,0.6)';
+      ctx.font = '7px "JetBrains Mono", monospace';
+      ctx.textAlign = x < W / 2 ? 'left' : 'right';
+      const textX = x < W / 2 ? x + nodeW + 4 : x - 4;
+      ctx.fillText(`${name} (${count})`, textX, y + h / 2 + 3);
+      positions.push({ name, y, h, count });
+      y += h + gap;
+    });
+    return positions;
+  }
+
+  const catPos = drawColumn(cats, colX[0], total);
+  ctx.textAlign = 'left';
+  const sevPos = drawColumn(sevs, colX[1], total);
+  const statPos = drawColumn(stats, colX[2], total);
+
+  // Draw flows
+  ctx.globalAlpha = 0.15;
+  function drawFlows(fromPos, toPos, flowMap, fromX, toX) {
+    const fromOffsets = {};
+    const toOffsets = {};
+    fromPos.forEach(p => { fromOffsets[p.name] = 0; });
+    toPos.forEach(p => { toOffsets[p.name] = 0; });
+
+    Object.entries(flowMap).forEach(([key, count]) => {
+      const [fromName, toName] = key.split('→');
+      const from = fromPos.find(p => p.name === fromName);
+      const to = toPos.find(p => p.name === toName);
+      if (!from || !to) return;
+      const fh = (count / from.count) * from.h;
+      const th = (count / to.count) * to.h;
+      const fy = from.y + (fromOffsets[fromName] || 0);
+      const ty = to.y + (toOffsets[toName] || 0);
+      fromOffsets[fromName] = (fromOffsets[fromName] || 0) + fh;
+      toOffsets[toName] = (toOffsets[toName] || 0) + th;
+
+      ctx.beginPath();
+      ctx.moveTo(fromX + nodeW, fy);
+      const cp = (toX - fromX - nodeW) / 2;
+      ctx.bezierCurveTo(fromX + nodeW + cp, fy, toX - cp, ty, toX, ty);
+      ctx.lineTo(toX, ty + th);
+      ctx.bezierCurveTo(toX - cp, ty + th, fromX + nodeW + cp, fy + fh, fromX + nodeW, fy + fh);
+      ctx.closePath();
+      ctx.fillStyle = nodeColor[fromName] || 'rgba(0,200,255,0.5)';
+      ctx.fill();
+    });
+  }
+
+  drawFlows(catPos, sevPos, catToSev, colX[0], colX[1]);
+  drawFlows(sevPos, statPos, sevToStatus, colX[1], colX[2]);
+  ctx.globalAlpha = 1.0;
+
+  // Column headers
+  ctx.fillStyle = 'rgba(224,220,212,0.35)';
+  ctx.font = '7px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('CATEGORY', colX[0] + nodeW / 2, 10);
+  ctx.fillText('SEVERITY', colX[1] + nodeW / 2, 10);
+  ctx.fillText('STATUS', colX[2] + nodeW / 2, 10);
+}
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
 initThree();
-if (state.webglOk) animate();
+if (state.webglOk) { initBananaParticles(); animate(); }
 initSupabase();
 addLog('Forge initialized — awaiting directives', 'system');
+// Session timeline: load initially and refresh every 30s
+setTimeout(() => { loadSessionTimeline(); sessionTimelineInterval = setInterval(loadSessionTimeline, 30000); state.intervalIds.push(sessionTimelineInterval); }, 2000);
 window.addEventListener('beforeunload', () => {
   state.intervalIds.forEach(id => clearInterval(id));
   if (state.animationFrameId) cancelAnimationFrame(state.animationFrameId);
