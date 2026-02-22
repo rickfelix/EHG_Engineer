@@ -60,12 +60,20 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     let handoffLookupId = sd_id;
     const { data: sdLookup } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key')
+      .select('id, sd_key, sd_type')
       .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
       .single();
     if (sdLookup) {
       prdLookupId = sdLookup.sd_key || sd_id;
       handoffLookupId = sdLookup.id || sd_id;
+    }
+
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-035: Determine if EXEC-TO-PLAN (gate2) is required for this SD type
+    // Infrastructure, documentation, and fix SD types use modified workflows that skip EXEC-TO-PLAN
+    const sdType = sdLookup?.sd_type || 'feature';
+    const gate2Required = !['infrastructure', 'documentation', 'fix'].includes(sdType);
+    if (!gate2Required) {
+      console.log(`   ℹ️  SD type '${sdType}' uses modified workflow - gate2 (EXEC-TO-PLAN) not required`);
     }
 
     // Fetch PRD metadata with DESIGN and DATABASE analyses
@@ -262,7 +270,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     console.log('\n[B] Value Delivered');
     console.log('-'.repeat(60));
 
-    await validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, supabase);
+    await validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, supabase, { sdType, gate2Required });
 
     // ===================================================================
     // SECTION C: Pattern Effectiveness (25 points)
@@ -270,7 +278,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     console.log('\n[C] Pattern Effectiveness');
     console.log('-'.repeat(60));
 
-    await validatePatternEffectiveness(sd_id, gateResults, validation, supabase);
+    await validatePatternEffectiveness(sd_id, gateResults, validation, supabase, { sdType, gate2Required });
 
     // ===================================================================
     // SECTION D: Executive Validation (25 points)
@@ -278,7 +286,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     console.log('\n[D] Executive Validation');
     console.log('-'.repeat(60));
 
-    await validateExecutiveApproval(sd_id, gateResults, validation, supabase);
+    await validateExecutiveApproval(sd_id, gateResults, validation, supabase, { sdType, gate2Required });
 
     // ===================================================================
     // FINAL VALIDATION RESULT (with Adaptive Threshold)
@@ -447,7 +455,7 @@ async function validateProcessAdherence(sd_id, prdData, gateResults, validation,
  * Validate Value Delivered (Section B - 35 points - CRITICAL)
  * Phase-aware: LEAD wants to see ROI and business value
  */
-async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, _supabase) {
+async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, _supabase, { sdType = 'feature', gate2Required = true } = {}) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -503,6 +511,10 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
   } else if (gateResults.gate2?.score >= 70) {
     sectionScore += 3;
     console.log('   ⚠️  Moderate implementation fidelity (3/5)');
+  } else if (!gate2Required) {
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-035: SD type skips EXEC-TO-PLAN, gate2 absence is legitimate
+    sectionScore += 4;
+    console.log(`   ℹ️  Gate 2 not required for '${sdType}' SD type - awarding 4/5`);
   } else {
     sectionScore += 3;
     validation.warnings.push('[B3] Low implementation fidelity');
@@ -521,7 +533,7 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
  * Validate Pattern Effectiveness (Section C - 30 points - CRITICAL)
  * Phase-aware: Strategic assessment of pattern success
  */
-async function validatePatternEffectiveness(sd_id, gateResults, validation, _supabase) {
+async function validatePatternEffectiveness(sd_id, gateResults, validation, _supabase, { sdType = 'feature', gate2Required = true } = {}) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -558,6 +570,10 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     sectionScore += 3;
     validation.warnings.push(`[C2] Gate 2 score: ${gateResults.gate2.score}/100`);
     console.log(`   ⚠️  Gate 2 score: ${gateResults.gate2.score}/100 (3/6)`);
+  } else if (!gate2Required) {
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-035: SD type skips EXEC-TO-PLAN, no gate2 expected
+    sectionScore += 5;
+    console.log(`   ℹ️  Gate 2 not required for '${sdType}' SD type - awarding 5/6`);
   } else {
     sectionScore += 4;
     console.log('   ⚠️  Gate 2 score unavailable - using estimated default (4/6)');
@@ -630,7 +646,7 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
  * Validate Executive Approval Requirements (Section D - 25 points - MAJOR)
  * Phase-aware: Executive governance and sign-off
  */
-async function validateExecutiveApproval(sd_id, gateResults, validation, supabase) {
+async function validateExecutiveApproval(sd_id, gateResults, validation, supabase, { sdType = 'feature', gate2Required = true } = {}) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -653,29 +669,44 @@ async function validateExecutiveApproval(sd_id, gateResults, validation, supabas
   const gate2OK = gate2Passed || acceptedHandoffs.gate2;
   const gate3OK = gate3Passed || acceptedHandoffs.gate3;
 
-  const passedCount = [gate1Passed, gate2Passed, gate3Passed].filter(Boolean).length;
-  const acceptedCount = [gate1OK, gate2OK, gate3OK].filter(Boolean).length;
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-035: Only count applicable gates based on SD type
+  const applicableGates = gate2Required
+    ? [gate1OK, gate2OK, gate3OK]
+    : [gate1OK, gate3OK]; // Skip gate2 for SD types that don't require EXEC-TO-PLAN
+  const applicablePassed = gate2Required
+    ? [gate1Passed, gate2Passed, gate3Passed]
+    : [gate1Passed, gate3Passed];
+
+  const totalApplicable = applicableGates.length;
+  const passedCount = applicablePassed.filter(Boolean).length;
+  const acceptedCount = applicableGates.filter(Boolean).length;
   const bypassCount = acceptedCount - passedCount;
 
   sectionDetails.gates_passed = passedCount;
   sectionDetails.gates_accepted_with_bypass = bypassCount;
-  sectionDetails.gates_total = 3;
+  sectionDetails.gates_total = totalApplicable;
+  if (!gate2Required) {
+    sectionDetails.gate2_not_required = true;
+    sectionDetails.sd_type = sdType;
+  }
 
-  if (acceptedCount === 3) {
+  if (acceptedCount === totalApplicable) {
     sectionScore += 10;
-    if (bypassCount > 0) {
-      console.log(`   ✅ All 3 gates cleared (${passedCount} passed, ${bypassCount} bypass-approved)`);
+    if (!gate2Required) {
+      console.log(`   ✅ All ${totalApplicable} applicable gates cleared (gate2 not required for '${sdType}')`);
+    } else if (bypassCount > 0) {
+      console.log(`   ✅ All ${totalApplicable} gates cleared (${passedCount} passed, ${bypassCount} bypass-approved)`);
     } else {
-      console.log('   ✅ All 3 gates passed (Gate 1, 2, 3)');
+      console.log(`   ✅ All ${totalApplicable} gates passed (Gate 1, 2, 3)`);
     }
-  } else if (acceptedCount === 2) {
+  } else if (acceptedCount === totalApplicable - 1) {
     sectionScore += 6;
-    validation.warnings.push(`[D1] Only ${acceptedCount}/3 gates cleared`);
-    console.log(`   ⚠️  Only ${acceptedCount}/3 gates cleared (6/10)`);
-  } else if (acceptedCount === 1) {
+    validation.warnings.push(`[D1] Only ${acceptedCount}/${totalApplicable} gates cleared`);
+    console.log(`   ⚠️  Only ${acceptedCount}/${totalApplicable} gates cleared (6/10)`);
+  } else if (acceptedCount >= 1) {
     sectionScore += 3;
-    validation.issues.push(`[D1] Only ${acceptedCount}/3 gates cleared - review required`);
-    console.log(`   ⚠️  Only ${acceptedCount}/3 gates cleared (3/10)`);
+    validation.issues.push(`[D1] Only ${acceptedCount}/${totalApplicable} gates cleared - review required`);
+    console.log(`   ⚠️  Only ${acceptedCount}/${totalApplicable} gates cleared (3/10)`);
   } else {
     sectionScore += 0;
     validation.issues.push('[D1] No gates passed or accepted - SD requires review');
