@@ -115,11 +115,11 @@ Produce a JSON response matching the `responseFormat` in the context.
 node scripts/eva/heal-command.mjs vision persist '<YOUR_JSON>'
 ```
 
-**Step 2d: Follow HEAL_STATUS signals**
+**Step 2d: Follow HEAL_STATUS signals — AUTO-CHAIN**
 
 If output contains `HEAL_STATUS=NEEDS_CORRECTION`:
-- Read the `HEAL_NEXT_CMD` line and execute it to generate corrective SDs
-- Continue the loop (max 10 rounds)
+- **Immediately** read the `HEAL_NEXT_CMD` line and execute it to generate corrective SDs
+- Do NOT pause or ask — continue the loop automatically (max 10 rounds)
 
 If output contains `HEAL_STATUS=PASS`:
 - Report success, loop is complete
@@ -130,48 +130,60 @@ If output contains `HEAL_STATUS=PASS`:
 
 Score the codebase against completed Strategic Directives to verify their promises were delivered.
 
+**IMPORTANT: This is a CONTINUOUS LOOP. Execute ALL steps automatically without pausing between them. Do NOT stop after any individual step — chain them together end-to-end.**
+
 **Step 2a: Get SD scoring context**
+
+Run the appropriate query command based on the filter:
 
 ```bash
 node scripts/eva/heal-command.mjs sd --today
 ```
-or
-```bash
-node scripts/eva/heal-command.mjs sd --sd-id SD-XXX-001
-```
-or
-```bash
-node scripts/eva/heal-command.mjs sd --last 5
-```
+or `--sd-id SD-XXX-001` or `--last 5` or `--since YYYY-MM-DD` etc.
 
-This outputs a `===SD_HEAL_SCORE_CONTEXT===` block listing each SD's promises.
+This outputs a `===SD_HEAL_SCORE_CONTEXT===` block listing each SD's promises. Capture the SD list.
 
-**Step 2b: Verify each SD's promises against the codebase**
+**Step 2b: Verify each SD's promises against the codebase (PARALLEL)**
 
-For each SD in the context, read the relevant codebase files and verify:
+For EACH SD in the context, verify its promises against the actual codebase. Use the **Task tool with Explore agents** to parallelize — batch SDs into groups of 10-15 per agent:
 
-1. **key_changes_delivered** (0-100): Were the stated key_changes actually implemented? Check the files that should have been modified.
-2. **success_criteria_met** (0-100): Are the success_criteria verifiable? Check tests, configs, and behavior.
-3. **success_metrics_achieved** (0-100): Do the success_metrics hold true? Check for measurable outcomes.
-4. **smoke_tests_pass** (0-100): Would the smoke_test_steps pass if executed? Run quick checks.
-5. **capabilities_present** (0-100): Are delivers_capabilities actually functional? Check exports, APIs, routes.
+For each SD, score these 5 dimensions (0-100):
+1. **key_changes_delivered**: Were the stated key_changes actually implemented?
+2. **success_criteria_met**: Are the success_criteria verifiable in tests/configs/behavior?
+3. **success_metrics_achieved**: Do the success_metrics hold true?
+4. **smoke_tests_pass**: Would the smoke_test_steps pass if executed?
+5. **capabilities_present**: Are delivers_capabilities actually functional?
 
-Produce a JSON response matching the `responseFormat` in the context.
+Produce a JSON response matching the `responseFormat` from the context.
 
-**Step 2c: Persist scores**
+**Step 2c: Persist scores (use --file to avoid ENAMETOOLONG)**
+
+Write the complete scoring JSON to a temp file, then persist:
 
 ```bash
-node scripts/eva/heal-command.mjs sd persist '<YOUR_JSON>'
+# Write JSON to file using the Write tool:
+#   scripts/temp/heal-scores.json
+
+# Then persist from file:
+node scripts/eva/heal-command.mjs sd persist --file scripts/temp/heal-scores.json
 ```
 
-**Step 2d: Follow HEAL_STATUS signals**
+**NEVER pass large JSON as an inline command argument** — it will fail with ENAMETOOLONG for more than ~5 SDs.
+
+**Step 2d: Follow HEAL_STATUS signals — AUTO-CHAIN**
+
+Parse the persist output for `HEAL_STATUS`:
 
 If `HEAL_STATUS=NEEDS_CORRECTION`:
-- Execute the `HEAL_NEXT_CMD` to generate corrective SDs
-- Present the corrective SDs and suggest next steps
+- **Immediately** run batch corrective generation (do NOT run individually per score):
+  ```bash
+  node scripts/eva/heal-command.mjs sd generate-all
+  ```
+- This batch-processes ALL failing scores in one command
+- Continue to Step 3 (present results)
 
 If `HEAL_STATUS=PASS`:
-- Report all SDs verified successfully
+- All SDs verified successfully — proceed to Step 3
 
 ---
 
