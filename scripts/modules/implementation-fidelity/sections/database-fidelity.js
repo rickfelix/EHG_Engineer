@@ -61,7 +61,9 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
 
       const migrationDirs = ['database/migrations', 'supabase/migrations', 'migrations'];
       let migrationFiles = [];
-      const sdIdLower = sd_id.replace('SD-', '').toLowerCase();
+      // Search by both UUID and sd_key for migration file matching
+      const searchTerms = await getSDSearchTerms(sd_id, supabase);
+      const searchLower = searchTerms.map(t => t.replace('SD-', '').toLowerCase());
 
       for (const dir of migrationDirs) {
         const fullPath = path.join(implementationRepo, dir);
@@ -69,8 +71,7 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
           const files = await readdir(fullPath);
           const sdMigrations = files.filter(f => {
             const fileLower = f.toLowerCase();
-            return fileLower.includes(sdIdLower) ||
-                   fileLower.includes(sdIdLower.split('-')[0]);
+            return searchLower.some(term => fileLower.includes(term));
           });
           migrationFiles.push(...sdMigrations.map(f => ({ dir, file: f })));
         }
@@ -85,7 +86,7 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
 
         // B1.2: Verify migrations were executed (20 points - CRITICAL)
         console.log('   [B1.2] Verifying migration execution...');
-        const execScore = await verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetails, validation, supabase);
+        const execScore = await verifyMigrationExecution(migrationFiles, searchLower[0], sectionDetails, validation, supabase);
         sectionScore += execScore;
       } else {
         validation.warnings.push('[B1] No migration files found for this SD');
