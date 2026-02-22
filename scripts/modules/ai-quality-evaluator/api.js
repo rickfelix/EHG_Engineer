@@ -4,6 +4,46 @@
  */
 
 /**
+ * Remove invalid Unicode surrogates that break JSON serialization.
+ * @param {string} str
+ * @returns {string}
+ */
+function sanitizeString(str) {
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = str.charCodeAt(i + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        result += str[i] + str[i + 1];
+        i++;
+      } else {
+        result += '\uFFFD';
+      }
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      result += '\uFFFD';
+    } else {
+      result += str[i];
+    }
+  }
+  return result;
+}
+
+/**
+ * Recursively sanitize all strings in a value (objects, arrays, primitives).
+ */
+function deepSanitize(value) {
+  if (typeof value === 'string') return sanitizeString(value);
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(deepSanitize);
+  const result = {};
+  for (const key of Object.keys(value)) {
+    result[key] = deepSanitize(value[key]);
+  }
+  return result;
+}
+
+/**
  * Call OpenAI API with retry logic and rate limit handling
  * Note: gpt-5-mini doesn't support function/tool calling, so we use json_object mode
  *
@@ -41,10 +81,13 @@ export async function callOpenAI(openai, modelOrMessages, messages, retries = 3)
         setTimeout(() => reject(new Error(`OpenAI API timeout after ${timeoutMs}ms`)), timeoutMs)
       );
 
+      // Sanitize messages to remove invalid Unicode surrogates (prevents JSON serialization errors)
+      const sanitizedMessages = deepSanitize(messages);
+
       // Create API call promise
       const apiPromise = openai.chat.completions.create({
         model,
-        messages,
+        messages: sanitizedMessages,
         response_format: { type: 'json_object' },
         max_completion_tokens: 8000  // Increased to handle detailed multi-criterion responses
         // Note: gpt-5-mini only supports temperature=1 (default)

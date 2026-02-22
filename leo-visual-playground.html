@@ -161,7 +161,41 @@
     50%{border-color:rgba(255,200,40,0.35);box-shadow:0 0 12px rgba(255,200,40,0.1)}}
   @keyframes pu{0%,100%{opacity:1}50%{opacity:.4}}
   @media(prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
-  @media(max-width:900px){#app{flex-direction:column}#scene{flex:3}#panel{flex:1;min-width:0;max-width:none}}
+  @media(max-width:900px){#app{flex-direction:column}#scene{flex:3}#panel{flex:1;min-width:0;max-width:none}#analytics{display:none!important}}
+
+  /* ═══ Analytics Panel (Phase D) ═══ */
+  #analytics{width:0;overflow:hidden;display:flex;flex-direction:column;
+    background:rgba(4,4,16,0.97);border-left:1px solid rgba(0,200,255,0.1);
+    font-family:'JetBrains Mono',monospace;transition:width .3s ease}
+  #analytics.open{width:400px;min-width:400px}
+  .an-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+    border-bottom:1px solid rgba(0,200,255,0.1)}
+  .an-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,200,255,0.8)}
+  .an-close{background:none;border:none;color:rgba(0,200,255,0.4);font-size:14px;cursor:pointer;padding:2px}
+  .an-close:hover{color:#00c8ff}
+  .an-status{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:8px;vertical-align:middle}
+  .an-status.ok{background:#4a9e7d}.an-status.off{background:#c4626a}
+  .an-tabs{display:flex;border-bottom:1px solid rgba(0,200,255,0.1)}
+  .an-tab{flex:1;padding:8px 6px;font-size:8px;letter-spacing:1px;text-transform:uppercase;text-align:center;
+    color:rgba(224,220,212,0.45);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;background:none;border-top:none;border-left:none;border-right:none}
+  .an-tab:hover{color:rgba(224,220,212,0.7)}
+  .an-tab.active{color:rgba(0,200,255,0.95);border-bottom-color:rgba(0,200,255,0.6)}
+  .an-body{flex:1;overflow-y:auto;padding:12px}
+  .an-chart-wrap{position:relative;width:100%;min-height:220px}
+  .an-chart-wrap canvas{width:100%!important;max-height:280px}
+  .an-filter{margin-bottom:10px}
+  .an-filter select{width:100%;padding:4px 6px;background:rgba(8,8,24,0.8);color:rgba(224,220,212,0.72);
+    border:1px solid rgba(0,200,255,0.12);border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:9px}
+  .an-export{display:flex;justify-content:flex-end;margin-top:8px}
+  .an-export-btn{background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.2);color:rgba(0,200,255,0.7);
+    font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;padding:4px 10px;cursor:pointer;border-radius:3px;transition:all .2s}
+  .an-export-btn:hover{background:rgba(0,200,255,0.15);color:#00c8ff}
+  .an-toast{position:fixed;bottom:20px;right:20px;background:rgba(0,200,255,0.15);border:1px solid rgba(0,200,255,0.3);
+    color:rgba(0,200,255,0.9);font-family:'JetBrains Mono',monospace;font-size:9px;padding:8px 14px;border-radius:4px;
+    opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}
+  .an-toast.show{opacity:1}
+  .an-empty{font-size:9px;color:rgba(224,220,212,0.36);text-align:center;padding:40px 12px}
+  #btnAnalytics{margin-top:4px}
 </style>
 </head>
 <body>
@@ -188,6 +222,8 @@
       <button class="bt" id="btnNext" onclick="setSlide('next')">Next</button>
       <div class="dvd"></div>
       <button class="bt" id="btnFast" onclick="setSlide('fast')">Fast</button>
+      <div class="dvd"></div>
+      <button class="bt" id="btnAnalytics" onclick="toggleAnalytics()">Charts</button>
     </div>
     <div id="slideProg"></div>
     <div id="dup-alert"><button id="dup-alert-close" onclick="dismissDupAlert()">&times;</button><div id="dup-alert-title">CLAIM CONFLICT DETECTED</div><div id="dup-alert-msg">Multiple sessions have claimed the same SD. This can cause conflicts.</div><ul id="dup-alert-list"></ul><div id="dup-alert-countdown"></div></div>
@@ -243,9 +279,35 @@
       <div id="est-conf"></div>
     </div>
   </div>
+  <div id="analytics" role="complementary" aria-label="Analytics charts panel">
+    <div class="an-header">
+      <span class="an-title">Analytics<span class="an-status off" id="anConnDot" title="Subscription status"></span></span>
+      <button class="an-close" onclick="toggleAnalytics()" aria-label="Close analytics">&times;</button>
+    </div>
+    <div class="an-tabs" role="tablist">
+      <button class="an-tab active" role="tab" data-tab="burndown" onclick="switchAnalyticsTab('burndown')">Burndown</button>
+      <button class="an-tab" role="tab" data-tab="gates" onclick="switchAnalyticsTab('gates')">Gate Failures</button>
+      <button class="an-tab" role="tab" data-tab="phases" onclick="switchAnalyticsTab('phases')">Time-in-Phase</button>
+    </div>
+    <div class="an-body">
+      <div id="an-burndown">
+        <div class="an-filter"><select id="anAppFilter" onchange="loadBurndownData()"><option value="">All Applications</option></select></div>
+        <div class="an-chart-wrap"><canvas id="burndownCanvas"></canvas></div>
+      </div>
+      <div id="an-gates" style="display:none">
+        <div class="an-chart-wrap"><canvas id="gatesCanvas"></canvas></div>
+      </div>
+      <div id="an-phases" style="display:none">
+        <div class="an-chart-wrap"><canvas id="phasesCanvas"></canvas></div>
+      </div>
+      <div class="an-export"><button class="an-export-btn" onclick="exportChartPNG()">Export PNG</button></div>
+    </div>
+  </div>
+  <div class="an-toast" id="anToast"></div>
 </div>
 
 <script src="playground.config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
 </script>
@@ -1475,6 +1537,321 @@ function renderHistory(items) {
 }
 
 // ═══════════════════════════════════════════════
+// ANALYTICS (Phase D)
+// ═══════════════════════════════════════════════
+const anState = {
+  open: false,
+  tab: 'burndown',
+  charts: { burndown: null, gates: null, phases: null },
+  channel: null,
+  initialized: false,
+};
+
+const AN_STATUS_COLORS = {
+  draft:'rgba(224,220,212,0.5)', planning:'rgba(100,180,255,0.7)', in_progress:'rgba(0,200,255,0.8)',
+  completed:'rgba(74,158,125,0.8)', blocked:'rgba(196,98,106,0.8)', review:'rgba(255,200,100,0.7)',
+  cancelled:'rgba(128,128,128,0.5)'
+};
+const PHASE_COLORS = {
+  DRAFT:'#666', LEAD:'#ffcc66', PLAN:'#64b4ff', PLAN_PRD:'#809fff', EXEC:'#00c8ff',
+  PLAN_VERIFICATION:'#bf80ff', LEAD_FINAL_APPROVAL:'#4a9e7d'
+};
+
+window.toggleAnalytics = function() {
+  anState.open = !anState.open;
+  const el = document.getElementById('analytics');
+  el.classList.toggle('open', anState.open);
+  document.getElementById('btnAnalytics').classList.toggle('ac', anState.open);
+  // Trigger ResizeObserver on #scene after CSS transition completes
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 350);
+  if (anState.open && !anState.initialized) { anState.initialized = true; initAnalytics(); }
+};
+
+window.switchAnalyticsTab = function(tab) {
+  anState.tab = tab;
+  document.querySelectorAll('.an-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  ['burndown','gates','phases'].forEach(t => {
+    document.getElementById('an-'+t).style.display = t === tab ? '' : 'none';
+  });
+};
+
+window.exportChartPNG = function() {
+  const chart = anState.charts[anState.tab];
+  if (!chart) return;
+  const url = chart.canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `playground-${anState.tab}-${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+  showAnToast('PNG exported');
+};
+
+function showAnToast(msg) {
+  const el = document.getElementById('anToast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+async function initAnalytics() {
+  if (!state.supabase || !window.Chart) return;
+  await populateAppFilter();
+  await loadBurndownData();
+  await loadGateFailuresData();
+  await loadTimeInPhaseData();
+  subscribeAnalytics();
+}
+
+async function populateAppFilter() {
+  try {
+    const { data } = await state.supabase.from('strategic_directives_v2')
+      .select('target_application').not('target_application','is',null);
+    const apps = [...new Set((data||[]).map(d=>d.target_application).filter(Boolean))].sort();
+    const sel = document.getElementById('anAppFilter');
+    sel.innerHTML = '<option value="">All Applications</option>' + apps.map(a=>`<option value="${a}">${a}</option>`).join('');
+  } catch(e) { console.warn('populateAppFilter:', e); }
+}
+
+window.loadBurndownData = async function() {
+  if (!state.supabase) return;
+  try {
+    let query = state.supabase.from('strategic_directives_v2')
+      .select('id, status, created_at, updated_at, target_application')
+      .order('created_at', { ascending: true });
+    const app = document.getElementById('anAppFilter')?.value;
+    if (app) query = query.eq('target_application', app);
+    const { data, error } = await query;
+    if (error) throw error;
+    renderBurndownChart(data || []);
+  } catch(e) { console.warn('loadBurndownData:', e); }
+};
+
+function renderBurndownChart(sds) {
+  if (!sds.length) return;
+  // Build weekly time buckets
+  const statuses = ['draft','planning','in_progress','review','blocked'];
+  const firstDate = new Date(sds[0].created_at);
+  const now = new Date();
+  const weeks = [];
+  const d = new Date(firstDate); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - d.getDay()); // start of week
+  while (d <= now) { weeks.push(new Date(d)); d.setDate(d.getDate()+7); }
+  if (weeks.length < 2) weeks.push(new Date(now));
+
+  // At each week boundary, count SDs by status
+  const datasets = statuses.map(s => ({ label:s, data:[], backgroundColor:AN_STATUS_COLORS[s], fill:true, tension:0.3 }));
+  weeks.forEach(weekEnd => {
+    const cutoff = weekEnd.getTime();
+    statuses.forEach((s, i) => {
+      // Count SDs that existed by this date and had this status
+      // Approximation: if SD was created before cutoff and current status matches, count it
+      // For completed/cancelled, exclude them from active statuses
+      const count = sds.filter(sd => {
+        const created = new Date(sd.created_at).getTime();
+        if (created > cutoff) return false;
+        const updated = new Date(sd.updated_at).getTime();
+        if (sd.status === 'completed' || sd.status === 'cancelled') {
+          // Only count if it wasn't completed yet at this point
+          if (updated <= cutoff) return false;
+          return s === 'in_progress'; // approximate: was probably in progress
+        }
+        return sd.status === s;
+      }).length;
+      datasets[i].data.push(count);
+    });
+  });
+
+  // ETA projection: 7-day completion velocity
+  const recentCompleted = sds.filter(sd => sd.status === 'completed' &&
+    (now - new Date(sd.updated_at)) < 7*86400000).length;
+  const velocity = recentCompleted / 7; // per day
+  const remaining = sds.filter(sd => !['completed','cancelled'].includes(sd.status)).length;
+  const etaDays = velocity > 0 ? Math.ceil(remaining / velocity) : null;
+
+  // Add projection points
+  if (etaDays && etaDays < 365) {
+    const projLabels = [];
+    const projData = [];
+    for (let i = 0; i <= Math.min(etaDays, 90); i += 7) {
+      projLabels.push(new Date(now.getTime() + i*86400000));
+      projData.push(Math.max(0, remaining - Math.round(velocity * i)));
+    }
+    // Extend weeks with projection dates
+    projLabels.forEach((pd, i) => {
+      if (i > 0) { weeks.push(pd); statuses.forEach((_, si) => datasets[si].data.push(null)); }
+    });
+    datasets.push({
+      label: `ETA: ${etaDays}d (${velocity.toFixed(1)}/day)`,
+      data: Array(weeks.length - projLabels.length).fill(null).concat(projData.slice(0, projLabels.length)),
+      borderColor: 'rgba(255,200,100,0.8)', borderDash:[6,4], borderWidth:2,
+      pointRadius:0, fill:false, tension:0.2
+    });
+  }
+
+  const labels = weeks.map(w => w.toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  if (anState.charts.burndown) anState.charts.burndown.destroy();
+  anState.charts.burndown = new Chart(document.getElementById('burndownCanvas'), {
+    type:'line',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{ color:'rgba(224,220,212,0.4)', font:{size:8}, maxRotation:45 }, grid:{ color:'rgba(0,200,255,0.06)' }},
+        y:{ stacked:true, ticks:{ color:'rgba(224,220,212,0.4)', font:{size:8} }, grid:{ color:'rgba(0,200,255,0.06)' }}
+      },
+      plugins:{
+        legend:{ labels:{ color:'rgba(224,220,212,0.6)', font:{size:8}, boxWidth:10 }},
+        tooltip:{ titleFont:{size:9}, bodyFont:{size:9} }
+      }
+    }
+  });
+}
+
+async function loadGateFailuresData() {
+  if (!state.supabase) return;
+  try {
+    const { data, error } = await state.supabase.from('sd_phase_handoffs')
+      .select('handoff_type, validation_score, status')
+      .eq('status', 'failed')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    renderGateFailuresChart(data || []);
+  } catch(e) { console.warn('loadGateFailuresData:', e); }
+}
+
+function renderGateFailuresChart(handoffs) {
+  // Count failures per handoff_type
+  const counts = {};
+  handoffs.forEach(h => { counts[h.handoff_type] = (counts[h.handoff_type]||0) + 1; });
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if (!sorted.length) {
+    if (anState.charts.gates) { anState.charts.gates.destroy(); anState.charts.gates = null; }
+    document.getElementById('an-gates').innerHTML = '<div class="an-empty">No gate failures recorded</div><div class="an-chart-wrap"><canvas id="gatesCanvas"></canvas></div>';
+    return;
+  }
+  const total = sorted.reduce((s,e)=>s+e[1], 0);
+  let cumulative = 0;
+  const cumData = sorted.map(e => { cumulative += e[1]; return Math.round(cumulative/total*100); });
+
+  if (anState.charts.gates) anState.charts.gates.destroy();
+  anState.charts.gates = new Chart(document.getElementById('gatesCanvas'), {
+    type:'bar',
+    data:{
+      labels: sorted.map(e=>e[0]),
+      datasets:[
+        { label:'Failures', data:sorted.map(e=>e[1]), backgroundColor:'rgba(196,98,106,0.7)', borderRadius:2, barPercentage:0.7 },
+        { label:'Cumulative %', data:cumData, type:'line', borderColor:'rgba(255,200,100,0.8)', borderWidth:2,
+          pointRadius:3, pointBackgroundColor:'rgba(255,200,100,0.8)', fill:false, yAxisID:'y1' }
+      ]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{ color:'rgba(224,220,212,0.4)', font:{size:8} }, grid:{ color:'rgba(0,200,255,0.06)' }},
+        y:{ ticks:{ color:'rgba(224,220,212,0.4)', font:{size:8} }, grid:{ color:'rgba(0,200,255,0.06)' }},
+        y1:{ position:'right', min:0, max:100, ticks:{ color:'rgba(255,200,100,0.5)', font:{size:8}, callback:v=>v+'%' }, grid:{ display:false }}
+      },
+      plugins:{
+        legend:{ labels:{ color:'rgba(224,220,212,0.6)', font:{size:8}, boxWidth:10 }},
+        tooltip:{ titleFont:{size:9}, bodyFont:{size:9} }
+      }
+    }
+  });
+}
+
+async function loadTimeInPhaseData() {
+  if (!state.supabase) return;
+  try {
+    const { data, error } = await state.supabase.from('sd_phase_handoffs')
+      .select('sd_id, handoff_type, created_at, status')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: true })
+      .limit(2000);
+    if (error) throw error;
+    renderTimeInPhaseChart(data || []);
+  } catch(e) { console.warn('loadTimeInPhaseData:', e); }
+}
+
+function renderTimeInPhaseChart(handoffs) {
+  // Group by sd_id, compute time deltas between consecutive handoffs
+  const bySd = {};
+  handoffs.forEach(h => { if (!bySd[h.sd_id]) bySd[h.sd_id] = []; bySd[h.sd_id].push(h); });
+
+  const phaseDurations = {};
+  Object.values(bySd).forEach(sdHandoffs => {
+    sdHandoffs.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    for (let i = 0; i < sdHandoffs.length - 1; i++) {
+      const phase = sdHandoffs[i].handoff_type;
+      const days = (new Date(sdHandoffs[i+1].created_at) - new Date(sdHandoffs[i].created_at)) / 86400000;
+      if (days >= 0 && days < 365) {
+        if (!phaseDurations[phase]) phaseDurations[phase] = [];
+        phaseDurations[phase].push(days);
+      }
+    }
+  });
+
+  // Compute median per phase
+  const median = arr => { const s = [...arr].sort((a,b)=>a-b); const m = Math.floor(s.length/2); return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+  const p90 = arr => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length*0.9)] || s[s.length-1]; };
+  const phases = Object.keys(phaseDurations).sort();
+
+  if (!phases.length) {
+    if (anState.charts.phases) { anState.charts.phases.destroy(); anState.charts.phases = null; }
+    document.getElementById('an-phases').innerHTML = '<div class="an-empty">No phase transition data</div><div class="an-chart-wrap"><canvas id="phasesCanvas"></canvas></div>';
+    return;
+  }
+
+  const medians = phases.map(p => +median(phaseDurations[p]).toFixed(2));
+  const p90s = phases.map(p => +p90(phaseDurations[p]).toFixed(2));
+  const colors = phases.map(p => {
+    const key = p.replace('LEAD-TO-PLAN','LEAD').replace('PLAN-TO-EXEC','PLAN').replace('EXEC-TO-PLAN','EXEC').replace('PLAN-TO-LEAD','PLAN_VERIFICATION').replace('LEAD-FINAL-APPROVAL','LEAD_FINAL_APPROVAL');
+    return PHASE_COLORS[key] || '#00c8ff';
+  });
+
+  if (anState.charts.phases) anState.charts.phases.destroy();
+  anState.charts.phases = new Chart(document.getElementById('phasesCanvas'), {
+    type:'bar',
+    data:{
+      labels: phases,
+      datasets:[
+        { label:'Median (days)', data:medians, backgroundColor:colors.map(c=>c+'cc'), borderRadius:2, barPercentage:0.6 },
+        { label:'p90 (days)', data:p90s, backgroundColor:colors.map(c=>c+'44'), borderColor:colors, borderWidth:1, borderRadius:2, barPercentage:0.6 }
+      ]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales:{
+        x:{ title:{ display:true, text:'Days', color:'rgba(224,220,212,0.4)', font:{size:8} },
+          ticks:{ color:'rgba(224,220,212,0.4)', font:{size:8} }, grid:{ color:'rgba(0,200,255,0.06)' }},
+        y:{ ticks:{ color:'rgba(224,220,212,0.4)', font:{size:8} }, grid:{ color:'rgba(0,200,255,0.06)' }}
+      },
+      plugins:{
+        legend:{ labels:{ color:'rgba(224,220,212,0.6)', font:{size:8}, boxWidth:10 }},
+        tooltip:{ titleFont:{size:9}, bodyFont:{size:9},
+          callbacks:{ afterLabel:(ctx)=>{ const p = phases[ctx.dataIndex]; const arr = phaseDurations[p]; return `n=${arr.length} samples`; }}
+        }
+      }
+    }
+  });
+}
+
+function subscribeAnalytics() {
+  if (!state.supabase) return;
+  const dot = document.getElementById('anConnDot');
+  anState.channel = state.supabase.channel('analytics-changes')
+    .on('postgres_changes', { event:'*', schema:'public', table:'sd_phase_handoffs' }, () => {
+      loadGateFailuresData(); loadTimeInPhaseData();
+    })
+    .on('postgres_changes', { event:'*', schema:'public', table:'claude_sessions' }, () => {
+      // Session changes can affect burndown velocity
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') { dot.className = 'an-status ok'; dot.title = 'Live'; }
+      else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { dot.className = 'an-status off'; dot.title = 'Disconnected'; }
+    });
+}
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
 initThree();
@@ -1484,6 +1861,7 @@ addLog('Forge initialized — awaiting directives', 'system');
 window.addEventListener('beforeunload', () => {
   state.intervalIds.forEach(id => clearInterval(id));
   if (state.animationFrameId) cancelAnimationFrame(state.animationFrameId);
+  if (anState.channel) anState.channel.unsubscribe();
 });
 </script>
 </body>
