@@ -61,7 +61,9 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
 
       const migrationDirs = ['database/migrations', 'supabase/migrations', 'migrations'];
       let migrationFiles = [];
-      const sdIdLower = sd_id.replace('SD-', '').toLowerCase();
+      // Search by both UUID and sd_key for migration file matching
+      const searchTerms = await getSDSearchTerms(sd_id, supabase);
+      const searchLower = searchTerms.map(t => t.replace('SD-', '').toLowerCase());
 
       for (const dir of migrationDirs) {
         const fullPath = path.join(implementationRepo, dir);
@@ -69,8 +71,9 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
           const files = await readdir(fullPath);
           const sdMigrations = files.filter(f => {
             const fileLower = f.toLowerCase();
-            return fileLower.includes(sdIdLower) ||
-                   fileLower.includes(sdIdLower.split('-')[0]);
+            return searchLower.some(term =>
+              fileLower.includes(term) || fileLower.includes(term.split('-')[0])
+            );
           });
           migrationFiles.push(...sdMigrations.map(f => ({ dir, file: f })));
         }
