@@ -1,13 +1,12 @@
 {
-  "isActive": true,
+  "isActive": false,
   "wasInterrupted": false,
-  "currentSd": "SD-LEO-FEAT-STAND-RESEARCH-DEPARTMENT-001",
-  "currentPhase": "EXEC",
-  "currentTask": "Implementing Stand Up Research Department as Internal EHG Service",
+  "currentSd": null,
+  "currentPhase": null,
+  "currentTask": null,
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
-  "clearedAt": "2026-02-22T04:24:53.633Z",
-  "lastUpdatedAt": "2026-02-22T04:50:13.165Z"
+  "clearedAt": "2026-02-22T16:30:58.391Z"
 }
