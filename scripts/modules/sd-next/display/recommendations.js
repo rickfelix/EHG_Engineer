@@ -243,7 +243,7 @@ async function categorizeBaselineSDs(supabase, baselineItems, sessionContext = {
   const readySDs = [];
   const needsVerificationSDs = [];
   const metadataBlockedSDs = [];
-  const { claimedSDs, currentSession, activeSessions = [] } = sessionContext;
+  const { currentSession, activeSessions = [] } = sessionContext;
   const currentSessionId = currentSession?.session_id;
 
   for (const item of baselineItems) {

@@ -28,7 +28,7 @@ import { getStaleThresholdSeconds } from '../../../lib/claim/stale-threshold.js'
  *   stale_alive       - Stale heartbeat + same host + PID alive (risky)
  *   stale_remote      - Stale heartbeat + different host (can't check PID)
  */
-export function analyzeClaimRelationship({ claimingSessionId, claimingSession, currentSession }) {
+export function analyzeClaimRelationship({ claimingSessionId: _claimingSessionId, claimingSession, currentSession }) {
   const staleThreshold = getStaleThresholdSeconds();
   const heartbeatAge = Math.round(claimingSession?.heartbeat_age_seconds || 0);
   const claimPid = claimingSession?.pid ? parseInt(claimingSession.pid, 10) : null;
