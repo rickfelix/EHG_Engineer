@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-22T02:46:03.894Z
-**Rows**: 16,297
+**Generated**: 2026-02-22T14:34:13.063Z
+**Rows**: 16,371
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -84,6 +84,10 @@
 - `idx_sub_agent_results_created_at`
   ```sql
   CREATE INDEX idx_sub_agent_results_created_at ON public.sub_agent_execution_results USING btree (created_at DESC)
+  ```
+- `idx_sub_agent_results_metadata_gin`
+  ```sql
+  CREATE INDEX idx_sub_agent_results_metadata_gin ON public.sub_agent_execution_results USING gin (metadata)
   ```
 - `idx_sub_agent_results_risk_assessment`
   ```sql
