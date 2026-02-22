@@ -15,7 +15,20 @@ import { getSDSearchTerms, gitLogForSD, detectImplementationRepo } from '../util
  * @param {Object} supabase - Supabase client
  */
 export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
-  // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI/form requirements
+  // Database-driven exemption check (mirrors Section B pattern from database-fidelity.js)
+  const exemptSections = validation.details.gate2_exempt_sections || [];
+  if (exemptSections.includes('C_dataflow')) {
+    validation.score += 25;
+    validation.gate_scores.data_flow_alignment = 25;
+    validation.details.data_flow_alignment = {
+      exempt: true,
+      reason: 'Section C exempt via gate2_exempt_sections (C_dataflow)'
+    };
+    console.log('   ✅ Section C exempt via gate2_exempt_sections (25/25)');
+    return;
+  }
+
+  // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI/form requirements (hardcoded fallback)
   try {
     let sd = null;
     const { data: sdById } = await supabase
@@ -116,7 +129,7 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     // Continue with normal validation
   }
 
-  const exemptSections = validation.details.gate2_exempt_sections || [];
+  // Re-use exemptSections from top of function for sub-section checks
   const isC1Exempt = exemptSections.includes('C1_queries');
   const isC2Exempt = exemptSections.includes('C2_form_integration');
 
