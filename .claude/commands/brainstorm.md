@@ -156,6 +156,32 @@ Related past brainstorm: "[topic]" ([date]) - Outcome: [outcome_type]
 
 ---
 
+## Step 4.5: Domain Knowledge Context Injection
+
+If a venture was identified in Step 4 with an `industry` field, inject accumulated domain knowledge into the session context. This is **non-blocking** — if it fails or returns empty, proceed normally.
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const industry = process.argv[2] || '';
+if (!industry) { console.log('DOMAIN_CONTEXT: none'); process.exit(0); }
+import('../lib/domain-intelligence/domain-expert-integration.js').then(mod => {
+  mod.buildDomainContext(supabase, industry).then(ctx => {
+    if (ctx) console.log('DOMAIN_CONTEXT:', ctx);
+    else console.log('DOMAIN_CONTEXT: none');
+  }).catch(() => console.log('DOMAIN_CONTEXT: none'));
+}).catch(() => console.log('DOMAIN_CONTEXT: none'));
+" "<VENTURE_INDUSTRY>"
+```
+
+**If DOMAIN_CONTEXT is not "none"**: Include the returned context block in your session awareness. Use it to inform your questions and provide more relevant guidance. Store the context in session metadata for traceability.
+
+**If DOMAIN_CONTEXT is "none"**: Proceed normally — this is the cold-start case where no prior domain knowledge has been accumulated yet.
+
+---
+
 ## Step 5: Route to Mode
 
 - If `--structured` flag is present → Go to **Structured Mode** (Step 6)
