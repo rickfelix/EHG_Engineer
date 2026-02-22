@@ -10,7 +10,6 @@ import dotenv from 'dotenv';
 import OpenAI from 'openai';
 
 import DatabaseLoader from '../src/services/database-loader.js';
-import RealtimeManager from '../src/services/realtime-manager.js';
 import LEOVersionDetector from '../src/services/version-detector.js';
 import RealtimeDashboard from '../src/services/realtime-dashboard.js';
 import { DirectiveEnhancer } from '../src/services/directive-enhancer.js';
@@ -33,7 +32,6 @@ export const CACHE_TTL = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // Initialize components
 export const dbLoader = new DatabaseLoader();
-export const realtimeManager = new RealtimeManager();
 export const versionDetector = new LEOVersionDetector();
 export const realtimeDashboard = new RealtimeDashboard(dbLoader);
 

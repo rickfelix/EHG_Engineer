@@ -26,9 +26,21 @@ class StrategicLoaders {
     const supabase = this.connectionManager.getClient();
 
     try {
+      // Select only dashboard-required columns (~27 of 86) to reduce data transfer
+      const SD_DASHBOARD_COLUMNS = [
+        'id', 'sd_key', 'title', 'description', 'category', 'priority',
+        'target_outcome', 'target_application', 'status', 'sequence_rank',
+        'owner', 'decision_log_ref', 'evidence_ref', 'approved_at',
+        'content', 'phase_progress', 'checklist',
+        'h_count', 'm_count', 'l_count', 'future_count',
+        'must_have_count', 'must_have_pct', 'rolled_triage', 'total_items',
+        'created_at', 'updated_at'
+      ].join(',');
+
       const { data, error } = await supabase
         .from('strategic_directives_v2')
-        .select('*')
+        .select(SD_DASHBOARD_COLUMNS)
+        .not('status', 'in', '("completed","cancelled","archived")')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -55,15 +67,28 @@ class StrategicLoaders {
         });
       }
 
-      // Load PRDs to calculate progress
-      const { data: prds } = await supabase
-        .from('product_requirements_v2')
-        .select('*');
+      // Cascade filter: only load PRDs and EES for active SDs
+      const activeSDIds = data.map(sd => sd.id);
 
-      // Load Execution Sequences
-      const { data: allEES } = await supabase
-        .from('execution_sequences_v2')
-        .select('*');
+      // Load PRDs for active SDs only (directive_id stores SD UUID)
+      let prds = null;
+      if (activeSDIds.length > 0) {
+        const { data: prdData } = await supabase
+          .from('product_requirements_v2')
+          .select('*')
+          .in('directive_id', activeSDIds);
+        prds = prdData;
+      }
+
+      // Load Execution Sequences for active SDs only
+      let allEES = null;
+      if (activeSDIds.length > 0) {
+        const { data: eesData } = await supabase
+          .from('execution_sequences_v2')
+          .select('*')
+          .in('sd_id', activeSDIds);
+        allEES = eesData;
+      }
 
       // Note: User stories functionality removed - replaced with backlog summaries
       // Backlog summaries will be fetched via API on-demand for better performance
