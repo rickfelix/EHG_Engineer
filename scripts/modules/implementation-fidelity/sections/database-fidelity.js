@@ -71,9 +71,7 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
           const files = await readdir(fullPath);
           const sdMigrations = files.filter(f => {
             const fileLower = f.toLowerCase();
-            return searchLower.some(term =>
-              fileLower.includes(term) || fileLower.includes(term.split('-')[0])
-            );
+            return searchLower.some(term => fileLower.includes(term));
           });
           migrationFiles.push(...sdMigrations.map(f => ({ dir, file: f })));
         }
@@ -88,7 +86,7 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
 
         // B1.2: Verify migrations were executed (20 points - CRITICAL)
         console.log('   [B1.2] Verifying migration execution...');
-        const execScore = await verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetails, validation, supabase);
+        const execScore = await verifyMigrationExecution(migrationFiles, searchLower[0], sectionDetails, validation, supabase);
         sectionScore += execScore;
       } else {
         validation.warnings.push('[B1] No migration files found for this SD');
