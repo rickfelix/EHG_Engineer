@@ -10,7 +10,9 @@
  *   node scripts/eva/heal-command.mjs vision [score|persist|generate|status|loop]
  *   node scripts/eva/heal-command.mjs sd [--today|--sd-id X|--last N]
  *   node scripts/eva/heal-command.mjs sd persist '<JSON>'
+ *   node scripts/eva/heal-command.mjs sd persist --file <path>
  *   node scripts/eva/heal-command.mjs sd generate <score-id>
+ *   node scripts/eva/heal-command.mjs sd generate-all [--score-ids id1,id2]
  *   node scripts/eva/heal-command.mjs status
  */
 
@@ -19,6 +21,7 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execFileSync } from 'child_process';
+import { readFileSync, existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -52,12 +55,27 @@ function parseSDArgs(args) {
     const arg = args[i];
     if (arg === 'persist') {
       opts.mode = 'persist';
-      opts.persistJson = args[i + 1];
+      // Check for --file flag first, then inline JSON
+      const nextArg = args[i + 1];
+      if (nextArg === '--file' && args[i + 2]) {
+        opts.persistFile = args[i + 2];
+      } else if (nextArg) {
+        opts.persistJson = nextArg;
+      }
       break;
     }
     if (arg === 'generate') {
       opts.mode = 'generate';
       opts.scoreId = args[i + 1];
+      break;
+    }
+    if (arg === 'generate-all') {
+      opts.mode = 'generate-all';
+      // Optional: --score-ids id1,id2,id3
+      const nextArg = args[i + 1];
+      if (nextArg === '--score-ids' && args[i + 2]) {
+        opts.scoreIds = args[i + 2].split(',');
+      }
       break;
     }
     if (arg === '--today') opts.today = true;
@@ -132,8 +150,8 @@ async function cmdSDQuery(opts) {
       '  - smoke_tests_pass (0-100): Would the smoke_test_steps pass if executed?',
       '  - capabilities_present (0-100): Are delivers_capabilities actually functional?',
       '',
-      'After scoring, run:',
-      '  node scripts/eva/heal-command.mjs sd persist \'<YOUR_JSON>\'',
+      'After scoring, write JSON to a file and run:',
+      '  node scripts/eva/heal-command.mjs sd persist --file <path-to-json>',
     ].join('\n'),
     sds: sds.map(sd => ({
       sd_key: sd.sd_key,
@@ -174,9 +192,17 @@ async function cmdSDQuery(opts) {
   console.log('===END_CONTEXT===');
 }
 
-async function cmdSDPersist(scoreJson) {
+async function cmdSDPersist(scoreJson, filePath) {
   const supabase = getSupabase();
-  const parsed = JSON.parse(scoreJson);
+  let rawJson = scoreJson;
+  if (filePath) {
+    if (!existsSync(filePath)) {
+      console.error(`File not found: ${filePath}`);
+      process.exit(1);
+    }
+    rawJson = readFileSync(filePath, 'utf8');
+  }
+  const parsed = JSON.parse(rawJson);
 
   if (!parsed.sd_scores || !Array.isArray(parsed.sd_scores)) {
     console.error('Invalid format: expected { sd_scores: [...], overall_score: N }');
@@ -289,6 +315,80 @@ async function cmdSDGenerate(scoreId) {
   }
 }
 
+async function cmdSDGenerateAll(scoreIds) {
+  const supabase = getSupabase();
+  const { generateCorrectiveSD } = await import('./corrective-sd-generator.mjs');
+
+  // If no score IDs provided, query recent non-accept scores
+  let ids = scoreIds;
+  if (!ids || ids.length === 0) {
+    const { data: scores } = await supabase
+      .from('eva_vision_scores')
+      .select('id, sd_id, total_score, threshold_action')
+      .not('sd_id', 'is', null)
+      .in('threshold_action', ['escalate', 'gap_closure_sd', 'minor_sd'])
+      .is('generated_sd_ids', null)
+      .order('scored_at', { ascending: false })
+      .limit(20);
+
+    if (!scores || scores.length === 0) {
+      console.log('\nNo unprocessed failing scores found.');
+      console.log('HEAL_STATUS=PASS');
+      return;
+    }
+    ids = scores.map(s => s.id);
+    console.log(`\nFound ${ids.length} failing score(s) to generate correctives for:\n`);
+    for (const s of scores) {
+      console.log(`  ${(s.sd_id || '?').padEnd(50)} ${s.total_score}/100 (${s.threshold_action})`);
+    }
+  }
+
+  const results = { created: [], deferred: [], failed: [] };
+
+  for (const scoreId of ids) {
+    try {
+      const result = await generateCorrectiveSD(scoreId);
+      if (result.created) {
+        results.created.push(result);
+        const sdList = result.sds || [{ sdKey: result.sdKey }];
+        for (const sd of sdList) {
+          console.log(`  \u2705 ${sd.sdKey} created`);
+        }
+      } else {
+        results.deferred.push({ scoreId, reason: result.reason || result.action });
+        console.log(`  \u23ED  ${scoreId.substring(0, 8)}... deferred (${result.reason || result.action})`);
+      }
+    } catch (err) {
+      results.failed.push({ scoreId, error: err.message });
+      console.error(`  \u274C ${scoreId.substring(0, 8)}... failed: ${err.message}`);
+    }
+  }
+
+  // Summary
+  console.log('\n\u2500\u2500\u2500 Batch Generate Summary \u2500\u2500\u2500');
+  console.log(`  Created:  ${results.created.length}`);
+  console.log(`  Deferred: ${results.deferred.length}`);
+  console.log(`  Failed:   ${results.failed.length}`);
+
+  if (results.created.length > 0) {
+    console.log('\n  Corrective SDs created:');
+    for (const r of results.created) {
+      const sdList = r.sds || [{ sdKey: r.sdKey }];
+      for (const sd of sdList) {
+        console.log(`    ${sd.sdKey}`);
+      }
+    }
+    console.log('\n  Work corrective SDs via: npm run sd:next');
+    console.log('\nHEAL_STATUS=CORRECTIVES_CREATED');
+    console.log(`HEAL_CORRECTIVE_COUNT=${results.created.length}`);
+  } else if (results.deferred.length > 0) {
+    console.log('\n  All scores deferred (below min-occurrences threshold).');
+    console.log('\nHEAL_STATUS=ALL_DEFERRED');
+  } else {
+    console.log('\nHEAL_STATUS=PASS');
+  }
+}
+
 // ─── STATUS: Combined vision + SD heal status ───────────────────────────────
 
 async function cmdStatus() {
@@ -372,11 +472,16 @@ if (isMain) {
     case 'sd': {
       const opts = parseSDArgs(rest);
       if (opts.mode === 'persist') {
-        if (!opts.persistJson) { console.error('Usage: heal sd persist \'<JSON>\''); process.exit(1); }
-        cmdSDPersist(opts.persistJson).catch(e => { console.error(e.message); process.exit(1); });
+        if (!opts.persistJson && !opts.persistFile) {
+          console.error('Usage: heal sd persist \'<JSON>\' OR heal sd persist --file <path>');
+          process.exit(1);
+        }
+        cmdSDPersist(opts.persistJson, opts.persistFile).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'generate') {
         if (!opts.scoreId) { console.error('Usage: heal sd generate <score-id>'); process.exit(1); }
         cmdSDGenerate(opts.scoreId).catch(e => { console.error(e.message); process.exit(1); });
+      } else if (opts.mode === 'generate-all') {
+        cmdSDGenerateAll(opts.scoreIds).catch(e => { console.error(e.message); process.exit(1); });
       } else {
         cmdSDQuery(opts).catch(e => { console.error(e.message); process.exit(1); });
       }
@@ -392,8 +497,11 @@ if (isMain) {
       console.log('Commands:');
       console.log('  vision [subcommand]                    Vision heal (delegates to vision-heal.js)');
       console.log('  sd [--today|--sd-id|--last|--since]    SD heal (verify completed SD promises)');
-      console.log('  sd persist <JSON>                      Persist SD heal scores');
-      console.log('  sd generate <score-id>                 Create corrective SDs from gaps');
+      console.log('  sd persist <JSON>                      Persist SD heal scores (inline JSON)');
+      console.log('  sd persist --file <path>               Persist SD heal scores (from file)');
+      console.log('  sd generate <score-id>                 Create corrective SD from one score');
+      console.log('  sd generate-all                        Batch-create correctives for all failing scores');
+      console.log('  sd generate-all --score-ids a,b,c      Batch-create for specific score IDs');
       console.log('  status                                 Combined heal status');
       console.log('');
       console.log('SD filters:');
