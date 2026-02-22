@@ -188,7 +188,7 @@ describe('calculateWeightedScore', () => {
     const result = calculateWeightedScore({}, LEGACY_WEIGHTS);
 
     expect(result.total_score).toBe(0);
-    expect(result.breakdown).toHaveLength(9);
+    expect(result.breakdown).toHaveLength(10);
     result.breakdown.forEach(b => expect(b.raw_score).toBe(0));
   });
 
@@ -264,10 +264,11 @@ describe('calculateWeightedScore', () => {
 });
 
 describe('VALID_COMPONENTS', () => {
-  test('contains all 9 synthesis components', () => {
-    expect(VALID_COMPONENTS).toHaveLength(9);
+  test('contains all 10 synthesis components', () => {
+    expect(VALID_COMPONENTS).toHaveLength(10);
     expect(VALID_COMPONENTS).toContain('virality');
     expect(VALID_COMPONENTS).toContain('moat_architecture');
+    expect(VALID_COMPONENTS).toContain('tech_trajectory');
     expect(VALID_COMPONENTS).toContain('build_cost');
     expect(VALID_COMPONENTS).toContain('chairman_constraints');
   });

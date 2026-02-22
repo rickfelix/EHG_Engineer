@@ -35,38 +35,41 @@ const MOCK_RESULTS = {
   archetypes: { primary_confidence: 0.85 },
   build_cost: { complexity: 'simple' },
   virality: { virality_score: 75 },
+  tech_trajectory: { trajectory_score: 67 },
 };
 
 const EQUAL_WEIGHTS = {
-  cross_reference: 1 / 9,
-  portfolio_evaluation: 1 / 9,
-  problem_reframing: 1 / 9,
-  moat_architecture: 1 / 9,
-  chairman_constraints: 1 / 9,
-  time_horizon: 1 / 9,
-  archetypes: 1 / 9,
-  build_cost: 1 / 9,
-  virality: 1 / 9,
+  cross_reference: 1 / 10,
+  portfolio_evaluation: 1 / 10,
+  problem_reframing: 1 / 10,
+  moat_architecture: 1 / 10,
+  chairman_constraints: 1 / 10,
+  time_horizon: 1 / 10,
+  archetypes: 1 / 10,
+  build_cost: 1 / 10,
+  virality: 1 / 10,
+  tech_trajectory: 1 / 10,
 };
 
 const LEGACY_WEIGHTS = {
   cross_reference: 0.10,
   portfolio_evaluation: 0.10,
   problem_reframing: 0.05,
-  moat_architecture: 0.15,
-  chairman_constraints: 0.15,
+  moat_architecture: 0.13,
+  chairman_constraints: 0.14,
   time_horizon: 0.10,
   archetypes: 0.10,
   build_cost: 0.10,
-  virality: 0.15,
+  virality: 0.13,
+  tech_trajectory: 0.05,
 };
 
 describe('sensitivity-analysis', () => {
   describe('runSensitivityAnalysis', () => {
-    it('returns ranked array of 9 components with influence scores', () => {
+    it('returns ranked array of 10 components with influence scores', () => {
       const result = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS);
 
-      expect(result).toHaveLength(9);
+      expect(result).toHaveLength(10);
       expect(result[0]).toHaveProperty('component');
       expect(result[0]).toHaveProperty('influence_score');
       expect(result[0]).toHaveProperty('elasticity');
@@ -103,15 +106,15 @@ describe('sensitivity-analysis', () => {
       const small = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS, { delta: 0.01 });
       const large = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS, { delta: 0.10 });
 
-      // Both should return 9 components
-      expect(small).toHaveLength(9);
-      expect(large).toHaveLength(9);
+      // Both should return 10 components
+      expect(small).toHaveLength(10);
+      expect(large).toHaveLength(10);
     });
 
     it('returns zero influence for null inputs', () => {
       const result = runSensitivityAnalysis(null, null);
 
-      expect(result).toHaveLength(9);
+      expect(result).toHaveLength(10);
       for (const r of result) {
         expect(r.influence_score).toBe(0);
         expect(r.elasticity).toBe(0);
@@ -127,7 +130,7 @@ describe('sensitivity-analysis', () => {
       const result = runSensitivityAnalysis(MOCK_RESULTS, zeroWeights);
 
       // With zero weights, perturbing upward from 0 should still detect influence
-      expect(result).toHaveLength(9);
+      expect(result).toHaveLength(10);
       // At least some components should have non-zero influence since we perturb up from 0
       const totalInfluence = result.reduce((acc, r) => acc + r.influence_score, 0);
       expect(totalInfluence).toBeCloseTo(1.0, 2);
@@ -142,7 +145,7 @@ describe('sensitivity-analysis', () => {
 
       const result = runSensitivityAnalysis(MOCK_RESULTS, dominantWeights);
 
-      expect(result).toHaveLength(9);
+      expect(result).toHaveLength(10);
       // moat_architecture should have significant influence
       const moat = result.find(r => r.component === 'moat_architecture');
       expect(moat).toBeDefined();
@@ -155,7 +158,7 @@ describe('sensitivity-analysis', () => {
       const ranking = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS);
       const drivers = identifyKeyDrivers(ranking, 0.80);
 
-      expect(drivers.length).toBeLessThanOrEqual(9);
+      expect(drivers.length).toBeLessThanOrEqual(10);
       expect(drivers.length).toBeGreaterThan(0);
 
       const cumulative = drivers.reduce((acc, d) => acc + d.influence_score, 0);
@@ -174,7 +177,7 @@ describe('sensitivity-analysis', () => {
       const ranking = runSensitivityAnalysis(MOCK_RESULTS, LEGACY_WEIGHTS);
       const drivers = identifyKeyDrivers(ranking, 1.0);
 
-      expect(drivers.length).toBe(9);
+      expect(drivers.length).toBe(10);
     });
 
     it('returns empty array for null ranking', () => {
