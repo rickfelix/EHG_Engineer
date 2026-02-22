@@ -9,7 +9,8 @@ import { describe, test, expect, vi } from 'vitest';
 import { validateSchemaShape, getVentureProgression } from '../../../lib/eva/contract-validator.js';
 
 // ---------------------------------------------------------------------------
-// validateSchemaShape
+// validateSchemaShape (SD-009 signature: { stageNumber, artifactData, outputSchema })
+// Returns { passed: boolean, mismatches: Array<{field, expectedType, actualType, category}> }
 // ---------------------------------------------------------------------------
 
 describe('validateSchemaShape', () => {
@@ -20,83 +21,87 @@ describe('validateSchemaShape', () => {
     { field: 'metadata', type: 'object', required: false },
   ];
 
-  test('returns empty array for valid artifact with all required fields', () => {
+  test('returns passed:true for valid artifact with all required fields', () => {
     const data = { description: 'A venture idea', score: 85, tags: ['ai'], metadata: {} };
-    const violations = validateSchemaShape(data, sampleSchema);
-    expect(violations).toEqual([]);
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: data, outputSchema: sampleSchema });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
-  test('returns violation for missing required field', () => {
+  test('returns mismatch for missing required field', () => {
     const data = { score: 85 }; // missing description
-    const violations = validateSchemaShape(data, sampleSchema);
-    expect(violations).toHaveLength(1);
-    expect(violations[0]).toEqual({
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: data, outputSchema: sampleSchema });
+    expect(result.passed).toBe(false);
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toEqual({
       field: 'description',
-      expected: 'string',
-      actual: 'missing',
-      violation: 'missing_required_field',
+      expectedType: 'string',
+      actualType: 'undefined',
+      category: 'missing_field',
     });
   });
 
-  test('returns violation for type mismatch', () => {
+  test('returns mismatch for type mismatch', () => {
     const data = { description: 123, score: 85 }; // description should be string
-    const violations = validateSchemaShape(data, sampleSchema);
-    expect(violations).toHaveLength(1);
-    expect(violations[0]).toEqual({
-      field: 'description',
-      expected: 'string',
-      actual: 'number',
-      violation: 'type_mismatch',
-    });
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: data, outputSchema: sampleSchema });
+    expect(result.passed).toBe(false);
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0].field).toBe('description');
+    expect(result.mismatches[0].category).toBe('type_mismatch');
   });
 
-  test('does not report violations for extra fields not in schema', () => {
+  test('does not report mismatches for extra fields not in schema', () => {
     const data = { description: 'Test', score: 85, extraField: 'bonus' };
-    const violations = validateSchemaShape(data, sampleSchema);
-    expect(violations).toEqual([]);
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: data, outputSchema: sampleSchema });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
-  test('does not report violations for missing optional fields', () => {
+  test('does not report mismatches for missing optional fields', () => {
     const data = { description: 'Test', score: 85 }; // tags and metadata missing but optional
-    const violations = validateSchemaShape(data, sampleSchema);
-    expect(violations).toEqual([]);
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: data, outputSchema: sampleSchema });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
-  test('returns all required field violations for null artifact data', () => {
-    const violations = validateSchemaShape(null, sampleSchema);
-    expect(violations).toHaveLength(2); // description and score are required
-    expect(violations[0].field).toBe('description');
-    expect(violations[1].field).toBe('score');
+  test('returns passed:true for null artifact data', () => {
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: null, outputSchema: sampleSchema });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
-  test('returns all required field violations for empty artifact data', () => {
-    const violations = validateSchemaShape({}, sampleSchema);
-    expect(violations).toHaveLength(2);
-    violations.forEach(v => expect(v.violation).toBe('missing_required_field'));
+  test('returns mismatches for empty artifact data missing required fields', () => {
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: {}, outputSchema: sampleSchema });
+    expect(result.passed).toBe(false);
+    expect(result.mismatches).toHaveLength(2);
+    result.mismatches.forEach(m => expect(m.category).toBe('missing_field'));
   });
 
-  test('returns empty array when outputSchema is empty', () => {
-    const violations = validateSchemaShape({ description: 'Test' }, []);
-    expect(violations).toEqual([]);
+  test('returns passed:true when outputSchema is empty', () => {
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: { description: 'Test' }, outputSchema: [] });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
-  test('returns empty array when outputSchema is null', () => {
-    const violations = validateSchemaShape({ description: 'Test' }, null);
-    expect(violations).toEqual([]);
+  test('returns passed:true when outputSchema is null', () => {
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: { description: 'Test' }, outputSchema: null });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
   test('skips type check for fields with type "any"', () => {
     const schema = [{ field: 'data', type: 'any', required: true }];
-    const violations = validateSchemaShape({ data: 42 }, schema);
-    expect(violations).toEqual([]);
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: { data: 42 }, outputSchema: schema });
+    expect(result.passed).toBe(true);
+    expect(result.mismatches).toEqual([]);
   });
 
   test('detects array type correctly', () => {
     const schema = [{ field: 'items', type: 'array', required: true }];
-    const violations = validateSchemaShape({ items: 'not-an-array' }, schema);
-    expect(violations).toHaveLength(1);
-    expect(violations[0].violation).toBe('type_mismatch');
-    expect(violations[0].actual).toBe('string');
+    const result = validateSchemaShape({ stageNumber: 1, artifactData: { items: 'not-an-array' }, outputSchema: schema });
+    expect(result.passed).toBe(false);
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0].category).toBe('type_mismatch');
   });
 });
 
