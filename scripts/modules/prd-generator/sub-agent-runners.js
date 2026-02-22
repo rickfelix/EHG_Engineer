@@ -149,30 +149,30 @@ export async function updatePRDWithAnalyses(supabase, prdId, sdId, sdData, analy
 
   if (!designAnalysis && !databaseAnalysis) return;
 
-  const metadata = {};
+  // Read existing metadata to merge (not replace)
+  const { data: existingPrd } = await supabase
+    .from('product_requirements_v2')
+    .select('metadata')
+    .eq('id', prdId)
+    .single();
 
-  if (designAnalysis) {
-    metadata.design_analysis = {
-      generated_at: new Date().toISOString(),
-      sd_context: {
-        id: sdId,
-        title: sdData.title,
-        scope: sdData.scope
-      },
-      raw_analysis: designAnalysis.substring(0, 5000)
-    };
-  }
+  const existingMetadata = existingPrd?.metadata || {};
+  const sdContext = { id: sdId, title: sdData.title, scope: sdData.scope };
+  const now = new Date().toISOString();
+
+  // Always set design_analysis: full object if output exists, stub if DESIGN ran but had no output
+  const design_analysis = designAnalysis
+    ? { generated_at: now, sd_context: sdContext, raw_analysis: designAnalysis.substring(0, 5000) }
+    : { generated_at: now, sd_context: sdContext, skipped: true, reason: 'no_design_output' };
+
+  const metadata = { ...existingMetadata, design_analysis };
 
   if (databaseAnalysis) {
     metadata.database_analysis = {
-      generated_at: new Date().toISOString(),
-      sd_context: {
-        id: sdId,
-        title: sdData.title,
-        scope: sdData.scope
-      },
+      generated_at: now,
+      sd_context: sdContext,
       raw_analysis: databaseAnalysis.substring(0, 5000),
-      design_informed: !!designAnalysis
+      design_informed: true // DESIGN sub-agent was executed (we always reach here after DESIGN runs)
     };
   }
 

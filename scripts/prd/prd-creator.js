@@ -347,30 +347,30 @@ This PRD defines the technical requirements and implementation approach for ${sd
 export async function updatePRDWithAnalyses(supabase, prdId, sdId, existingMetadata, analyses, sdData) {
   const { designAnalysis, databaseAnalysis } = analyses;
 
+  const now = new Date().toISOString();
+  const sdContext = { id: sdId, title: sdData.title, scope: sdData.scope };
+
+  // Always set design_analysis: full object if output exists, stub if DESIGN ran but had no output
+  const design_analysis = designAnalysis
+    ? { generated_at: now, sd_context: sdContext, raw_analysis: designAnalysis.substring(0, 5000) }
+    : { generated_at: now, sd_context: sdContext, skipped: true, reason: 'no_design_output' };
+
+  const database_analysis = databaseAnalysis
+    ? {
+      generated_at: now,
+      sd_context: sdContext,
+      raw_analysis: databaseAnalysis.substring(0, 5000),
+      design_informed: true // DESIGN sub-agent was executed (always runs before DATABASE)
+    }
+    : null;
+
   const { error } = await supabase
     .from('product_requirements_v2')
     .update({
       metadata: {
         ...(existingMetadata || {}),
-        design_analysis: designAnalysis ? {
-          generated_at: new Date().toISOString(),
-          sd_context: {
-            id: sdId,
-            title: sdData.title,
-            scope: sdData.scope
-          },
-          raw_analysis: designAnalysis.substring(0, 5000)
-        } : null,
-        database_analysis: databaseAnalysis ? {
-          generated_at: new Date().toISOString(),
-          sd_context: {
-            id: sdId,
-            title: sdData.title,
-            scope: sdData.scope
-          },
-          raw_analysis: databaseAnalysis.substring(0, 5000),
-          design_informed: !!designAnalysis
-        } : null
+        design_analysis,
+        ...(database_analysis ? { database_analysis } : {})
       }
     })
     .eq('id', prdId);
