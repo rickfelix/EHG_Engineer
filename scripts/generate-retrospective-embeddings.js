@@ -21,7 +21,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getEmbeddingClient } from '../lib/llm/client-factory.js';
 import fs from 'fs';
 // import path from 'path'; // Currently unused - available for future path utilities
 import dotenv from 'dotenv';
@@ -32,10 +32,9 @@ dotenv.config();
 // Configuration
 // ============================================================================
 
-const BATCH_SIZE = 5; // Process 5 at a time (OpenAI rate limit: 3000 req/min)
+const BATCH_SIZE = 5; // Process 5 at a time (rate limit: 3000 req/min)
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000; // Start with 1 second
-const EMBEDDING_MODEL = 'text-embedding-3-small'; // 1536 dimensions, $0.02/1M tokens
 const PROGRESS_FILE = 'embedding-generation-progress.json';
 
 // Initialize clients
@@ -44,9 +43,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const embedder = getEmbeddingClient();
 
 // ============================================================================
 // Helper Functions
@@ -105,16 +102,14 @@ function buildEmbeddingContent(retrospective) {
  */
 async function generateEmbeddingWithRetry(content, retries = 0) {
   try {
-    const response = await openai.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: content,
-      encoding_format: 'float'
-    });
+    const [embedding] = await embedder.embed(content);
 
+    // Estimate tokens/cost (factory doesn't return usage stats)
+    const estimatedTokens = Math.ceil(content.length / 4);
     return {
-      embedding: response.data[0].embedding,
-      tokens: response.usage.total_tokens,
-      cost: (response.usage.total_tokens / 1000000) * 0.02 // $0.02 per 1M tokens
+      embedding,
+      tokens: estimatedTokens,
+      cost: (estimatedTokens / 1000000) * 0.02 // $0.02 per 1M tokens
     };
   } catch (error) {
     if (retries < MAX_RETRIES) {
@@ -228,7 +223,7 @@ async function fetchRetrospectivesNeedingEmbeddings(force, specificId, progress)
 async function main() {
   console.log('🚀 Retrospective Embedding Generation');
   console.log('═'.repeat(70));
-  console.log(`Model: ${EMBEDDING_MODEL}`);
+  console.log(`Model: ${embedder.model} (${embedder.provider})`);
   console.log(`Batch Size: ${BATCH_SIZE}`);
   console.log(`Max Retries: ${MAX_RETRIES}`);
   console.log('');
@@ -251,13 +246,6 @@ async function main() {
   const progress = loadProgress();
   if (progress.processedIds.length > 0) {
     console.log(`📂 Resuming from previous run: ${progress.successCount} success, ${progress.errorCount} errors`);
-  }
-
-  // Verify OpenAI API key
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY environment variable not set');
-    console.error('   Add OPENAI_API_KEY to your .env file');
-    process.exit(1);
   }
 
   // Fetch retrospectives needing embeddings

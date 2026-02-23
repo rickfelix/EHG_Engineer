@@ -6,14 +6,12 @@
  */
 
 import 'dotenv/config';
-import OpenAI from 'openai';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 
 async function testDirectAnalysis() {
   console.log('🧪 Testing Direct OpenAI Analysis...\n');
-  
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
+
+  const openai = getLLMClient({ purpose: 'validation' });
   
   const prompt = 'Fix the dark mode toggle in the dashboard that shows dark but displays light';
   
@@ -100,10 +98,8 @@ Consider:
 // Alternative test without function calling
 async function testSimpleAnalysis() {
   console.log('\n🧪 Testing Simple Analysis (no function calling)...\n');
-  
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
+
+  const openai = getLLMClient({ purpose: 'validation' });
   
   const prompt = 'Fix the dark mode toggle in the dashboard that shows dark but displays light';
   

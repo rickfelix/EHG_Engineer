@@ -23,7 +23,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getEmbeddingClient } from '../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -32,7 +32,6 @@ dotenv.config();
 // Configuration
 // ============================================================================
 
-const EMBEDDING_MODEL = 'text-embedding-3-small'; // 1536 dimensions, $0.02/1M tokens
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000; // Start with 1 second
 const DEFAULT_BATCH_SIZE = 10;
@@ -44,9 +43,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const embedder = getEmbeddingClient();
 
 // ============================================================================
 // Helper Functions
@@ -58,12 +55,8 @@ const openai = new OpenAI({
 async function generateEmbeddingWithRetry(text, retries = MAX_RETRIES) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: text
-      });
-
-      return response.data[0].embedding;
+      const [embedding] = await embedder.embed(text);
+      return embedding;
 
     } catch (error) {
       if (attempt === retries) {
@@ -149,13 +142,6 @@ async function main() {
 
   // Parse options
   const options = parseArgs();
-
-  // Check OpenAI API key
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY not found in environment variables');
-    console.error('   Please set OPENAI_API_KEY in your .env file');
-    process.exit(1);
-  }
 
   // Build query
   let query = supabase

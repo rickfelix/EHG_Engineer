@@ -18,8 +18,8 @@
  * @version 1.0.0
  */
 
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 
 dotenv.config();
@@ -247,7 +247,6 @@ NO additional text or markdown - ONLY the JSON object.`;
 Analyze the SD and generate appropriate personas based on the target application and who will be affected by this work.`;
 
   const response = await openai.chat.completions.create({
-    model: MODEL,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
@@ -387,22 +386,18 @@ async function main() {
   let tokenUsage = 0;
 
   // Try AI generation first
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const aiResult = await generatePersonasWithAI(sdData, openai);
-      personas = aiResult.personas;
-      chairmanPerspective = aiResult.chairmanPerspective;
-      tokenUsage = aiResult.tokenUsage;
-      source = 'ai';
-      console.log(`   AI generated ${personas.length} personas`);
-      console.log(`   Token usage: ${tokenUsage}`);
-    } catch (aiError) {
-      console.warn(`   AI generation failed: ${aiError.message}`);
-      console.log('   Falling back to default personas...');
-    }
-  } else {
-    console.log('   OPENAI_API_KEY not set, using defaults');
+  try {
+    const llm = getLLMClient({ purpose: 'fast' });
+    const aiResult = await generatePersonasWithAI(sdData, llm);
+    personas = aiResult.personas;
+    chairmanPerspective = aiResult.chairmanPerspective;
+    tokenUsage = aiResult.tokenUsage;
+    source = 'ai';
+    console.log(`   AI generated ${personas.length} personas`);
+    console.log(`   Token usage: ${tokenUsage}`);
+  } catch (aiError) {
+    console.warn(`   AI generation failed: ${aiError.message}`);
+    console.log('   Falling back to default personas...');
   }
 
   // Fallback to defaults if AI failed or unavailable

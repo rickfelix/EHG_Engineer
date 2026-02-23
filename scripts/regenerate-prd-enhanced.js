@@ -9,14 +9,14 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = getLLMClient({ purpose: 'generation' });
 
 const SD_ID = process.argv[2] || 'SD-VISION-V2-001';
 

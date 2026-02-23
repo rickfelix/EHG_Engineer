@@ -7,7 +7,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import OpenAI from 'openai';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 
 import DatabaseLoader from '../src/services/database-loader.js';
 import LEOVersionDetector from '../src/services/version-detector.js';
@@ -35,22 +35,23 @@ export const dbLoader = new DatabaseLoader();
 export const versionDetector = new LEOVersionDetector();
 export const realtimeDashboard = new RealtimeDashboard(dbLoader);
 
-// Initialize OpenAI if API key is provided
+// Initialize LLM client if any API key is provided
 export let openai = null;
 export let directiveEnhancer = null;
 
-export function initializeOpenAI() {
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
-    console.log('✅ OpenAI integration enabled');
+export function initializeLLM() {
+  if (process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY) {
+    openai = getLLMClient({ purpose: 'generation' });
+    console.log('✅ LLM integration enabled (via client-factory)');
 
     // Initialize Directive Enhancement Service
     directiveEnhancer = new DirectiveEnhancer(openai, dbLoader);
     console.log('✅ Directive Enhancement Service enabled');
   } else {
-    console.log('⚠️ OpenAI API key not found - AI features will use fallback mode');
+    console.log('⚠️ No LLM API key found - AI features will use fallback mode');
   }
   return { openai, directiveEnhancer };
 }
+
+// Backward-compatible alias
+export const initializeOpenAI = initializeLLM;

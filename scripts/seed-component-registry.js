@@ -6,7 +6,7 @@
  *
  * Features:
  * - 12+ component definitions across 6 registries
- * - OpenAI text-embedding-3-small embeddings for semantic search
+ * - Centralized LLM factory embeddings for semantic search (provider-agnostic)
  * - Explainability metadata (primary_use_case, bundle_size_kb, alternatives)
  * - Retry logic with exponential backoff
  * - Cost estimation and progress tracking
@@ -21,7 +21,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getEmbeddingClient } from '../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,10 +30,9 @@ dotenv.config();
 // Configuration
 // ============================================================================
 
-const EMBEDDING_MODEL = 'text-embedding-3-small'; // 1536 dimensions, $0.02/1M tokens
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
-const RATE_LIMIT_DELAY_MS = 500; // 500ms between OpenAI API calls
+const RATE_LIMIT_DELAY_MS = 500; // 500ms between embedding API calls
 
 // Initialize clients
 const supabase = createClient(
@@ -41,9 +40,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const embedder = getEmbeddingClient();
 
 // ============================================================================
 // Component Definitions
@@ -474,12 +471,9 @@ const transcription = await openai.audio.transcriptions.create({
 async function generateEmbeddingWithRetry(text, retries = MAX_RETRIES) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: text
-      });
+      const [embedding] = await embedder.embed(text);
 
-      return response.data[0].embedding;
+      return embedding;
 
     } catch (error) {
       if (attempt === retries) {
@@ -539,13 +533,6 @@ async function main() {
   console.log('='.repeat(70));
 
   const options = parseArgs();
-
-  // Check OpenAI API key
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY not found in environment variables');
-    console.error('   Please set OPENAI_API_KEY in your .env file');
-    process.exit(1);
-  }
 
   // Check Supabase connection
   const { error: connectionError } = await supabase
