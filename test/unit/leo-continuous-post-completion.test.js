@@ -41,6 +41,7 @@ describe('leo-continuous Post-Completion Integration', () => {
       const sequence = getPostCompletionSequence('orchestrator');
 
       expect(requirements.sequenceType).toBe('minimal');
+      expect(requirements.heal).toBe(false);
       expect(sequence.length).toBe(1);
       expect(sequence[0]).toBe('ship');
     });
@@ -72,13 +73,13 @@ describe('leo-continuous Post-Completion Integration', () => {
       }
     });
 
-    it('should have document after ship', () => {
+    it('should have heal after ship', () => {
       const sequence = getPostCompletionSequence('feature');
 
-      if (sequence.includes('document')) {
-        const documentIdx = sequence.indexOf('document');
+      if (sequence.includes('heal')) {
+        const healIdx = sequence.indexOf('heal');
         const shipIdx = sequence.indexOf('ship');
-        expect(documentIdx).toBeGreaterThan(shipIdx);
+        expect(healIdx).toBeGreaterThan(shipIdx);
       }
     });
 
@@ -88,6 +89,16 @@ describe('leo-continuous Post-Completion Integration', () => {
       if (sequence.includes('learn')) {
         const learnIdx = sequence.indexOf('learn');
         expect(learnIdx).toBe(sequence.length - 1);
+      }
+    });
+
+    it('should have heal before learn', () => {
+      const sequence = getPostCompletionSequence('feature');
+
+      if (sequence.includes('heal') && sequence.includes('learn')) {
+        const healIdx = sequence.indexOf('heal');
+        const learnIdx = sequence.indexOf('learn');
+        expect(healIdx).toBeLessThan(learnIdx);
       }
     });
   });

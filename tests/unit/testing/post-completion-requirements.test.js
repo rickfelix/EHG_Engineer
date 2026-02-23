@@ -13,6 +13,7 @@ import {
   FULL_SEQUENCE_TYPES,
   MINIMAL_SEQUENCE_TYPES,
   LEARN_SKIP_SOURCES,
+  HEAL_SKIP_SOURCES,
   SD_TYPE_DOC_DIRECTORIES
 } from '../../../lib/utils/post-completion-requirements.js';
 
@@ -146,20 +147,20 @@ describe('getPostCompletionSequence() - Vision QA step', () => {
     expect(seq).toContain('document'); // infrastructure now gets document
   });
 
-  it('should produce full sequence: restart -> vision-qa -> document -> ship -> learn', () => {
+  it('should produce full sequence: restart -> vision-qa -> document -> ship -> heal -> learn', () => {
     const seq = getPostCompletionSequence('feature', {
       hasUIChanges: true,
       autoProceed: true
     });
-    expect(seq).toEqual(['restart', 'vision-qa', 'document', 'ship', 'learn']);
+    expect(seq).toEqual(['restart', 'vision-qa', 'document', 'ship', 'heal', 'learn']);
   });
 
-  it('should produce sequence without vision-qa: restart -> document -> ship -> learn', () => {
+  it('should produce sequence without vision-qa: restart -> document -> ship -> heal -> learn', () => {
     const seq = getPostCompletionSequence('feature', {
       hasUIChanges: false,
       autoProceed: true
     });
-    expect(seq).toEqual(['restart', 'document', 'ship', 'learn']);
+    expect(seq).toEqual(['restart', 'document', 'ship', 'heal', 'learn']);
   });
 
   it('should produce sequence with document for infrastructure', () => {
@@ -259,6 +260,12 @@ describe('Exported constants', () => {
     expect(Array.isArray(LEARN_SKIP_SOURCES)).toBe(true);
     expect(LEARN_SKIP_SOURCES).toContain('learn');
     expect(LEARN_SKIP_SOURCES).toContain('quick-fix');
+  });
+
+  it('should export HEAL_SKIP_SOURCES as array', () => {
+    expect(Array.isArray(HEAL_SKIP_SOURCES)).toBe(true);
+    expect(HEAL_SKIP_SOURCES).toContain('heal');
+    expect(HEAL_SKIP_SOURCES).toContain('corrective');
   });
 
   it('should export SD_TYPE_DOC_DIRECTORIES mapping', () => {

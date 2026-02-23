@@ -402,7 +402,7 @@
     "eslint-plugin-boundaries": "^5.1.0",
     "eslint-plugin-playwright": "^2.3.0",
     "husky": "^9.1.7",
-    "minimatch": "^10.1.2",
+    "minimatch": "^10.2.2",
     "pg": "^8.18.0",
     "puppeteer": "^24.23.0",
     "typescript": "^5.9.2",
