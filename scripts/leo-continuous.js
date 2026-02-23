@@ -135,6 +135,7 @@ async function executePostCompletionCommand(command) {
     const commandMap = {
       'document': ['node', ['scripts/execute-skill.js', 'document']],
       'ship': ['node', ['scripts/execute-skill.js', 'ship']],
+      'heal': ['node', ['scripts/eva/heal-command.mjs', 'sd', 'query', '--persist']],
       'learn': ['node', ['scripts/modules/learning/index.js', 'process']],
       'restart': ['node', ['scripts/cross-platform-run.js', 'leo-stack', 'restart']],
       'vision-qa': ['node', ['scripts/execute-vision-qa.js']]
@@ -230,6 +231,7 @@ async function triggerPostCompletionSequence(sd) {
       visionQA: requirements.visionQA,
       ship: requirements.ship,
       document: requirements.document,
+      heal: requirements.heal,
       learn: requirements.learn
     }
   };

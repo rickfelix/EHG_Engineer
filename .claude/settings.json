@@ -4,7 +4,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\statusline-context-tracker.ps1"
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/statusline-context-tracker.ps1"
   },
   "hooks": {
     "PreCompact": [
@@ -12,7 +12,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\scripts\\hooks\\precompact-snapshot.ps1",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/precompact-snapshot.ps1",
             "timeout": 10
           }
         ]
@@ -33,7 +33,7 @@
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\scripts\\hooks\\session-start-loader.ps1",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-start-loader.ps1",
             "timeout": 5
           },
           {
@@ -125,7 +125,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State idle",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/set-activity-state.ps1 -State idle",
             "timeout": 2
           },
           {
@@ -146,7 +146,7 @@
           },
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/set-activity-state.ps1 -State running",
             "timeout": 2
           },
           {
@@ -172,7 +172,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/set-activity-state.ps1 -State running",
             "timeout": 2
           }
         ]

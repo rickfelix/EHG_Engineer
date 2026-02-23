@@ -74,7 +74,7 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     }
   }
 
-  // Check /learn - Recommended for code-producing SDs
+  // Check /learn, /heal, /document - Recommended for code-producing SDs
   const codeProducingTypes = ['feature', 'bugfix', 'security', 'enhancement', 'performance'];
   const isCodeProducing = codeProducingTypes.includes(sd.sd_type);
 
@@ -82,6 +82,22 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     const hasLearn = retros && retros.length > 0;
     if (!hasLearn) {
       missingRecommended.push('LEARN');
+    }
+
+    // Check /heal - Recommended for code-producing SDs (skip for heal/corrective sources)
+    const healSkipSources = ['heal', 'corrective'];
+    const sdSource = (sd.source || '').toLowerCase();
+    if (!healSkipSources.includes(sdSource)) {
+      const { data: healScores } = await supabase
+        .from('eva_heal_scores')
+        .select('id')
+        .eq('sd_key', sdKey)
+        .limit(1);
+
+      const hasHeal = healScores && healScores.length > 0;
+      if (!hasHeal) {
+        missingRecommended.push('HEAL');
+      }
     }
 
     // Check /document - Recommended for all SD types except orchestrator
@@ -127,6 +143,9 @@ export async function validatePostCompletion(supabase, sd, sdKey) {
     console.error(`   Missing recommended: ${missingRecommended.join(', ')}`);
     if (missingRecommended.includes('LEARN')) {
       console.error('   Consider running /learn to capture insights from this SD');
+    }
+    if (missingRecommended.includes('HEAL')) {
+      console.error('   Consider running /heal sd to verify SD promises');
     }
     if (missingRecommended.includes('DOCUMENT')) {
       console.error('   Consider running /document to update documentation');

@@ -15,6 +15,7 @@ import {
   FULL_SEQUENCE_TYPES,
   MINIMAL_SEQUENCE_TYPES,
   LEARN_SKIP_SOURCES,
+  HEAL_SKIP_SOURCES,
   SD_TYPE_DOC_DIRECTORIES
 } from '../../lib/utils/post-completion-requirements.js';
 
@@ -27,6 +28,7 @@ describe('Post-Completion Requirements', () => {
         expect(reqs.restart).toBe(true);
         expect(reqs.ship).toBe(true);
         expect(reqs.document).toBe(true);
+        expect(reqs.heal).toBe(true);
         expect(reqs.learn).toBe(true);
         expect(reqs.sequenceType).toBe('full');
       });
@@ -152,6 +154,35 @@ describe('Post-Completion Requirements', () => {
       });
     });
 
+    describe('Heal skip based on source', () => {
+      it('should skip heal for source=heal', () => {
+        const reqs = getPostCompletionRequirements('feature', { source: 'heal' });
+
+        expect(reqs.heal).toBe(false);
+        expect(reqs.skipHealReason).toContain('heal');
+      });
+
+      it('should skip heal for source=corrective', () => {
+        const reqs = getPostCompletionRequirements('feature', { source: 'corrective' });
+
+        expect(reqs.heal).toBe(false);
+        expect(reqs.skipHealReason).toContain('corrective');
+      });
+
+      it('should NOT skip heal for normal sources', () => {
+        const reqs = getPostCompletionRequirements('feature', { source: '' });
+
+        expect(reqs.heal).toBe(true);
+        expect(reqs.skipHealReason).toBeNull();
+      });
+
+      it('should NOT include heal for minimal sequence types', () => {
+        const reqs = getPostCompletionRequirements('infrastructure');
+
+        expect(reqs.heal).toBe(false);
+      });
+    });
+
     describe('Default behavior', () => {
       it('should default to feature type when not specified', () => {
         const reqs = getPostCompletionRequirements(null);
@@ -173,7 +204,7 @@ describe('Post-Completion Requirements', () => {
     it('should return correct sequence for feature SD', () => {
       const sequence = getPostCompletionSequence('feature');
 
-      expect(sequence).toEqual(['restart', 'document', 'ship', 'learn']);
+      expect(sequence).toEqual(['restart', 'document', 'ship', 'heal', 'learn']);
     });
 
     it('should return sequence with document for infrastructure SD', () => {
@@ -189,17 +220,19 @@ describe('Post-Completion Requirements', () => {
       expect(sequence).not.toContain('learn');
     });
 
-    it('should return correct order: restart -> document -> ship -> learn', () => {
+    it('should return correct order: restart -> document -> ship -> heal -> learn', () => {
       const sequence = getPostCompletionSequence('feature');
 
       const restartIndex = sequence.indexOf('restart');
       const documentIndex = sequence.indexOf('document');
       const shipIndex = sequence.indexOf('ship');
+      const healIndex = sequence.indexOf('heal');
       const learnIndex = sequence.indexOf('learn');
 
       expect(restartIndex).toBeLessThan(documentIndex);
       expect(documentIndex).toBeLessThan(shipIndex);
-      expect(shipIndex).toBeLessThan(learnIndex);
+      expect(shipIndex).toBeLessThan(healIndex);
+      expect(healIndex).toBeLessThan(learnIndex);
     });
   });
 
@@ -292,6 +325,12 @@ describe('Post-Completion Requirements', () => {
       expect(LEARN_SKIP_SOURCES).toContain('learn');
       expect(LEARN_SKIP_SOURCES).toContain('quick-fix');
       expect(LEARN_SKIP_SOURCES).toContain('escalation');
+    });
+
+    it('should export HEAL_SKIP_SOURCES array', () => {
+      expect(Array.isArray(HEAL_SKIP_SOURCES)).toBe(true);
+      expect(HEAL_SKIP_SOURCES).toContain('heal');
+      expect(HEAL_SKIP_SOURCES).toContain('corrective');
     });
 
     it('should export SD_TYPE_DOC_DIRECTORIES mapping', () => {
