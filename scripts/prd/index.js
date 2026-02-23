@@ -181,12 +181,28 @@ export async function addPRDToDatabase(sdId, prdTitle) {
       console.log(`   Test Scenarios: ${llmContent.test_scenarios?.length || 0}`);
       console.log(`   Risks Identified: ${llmContent.risks?.length || 0}`);
     } catch (error) {
-      if (error.message.includes('already exists')) {
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: Handle blocking pre-validation with retry
+      if (error.code === 'PRD_PRE_VALIDATION_FAILED') {
+        console.warn('\n⚠️  PRD pre-validation blocked insertion. Retrying with warning flag...');
+        console.warn(`   Missing: ${error.validationResult?.missing?.join(', ') || 'none'}`);
+        console.warn(`   Low-quality: ${error.validationResult?.lowQuality?.join(', ') || 'none'}`);
+        try {
+          llmContent._preValidationOverride = true;
+          data = await createPRDWithValidatedContent(
+            supabase, prdId, sdId, sdIdValue, prdTitle, sdData, llmContent, stakeholderPersonas
+          );
+          console.log(`\n⚠️  PRD ${prdId} created with pre_validation_warning flag`);
+        } catch (retryError) {
+          console.error('Retry also failed:', retryError.message);
+          process.exit(1);
+        }
+      } else if (error.message.includes('already exists')) {
         console.log(`PRD ${prdId} already exists in database`);
+        process.exit(1);
       } else {
         console.error('Database insert error:', error.message);
+        process.exit(1);
       }
-      process.exit(1);
     }
 
     // Update PRD with sub-agent analyses metadata

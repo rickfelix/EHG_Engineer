@@ -35,6 +35,15 @@ const SCORE_THRESHOLD = 60;
 // Lookback window in days for recent scores
 const DEFAULT_LOOKBACK_DAYS = 30;
 
+// SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: SD-type-aware dimension exemptions
+// Dimensions that naturally score low for certain SD types and should not create VGAP patterns.
+// Key: SD type, Value: Set of dimension ID prefixes to exempt (e.g., 'V09' for strategic_governance_cascade)
+const SD_TYPE_EXEMPT_DIMENSIONS = {
+  infrastructure: new Set(['V09']),
+  fix:            new Set(['V09']),
+  documentation:  new Set(['V09']),
+};
+
 /**
  * Build a compact pattern_id from dimension ID that fits varchar(20).
  * e.g. "V01" -> "VGAP-V01" (8 chars)
@@ -97,6 +106,21 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
   let skipped = 0;
   let errors = 0;
 
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: Resolve SD types for dimension exemption checks
+  const sdTypeMap = {};
+  const uniqueSdIds = [...new Set(scores.map(s => s.sd_id).filter(Boolean))];
+  if (uniqueSdIds.length > 0) {
+    const { data: sdRows } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_type')
+      .in('id', uniqueSdIds);
+    if (sdRows) {
+      for (const row of sdRows) {
+        sdTypeMap[row.id] = row.sd_type;
+      }
+    }
+  }
+
   // Collect per-dimension aggregates across all score records
   const dimAggregates = {};
 
@@ -114,6 +138,17 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
         console.warn(`  ⚠️  Skipping malformed dimension "${dimId}": score=${dim.score}, name=${dim.name}`);
         skipped++;
         continue;
+      }
+
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: Skip exempt dimensions for this SD type
+      const sdType = sdTypeMap[scoreRecord.sd_id];
+      const exemptDims = sdType && SD_TYPE_EXEMPT_DIMENSIONS[sdType];
+      if (exemptDims) {
+        const dimPrefix = dimId.replace(/[^A-Z0-9]/gi, '').substring(0, 3);
+        if (exemptDims.has(dimPrefix)) {
+          skipped++;
+          continue;
+        }
       }
 
       if (dim.score >= SCORE_THRESHOLD) {
