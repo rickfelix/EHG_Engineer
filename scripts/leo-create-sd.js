@@ -381,7 +381,7 @@ async function createChild(parentKey, index = 0) {
  * @param {string|null} planPath - Optional explicit path to plan file
  * @param {boolean} skipConfirmation - Skip confirmation for auto-detected plans (CLI flag: --yes)
  */
-async function createFromPlan(planPath = null, skipConfirmation = false) {
+async function createFromPlan(planPath = null, skipConfirmation = false, overrides = {}) {
   console.log('\n📋 Creating SD from Claude Code plan file');
 
   // Step 1: Find plan file (auto-detect if no path provided)
@@ -419,12 +419,22 @@ async function createFromPlan(planPath = null, skipConfirmation = false) {
 
   const parsed = parsePlanFile(content);
 
+  // Apply overrides from --type and --title flags
+  if (overrides.typeOverride) {
+    console.log(`   Type override: ${overrides.typeOverride} (was: ${parsed.type})`);
+    parsed.type = overrides.typeOverride;
+  }
+  if (overrides.titleOverride) {
+    console.log(`   Title override: ${overrides.titleOverride} (was: ${parsed.title})`);
+    parsed.title = overrides.titleOverride;
+  }
+
   // Show parsed summary
   console.log('\n   ═══════════════════════════════════════════');
   console.log('   PLAN SUMMARY');
   console.log('   ═══════════════════════════════════════════');
   console.log(`   Title: ${parsed.title || '(untitled)'}`);
-  console.log(`   Type (inferred): ${parsed.type}`);
+  console.log(`   Type${overrides.typeOverride ? '' : ' (inferred)'}: ${parsed.type}`);
   console.log(`   Goal: ${parsed.summary ? parsed.summary.substring(0, 80) + '...' : '(none found)'}`);
   console.log(`   Checklist items: ${parsed.steps.length}`);
   console.log(`   Files to modify: ${parsed.files.length}`);
@@ -1173,7 +1183,7 @@ Usage:
   node scripts/leo-create-sd.js --from-uat <test-id>
   node scripts/leo-create-sd.js --from-learn <pattern-id>
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
-  node scripts/leo-create-sd.js --from-plan [path]
+  node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js --child <parent-key> [index]
   node scripts/leo-create-sd.js <source> <type> "<title>"
 
@@ -1183,6 +1193,8 @@ Types: ${Object.keys(SD_TYPES).join(', ')}
 Flags:
   --force, -f        Force SD creation even if key has QF- prefix (normally redirects to quick-fix)
   --yes, -y          Skip confirmation for auto-detected plans
+  --type <type>      Override inferred SD type when using --from-plan
+  --title "<title>"  Override extracted title when using --from-plan
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
   --help             Show this help message
 
@@ -1213,6 +1225,8 @@ Examples:
   node scripts/leo-create-sd.js --from-plan                              # Auto-detect most recent plan
   node scripts/leo-create-sd.js --from-plan --yes                        # Auto-detect without confirmation
   node scripts/leo-create-sd.js --from-plan ~/.claude/plans/my-plan.md   # Use specific plan
+  node scripts/leo-create-sd.js --from-plan --type feature --yes         # Override inferred type
+  node scripts/leo-create-sd.js --from-plan --type feature --title "My SD" --yes  # Override both
   node scripts/leo-create-sd.js --child SD-LEO-FEAT-001 0
   node scripts/leo-create-sd.js LEO fix "Login button not working"
   node scripts/leo-create-sd.js QF bugfix "Quick fix" --force            # Force QF- prefix as full SD
@@ -1233,13 +1247,39 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
     } else if (args[0] === '--from-plan') {
       // Check for --yes flag (skip confirmation for auto-detect)
       const hasYesFlag = args.includes('--yes') || args.includes('-y');
-      // Path is any arg that isn't a flag
-      const planPath = args.slice(1).find(arg => !arg.startsWith('-')) || null;
-      await createFromPlan(planPath, hasYesFlag);
+      // Parse --type override (e.g., --from-plan --type feature)
+      const typeIdx = args.indexOf('--type');
+      const typeOverride = typeIdx !== -1 ? args[typeIdx + 1] : null;
+      // Parse --title override (e.g., --from-plan --title "My Title")
+      const titleIdx = args.indexOf('--title');
+      const titleOverride = titleIdx !== -1 ? args[titleIdx + 1] : null;
+      // Path is any arg that isn't a flag or a flag's value
+      const flagValuePositions = new Set(
+        [typeIdx !== -1 ? typeIdx + 1 : -1, titleIdx !== -1 ? titleIdx + 1 : -1].filter(i => i > 0)
+      );
+      const knownPlanFlags = new Set(['--yes', '-y', '--type', '--title', '--from-plan']);
+      const planPath = args.find((arg, i) =>
+        i > 0 && !arg.startsWith('-') && !flagValuePositions.has(i) && !knownPlanFlags.has(arg)
+      ) || null;
+      await createFromPlan(planPath, hasYesFlag, { typeOverride, titleOverride });
     } else if (args[0] === '--child') {
       await createChild(args[1], parseInt(args[2] || '0', 10));
     } else {
       // Direct creation: <source> <type> "<title>"
+      // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)
+      const knownDirectFlags = new Set(['--force', '-f', '--venture']);
+      const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
+      if (unknownFlags.length > 0) {
+        console.error('\n❌ Unknown flag(s): ' + unknownFlags.join(', '));
+        console.error('   Direct creation supports: <source> <type> "<title>" [--force] [--venture <name>]');
+        console.error('   Did you mean one of these?');
+        console.error('     --from-plan [path] [--type <type>] [--title "<title>"]');
+        console.error('     --from-feedback <id>');
+        console.error('     --from-learn <pattern-id>');
+        console.error('     --from-uat <test-id>');
+        process.exit(1);
+      }
+
       const [source, type, ...titleParts] = args;
       const title = titleParts.join(' ');
 
