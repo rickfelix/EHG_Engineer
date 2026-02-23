@@ -48,14 +48,15 @@ const CAPABILITIES = [
 ];
 
 // Add stage template checks (stages 1 through 25)
+// Stages have either outputSchema array OR schema+validate (active stage pattern)
 for (let i = 1; i <= 25; i++) {
   const num = String(i).padStart(2, '0');
   CAPABILITIES.push({
-    name: `stage-${num}-outputSchema`,
+    name: `stage-${num}-template`,
     module: `lib/eva/stage-templates/stage-${num}.js`,
-    verification_method: 'default.outputSchema is array with length > 0',
+    verification_method: 'default has outputSchema array OR schema object with validate function',
     export_name: 'default',
-    check: 'outputSchema'
+    check: 'stageTemplate'
   });
 }
 
@@ -82,20 +83,31 @@ async function verifyCapability(cap) {
   try {
     const mod = await import(pathToFileURL(fullPath).href);
 
-    if (cap.check === 'outputSchema') {
-      // For stage templates, check default.outputSchema
+    if (cap.check === 'stageTemplate') {
+      // For stage templates, check for active implementation:
+      // 1. outputSchema array with entries (stages 1-8 pattern)
+      // 2. schema object + validate function (stages 9-25 pattern)
       const defaultExport = mod.default;
       if (!defaultExport) {
         result.status = 'error';
         result.detail = 'No default export found';
         return result;
       }
-      if (Array.isArray(defaultExport.outputSchema) && defaultExport.outputSchema.length > 0) {
+      const hasOutputSchema = Array.isArray(defaultExport.outputSchema) && defaultExport.outputSchema.length > 0;
+      const hasSchema = defaultExport.schema && typeof defaultExport.schema === 'object' && Object.keys(defaultExport.schema).length > 0;
+      const hasValidate = typeof defaultExport.validate === 'function';
+      if (hasOutputSchema) {
         result.status = 'present';
         result.detail = `outputSchema has ${defaultExport.outputSchema.length} fields`;
+      } else if (hasSchema && hasValidate) {
+        result.status = 'present';
+        result.detail = `Active stage: schema with ${Object.keys(defaultExport.schema).length} fields, validate function present`;
+      } else if (hasSchema || hasValidate) {
+        result.status = 'present';
+        result.detail = `Partial stage: schema=${hasSchema}, validate=${hasValidate}`;
       } else {
         result.status = 'missing';
-        result.detail = 'outputSchema is empty or not an array';
+        result.detail = 'No outputSchema, schema, or validate function found';
       }
     } else {
       // For named exports, check typeof

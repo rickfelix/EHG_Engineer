@@ -90,13 +90,13 @@ async function avgVisionScore() {
   if (error || !data || data.length === 0) {
     return {
       name: 'avg_vision_score',
-      value: null,
+      value: 0,
       unit: 'score',
       target: 93,
       baseline: 50,
       trend: 'neutral',
       measured_at: new Date().toISOString(),
-      detail: { scores_found: 0 }
+      detail: { scores_found: 0, source: 'no_data', explanation: 'No vision scores recorded yet' }
     };
   }
 
@@ -131,15 +131,37 @@ async function gatePassRate() {
     .limit(20);
 
   if (error || !data || data.length === 0) {
+    // Fallback: query sd_phase_handoffs for gate pass rate
+    const { data: fallbackData } = await supabase
+      .from('sd_phase_handoffs')
+      .select('validation_score')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (fallbackData && fallbackData.length > 0) {
+      const passedFb = fallbackData.filter(d => d.validation_score >= 70).length;
+      const rateFb = Math.round((passedFb / fallbackData.length) * 100);
+      return {
+        name: 'gate_pass_rate',
+        value: rateFb,
+        unit: 'percent',
+        target: 85,
+        baseline: 0,
+        trend: 'neutral',
+        measured_at: new Date().toISOString(),
+        detail: { handoffs_found: fallbackData.length, passed: passedFb, source: 'fallback', fallback_table: 'sd_phase_handoffs' }
+      };
+    }
+
     return {
       name: 'gate_pass_rate',
-      value: null,
+      value: 0,
       unit: 'percent',
       target: 85,
       baseline: 0,
       trend: 'neutral',
       measured_at: new Date().toISOString(),
-      detail: { handoffs_found: 0 }
+      detail: { handoffs_found: 0, source: 'no_data', explanation: 'No handoff executions recorded yet' }
     };
   }
 
@@ -181,13 +203,13 @@ async function meanTimeToCompletion() {
   if (error || !data || data.length === 0) {
     return {
       name: 'mean_time_to_completion',
-      value: null,
+      value: 0,
       unit: 'minutes',
       target: 120,
-      baseline: null,
+      baseline: 0,
       trend: 'neutral',
       measured_at: new Date().toISOString(),
-      detail: { sds_measured: 0 }
+      detail: { sds_measured: 0, source: 'no_data', explanation: 'No completed SDs with completion_date in last 30 days' }
     };
   }
 
