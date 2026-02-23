@@ -416,7 +416,9 @@ Show feedback inbox with options to manage items or create SDs from them.
 ### If argument is "next" or "n":
 Show the SD queue to determine what to work on next:
 
-1. **Run the queue display:**
+1. **Run the queue display (MANDATORY — NO EXCEPTIONS):**
+   **ALWAYS execute `npm run sd:next` via the Bash tool, even if it was recently run in this session.**
+   Do NOT skip this step, reuse cached output, or summarize previous results. The queue state changes between runs.
    ```bash
    npm run sd:next
    ```
@@ -643,13 +645,22 @@ Run the post-completion sequence for the current working SD.
    ```
    Invoke the `ship` skill using Skill tool.
 
-   **Step 3: Learn**
+   **Step 3: Heal**
+   ```
+   🩺 Running /heal sd...
+   ```
+   Invoke the `heal` skill with args: `sd --sd-id <SD-KEY>`.
+   - Non-blocking: if heal fails or times out, log warning and continue.
+   - If HEAL_STATUS=PASS: continue to next step.
+   - If HEAL_STATUS=NEEDS_CORRECTION: corrective SD is queued (appears in sd:next), continue.
+
+   **Step 4: Learn**
    ```
    📚 Running /learn...
    ```
    Invoke the `learn` skill using Skill tool.
 
-   **Step 4: Next**
+   **Step 5: Next**
    ```
    📋 Showing next SD in queue...
    ```
@@ -664,6 +675,7 @@ Run the post-completion sequence for the current working SD.
    Executed:
    - /document - Documentation updated
    - /ship - Changes committed and PR created
+   - /heal sd - Codebase verified against SD promises
    - /learn - Patterns captured
    - sd:next - Queue displayed
    ```
@@ -1112,9 +1124,10 @@ When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, **check session a
 | 1 | `/restart` | UI/feature SD, or long session | Auto-run | Ask first |
 | 2 | Visual review | If UI changes | Auto-review | Auto-review |
 | 3 | `/ship` | Always | Auto-invoke | Ask first |
-| 4 | `/document` | Feature/API SD | Auto-invoke | Ask first |
-| 5 | `/learn` | Always | Auto-invoke | Ask first |
-| 6 | `/leo next` | After completion | Auto-show | Ask first |
+| 4 | `/heal sd --sd-id <key>` | Always | Auto-invoke | Ask first |
+| 5 | `/document` | Feature/API SD | Auto-invoke | Ask first |
+| 6 | `/learn` | Always | Auto-invoke | Ask first |
+| 7 | `/leo next` | After completion | Auto-show | Ask first |
 
 **AUTO-PROCEED MODE (check session preference)**:
 
@@ -1154,16 +1167,18 @@ supabase.from('claude_sessions')
 1. Invoke /restart skill → Wait for servers
 2. Perform visual review → Report findings
 3. Invoke /ship skill → Create PR, merge
-4. Invoke /document skill → Update docs
-5. Invoke /learn skill → Capture patterns
-6. Run npm run sd:next → Show next work
+4. Invoke /heal sd --sd-id <key> → Verify promises (non-blocking)
+5. Invoke /document skill → Update docs
+6. Invoke /learn skill → Capture patterns
+7. Run npm run sd:next → Show next work
 ```
 
 **For Infrastructure/Database SDs (when auto_proceed=true):**
 ```
 1. Invoke /ship skill → Create PR, merge
-2. Invoke /learn skill → Capture patterns
-3. Run npm run sd:next → Show next work
+2. Invoke /heal sd --sd-id <key> → Verify promises (non-blocking)
+3. Invoke /learn skill → Capture patterns
+4. Run npm run sd:next → Show next work
 ```
 
 **Always stop and ask user if (regardless of auto_proceed):**

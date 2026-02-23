@@ -115,6 +115,45 @@ export async function checkMinOccurrences(supabase, sdId, minOccurrences = MIN_O
   return { qualifies: (count ?? 0) >= minOccurrences, count: count ?? 0 };
 }
 
+// ─── Relevance Validation (False Positive Detection) ─────────────────────────
+
+const FALSE_POSITIVE_CLASSIFICATIONS = ['DESCOPED', 'RELOCATED', 'SUPERSEDED'];
+const FALSE_POSITIVE_SIGNALS = ['ZERO CALLERS', 'NO REFERENCES', 'INTENTIONALLY OMITTED', 'NOT NEEDED'];
+
+/**
+ * Check dimension reasoning for false positive signals.
+ * If a majority of dimensions contain signals that items were intentionally
+ * omitted or already delivered elsewhere, the score is likely a false positive.
+ *
+ * @param {Object} score - eva_vision_scores record with dimension_scores
+ * @returns {{ likely_false_positive: boolean, signal_count: number, total_dims: number, ratio: number }}
+ */
+export function checkRelevanceSignals(score) {
+  const dims = score.dimension_scores ?? {};
+
+  let falsePositiveSignals = 0;
+  let totalDims = 0;
+
+  for (const [, dim] of Object.entries(dims)) {
+    if (!dim?.reasoning) continue;
+    totalDims++;
+    const reasoning = String(dim.reasoning).toUpperCase();
+
+    if (FALSE_POSITIVE_CLASSIFICATIONS.some(c => reasoning.includes(c)) ||
+        FALSE_POSITIVE_SIGNALS.some(s => reasoning.includes(s))) {
+      falsePositiveSignals++;
+    }
+  }
+
+  const ratio = totalDims > 0 ? falsePositiveSignals / totalDims : 0;
+  return {
+    likely_false_positive: ratio > 0.5,
+    signal_count: falsePositiveSignals,
+    total_dims: totalDims,
+    ratio,
+  };
+}
+
 // ─── Enriched Description Builder ─────────────────────────────────────────────
 
 /**
@@ -201,6 +240,14 @@ export async function generateCorrectiveSD(scoreId) {
   if (!qualifies) {
     console.log(`[corrective-sd-generator] Skipping: only ${count}/${effectiveMinOccurrences} occurrences below threshold`);
     return { created: false, action: 'deferred', reason: `min-occurrences-not-met (${count}/${effectiveMinOccurrences})`, sdKey: null, sdId: null };
+  }
+
+  // 1c. Relevance validation — skip if signals suggest false positive
+  const relevance = checkRelevanceSignals(score);
+  if (relevance.likely_false_positive) {
+    console.log(`[corrective-sd-generator] Skipping: ${relevance.signal_count}/${relevance.total_dims} dimensions flagged as intentional omissions (ratio ${(relevance.ratio * 100).toFixed(0)}%)`);
+    await _logAudit(supabase, scoreId, 'skipped_false_positive', null, score.vision_id);
+    return { created: false, action: 'skipped', reason: `false-positive-signals (${relevance.signal_count}/${relevance.total_dims})`, sdKey: null, sdId: null };
   }
 
   // 2. Determine action (prefer stored threshold_action, fall back to classify)
