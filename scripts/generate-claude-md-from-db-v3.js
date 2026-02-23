@@ -360,7 +360,7 @@ ${section.content}
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   async function main() {
     const generator = new CLAUDEMDGeneratorV3();
     await generator.generate();

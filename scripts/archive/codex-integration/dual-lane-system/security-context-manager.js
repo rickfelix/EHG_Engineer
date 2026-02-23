@@ -375,7 +375,7 @@ class SecurityContextManager {
 export default SecurityContextManager;
 
 // CLI interface for testing
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const manager = new SecurityContextManager();
 
   const command = process.argv[2];

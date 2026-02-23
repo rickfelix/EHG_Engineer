@@ -644,7 +644,7 @@ class EnhancedDevOpsPlatformArchitect {
 export default EnhancedDevOpsPlatformArchitect;
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const agent = new EnhancedDevOpsPlatformArchitect();
   const sdId = process.argv[2];
 

@@ -252,7 +252,7 @@ async function main() {
   console.log('🎉 BMAD Protocol Update Complete!');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   main()
     .then(() => process.exit(0))
     .catch(error => {

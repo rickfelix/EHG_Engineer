@@ -473,7 +473,7 @@ class CodexOutputValidator {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const validator = new CodexOutputValidator();
   const manifestPath = process.argv[2];
 

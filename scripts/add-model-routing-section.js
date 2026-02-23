@@ -128,7 +128,7 @@ async function main() {
   console.log('🎉 Model Routing Protocol Update Complete!');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   main()
     .then(() => process.exit(0))
     .catch(error => {

@@ -193,7 +193,7 @@ class UATAlertingSystem {
 export default UATAlertingSystem;
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const alerting = new UATAlertingSystem();
   alerting.monitorTestRuns()
     .then(() => {

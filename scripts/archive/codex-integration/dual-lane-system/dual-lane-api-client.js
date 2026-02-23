@@ -412,7 +412,7 @@ TASK: ${task}
 export default DualLaneAPIClient;
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const client = new DualLaneAPIClient();
 
   const command = process.argv[2];

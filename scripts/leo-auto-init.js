@@ -224,7 +224,7 @@ class LEOAutoInit {
 export { LEOAutoInit };
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const autoInit = new LEOAutoInit();
   autoInit.initialize().then(result => {
     if (!autoInit.silent) {

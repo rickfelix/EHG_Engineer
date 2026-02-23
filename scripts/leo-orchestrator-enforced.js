@@ -230,7 +230,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
 export default EnforcedOrchestrator;
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const orchestrator = new EnforcedOrchestrator();
   const sdId = process.argv[2];
   

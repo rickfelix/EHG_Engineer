@@ -472,7 +472,7 @@ class OverEngineeringRubric {
 export default OverEngineeringRubric;
 
 // CLI usage
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   import('dotenv').then(dotenv => dotenv.default.config());
   import('@supabase/supabase-js').then(async ({ createClient }) => {
     const args = process.argv.slice(2);

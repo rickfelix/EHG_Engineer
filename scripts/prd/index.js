@@ -619,7 +619,7 @@ async function autoInvokePlanSubAgents(supabase, sdId, prdId, stakeholderPersona
 }
 
 // CLI entry point
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('index.js')) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || process.argv[1]?.endsWith('index.js')) {
   const args = process.argv.slice(2);
   if (args.length < 1) {
     console.log('Usage: node scripts/prd/index.js <SD-ID> [PRD-Title]');

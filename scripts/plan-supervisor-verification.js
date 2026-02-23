@@ -489,7 +489,7 @@ Verifying with all sub-agents...
 }
 
 // Run the CLI
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const cli = new PLANSupervisorCLI();
   cli.run().catch(error => {
     console.error('Fatal error:', error);

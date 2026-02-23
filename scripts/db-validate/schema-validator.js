@@ -514,7 +514,7 @@ export const ENGINEER_CORE_TABLES = [
 ];
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const args = process.argv.slice(2);
   const project = args.find(a => a.startsWith('--project='))?.split('=')[1] || 'engineer';
   const verbose = args.includes('--verbose');

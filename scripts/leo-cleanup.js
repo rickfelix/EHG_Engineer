@@ -214,7 +214,7 @@ class LEOCleanup {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const cleanup = new LEOCleanup();
 
   const args = process.argv.slice(2);

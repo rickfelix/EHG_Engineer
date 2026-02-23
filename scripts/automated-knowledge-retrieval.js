@@ -518,7 +518,7 @@ class KnowledgeRetrieval {
 export default KnowledgeRetrieval;
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const sdId = process.argv[2];
   const techStack = process.argv[3];
 

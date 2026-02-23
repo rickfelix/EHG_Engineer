@@ -355,7 +355,7 @@ export default SessionManagerSubAgent;
 export { SessionManagerSubAgent };
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const subAgent = new SessionManagerSubAgent();
   const action = process.argv[2] || 'validate';
   const sdId = process.argv[3] || null;
