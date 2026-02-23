@@ -232,13 +232,24 @@ export async function createPRDWithValidatedContent(
   const checkedCount = planChecklist.filter(item => item.checked).length;
   const progress = Math.round((checkedCount / planChecklist.length) * 100);
 
-  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-036: Pre-validate PRD fields before insertion
-  // Surfaces missing/boilerplate fields early to prevent prdQualityValidation gate failures
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-039: Blocking PRD pre-validation (was warn-only)
+  // Pre-validate required fields. If validation fails, throw to let caller remediate.
+  // Caller can retry with preValidationOverride=true to insert with warning flag.
   const preValidation = validatePRDFields(llmContent);
   if (!preValidation.valid) {
-    console.warn(`\n⚠️  PRD pre-validation warnings for ${sdId}:`);
-    preValidation.warnings.forEach(w => console.warn(`   ${w}`));
-    console.warn('   These may cause prdQualityValidation gate failure at PLAN-TO-EXEC\n');
+    console.error(`\n❌ PRD pre-validation FAILED for ${sdId}:`);
+    preValidation.warnings.forEach(w => console.error(`   ${w}`));
+    console.error(`   Missing: ${preValidation.missing.length}, Low-quality: ${preValidation.lowQuality.length}`);
+
+    if (!llmContent._preValidationOverride) {
+      const err = new Error(`PRD pre-validation failed: ${preValidation.missing.length} missing, ${preValidation.lowQuality.length} low-quality fields`);
+      err.code = 'PRD_PRE_VALIDATION_FAILED';
+      err.validationResult = preValidation;
+      throw err;
+    }
+
+    // Override path: insert with warning flag after remediation attempt
+    console.warn('   ⚠️  Inserting with pre_validation_warning flag (override active)\n');
   }
 
   const { data, error } = await supabase
@@ -287,7 +298,15 @@ export async function createPRDWithValidatedContent(
       progress: progress,
       stakeholders: stakeholderPersonas,
       content: formatPRDContent(sdId, sdData, llmContent),
-      metadata: llmContent.metadata || {}
+      metadata: {
+        ...(llmContent.metadata || {}),
+        ...(llmContent._preValidationOverride && !preValidation.valid ? {
+          pre_validation_warning: true,
+          pre_validation_missing: preValidation.missing,
+          pre_validation_low_quality: preValidation.lowQuality,
+          pre_validation_override_at: new Date().toISOString(),
+        } : {}),
+      }
     })
     .select()
     .single();
