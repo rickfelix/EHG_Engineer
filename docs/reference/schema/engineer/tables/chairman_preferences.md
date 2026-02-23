@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-22T16:51:20.959Z
-**Rows**: 0
+**Generated**: 2026-02-23T22:18:41.779Z
+**Rows**: 1
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -63,22 +63,23 @@
 ### 1. chairman_preferences_delete (DELETE)
 
 - **Roles**: {public}
-- **Using**: `true`
+- **Using**: `fn_is_chairman()`
 
 ### 2. chairman_preferences_insert (INSERT)
 
 - **Roles**: {public}
-- **With Check**: `true`
+- **With Check**: `fn_is_chairman()`
 
 ### 3. chairman_preferences_select (SELECT)
 
 - **Roles**: {public}
-- **Using**: `true`
+- **Using**: `fn_is_chairman()`
 
 ### 4. chairman_preferences_update (UPDATE)
 
 - **Roles**: {public}
-- **Using**: `true`
+- **Using**: `fn_is_chairman()`
+- **With Check**: `fn_is_chairman()`
 
 ## Triggers
 

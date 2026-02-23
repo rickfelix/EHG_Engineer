@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-22T16:51:20.959Z
-**Tables**: 492
+**Generated**: 2026-02-23T22:18:41.779Z
+**Tables**: 499
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (492)
+## All Tables (499)
 
 ### LEO Protocol
 
@@ -166,6 +166,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [agent_knowledge_base](tables/agent_knowledge_base.md)
 - [domain_knowledge](tables/domain_knowledge.md)
 - [issue_patterns](tables/issue_patterns.md)
+- [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
 ### Other
 
@@ -434,6 +435,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sdip_groups](tables/sdip_groups.md)
 - [sdip_submissions](tables/sdip_submissions.md)
 - [self_audit_findings](tables/self_audit_findings.md)
+- [sensemaking_analyses](tables/sensemaking_analyses.md)
+- [sensemaking_personas](tables/sensemaking_personas.md)
+- [sensemaking_telegram_sessions](tables/sensemaking_telegram_sessions.md)
 - [session_lifecycle_events](tables/session_lifecycle_events.md)
 - [shipping_decisions](tables/shipping_decisions.md)
 - [simulation_sessions](tables/simulation_sessions.md)
@@ -467,6 +471,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [task_hydration_log](tables/task_hydration_log.md)
 - [team_templates](tables/team_templates.md)
 - [tech_stack_references](tables/tech_stack_references.md)
+- [telegram_bot_interactions](tables/telegram_bot_interactions.md)
+- [telegram_conversations](tables/telegram_conversations.md)
+- [telegram_forum_topics](tables/telegram_forum_topics.md)
 - [telemetry_analysis_runs](tables/telemetry_analysis_runs.md)
 - [telemetry_thresholds](tables/telemetry_thresholds.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
