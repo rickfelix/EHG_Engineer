@@ -11,14 +11,12 @@
  * @version 1.1.0
  */
 
-import OpenAI from 'openai';
-
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
-// Gemini: Default to Nano Banana (Gemini 2.5 Flash Image)
-const GEMINI_IMAGE_MODEL = process.env.VISION_VISUALIZATION_MODEL || 'gemini-2.5-flash-image';
+// Gemini: Default to Nano Banana Pro (Gemini 3 Pro Image)
+const GEMINI_IMAGE_MODEL = process.env.VISION_VISUALIZATION_MODEL || 'gemini-3-pro-image-preview';
 
 // OpenAI: DALL-E 3 as fallback
 const OPENAI_IMAGE_MODEL = process.env.VISION_IMAGE_MODEL || 'dall-e-3';
@@ -46,7 +44,7 @@ class OpenAIProvider {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY not configured');
     }
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    this.apiKey = process.env.OPENAI_API_KEY;
     this.model = OPENAI_IMAGE_MODEL;
   }
 
@@ -55,22 +53,35 @@ class OpenAIProvider {
   }
 
   /**
-   * Generate image using DALL-E
+   * Generate image using DALL-E (via fetch — no SDK dependency)
    * @param {string} prompt - Image generation prompt
    * @returns {Promise<ImageGenerationResult>}
    */
   async generateImage(prompt) {
     console.log(`   Generating image with OpenAI ${this.model}...`);
 
-    const response = await this.openai.images.generate({
-      model: this.model,
-      prompt: prompt,
-      n: 1,
-      size: OPENAI_IMAGE_SIZE,
-      response_format: 'b64_json'
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify({
+        model: this.model,
+        prompt,
+        n: 1,
+        size: OPENAI_IMAGE_SIZE,
+        response_format: 'b64_json'
+      })
     });
 
-    const base64Data = response.data[0].b64_json;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI Images API error: ${response.status} - ${errorText.substring(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const base64Data = data.data[0].b64_json;
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
     return {
