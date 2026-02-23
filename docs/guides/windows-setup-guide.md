@@ -6,7 +6,7 @@
 - **Status**: Draft
 - **Version**: 1.0.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-13
+- **Last Updated**: 2026-02-23
 - **Tags**: database, api, e2e, unit
 
 This guide covers setting up EHG_Engineer for native Windows development without WSL.
@@ -71,9 +71,17 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# OpenAI (for LLM features)
+# Google Gemini (primary LLM — required for all AI features)
+# Get your key: https://aistudio.google.com/apikey
+GEMINI_API_KEY=your-gemini-api-key
+
+# OpenAI (optional — fallback LLM and voice/WebRTC only)
 OPENAI_API_KEY=your-openai-key
 ```
+
+> **Note**: As of 2026-02-23, Google Gemini 3.x is the default LLM provider.
+> `GEMINI_API_KEY` is sufficient for all non-voice features.
+> `OPENAI_API_KEY` is only required for voice/WebRTC (`supabase/functions/openai-realtime-token`).
 
 ## Starting Development Servers
 

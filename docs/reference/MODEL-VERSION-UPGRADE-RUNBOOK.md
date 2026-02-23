@@ -6,7 +6,7 @@
 - **Status**: Draft
 - **Version**: 1.0.0
 - **Author**: DOCMON
-- **Last Updated**: 2026-01-08
+- **Last Updated**: 2026-02-23
 - **Tags**: database, api, testing, e2e
 
 **Status**: ACTIVE
@@ -444,46 +444,73 @@ Examples:
 
 ## 10. Centralized Model Configuration (SD-LLM-CONFIG-CENTRAL-001)
 
-**Status**: IMPLEMENTED (2026-01-08)
+**Status**: IMPLEMENTED (2026-01-08) | **Provider default updated to Google Gemini 3.x (2026-02-23)**
 
 ### Solution Overview
 
-Centralized model configuration via `lib/config/model-config.js` eliminates hardcoded model names across the codebase.
+Centralized model configuration via `lib/config/model-config.js` eliminates hardcoded model names across the codebase. As of 2026-02-23, **Google Gemini is the primary provider** — OpenAI is the fallback.
+
+### Cascade Priority (as of 2026-02-23)
+
+```
+Anthropic (effort-based/thinking) → Google Gemini → OpenAI → Ollama (local)
+```
+
+Use `getLLMClient({ purpose })` from `lib/llm/client-factory.js` to get a provider-agnostic client.
 
 ### Usage
 
 ```javascript
-// Import the centralized config
-import { getOpenAIModel, getClaudeModel } from '../../lib/config/model-config.js';
+// Recommended: use factory (automatically routes to Gemini primary)
+import { getLLMClient, getEmbeddingClient } from '../../lib/llm/client-factory.js';
 
-// Get model by purpose
-this.model = getOpenAIModel('validation');    // Returns 'gpt-5.2' or env override
-this.model = getOpenAIModel('classification'); // Returns 'gpt-5-mini' or env override
-this.model = getOpenAIModel('generation');    // Returns 'gpt-5.2' or env override
-this.model = getOpenAIModel('fast');          // Returns 'gpt-5-mini' or env override
-this.model = getOpenAIModel('vision');        // Returns 'gpt-4o' or env override
+const llm = getLLMClient({ purpose: 'validation' });   // → gemini-3.1-pro-preview
+const llm = getLLMClient({ purpose: 'fast' });         // → gemini-3-flash-preview
+const llm = getLLMClient({ purpose: 'generation' });   // → gemini-3.1-pro-preview
+const llm = getLLMClient({ purpose: 'classification'});// → gemini-3-flash-preview
+const llm = getLLMClient({ purpose: 'vision' });       // → gemini-3.1-pro-preview
+const embedder = getEmbeddingClient();                 // → gemini-embedding-001 (1536d)
 
-this.model = getClaudeModel('validation');    // Returns 'claude-sonnet-4-20250514' or env override
+// OpenAI-compatible interface on all returned clients
+const result = await llm.chat.completions.create({ messages, ... });
+
+// Legacy helpers (still work, used internally)
+import { getGoogleModel, getClaudeModel } from '../../lib/config/model-config.js';
+const model = getGoogleModel('validation');  // Returns 'gemini-3.1-pro-preview' or env override
+const model = getClaudeModel('validation'); // Returns 'claude-sonnet-4-20250514' or env override
 ```
+
+### Current Model Defaults
+
+| Purpose | Google (primary) | OpenAI (fallback) |
+|---------|-----------------|-------------------|
+| validation | `gemini-3.1-pro-preview` | `gpt-5.2` |
+| generation | `gemini-3.1-pro-preview` | `gpt-5.2` |
+| classification | `gemini-3-flash-preview` | `gpt-5-mini` |
+| fast | `gemini-3-flash-preview` | `gpt-5-mini` |
+| vision | `gemini-3.1-pro-preview` | `gpt-4o` |
+| embedding | `gemini-embedding-001` (1536d) | `text-embedding-3-small` (1536d) |
 
 ### Environment Variable Overrides
 
-Override models via environment variables without code changes:
-
 ```bash
-# Override all OpenAI model calls
-OPENAI_MODEL=gpt-6
+# Primary: Google Gemini (required for all AI features)
+GEMINI_API_KEY=your-gemini-api-key
 
-# Override by purpose
+# Override Google models by purpose
+GEMINI_MODEL_VALIDATION=gemini-3.1-pro-preview
+GEMINI_MODEL_CLASSIFICATION=gemini-3-flash-preview
+GEMINI_MODEL_GENERATION=gemini-3.1-pro-preview
+GEMINI_MODEL_FAST=gemini-3-flash-preview
+GEMINI_MODEL_VISION=gemini-3.1-pro-preview
+
+# Fallback: OpenAI (optional — voice/WebRTC only if Gemini is primary)
+OPENAI_API_KEY=your-openai-key
 OPENAI_MODEL_VALIDATION=gpt-5.3
 OPENAI_MODEL_CLASSIFICATION=gpt-5-mini
-OPENAI_MODEL_GENERATION=gpt-5.3
-OPENAI_MODEL_FAST=gpt-5-nano
-OPENAI_MODEL_VISION=gpt-5-vision
 
-# Claude equivalents
-CLAUDE_MODEL=claude-5-sonnet
-CLAUDE_MODEL_VALIDATION=claude-5-sonnet
+# Claude (effort-based reasoning, Anthropic adapter)
+CLAUDE_MODEL=claude-sonnet-4-20250514
 ```
 
 ### Model Upgrade Process (Simplified)
@@ -491,21 +518,21 @@ CLAUDE_MODEL_VALIDATION=claude-5-sonnet
 With centralized config, upgrading models is now:
 
 1. **Edit ONE file**: `lib/config/model-config.js`
-2. **Update defaults in MODEL_DEFAULTS object**
+2. **Update defaults in `google.{}` section** (Google is primary)
 3. **Test**: `npm run llm:config`
 4. **Commit**: Single file change
 
 ```javascript
-// lib/config/model-config.js - Update defaults
+// lib/config/model-config.js - Update Google defaults
 const MODEL_DEFAULTS = {
-  openai: {
-    validation: 'gpt-5.3',      // Updated from gpt-5.2
-    classification: 'gpt-5-mini',
-    generation: 'gpt-5.3',      // Updated from gpt-5.2
-    fast: 'gpt-5-mini',
-    vision: 'gpt-5-vision',     // Updated from gpt-4o
+  google: {
+    validation: 'gemini-3.2-pro-preview',    // Example: upgrade to 3.2
+    classification: 'gemini-3.1-flash',
+    generation: 'gemini-3.2-pro-preview',
+    fast: 'gemini-3.1-flash',
+    vision: 'gemini-3.2-pro-preview',
   },
-  // ...
+  // openai: kept as fallback
 };
 ```
 
@@ -578,4 +605,5 @@ npm run llm:validate
 ---
 
 **Maintained by**: LEO Protocol Team
-**Last Updated**: 2026-01-08
+**Last Updated**: 2026-02-23
+**Change log**: v1.1.0 — Updated Section 10 for Google Gemini 3.x as primary provider (PR #1577)
