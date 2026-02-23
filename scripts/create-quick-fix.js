@@ -209,7 +209,9 @@ async function createQuickFix(options = {}) {
   }
 
   // Tier 1 or Tier 2: Create quick-fix record
-  const qfStatus = routingDecision.tier === 1 ? 'approved' : 'open';
+  // Note: 'approved' is not a valid quick_fixes status (constraint: quick_fixes_status_check).
+  // Tier 1 QFs are auto-approved (no LEAD review) but DB status starts as 'open'.
+  const qfStatus = 'open';
   const { data, error } = await supabase
     .from('quick_fixes')
     .insert({

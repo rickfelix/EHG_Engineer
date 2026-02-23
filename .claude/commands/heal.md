@@ -197,6 +197,19 @@ After any subcommand, present a clear summary:
 
 ---
 
+### Post-Completion Integration
+
+When invoked as part of the post-completion sequence (after `/ship`, before `/learn`):
+- Score only the just-completed SD using `--sd-id <key>`
+- If `HEAL_STATUS=PASS`: Report success, continue post-completion sequence
+- If `HEAL_STATUS=NEEDS_CORRECTION`:
+  - **AUTO-PROCEED ON**: Auto-generate corrective SD via `generate-all`, log it, continue sequence. The corrective SD is queued (appears in `sd:next`), not executed inline.
+  - **AUTO-PROCEED OFF**: Show results, ask user before generating corrective SDs
+- **Never block** the post-completion sequence on heal failure — if heal errors out or times out, log a warning and continue to `/learn`
+- Corrective SDs created during post-completion do not block orchestrator chaining — they are queued for later execution
+
+---
+
 ## Command Ecosystem
 
 | After this | Suggest |
