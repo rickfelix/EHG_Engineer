@@ -13,7 +13,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getLLMClient } from '../../../lib/llm/client-factory.js';
 import { ConstitutionValidator } from './constitution-validator.js';
 import { AssessmentStorage } from './storage.js';
 import { generateEvaluationPrompt } from './prompts.js';
@@ -35,9 +35,7 @@ export class AIQualityJudge {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    this.openai = options.openai || new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    this.openai = options.openai || getLLMClient({ purpose: 'validation' });
 
     this.constitutionValidator = new ConstitutionValidator(this.supabase);
     this.storage = new AssessmentStorage(this.supabase);

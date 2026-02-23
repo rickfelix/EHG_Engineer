@@ -2,8 +2,8 @@
 /**
  * Semantic Codebase Indexer
  *
- * Scans codebase, extracts code entities, generates OpenAI embeddings,
- * and populates codebase_semantic_index table for semantic search.
+ * Scans codebase, extracts code entities, generates embeddings via
+ * centralized LLM factory, and populates codebase_semantic_index table.
  *
  * SD: SD-SEMANTIC-SEARCH-001
  * Story: US-001 - Natural Language Code Search
@@ -13,16 +13,26 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-const OpenAI = require('openai');
 const fs = require('fs').promises;
 const path = require('path');
 const { parseCodeEntities } = require('./modules/language-parsers');
 require('dotenv').config();
 
 // Configuration
-const BATCH_SIZE = 50; // OpenAI embeddings batch size
-const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_DIMENSIONS = 1536;
+const BATCH_SIZE = 50; // Embeddings batch size
+
+/**
+ * Lazy-loaded embedding client from centralized LLM factory
+ * Uses dynamic import() because this is a CommonJS file and the factory is ESM
+ */
+let _embedder = null;
+async function getEmbedder() {
+  if (!_embedder) {
+    const { getEmbeddingClient } = await import('../lib/llm/client-factory.js');
+    _embedder = getEmbeddingClient();
+  }
+  return _embedder;
+}
 
 // Application paths
 const APPLICATION_PATHS = {
@@ -50,9 +60,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// OpenAI client removed — embeddings now handled by centralized LLM factory
 
 /**
  * Parse command line arguments
@@ -98,30 +106,21 @@ async function scanDirectory(dirPath, fileList = []) {
 }
 
 /**
- * Generate embedding for text using OpenAI
+ * Generate embedding for text using centralized LLM factory
  */
- 
 async function _generateEmbedding(text) {
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: text,
-    encoding_format: 'float'
-  });
-
-  return response.data[0].embedding;
+  const embedder = await getEmbedder();
+  const [embedding] = await embedder.embed(text);
+  return embedding;
 }
 
 /**
- * Generate embeddings in batches
+ * Generate embeddings in batches using centralized LLM factory
  */
 async function generateEmbeddingsBatch(texts) {
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: texts,
-    encoding_format: 'float'
-  });
-
-  return response.data.map(item => item.embedding);
+  const embedder = await getEmbedder();
+  const embeddings = await embedder.embed(texts);
+  return embeddings;
 }
 
 /**
@@ -250,7 +249,8 @@ async function main() {
   console.log('══════════════════════════════════════════════════════════\n');
   console.log(`Application: ${application}`);
   console.log(`Mode: ${incremental ? 'Incremental' : 'Full rebuild'}`);
-  console.log(`Embedding model: ${EMBEDDING_MODEL} (${EMBEDDING_DIMENSIONS}D)\n`);
+  const embedder = await getEmbedder();
+  console.log(`Embedding model: ${embedder.model} (${embedder.dimensions}D, provider: ${embedder.provider})\n`);
 
   // Validate application
   if (!APPLICATION_PATHS[application]) {

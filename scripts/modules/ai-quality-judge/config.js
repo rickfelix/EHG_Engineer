@@ -116,8 +116,8 @@ export const VIOLATION_SEVERITY = {
  */
 export const MODEL_CONFIG = {
   evaluator: {
-    model: 'gpt-4o-mini',
-    family: 'openai',
+    model: 'gemini-3-flash-preview',
+    family: 'google',
     temperature: 0.3,
     description: 'Evaluator model - different family from proposer'
   },

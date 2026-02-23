@@ -18,7 +18,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 import { executeSubAgent } from '../lib/sub-agent-executor.js';
 
 // Configuration
@@ -234,7 +234,7 @@ async function main() {
     process.exit(0);
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getLLMClient({ purpose: 'generation' });
 
   const systemPrompt = buildSystemPrompt(sdType);
   const userPrompt = buildUserPrompt(sd, {
@@ -339,7 +339,7 @@ async function main() {
 
 // Helper functions
 
-function buildDesignPrompt(sd) {
+function _buildDesignPrompt(sd) {
   return `Analyze UI/UX design and user workflows for Strategic Directive: ${sd.id}
 
 **Title**: ${sd.title}
@@ -352,7 +352,7 @@ ${formatObjectives(sd.strategic_objectives)}
 **Task**: Identify user workflows, UI components, and user journey.`;
 }
 
-function buildDatabasePrompt(sd, designAnalysis) {
+function _buildDatabasePrompt(sd, designAnalysis) {
   return `Analyze database schema for Strategic Directive: ${sd.id}
 
 **Title**: ${sd.title}
@@ -364,7 +364,7 @@ ${designAnalysis ? `**Design Context**:\n${designAnalysis.substring(0, 2000)}` :
 **Task**: Analyze schema requirements and recommend database changes.`;
 }
 
-function buildRiskPrompt(sd) {
+function _buildRiskPrompt(sd) {
   return `Analyze implementation risks for Strategic Directive: ${sd.id}
 
 **Title**: ${sd.title}
@@ -374,7 +374,7 @@ function buildRiskPrompt(sd) {
 **Task**: Identify technical risks, assess probability/impact, and propose mitigations.`;
 }
 
-function buildSecurityPrompt(sd) {
+function _buildSecurityPrompt(sd) {
   return `Analyze security requirements for Strategic Directive: ${sd.id}
 
 **Title**: ${sd.title}

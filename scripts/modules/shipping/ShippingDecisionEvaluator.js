@@ -17,11 +17,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
-
-// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
-import { getOpenAIModel } from '../../../lib/config/model-config.js';
+import { getLLMClient } from '../../../lib/llm/client-factory.js';
 
 dotenv.config();
 
@@ -33,17 +30,13 @@ export class ShippingDecisionEvaluator {
   constructor(decisionType, options = {}) {
     this.decisionType = decisionType;
     this.options = options;
-    this.model = getOpenAIModel('validation'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config
     this.temperature = 0.3; // Balance consistency + nuance
 
     // Get rubric config for this decision type
     this.rubricConfig = ShippingDecisionEvaluator.getRubricConfig(decisionType);
 
-    // Initialize OpenAI
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not found in environment');
-    }
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    // Initialize LLM client via factory (handles model selection and API key detection)
+    this.openai = getLLMClient({ purpose: 'validation' });
 
     // Initialize Supabase
     this.supabase = createClient(
@@ -447,16 +440,15 @@ Remember: Return ONLY valid JSON with scores for each criterion and _meta confid
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const response = await this.openai.chat.completions.create({
-          model: this.model,
           messages,
           temperature: this.temperature,
-          max_completion_tokens: 1000,  // Updated from deprecated max_tokens
+          max_completion_tokens: 1000,
           response_format: { type: 'json_object' }
         });
         return response;
       } catch (error) {
         if (attempt === retries) throw error;
-        console.warn(`[Shipping] OpenAI attempt ${attempt} failed, retrying...`);
+        console.warn(`[Shipping] LLM attempt ${attempt} failed, retrying...`);
         await new Promise(r => setTimeout(r, 1000 * attempt));
       }
     }
@@ -582,7 +574,7 @@ Remember: Return ONLY valid JSON with scores for each criterion and _meta confid
           reasoning: decision.reasoning,
           context_snapshot: context,
           escalated_to_human: assessment.confidence === 'LOW',
-          model: this.model,
+          model: 'llm-factory-validation',
           tokens_used: tokensUsed,
           cost_usd: cost
         });

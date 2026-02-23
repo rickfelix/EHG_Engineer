@@ -21,7 +21,7 @@
 import { createClient } from '@supabase/supabase-js';
 import CircuitBreaker from './context7-circuit-breaker.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
-import OpenAI from 'openai';
+import { getEmbeddingClient } from '../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -31,17 +31,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// SD-RETRO-ENHANCE-001: US-008 - OpenAI client for semantic search
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-}) : null;
+// SD-RETRO-ENHANCE-001: US-008 - Embedding client for semantic search
+const embedder = getEmbeddingClient();
 
 const TOKEN_BUDGET_PER_QUERY = 5000;
 const _TOKEN_BUDGET_PER_PRD = 15000; // Reserved for future aggregate budget tracking
 const LOCAL_RESULTS_THRESHOLD = 3;
 const CACHE_TTL_HOURS = 24;
 const SEMANTIC_SEARCH_THRESHOLD = 0.7; // 70% similarity minimum
-const EMBEDDING_MODEL = 'text-embedding-3-small'; // 1536 dimensions
 
 class KnowledgeRetrieval {
   constructor(sdId) {
@@ -162,26 +159,16 @@ class KnowledgeRetrieval {
    * SD-RETRO-ENHANCE-001: US-008
    */
   async semanticSearch(techStack) {
-    // Check prerequisites
-    if (!openai) {
-      console.log('   ℹ️  OpenAI API key not configured');
-      return null;
-    }
-
     try {
       // Step 1: Generate embedding for search query
-      console.log('   🔄 Generating query embedding...');
-      const embeddingResponse = await openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: techStack,
-        encoding_format: 'float'
-      });
+      console.log(`   🔄 Generating query embedding (${embedder.provider}/${embedder.model})...`);
+      const [queryEmbedding] = await embedder.embed(techStack);
 
-      const queryEmbedding = embeddingResponse.data[0].embedding;
-      const tokensUsed = embeddingResponse.usage.total_tokens;
+      // Estimate tokens (factory doesn't return usage stats)
+      const tokensUsed = Math.ceil(techStack.length / 4);
       this.totalTokens += tokensUsed;
 
-      console.log(`   ✅ Embedding generated (${tokensUsed} tokens)`);
+      console.log(`   ✅ Embedding generated (~${tokensUsed} tokens)`);
 
       // Step 2: Call match_retrospectives() RPC function
       const { data, error } = await supabase.rpc('match_retrospectives', {

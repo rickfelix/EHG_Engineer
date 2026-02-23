@@ -19,8 +19,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 
 dotenv.config();
 
@@ -29,9 +29,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const openai = getLLMClient({ purpose: 'generation' });
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -156,8 +154,7 @@ Generate success_metrics for the SD described above:`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4.1',
-      max_tokens: 1024,
+      max_completion_tokens: 1024,
       response_format: { type: 'json_object' },
       messages: [
         {

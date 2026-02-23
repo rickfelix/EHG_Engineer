@@ -15,9 +15,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import _readline from 'readline';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 
 import {
   buildGraph,
@@ -43,9 +43,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = getLLMClient({ purpose: 'generation' });
 
 // ANSI colors
 const colors = {
@@ -275,7 +273,6 @@ class IntelligentBaselineGenerator {
 
     try {
       const response = await openai.chat.completions.create({
-        model: 'gpt-5.2',
         max_completion_tokens: 4000,
         temperature: 0.2,
         messages: [

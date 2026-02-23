@@ -3,7 +3,7 @@
 /**
  * Semantic Target Application Validator
  *
- * Uses GPT 5.2 (or configured model) to semantically determine whether an SD
+ * Uses LLM factory (Gemini primary) to semantically determine whether an SD
  * should target EHG (runtime app) or EHG_Engineer (governance/infrastructure).
  *
  * This is a HARD GATE - it blocks if confidence is below threshold.
@@ -19,8 +19,8 @@
  * @version 1.0.0
  */
 
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 
 dotenv.config();
 
@@ -28,15 +28,10 @@ dotenv.config();
 // CONFIGURATION
 // ============================================================================
 
-// Model selection: GPT 5.2 preferred, fallback to gpt-5-mini
-const MODEL = process.env.TARGET_APP_VALIDATOR_MODEL || 'gpt-5.2';
-const FALLBACK_MODEL = 'gpt-5-mini';
-
 // Confidence threshold (0-100) - below this, validation FAILS
 const CONFIDENCE_THRESHOLD = parseInt(process.env.TARGET_APP_CONFIDENCE_THRESHOLD || '80', 10);
 
 // API configuration
-const API_TIMEOUT_MS = parseInt(process.env.AI_API_TIMEOUT_MS || '30000', 10);
 const MAX_RETRIES = 3;
 
 // ============================================================================
@@ -94,38 +89,13 @@ export class SemanticTargetApplicationValidator {
   }
 
   /**
-   * Initialize OpenAI client
+   * Initialize LLM client via factory
    */
   async initialize() {
     if (this.initialized) return;
 
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY not configured - cannot run semantic validation');
-    }
-
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: API_TIMEOUT_MS
-    });
-
-    // Test model availability, fall back if needed
-    try {
-      await this._testModel(this.model);
-    } catch (_error) {
-      console.warn(`   ⚠️  Model ${this.model} not available, falling back to ${FALLBACK_MODEL}`);
-      this.model = FALLBACK_MODEL;
-    }
-
+    this.openai = getLLMClient({ purpose: 'validation' });
     this.initialized = true;
-  }
-
-  /**
-   * Test if a model is available
-   */
-  async _testModel(model) {
-    // Quick validation - just check the model exists via models.retrieve
-    const modelInfo = await this.openai.models.retrieve(model);
-    return modelInfo;
   }
 
   /**
@@ -193,9 +163,7 @@ Determine the correct target_application with confidence score.`;
   async _callOpenAI(messages, retries = MAX_RETRIES) {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        // Note: gpt-5-mini doesn't support custom temperature, so we omit it
         const response = await this.openai.chat.completions.create({
-          model: this.model,
           messages: messages,
           response_format: { type: 'json_object' },
           max_completion_tokens: 500
@@ -233,7 +201,7 @@ Determine the correct target_application with confidence score.`;
     console.log('   ╔═══════════════════════════════════════════════════════════════╗');
     console.log('   ║  🎯 SEMANTIC TARGET APPLICATION VALIDATION                    ║');
     console.log('   ╠═══════════════════════════════════════════════════════════════╣');
-    console.log(`   ║  Model: ${this.model.padEnd(52)}║`);
+    console.log(`   ║  Model: ${'llm-factory (validation)'.padEnd(52)}║`);
     console.log(`   ║  Confidence Threshold: ${String(this.confidenceThreshold + '%').padEnd(40)}║`);
     console.log('   ╚═══════════════════════════════════════════════════════════════╝');
     console.log('');
@@ -330,7 +298,7 @@ Determine the correct target_application with confidence score.`;
           : 'Manually review and set target_application',
         mismatch,
         existing_value: existingValue,
-        model_used: this.model,
+        model_used: 'llm-factory-validation',
         duration_ms: duration
       };
 

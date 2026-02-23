@@ -1,7 +1,7 @@
 /**
  * LEO v4.4 LLM UX Oracle Fixture
  *
- * Multi-lens GPT-5.2 evaluation for human-like UX assessment:
+ * Multi-lens LLM evaluation for human-like UX assessment:
  * - First-time user perspective
  * - Accessibility beyond WCAG
  * - Mobile usability
@@ -23,7 +23,7 @@
  */
 
 import { test as base, expect } from '@playwright/test';
-import OpenAI from 'openai';
+import { getLLMClient } from '../../../lib/llm/client-factory.js';
 
 /**
  * Available evaluation lenses
@@ -171,14 +171,10 @@ const STRINGENCY_THRESHOLDS: Record<'strict' | 'standard' | 'relaxed', number> =
 };
 
 /**
- * Create OpenAI client (lazy initialization)
+ * Create LLM client via centralized factory (lazy initialization)
  */
-function getOpenAIClient(): OpenAI {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required for LLM UX evaluation');
-  }
-  return new OpenAI({ apiKey });
+function getLLMValidationClient() {
+  return getLLMClient({ purpose: 'validation' });
 }
 
 /**
@@ -206,14 +202,14 @@ type LLMUXFixtures = {
 export const test = base.extend<LLMUXFixtures>({
   uxOracle: [async ({ page }, use, testInfo) => {
     const results: UXEvaluationResult[] = [];
-    let openai: OpenAI | null = null;
+    let openai: ReturnType<typeof getLLMClient> | null = null;
 
     const fixture: LLMUXOracleFixture = {
       evaluate: async (
         lens: EvaluationLens,
         stringency: 'strict' | 'standard' | 'relaxed' = 'standard'
       ): Promise<UXEvaluationResult> => {
-        if (!openai) openai = getOpenAIClient();
+        if (!openai) openai = getLLMValidationClient();
 
         // Capture screenshot
         const screenshot = await page.screenshot({ type: 'png', fullPage: false });
@@ -223,9 +219,8 @@ export const test = base.extend<LLMUXFixtures>({
         const isCritical = isCriticalPath(page.url());
         const maxTokens = isCritical ? 2048 : 1024;
 
-        // Call GPT-5.2
+        // Call LLM via factory (model selected by purpose)
         const response = await openai.chat.completions.create({
-          model: 'gpt-5.2',
           max_tokens: maxTokens,
           messages: [{
             role: 'user',
@@ -254,7 +249,7 @@ export const test = base.extend<LLMUXFixtures>({
           suggestions: parsed.suggestions ?? [],
           shouldBlock: (parsed.score ?? 50) < STRINGENCY_THRESHOLDS[stringency],
           stringency,
-          model: 'gpt-5.2',
+          model: response.model ?? 'factory-default',
           tokensUsed: response.usage?.total_tokens ?? 0
         };
 
@@ -283,12 +278,11 @@ export const test = base.extend<LLMUXFixtures>({
       },
 
       compareVersions: async (baselineScreenshot: Buffer): Promise<ComparisonResult> => {
-        if (!openai) openai = getOpenAIClient();
+        if (!openai) openai = getLLMValidationClient();
 
         const currentScreenshot = await page.screenshot({ type: 'png', fullPage: false });
 
         const response = await openai.chat.completions.create({
-          model: 'gpt-5.2',
           max_tokens: 1024,
           messages: [{
             role: 'user',
@@ -329,7 +323,7 @@ Return JSON: { "verdict": "improvement|regression|neutral", "confidence": 0-100,
       evaluateJourney: async (
         screenshots: Array<{ step: string; image: Buffer }>
       ): Promise<JourneyEvaluationResult> => {
-        if (!openai) openai = getOpenAIClient();
+        if (!openai) openai = getLLMValidationClient();
 
         const imageContents = screenshots.map(s => ({
           type: 'image_url' as const,
@@ -337,7 +331,6 @@ Return JSON: { "verdict": "improvement|regression|neutral", "confidence": 0-100,
         }));
 
         const response = await openai.chat.completions.create({
-          model: 'gpt-5.2',
           max_tokens: 2048,
           messages: [{
             role: 'user',

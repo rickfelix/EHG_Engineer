@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { getLLMClient } from '../lib/llm/client-factory.js';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -34,9 +34,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = getLLMClient({ purpose: 'validation' });
 
 const colors = {
   reset: '\x1b[0m',
@@ -159,7 +157,6 @@ JSON response:`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-5.2',
       max_completion_tokens: 500,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2,

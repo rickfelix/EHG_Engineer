@@ -8,22 +8,19 @@
  * comprehensive SD documentation.
  */
 
-import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 
-// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
-import { getOpenAIModel } from '../lib/config/model-config.js';
+// SD-LLM-CLIENT-FACTORY-001: Centralized LLM client factory
+import { getLLMClient } from '../lib/llm/client-factory.js';
 // SD-LEO-SDKEY-001: Centralized SD key generation
 import { generateSDKey } from './modules/sd-key-generator.js';
 
 dotenv.config();
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize LLM client (compat layer provides .chat.completions.create())
+const openai = getLLMClient({ purpose: 'generation' });
 
 // Initialize Supabase
 const supabase = createClient(
@@ -34,7 +31,7 @@ const supabase = createClient(
 class UATToSDConverter {
   constructor() {
     this.conversionId = `UAT-SD-${Date.now()}`;
-    this.model = getOpenAIModel('generation'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config (was outdated gpt-4-turbo-preview)
+    this.model = openai.defaultModel || 'factory-managed'; // SD-LLM-CLIENT-FACTORY-001: Model resolved by centralized factory
   }
 
   /**

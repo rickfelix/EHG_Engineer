@@ -182,11 +182,11 @@ export default defineConfig({
         'console-capture',    // Console error assertions
         'chaos-saboteur',     // Resilience testing
         'visual-oracle',      // CLS measurement
-        'llm-ux-oracle',      // GPT-5.2 UX evaluation
+        'llm-ux-oracle',      // LLM UX evaluation (factory-routed)
         'stringency-resolver' // Intelligent stringency
       ],
       stringency: process.env.E2E_STRINGENCY || 'standard',
-      llmModel: 'gpt-5.2',
+      llmModel: 'factory-routed',
       budgetMonthlyUSD: 20
     }
   },
