@@ -213,11 +213,18 @@ export class PlanToExecExecutor extends BaseExecutor {
     console.log('🔍 Step 2: Standard PLAN→EXEC Verification');
     console.log('-'.repeat(50));
 
-    const verifier = new PlanToExecVerifier();
-    const verificationResult = await verifier.verifyHandoff(sdId, options.prdId);
+    let verificationResult;
+    if (options.bypassValidation) {
+      console.log('   ⚠️  BYPASS ACTIVE: Skipping PlanToExecVerifier (legacy validation)');
+      console.log(`   📝 Reason: ${options.bypassReason || 'No reason provided'}`);
+      verificationResult = { success: true, bypassed: true };
+    } else {
+      const verifier = new PlanToExecVerifier();
+      verificationResult = await verifier.verifyHandoff(sdId, options.prdId);
 
-    if (!verificationResult.success) {
-      return verificationResult;
+      if (!verificationResult.success) {
+        return verificationResult;
+      }
     }
 
     // Create handoff retrospective after successful handoff
