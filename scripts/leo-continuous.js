@@ -666,8 +666,20 @@ async function runContinuous(startSdId = null) {
       : await getNextParentSD();
 
     if (!parentSd) {
-      console.log(`\n${colors.green}${colors.bold}All SDs in baseline complete!${colors.reset}`);
-      break;
+      const pollMinutes = 30;
+      console.log(`\n${colors.dim}No pending SDs found. Polling again in ${pollMinutes} minutes...${colors.reset}`);
+
+      // Update heartbeat while idle
+      await supabase
+        .from('claude_sessions')
+        .update({ heartbeat_at: new Date().toISOString() })
+        .eq('session_id', sessionId);
+
+      // Sleep with early exit on SIGINT
+      for (let i = 0; i < pollMinutes * 60 && isRunning; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      continue;
     }
 
     // Execute the hierarchy
