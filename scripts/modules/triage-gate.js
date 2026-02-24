@@ -141,12 +141,12 @@ function buildAskUserQuestionPayload(routingDecision, locResult, title, type) {
   if (tier === 1) {
     questionText =
       `Triage: estimated ~${locResult.estimatedLoc} LOC (${locResult.confidence}% confidence). ` +
-      `This looks like a Quick Fix (Tier 1 — auto-approve, no LEAD review). ` +
+      'This looks like a Quick Fix (Tier 1 — auto-approve, no LEAD review). ' +
       `Max ${tier1MaxLoc} LOC. How would you like to proceed?`;
   } else {
     questionText =
       `Triage: estimated ~${locResult.estimatedLoc} LOC (${locResult.confidence}% confidence). ` +
-      `This looks like a Standard Quick Fix (Tier 2 — compliance rubric ≥70 required). ` +
+      'This looks like a Standard Quick Fix (Tier 2 — compliance rubric ≥70 required). ' +
       `Max ${tier2MaxLoc} LOC. How would you like to proceed?`;
   }
 
@@ -272,9 +272,9 @@ async function main() {
 }
 
 // ESM entry point detection (Windows-compatible)
-const isMain =
+const isMain = process.argv[1] && (
   import.meta.url === `file://${process.argv[1]}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
+  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
 
 if (isMain) {
   main().catch((err) => {

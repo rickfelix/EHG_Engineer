@@ -1109,8 +1109,11 @@ async function createSD(options) {
     .single();
 
   if (error) {
-    console.error('Failed to create SD:', error.message);
-    process.exit(1);
+    const msg = `Failed to create SD: ${error.message}`;
+    console.error(msg);
+    // Throw instead of process.exit — callers (EVA, corrective-sd-generator) must not be killed
+    if (typeof globalThis.__LEO_CLI_MODE !== 'undefined') process.exit(1);
+    throw new Error(msg);
   }
 
   // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
