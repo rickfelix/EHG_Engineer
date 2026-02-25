@@ -552,7 +552,7 @@ After outcome classification, assess whether the brainstorm requires formal visi
 | Signal | Indicates |
 |--------|-----------|
 | Topic contains: "new UI", "new system", "platform", "redesign", "from scratch" | New build surface |
-| Outcome is "Ready for SD" AND estimated effort > 20h | Significant scope |
+| Pragmatist feasibility ≤ 5/10 OR 3+ implementation phases identified | Significant scope (complexity-based, not time-based) |
 | Multiple personas or user types identified | Needs UX vision |
 | Team analysis Pragmatist rated feasibility ≤ 5/10 | Complex enough for architecture |
 | Brainstorm domain is "architecture" | Architecture plan inherent |
@@ -731,8 +731,10 @@ node scripts/eva/vision-command.mjs upsert \
 **Dimension derivation** (no LLM needed):
 - Extract 6-10 dimensions from the vision doc's success criteria and key sections
 - Each dimension: `{name, weight, description, source_section}`
-- Weights should sum to ~1.0
+- Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1)
 - Use `timeout: 30000` for the command
+
+**Key format**: `VISION-<CONTEXT>-L2-NNN` where CONTEXT = venture_id when available, topic key otherwise
 
 If upsert succeeds, note the returned vision ID and key for the architecture plan linkage.
 
@@ -759,6 +761,9 @@ node scripts/eva/archplan-command.mjs upsert \
 ```
 
 Architecture dimensions focus on structural/implementation aspects (6-8 dimensions).
+Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).
+
+**Key format**: `ARCH-<CONTEXT>-NNN` where CONTEXT = venture_id when available, topic key otherwise
 
 ### 9.5E: Confirm Registration
 

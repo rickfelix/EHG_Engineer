@@ -59,6 +59,26 @@ If `--source` not provided, ask:
 "What is the path to the source document? (e.g. docs/plans/eva-venture-lifecycle-vision.md)"
 ```
 
+**Step 1.5: Scope disambiguation**
+
+Ask using AskUserQuestion:
+
+```javascript
+{
+  "questions": [{
+    "question": "Is this vision scoped to a single venture or portfolio-wide?",
+    "header": "Scope",
+    "multiSelect": false,
+    "options": [
+      {"label": "Single venture (Recommended for L2)", "description": "Vision applies to one specific venture"},
+      {"label": "Portfolio-wide (Recommended for L1)", "description": "Vision applies across all EHG ventures"}
+    ]
+  }]
+}
+```
+
+Cross-validate: If the user chose L1 but "Single venture", or L2 but "Portfolio-wide", warn about the mismatch and confirm they want to proceed.
+
 **Step 2: Generate a vision key**
 
 Format: `VISION-<PREFIX>-<LEVEL>-<NNN>`
@@ -75,6 +95,32 @@ node scripts/eva/vision-command.mjs extract --source <source-path>
 
 Capture the JSON output (dimensions array).
 
+**Step 3.5: Required section validation**
+
+After extraction, check the source document for these required sections:
+- Problem Statement
+- Personas / Audience
+- Success Criteria
+- Scope
+
+If any are missing, ask using AskUserQuestion:
+
+```javascript
+{
+  "questions": [{
+    "question": "The source document is missing: [list missing sections]. These improve HEAL scoring quality.",
+    "header": "Missing Sections",
+    "multiSelect": false,
+    "options": [
+      {"label": "Add sections now", "description": "I'll provide the missing content before saving"},
+      {"label": "Proceed without", "description": "Save as-is — sections can be added via addendum later"}
+    ]
+  }]
+}
+```
+
+If the user chooses to add sections, collect the content and append to the source before proceeding.
+
 **Step 4: Chairman approval gate**
 
 Present the dimensions to the user:
@@ -88,6 +134,12 @@ Vision Key: <generated-key>
 Level: <L1|L2>
 Source: <source-path>
 Dimensions: <count>
+Weight Sum: <sum> (should be ~1.0)
+```
+
+If the weight sum is outside 0.9-1.1, display a warning:
+```
+⚠️  Dimension weights sum to <sum> — expected ~1.0. Consider adjusting before approval.
 ```
 
 Then ask:
