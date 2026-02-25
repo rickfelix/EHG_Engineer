@@ -699,25 +699,52 @@ Brainstorm saved to: brainstorm/YYYY-MM-DD-<topic-slug>.md
 
 This step creates formal planning documents and registers them in EVA's tracking system (eva_vision_documents, eva_architecture_plans) so they are scored by HEAL and referenced by downstream SDs.
 
-### 9.5A: Draft Vision Document (if requested)
+### 9.5A: Auto-Generate Vision Document
 
-Write a vision document to `docs/plans/<topic-slug>-vision.md`. Include:
-- Executive Summary
-- Problem Statement
-- Personas (with goals, mindset, key activities)
-- Information Architecture (views, routes, source tables)
-- Key Decision/Intervention Points
-- Integration patterns
-- Evolution/phasing plan
-- What this is NOT (explicit out-of-scope)
-- UI/UX wireframes (ASCII mockups for each key view, if UI-related)
-- Success criteria
+**AUTOMATED**: Synthesize a vision document from brainstorm content. Write to `docs/plans/<topic-slug>-vision.md`.
 
-Use the brainstorm discovery answers, team perspectives, and evaluation results as source material.
+Use the brainstorm discovery answers, team perspectives (Challenger, Visionary, Pragmatist), and evaluation results to generate **all** of the following sections. Every section is **required** — EVA registration will fail if any are missing.
 
-### 9.5B: Register Vision in EVA
+**Required sections** (use these exact markdown headings):
+```markdown
+# Vision: <Topic Title>
 
-Run the vision command. Provide dimensions manually (derived from the vision doc's key sections) to avoid LLM timeout on large documents:
+## Executive Summary
+[2-3 paragraph synthesis of the brainstorm's core thesis]
+
+## Problem Statement
+[What problem this addresses, who is affected, current impact]
+
+## Personas
+[For each persona: name, goals, mindset, key activities — derived from brainstorm user/stakeholder discussion]
+
+## Information Architecture
+[Views, routes, data sources, navigation structure — derived from Pragmatist feasibility analysis]
+
+## Key Decision Points
+[Critical decision/intervention points identified during brainstorm — from Challenger analysis]
+
+## Integration Patterns
+[How this connects to existing systems — derived from brainstorm integration discussion]
+
+## Evolution Plan
+[Phasing strategy: what ships first, what comes later — from Visionary growth analysis]
+
+## Out of Scope
+[Explicit boundaries — what this is NOT, derived from scope discussion]
+
+## UI/UX Wireframes
+[ASCII mockups for key views if UI-related, or "N/A — no UI component" for backend work]
+
+## Success Criteria
+[Measurable outcomes — derived from brainstorm evaluation criteria and team consensus]
+```
+
+**After writing the file**, verify it exists and has all 10 required sections before proceeding to 9.5B.
+
+### 9.5B: Register Vision in EVA (with Key Capture)
+
+Run the vision command with dimensions derived from the vision doc's success criteria and key sections:
 
 ```bash
 node scripts/eva/vision-command.mjs upsert \
@@ -736,21 +763,53 @@ node scripts/eva/vision-command.mjs upsert \
 
 **Key format**: `VISION-<CONTEXT>-L2-NNN` where CONTEXT = venture_id when available, topic key otherwise
 
-If upsert succeeds, note the returned vision ID and key for the architecture plan linkage.
+**CRITICAL — Key Capture and Error Handling:**
+1. Parse the command output for the returned vision key (look for `VISION-` pattern in stdout)
+2. **Store the vision_key** — you will need it for Step 9.5D and Step 11
+3. **If the command fails** (non-zero exit code or error in output):
+   - Report the specific error to the user (e.g., "Missing required section: Problem Statement")
+   - **HALT** — do NOT proceed to Step 9.5C
+   - Suggest fixing the vision document and retrying: "Fix the issue in docs/plans/<slug>-vision.md, then re-run Step 9.5B"
+4. **If the command succeeds**, confirm: `✅ Vision registered: VISION-<KEY> (L2, N dimensions)`
 
-### 9.5C: Draft Architecture Plan (if requested)
+### 9.5C: Auto-Generate Architecture Plan
 
-Write an architecture plan to `docs/plans/<topic-slug>-architecture.md`. Include:
-- Stack & repository decisions
-- Legacy deprecation plan (if replacing existing)
-- Route/component structure
-- Data layer (Supabase queries, mutations, RLS requirements)
-- API surface (RPC functions, governance endpoints)
-- Implementation phases with time estimates
-- Testing strategy
-- Risk mitigation
+**AUTOMATED**: Synthesize an architecture plan from brainstorm content. Write to `docs/plans/<topic-slug>-architecture.md`.
 
-### 9.5D: Register Architecture Plan in EVA
+Use the Pragmatist's feasibility analysis, the Challenger's risk assessment, and the brainstorm's technical discussion to generate **all** of the following sections. Every section is **required**.
+
+**Required sections** (use these exact markdown headings):
+```markdown
+# Architecture Plan: <Topic Title>
+
+## Stack & Repository Decisions
+[Technology choices, repo structure — from Pragmatist analysis]
+
+## Legacy Deprecation Plan
+[What existing systems this replaces/modifies, migration path — or "N/A — greenfield"]
+
+## Route & Component Structure
+[Routes, components, module organization — from Information Architecture discussion]
+
+## Data Layer
+[Supabase tables, queries, mutations, RLS requirements — from data discussion]
+
+## API Surface
+[RPC functions, REST endpoints, governance endpoints — from integration discussion]
+
+## Implementation Phases
+[Phase 1/2/3 with time estimates and deliverables — from Pragmatist phasing]
+
+## Testing Strategy
+[Unit, integration, E2E test approach — from quality discussion]
+
+## Risk Mitigation
+[Technical risks with specific mitigation strategies — from Challenger risk analysis]
+```
+
+**After writing the file**, verify it exists and has all 8 required sections before proceeding to 9.5D.
+
+### 9.5D: Register Architecture Plan in EVA (with Key Capture)
 
 ```bash
 node scripts/eva/archplan-command.mjs upsert \
@@ -765,16 +824,54 @@ Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).
 
 **Key format**: `ARCH-<CONTEXT>-NNN` where CONTEXT = venture_id when available, topic key otherwise
 
-### 9.5E: Confirm Registration
+**CRITICAL — Key Capture and Error Handling:**
+1. Parse the command output for the returned plan key (look for `ARCH-` pattern in stdout)
+2. **Store the plan_key** — you will need it for Step 9.5E and Step 11
+3. **Use the vision_key from Step 9.5B** for the `--vision-key` flag (do NOT re-derive it)
+4. **If the command fails** (non-zero exit code or error in output):
+   - Report the specific error to the user
+   - **HALT** — do NOT proceed to Step 9.5E
+   - Suggest fixing the architecture document and retrying
+5. **If the command succeeds**, confirm: `✅ Arch plan registered: ARCH-<KEY> (linked to VISION-<KEY>)`
 
-Report to the user:
+### 9.5E: Validation Checkpoint (BLOCKING)
+
+**MANDATORY GATE** — Do NOT proceed to Step 10 until this passes.
+
+Verify both registrations succeeded:
+
+1. **Check vision_key**: Must be non-null and captured from Step 9.5B
+   - If null: `❌ Vision registration missing. Re-run Step 9.5B before continuing.`
+   - **BLOCK** — do not proceed
+
+2. **Check plan_key**: Must be non-null and captured from Step 9.5D
+   - If null: `❌ Architecture plan registration missing. Re-run Step 9.5D before continuing.`
+   - **BLOCK** — do not proceed
+
+3. **If both keys exist**, report success:
 ```
-Vision registered:  VISION-<KEY> (L2, N dimensions) — tracked by HEAL
-Arch plan registered: ARCH-<KEY> (linked to VISION-<KEY>) — tracked by HEAL
-Brainstorm linked: <SESSION_ID>
+✅ Vision & Architecture Pipeline Complete
+   Vision:    VISION-<KEY> (L2, N dimensions) — tracked by HEAL
+   Arch Plan: ARCH-<KEY> (linked to VISION-<KEY>) — tracked by HEAL
+   Brainstorm: <SESSION_ID>
 
-These documents are now in the EVA system. SDs created from this brainstorm
-will reference these keys for traceability.
+   These keys will be passed to /eva review and /leo create in Step 11.
+```
+
+4. **Store both keys for Step 11**: The vision_key and plan_key must be available when Step 11 executes. If the brainstorm session was recorded in Step 10, also store them in the session's metadata:
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('brainstorm_sessions')
+  .update({ metadata: { vision_key: '<VISION_KEY>', plan_key: '<PLAN_KEY>' } })
+  .eq('id', '<SESSION_ID>')
+  .then(({error}) => {
+    if (error) console.error('Failed to store keys:', error.message);
+    else console.log('Keys stored in brainstorm session metadata');
+  });
+"
 ```
 
 ---
@@ -837,14 +934,26 @@ question: "Vision and architecture plan are registered in EVA. Ready to create S
 header: "Next Steps"
 options:
   - label: "Create SDs (Recommended)"
-    description: "Create Strategic Directives referencing VISION-<KEY> and ARCH-<KEY>"
+    description: "Run /eva review then /leo create with VISION-<KEY> and ARCH-<KEY> auto-populated"
   - label: "Review documents first"
-    description: "Read through the vision and architecture docs before creating SDs"
+    description: "Run /eva review for 3-agent review of vision and architecture docs"
   - label: "Triangulate first"
     description: "Get external AI opinions on open questions via /triangulation-protocol"
   - label: "Done for now"
     description: "Documents are registered — SDs can be created in a future session"
 ```
+
+**Auto-chaining when "Create SDs" or "Review documents first" is selected (vision/arch keys available):**
+
+1. **Invoke /eva review** with the registered keys:
+   - Use the Skill tool to invoke `review-vision` with args: `--vision-key <VISION_KEY> --plan-key <PLAN_KEY>`
+   - The vision_key and plan_key come from Step 9.5E (stored during that step)
+   - Do NOT ask the user to type the keys — they are auto-populated
+
+2. **After review completes, invoke /leo create** with the keys:
+   - Use the Skill tool to invoke `leo` with args: `create --vision-key <VISION_KEY> --arch-key <PLAN_KEY>`
+   - The keys are passed as CLI flags so the created SD has vision/arch traceability in its metadata
+   - Do NOT ask the user for the keys — they are auto-populated from Step 9.5
 
 **If outcome is "Ready for SD" AND no vision/arch registered:**
 ```
