@@ -1,30 +1,40 @@
 ---
 Category: Guide
 Status: Approved
-Version: 1.0.0
+Version: 2.0.0
 Author: DOCMON Sub-Agent
-Last Updated: 2026-02-08
-Tags: [cli-venture-lifecycle, eva, stages, phase-1, the-truth]
+Last Updated: 2026-02-25
+Tags: [cli-venture-lifecycle, eva, stages, phase-1, the-truth, stage-zero]
 Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
 ---
 
-# Phase 1: The Truth -- Stages 1-5
+# Phase 1: The Truth -- Stage 0 (Pre-Lifecycle) + Stages 1-5
 
 ## Phase Purpose
 
 Validate the idea before investing significant resources. This phase answers the question: **"Is this idea worth pursuing? Does the market want it? Can we make money?"**
 
-Every venture begins here. If a venture cannot survive The Truth, it should not consume resources in later phases. Two kill gates (Stages 3 and 5) provide deterministic termination points. A Reality Gate at the 5-to-6 boundary validates that all five Truth-phase artifacts exist before the venture advances.
+Every venture begins at Stage 0 (ideation synthesis), which feeds into the formal 25-stage lifecycle starting at Stage 1. If a venture cannot survive The Truth, it should not consume resources in later phases. Two kill gates (Stages 3 and 5) provide deterministic termination points. A Reality Gate at the 5-to-6 boundary validates that all five Truth-phase artifacts exist before the venture advances.
 
 ## Phase Flow
 
 ```
+ STAGE 0 (Pre-Lifecycle)
+ ========================
+ +-------------------+     +-------------------+     +-------------------+
+ |   ENTRY PATH      |---->|   SYNTHESIS        |---->|   CHAIRMAN REVIEW |
+ |   discovery /     |     |   13 components    |     |   park / proceed  |
+ |   competitor /    |     |   (LLM-driven)     |     |   maturity assess |
+ |   chairman-direct |     +-------------------+     +--------+----------+
+ +-------------------+                                  PARK   |  READY
+                                                        (nursery) |
+                                                               v
                           PHASE 1: THE TRUTH
  ================================================================
 
  +-------------------+     +-------------------+
  |   STAGE 1         |     |   STAGE 2         |
- |   Draft Idea      |---->|   AI Review       |
+ |   Idea Capture    |---->|   Idea Analysis   |
  |   (artifact_only) |     |   (automated_chk) |
  +-------------------+     +-------------------+
                                     |
@@ -54,13 +64,19 @@ Every venture begins here. If a venture cannot survive The Truth, it should not 
 
 ```mermaid
 flowchart TD
-    S1["Stage 1: Draft Idea"]
-    S2["Stage 2: AI Review"]
+    S0["Stage 0: Ideation Synthesis\n(13 components)"]
+    CR{"Chairman Review\npark / proceed"}
+    NURSERY["Venture Nursery"]
+    S1["Stage 1: Idea Capture"]
+    S2["Stage 2: Idea Analysis\n(7 personas)"]
     S3{"Stage 3: Market Validation\n(KILL GATE)"}
     S4["Stage 4: Competitive Intel"]
     S5{"Stage 5: Profitability\n(KILL GATE)"}
     RG["Reality Gate 1->2"]
 
+    S0 --> CR
+    CR -->|park| NURSERY
+    CR -->|ready| S1
     S1 --> S2 --> S3
     S3 -->|pass| S4
     S3 -->|kill| DEAD1["Venture Killed"]
@@ -69,6 +85,9 @@ flowchart TD
     S5 -->|kill| DEAD2["Venture Killed"]
     RG --> PHASE2["Phase 2: The Engine"]
 
+    style S0 fill:#9cf,stroke:#06c
+    style CR fill:#fc9,stroke:#c60
+    style NURSERY fill:#ccc,stroke:#666
     style S3 fill:#f96,stroke:#c00
     style S5 fill:#f96,stroke:#c00
     style DEAD1 fill:#c00,color:#fff
@@ -78,126 +97,263 @@ flowchart TD
 
 ---
 
-## Stage 1: Draft Idea
+## Stage 0: Ideation Synthesis (Pre-Lifecycle)
 
 | Property | Value |
 |----------|-------|
-| Template | `lib/eva/stage-templates/stage-01.js` (56 lines) |
-| Slug | `draft-idea` |
-| Stage Type | artifact_only |
-| Gate Type | None |
-| Version | 1.0.0 |
+| Implementation | `lib/eva/stage-zero/` (15+ files) |
+| CLI Entry | `node scripts/eva-venture-new.js` |
+| Stage Type | pre-lifecycle |
+| Gate Type | Chairman Review (park/proceed) |
 
 ### Purpose
 
-Captures a minimally viable venture idea with required fields. This is the venture's origin document -- the seed from which all subsequent analysis grows.
+Stage 0 is the ideation engine that feeds into the formal 25-stage lifecycle. It transforms raw inputs (chairman ideas, market signals, competitor data) into a structured venture brief through 13 synthesis components.
 
-### Required Inputs
+### Entry Paths
 
-| Field | Type | Constraint |
-|-------|------|------------|
-| `description` | string | minLength: 50 |
-| `valueProp` | string | minLength: 20 |
-| `targetMarket` | string | minLength: 10 |
+| Path | CLI Flag | Purpose |
+|------|----------|---------|
+| Discovery | `--path discovery --strategy trend_scanner` | AI-driven opportunity detection |
+| Competitor Teardown | `--path competitor --url <URL>` | Deconstruct a competitor to find gaps |
+| Chairman Direct | `--path chairman --idea "..."` | Chairman provides the idea directly |
 
-### Generated Artifacts
+### 13 Synthesis Components
 
-- **idea_brief** -- The validated idea record stored as stage data
+Each component enriches the venture brief via LLM analysis:
 
-### Derived Fields
+1. **Cross-Reference** -- Checks venture against intellectual capital + outcome history + domain knowledge
+2. **Problem Reframing** -- Reframes the problem from multiple angles
+3. **Archetype Classification** -- Maps to venture archetype (marketplace, SaaS, etc.)
+4. **Portfolio Evaluation** -- Evaluates fit within EHG portfolio
+5. **Moat Architecture** -- Identifies defensibility strategy
+6. **Time Horizon** -- Classifies build timeline
+7. **Build Cost Estimation** -- Estimates implementation cost
+8. **Narrative Risk** -- Identifies storytelling/positioning risks
+9. **Attention Capital** -- Evaluates attention acquisition strategy
+10. **Tech Trajectory** -- Assesses technology trend alignment
+11. **Design Evaluation** -- Evaluates UX/design differentiation potential
+12. **Virality Assessment** -- Scores organic growth potential
+13. **Chairman Constraints** -- Validates against chairman preferences
 
-None. Stage 1 is a pure input stage with no computed values.
+### Outputs
 
-### Validation Rules
+- **ventures table** -- New venture record with `current_lifecycle_stage: 1`, `company_id` (defaults to EHG)
+- **venture_artifacts** -- Stage 0 artifact (`lifecycle_stage: 0`, `artifact_type: 'stage_0_analysis'`)
+- **venture_briefs** -- Detailed brief record with all synthesis fields
+- **ventures.metadata.stage_zero** -- Synthesis data embedded in venture metadata (fallback for Stage 1)
 
-- `description` must be a string with at least 50 characters
-- `valueProp` must be a string with at least 20 characters
-- `targetMarket` must be a string with at least 10 characters
+### Chairman Review
 
-All validation uses the shared `validateString()` helper from `lib/eva/stage-templates/validation.js`.
+The chairman review assesses venture maturity:
 
-### Chairman Interaction
+| Maturity | Decision | Action |
+|----------|----------|--------|
+| `ready` | Proceed | Create venture at Stage 1 |
+| `seed` / `sprout` | Proceed (early) | Create venture with maturity flag |
+| `nursery` | Park | Route to Venture Nursery with review schedule (90d) |
+| `blocked` | Park | Route to Venture Nursery with review schedule (30d) |
 
-The Chairman reviews the draft idea before Stage 2 begins. This is an advisory review -- there is no automated gate.
+### Data Flow to Stage 1
 
-### Integration Points
+Stage 1 consumes Stage 0 output through three resolution paths (in order):
+1. `venture_artifacts` where `lifecycle_stage = 0` (primary)
+2. `ventures.metadata.stage_zero` (fallback)
+3. Direct brief data passed through execution context
 
-- Stage 1 data flows forward to Stage 25 (Venture Review) for drift detection
-- The `description` and `targetMarket` fields provide context for the AI Review in Stage 2
-- Stage 1 data is the baseline for the constraint drift check at the end of the lifecycle
+### File References
 
-### For AI Agents
-
-**When to invoke**: At venture creation. Every venture starts at Stage 1.
-
-**What to check**: Ensure all three fields meet minimum length constraints. A bare-bones idea with a 10-word description will fail validation.
-
-**What to produce**: A JSON object with `description`, `valueProp`, and `targetMarket` fields.
-
-**How to validate**: Call `TEMPLATE.validate(data)`. If `valid === false`, the `errors` array describes what is missing.
+| Component | Path |
+|-----------|------|
+| Entry paths | `lib/eva/stage-zero/paths/discovery-mode.js`, `competitor-teardown.js` |
+| Synthesis pipeline | `lib/eva/stage-zero/synthesis/index.js` (orchestrator) |
+| Chairman review | `lib/eva/stage-zero/chairman-review.js` |
+| Venture nursery | `lib/eva/stage-zero/venture-nursery.js` |
+| Interfaces/contracts | `lib/eva/stage-zero/interfaces.js` |
 
 ---
 
-## Stage 2: AI Review
+## Stage 1: Idea Capture
 
 | Property | Value |
 |----------|-------|
-| Template | `lib/eva/stage-templates/stage-02.js` (85 lines) |
-| Slug | `ai-review` |
-| Stage Type | automated_check |
+| Template | `lib/eva/stage-templates/stage-01.js` |
+| Analysis Step | `lib/eva/stage-templates/analysis-steps/stage-01-hydration.js` |
+| Slug | `idea-capture` |
+| Stage Type | artifact_only |
 | Gate Type | None |
-| Version | 1.0.0 |
+| Version | 2.0.0 |
 
 ### Purpose
 
-Stores critiques from multiple AI models or agents and computes a deterministic composite score as the rounded average of all critique scores.
+Hydrates a structured venture idea from Stage 0 synthesis data via LLM. Transforms raw synthesis into validated fields with provenance tracking. This is the venture's origin document within the formal lifecycle.
 
-### Required Inputs
+### Required Inputs (from Stage 0)
 
 | Field | Type | Constraint |
 |-------|------|------------|
-| `critiques` | array | minItems: 1 |
-| `critiques[].model` | string | required |
-| `critiques[].summary` | string | minLength: 20 |
-| `critiques[].strengths` | array of strings | minItems: 1 |
-| `critiques[].risks` | array of strings | minItems: 1 |
-| `critiques[].score` | integer | 0-100 |
+| `synthesis` | object | Stage 0 synthesis data (aliased from `stage0Data`) |
+| `ventureName` | string | Venture identifier |
+
+### Output Schema
+
+| Field | Type | Constraint | Required |
+|-------|------|------------|----------|
+| `description` | string | minLength: 50 | Yes |
+| `problemStatement` | string | minLength: 20 | Yes |
+| `valueProp` | string | minLength: 20 | Yes |
+| `targetMarket` | string | minLength: 10 | Yes |
+| `archetype` | enum | marketplace, saas, content, services, hardware, hybrid, other | Yes |
+| `keyAssumptions` | array of strings | minItems: 1 | Yes |
+| `moatStrategy` | string | minLength: 10 | No |
+| `successCriteria` | array of strings | | No |
 
 ### Generated Artifacts
 
-- **critique_report** -- Multi-perspective analysis with composite scoring
+- **stage_1_analysis** -- Hydrated idea record stored in `venture_artifacts`
 
 ### Derived Fields
 
 | Field | Formula |
 |-------|---------|
-| `compositeScore` | `Math.round(sum_of_scores / critique_count)` |
+| `sourceProvenance` | Object tracking which fields came from Stage 0 synthesis vs LLM generation |
+
+### Template Hooks
+
+- **`onBeforeAnalysis`** -- Recommends templates from similar ventures before hydration runs
 
 ### Validation Rules
 
-- At least one critique entry required
-- Each critique must have a model name, summary (20+ chars), at least one strength, at least one risk, and a score between 0 and 100
-- Ties round 0.5 up per standard `Math.round` behavior
+- `description` must be a string with at least 50 characters
+- `problemStatement` must be a string with at least 20 characters
+- `valueProp` must be a string with at least 20 characters
+- `targetMarket` must be a string with at least 10 characters
+- `archetype` must be one of the defined enum values
+- `keyAssumptions` must be a non-empty array of strings
 
 ### Chairman Interaction
 
-The composite score informs the Chairman's decision but does not gate progression. A low composite score is a signal, not a blocker.
+Advisory only -- no automated gate. The Chairman reviews the hydrated idea before Stage 2 begins.
 
 ### Integration Points
 
-- Multiple AI models contribute independent critiques
-- The composite score provides input context for Stage 3 (Market Validation)
-- Critique risks feed into Stage 6 (Risk Matrix)
+- Consumes Stage 0 synthesis via `venture_artifacts` (lifecycle_stage=0) or `ventures.metadata.stage_zero`
+- Stage 1 data flows forward to Stages 2, 3, 4, 5 and Stage 25 (drift detection)
+- `description`, `targetMarket`, `problemStatement` provide context for Stage 2's multi-persona analysis
+- `keyAssumptions` baseline feeds Assumptions vs Reality tracking
 
 ### For AI Agents
 
-**When to invoke**: After Stage 1 data is validated. Multiple AI agents should produce independent critiques.
+**When to invoke**: After Stage 0 creates a venture. Stage 1 is the first formal lifecycle stage.
 
-**What to check**: Each critique must have all required fields. The `score` must be an integer from 0 to 100.
+**What to check**: Stage 0 artifact must exist with synthesis data. All 6 required fields must meet constraints.
 
-**What to produce**: An array of critique objects, each from a different model perspective.
+**What to produce**: A JSON object with all required fields. The analysis step calls the LLM to hydrate from synthesis.
 
-**How to validate**: Call `TEMPLATE.validate(data)`, then `TEMPLATE.computeDerived(data)` to get the composite score.
+**How to validate**: Call `TEMPLATE.validate(data)`. If `valid === false`, the `errors` array describes failures.
+
+---
+
+## Stage 2: Idea Analysis (MoA Multi-Persona)
+
+| Property | Value |
+|----------|-------|
+| Template | `lib/eva/stage-templates/stage-02.js` |
+| Analysis Step | `lib/eva/stage-templates/analysis-steps/stage-02-multi-persona.js` |
+| Slug | `idea-validation` |
+| Stage Type | automated_check |
+| Gate Type | None |
+| Version | 2.0.0 |
+
+### Purpose
+
+Runs a Mixture-of-Agents (MoA) multi-persona analysis on the Stage 1 idea. Seven personas evaluate the venture from different perspectives, each producing a 0-100 score aligned 1:1 with Stage 3's kill gate metrics. Includes Four Buckets epistemic classification.
+
+### Seven Personas
+
+| Persona | Stage 3 Metric | Focus Area |
+|---------|---------------|------------|
+| Market Strategist | `marketFit` | Market size, timing, product-market fit signals |
+| Customer Advocate | `customerNeed` | Pain severity, willingness to pay, frequency of need |
+| Growth Hacker | `momentum` | Virality potential, distribution channels, traction signals |
+| Revenue Analyst | `revenuePotential` | Monetization model, pricing power, revenue ceiling |
+| Moat Architect | `competitiveBarrier` | Defensibility, network effects, switching costs, IP |
+| Operations Realist | `executionFeasibility` | Technical complexity, resource requirements, time to market |
+| Product Designer | `designQuality` | UX clarity, interaction simplicity, design differentiation |
+
+### Required Inputs (from Stage 1)
+
+| Field | Type | Constraint |
+|-------|------|------------|
+| `stage1Data.description` | string | Required |
+| `stage1Data.valueProp` | string | Used in persona prompts |
+| `stage1Data.targetMarket` | string | Used in persona prompts |
+| `stage1Data.problemStatement` | string | Used in persona prompts |
+
+### Output Schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `analysis.strategic` | string (min 20) | Market Strategist + Revenue Analyst perspective synthesis |
+| `analysis.technical` | string (min 20) | Operations Realist + Moat Architect perspective synthesis |
+| `analysis.tactical` | string (min 20) | Growth Hacker + Customer Advocate + Product Designer synthesis |
+| `metrics.marketFit` | integer 0-100 | From Market Strategist |
+| `metrics.customerNeed` | integer 0-100 | From Customer Advocate |
+| `metrics.momentum` | integer 0-100 | From Growth Hacker |
+| `metrics.revenuePotential` | integer 0-100 | From Revenue Analyst |
+| `metrics.competitiveBarrier` | integer 0-100 | From Moat Architect |
+| `metrics.executionFeasibility` | integer 0-100 | From Operations Realist |
+| `metrics.designQuality` | integer 0-100 | From Product Designer |
+| `evidence.market` | string | Market Strategist evidence summary |
+| `evidence.customer` | string | Customer Advocate evidence summary |
+| `evidence.competitive` | string | Moat Architect evidence summary |
+| `evidence.execution` | string | Operations Realist evidence summary |
+| `evidence.design` | string | Product Designer evidence summary |
+| `suggestions` | array | Optional improvement suggestions (type: immediate/strategic) |
+| `critiques` | array | Raw persona outputs preserved for downstream use |
+| `fourBuckets` | object | Epistemic classifications (fact/assumption/simulation/unknown) |
+
+### Generated Artifacts
+
+- **stage_2_analysis** -- Multi-persona analysis with 7 metric scores, evidence, and epistemic classification
+
+### Derived Fields
+
+| Field | Formula |
+|-------|---------|
+| `compositeScore` | `Math.round(sum_of_7_metrics / 7)` |
+
+### Cross-Stage Contract Validation
+
+Stage 2's `validate()` checks Stage 1 upstream data:
+- `stage01.description` (min 50 chars)
+- `stage01.problemStatement` (min 20 chars)
+- `stage01.valueProp` (min 20 chars)
+- `stage01.targetMarket` (min 10 chars)
+- `stage01.archetype` (string)
+
+### Chairman Interaction
+
+The composite score and per-metric breakdown inform the Chairman's decision but do not gate progression. A low composite score is a signal, not a blocker.
+
+### Integration Points
+
+- Consumes Stage 1 data (description, valueProp, targetMarket, problemStatement)
+- 7 metric scores flow directly to Stage 3 (Market Validation Kill Gate) as input
+- Evidence domains feed into Stage 6 (Risk Matrix)
+- Four Buckets classifications feed epistemic tracking
+
+### For AI Agents
+
+**When to invoke**: After Stage 1 artifact is persisted.
+
+**What to check**: Stage 1 data must have `description` field. All 7 metrics must be integers 0-100.
+
+**What to produce**: The analysis step runs 7 sequential LLM calls (one per persona) and transforms outputs into the template schema.
+
+**How to validate**: Call `TEMPLATE.validate(data)` to check the structured output, then `TEMPLATE.computeDerived(data)` to get the composite score.
+
+**Performance note**: 7 sequential Gemini calls take ~5-6 minutes total. Each call uses `max_tokens: 4000` and `timeout: 120000ms`.
 
 ---
 

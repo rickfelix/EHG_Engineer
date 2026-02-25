@@ -767,12 +767,30 @@ The Chairman controls notification preferences per venture and globally. The def
 
 ## Appendix A: Stage 0 (Pre-Lifecycle)
 
-Stage 0 is the ideation synthesis that feeds into Stage 1. It is not formally part of the 25-stage lifecycle but is the entry point. Stage 0 consumes:
-- Chairman ideas (direct input)
-- EVA opportunity detection (automated)
-- External signals (market, competitive, technology)
+Stage 0 is the ideation synthesis that feeds into Stage 1. It is not formally part of the 25-stage lifecycle but is the entry point.
 
-Stage 0 produces a structured synthesis that Stage 1 consumes as its primary input. The gap between Stage 0 output and Stage 1 input was identified as the #1 gap in Stage 1 of the analysis.
+**Implementation**: `lib/eva/stage-zero/` (15+ files). CLI: `node scripts/eva-venture-new.js`.
+
+**Entry paths**: Discovery (trend scanning), Competitor Teardown, Chairman Direct.
+
+**Stage 0 consumes**:
+- Chairman ideas (direct input via `--path chairman`)
+- EVA opportunity detection (`--path discovery --strategy trend_scanner`)
+- Competitor signals (`--path competitor --url <URL>`)
+
+**13 synthesis components** enrich the venture brief: cross-reference, problem reframing, archetype classification, portfolio evaluation, moat architecture, time horizon, build cost estimation, narrative risk, attention capital, tech trajectory, design evaluation, virality assessment, chairman constraints.
+
+**Stage 0 produces**:
+- Venture record in `ventures` table (with `company_id` defaulting to EHG)
+- Stage 0 artifact in `venture_artifacts` (`lifecycle_stage: 0`)
+- Brief record in `venture_briefs` (with portfolio_evaluation, problem_reframings)
+- Synthesis data in `ventures.metadata.stage_zero` (Stage 1 fallback)
+
+**Chairman review**: Maturity assessment (ready/seed/sprout/nursery/blocked). Non-ready ventures route to Venture Nursery with review schedules.
+
+**Stage 0 → Stage 1 handoff**: Stage 1 resolves synthesis data through three paths: (1) `venture_artifacts` lifecycle_stage=0, (2) `ventures.metadata.stage_zero`, (3) direct context. See `lib/eva/stage-execution-engine.js` for resolution logic.
+
+See `docs/guides/workflow/cli-venture-lifecycle/stages/phase-01-the-truth.md` for full Stage 0 documentation.
 
 ---
 
