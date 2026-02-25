@@ -25,23 +25,79 @@ This document defines the technical architecture for the Chairman Web UI: a focu
 
 ### 2.2 Tech Stack (inherited)
 
-| Layer | Technology | Notes |
-|-------|-----------|-------|
-| Framework | React 18+ | Existing |
-| Build | Vite | Existing |
-| Language | TypeScript | Existing |
-| UI Components | Shadcn UI | Existing — Card, Table, Badge, Button, Sheet, Tabs |
-| Styling | Tailwind CSS | Existing — responsive utilities for mobile |
-| Data | Supabase JS Client | Existing — `@supabase/supabase-js` |
-| Auth | Supabase Auth | Existing — `ProtectedRoute` component |
-| State | @tanstack/react-query | Existing — cache, refetch, stale-while-revalidate |
-| Routing | react-router-dom | Existing |
-| Charts | Recharts | Existing — for HEAL score trends, health visualizations |
-| Hosting | Vercel | Existing — HTTPS, edge CDN |
+| Layer | Technology | Version | Notes |
+|-------|-----------|---------|-------|
+| Framework | React | ^18.3.1 | Existing |
+| Build | Vite | Existing | Existing |
+| Language | TypeScript | Existing | Existing |
+| UI Components | Shadcn UI | Existing | Card, Table, Badge, Button, Sheet, Tabs |
+| Styling | Tailwind CSS | Existing | Responsive utilities for mobile |
+| Data | @supabase/supabase-js | ^2.56.0 | Existing — Supabase client |
+| Auth | Supabase Auth | Existing | `ProtectedRoute` + `ProtectedRouteWrapper` |
+| State (server) | @tanstack/react-query | **^5.83.0** | **v5 API** — must use `{ queryKey, queryFn }` object syntax |
+| State (client) | zustand | ^5.0.8 | Existing — use for persona toggle, sidebar collapse, alert state |
+| Routing | react-router-dom | ^6.30.1 | Existing |
+| Charts | Recharts | ^2.15.4 | HEAL score trends, health visualizations |
+| Animation | framer-motion | ^11.18.2 | Existing — use for view transitions, card entrances |
+| Validation | zod | ^3.25.76 | Existing — use for RPC response validation |
+| Toasts | sonner | ^1.7.4 | **Primary toast system** for chairman-v3 (see Section 2.4) |
+| Theme | Custom ThemeProvider | Existing | **Not** `next-themes` (see Section 2.5) |
+| Hosting | Vercel | Existing | HTTPS, edge CDN |
 
 ### 2.3 New Dependencies
 
 None required. The existing stack covers all needs.
+
+### 2.4 Toast System Decision
+
+Two toast systems coexist in the EHG app:
+
+| System | Package | Usage |
+|--------|---------|-------|
+| **sonner** | `sonner ^1.7.4` | Programmatic transient toasts (`toast.success()`, `toast.error()`) |
+| **Radix toast** | `@radix-ui/react-toast ^1.2.14` | Shadcn `useToast()` hook — persistent/actionable toasts |
+
+**Decision for chairman-v3**: Standardize on **sonner** exclusively.
+- Simpler API (`toast()` function vs. hook + imperative handle)
+- Already themed via `src/components/ui/sonner.tsx`
+- Use for: decision confirmations, error messages, alert dismissals
+- Do NOT import `use-toast.ts` (Radix-based) in any v3 component
+
+### 2.5 Theme System Decision
+
+Two theme providers coexist:
+
+| Provider | Location | Used By |
+|----------|----------|---------|
+| Custom `ThemeProvider` | `src/components/theme/ThemeProvider.tsx` | App-wide — stores in `localStorage('ehg-ui-theme')` |
+| `next-themes` | `next-themes ^0.3.0` | Only `sonner.tsx` imports `useTheme` from `next-themes` |
+
+**Decision for chairman-v3**: Use the **custom ThemeProvider** exclusively.
+- All v3 components import `useTheme` from `src/components/theme/ThemeProvider`
+- Fix `sonner.tsx` to use the custom provider instead of `next-themes` (Phase 5 cleanup)
+- Two toggle components exist (`ThemeToggle.tsx` and `DarkModeToggle.tsx`) — pick one for ChairmanShell, delete the other in Phase 5
+
+### 2.6 React Query v5 Conventions
+
+All chairman-v3 hooks must follow the v5 API:
+
+```tsx
+// CORRECT (v5)
+const { data, isLoading } = useQuery({
+  queryKey: ['chairman', 'decisions', 'pending'],
+  queryFn: () => supabase.from('chairman_decisions').select('*').eq('status', 'pending'),
+  staleTime: 60_000,
+  refetchInterval: 60_000,
+});
+
+// WRONG (v4 shorthand — will not compile)
+const { data } = useQuery(['decisions'], fetchDecisions);
+```
+
+**Query key conventions for chairman-v3:**
+- Prefix all keys with `['chairman', ...]` or `['builder', ...]` by persona
+- Include filter params in keys: `['chairman', 'decisions', { status: 'pending' }]`
+- Mutations use `useMutation` with `onSuccess` invalidation of related query keys
 
 ---
 
@@ -64,13 +120,26 @@ The current EHG app has 10+ chairman routes built across multiple SDs. These are
 | `/chairman/governance` | GovernanceOverview | `/chairman` (merged into briefing) | Remove route |
 | `/chairman/okr-analytics` | OKRAnalyticsPage | Future enhancement or remove | Keep temporarily |
 
-### 3.2 Deprecation Strategy
+### 3.2 Layout Wrapping Inconsistency
+
+The existing chairman routes have an inconsistent layout pattern — 4 routes bypass `ChairmanLayoutV2`:
+
+| Route | Has Layout Wrapper? |
+|-------|-------------------|
+| `/chairman/settings` | No |
+| `/chairman/escalations/:id` | No |
+| `/chairman/analytics` | No |
+| `/chairman/okr-analytics` | No |
+
+**Impact on deprecation**: Routes without the layout wrapper may have standalone styling/navigation that needs separate handling during swap. All v3 routes use `ChairmanShell` uniformly — no exceptions.
+
+### 3.3 Deprecation Strategy
 
 **Phase 1**: Build new components alongside existing ones. New routes use a `v3/` component directory.
 **Phase 2**: Once new views are stable (2+ weeks daily use), swap route definitions to point to new components.
 **Phase 3**: Delete old components, remove unused routes. Target: 5 chairman routes (briefing, decisions, ventures, vision, preferences) + 3 builder routes (dashboard, queue, inbox).
 
-### 3.3 Existing Components to Reuse
+### 3.4 Existing Components to Reuse
 
 Some existing chairman-v2 components are well-built and should be preserved or adapted:
 
@@ -81,6 +150,25 @@ Some existing chairman-v2 components are well-built and should be preserved or a
 | `EVAGreeting` | Reuse in daily briefing |
 | `QuickStatCard` | Reuse for summary metrics |
 | `DecisionStack` | Adapt for new decision queue (core logic is solid) |
+
+### 3.5 Existing Hooks to Evaluate
+
+5 chairman-specific hooks already exist in `src/hooks/` (flat directory):
+
+| Existing Hook | v3 Replacement | Action |
+|--------------|----------------|--------|
+| `useChairmanDashboardData.ts` | `useChairmanBriefing.ts` | Replace — different data shape |
+| `useChairmanData.ts` | Split across multiple v3 hooks | Deprecate |
+| `useChairmanConfig.ts` | `useChairmanPreferences.ts` | Evaluate — may be reusable |
+| `useChairmanOverviewData.ts` | `useChairmanBriefing.ts` | Replace |
+| `useChairmanFeedbackService.ts` | No v3 equivalent | Keep if still used elsewhere |
+| `useDecisionQueue.ts` | `useDecisionQueue.ts` (v3) | Evaluate — core logic may carry over |
+| `useVisionDashboardData.ts` | `useVisionScores.ts` | Replace — streamline query |
+| `useGovernanceData.ts` | Merged into briefing/lifecycle | Deprecate |
+| `useStrategicGovernance.ts` | No direct equivalent | Deprecate if only used by old routes |
+| `useOKRScorecard.ts` | Future enhancement | Keep temporarily |
+
+**Strategy**: During Phase 1, read each existing hook before writing its replacement. Carry forward well-tested query logic; replace the shape and caching strategy.
 
 ---
 
@@ -182,6 +270,89 @@ interface DecisionActionsProps {
   onDecision: (decision: string, rationale?: string) => void;
 }
 ```
+
+### 5.3 Error Boundary Strategy
+
+The EHG app has a mature error boundary hierarchy. Chairman-v3 reuses it:
+
+| Boundary | Component | Usage in v3 |
+|----------|-----------|-------------|
+| App-level | `GlobalErrorBoundary` | Already wraps entire app — no change |
+| Route-level | `RouteErrorBoundary` | Wrap each v3 route in `chairmanRoutesV3.tsx` |
+| Component-level | `ComponentErrorBoundary` | Wrap data-dependent sections (HEAL chart, venture list) |
+| Protected route | `ProtectedRouteWrapper` | Use for all v3 routes — provides `Suspense` + `loadingMessage` |
+| Lazy loading | `LazyRoute` | Use for code-splitting v3 views |
+
+**Pattern for v3 routes:**
+```tsx
+<Route path="/chairman" element={
+  <ProtectedRouteWrapper loadingMessage="Loading briefing...">
+    <LazyRoute component={() => import('./components/chairman-v3/DailyBriefing')} />
+  </ProtectedRouteWrapper>
+} errorElement={<RouteErrorBoundary />} />
+```
+
+### 5.4 Client State (Zustand)
+
+UI-only state that does not belong in React Query:
+
+```tsx
+// src/stores/chairman-ui.ts
+interface ChairmanUIStore {
+  activePersona: 'chairman' | 'builder';
+  sidebarCollapsed: boolean;
+  alertsOpen: boolean;
+  togglePersona: () => void;
+  toggleSidebar: () => void;
+  toggleAlerts: () => void;
+}
+```
+
+- Persisted to `localStorage` via Zustand `persist` middleware
+- Persona preference survives page reload
+- Sidebar collapse state survives navigation
+
+### 5.5 View Transitions (Framer Motion)
+
+Use `framer-motion` for polish — keep animations subtle and fast:
+
+| Transition | Animation | Duration |
+|------------|-----------|----------|
+| View mount | Fade in + slide up 8px | 200ms |
+| Decision card enter | Stagger children 50ms | 150ms each |
+| Persona toggle | Crossfade sidebar items | 250ms |
+| Alert toast | Slide in from right | 200ms |
+| Modal (reject rationale) | Scale from 0.95 + fade | 200ms |
+
+**Rule**: No animation > 300ms. No spring physics (too playful for a governance tool).
+
+### 5.6 RPC Response Validation (Zod)
+
+Validate Supabase RPC responses at runtime to catch schema drift:
+
+```tsx
+// src/lib/schemas/chairman.ts
+import { z } from 'zod';
+
+export const DecisionSchema = z.object({
+  id: z.string().uuid(),
+  venture_id: z.string().uuid(),
+  lifecycle_stage: z.number(),
+  status: z.enum(['pending', 'approved', 'rejected']),
+  decision: z.enum(['proceed', 'reject', 'park']).nullable(),
+  summary: z.string(),
+  rationale: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export const ApproveResponseSchema = z.object({
+  success: z.boolean(),
+  decision_id: z.string().uuid(),
+  new_status: z.string(),
+});
+```
+
+Use `.safeParse()` in hooks — log validation failures, display graceful fallback rather than crash.
 
 ---
 
