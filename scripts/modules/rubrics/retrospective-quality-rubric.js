@@ -516,14 +516,25 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
     } catch (error) {
       console.error('Retrospective Quality Validation Error:', error);
 
-      // Return failed validation on error
+      // Fail-open: use stored quality_score when AI is unavailable (rate limits, outages)
+      const storedScore = retrospective.quality_score || 0;
+      const hasContent = Array.isArray(retrospective.key_learnings) && retrospective.key_learnings.length > 0;
+      const fallbackScore = (storedScore > 0 && hasContent) ? storedScore : 0;
+      const fallbackPassed = fallbackScore >= 55;
+
+      if (fallbackScore > 0) {
+        console.log(`   ⚠️  AI unavailable — using stored quality_score fallback: ${fallbackScore}/100`);
+      }
+
       return {
-        passed: false,
-        score: 0,
-        issues: [`AI quality assessment failed: ${error.message}`],
-        warnings: ['Manual review required'],
+        passed: fallbackPassed,
+        score: fallbackScore,
+        issues: fallbackPassed ? [] : [`AI quality assessment failed: ${error.message}`],
+        warnings: ['AI evaluator unavailable - using stored quality_score fallback', 'Manual review required'],
         details: {
-          error: error.message
+          error: error.message,
+          fallback_used: true,
+          stored_quality_score: storedScore
         }
       };
     }
