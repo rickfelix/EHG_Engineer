@@ -130,7 +130,8 @@ console.log('');
 
   // 2. Execute stage
   console.log('⚡ Step 2: Stage Execution');
-  const result = await executeStage({ stageNumber, ventureId, dryRun });
+  const silentLogger = { log: () => {}, warn: console.warn, error: console.error };
+  const result = await executeStage({ stageNumber, ventureId, dryRun, logger: silentLogger });
 
   console.log(`   Template: ${result.template}`);
   console.log(`   Has analysisStep: ${result.hasAnalysisStep}`);
