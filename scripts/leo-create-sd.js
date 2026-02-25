@@ -8,6 +8,8 @@
  * - --from-learn <pattern-id>: Create from /learn pattern
  * - --from-feedback <id>: Create from /inbox feedback item
  * - --child <parent-key> <index>: Create child SD
+ * - --vision-key <key>: Link to EVA vision document
+ * - --arch-key <key>: Link to EVA architecture plan
  *
  * Part of SD-LEO-SDKEY-001: Centralize SD Creation Through /leo
  */
@@ -580,7 +582,7 @@ export const VISION_PRESCREEN_TIMEOUT_MS = 15000;
  * @param {Object} supabase   - Supabase client (passed to scoreSD to reuse connection)
  * @returns {Promise<Object|null>} scoreResult or null on failure
  */
-export async function scoreSDAtConception(sdKey, title, description, supabase) {
+export async function scoreSDAtConception(sdKey, title, description, supabase, { visionKey, archKey } = {}) {
   const ACTION_LABELS = {
     accept:         '✅ ACCEPT',
     minor_sd:       '🟡 MINOR GAP',
@@ -590,8 +592,11 @@ export async function scoreSDAtConception(sdKey, title, description, supabase) {
 
   try {
     const visionScope = `Title: ${title}\nDescription: ${description}`;
+    const scorerOpts = { sdKey, scope: visionScope, dryRun: false, supabase };
+    if (visionKey) scorerOpts.visionKey = visionKey;
+    if (archKey) scorerOpts.archKey = archKey;
     const scoreResult = await Promise.race([
-      scoreSD({ sdKey, scope: visionScope, dryRun: false, supabase }),
+      scoreSD(scorerOpts),
       new Promise((_, reject) =>
         setTimeout(
           () => reject(new Error(`Vision scoring timeout (${VISION_PRESCREEN_TIMEOUT_MS / 1000}s)`)),
@@ -1117,7 +1122,10 @@ async function createSD(options) {
   }
 
   // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
-  await scoreSDAtConception(data.sd_key, title, description, supabase);
+  await scoreSDAtConception(data.sd_key, title, description, supabase, {
+    visionKey: metadata?.vision_key,
+    archKey: metadata?.arch_key
+  });
 
   console.log('\n' + '═'.repeat(60));
   console.log('✅ SD CREATED');
@@ -1199,6 +1207,8 @@ Flags:
   --type <type>      Override inferred SD type when using --from-plan
   --title "<title>"  Override extracted title when using --from-plan
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
+  --vision-key <key> Link SD to EVA vision document (stored in metadata, used for vision scoring)
+  --arch-key <key>   Link SD to EVA architecture plan (stored in metadata, used for vision scoring)
   --help             Show this help message
 
 Dependency Field Guide:
@@ -1270,7 +1280,7 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
     } else {
       // Direct creation: <source> <type> "<title>"
       // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)
-      const knownDirectFlags = new Set(['--force', '-f', '--venture']);
+      const knownDirectFlags = new Set(['--force', '-f', '--venture', '--vision-key', '--arch-key']);
       const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
       if (unknownFlags.length > 0) {
         console.error('\n❌ Unknown flag(s): ' + unknownFlags.join(', '));
@@ -1376,6 +1386,12 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
       const cliVenture = ventureArgIdx !== -1 ? args[ventureArgIdx + 1] : null;
       const venturePrefix = await resolveVenturePrefix(cliVenture);
 
+      // Parse --vision-key and --arch-key flags (SD-MAN-INFRA-AUTOMATE-BRAINSTORM-PIPELINE-002)
+      const visionKeyIdx = args.indexOf('--vision-key');
+      const visionKey = visionKeyIdx !== -1 ? args[visionKeyIdx + 1] : null;
+      const archKeyIdx = args.indexOf('--arch-key');
+      const archKey = archKeyIdx !== -1 ? args[archKeyIdx + 1] : null;
+
       const sdKey = await generateSDKey({ source, type, title, venturePrefix });
 
       await createSD({
@@ -1387,7 +1403,9 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
         forceCreate,
         metadata: {
           source: source.toLowerCase(),
-          ...phase0Metadata
+          ...phase0Metadata,
+          ...(visionKey && { vision_key: visionKey }),
+          ...(archKey && { arch_key: archKey })
         }
       });
     }
