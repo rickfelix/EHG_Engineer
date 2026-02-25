@@ -3,6 +3,10 @@
  * Brainstorm-to-Vision Pipeline
  * SD: SD-EHG-ORCH-GOVERNANCE-STACK-001-E
  *
+ * VISION KEY FORMAT: VISION-<CONTEXT>-<LEVEL>-<NNN>
+ * ARCH KEY FORMAT: ARCH-<CONTEXT>-<NNN>
+ * CONTEXT = venture_id when available, topic key otherwise
+ *
  * Wires brainstorm sessions with vision-relevant outcomes to EVA vision documents.
  * Sessions with 'significant_departure' create addendums on L1 vision.
  * Sessions with 'sd_created' (strategic scope) create new L2 vision docs.
@@ -20,8 +24,7 @@ import { getValidationClient } from '../../lib/llm/client-factory.js';
 dotenv.config();
 
 const VISION_RELEVANT_OUTCOMES = ['sd_created', 'significant_departure'];
-const L1_VISION_KEY = 'VISION-EHG-L1-001';
-const MAX_LLM_CONTENT_CHARS = 8000;
+const MAX_LLM_CONTENT_CHARS = 15000;
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -33,7 +36,10 @@ function parseArgs(argv) {
   return opts;
 }
 
-async function extractDimensions(content) {
+async function extractDimensions(content, retryCount = 0) {
+  if (content.length > MAX_LLM_CONTENT_CHARS) {
+    console.warn(`\n   ⚠️  Content truncated from ${content.length.toLocaleString()} to ${MAX_LLM_CONTENT_CHARS.toLocaleString()} chars for LLM extraction`);
+  }
   const truncated = content.length > MAX_LLM_CONTENT_CHARS
     ? content.slice(0, MAX_LLM_CONTENT_CHARS) + '\n...[truncated]'
     : content;
@@ -62,7 +68,12 @@ ${truncated}`;
     if (!match) return null;
     const dims = JSON.parse(match[0]);
     return Array.isArray(dims) && dims.length > 0 ? dims : null;
-  } catch {
+  } catch (err) {
+    if (retryCount === 0) {
+      console.warn(`\n   ⚠️  Extraction failed (attempt 1): ${err.message} — retrying...`);
+      return extractDimensions(content, 1);
+    }
+    console.warn(`\n   ⚠️  Extraction failed after 2 attempts: ${err.message}`);
     return null;
   }
 }
@@ -105,12 +116,21 @@ async function main() {
 
   if (!unlinked.length) { console.log('✅ All sessions already linked to vision docs.'); return; }
 
-  // Get L1 vision doc for addendums
+  // Dynamically resolve L1 vision doc (most recent active L1)
   const { data: l1Vision } = await supabase
     .from('eva_vision_documents')
     .select('id, vision_key, content, addendums, version')
-    .eq('vision_key', L1_VISION_KEY)
+    .eq('level', 'L1')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
+
+  if (!l1Vision) {
+    console.warn('   ⚠️  No active L1 vision document found — significant_departure sessions will be skipped');
+  } else {
+    console.log(`   📋 L1 vision: ${l1Vision.vision_key}`);
+  }
 
   let processed = 0;
 
@@ -147,9 +167,12 @@ async function main() {
       continue;
     }
 
-    if (session.outcome_type === 'significant_departure' && l1Vision) {
+    if (session.outcome_type === 'significant_departure' && !l1Vision) {
+      console.warn(`    ⚠️  Skipping significant_departure session — no active L1 vision document found`);
+      continue;
+    } else if (session.outcome_type === 'significant_departure' && l1Vision) {
       // Add as addendum to L1 vision
-      console.log(`    → Adding addendum to ${L1_VISION_KEY}`);
+      console.log(`    → Adding addendum to ${l1Vision.vision_key}`);
 
       if (opts.dryRun) {
         console.log('    [DRY RUN] Would add addendum and set source_brainstorm_id');
@@ -177,17 +200,17 @@ async function main() {
           addendums: updatedAddendums,
           content: combinedContent,
           extracted_dimensions: dimensions,
-          source_brainstorm_id: session.id,
           updated_at: new Date().toISOString(),
         })
-        .eq('vision_key', L1_VISION_KEY);
+        .eq('vision_key', l1Vision.vision_key);
 
       if (updErr) { console.error(`    ❌ Addendum failed: ${updErr.message}`); continue; }
       console.log(`    ✅ Addendum added (${dimensions?.length || 0} dimensions re-extracted)`);
 
     } else if (session.outcome_type === 'sd_created') {
       // Create new L2 vision doc
-      const visionKey = `VISION-BS-${session.id.slice(0, 8).toUpperCase()}`;
+      const contextPrefix = session.metadata?.venture_id || `BS-${session.id.slice(0, 8).toUpperCase()}`;
+      const visionKey = `VISION-${contextPrefix}-L2-001`;
       console.log(`    → Creating L2 vision doc: ${visionKey}`);
 
       if (opts.dryRun) {

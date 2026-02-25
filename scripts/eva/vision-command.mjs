@@ -3,6 +3,10 @@
  * EVA Vision Command - Core Implementation
  * SD: SD-MAN-INFRA-EVA-VISION-COMMAND-001
  *
+ * VISION KEY FORMAT: VISION-<CONTEXT>-<LEVEL>-<NNN>
+ * ARCH KEY FORMAT: ARCH-<CONTEXT>-<NNN>
+ * CONTEXT = venture_id when available, topic key otherwise
+ *
  * Handles create, addendum, and extract operations for eva_vision_documents.
  * Called by the /eva vision skill — Claude handles interactive approval;
  * this script handles LLM extraction and DB operations.
@@ -35,7 +39,7 @@ dotenv.config();
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
-const MAX_LLM_CONTENT_CHARS = 8000;
+const MAX_LLM_CONTENT_CHARS = 15000;
 
 // ============================================================================
 // Argument parsing
@@ -59,6 +63,9 @@ function parseArgs(argv) {
 // ============================================================================
 
 async function extractDimensions(content, retryCount = 0) {
+  if (content.length > MAX_LLM_CONTENT_CHARS) {
+    console.warn(`\n   ⚠️  Content truncated from ${content.length.toLocaleString()} to ${MAX_LLM_CONTENT_CHARS.toLocaleString()} chars for LLM extraction`);
+  }
   const truncated = content.length > MAX_LLM_CONTENT_CHARS
     ? content.slice(0, MAX_LLM_CONTENT_CHARS) + '\n...[truncated for dimension extraction]'
     : content;
@@ -153,10 +160,17 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  // Build next version number
+  if (dimensions) {
+    const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
+    if (weightSum < 0.9 || weightSum > 1.1) {
+      console.warn(`\n   ⚠️  Dimension weights sum to ${weightSum.toFixed(2)} (expected ~1.0)`);
+    }
+  }
+
+  // Build next version number and fetch existing addendums
   const { data: existing } = await supabase
     .from('eva_vision_documents')
-    .select('id, version')
+    .select('id, version, addendums')
     .eq('vision_key', visionKey)
     .maybeSingle();
 
@@ -172,6 +186,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     chairman_approved: true, // approval already happened in skill before calling upsert
     source_file_path: source,
     created_by: 'eva-vision-command',
+    addendums: existing?.addendums || [],
     ...(ventureId ? { venture_id: ventureId } : {}),
     ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
   };
@@ -226,6 +241,13 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
   const combinedContent = `${existing.content}\n\n---\n\n## Addendum ${updatedAddendums.length}\n\n${section}`;
   console.error(`\n🤖 Re-extracting dimensions from updated content...`);
   const dimensions = await extractDimensions(combinedContent);
+
+  if (dimensions) {
+    const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
+    if (weightSum < 0.9 || weightSum > 1.1) {
+      console.warn(`\n   ⚠️  Dimension weights sum to ${weightSum.toFixed(2)} (expected ~1.0)`);
+    }
+  }
 
   const updatePayload = {
     addendums: updatedAddendums,

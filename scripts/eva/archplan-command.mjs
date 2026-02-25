@@ -3,7 +3,11 @@
  * EVA Architecture Plan Command - Core Implementation
  * SD: SD-MAN-INFRA-EVA-ARCHITECTURE-PLAN-001
  *
- * Handles create, version, extract, and list operations for eva_architecture_plans.
+ * VISION KEY FORMAT: VISION-<CONTEXT>-<LEVEL>-<NNN>
+ * ARCH KEY FORMAT: ARCH-<CONTEXT>-<NNN>
+ * CONTEXT = venture_id when available, topic key otherwise
+ *
+ * Handles create, version, extract, addendum, and list operations for eva_architecture_plans.
  * Mirrors vision-command.mjs structure with addition of ADR + capability context.
  *
  * Subcommands:
@@ -12,12 +16,16 @@
  *            --vision-key <key>           Link to parent vision document
  *            --source <path>
  *            [--dimensions <json>]
+ *            [--brainstorm-id <uuid>]
+ *   addendum --plan-key <key>             Append addendum section to existing plan
+ *            --section <text>
  *   list                                  List all architecture plans with vision linkage
  *
  * Usage:
  *   node scripts/eva/archplan-command.mjs list
  *   node scripts/eva/archplan-command.mjs extract --source docs/plans/eva-platform-architecture.md
  *   node scripts/eva/archplan-command.mjs upsert --plan-key ARCH-EHG-L1-002 --vision-key VISION-EHG-L1-001 --source docs/plans/...
+ *   node scripts/eva/archplan-command.mjs addendum --plan-key ARCH-EHG-L1-002 --section "New section text"
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -31,7 +39,7 @@ dotenv.config();
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
-const MAX_LLM_CONTENT_CHARS = 8000;
+const MAX_LLM_CONTENT_CHARS = 15000;
 
 // ============================================================================
 // Argument parsing
@@ -108,6 +116,9 @@ function buildContextSection(context) {
 // ============================================================================
 
 async function extractDimensions(content, contextSection, retryCount = 0) {
+  if (content.length > MAX_LLM_CONTENT_CHARS) {
+    console.warn(`\n   ⚠️  Content truncated from ${content.length.toLocaleString()} to ${MAX_LLM_CONTENT_CHARS.toLocaleString()} chars for LLM extraction`);
+  }
   const combined = content.length > MAX_LLM_CONTENT_CHARS
     ? content.slice(0, MAX_LLM_CONTENT_CHARS) + '\n...[truncated]'
     : content;
@@ -185,7 +196,7 @@ async function cmdExtract({ source }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson }) {
+async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId }) {
   if (!planKey) { console.error('--plan-key is required'); process.exit(1); }
   if (!visionKey) { console.error('--vision-key is required (link to parent vision document)'); process.exit(1); }
   if (!source) { console.error('--source is required'); process.exit(1); }
@@ -222,6 +233,13 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
     dimensions = await extractDimensions(content, contextSection);
   }
 
+  if (dimensions) {
+    const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
+    if (weightSum < 0.9 || weightSum > 1.1) {
+      console.warn(`\n   ⚠️  Dimension weights sum to ${weightSum.toFixed(2)} (expected ~1.0)`);
+    }
+  }
+
   // Determine next version
   const { data: existing } = await supabase
     .from('eva_architecture_plans')
@@ -240,6 +258,8 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
     status: 'active',
     chairman_approved: true,
     created_by: 'eva-archplan-command',
+    source_file_path: source,
+    ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
   };
 
   const { data, error } = await supabase
@@ -259,11 +279,73 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
 }
 
+async function cmdAddendum({ planKey, section }) {
+  if (!planKey) { console.error('--plan-key is required'); process.exit(1); }
+  if (!section) { console.error('--section is required (the addendum text)'); process.exit(1); }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  // Fetch existing plan
+  const { data: existing, error: fetchErr } = await supabase
+    .from('eva_architecture_plans')
+    .select('id, plan_key, content, addendums, extracted_dimensions, version, vision_id')
+    .eq('plan_key', planKey)
+    .single();
+
+  if (fetchErr || !existing) {
+    console.error(`❌ Architecture plan not found: ${planKey}`);
+    process.exit(1);
+  }
+
+  // Build addendum entry
+  const addendum = {
+    section,
+    added_at: new Date().toISOString(),
+    added_by: 'eva-archplan-command',
+  };
+
+  const currentAddendums = existing.addendums || [];
+  const updatedAddendums = [...currentAddendums, addendum];
+
+  // Re-extract dimensions from combined content with ADR context
+  const combinedContent = `${existing.content}\n\n---\n\n## Addendum ${updatedAddendums.length}\n\n${section}`;
+  console.error(`\n🤖 Re-extracting dimensions from updated content...`);
+  const context = await fetchContext(supabase);
+  const contextSection = buildContextSection(context);
+  const dimensions = await extractDimensions(combinedContent, contextSection);
+
+  if (dimensions) {
+    const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
+    if (weightSum < 0.9 || weightSum > 1.1) {
+      console.warn(`\n   ⚠️  Dimension weights sum to ${weightSum.toFixed(2)} (expected ~1.0)`);
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('eva_architecture_plans')
+    .update({
+      addendums: updatedAddendums,
+      extracted_dimensions: dimensions,
+      content: combinedContent,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('plan_key', planKey)
+    .select('id, plan_key, version')
+    .single();
+
+  if (error) { console.error('❌ Addendum failed:', error.message); process.exit(1); }
+
+  console.log('\n✅ Addendum added:');
+  console.log(`   Key:      ${data.plan_key}`);
+  console.log(`   Addendums: ${updatedAddendums.length}`);
+  if (dimensions) console.log(`   Dimensions re-extracted: ${dimensions.length}`);
+}
+
 async function cmdList() {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const { data, error } = await supabase
     .from('eva_architecture_plans')
-    .select('id, plan_key, version, status, chairman_approved, created_at, eva_vision_documents!inner(vision_key, level)')
+    .select('id, plan_key, version, status, chairman_approved, created_at, eva_vision_documents(vision_key, level)')
     .order('created_at', { ascending: false });
 
   if (error) { console.error('❌ List failed:', error.message); process.exit(1); }
@@ -273,7 +355,7 @@ async function cmdList() {
   console.log('  ' + 'Plan Key'.padEnd(28) + 'Ver'.padEnd(5) + 'Status'.padEnd(12) + 'Vision Key'.padEnd(28) + 'Approved');
   console.log('  ' + '-'.repeat(80));
   for (const d of data) {
-    const visionKey = d.eva_vision_documents?.vision_key || 'unlinked';
+    const visionKey = d.eva_vision_documents?.vision_key || '(orphaned)';
     console.log('  ' + d.plan_key.padEnd(28) + String(d.version).padEnd(5) + d.status.padEnd(12) + visionKey.padEnd(28) + (d.chairman_approved ? '✅' : '⏳'));
   }
 }
@@ -285,11 +367,12 @@ async function cmdList() {
 const { subcommand, opts } = parseArgs(process.argv);
 
 switch (subcommand) {
-  case 'extract': await cmdExtract(opts); break;
-  case 'upsert':  await cmdUpsert(opts); break;
-  case 'list':    await cmdList(); break;
+  case 'extract':  await cmdExtract(opts); break;
+  case 'upsert':   await cmdUpsert(opts); break;
+  case 'addendum': await cmdAddendum(opts); break;
+  case 'list':     await cmdList(); break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
-    console.error('Valid subcommands: extract, upsert, list');
+    console.error('Valid subcommands: extract, upsert, addendum, list');
     process.exit(1);
 }
