@@ -14,6 +14,7 @@ Entry point for all EVA governance commands. Routes `/eva <subcommand>` to the a
 /eva archplan [subcommand]    Architecture plan management
 /eva score [options]          Vision alignment scoring
 /eva research [question]      Tiered research queries
+/eva review [options]         Post-creation vision/arch review
 /eva dashboard                Aggregated EVA metrics
 ```
 
@@ -55,7 +56,10 @@ EVA Governance CLI
                       Subcommands: create, addendum, list
 
   /eva archplan       Architecture plan management
-                      Subcommands: create, version, list
+                      Subcommands: create, version, addendum, list
+
+  /eva review         Post-creation vision/architecture review
+                      Options: --vision-key <key>, --plan-key <key>
 
   /eva score          Score SD/scope against vision alignment
                       Options: --sd-id <KEY>, --scope "<text>", --dry-run
@@ -81,6 +85,7 @@ Use the Skill tool to invoke the corresponding individual skill:
 | `vision` | `eva-vision` | Yes |
 | `archplan` | `eva-archplan` | Yes |
 | `score` | `eva-score` | Yes |
+| `review` | `review-vision` | Yes |
 | `research` | `eva-research` | Yes |
 | `dashboard` | `eva-dashboard` | Yes |
 
