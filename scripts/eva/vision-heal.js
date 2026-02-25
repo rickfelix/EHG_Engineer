@@ -31,8 +31,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
 
 const ACCEPT_THRESHOLD = 93;
-const VISION_KEY = 'VISION-EHG-L1-001';
-const ARCH_KEY = 'ARCH-EHG-L1-001';
+const DEFAULT_VISION_KEY = 'VISION-EHG-L1-001';
+const DEFAULT_ARCH_KEY = 'ARCH-EHG-L1-001';
+
+function parseKeyArgs(argv) {
+  let visionKey = DEFAULT_VISION_KEY;
+  let archKey = DEFAULT_ARCH_KEY;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--vision-key' && argv[i + 1]) visionKey = argv[++i];
+    if (argv[i] === '--arch-key' && argv[i + 1]) archKey = argv[++i];
+  }
+  return { visionKey, archKey };
+}
 
 function getSupabase() {
   return createClient(
@@ -43,25 +53,28 @@ function getSupabase() {
 
 // ─── SCORE: Output context for Claude Code inline evaluation ─────────────────
 
-async function cmdScore() {
+async function cmdScore(visionKey = DEFAULT_VISION_KEY, archKey = DEFAULT_ARCH_KEY) {
   const supabase = getSupabase();
 
   // Load vision dimensions
   const { data: vision } = await supabase
     .from('eva_vision_documents')
     .select('id, extracted_dimensions')
-    .eq('vision_key', VISION_KEY)
+    .eq('vision_key', visionKey)
     .single();
 
   const { data: arch } = await supabase
     .from('eva_architecture_plans')
     .select('id, extracted_dimensions')
-    .eq('plan_key', ARCH_KEY)
+    .eq('plan_key', archKey)
     .single();
 
-  if (!vision?.extracted_dimensions || !arch?.extracted_dimensions) {
-    console.error('❌ Vision or architecture documents not found or missing dimensions');
+  if (!vision?.extracted_dimensions) {
+    console.error(`❌ Vision document not found for key: ${visionKey}`);
     process.exit(1);
+  }
+  if (!arch?.extracted_dimensions) {
+    console.log(`ℹ️  Architecture plan not found for key: ${archKey} — scoring vision dimensions only`);
   }
 
   // Get latest score for comparison
@@ -104,7 +117,7 @@ async function cmdScore() {
 
 // ─── PERSIST: Write Claude Code's score to database ──────────────────────────
 
-async function cmdPersist(scoreJson) {
+async function cmdPersist(scoreJson, visionKey = DEFAULT_VISION_KEY, archKey = DEFAULT_ARCH_KEY) {
   const supabase = getSupabase();
 
   const parsed = JSON.parse(scoreJson);
@@ -113,13 +126,13 @@ async function cmdPersist(scoreJson) {
   const { data: vision } = await supabase
     .from('eva_vision_documents')
     .select('id, extracted_dimensions')
-    .eq('vision_key', VISION_KEY)
+    .eq('vision_key', visionKey)
     .single();
 
   const { data: arch } = await supabase
     .from('eva_architecture_plans')
     .select('id, extracted_dimensions')
-    .eq('plan_key', ARCH_KEY)
+    .eq('plan_key', archKey)
     .single();
 
   // Build dimension_scores JSONB with weights
@@ -157,8 +170,8 @@ async function cmdPersist(scoreJson) {
       dimension_scores: dimensionScores,
       threshold_action: thresholdAction,
       rubric_snapshot: {
-        vision_key: VISION_KEY,
-        arch_key: ARCH_KEY,
+        vision_key: visionKey,
+        arch_key: archKey,
         criteria_count: allDims.length,
         summary: parsed.summary,
         scored_by: 'claude-code-inline',
@@ -320,14 +333,15 @@ const isMain = argv1 && (
 if (isMain) {
   const cmd = process.argv[2];
   const arg = process.argv[3];
+  const { visionKey, archKey } = parseKeyArgs(process.argv);
 
   switch (cmd) {
     case 'score':
-      cmdScore().catch(e => { console.error(e.message); process.exit(1); });
+      cmdScore(visionKey, archKey).catch(e => { console.error(e.message); process.exit(1); });
       break;
     case 'persist':
       if (!arg) { console.error('Usage: vision-heal.js persist \'<JSON>\''); process.exit(1); }
-      cmdPersist(arg).catch(e => { console.error(e.message); process.exit(1); });
+      cmdPersist(arg, visionKey, archKey).catch(e => { console.error(e.message); process.exit(1); });
       break;
     case 'generate':
       if (!arg) { console.error('Usage: vision-heal.js generate <score-id>'); process.exit(1); }

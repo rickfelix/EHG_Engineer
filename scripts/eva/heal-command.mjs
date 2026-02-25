@@ -227,17 +227,30 @@ async function cmdSDPersist(scoreJson, filePath) {
     process.exit(1);
   }
 
-  // Load vision doc IDs for the foreign key (reuse same vision/arch refs)
+  // Resolve vision/arch keys — use SD metadata if available, else default to L1
+  let visionKey = 'VISION-EHG-L1-001';
+  let archKey = 'ARCH-EHG-L1-001';
+  if (parsed.sd_scores?.[0]?.sd_key) {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('metadata')
+      .eq('sd_key', parsed.sd_scores[0].sd_key)
+      .single();
+    if (sd?.metadata?.vision_key) visionKey = sd.metadata.vision_key;
+    if (sd?.metadata?.arch_key) archKey = sd.metadata.arch_key;
+  }
+
+  // Load vision doc IDs for the foreign key
   const { data: vision } = await supabase
     .from('eva_vision_documents')
     .select('id')
-    .eq('vision_key', 'VISION-EHG-L1-001')
+    .eq('vision_key', visionKey)
     .single();
 
   const { data: arch } = await supabase
     .from('eva_architecture_plans')
     .select('id')
-    .eq('plan_key', 'ARCH-EHG-L1-001')
+    .eq('plan_key', archKey)
     .single();
 
   const insertedIds = [];

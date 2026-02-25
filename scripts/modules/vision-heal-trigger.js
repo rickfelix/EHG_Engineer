@@ -137,12 +137,16 @@ export async function incrementCompletionCounter(supabase) {
  *
  * @returns {{success: boolean, output: string}}
  */
-export function executeVisionHeal() {
+export function executeVisionHeal(visionKey, archKey) {
   const healScript = join(__dirname, '../../eva/heal-command.mjs');
+
+  const args = [healScript, 'vision', 'score'];
+  if (visionKey) args.push('--vision-key', visionKey);
+  if (archKey) args.push('--arch-key', archKey);
 
   const result = spawnSync(
     process.execPath,
-    [healScript, 'vision', 'score'],
+    args,
     { encoding: 'utf8', timeout: 120000, env: process.env }
   );
 
@@ -189,14 +193,30 @@ export async function runVisionHealIfTriggered(sd, supabase) {
 
   console.log(`   ✅ Cooldown clear: ${cooldown.reason}`);
 
-  // Execute vision heal (non-blocking)
-  console.log('   🔍 Running /heal vision score...');
-  const result = executeVisionHeal();
+  // Extract vision/arch keys from SD metadata
+  const metadata = sd.metadata || {};
+  const visionKey = metadata.vision_key || null;
+  const archKey = metadata.arch_key || null;
 
-  if (result.success) {
-    console.log('   ✅ Vision heal completed successfully');
+  // Execute L2 vision heal if SD has vision_key
+  if (visionKey) {
+    console.log(`   🔍 Running /heal vision score for L2: ${visionKey}...`);
+    const l2Result = executeVisionHeal(visionKey, archKey);
+    if (l2Result.success) {
+      console.log('   ✅ L2 vision heal completed successfully');
+    } else {
+      console.log(`   ⚠️  L2 vision heal failed (non-blocking): ${l2Result.output}`);
+    }
+  }
+
+  // Always run L1 (global) vision heal
+  console.log('   🔍 Running /heal vision score for L1 (global)...');
+  const l1Result = executeVisionHeal();
+
+  if (l1Result.success) {
+    console.log('   ✅ L1 vision heal completed successfully');
     await recordVisionHealRun(supabase);
   } else {
-    console.log(`   ⚠️  Vision heal failed (non-blocking): ${result.output}`);
+    console.log(`   ⚠️  L1 vision heal failed (non-blocking): ${l1Result.output}`);
   }
 }
