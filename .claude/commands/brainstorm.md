@@ -543,6 +543,43 @@ Present the classification to the user:
 
 ---
 
+## Step 8.5: Scope Assessment — Vision & Architecture Plan Needs
+
+After outcome classification, assess whether the brainstorm requires formal vision and/or architecture documents before SD creation.
+
+**Auto-detect signals** (if 2+ match, recommend vision+arch):
+
+| Signal | Indicates |
+|--------|-----------|
+| Topic contains: "new UI", "new system", "platform", "redesign", "from scratch" | New build surface |
+| Outcome is "Ready for SD" AND estimated effort > 20h | Significant scope |
+| Multiple personas or user types identified | Needs UX vision |
+| Team analysis Pragmatist rated feasibility ≤ 5/10 | Complex enough for architecture |
+| Brainstorm domain is "architecture" | Architecture plan inherent |
+| Multiple phases or evolution path discussed | Vision needed for roadmap |
+
+**If 2+ signals detected**, ask using AskUserQuestion:
+
+```
+question: "This brainstorm has enough scope to warrant formal planning documents. What do you need?"
+header: "Planning Docs"
+options:
+  - label: "Vision + Architecture Plan (Recommended)"
+    description: "Create both — vision defines what/why, architecture defines how. Registered in EVA for HEAL scoring."
+  - label: "Vision document only"
+    description: "Strategic intent, personas, and success criteria. Architecture designed per-SD."
+  - label: "Architecture plan only"
+    description: "Technical decisions and component design. Link to existing L1 vision."
+  - label: "Skip — go straight to SD"
+    description: "Scope is clear enough from the brainstorm alone."
+```
+
+**If fewer than 2 signals**, skip this step and proceed to Step 9.
+
+Store the user's choice for use in Step 9.5.
+
+---
+
 ## Step 9: Generate and Save Document
 
 ### File Naming
@@ -656,6 +693,87 @@ Brainstorm saved to: brainstorm/YYYY-MM-DD-<topic-slug>.md
 
 ---
 
+## Step 9.5: Vision & Architecture Document Pipeline
+
+**Skip this step if Step 8.5 was skipped or user chose "Skip — go straight to SD".**
+
+This step creates formal planning documents and registers them in EVA's tracking system (eva_vision_documents, eva_architecture_plans) so they are scored by HEAL and referenced by downstream SDs.
+
+### 9.5A: Draft Vision Document (if requested)
+
+Write a vision document to `docs/plans/<topic-slug>-vision.md`. Include:
+- Executive Summary
+- Problem Statement
+- Personas (with goals, mindset, key activities)
+- Information Architecture (views, routes, source tables)
+- Key Decision/Intervention Points
+- Integration patterns
+- Evolution/phasing plan
+- What this is NOT (explicit out-of-scope)
+- UI/UX wireframes (ASCII mockups for each key view, if UI-related)
+- Success criteria
+
+Use the brainstorm discovery answers, team perspectives, and evaluation results as source material.
+
+### 9.5B: Register Vision in EVA
+
+Run the vision command. Provide dimensions manually (derived from the vision doc's key sections) to avoid LLM timeout on large documents:
+
+```bash
+node scripts/eva/vision-command.mjs upsert \
+  --vision-key VISION-<TOPIC-KEY>-L2-001 \
+  --level L2 \
+  --source docs/plans/<topic-slug>-vision.md \
+  --brainstorm-id <SESSION_ID> \
+  --dimensions '<JSON_ARRAY>'
+```
+
+**Dimension derivation** (no LLM needed):
+- Extract 6-10 dimensions from the vision doc's success criteria and key sections
+- Each dimension: `{name, weight, description, source_section}`
+- Weights should sum to ~1.0
+- Use `timeout: 30000` for the command
+
+If upsert succeeds, note the returned vision ID and key for the architecture plan linkage.
+
+### 9.5C: Draft Architecture Plan (if requested)
+
+Write an architecture plan to `docs/plans/<topic-slug>-architecture.md`. Include:
+- Stack & repository decisions
+- Legacy deprecation plan (if replacing existing)
+- Route/component structure
+- Data layer (Supabase queries, mutations, RLS requirements)
+- API surface (RPC functions, governance endpoints)
+- Implementation phases with time estimates
+- Testing strategy
+- Risk mitigation
+
+### 9.5D: Register Architecture Plan in EVA
+
+```bash
+node scripts/eva/archplan-command.mjs upsert \
+  --plan-key ARCH-<TOPIC-KEY>-001 \
+  --vision-key VISION-<TOPIC-KEY>-L2-001 \
+  --source docs/plans/<topic-slug>-architecture.md \
+  --dimensions '<JSON_ARRAY>'
+```
+
+Architecture dimensions focus on structural/implementation aspects (6-8 dimensions).
+
+### 9.5E: Confirm Registration
+
+Report to the user:
+```
+Vision registered:  VISION-<KEY> (L2, N dimensions) — tracked by HEAL
+Arch plan registered: ARCH-<KEY> (linked to VISION-<KEY>) — tracked by HEAL
+Brainstorm linked: <SESSION_ID>
+
+These documents are now in the EVA system. SDs created from this brainstorm
+will reference these keys for traceability.
+```
+
+---
+
 ## Step 10: Session Retrospective
 
 After saving the document, record the session for self-improvement:
@@ -708,7 +826,22 @@ Cap at 100. This score feeds into the self-improvement loop.
 
 After the document is saved and session recorded, suggest next steps based on the outcome classification:
 
-**If outcome is "Ready for SD":**
+**If outcome is "Ready for SD" AND vision/arch were registered in Step 9.5:**
+```
+question: "Vision and architecture plan are registered in EVA. Ready to create SDs?"
+header: "Next Steps"
+options:
+  - label: "Create SDs (Recommended)"
+    description: "Create Strategic Directives referencing VISION-<KEY> and ARCH-<KEY>"
+  - label: "Review documents first"
+    description: "Read through the vision and architecture docs before creating SDs"
+  - label: "Triangulate first"
+    description: "Get external AI opinions on open questions via /triangulation-protocol"
+  - label: "Done for now"
+    description: "Documents are registered — SDs can be created in a future session"
+```
+
+**If outcome is "Ready for SD" AND no vision/arch registered:**
 ```
 question: "This brainstorm looks ready for implementation. What next?"
 header: "Next Steps"
