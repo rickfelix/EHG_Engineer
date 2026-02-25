@@ -339,6 +339,16 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // Fail-safe: non-blocking, never prevents SD completion.
     await runProgrammaticRetrospective(sd);
 
+    // SD-MAN-INFRA-WIRE-HEAL-VISION-002: Auto-trigger /heal vision on orchestrator or vision-linked SD completion.
+    // Checks trigger predicates (orchestrator done, vision_key present) and cooldown before running.
+    // Fail-safe: non-blocking, never prevents SD completion.
+    try {
+      const { runVisionHealIfTriggered } = await import('../../../../modules/vision-heal-trigger.js');
+      await runVisionHealIfTriggered(sd, this.supabase);
+    } catch (visionHealError) {
+      console.log(`   ⚠️  Vision heal trigger failed (non-blocking): ${visionHealError.message}`);
+    }
+
     // Release the session claim
     await releaseSessionClaim(sd, this.supabase);
 
