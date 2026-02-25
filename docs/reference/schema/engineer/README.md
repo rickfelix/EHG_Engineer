@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-23T22:55:54.652Z
-**Tables**: 499
+**Generated**: 2026-02-25T20:22:28.434Z
+**Tables**: 501
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (499)
+## All Tables (501)
 
 ### LEO Protocol
 
@@ -273,6 +273,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [documentation_inventory](tables/documentation_inventory.md)
 - [documentation_templates](tables/documentation_templates.md)
 - [documentation_violations](tables/documentation_violations.md)
+- [ehg_alerts](tables/ehg_alerts.md)
 - [ehg_component_patterns](tables/ehg_component_patterns.md)
 - [ehg_design_decisions](tables/ehg_design_decisions.md)
 - [ehg_feature_areas](tables/ehg_feature_areas.md)
@@ -334,6 +335,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
 - [github_operations](tables/github_operations.md)
 - [governance_audit_log](tables/governance_audit_log.md)
+- [governance_decisions](tables/governance_decisions.md)
 - [governance_policies](tables/governance_policies.md)
 - [governance_proposals](tables/governance_proposals.md)
 - [hap_blocks_v2](tables/hap_blocks_v2.md)
