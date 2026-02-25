@@ -126,7 +126,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     // Section C: Traceability Mapping
     console.log('\n[C] Traceability Mapping');
     console.log('-'.repeat(60));
-    await validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase, sdCategory, gitRepoPath, sdType);
+    await validateTraceabilityMapping(sdKey, sdUuid, designAnalysis, databaseAnalysis, validation, supabase, sdCategory, gitRepoPath, sdType);
 
     // Section D: Sub-Agent Effectiveness
     console.log('\n[D] Sub-Agent Effectiveness');
