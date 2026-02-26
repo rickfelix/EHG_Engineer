@@ -85,7 +85,10 @@ export const CONSTITUTION_RULE_CODES = [
   'CONST-008', // Chesterton's Fence
   'CONST-009', // Human FREEZE command
   'CONST-010', // Non-Manipulation Principle (SD-LEO-INFRA-CONST-AMEND-001)
-  'CONST-011'  // Value Priority Hierarchy (SD-LEO-INFRA-CONST-AMEND-001)
+  'CONST-011', // Value Priority Hierarchy (SD-LEO-INFRA-CONST-AMEND-001)
+  'CONST-012', // FR Delivery Verification (SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-A)
+  'CONST-013', // Gate Immutability During EXEC (SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-A)
+  'CONST-014'  // Mandatory Decomposition (SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-A)
 ];
 
 /**
@@ -94,11 +97,11 @@ export const CONSTITUTION_RULE_CODES = [
 export const VIOLATION_SEVERITY = {
   CRITICAL: {
     description: 'Auto-reject, no human override allowed',
-    rules: ['CONST-001', 'CONST-002', 'CONST-007', 'CONST-009']
+    rules: ['CONST-001', 'CONST-002', 'CONST-007', 'CONST-009', 'CONST-013']
   },
   HIGH: {
     description: 'Flag for mandatory human review',
-    rules: ['CONST-003', 'CONST-004', 'CONST-005']
+    rules: ['CONST-003', 'CONST-004', 'CONST-005', 'CONST-012', 'CONST-014']
   },
   MEDIUM: {
     description: 'Warning, human review recommended',
