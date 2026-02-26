@@ -1,12 +1,12 @@
-# _migration_metadata Table
+# leo_protocol_state Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-26T02:22:21.495Z
-**Rows**: 2
-**RLS**: Enabled (0 policies)
+**Rows**: 0
+**RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,23 +14,24 @@
 
 ---
 
-## Columns (2 total)
+## Columns (3 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| key | `text` | **NO** | - | - |
-| value | `timestamp with time zone` | **NO** | - | - |
+| key | `character varying(100)` | **NO** | - | - |
+| value | `jsonb` | **NO** | `'{}'::jsonb` | - |
+| updated_at | `timestamp with time zone` | YES | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `_migration_metadata_pkey`: PRIMARY KEY (key)
+- `leo_protocol_state_pkey`: PRIMARY KEY (key)
 
 ## Indexes
 
-- `_migration_metadata_pkey`
+- `leo_protocol_state_pkey`
   ```sql
-  CREATE UNIQUE INDEX _migration_metadata_pkey ON public._migration_metadata USING btree (key)
+  CREATE UNIQUE INDEX leo_protocol_state_pkey ON public.leo_protocol_state USING btree (key)
   ```
 
 ---
