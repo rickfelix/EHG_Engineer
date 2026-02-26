@@ -22,11 +22,7 @@ router.get('/', asyncHandler(async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 
-  // Map stage enum to numeric value if needed
-  const ventures = (data || []).map(v => ({
-    ...v,
-    stage: v.current_stage || v.current_workflow_stage || 1
-  }));
+  const ventures = data || [];
 
   res.json(ventures);
 }));
@@ -46,13 +42,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Venture not found' });
   }
 
-  // Map stage to numeric value
-  const venture = {
-    ...data,
-    stage: data.current_stage || data.current_workflow_stage || 1
-  };
-
-  res.json(venture);
+  res.json(data);
 }));
 
 // Get artifacts for a venture
@@ -131,8 +121,7 @@ router.patch('/:id/stage', asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('ventures')
     .update({
-      current_stage: stage,
-      current_workflow_stage: stage
+      current_lifecycle_stage: stage
     })
     .eq('id', id)
     .select()
@@ -143,12 +132,7 @@ router.patch('/:id/stage', asyncHandler(async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 
-  const venture = {
-    ...data,
-    stage: data.current_stage || data.current_workflow_stage || 1
-  };
-
-  res.json(venture);
+  res.json(data);
 }));
 
 // Create or update artifact for a venture stage

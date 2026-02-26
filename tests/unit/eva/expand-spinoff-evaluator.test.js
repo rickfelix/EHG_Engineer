@@ -43,7 +43,7 @@ function createVenture(overrides = {}) {
     id: 'v1',
     name: 'Test Venture',
     status: 'active',
-    current_stage: 25,
+    current_lifecycle_stage: 25,
     archetype: 'saas',
     metadata: {
       financials: {
