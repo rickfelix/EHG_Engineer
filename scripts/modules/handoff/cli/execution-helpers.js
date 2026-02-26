@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
 import { createTaskHydrator } from '../../../../lib/tasks/index.js';
+import { validateBypassReason } from '../bypass-rubric.js';
 
 /**
  * Check bypass rate limits and log to audit
@@ -24,6 +25,24 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
+
+  // CONST-015: Validate bypass reason against rubric before proceeding
+  const rubricResult = validateBypassReason(bypassReason);
+  if (!rubricResult.allowed) {
+    console.error('');
+    console.error('❌ BYPASS REJECTED (CONST-015 Bypass Rubric)');
+    console.error(`   Category: ${rubricResult.category}`);
+    console.error(`   Rule: ${rubricResult.matchedRule}`);
+    console.error(`   ${rubricResult.explanation}`);
+    console.error('');
+    return { success: false, rejected: true, rubricResult };
+  }
+
+  if (rubricResult.category === 'UNCLASSIFIED') {
+    console.log('');
+    console.log('⚠️  BYPASS REASON UNCLASSIFIED — allowed but flagged for review');
+    console.log(`   Reason: ${bypassReason}`);
+  }
 
   const canonicalSdId = await normalizeSDId(supabase, sdId);
   const today = new Date();
@@ -81,6 +100,8 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
         original_sd_id: sdId,
         canonical_sd_id: canonicalSdId,
         bypass_reason: bypassReason,
+        rubric_category: rubricResult.category,
+        rubric_matched_rule: rubricResult.matchedRule,
         sd_bypasses_today: (sdBypasses?.length || 0) + 1,
         global_bypasses_today: (globalBypasses?.length || 0) + 1
       },
