@@ -69,7 +69,8 @@ function Write-Log {
 # Function to check if port is in use
 function Test-PortInUse {
     param([int]$Port)
-    $connection = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    # Only check Listen state — TimeWait/CloseWait are stale sockets that will clear on their own
+    $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     return $null -ne $connection
 }
 
@@ -133,9 +134,9 @@ function Start-Engineer {
     $serverLog = Join-Path $LogDir "engineer-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
     $env:PORT = "3000"
 
-    $process = Start-Process -FilePath "node" -ArgumentList "server.js" -WorkingDirectory $EngineerDir `
-        -RedirectStandardOutput $serverLog -RedirectStandardError "$serverLog.err" `
-        -WindowStyle Hidden -PassThru
+    # Use cmd /c to merge stderr into stdout so crash errors appear in the main log
+    $process = Start-Process -FilePath "cmd" -ArgumentList "/c", "node server.js > `"$serverLog`" 2>&1" `
+        -WorkingDirectory $EngineerDir -WindowStyle Hidden -PassThru
 
     $process.Id | Out-File -FilePath $EngineerPidFile -Encoding ASCII
 
@@ -149,6 +150,15 @@ function Start-Engineer {
         return $true
     } else {
         Write-Log "ERROR" "[ERROR] EHG_Engineer failed to start! Check log: $serverLog" "Red"
+        # Show last few lines of log for quick diagnosis
+        if (Test-Path $serverLog) {
+            $logContent = Get-Content $serverLog -Tail 5 -ErrorAction SilentlyContinue
+            if ($logContent) {
+                foreach ($line in $logContent) {
+                    Write-Log "ERROR" "   > $line" "Red"
+                }
+            }
+        }
         Pop-Location
         return $false
     }
