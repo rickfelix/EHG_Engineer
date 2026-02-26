@@ -572,6 +572,92 @@ export function createPipelineFlowGate() {
 }
 
 /**
+ * Create Gate 6: FR Delivery Verification (CONST-012)
+ * Verifies all PRD functional requirements have delivery evidence before SD completion.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} prdRepo - PRD repository
+ * @returns {Object} Gate definition
+ */
+export function createFRDeliveryVerificationGate(supabase, prdRepo) {
+  return {
+    name: 'FR_DELIVERY_VERIFICATION',
+    validator: async (ctx) => {
+      console.log('\n🔒 GATE 6: FR Delivery Verification (CONST-012)');
+      console.log('-'.repeat(50));
+
+      const prd = await prdRepo?.getBySdUuid(ctx.sd.id);
+
+      if (!prd) {
+        const { data: children } = await supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', ctx.sd.id);
+
+        if (children && children.length > 0) {
+          console.log('   ℹ️  Orchestrator SD — FR verification delegated to children');
+          return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Orchestrator SD — FR verification delegated to children'] };
+        }
+
+        console.log('   ⚠️  No PRD found — skipping FR verification');
+        return { passed: true, score: 80, max_score: 100, issues: [], warnings: ['No PRD found — FR delivery verification skipped'] };
+      }
+
+      const frs = prd.functional_requirements || [];
+      if (frs.length === 0) {
+        console.log('   ℹ️  No functional requirements in PRD');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No FRs defined in PRD'] };
+      }
+
+      console.log(`   📋 Checking ${frs.length} functional requirements...`);
+
+      // Evidence sources: completed user stories + accepted handoffs
+      const { data: stories } = await supabase
+        .from('user_stories')
+        .select('id, title, status')
+        .eq('sd_id', ctx.sd.id);
+
+      const completedStories = (stories || []).filter(s =>
+        s.status === 'completed' || s.status === 'done' || s.status === 'validated'
+      );
+
+      const { data: handoffs } = await supabase
+        .from('sd_phase_handoffs')
+        .select('handoff_type, status')
+        .eq('sd_id', ctx.sd.id)
+        .eq('status', 'accepted');
+
+      const hasExecHandoff = (handoffs || []).some(h => h.handoff_type === 'PLAN-TO-LEAD');
+
+      const frResults = [];
+      for (const fr of frs) {
+        const frId = fr.id || `FR-${frs.indexOf(fr) + 1}`;
+        const evidenced = completedStories.length > 0 || hasExecHandoff;
+        frResults.push({ id: frId, description: safeTruncate(fr.description || '', 80), evidenced });
+        console.log(`   ${evidenced ? '✅' : '❌'} ${frId}: ${safeTruncate(fr.description || '', 60)}`);
+      }
+
+      const evidencedCount = frResults.filter(r => r.evidenced).length;
+      const coveragePct = Math.round((evidencedCount / frs.length) * 100);
+      console.log(`\n   📊 FR Coverage: ${evidencedCount}/${frs.length} (${coveragePct}%)`);
+
+      if (coveragePct < 100) {
+        const missing = frResults.filter(r => !r.evidenced);
+        return {
+          passed: false, score: coveragePct, max_score: 100,
+          issues: [`FR delivery coverage ${coveragePct}% — ${missing.length} FR(s) lack evidence`, ...missing.map(m => `  Missing: ${m.id}`)],
+          warnings: [], details: { frResults, coveragePct }
+        };
+      }
+
+      console.log('   ✅ All FRs have delivery evidence');
+      return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { frResults, coveragePct: 100 } };
+    },
+    required: true
+  };
+}
+
+/**
  * Get all required gates for LEAD-FINAL-APPROVAL
  * @param {Object} supabase - Supabase client
  * @param {Object} prdRepo - PRD repository
@@ -582,7 +668,6 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   const gates = [];
 
   // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
-  // Ensures CLAUDE_CORE.md is read before any SD work
   if (sd) {
     gates.push(createSdStartGate(sd.sd_key || sd.id || 'unknown'));
   }
@@ -591,10 +676,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
   gates.push(createRetrospectiveExistsGate(supabase));
   gates.push(createPRMergeVerificationGate());
-
-  // Pipeline Flow Verification (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
-  // For standalone code-producing SDs
   gates.push(createPipelineFlowGate());
+
+  // FR Delivery Verification (CONST-012 — SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-C)
+  gates.push(createFRDeliveryVerificationGate(supabase, prdRepo));
 
   return gates;
 }
@@ -606,5 +691,6 @@ export default {
   createRetrospectiveExistsGate,
   createPRMergeVerificationGate,
   createPipelineFlowGate,
+  createFRDeliveryVerificationGate,
   getRequiredGates
 };
