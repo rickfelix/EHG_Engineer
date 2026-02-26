@@ -1075,6 +1075,31 @@ async function createSD(options) {
 
   // ========================================================================
 
+  // Guardrail 4: Vision Delta Watch Points (SD-LEO-INFRA-HEAL-VISION-DELTA-002)
+  // Surface architecture dimensions that historically have the largest gaps
+  // between first-pass and corrected vision scores. Advisory only — does not block.
+  try {
+    const { getVisionWatchPoints } = await import('./vision-delta-aggregator.js');
+    const watchPoints = await getVisionWatchPoints(supabase, 3);
+    if (watchPoints.length > 0) {
+      console.log('\n' + '🔭'.repeat(15));
+      console.log('🔭 ARCHITECTURE WATCH POINTS (from vision delta analysis)');
+      console.log('🔭'.repeat(15));
+      console.log('   These dimensions commonly have large gaps on first-pass scoring.');
+      console.log('   Consider addressing them in your SD description and objectives:\n');
+      for (const wp of watchPoints) {
+        const sev = wp.severity === 'high' ? '🔴' : '🟡';
+        console.log(`   ${sev} ${wp.dimension} (${wp.key}): avg +${wp.mean_delta} gap across ${wp.sd_count} SDs`);
+      }
+      console.log('\n   These are advisory — not blocking SD creation.');
+      console.log('🔭'.repeat(15));
+    }
+  } catch {
+    // Non-fatal: watch points are advisory
+  }
+
+  // ========================================================================
+
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
