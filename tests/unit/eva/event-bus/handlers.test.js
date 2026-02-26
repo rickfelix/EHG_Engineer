@@ -68,7 +68,7 @@ describe('handleDecisionSubmitted', () => {
   it('unblocks venture when decision is approved', async () => {
     const supabase = mockSupabase({
       chairman_decisions: { single: { id: 'd1', status: 'approved', venture_id: 'v1', lifecycle_stage: 10 } },
-      eva_ventures: { single: { id: 'v1', status: 'blocked', current_stage: 10 } },
+      eva_ventures: { single: { id: 'v1', status: 'blocked' } },
     });
 
     const result = await handleDecisionSubmitted(
@@ -82,7 +82,7 @@ describe('handleDecisionSubmitted', () => {
   it('cancels venture when decision is rejected', async () => {
     const supabase = mockSupabase({
       chairman_decisions: { single: { id: 'd1', status: 'rejected', venture_id: 'v1', lifecycle_stage: 10 } },
-      eva_ventures: { single: { id: 'v1', status: 'pending_review', current_stage: 10 } },
+      eva_ventures: { single: { id: 'v1', status: 'pending_review' } },
     });
 
     const result = await handleDecisionSubmitted(

@@ -408,9 +408,9 @@ describe('orchestrator', () => {
         // Ventures by stage query
         selectVenturesChain({
           data: [
-            { current_stage: 'Stage 0' },
-            { current_stage: 'Stage 0' },
-            { current_stage: 'Stage 1' }
+            { current_lifecycle_stage: 'Stage 0' },
+            { current_lifecycle_stage: 'Stage 0' },
+            { current_lifecycle_stage: 'Stage 1' }
           ]
         }),
         // Decisions query

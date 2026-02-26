@@ -280,14 +280,14 @@ describe('VentureStateMachine', () => {
 
       expect(summary.venture_id).toBe('v-1');
       expect(summary.ceo_agent_id).toBe('ceo-1');
-      expect(summary.current_stage).toBe(5);
+      expect(summary.current_lifecycle_stage).toBe(5);
       expect(summary.stages_completed).toBe(2);
       expect(summary.pending_handoffs).toBe(1);
     });
 
     it('should return zero counts before initialization', () => {
       const summary = sm.getSummary();
-      expect(summary.current_stage).toBeNull();
+      expect(summary.current_lifecycle_stage).toBeNull();
       expect(summary.stages_completed).toBe(0);
       expect(summary.pending_handoffs).toBe(0);
     });

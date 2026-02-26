@@ -81,7 +81,7 @@ describe('ServiceError', () => {
 
 describe('loadContext', () => {
   it('returns venture and stage data', async () => {
-    const venture = { id: 'v1', name: 'Test Venture', status: 'active', current_stage: 3, archetype: 'saas', metadata: {} };
+    const venture = { id: 'v1', name: 'Test Venture', status: 'active', current_lifecycle_stage: 3, archetype: 'saas', metadata: {} };
     const stage = { id: 's1', venture_id: 'v1', stage_number: 3, status: 'in_progress', started_at: '2026-01-01', completed_at: null, metadata: {} };
 
     const db = createMockDb({
@@ -96,7 +96,7 @@ describe('loadContext', () => {
   });
 
   it('returns null stage when stageId is null', async () => {
-    const venture = { id: 'v1', name: 'Test', status: 'active', current_stage: 1, archetype: 'saas', metadata: {} };
+    const venture = { id: 'v1', name: 'Test', status: 'active', current_lifecycle_stage: 1, archetype: 'saas', metadata: {} };
     const db = createMockDb({
       'ventures:single': { data: venture, error: null },
     });
@@ -134,7 +134,7 @@ describe('loadContext', () => {
   });
 
   it('returns null stage when stage row does not exist (PGRST116)', async () => {
-    const venture = { id: 'v1', name: 'Test', status: 'active', current_stage: 1, archetype: 'saas', metadata: {} };
+    const venture = { id: 'v1', name: 'Test', status: 'active', current_lifecycle_stage: 1, archetype: 'saas', metadata: {} };
     const db = createMockDb({
       'ventures:single': { data: venture, error: null },
       'eva_venture_stages:single': { data: null, error: { code: 'PGRST116', message: 'no rows' } },
@@ -145,7 +145,7 @@ describe('loadContext', () => {
   });
 
   it('throws on non-PGRST116 stage error', async () => {
-    const venture = { id: 'v1', name: 'Test', status: 'active', current_stage: 1, archetype: 'saas', metadata: {} };
+    const venture = { id: 'v1', name: 'Test', status: 'active', current_lifecycle_stage: 1, archetype: 'saas', metadata: {} };
     const db = createMockDb({
       'ventures:single': { data: venture, error: null },
       'eva_venture_stages:single': { data: null, error: { code: 'OTHER', message: 'connection refused' } },
