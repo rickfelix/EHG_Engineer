@@ -16,3 +16,4 @@ export { createInfrastructureConsumerCheckGate, generateFollowUpSD, REASON_CODES
 export { createIntegrationSectionValidationGate, REQUIRED_SUBSECTIONS, SUBSECTION_NAMES, BLOCKING_SD_TYPES, WARNING_SD_TYPES, SKIP_SD_TYPES, ERROR_CODE_PREFIX } from './integration-section-validation.js';
 export { createMigrationDataVerificationGate } from './migration-data-verification.js';
 export { createArchitecturalPatternChecklistGate } from './architectural-pattern-checklist.js';
+export { createDecompositionCheckGate } from './decomposition-check.js';

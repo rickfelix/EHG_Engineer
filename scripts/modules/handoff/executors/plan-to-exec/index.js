@@ -22,7 +22,8 @@ import {
   createInfrastructureConsumerCheckGate,
   createIntegrationSectionValidationGate,
   createMigrationDataVerificationGate,
-  createArchitecturalPatternChecklistGate
+  createArchitecturalPatternChecklistGate,
+  createDecompositionCheckGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -170,6 +171,10 @@ export class PlanToExecExecutor extends BaseExecutor {
     // ADVISORY: Scans PRD for state management, error handling, observability patterns
     // Only runs for complex SDs (story_points >= 8 OR LOC >= 500 OR hasChildren)
     gates.push(createArchitecturalPatternChecklistGate(this.prdRepo, sd, this.supabase));
+
+    // Decomposition Check (CONST-014)
+    // Blocks PLAN-TO-EXEC when PRD reveals multi-phase complexity
+    gates.push(createDecompositionCheckGate(this.supabase));
 
     return gates;
   }
