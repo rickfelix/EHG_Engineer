@@ -1132,6 +1132,35 @@ async function createSD(options) {
     }
   };
 
+  // CONST-014 Enforcement: Decomposition check at creation time
+  // SDs with 3+ phases or 8+ FRs must use orchestrator pattern
+  if (!parentId) {
+    try {
+      const scopeText = `${title} ${description || ''} ${(finalStrategicObjectives || []).join(' ')} ${(finalKeyChanges || []).join(' ')}`;
+      const phaseSignals = ['phase 1', 'phase 2', 'phase 3', 'step 1', 'step 2', 'step 3', 'layer 1', 'layer 2', 'layer 3', 'first,', 'second,', 'third,', 'finally,'];
+      const phaseCount = phaseSignals.filter(s => scopeText.toLowerCase().includes(s)).length;
+      const frCount = (finalSuccessCriteria || []).length + (finalKeyChanges || []).length;
+
+      if (phaseCount >= 3 || frCount >= 8) {
+        console.log('\n' + '⚠️'.repeat(20));
+        console.log('📐 CONST-014 DECOMPOSITION RECOMMENDATION');
+        console.log('─'.repeat(50));
+        console.log(`   Phase signals detected: ${phaseCount} (threshold: 3)`);
+        console.log(`   Scope items (FRs + changes): ${frCount} (threshold: 8)`);
+        console.log('');
+        console.log('   This SD may benefit from orchestrator decomposition.');
+        console.log('   Consider creating child SDs for focused scope.');
+        console.log('   Proceeding with creation — decompose after LEAD approval.');
+        console.log('─'.repeat(50));
+
+        // Tag in metadata for downstream enforcement
+        sdData.metadata = { ...sdData.metadata, decomposition_recommended: true, scope_signals: { phaseCount, frCount } };
+      }
+    } catch {
+      // Non-fatal: decomposition check should not block creation
+    }
+  }
+
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .insert(sdData)
