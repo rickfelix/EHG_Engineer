@@ -13,7 +13,10 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-import { analyzeStage24, AARRR_CATEGORIES, TREND_DIRECTIONS, OUTCOME_ASSESSMENTS, IMPACT_LEVELS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-metrics-learning.js';
+import {
+  analyzeStage24, AARRR_CATEGORIES, TREND_DIRECTIONS, OUTCOME_ASSESSMENTS, IMPACT_LEVELS,
+  EXPERIMENT_STATUSES, EXPERIMENT_OUTCOMES, COHORT_PERIODS, ENGAGEMENT_LEVELS,
+} from '../../../../../lib/eva/stage-templates/analysis-steps/stage-24-metrics-learning.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
@@ -38,6 +41,35 @@ function createLLMResponse(overrides = {}) {
       assessment: 'partial',
       criteriaMetRate: 67,
       summary: 'Launch partially successful: 67% of success criteria met.',
+    },
+    growthExperiments: [
+      {
+        name: 'Onboarding simplification',
+        hypothesis: 'Reducing onboarding steps from 5 to 3 will increase activation by 15%',
+        status: 'concluded',
+        outcome: 'positive',
+        metric: 'Activation rate',
+        baselineValue: 40, currentValue: 52, targetLift: 15, actualLift: 30,
+        sampleSize: 500, confidence: 95,
+      },
+    ],
+    retentionCohorts: [
+      {
+        cohortName: 'Beta week 1',
+        cohortSize: 200,
+        periods: { day_1: 90, day_7: 60, day_14: 45, day_30: 35, day_60: 25, day_90: 18 },
+        churnRisk: 'low',
+      },
+    ],
+    engagementScoring: {
+      overallScore: 72,
+      segments: [
+        { level: 'highly_engaged', userCount: 50, percentage: 25, avgSessionDepth: 8, avgSessionDuration: 600, featureAdoption: 90 },
+        { level: 'casual', userCount: 100, percentage: 50, avgSessionDepth: 2, avgSessionDuration: 120, featureAdoption: 30 },
+      ],
+      topFeatures: [
+        { name: 'Dashboard', adoptionRate: 85, engagementImpact: 'high' },
+      ],
     },
     ...overrides,
   };
@@ -80,6 +112,22 @@ describe('stage-24-metrics-learning.js', () => {
 
     it('should export IMPACT_LEVELS', () => {
       expect(IMPACT_LEVELS).toEqual(['high', 'medium', 'low']);
+    });
+
+    it('should export EXPERIMENT_STATUSES', () => {
+      expect(EXPERIMENT_STATUSES).toEqual(['running', 'concluded', 'cancelled']);
+    });
+
+    it('should export EXPERIMENT_OUTCOMES', () => {
+      expect(EXPERIMENT_OUTCOMES).toEqual(['positive', 'negative', 'inconclusive']);
+    });
+
+    it('should export COHORT_PERIODS', () => {
+      expect(COHORT_PERIODS).toEqual(['day_1', 'day_7', 'day_14', 'day_30', 'day_60', 'day_90']);
+    });
+
+    it('should export ENGAGEMENT_LEVELS', () => {
+      expect(ENGAGEMENT_LEVELS).toEqual(['highly_engaged', 'engaged', 'casual', 'at_risk', 'churned']);
     });
   });
 
@@ -290,12 +338,22 @@ describe('stage-24-metrics-learning.js', () => {
       expect(result).toHaveProperty('criteriaEvaluation');
       expect(result).toHaveProperty('learnings');
       expect(result).toHaveProperty('launchOutcome');
+      expect(result).toHaveProperty('growthExperiments');
+      expect(result).toHaveProperty('retentionCohorts');
+      expect(result).toHaveProperty('engagementScoring');
       expect(result).toHaveProperty('totalMetrics');
       expect(result).toHaveProperty('metricsOnTarget');
       expect(result).toHaveProperty('metricsBelowTarget');
       expect(result).toHaveProperty('categoriesComplete');
       expect(result).toHaveProperty('totalLearnings');
       expect(result).toHaveProperty('highImpactLearnings');
+      expect(result).toHaveProperty('totalExperiments');
+      expect(result).toHaveProperty('concludedExperiments');
+      expect(result).toHaveProperty('positiveExperimentRate');
+      expect(result).toHaveProperty('totalCohorts');
+      expect(result).toHaveProperty('avgDay30Retention');
+      expect(result).toHaveProperty('highChurnCohorts');
+      expect(result).toHaveProperty('engagementScore');
     });
   });
 
@@ -319,6 +377,113 @@ describe('stage-24-metrics-learning.js', () => {
       await analyzeStage24({ ...VALID_PARAMS, ventureName: 'LaunchCo' });
       const userPrompt = mockComplete.mock.calls[0][1];
       expect(userPrompt).toContain('LaunchCo');
+    });
+  });
+
+  describe('Growth experiments normalization', () => {
+    it('should normalize growth experiments from LLM response', async () => {
+      setupMock();
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.growthExperiments.length).toBe(1);
+      expect(result.growthExperiments[0].name).toBe('Onboarding simplification');
+      expect(result.growthExperiments[0].status).toBe('concluded');
+      expect(result.growthExperiments[0].outcome).toBe('positive');
+    });
+
+    it('should provide default experiment when empty', async () => {
+      setupMock({ growthExperiments: [] });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.growthExperiments.length).toBe(1);
+      expect(result.growthExperiments[0].status).toBe('running');
+      expect(result.growthExperiments[0].outcome).toBe('inconclusive');
+    });
+
+    it('should default invalid status to running', async () => {
+      setupMock({ growthExperiments: [{ name: 'Test', status: 'invalid', outcome: 'positive' }] });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.growthExperiments[0].status).toBe('running');
+    });
+
+    it('should clamp confidence to 0-100', async () => {
+      setupMock({ growthExperiments: [{ name: 'Test', confidence: 150 }] });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.growthExperiments[0].confidence).toBe(100);
+    });
+
+    it('should compute experiment derived metrics', async () => {
+      setupMock();
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.totalExperiments).toBe(1);
+      expect(result.concludedExperiments).toBe(1);
+      expect(result.positiveExperimentRate).toBe(100);
+    });
+  });
+
+  describe('Retention cohorts normalization', () => {
+    it('should normalize retention cohorts from LLM response', async () => {
+      setupMock();
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.retentionCohorts.length).toBe(1);
+      expect(result.retentionCohorts[0].cohortName).toBe('Beta week 1');
+      expect(result.retentionCohorts[0].periods.day_30).toBe(35);
+    });
+
+    it('should provide default cohort when empty', async () => {
+      setupMock({ retentionCohorts: [] });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.retentionCohorts.length).toBe(1);
+      expect(result.retentionCohorts[0].churnRisk).toBe('medium');
+    });
+
+    it('should clamp period values to 0-100', async () => {
+      setupMock({ retentionCohorts: [{ cohortName: 'Test', periods: { day_1: 150, day_7: -10 } }] });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.retentionCohorts[0].periods.day_1).toBe(100);
+      expect(result.retentionCohorts[0].periods.day_7).toBe(0);
+    });
+
+    it('should compute retention derived metrics', async () => {
+      setupMock();
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.totalCohorts).toBe(1);
+      expect(result.avgDay30Retention).toBe(35);
+      expect(result.highChurnCohorts).toBe(0);
+    });
+  });
+
+  describe('Engagement scoring normalization', () => {
+    it('should normalize engagement scoring from LLM response', async () => {
+      setupMock();
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.engagementScoring.overallScore).toBe(72);
+      expect(result.engagementScoring.segments.length).toBe(2);
+      expect(result.engagementScoring.topFeatures.length).toBe(1);
+    });
+
+    it('should provide default segment when empty', async () => {
+      setupMock({ engagementScoring: {} });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.engagementScoring.segments.length).toBe(1);
+      expect(result.engagementScoring.segments[0].level).toBe('casual');
+      expect(result.engagementScoring.overallScore).toBe(0);
+    });
+
+    it('should default invalid engagement level to casual', async () => {
+      setupMock({ engagementScoring: { segments: [{ level: 'super' }] } });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.engagementScoring.segments[0].level).toBe('casual');
+    });
+
+    it('should clamp overallScore to 0-100', async () => {
+      setupMock({ engagementScoring: { overallScore: 200 } });
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.engagementScoring.overallScore).toBe(100);
+    });
+
+    it('should expose engagementScore as top-level derived metric', async () => {
+      setupMock();
+      const result = await analyzeStage24(VALID_PARAMS);
+      expect(result.engagementScore).toBe(72);
     });
   });
 
