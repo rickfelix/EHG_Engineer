@@ -642,6 +642,85 @@ export async function storeCompletenessAudit(supabase, orchestratorId, auditResu
 }
 
 /**
+ * Auto-trigger /heal sd against a parent orchestrator when all children complete.
+ * Non-blocking: spawns heal-command.mjs as a detached child process.
+ * Idempotent: skips if sd_heal_scores already has a score for today.
+ *
+ * SD-LEO-INFRA-AUTO-HEAL-ORCHESTRATOR-001
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} orchestratorId - Orchestrator UUID (id column)
+ * @param {string} orchestratorTitle - Orchestrator title (for logging)
+ * @param {string} correlationId - Correlation ID for tracing
+ * @param {object} hookDetails - Mutable hook details object for telemetry
+ */
+async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, correlationId, hookDetails) {
+  // Resolve sd_key from UUID
+  const { data: orchSD, error: orchErr } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key')
+    .eq('id', orchestratorId)
+    .single();
+
+  if (orchErr || !orchSD?.sd_key) {
+    console.log(`   ⚠️  Could not resolve sd_key for ${orchestratorId}`);
+    hookDetails.parentHeal = { status: 'skipped', reason: 'sd_key_not_found' };
+    return;
+  }
+
+  const sdKey = orchSD.sd_key;
+
+  // Idempotency: check if already scored today
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: existing } = await supabase
+    .from('sd_heal_scores')
+    .select('id')
+    .eq('sd_key', sdKey)
+    .gte('scored_at', today + 'T00:00:00Z')
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    console.log(`   ℹ️  Heal already scored today for ${sdKey} — skipping`);
+    hookDetails.parentHeal = { status: 'skipped', reason: 'already_scored_today', sdKey };
+    return;
+  }
+
+  // Spawn heal-command.mjs as detached process
+  const { spawn } = await import('child_process');
+  const repoRoot = process.cwd();
+  const healCmd = 'node';
+  const healArgs = ['scripts/eva/heal-command.mjs', 'sd', '--sd-id', sdKey];
+
+  const child = spawn(healCmd, healArgs, {
+    cwd: repoRoot,
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env }
+  });
+  child.unref();
+
+  console.log(`   🩺 Heal spawned for orchestrator ${sdKey} (PID: ${child.pid})`);
+
+  // Emit system event for observability
+  await supabase.from('system_events').insert({
+    event_type: 'PARENT_HEAL_REQUESTED',
+    entity_type: 'strategic_directive',
+    entity_id: orchestratorId,
+    details: {
+      sd_key: sdKey,
+      title: orchestratorTitle,
+      correlation_id: correlationId,
+      heal_pid: child.pid,
+      timestamp: new Date().toISOString()
+    },
+    severity: 'info',
+    created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
+  });
+
+  hookDetails.parentHeal = { status: 'spawned', sdKey, pid: child.pid };
+}
+
+/**
  * Main orchestrator completion hook
  *
  * Called when an orchestrator SD completes (all children done).
@@ -832,6 +911,16 @@ export async function executeOrchestratorCompletionHook(
   } catch (gapError) {
     console.warn(`   ⚠️  Gap analysis failed (advisory): ${gapError.message}`);
     hookDetails.gapAnalysis = { status: 'error', error: gapError.message };
+  }
+
+  // Auto-trigger /heal against parent orchestrator (SD-LEO-INFRA-AUTO-HEAL-ORCHESTRATOR-001)
+  // Non-blocking: spawns heal as detached process, never blocks completion
+  console.log('\n   🩺 Triggering parent orchestrator heal...');
+  try {
+    await invokeParentHeal(supabase, orchestratorId, orchestratorTitle, correlationId, hookDetails);
+  } catch (healErr) {
+    console.warn(`   ⚠️  Parent heal trigger failed (non-blocking): ${healErr.message}`);
+    hookDetails.parentHeal = { status: 'error', error: healErr.message };
   }
 
   if (autoProceedResult.autoProceed) {
