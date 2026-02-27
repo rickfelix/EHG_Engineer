@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-27T21:47:21.866Z
+**Generated**: 2026-02-27T22:03:40.633Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,7 @@
 | dependency_risk | `text` | YES | `'NONE'::text` | - |
 | scope_exclusions | `jsonb` | YES | `'[]'::jsonb` | - |
 | baseline_snapshot | `jsonb` | YES | `'{}'::jsonb` | - |
+| evidence_coverage_score | `integer(32)` | YES | `0` | - |
 
 ## Constraints
 
@@ -57,6 +58,7 @@
 - `lead_eval_bvs_range`: CHECK (((business_value_score >= 0) AND (business_value_score <= 100)))
 - `lead_eval_dr_check`: CHECK ((dependency_risk = ANY (ARRAY['NONE'::text, 'LOW'::text, 'MEDIUM'::text, 'HIGH'::text, 'CRITICAL'::text])))
 - `lead_eval_drs_range`: CHECK (((duplication_risk_score >= 0) AND (duplication_risk_score <= 100)))
+- `lead_eval_ecs_range`: CHECK (((evidence_coverage_score >= 0) AND (evidence_coverage_score <= 100)))
 - `lead_eval_rcs_range`: CHECK (((resource_cost_score >= 0) AND (resource_cost_score <= 100)))
 - `lead_eval_scs_range`: CHECK (((scope_complexity_score >= 0) AND (scope_complexity_score <= 100)))
 - `lead_eval_tdi_check`: CHECK ((technical_debt_impact = ANY (ARRAY['NONE'::text, 'LOW'::text, 'MEDIUM'::text, 'HIGH'::text, 'CRITICAL'::text])))

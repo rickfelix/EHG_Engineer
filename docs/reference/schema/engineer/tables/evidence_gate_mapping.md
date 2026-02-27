@@ -1,12 +1,12 @@
-# sub_agent_gate_requirements Table
+# evidence_gate_mapping Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-02-27T22:03:40.633Z
-**Rows**: 13
-**RLS**: Enabled (2 policies)
+**Rows**: 8
+**RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -18,38 +18,32 @@
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| context_type | `text` | **NO** | - | - |
-| trigger_condition | `text` | **NO** | - | - |
-| required_sub_agents | `ARRAY` | **NO** | - | - |
-| gate_priority | `integer(32)` | YES | `1` | - |
+| id | `integer(32)` | **NO** | `nextval('evidence_gate_mapping_id_seq'::regclass)` | - |
+| gate_question_id | `text` | **NO** | - | - |
+| gate_question_text | `text` | **NO** | - | - |
+| evidence_steps | `jsonb` | **NO** | `'[]'::jsonb` | - |
+| evidence_description | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `sub_agent_gate_requirements_pkey`: PRIMARY KEY (id)
+- `evidence_gate_mapping_pkey`: PRIMARY KEY (id)
+
+### Unique Constraints
+- `evidence_gate_mapping_gate_question_id_key`: UNIQUE (gate_question_id)
 
 ## Indexes
 
-- `sub_agent_gate_requirements_pkey`
+- `evidence_gate_mapping_gate_question_id_key`
   ```sql
-  CREATE UNIQUE INDEX sub_agent_gate_requirements_pkey ON public.sub_agent_gate_requirements USING btree (id)
+  CREATE UNIQUE INDEX evidence_gate_mapping_gate_question_id_key ON public.evidence_gate_mapping USING btree (gate_question_id)
   ```
-
-## RLS Policies
-
-### 1. authenticated_read_sub_agent_gate_requirements (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. service_role_all_sub_agent_gate_requirements (ALL)
-
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
+- `evidence_gate_mapping_pkey`
+  ```sql
+  CREATE UNIQUE INDEX evidence_gate_mapping_pkey ON public.evidence_gate_mapping USING btree (id)
+  ```
 
 ---
 
