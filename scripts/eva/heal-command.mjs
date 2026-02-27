@@ -76,6 +76,11 @@ function parseSDArgs(args) {
       if (nextArg === '--score-ids' && args[i + 2]) {
         opts.scoreIds = args[i + 2].split(',');
       }
+      // --batch-size N override (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003)
+      const bsIdx = args.indexOf('--batch-size');
+      if (bsIdx !== -1 && args[bsIdx + 1]) {
+        opts.batchSize = parseInt(args[bsIdx + 1], 10);
+      }
       break;
     }
     if (arg === '--today') opts.today = true;
@@ -228,6 +233,68 @@ async function cmdSDPersist(scoreJson, filePath) {
     process.exit(1);
   }
 
+  // ─── Per-Dimension Schema Validation (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003) ───
+  const REQUIRED_DIMENSIONS = [
+    'key_changes_delivered',
+    'success_criteria_met',
+    'success_metrics_achieved',
+    'smoke_tests_pass',
+    'capabilities_present',
+  ];
+  const MIN_RATIONALE_LENGTH = 20;
+
+  const validationErrors = [];
+  for (const sdScore of parsed.sd_scores) {
+    const dims = sdScore.dimensions || [];
+    const dimIds = dims.map(d => d.id);
+
+    // Check all 5 required dimensions are present
+    const missing = REQUIRED_DIMENSIONS.filter(r => !dimIds.includes(r));
+    if (missing.length > 0) {
+      validationErrors.push({
+        sdKey: sdScore.sd_key,
+        rule: 'MISSING_DIMENSIONS',
+        details: `Missing ${missing.length} of 5 required dimensions: ${missing.join(', ')}`,
+        fix: 'Re-score this SD with all 5 dimensions',
+      });
+    }
+
+    // Check for unknown dimension keys
+    const unknown = dimIds.filter(d => !REQUIRED_DIMENSIONS.includes(d));
+    if (unknown.length > 0) {
+      validationErrors.push({
+        sdKey: sdScore.sd_key,
+        rule: 'UNKNOWN_DIMENSIONS',
+        details: `Unknown dimension keys: ${unknown.join(', ')}`,
+        fix: 'Use only: ' + REQUIRED_DIMENSIONS.join(', '),
+      });
+    }
+
+    // Check rationale quality per dimension
+    for (const dim of dims) {
+      const reasoning = (dim.reasoning || '').trim();
+      if (reasoning.length < MIN_RATIONALE_LENGTH) {
+        validationErrors.push({
+          sdKey: sdScore.sd_key,
+          rule: 'INSUFFICIENT_RATIONALE',
+          details: `Dimension '${dim.id}' has rationale of ${reasoning.length} chars (minimum: ${MIN_RATIONALE_LENGTH})`,
+          fix: 'Provide meaningful reasoning for each dimension (>= 20 characters)',
+        });
+      }
+    }
+  }
+
+  if (validationErrors.length > 0) {
+    console.error('\n❌ SCORE VALIDATION FAILED');
+    console.error(`   ${validationErrors.length} validation error(s) found:\n`);
+    for (const err of validationErrors) {
+      console.error(`   [${err.rule}] ${err.sdKey}: ${err.details}`);
+      console.error(`     Fix: ${err.fix}\n`);
+    }
+    console.error('HEAL_STATUS=VALIDATION_FAILED');
+    process.exit(1);
+  }
+
   // Resolve vision/arch keys — use SD metadata if available, else default to L1
   let visionKey = 'VISION-EHG-L1-001';
   let archKey = 'ARCH-EHG-L1-001';
@@ -347,9 +414,16 @@ async function cmdSDGenerate(scoreId) {
   }
 }
 
-async function cmdSDGenerateAll(scoreIds) {
+async function cmdSDGenerateAll(scoreIds, options = {}) {
   const supabase = getSupabase();
   const { generateCorrectiveSD } = await import('./corrective-sd-generator.mjs');
+
+  // Batch size: CLI flag > env var > default of 8 (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003)
+  const DEFAULT_BATCH_SIZE = 8;
+  const batchSize = options.batchSize
+    || (process.env.HEAL_BATCH_SIZE ? parseInt(process.env.HEAL_BATCH_SIZE, 10) : null)
+    || DEFAULT_BATCH_SIZE;
+  console.log(`  batch_size=${batchSize}`);
 
   // If no score IDs provided, query recent non-accept scores
   let ids = scoreIds;
@@ -361,7 +435,7 @@ async function cmdSDGenerateAll(scoreIds) {
       .in('threshold_action', ['escalate', 'gap_closure_sd', 'minor_sd'])
       .is('generated_sd_ids', null)
       .order('scored_at', { ascending: false })
-      .limit(20);
+      .limit(batchSize);
 
     if (!scores || scores.length === 0) {
       console.log('\nNo unprocessed failing scores found.');
@@ -375,7 +449,7 @@ async function cmdSDGenerateAll(scoreIds) {
     }
   }
 
-  const results = { created: [], deferred: [], failed: [] };
+  const results = { created: [], deferred: [], failed: [], needsRescore: [] };
 
   for (const scoreId of ids) {
     try {
@@ -386,6 +460,9 @@ async function cmdSDGenerateAll(scoreIds) {
         for (const sd of sdList) {
           console.log(`  \u2705 ${sd.sdKey} created`);
         }
+      } else if (result.needsRescore) {
+        results.needsRescore.push({ scoreId, reason: result.reason });
+        console.log(`  \u26A0  ${scoreId.substring(0, 8)}... needs re-score (${result.reason})`);
       } else {
         results.deferred.push({ scoreId, reason: result.reason || result.action });
         console.log(`  \u23ED  ${scoreId.substring(0, 8)}... deferred (${result.reason || result.action})`);
@@ -398,9 +475,10 @@ async function cmdSDGenerateAll(scoreIds) {
 
   // Summary
   console.log('\n\u2500\u2500\u2500 Batch Generate Summary \u2500\u2500\u2500');
-  console.log(`  Created:  ${results.created.length}`);
-  console.log(`  Deferred: ${results.deferred.length}`);
-  console.log(`  Failed:   ${results.failed.length}`);
+  console.log(`  Created:       ${results.created.length}`);
+  console.log(`  Deferred:      ${results.deferred.length}`);
+  console.log(`  Needs rescore: ${results.needsRescore.length}`);
+  console.log(`  Failed:        ${results.failed.length}`);
 
   if (results.created.length > 0) {
     console.log('\n  Corrective SDs created:');
@@ -418,6 +496,12 @@ async function cmdSDGenerateAll(scoreIds) {
     console.log('\nHEAL_STATUS=ALL_DEFERRED');
   } else {
     console.log('\nHEAL_STATUS=PASS');
+  }
+
+  // Signal incomplete scores needing re-score (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003)
+  if (results.needsRescore.length > 0) {
+    console.log(`\nHEAL_RESCORE_NEEDED=${results.needsRescore.length}`);
+    console.log(`HEAL_RESCORE_IDS=${results.needsRescore.map(r => r.scoreId).join(',')}`);
   }
 }
 
@@ -513,7 +597,7 @@ if (isMain) {
         if (!opts.scoreId) { console.error('Usage: heal sd generate <score-id>'); process.exit(1); }
         cmdSDGenerate(opts.scoreId).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'generate-all') {
-        cmdSDGenerateAll(opts.scoreIds).catch(e => { console.error(e.message); process.exit(1); });
+        cmdSDGenerateAll(opts.scoreIds, { batchSize: opts.batchSize }).catch(e => { console.error(e.message); process.exit(1); });
       } else {
         cmdSDQuery(opts).catch(e => { console.error(e.message); process.exit(1); });
       }
@@ -534,6 +618,7 @@ if (isMain) {
       console.log('  sd generate <score-id>                 Create corrective SD from one score');
       console.log('  sd generate-all                        Batch-create correctives for all failing scores');
       console.log('  sd generate-all --score-ids a,b,c      Batch-create for specific score IDs');
+      console.log('  sd generate-all --batch-size N          Override batch size (default: 8, env: HEAL_BATCH_SIZE)');
       console.log('  status                                 Combined heal status');
       console.log('');
       console.log('SD filters:');
