@@ -13,7 +13,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-import { analyzeStage25, VENTURE_DECISIONS, HEALTH_RATINGS, REVIEW_CATEGORIES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-25-venture-review.js';
+import { analyzeStage25, analyzeExpansionVectors, VENTURE_DECISIONS, HEALTH_RATINGS, REVIEW_CATEGORIES, EXPANSION_VECTORS, EXPANSION_WEIGHTS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-25-venture-review.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
@@ -371,6 +371,77 @@ describe('stage-25-venture-review.js', () => {
       await analyzeStage25({ ...VALID_PARAMS, ventureName: 'ReviewCo' });
       const userPrompt = mockComplete.mock.calls[0][1];
       expect(userPrompt).toContain('ReviewCo');
+    });
+  });
+
+  describe('Expansion vector analysis', () => {
+    it('should export EXPANSION_VECTORS and EXPANSION_WEIGHTS', () => {
+      expect(EXPANSION_VECTORS).toEqual(['market', 'feature', 'segment']);
+      expect(EXPANSION_WEIGHTS).toEqual({ market: 0.4, feature: 0.35, segment: 0.25 });
+    });
+
+    it('should run expansion analysis when decision is expand', async () => {
+      const expandResponse = JSON.stringify({
+        market: { score: 80, rationale: 'Strong market opportunity' },
+        feature: { score: 70, rationale: 'Features ready for expansion' },
+        segment: { score: 60, rationale: 'New segments identified' },
+      });
+      const mainResponse = createLLMResponse({
+        ventureDecision: { recommendation: 'expand', confidence: 85, rationale: 'Ready to scale', nextActions: ['Enter new market'] },
+      });
+      const mockComplete = vi.fn()
+        .mockResolvedValueOnce(mainResponse)
+        .mockResolvedValueOnce(expandResponse);
+      getLLMClient.mockReturnValue({ complete: mockComplete });
+
+      const result = await analyzeStage25(VALID_PARAMS);
+      expect(result.expansionAnalysis).not.toBeNull();
+      expect(result.expansionReadinessScore).toBe(Math.round(80 * 0.4 + 70 * 0.35 + 60 * 0.25));
+      expect(result.expansionAnalysis.vectors.market.score).toBe(80);
+      expect(result.expansionAnalysis.vectors.feature.score).toBe(70);
+      expect(result.expansionAnalysis.vectors.segment.score).toBe(60);
+    });
+
+    it('should skip expansion analysis for non-expand decisions', async () => {
+      setupMock({ ventureDecision: { recommendation: 'continue', confidence: 80, rationale: 'Steady', nextActions: ['Keep going'] } });
+      const result = await analyzeStage25(VALID_PARAMS);
+      expect(result.expansionAnalysis).toBeNull();
+      expect(result.expansionReadinessScore).toBeNull();
+    });
+
+    it('should handle expansion LLM failure gracefully', async () => {
+      const mainResponse = createLLMResponse({
+        ventureDecision: { recommendation: 'expand', confidence: 85, rationale: 'Scale up', nextActions: ['Expand'] },
+      });
+      const mockComplete = vi.fn()
+        .mockResolvedValueOnce(mainResponse)
+        .mockRejectedValueOnce(new Error('LLM timeout'));
+      getLLMClient.mockReturnValue({ complete: mockComplete });
+
+      const result = await analyzeStage25(VALID_PARAMS);
+      expect(result.expansionAnalysis).not.toBeNull();
+      expect(result.expansionReadinessScore).toBe(50); // default fallback
+      expect(result.expansionAnalysis.vectors.market.score).toBe(50);
+    });
+
+    it('should clamp expansion vector scores to 0-100', async () => {
+      const expandResponse = JSON.stringify({
+        market: { score: 150, rationale: 'Over max' },
+        feature: { score: -10, rationale: 'Under min' },
+        segment: { score: 75, rationale: 'Normal' },
+      });
+      const mainResponse = createLLMResponse({
+        ventureDecision: { recommendation: 'expand', confidence: 85, rationale: 'Ready', nextActions: ['Go'] },
+      });
+      const mockComplete = vi.fn()
+        .mockResolvedValueOnce(mainResponse)
+        .mockResolvedValueOnce(expandResponse);
+      getLLMClient.mockReturnValue({ complete: mockComplete });
+
+      const result = await analyzeStage25(VALID_PARAMS);
+      expect(result.expansionAnalysis.vectors.market.score).toBe(100);
+      expect(result.expansionAnalysis.vectors.feature.score).toBe(0);
+      expect(result.expansionAnalysis.vectors.segment.score).toBe(75);
     });
   });
 
