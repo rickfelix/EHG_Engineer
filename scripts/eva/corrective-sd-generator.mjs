@@ -242,7 +242,16 @@ export async function generateCorrectiveSD(scoreId) {
     return { created: false, action: 'deferred', reason: `min-occurrences-not-met (${count}/${effectiveMinOccurrences})`, sdKey: null, sdId: null };
   }
 
-  // 1c. Relevance validation — skip if signals suggest false positive
+  // 1c. Overall-only detection — skip scores with < 3 dimensions (SD-MAN-INFRA-ENFORCE-PER-DIMENSION-003)
+  const dimKeys = Object.keys(score.dimension_scores || {});
+  if (dimKeys.length < 3) {
+    console.log(`[corrective-sd-generator] Skipping: score has only ${dimKeys.length} dimension(s) — needs re-scoring with full 5-dimension breakdown`);
+    console.log(`[corrective-sd-generator] RE_SCORE_NEEDED=true score_id=${scoreId} sd_id=${score.sd_id}`);
+    await _logAudit(supabase, scoreId, 'skipped_incomplete_dimensions', null, score.vision_id);
+    return { created: false, action: 'skipped', reason: `incomplete-dimensions (${dimKeys.length}/5)`, sdKey: null, sdId: null, needsRescore: true };
+  }
+
+  // 1d. Relevance validation — skip if signals suggest false positive
   const relevance = checkRelevanceSignals(score);
   if (relevance.likely_false_positive) {
     console.log(`[corrective-sd-generator] Skipping: ${relevance.signal_count}/${relevance.total_dims} dimensions flagged as intentional omissions (ratio ${(relevance.ratio * 100).toFixed(0)}%)`);
