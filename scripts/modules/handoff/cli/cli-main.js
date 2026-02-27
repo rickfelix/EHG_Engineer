@@ -31,6 +31,8 @@ import {
   displayMultiRepoStatus
 } from './index.js';
 import { checkBypassRateLimits, displayExecutionResult } from './execution-helpers.js';
+import { detectBlockers, DETECTION_TIMEOUT_MS } from '../blocker-resolution.js';
+import { analyzeClaimRelationship, autoReleaseStaleDeadClaim } from '../../sd-next/claim-analysis.js';
 
 // LEO 5.0 commands
 import {
@@ -523,6 +525,43 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
     }
   }
 
+  // Pre-gate blocker detection (SD-MAN-INFRA-VISION-HEAL-PLATFORM-001-02)
+  if (!bypassValidation) {
+    try {
+      const blockerResult = await Promise.race([
+        runPreGateBlockerDetection(system.supabase, sdId, workflowInfo?.sd),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), DETECTION_TIMEOUT_MS + 1000))
+      ]);
+
+      if (blockerResult?.hasBlockingIssues) {
+        console.error('');
+        console.error('❌ PRE-GATE BLOCKER DETECTED');
+        console.error('═'.repeat(50));
+        for (const issue of blockerResult.issues) {
+          console.error(`   • ${issue}`);
+        }
+        console.error('');
+        console.error('   Resolve blockers before proceeding.');
+        console.error('═'.repeat(50));
+        return { success: false };
+      }
+
+      if (blockerResult?.warnings?.length > 0) {
+        console.log('');
+        console.log('⚠️  PRE-GATE BLOCKER WARNINGS:');
+        for (const warn of blockerResult.warnings) {
+          console.log(`   • ${warn}`);
+        }
+        console.log('');
+      }
+    } catch (err) {
+      // Non-blocking: detection failure should not prevent handoff
+      if (process.env.DEBUG) {
+        console.log(`   ℹ️  Blocker detection skipped: ${err.message}`);
+      }
+    }
+  }
+
   // Execute handoff
   const result = await system.executeHandoff(handoffType, sdId, {
     prdId,
@@ -788,6 +827,71 @@ export async function handleStatsCommand() {
 
   console.log('');
   return { success: true };
+}
+
+/**
+ * Pre-gate blocker detection: checks for stale claims, incomplete dependencies,
+ * and other blockers before gate validation runs.
+ * Returns { hasBlockingIssues, issues[], warnings[] }
+ */
+async function runPreGateBlockerDetection(supabase, sdId, sd) {
+  const result = { hasBlockingIssues: false, issues: [], warnings: [] };
+
+  // 1. Detect blockers from blocker-resolution.js
+  if (sd) {
+    const blockers = await detectBlockers(sd, supabase);
+    if (blockers && blockers.length > 0) {
+      for (const blocker of blockers) {
+        if (blocker.severity === 'blocking') {
+          result.hasBlockingIssues = true;
+          result.issues.push(`Blocker: ${blocker.description || blocker.type}`);
+        } else {
+          result.warnings.push(`${blocker.type}: ${blocker.description || 'detected'}`);
+        }
+      }
+    }
+  }
+
+  // 2. Check for stale claims on dependency SDs
+  if (sd?.dependencies && Array.isArray(sd.dependencies) && sd.dependencies.length > 0) {
+    const { data: depSDs } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status, claiming_session_id')
+      .in('id', sd.dependencies);
+
+    for (const dep of (depSDs || [])) {
+      if (dep.status !== 'completed' && dep.status !== 'cancelled') {
+        result.hasBlockingIssues = true;
+        result.issues.push(`Dependency not complete: ${dep.sd_key} (${dep.status})`);
+      }
+
+      // Check for stale claims on deps and auto-release if dead
+      if (dep.claiming_session_id) {
+        const { data: claimSession } = await supabase
+          .from('v_active_sessions')
+          .select('session_id, heartbeat_age_seconds, pid, hostname, terminal_id')
+          .eq('session_id', dep.claiming_session_id)
+          .single();
+
+        if (claimSession) {
+          const analysis = analyzeClaimRelationship({
+            claimingSessionId: dep.claiming_session_id,
+            claimingSession: claimSession,
+            currentSession: { terminal_id: process.env.CLAUDE_TERMINAL_ID || null }
+          });
+
+          if (analysis.canAutoRelease) {
+            const released = await autoReleaseStaleDeadClaim(supabase, dep.claiming_session_id);
+            if (released) {
+              result.warnings.push(`Auto-released stale claim on ${dep.sd_key} (PID ${analysis.pid} dead)`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
