@@ -40,6 +40,12 @@ export {
   analyzePlaceholderContent
 } from './placeholder-content.js';
 
+// Lead Evaluation Check Gate (SD-MAN-ORCH-IMPROVE-STEP-LEAD-002-A)
+export {
+  validateLeadEvaluation,
+  createLeadEvaluationGate
+} from './lead-evaluation-check.js';
+
 // Vision Score Gate (SD-MAN-INFRA-VISION-SCORE-GATE-001)
 export {
   validateVisionScore,

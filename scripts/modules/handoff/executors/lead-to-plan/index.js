@@ -16,7 +16,8 @@ import {
   createBaselineDebtGate,
   createSmokeTestSpecificationGate,
   createPlaceholderContentGate,
-  createVisionScoreGate
+  createVisionScoreGate,
+  createLeadEvaluationGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -94,6 +95,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Hard enforcement — blocks when vision score below sd_type threshold or absent
     // Corrective SDs (with vision_origin_score_id) are exempt (PAT-CORR-VISION-GATE-001)
     gates.push(createVisionScoreGate(this.supabase));
+
+    // Lead Evaluation Check Gate (SD-MAN-ORCH-IMPROVE-STEP-LEAD-002-A)
+    // Warning-only: checks for structured lead_evaluations record
+    gates.push(createLeadEvaluationGate(this.supabase));
 
     return gates;
   }
