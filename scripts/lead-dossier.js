@@ -192,7 +192,46 @@ async function fetchRelatedRetros(similarSDs) {
   }));
 }
 
-function deriveEvaluation(sd, prd, backlog, graph, similarSDs) {
+async function fetchEvidenceMapping() {
+  const { data } = await supabase
+    .from('evidence_gate_mapping')
+    .select('gate_question_id, gate_question_text, evidence_steps, evidence_description')
+    .order('gate_question_id');
+  return data || [];
+}
+
+function computeEvidenceCoverage(sd, prd, backlog, graph, similarSDs, existingEvals, mapping) {
+  // Evidence step availability: 1=SD Metadata, 2=PRD, 3=Backlog/Stories, 4=Dependencies, 5=Similar SDs, 6=Evaluations
+  const available = new Set();
+  if (sd && sd.title && sd.description) available.add(1);
+  if (prd) available.add(2);
+  if (backlog && backlog.length > 0) available.add(3);
+  if (graph && (graph.parent || graph.children.length > 0 || graph.siblings > 0)) available.add(4);
+  if (similarSDs && similarSDs.length > 0) available.add(5);
+  if (existingEvals && existingEvals.length > 0) available.add(6);
+
+  const results = mapping.map(m => {
+    const steps = m.evidence_steps || [];
+    const covered = steps.filter(s => available.has(s));
+    return {
+      gate_question_id: m.gate_question_id,
+      gate_question_text: m.gate_question_text,
+      evidence_description: m.evidence_description,
+      total_steps: steps.length,
+      covered_steps: covered.length,
+      coverage_pct: steps.length > 0 ? Math.round((covered.length / steps.length) * 100) : 0,
+      missing_steps: steps.filter(s => !available.has(s)),
+    };
+  });
+
+  const totalPossible = results.reduce((a, r) => a + r.total_steps, 0);
+  const totalCovered = results.reduce((a, r) => a + r.covered_steps, 0);
+  const overallScore = totalPossible > 0 ? Math.round((totalCovered / totalPossible) * 100) : 0;
+
+  return { results, overallScore };
+}
+
+function deriveEvaluation(sd, prd, backlog, graph, similarSDs, evidenceCoverageScore) {
   // Business value: based on SD type and category
   const typeWeights = { feature: 'HIGH', bugfix: 'MEDIUM', infrastructure: 'MEDIUM', database: 'MEDIUM' };
   const businessValue = sd.priority === 'critical' ? 'HIGH'
@@ -297,6 +336,7 @@ function deriveEvaluation(sd, prd, backlog, graph, similarSDs) {
     scope_complexity_score: scopeComplexityScore,
     technical_debt_impact: technicalDebtImpact,
     dependency_risk: dependencyRisk,
+    evidence_coverage_score: evidenceCoverageScore || 0,
     confidence_score: confidence,
     final_decision: decision,
     justification: justParts.join('\n'),
@@ -333,7 +373,7 @@ async function persistEvaluation(sdId, evaluation) {
 }
 
 function formatSummary(dossier) {
-  const { sd, prd, backlog, graph, similarSDs, relatedRetros, evaluation } = dossier;
+  const { sd, prd, backlog, graph, similarSDs, relatedRetros, evidenceCoverage, evaluation } = dossier;
   const lines = [];
 
   lines.push('╔══════════════════════════════════════════════════════════════╗');
@@ -394,6 +434,22 @@ function formatSummary(dossier) {
   }
   lines.push('');
 
+  lines.push('── EVIDENCE ALIGNMENT ───────────────────────────────────────');
+  if (evidenceCoverage && evidenceCoverage.results?.length > 0) {
+    lines.push(`  Overall Coverage: ${evidenceCoverage.overallScore}%`);
+    const stepNames = { 1: 'SD Metadata', 2: 'PRD', 3: 'Backlog', 4: 'Dependencies', 5: 'Similar SDs', 6: 'Evaluations' };
+    evidenceCoverage.results.forEach(r => {
+      const status = r.coverage_pct === 100 ? '✓' : r.coverage_pct > 0 ? '◐' : '✗';
+      lines.push(`  ${status} ${r.gate_question_id}: ${r.gate_question_text}`);
+      if (r.missing_steps.length > 0) {
+        lines.push(`    Missing: ${r.missing_steps.map(s => stepNames[s] || s).join(', ')}`);
+      }
+    });
+  } else {
+    lines.push('  No evidence mapping available');
+  }
+  lines.push('');
+
   lines.push('── EVALUATION ───────────────────────────────────────────────');
   lines.push(`  Decision:       ${evaluation.final_decision}`);
   lines.push(`  Confidence:     ${evaluation.confidence_score}%`);
@@ -403,6 +459,7 @@ function formatSummary(dossier) {
   lines.push(`  Complexity:     ${evaluation.scope_complexity} (${evaluation.scope_complexity_score}/100)`);
   lines.push(`  Debt Impact:    ${evaluation.technical_debt_impact}`);
   lines.push(`  Dep. Risk:      ${evaluation.dependency_risk}`);
+  lines.push(`  Evidence:       ${evaluation.evidence_coverage_score}%`);
   if (evaluation.required_actions?.length > 0) {
     lines.push('  Required Actions:');
     evaluation.required_actions.forEach(a => lines.push(`    ⚠️  ${a}`));
@@ -444,8 +501,12 @@ async function main() {
   // 2b. Fetch related retrospectives from similar SDs
   const relatedRetros = await fetchRelatedRetros(similarSDs);
 
+  // 2c. Fetch evidence-gate mapping and compute coverage
+  const evidenceMapping = await fetchEvidenceMapping();
+  const evidenceCoverage = computeEvidenceCoverage(sd, prd, backlog, graph, similarSDs, existingEvals, evidenceMapping);
+
   // 3. Derive evaluation
-  const evaluation = deriveEvaluation(sd, prd, backlog, graph, similarSDs);
+  const evaluation = deriveEvaluation(sd, prd, backlog, graph, similarSDs, evidenceCoverage.overallScore);
 
   const dossier = {
     sd: { id: sd.id, sd_key: sd.sd_key, title: sd.title, sd_type: sd.sd_type, status: sd.status,
@@ -459,6 +520,7 @@ async function main() {
     graph,
     similarSDs: similarSDs.slice(0, 10),
     relatedRetros,
+    evidenceCoverage,
     evaluation,
   };
 

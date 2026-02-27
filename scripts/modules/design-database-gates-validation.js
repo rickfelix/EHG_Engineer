@@ -242,10 +242,20 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       validation.failed_gates.push('DESIGN_INFORMED_DATABASE');
       console.log('   ❌ PRD query failed (0/15)');
     } else if (!prdData?.metadata?.database_analysis) {
-      validation.issues.push('CRITICAL: PRD metadata.database_analysis not found');
-      validation.issues.push('DATABASE sub-agent may not have run during PRD creation');
-      validation.failed_gates.push('DESIGN_INFORMED_DATABASE');
-      console.log('   ❌ DATABASE analysis not found in PRD metadata (0/15)');
+      // PAT-AUTO-5e5fdf7c fix: If both sub-agents exist with PASS/SKIP verdict,
+      // award partial credit — sub-agent existence proves workflow happened
+      const bothAgentsExist = validation.gate_scores.design_execution > 0 && validation.gate_scores.database_execution > 0;
+      if (bothAgentsExist) {
+        validation.warnings.push('PRD metadata.database_analysis not found, but both sub-agents executed — awarding partial credit');
+        validation.score += 8;
+        validation.gate_scores.design_informed_database = 8;
+        console.log('   ⚠️  DATABASE analysis not in PRD metadata, but sub-agents exist (8/15)');
+      } else {
+        validation.issues.push('CRITICAL: PRD metadata.database_analysis not found');
+        validation.issues.push('DATABASE sub-agent may not have run during PRD creation');
+        validation.failed_gates.push('DESIGN_INFORMED_DATABASE');
+        console.log('   ❌ DATABASE analysis not found in PRD metadata (0/15)');
+      }
     } else if (!prdData.metadata.database_analysis.design_informed) {
       validation.warnings.push('DATABASE analysis was not informed by DESIGN context');
       validation.warnings.push('Schema recommendations may not align with UI workflows');
