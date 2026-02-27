@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-26T02:22:21.495Z
-**Rows**: 0
+**Generated**: 2026-02-27T21:47:21.866Z
+**Rows**: 1
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,14 @@
 | evaluation_version | `text` | YES | `'1.0'::text` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| business_value_score | `integer(32)` | YES | `50` | - |
+| duplication_risk_score | `integer(32)` | YES | `50` | - |
+| resource_cost_score | `integer(32)` | YES | `50` | - |
+| scope_complexity_score | `integer(32)` | YES | `50` | - |
+| technical_debt_impact | `text` | YES | `'NONE'::text` | - |
+| dependency_risk | `text` | YES | `'NONE'::text` | - |
+| scope_exclusions | `jsonb` | YES | `'[]'::jsonb` | - |
+| baseline_snapshot | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 
@@ -46,6 +54,12 @@
 - `lead_evaluations_sd_id_evaluated_at_key`: UNIQUE (sd_id, evaluated_at)
 
 ### Check Constraints
+- `lead_eval_bvs_range`: CHECK (((business_value_score >= 0) AND (business_value_score <= 100)))
+- `lead_eval_dr_check`: CHECK ((dependency_risk = ANY (ARRAY['NONE'::text, 'LOW'::text, 'MEDIUM'::text, 'HIGH'::text, 'CRITICAL'::text])))
+- `lead_eval_drs_range`: CHECK (((duplication_risk_score >= 0) AND (duplication_risk_score <= 100)))
+- `lead_eval_rcs_range`: CHECK (((resource_cost_score >= 0) AND (resource_cost_score <= 100)))
+- `lead_eval_scs_range`: CHECK (((scope_complexity_score >= 0) AND (scope_complexity_score <= 100)))
+- `lead_eval_tdi_check`: CHECK ((technical_debt_impact = ANY (ARRAY['NONE'::text, 'LOW'::text, 'MEDIUM'::text, 'HIGH'::text, 'CRITICAL'::text])))
 - `lead_evaluations_business_value_check`: CHECK ((business_value = ANY (ARRAY['HIGH'::text, 'MEDIUM'::text, 'LOW'::text])))
 - `lead_evaluations_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
 - `lead_evaluations_duplication_risk_check`: CHECK ((duplication_risk = ANY (ARRAY['HIGH'::text, 'MEDIUM'::text, 'LOW'::text])))
