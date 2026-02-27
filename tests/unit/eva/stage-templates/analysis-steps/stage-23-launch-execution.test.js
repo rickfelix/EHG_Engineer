@@ -13,7 +13,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js';
+import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES, APP_STORE_STATUSES, DOMAIN_STATUSES, CHANNEL_STATUSES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
@@ -70,6 +70,18 @@ describe('stage-23-launch-execution.js', () => {
 
     it('should export CRITERION_PRIORITIES', () => {
       expect(CRITERION_PRIORITIES).toEqual(['primary', 'secondary']);
+    });
+
+    it('should export APP_STORE_STATUSES', () => {
+      expect(APP_STORE_STATUSES).toEqual(['not_submitted', 'submitted', 'in_review', 'approved', 'rejected', 'live']);
+    });
+
+    it('should export DOMAIN_STATUSES', () => {
+      expect(DOMAIN_STATUSES).toEqual(['not_configured', 'dns_pending', 'ssl_pending', 'active', 'error']);
+    });
+
+    it('should export CHANNEL_STATUSES', () => {
+      expect(CHANNEL_STATUSES).toEqual(['not_started', 'drafting', 'scheduled', 'live', 'paused']);
     });
   });
 
@@ -247,6 +259,14 @@ describe('stage-23-launch-execution.js', () => {
       expect(result).toHaveProperty('blockedTasks');
       expect(result).toHaveProperty('primaryCriteria');
       expect(result).toHaveProperty('totalCriteria');
+      expect(result).toHaveProperty('appStoreReadiness');
+      expect(result).toHaveProperty('domainDeployment');
+      expect(result).toHaveProperty('marketingChannels');
+      expect(result).toHaveProperty('chairmanEscalation');
+      expect(result).toHaveProperty('publishReadinessScore');
+      expect(result).toHaveProperty('liveChannels');
+      expect(result).toHaveProperty('totalChannels');
+      expect(result).toHaveProperty('requiresChairmanApproval');
     });
 
     it('should compute derived counts correctly', async () => {
@@ -282,6 +302,106 @@ describe('stage-23-launch-execution.js', () => {
       await analyzeStage23({ ...VALID_PARAMS, ventureName: 'TestVenture' });
       const userPrompt = mockComplete.mock.calls[0][1];
       expect(userPrompt).toContain('TestVenture');
+    });
+  });
+
+  describe('App store readiness normalization', () => {
+    it('should default to not_submitted/web when missing', async () => {
+      setupMock();
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appStoreReadiness.status).toBe('not_submitted');
+      expect(result.appStoreReadiness.platform).toBe('web');
+      expect(result.appStoreReadiness.complianceScore).toBe(0);
+      expect(result.appStoreReadiness.blockers).toEqual([]);
+    });
+
+    it('should accept valid app store data', async () => {
+      setupMock({
+        appStoreReadiness: { status: 'approved', platform: 'ios', complianceScore: 85, blockers: ['Screenshots needed'] },
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appStoreReadiness.status).toBe('approved');
+      expect(result.appStoreReadiness.platform).toBe('ios');
+      expect(result.appStoreReadiness.complianceScore).toBe(85);
+    });
+
+    it('should clamp complianceScore to 0-100', async () => {
+      setupMock({ appStoreReadiness: { complianceScore: 150 } });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appStoreReadiness.complianceScore).toBe(100);
+    });
+  });
+
+  describe('Domain deployment normalization', () => {
+    it('should default to not_configured when missing', async () => {
+      setupMock();
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.domainDeployment.status).toBe('not_configured');
+      expect(result.domainDeployment.sslValid).toBe(false);
+      expect(result.domainDeployment.cdnConfigured).toBe(false);
+    });
+
+    it('should accept valid domain data', async () => {
+      setupMock({
+        domainDeployment: { status: 'active', domain: 'example.com', sslValid: true, cdnConfigured: true },
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.domainDeployment.status).toBe('active');
+      expect(result.domainDeployment.domain).toBe('example.com');
+    });
+  });
+
+  describe('Marketing channels normalization', () => {
+    it('should default to organic when empty', async () => {
+      setupMock({ marketingChannels: [] });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.marketingChannels.length).toBe(1);
+      expect(result.marketingChannels[0].channel).toBe('organic');
+    });
+
+    it('should accept valid channel data', async () => {
+      setupMock({
+        marketingChannels: [
+          { channel: 'email', status: 'live', reach: '10K subscribers' },
+          { channel: 'social_media', status: 'scheduled', reach: '5K followers' },
+        ],
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.marketingChannels.length).toBe(2);
+      expect(result.liveChannels).toBe(1);
+      expect(result.totalChannels).toBe(2);
+    });
+  });
+
+  describe('Chairman escalation normalization', () => {
+    it('should auto-detect irreversible actions', async () => {
+      setupMock({
+        appStoreReadiness: { status: 'submitted' },
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.chairmanEscalation.requiresApproval).toBe(true);
+      expect(result.requiresChairmanApproval).toBe(true);
+    });
+
+    it('should not require approval when no irreversible actions', async () => {
+      setupMock({
+        appStoreReadiness: { status: 'not_submitted' },
+        domainDeployment: { status: 'not_configured' },
+        marketingChannels: [{ channel: 'email', status: 'drafting', reach: 'TBD' }],
+        chairmanEscalation: { requiresApproval: false },
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.chairmanEscalation.requiresApproval).toBe(false);
+    });
+  });
+
+  describe('Publish readiness score', () => {
+    it('should compute publishReadinessScore as a number 0-100', async () => {
+      setupMock();
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(typeof result.publishReadinessScore).toBe('number');
+      expect(result.publishReadinessScore).toBeGreaterThanOrEqual(0);
+      expect(result.publishReadinessScore).toBeLessThanOrEqual(100);
     });
   });
 
