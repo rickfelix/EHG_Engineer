@@ -96,7 +96,7 @@ export class ContentBasedRubric {
   score(sd, prd = null) {
     const scopeText = `${sd.title || ''} ${sd.scope || ''} ${sd.description || ''}`;
     const keyChangesText = Array.isArray(sd.key_changes) ? sd.key_changes.join(' ') : '';
-    const combinedText = `${scopeText} ${keyChangesText}`;
+
 
     const typeScores = {};
 
