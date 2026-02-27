@@ -160,6 +160,7 @@ async function cmdSDQuery(opts) {
       '  - success_criteria_met (0-100): Are the success_criteria verifiable in the codebase?',
       '  - success_metrics_achieved (0-100): Do the success_metrics hold true?',
       '  - smoke_tests_pass (0-100): Would the smoke_test_steps pass if executed?',
+      '    NOTE: If smoke_test_steps is empty/null/[], score 100 with reasoning "N/A: no smoke test steps defined".',
       '  - capabilities_present (0-100): Are delivers_capabilities actually functional?',
       '',
       'Include the classification in each dimension\'s reasoning field (e.g., "DESCOPED: zero callers in codebase").',
