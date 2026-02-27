@@ -21,6 +21,10 @@ import dotenv from 'dotenv';
 // LEO v4.3.3: Import IntensityDetector for refactoring SDs
 import { detectIntensityForSD } from './intensity-detector.js';
 
+// Content-based classification signals
+import { ContentBasedRubric } from './sd-type-content-rubric.js';
+import { SiblingContextAnalyzer } from './sd-type-sibling-context.js';
+
 dotenv.config();
 
 // Valid SD types (must match database CHECK constraint)
@@ -95,22 +99,52 @@ export class SDTypeClassifier {
    * @param {string} sd.sd_type - Currently declared sd_type
    * @returns {Promise<Object>} Classification result
    */
-  async classify(sd) {
+  async classify(sd, options = {}) {
+    // Run content rubric (always available, no external deps)
+    const rubric = new ContentBasedRubric();
+    const rubricResult = rubric.score(sd, options.prd || null);
+
+    // Run sibling context analysis (requires DB, may return null)
+    const siblingAnalyzer = new SiblingContextAnalyzer(options.supabase || null);
+    const siblingResult = await siblingAnalyzer.analyze(sd);
+
     // Get LLM client from factory
     const llmClient = await this.getLLMClient();
 
-    // If LLM client not available, fall back to keyword detection
+    // Primary classification: LLM or keyword fallback
+    let primary;
     if (!llmClient) {
-      return this.keywordFallback(sd);
+      primary = this.keywordFallback(sd);
+    } else {
+      try {
+        const aiResult = await this.callOpenAI(sd, llmClient);
+        primary = this.processResult(aiResult, sd);
+      } catch (error) {
+        console.error('AI classification failed, falling back to keywords:', error.message);
+        primary = this.keywordFallback(sd);
+      }
     }
 
-    try {
-      const result = await this.callOpenAI(sd, llmClient);
-      return this.processResult(result, sd);
-    } catch (error) {
-      console.error('AI classification failed, falling back to keywords:', error.message);
-      return this.keywordFallback(sd);
+    // Merge secondary signals into result
+    primary.contentRubric = rubricResult;
+    primary.siblingContext = siblingResult;
+
+    // If primary confidence is low and rubric/sibling agree on a different type, flag it
+    if (primary.confidence < 70 && rubricResult.confidence >= 50) {
+      if (rubricResult.recommendedType !== primary.detectedType) {
+        primary.contentRubricOverride = rubricResult.recommendedType;
+        primary.recommendation += ` Content rubric suggests '${rubricResult.recommendedType}' (score: ${rubricResult.confidence}).`;
+      }
     }
+
+    if (siblingResult && siblingResult.recommendedType && siblingResult.confidence >= 60) {
+      primary.siblingRecommendation = siblingResult.recommendedType;
+      if (siblingResult.recommendedType !== primary.detectedType) {
+        primary.recommendation += ` Sibling context suggests '${siblingResult.recommendedType}' (${siblingResult.reason}).`;
+      }
+    }
+
+    return primary;
   }
 
   /**
