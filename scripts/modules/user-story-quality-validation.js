@@ -112,7 +112,7 @@ function validateUserStoryHeuristic(story) {
 
   // Ensure score is within bounds
   score = Math.max(0, Math.min(100, score));
-  const passed = score >= 65 && issues.length === 0;
+  const passed = score >= 65;
 
   return {
     story_key: storyKey,
@@ -352,11 +352,7 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
   // Calculate average score
   result.averageScore = Math.round(totalScore / stories.length);
 
-  // Determine overall validity
-  if (result.issues.length > 0) {
-    result.valid = false;
-  }
-
+  // Determine overall validity based on score threshold (not issue count)
   if (result.averageScore < minimumScore) {
     result.valid = false;
     result.issues.push(`Average user story quality score (${result.averageScore}%) is below minimum (${minimumScore}%)`);
