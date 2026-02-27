@@ -13,7 +13,7 @@ vi.mock('../../../../../lib/llm/index.js', () => ({
   })),
 }));
 
-import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES, APP_STORE_STATUSES, DOMAIN_STATUSES, CHANNEL_STATUSES } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js';
+import { analyzeStage23, LAUNCH_TYPES, TASK_STATUSES, CRITERION_PRIORITIES, APP_STORE_STATUSES, DOMAIN_STATUSES, CHANNEL_STATUSES, APP_RANKING_TIERS, COMPETITIVE_POSITIONS } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js';
 import { getLLMClient } from '../../../../../lib/llm/index.js';
 
 function createLLMResponse(overrides = {}) {
@@ -82,6 +82,14 @@ describe('stage-23-launch-execution.js', () => {
 
     it('should export CHANNEL_STATUSES', () => {
       expect(CHANNEL_STATUSES).toEqual(['not_started', 'drafting', 'scheduled', 'live', 'paused']);
+    });
+
+    it('should export APP_RANKING_TIERS', () => {
+      expect(APP_RANKING_TIERS).toEqual(['top10', 'top50', 'top100', 'below100', 'unknown']);
+    });
+
+    it('should export COMPETITIVE_POSITIONS', () => {
+      expect(COMPETITIVE_POSITIONS).toEqual(['leader', 'challenger', 'follower', 'niche', 'unknown']);
     });
   });
 
@@ -267,6 +275,8 @@ describe('stage-23-launch-execution.js', () => {
       expect(result).toHaveProperty('liveChannels');
       expect(result).toHaveProperty('totalChannels');
       expect(result).toHaveProperty('requiresChairmanApproval');
+      expect(result).toHaveProperty('appRankings');
+      expect(result).toHaveProperty('competitivePosition');
     });
 
     it('should compute derived counts correctly', async () => {
@@ -402,6 +412,116 @@ describe('stage-23-launch-execution.js', () => {
       expect(typeof result.publishReadinessScore).toBe('number');
       expect(result.publishReadinessScore).toBeGreaterThanOrEqual(0);
       expect(result.publishReadinessScore).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('App rankings normalization', () => {
+    it('should default to null/unknown when no ranking data', async () => {
+      setupMock();
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appRankings.categoryRank).toBeNull();
+      expect(result.appRankings.overallRank).toBeNull();
+      expect(result.appRankings.rating).toBeNull();
+      expect(result.appRankings.reviewCount).toBeNull();
+      expect(result.appRankings.tier).toBe('unknown');
+      expect(result.appRankings.trend).toBe('unknown');
+    });
+
+    it('should extract valid ranking data', async () => {
+      setupMock({
+        appRankings: { categoryRank: 5, overallRank: 42, rating: 4.5, reviewCount: 1200, trend: 'improving' },
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appRankings.categoryRank).toBe(5);
+      expect(result.appRankings.overallRank).toBe(42);
+      expect(result.appRankings.rating).toBe(4.5);
+      expect(result.appRankings.reviewCount).toBe(1200);
+      expect(result.appRankings.trend).toBe('improving');
+    });
+
+    it('should derive tier from categoryRank', async () => {
+      const cases = [
+        { rank: 3, expected: 'top10' },
+        { rank: 10, expected: 'top10' },
+        { rank: 25, expected: 'top50' },
+        { rank: 50, expected: 'top50' },
+        { rank: 75, expected: 'top100' },
+        { rank: 100, expected: 'top100' },
+        { rank: 150, expected: 'below100' },
+      ];
+      for (const { rank, expected } of cases) {
+        setupMock({ appRankings: { categoryRank: rank } });
+        const result = await analyzeStage23(VALID_PARAMS);
+        expect(result.appRankings.tier).toBe(expected);
+      }
+    });
+
+    it('should clamp rating to 0-5', async () => {
+      setupMock({ appRankings: { rating: 7 } });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appRankings.rating).toBe(5);
+    });
+
+    it('should default invalid trend to unknown', async () => {
+      setupMock({ appRankings: { trend: 'skyrocketing' } });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.appRankings.trend).toBe('unknown');
+    });
+
+    it('should accept all valid trends', async () => {
+      for (const trend of ['improving', 'stable', 'declining', 'unknown']) {
+        setupMock({ appRankings: { trend } });
+        const result = await analyzeStage23(VALID_PARAMS);
+        expect(result.appRankings.trend).toBe(trend);
+      }
+    });
+  });
+
+  describe('Competitive position normalization', () => {
+    it('should default to null/unknown when no data', async () => {
+      setupMock();
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.competitivePosition.marketShareEstimate).toBeNull();
+      expect(result.competitivePosition.competitorCount).toBeNull();
+      expect(result.competitivePosition.differentiationScore).toBeNull();
+      expect(result.competitivePosition.position).toBe('unknown');
+    });
+
+    it('should extract valid competitive data', async () => {
+      setupMock({
+        competitivePosition: { marketShareEstimate: 15, competitorCount: 8, differentiationScore: 75, position: 'challenger' },
+      });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.competitivePosition.marketShareEstimate).toBe(15);
+      expect(result.competitivePosition.competitorCount).toBe(8);
+      expect(result.competitivePosition.differentiationScore).toBe(75);
+      expect(result.competitivePosition.position).toBe('challenger');
+    });
+
+    it('should clamp marketShareEstimate to 0-100', async () => {
+      setupMock({ competitivePosition: { marketShareEstimate: 120 } });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.competitivePosition.marketShareEstimate).toBe(100);
+    });
+
+    it('should clamp differentiationScore to 0-100', async () => {
+      setupMock({ competitivePosition: { differentiationScore: -10 } });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.competitivePosition.differentiationScore).toBe(0);
+    });
+
+    it('should default invalid position to unknown', async () => {
+      setupMock({ competitivePosition: { position: 'dominator' } });
+      const result = await analyzeStage23(VALID_PARAMS);
+      expect(result.competitivePosition.position).toBe('unknown');
+    });
+
+    it('should accept all valid positions', async () => {
+      for (const pos of ['leader', 'challenger', 'follower', 'niche', 'unknown']) {
+        setupMock({ competitivePosition: { position: pos } });
+        const result = await analyzeStage23(VALID_PARAMS);
+        expect(result.competitivePosition.position).toBe(pos);
+      }
     });
   });
 
