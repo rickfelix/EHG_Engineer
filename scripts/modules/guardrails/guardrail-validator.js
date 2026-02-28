@@ -2,8 +2,8 @@
  * Governance Guardrails Validator
  *
  * Validates the 7 named governance guardrails against AEGIS constitution
- * rules. Advisory mode only — logs violations and escalates to
- * chairman_decisions but never blocks operations.
+ * rules. Blocking mode — violations prevent SD creation and escalate to
+ * chairman_decisions. Chairman can override with explicit reason.
  *
  * The 7 guardrails:
  *   1. No autonomous spending above threshold
@@ -14,7 +14,7 @@
  *   6. No security bypass without escalation
  *   7. No scope change without LEAD approval
  *
- * Part of SD-MAN-ORCH-VISION-HEAL-GOVERNANCE-001-03
+ * Part of SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-01-A
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -123,21 +123,33 @@ export async function validateGuardrails({
     }
   }
 
-  const passed = violations.length === 0;
+  const hasViolations = violations.length > 0;
+  let blocked = hasViolations;
+  let overrideDecision = null;
 
-  // Escalate violations to chairman (advisory only)
-  if (violations.length > 0 && !dryRun) {
-    try {
-      await escalateGuardrailViolations(supabase, sd, violations);
-      logger.log(`Guardrail validation: ${violations.length} violation(s) escalated to chairman`);
-    } catch (err) {
-      logger.error(`Guardrail validation: Escalation failed: ${err.message}`);
+  if (hasViolations && !dryRun) {
+    // Check for existing chairman override
+    overrideDecision = await checkChairmanOverride(supabase, sd);
+
+    if (overrideDecision) {
+      blocked = false;
+      logger.log(`Guardrail validation: ${violations.length} violation(s) OVERRIDDEN by chairman decision ${overrideDecision.id}`);
+    } else {
+      // Escalate as blocking — chairman must approve to proceed
+      try {
+        await escalateGuardrailViolations(supabase, sd, violations);
+        logger.log(`Guardrail validation: ${violations.length} violation(s) BLOCKED — escalated to chairman`);
+      } catch (err) {
+        logger.error(`Guardrail validation: Escalation failed: ${err.message}`);
+      }
     }
   }
 
-  logger.log(`Guardrail validation: ${guardrailsChecked} guardrails checked, ${violations.length} violations, ${warnings.length} warnings`);
+  const passed = !blocked;
 
-  return { passed, violations, warnings, guardrailsChecked };
+  logger.log(`Guardrail validation: ${guardrailsChecked} guardrails checked, ${violations.length} violations, ${warnings.length} warnings, blocked=${blocked}`);
+
+  return { passed, blocked, violations, warnings, guardrailsChecked, overrideDecision };
 }
 
 /**
@@ -149,9 +161,9 @@ async function escalateGuardrailViolations(supabase, sd, violations) {
     .insert({
       venture_id: sd.venture_id || null,
       lifecycle_stage: 'guardrail_check',
-      decision_type: 'advisory',
+      decision_type: 'guardrail_override',
       status: 'pending',
-      blocking: false,
+      blocking: true,
       summary: `Guardrail validation: ${violations.length} violation(s) for SD "${sd.title}"`,
       metadata: {
         sd_key: sd.sd_key || sd.id,
@@ -163,6 +175,37 @@ async function escalateGuardrailViolations(supabase, sd, violations) {
     });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Check if chairman has already approved an override for this SD's guardrail violations.
+ */
+async function checkChairmanOverride(supabase, sd) {
+  const sdKey = sd.sd_key || sd.id;
+  const { data, error } = await supabase
+    .from('chairman_decisions')
+    .select('id, status, metadata')
+    .eq('decision_type', 'guardrail_override')
+    .eq('status', 'approved')
+    .containedBy('metadata', { sd_key: sdKey })
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    // Try alternate match via metadata->>sd_key
+    const { data: data2 } = await supabase
+      .from('chairman_decisions')
+      .select('id, status, metadata')
+      .eq('decision_type', 'guardrail_override')
+      .eq('status', 'approved')
+      .limit(50);
+
+    if (data2) {
+      return data2.find(d => d.metadata?.sd_key === sdKey) || null;
+    }
+    return null;
+  }
+
+  return data[0] || null;
 }
 
 /**
