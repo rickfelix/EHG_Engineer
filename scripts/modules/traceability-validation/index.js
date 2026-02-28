@@ -71,12 +71,26 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   console.log('-'.repeat(60));
 
   try {
-    // Fetch PRD metadata (use sdKey for directive_id, which stores sd_key not UUID)
-    const { data: prdData, error: prdError } = await supabase
+    // Fetch PRD metadata (try sd_key first, fallback to UUID for legacy PRDs)
+    let prdData, prdError;
+    ({ data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title')
       .eq('directive_id', sdKey)
-      .single();
+      .single());
+
+    // Root Cause 1 fix: Fallback to UUID if sd_key lookup failed
+    // Some PRDs (created via auto-generation before fix) store UUID in directive_id
+    if (prdError && sdUuid && sdUuid !== sdKey) {
+      ({ data: prdData, error: prdError } = await supabase
+        .from('product_requirements_v2')
+        .select('metadata, directive_id, title')
+        .eq('directive_id', sdUuid)
+        .single());
+      if (prdData) {
+        console.log('   ℹ️  PRD found via UUID fallback (directive_id format mismatch)');
+      }
+    }
 
     if (prdError) {
       validation.issues.push(`Failed to fetch PRD: ${prdError.message}`);

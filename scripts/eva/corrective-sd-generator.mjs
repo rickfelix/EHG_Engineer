@@ -35,11 +35,13 @@ export const THRESHOLDS = {
 };
 
 // SD type and priority per tier
+// Root Cause 2 fix: Use 'corrective' instead of 'feature' for gap-closure/escalation
+// Corrective type has 70% gate threshold (vs 85% for feature), lighter validation
 const TIER_CONFIG = {
   accept:      { action: 'accept',      sdType: null,            priority: null },
   minor:       { action: 'minor',       sdType: 'enhancement',   priority: 'medium' },
-  'gap-closure': { action: 'gap-closure', sdType: 'feature',     priority: 'high' },
-  escalation:  { action: 'escalation',  sdType: 'feature',       priority: 'critical' },
+  'gap-closure': { action: 'gap-closure', sdType: 'corrective',  priority: 'high' },
+  escalation:  { action: 'escalation',  sdType: 'corrective',    priority: 'critical' },
 };
 
 // Orchestrator parent UUID (SD-MAN-ORCH-EVA-VISION-GOVERNANCE-001)
@@ -309,11 +311,11 @@ export async function generateCorrectiveSD(scoreId) {
     priorityResult = { priority: tier.priority, band: null, score: null, reason_codes: ['static_fallback'], source: 'tier-fallback' };
   }
 
-  // Groups to process: V-dims → governance/feature SD; A-dims → infrastructure SD; other → feature SD
+  // Groups to process: V-dims → corrective SD; A-dims → infrastructure SD; other → corrective SD
   const groups = [
-    { dims: vDims,    sdType: 'feature',         category: 'feature',         label: 'Vision' },
+    { dims: vDims,    sdType: 'corrective',       category: 'corrective',      label: 'Vision' },
     { dims: aDims,    sdType: 'infrastructure',   category: 'infrastructure',  label: 'Architecture' },
-    { dims: otherDims, sdType: tier.sdType ?? 'feature', category: tier.sdType ?? 'feature', label: 'Vision' },
+    { dims: otherDims, sdType: tier.sdType ?? 'corrective', category: tier.sdType ?? 'corrective', label: 'Vision' },
   ].filter(g => g.dims.length > 0);
 
   // Fall back to single lowest-dimension if no weak dims found (e.g. empty dimension_scores)
@@ -321,8 +323,8 @@ export async function generateCorrectiveSD(scoreId) {
     const { dimId, dimensionName } = _extractLowestDimension(score.dimension_scores, score.total_score);
     groups.push({
       dims: [{ dimId, dimensionName, score: score.total_score }],
-      sdType: tier.sdType ?? 'feature',
-      category: tier.sdType ?? 'feature',
+      sdType: tier.sdType ?? 'corrective',
+      category: tier.sdType ?? 'corrective',
       label: 'Vision',
     });
   }
