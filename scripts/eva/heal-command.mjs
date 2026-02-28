@@ -13,6 +13,7 @@
  *   node scripts/eva/heal-command.mjs sd persist --file <path>
  *   node scripts/eva/heal-command.mjs sd generate <score-id>
  *   node scripts/eva/heal-command.mjs sd generate-all [--score-ids id1,id2]
+ *   node scripts/eva/heal-command.mjs sd close-loop [--apply]
  *   node scripts/eva/heal-command.mjs status
  */
 
@@ -67,6 +68,11 @@ function parseSDArgs(args) {
     if (arg === 'generate') {
       opts.mode = 'generate';
       opts.scoreId = args[i + 1];
+      break;
+    }
+    if (arg === 'close-loop') {
+      opts.mode = 'close-loop';
+      opts.apply = args.includes('--apply');
       break;
     }
     if (arg === 'generate-all') {
@@ -505,6 +511,48 @@ async function cmdSDGenerateAll(scoreIds, options = {}) {
   }
 }
 
+// ─── SD CLOSE-LOOP: Back-link corrective SDs to origin heal scores ──────────
+
+async function cmdSDCloseLoop(apply) {
+  const supabase = getSupabase();
+  const { findUnlinkedScores, findCorrectiveSDs, matchScoresToCorrectives, applyLinks } = await import('./heal-loop-linker.mjs');
+
+  const unlinked = await findUnlinkedScores(supabase);
+  const correctives = await findCorrectiveSDs(supabase);
+
+  console.log('\n=== Heal Loop Close ===');
+  console.log(`  Unlinked non-accept scores: ${unlinked.length}`);
+  console.log(`  Corrective SDs found: ${correctives.length}`);
+
+  if (unlinked.length === 0) {
+    console.log('\n  All non-accept scores already linked. Nothing to do.');
+    return;
+  }
+
+  const { matches, unmatched } = await matchScoresToCorrectives(unlinked, correctives);
+
+  if (matches.length > 0) {
+    console.log(`\n  Matches (${matches.length}):`);
+    for (const m of matches) {
+      console.log(`    ${m.originalSdKey} (${m.score}/100) \u2192 ${m.correctiveSdKey} [${m.correctiveTitle}] (${m.confidence})`);
+    }
+  }
+
+  if (unmatched.length > 0) {
+    console.log(`\n  Unmatched (${unmatched.length}):`);
+    for (const u of unmatched) {
+      console.log(`    ${u.sdKey}: ${u.score}/100 (${u.action})`);
+    }
+  }
+
+  if (apply && matches.length > 0) {
+    const result = await applyLinks(matches, supabase);
+    console.log(`\n  Applied: ${result.linked} linked, ${result.failed} failed`);
+  } else if (matches.length > 0) {
+    console.log('\n  Run with --apply to persist links');
+  }
+}
+
 // ─── STATUS: Combined vision + SD heal status ───────────────────────────────
 
 async function cmdStatus() {
@@ -596,6 +644,8 @@ if (isMain) {
       } else if (opts.mode === 'generate') {
         if (!opts.scoreId) { console.error('Usage: heal sd generate <score-id>'); process.exit(1); }
         cmdSDGenerate(opts.scoreId).catch(e => { console.error(e.message); process.exit(1); });
+      } else if (opts.mode === 'close-loop') {
+        cmdSDCloseLoop(opts.apply).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'generate-all') {
         cmdSDGenerateAll(opts.scoreIds, { batchSize: opts.batchSize }).catch(e => { console.error(e.message); process.exit(1); });
       } else {
@@ -619,6 +669,8 @@ if (isMain) {
       console.log('  sd generate-all                        Batch-create correctives for all failing scores');
       console.log('  sd generate-all --score-ids a,b,c      Batch-create for specific score IDs');
       console.log('  sd generate-all --batch-size N          Override batch size (default: 8, env: HEAL_BATCH_SIZE)');
+      console.log('  sd close-loop                          Back-link corrective SDs to origin heal scores (dry-run)');
+      console.log('  sd close-loop --apply                  Persist the links');
       console.log('  status                                 Combined heal status');
       console.log('');
       console.log('SD filters:');
