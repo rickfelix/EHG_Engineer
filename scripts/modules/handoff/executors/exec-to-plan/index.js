@@ -25,7 +25,8 @@ import {
   createIntegrationTestRequirementGate,
   createIntegrationContractGate,
   createStoryAutoValidationGate,
-  createE2ETestMappingGate
+  createE2ETestMappingGate,
+  createDFEEscalationGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -158,6 +159,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // E2E test mapping (SD-LEO-FIX-STORIES-SUB-AGENT-001)
     // Maps E2E test files to user stories for coverage tracking
     gates.push(createE2ETestMappingGate(this.supabase));
+
+    // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-001)
+    // Routes ESCALATE decisions to chairman_decisions for governance
+    gates.push(createDFEEscalationGate(this.supabase));
 
     return gates;
   }

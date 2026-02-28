@@ -21,3 +21,4 @@ export { createIntegrationTestRequirementGate } from './integration-test-require
 export { createIntegrationContractGate } from './integration-contract-gate.js';
 export { createStoryAutoValidationGate } from './story-auto-validation.js';
 export { createE2ETestMappingGate } from './e2e-test-mapping.js';
+export { createDFEEscalationGate } from './dfe-escalation-gate.js';
