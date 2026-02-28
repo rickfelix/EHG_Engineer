@@ -4,7 +4,8 @@
  *
  * Replaces text-based rules in CLAUDE.md with programmatic enforcement:
  * 1. Background execution ban (NC-006) - HARD BLOCK (exit 2)
- * 2. Sub-agent routing advisory - SOFT HINT (stdout, exit 0)
+ * 2. Tool policy profile validation - LOG-ONLY (stdout warning, exit 0)
+ * 3. Sub-agent routing advisory - SOFT HINT (stdout, exit 0)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -14,6 +15,15 @@
 
 const TOOL_NAME = process.env.CLAUDE_TOOL_NAME || '';
 const TOOL_INPUT_RAW = process.env.CLAUDE_TOOL_INPUT || '';
+
+// --- TOOL POLICY PROFILES (from lib/tool-policy.js) ---
+// Inline copy for CJS hook compatibility (lib/tool-policy.js is ESM).
+const PROFILE_ALLOWLISTS = {
+  full: null,
+  coding: ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'NotebookEdit', 'Task', 'TeamCreate', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'SendMessage'],
+  readonly: ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch'],
+  minimal: ['Read']
+};
 
 // --- AGENT ROUTING TABLE ---
 // Source of truth: lib/keyword-intent-scorer.js (primary keywords only)
@@ -51,7 +61,40 @@ function main() {
     }
   }
 
-  // --- ENFORCEMENT 2: Sub-Agent Routing Advisory ---
+  // --- ENFORCEMENT 2: Tool Policy Profile (Log-Only) ---
+  // Compile-time enforcement via generate-agent-md-from-db.js filters the YAML tools list.
+  // This runtime check provides advisory warnings when an agent type has a restricted profile.
+  // Mode: LOG-ONLY — warns but does not block. Switch to exit(2) for enforcement mode.
+  if (TOOL_NAME === 'Task' && input.subagent_type) {
+    const agentType = input.subagent_type;
+    // Read agent profile from compiled YAML if available
+    const fs = require('fs');
+    const path = require('path');
+    const agentFile = path.join(__dirname, '..', '..', '.claude', 'agents', agentType + '.md');
+    try {
+      if (fs.existsSync(agentFile)) {
+        const content = fs.readFileSync(agentFile, 'utf8');
+        // Extract tools from YAML frontmatter
+        const toolsMatch = content.match(/^tools:\s*(.+)$/m);
+        if (toolsMatch) {
+          const declaredTools = toolsMatch[1].split(',').map(t => t.trim());
+          // Check if the spawned agent requests tools not in its declared list
+          // This is informational — the YAML frontmatter already restricts what Claude sees
+          const profile = content.match(/^# tool_policy_profile:\s*(\w+)/m);
+          if (profile && profile[1] !== 'full') {
+            console.log(
+              `[pre-tool-enforce] POLICY: Agent "${agentType}" uses profile "${profile[1]}" ` +
+              `(${declaredTools.length} tools allowed)`
+            );
+          }
+        }
+      }
+    } catch {
+      // Non-blocking — policy check failure should never block tool use
+    }
+  }
+
+  // --- ENFORCEMENT 3: Sub-Agent Routing Advisory ---
   // Only applies to Task tool. Advisory only (stdout, exit 0).
   if (TOOL_NAME === 'Task') {
     const promptLower = (input.prompt || '').toLowerCase();
