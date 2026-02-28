@@ -305,11 +305,42 @@ export function printScoreSummary(rankedSDs) {
   console.log('─'.repeat(70));
 }
 
+/**
+ * Calculate deadline proximity factor for OKR-driven prioritization.
+ * SD-MAN-GEN-CORRECTIVE-VISION-GAP-004 (FR-006)
+ *
+ * Returns a multiplier between 0.0 and 1.0:
+ *   - 1.0 when at or past the deadline
+ *   - 0.0 when 90+ days away
+ *   - Linear interpolation between
+ *
+ * @param {string|Date} deadline - Key result deadline
+ * @param {Date} [now] - Reference date (default: Date.now())
+ * @returns {number} Proximity factor 0.0-1.0
+ */
+export function getDeadlineProximityFactor(deadline, now = new Date()) {
+  if (!deadline) return 0.0;
+  const deadlineDate = new Date(deadline);
+  if (isNaN(deadlineDate.getTime())) return 0.0;
+
+  const daysRemaining = (deadlineDate - now) / (1000 * 60 * 60 * 24);
+
+  // At or past deadline → maximum urgency
+  if (daysRemaining <= 0) return 1.0;
+
+  // More than 90 days → no urgency boost
+  const MAX_DAYS = 90;
+  if (daysRemaining >= MAX_DAYS) return 0.0;
+
+  // Linear interpolation: closer to deadline = higher factor
+  return Math.round((1 - daysRemaining / MAX_DAYS) * 100) / 100;
+}
+
 // Export weights for reference
 export { WEIGHTS };
 
 // CLI support
-if (process.argv[1].endsWith('priority-scorer.js')) {
+if (process.argv[1]?.endsWith('priority-scorer.js')) {
   console.log('Priority Scorer Library');
   console.log('');
   console.log('Score Weights:');
@@ -330,5 +361,6 @@ export default {
   rankSDs,
   assignTrack,
   printScoreSummary,
+  getDeadlineProximityFactor,
   WEIGHTS,
 };
