@@ -31,6 +31,9 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
+// DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
+import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
+
 // Helper modules
 import { transitionPrdToExec, transitionSdToExec } from './state-transitions.js';
 import { createHandoffRetrospective } from './retrospective.js';
@@ -170,6 +173,10 @@ export class PlanToExecExecutor extends BaseExecutor {
     // ADVISORY: Scans PRD for state management, error handling, observability patterns
     // Only runs for complex SDs (story_points >= 8 OR LOC >= 500 OR hasChildren)
     gates.push(createArchitecturalPatternChecklistGate(this.prdRepo, sd, this.supabase));
+
+    // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
+    // Routes ESCALATE decisions to chairman_decisions for governance
+    gates.push(createDFEEscalationGate(this.supabase, 'plan-to-exec-gate'));
 
     return gates;
   }

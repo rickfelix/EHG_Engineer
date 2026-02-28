@@ -17,6 +17,9 @@ import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
 import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
 
+// DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
+import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
+
 // Gate creators
 import {
   createPrerequisiteCheckGate,
@@ -139,6 +142,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // Documentation link validation gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-D)
     gates.push(createDocumentationLinkValidationGate(this.supabase));
+
+    // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
+    // Routes ESCALATE decisions to chairman_decisions for governance
+    gates.push(createDFEEscalationGate(this.supabase, 'plan-to-lead-gate'));
 
     return gates;
   }

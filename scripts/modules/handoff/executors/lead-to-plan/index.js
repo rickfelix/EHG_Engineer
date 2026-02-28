@@ -26,6 +26,9 @@ import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 
+// DFE Escalation Gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
+import { createDFEEscalationGate } from '../../gates/dfe-escalation-gate.js';
+
 // Helper modules
 import { transitionSdToPlan } from './state-transitions.js';
 import { displayPreHandoffWarnings } from './pre-handoff-warnings.js';
@@ -99,6 +102,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Lead Evaluation Check Gate (SD-MAN-ORCH-IMPROVE-STEP-LEAD-002-A)
     // Warning-only: checks for structured lead_evaluations record
     gates.push(createLeadEvaluationGate(this.supabase));
+
+    // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
+    // Routes ESCALATE decisions to chairman_decisions for governance
+    gates.push(createDFEEscalationGate(this.supabase, 'lead-to-plan-gate'));
 
     return gates;
   }
