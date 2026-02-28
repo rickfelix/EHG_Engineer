@@ -352,7 +352,10 @@
     "feedback:stale:dry": "node scripts/feedback-staleness-check.js --dry-run",
     "test:vision-governance": "vitest run tests/vision-governance/",
     "playground:config": "node scripts/generate-playground-config.cjs",
-    "playground": "node scripts/generate-playground-config.cjs --open"
+    "playground": "node scripts/generate-playground-config.cjs --open",
+    "sd:query": "node scripts/sd-query.js",
+    "decision:audit": "node scripts/decision-audit.js",
+    "okr:sync": "node scripts/okr-priority-sync.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
