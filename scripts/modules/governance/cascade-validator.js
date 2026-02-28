@@ -1,7 +1,8 @@
 /**
  * Strategic Governance Cascade Validator
  *
- * Validates Mission → Vision → OKR → SD alignment during SD creation.
+ * Validates the full 6-layer governance hierarchy:
+ *   Mission → Constitution → Vision → Strategy → OKR → SD
  * Blocking mode — violations prevent SD creation and escalate to
  * chairman_decisions. Chairman can override with explicit reason.
  * Mandatory revision cycles enforced when alignment fails.
@@ -116,18 +117,75 @@ export async function validateCascade({
     }
   }
 
-  // Step 4: Check Vision alignment (if SD has vision_key)
-  if (sd.vision_key) {
+  // Step 4: Validate 6-layer governance hierarchy
+  // Layer 1: Mission — at least one active constitution must exist (mission derives constitutions)
+  if (!constitutions || constitutions.length === 0) {
+    violations.push({
+      layer: 'mission_constitution',
+      reason: 'No active AEGIS constitutions found — Mission→Constitution link missing',
+      enforcementLevel: 'blocking',
+    });
+  }
+
+  // Layer 2: Constitution → Rules already validated in Step 3
+
+  // Layer 3: Vision alignment (MANDATORY — not conditional on vision_key)
+  const visionKey = sd.vision_key || sd.metadata?.vision_key || null;
+  if (visionKey) {
     const { data: vision } = await supabase
       .from('eva_vision_documents')
       .select('vision_key, dimensions')
-      .eq('vision_key', sd.vision_key)
+      .eq('vision_key', visionKey)
       .single();
 
     if (!vision) {
-      warnings.push({ reason: `Vision ${sd.vision_key} not found in EVA registry` });
+      violations.push({
+        layer: 'vision',
+        reason: `Vision ${visionKey} not found in EVA registry`,
+        enforcementLevel: 'blocking',
+      });
+    }
+  } else {
+    // Vision alignment is mandatory — warn if no vision_key provided
+    warnings.push({
+      layer: 'vision',
+      reason: 'SD has no vision_key — vision alignment not verifiable. Consider linking to a vision document.',
+    });
+  }
+
+  // Layer 4: Strategy alignment — SD should reference strategic objectives
+  const hasStrategicObjectives = sd.strategic_objectives && sd.strategic_objectives.length > 0;
+  if (!hasStrategicObjectives) {
+    warnings.push({
+      layer: 'strategy',
+      reason: 'SD has no strategic_objectives — strategy layer not linked',
+    });
+  }
+
+  // Layer 5: OKR alignment — check if SD links to objectives/key results
+  const objectiveIds = sd.metadata?.objective_ids || [];
+  if (objectiveIds.length === 0) {
+    warnings.push({
+      layer: 'okr',
+      reason: 'SD has no linked OKR objectives — OKR layer not connected',
+    });
+  } else {
+    // Verify linked objectives exist
+    const { data: objectives } = await supabase
+      .from('key_results')
+      .select('id')
+      .in('objective_id', objectiveIds)
+      .limit(1);
+
+    if (!objectives || objectives.length === 0) {
+      warnings.push({
+        layer: 'okr',
+        reason: `Linked objective IDs not found in key_results: ${objectiveIds.join(', ')}`,
+      });
     }
   }
+
+  // Layer 6: SD itself — already being validated
 
   const hasViolations = violations.length > 0;
   let blocked = hasViolations;

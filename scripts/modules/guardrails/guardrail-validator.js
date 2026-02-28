@@ -5,7 +5,7 @@
  * rules. Blocking mode — violations prevent SD creation and escalate to
  * chairman_decisions. Chairman can override with explicit reason.
  *
- * The 7 guardrails:
+ * The 9 guardrails:
  *   1. No autonomous spending above threshold
  *   2. No external communication without approval
  *   3. No data deletion without backup
@@ -13,6 +13,8 @@
  *   5. No schema migration without review
  *   6. No security bypass without escalation
  *   7. No scope change without LEAD approval
+ *   8. No bulk SD creation without governance review
+ *   9. No orchestrator without architecture plan
  *
  * Part of SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-01-A
  */
@@ -27,6 +29,8 @@ const GUARDRAIL_DEFINITIONS = [
   { id: 'GR-005', name: 'schema_migration', keywords: ['migration', 'schema', 'alter', 'column', 'table', 'index'] },
   { id: 'GR-006', name: 'security_bypass', keywords: ['security', 'bypass', 'override', 'credential', 'token', 'auth'] },
   { id: 'GR-007', name: 'scope_change', keywords: ['scope', 'requirement', 'change', 'modify', 'expand', 'add feature'] },
+  { id: 'GR-008', name: 'bulk_sd_block', keywords: ['bulk', 'batch', 'mass create', 'multiple directives', 'auto-generate', 'generate all'] },
+  { id: 'GR-009', name: 'orchestrator_arch_plan', keywords: ['orchestrator', 'parent directive', 'children', 'architecture plan', 'arch plan', 'multi-child'] },
 ];
 
 /**
