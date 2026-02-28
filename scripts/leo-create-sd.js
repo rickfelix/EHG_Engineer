@@ -1100,6 +1100,51 @@ async function createSD(options) {
 
   // ========================================================================
 
+  // Guardrail Registry Check (V11: governance_guardrail_enforcement)
+  // Blocking guardrails can prevent SD creation. Advisory guardrails log warnings.
+  try {
+    const guardrailRegistry = await import('../lib/governance/guardrail-registry.js');
+    const guardrailInput = {
+      sd_type: dbType,
+      scope: description,
+      priority,
+      visionScore: null, // Will be populated by scoreSDAtConception later
+      strategic_objectives: finalStrategicObjectives,
+      risks: [],
+      metadata,
+    };
+    const guardrailResult = guardrailRegistry.check(guardrailInput);
+
+    if (guardrailResult.warnings.length > 0) {
+      console.log('\n   ⚠️  GUARDRAIL ADVISORY WARNINGS:');
+      for (const w of guardrailResult.warnings) {
+        console.log(`      [${w.guardrail}] ${w.message}`);
+      }
+    }
+
+    if (!guardrailResult.passed) {
+      console.log('\n' + '🛑'.repeat(30));
+      console.log('🛑 GUARDRAIL VIOLATION — SD CREATION BLOCKED');
+      console.log('🛑'.repeat(30));
+      for (const v of guardrailResult.violations) {
+        console.log(`   [${v.severity.toUpperCase()}] ${v.name}: ${v.message}`);
+      }
+      console.log('\n   Resolve the above violations before creating this SD.');
+      console.log('   To bypass (not recommended): add --force flag');
+      console.log('🛑'.repeat(30));
+
+      if (!forceCreate) {
+        process.exit(1);
+      }
+      console.log('\n   ⚠️  --force flag detected. Proceeding despite guardrail violations.');
+    }
+  } catch (err) {
+    // Graceful degradation: if guardrail module fails, log warning and proceed
+    if (err.code !== 'MODULE_NOT_FOUND') {
+      console.log(`\n   ⚠️  Guardrail check error: ${err.message}. Proceeding with SD creation.`);
+    }
+  }
+
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
