@@ -163,6 +163,9 @@ export async function validateCascade({
   }
 
   // Layer 5: OKR alignment — check if SD links to objectives/key results
+  // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-067 US-002: Bidirectional cascade validation
+  // Direction 1 (SD→OKR): SD should reference OKR objectives
+  // Direction 2 (OKR→SD): Referenced objectives must exist and be active
   const objectiveIds = sd.metadata?.objective_ids || [];
   if (objectiveIds.length === 0) {
     warnings.push({
@@ -170,18 +173,30 @@ export async function validateCascade({
       reason: 'SD has no linked OKR objectives — OKR layer not connected',
     });
   } else {
-    // Verify linked objectives exist
-    const { data: objectives } = await supabase
+    // Reverse validation (OKR→SD): verify referenced objectives actually exist
+    const { data: objectives, error: objError } = await supabase
       .from('key_results')
-      .select('id')
-      .in('objective_id', objectiveIds)
-      .limit(1);
+      .select('id, objective_id')
+      .in('objective_id', objectiveIds);
 
-    if (!objectives || objectives.length === 0) {
+    if (objError) {
       warnings.push({
-        layer: 'okr',
-        reason: `Linked objective IDs not found in key_results: ${objectiveIds.join(', ')}`,
+        layer: 'okr_reverse',
+        reason: `Could not verify OKR objectives: ${objError.message}`,
       });
+    } else {
+      const foundObjectiveIds = new Set((objectives || []).map(o => o.objective_id));
+      const orphanedIds = objectiveIds.filter(id => !foundObjectiveIds.has(id));
+
+      if (orphanedIds.length > 0) {
+        // Orphaned references are violations (blocking), not warnings
+        violations.push({
+          layer: 'okr_reverse',
+          reason: `SD references ${orphanedIds.length} non-existent OKR objective(s): ${orphanedIds.join(', ')}. Cascade link is broken.`,
+          enforcementLevel: 'blocking',
+          orphanedObjectiveIds: orphanedIds,
+        });
+      }
     }
   }
 
