@@ -455,8 +455,9 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
   }
 
   // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Guardrail 5 - Handoff Sequence Enforcement
-  // Verify that prerequisite handoffs have been completed before allowing execution
-  if (!bypassValidation) {
+  // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-003: Sequence enforcement runs ALWAYS,
+  // even with --bypass-validation. Bypass skips quality gates, NOT workflow ordering.
+  {
     const workflowCheck = await getSDWorkflow(sdId);
     if (!workflowCheck.error && workflowCheck.sd) {
       const sdType = workflowCheck.sd.sd_type || 'feature';

@@ -275,6 +275,11 @@ export async function displayExecutionResult(result, handoffType, sdId) {
         console.log(`      ${nextStep.message}`);
         console.log('');
         console.log('   ⚠️  DO NOT claim completion until LEAD-FINAL-APPROVAL is done');
+
+        // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-002: Machine-readable next command
+        // Enables auto-chaining in CLI workflows (modeled after HEAL_NEXT_CMD pattern)
+        console.log('');
+        console.log(`HANDOFF_NEXT_CMD=node scripts/unified-handoff-system.js execute ${nextStep.next} ${sdId}`);
       } else {
         console.log(`   ${nextStep.message}`);
       }

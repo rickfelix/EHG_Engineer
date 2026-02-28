@@ -181,6 +181,16 @@ export class HandoffRecorder {
 
       console.log(`📝 Success recorded: ${executionId}`);
 
+      // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
+      // Log every handoff execution (success) to validation_audit_log for compliance review
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'accepted',
+        score: normalizedScore,
+        executionId,
+        gateCount: result.gateCount,
+        failedGate: result.failedGate || null
+      });
+
       // Create handoff artifact ONLY for phase transitions, not completion actions
       // Root Cause Fix (SD-VENTURE-STAGE0-UI-001):
       // - Completion actions (LEAD-FINAL-APPROVAL) don't have a valid to_phase
@@ -273,6 +283,18 @@ export class HandoffRecorder {
       }
 
       console.log(`📝 Failure recorded: ${executionId}`);
+
+      // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
+      // Log every handoff execution (failure) to validation_audit_log for compliance review
+      await this._logGovernanceAudit(handoffType, sdUuid, {
+        status: 'rejected',
+        score: normalizedScore,
+        executionId,
+        gateCount: result.gateCount,
+        failedGate: result.failedGate || null,
+        reasonCode: result.reasonCode
+      });
+
       return executionId;
 
     } catch (error) {
@@ -768,6 +790,48 @@ export class HandoffRecorder {
       // Error logging should never block operations
       console.warn(`   ⚠️  Error logging exception: ${logError.message}`);
       return null;
+    }
+  }
+
+  /**
+   * SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance Audit Trail
+   *
+   * Log handoff execution to validation_audit_log for compliance review.
+   * Non-blocking — audit logging failures do not prevent handoff completion.
+   *
+   * @param {string} handoffType - Handoff type (e.g., 'LEAD-TO-PLAN')
+   * @param {string} sdUuid - SD UUID
+   * @param {object} details - Audit details (status, score, executionId, etc.)
+   */
+  async _logGovernanceAudit(handoffType, sdUuid, details) {
+    try {
+      const { error } = await this.supabase
+        .from('validation_audit_log')
+        .insert({
+          correlation_id: `handoff-${details.executionId}`,
+          sd_id: sdUuid,
+          validator_name: `handoff_${handoffType.toLowerCase().replace(/-/g, '_')}`,
+          failure_reason: details.status === 'accepted'
+            ? `Handoff ${handoffType} accepted with score ${details.score}%`
+            : `Handoff ${handoffType} rejected: ${details.reasonCode || 'VALIDATION_FAILED'}`,
+          failure_category: details.status === 'accepted' ? 'pass' : 'gate_failure',
+          metadata: {
+            handoff_type: handoffType,
+            execution_id: details.executionId,
+            validation_score: details.score,
+            gate_count: details.gateCount,
+            failed_gate: details.failedGate,
+            outcome: details.status
+          },
+          execution_context: 'handoff-recorder'
+        });
+
+      if (error) {
+        console.warn(`   ⚠️  Governance audit log failed: ${error.message}`);
+      }
+    } catch (err) {
+      // Non-blocking — audit failures must never prevent handoff completion
+      console.warn(`   ⚠️  Governance audit exception: ${err.message}`);
     }
   }
 
