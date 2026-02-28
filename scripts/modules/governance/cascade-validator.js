@@ -2,8 +2,9 @@
  * Strategic Governance Cascade Validator
  *
  * Validates Mission → Vision → OKR → SD alignment during SD creation.
- * Advisory mode only — logs violations and escalates to chairman_decisions
- * but never blocks SD creation.
+ * Blocking mode — violations prevent SD creation and escalate to
+ * chairman_decisions. Chairman can override with explicit reason.
+ * Mandatory revision cycles enforced when alignment fails.
  *
  * Part of SD-MAN-ORCH-VISION-HEAL-GOVERNANCE-001-02
  */
@@ -128,27 +129,40 @@ export async function validateCascade({
     }
   }
 
-  const passed = violations.length === 0;
+  const hasViolations = violations.length > 0;
+  let blocked = hasViolations;
+  let overrideDecision = null;
 
-  // Step 5: Escalate violations to chairman (advisory only)
-  if (violations.length > 0 && !dryRun) {
-    try {
-      await escalateToChairman(supabase, sd, violations);
-      logger.log(`Cascade validation: ${violations.length} violation(s) escalated to chairman`);
-    } catch (err) {
-      logger.error(`Cascade validation: Escalation failed: ${err.message}`);
+  // Step 5: Check for chairman override, then escalate if still blocked
+  if (hasViolations && !dryRun) {
+    // Check if chairman already approved an override
+    overrideDecision = await checkCascadeOverride(supabase, sd);
+
+    if (overrideDecision) {
+      blocked = false;
+      logger.log(`Cascade validation: ${violations.length} violation(s) OVERRIDDEN by chairman decision ${overrideDecision.id}`);
+    } else {
+      // Escalate as blocking — chairman must approve to proceed
+      try {
+        await escalateToChairman(supabase, sd, violations);
+        logger.log(`Cascade validation: ${violations.length} violation(s) BLOCKED — escalated to chairman for mandatory revision`);
+      } catch (err) {
+        logger.error(`Cascade validation: Escalation failed: ${err.message}`);
+      }
     }
   }
 
-  // Log results
-  logger.log(`Cascade validation: ${rulesChecked} rules checked, ${violations.length} violations, ${warnings.length} warnings`);
+  const passed = !blocked;
 
-  return { passed, violations, warnings, rulesChecked };
+  // Log results
+  logger.log(`Cascade validation: ${rulesChecked} rules checked, ${violations.length} violations, ${warnings.length} warnings, blocked=${blocked}`);
+
+  return { passed, blocked, violations, warnings, rulesChecked, overrideDecision };
 }
 
 /**
  * Escalate cascade violations to chairman_decisions queue.
- * Creates an advisory (non-blocking) decision entry.
+ * Creates a blocking decision — SD creation halted until chairman approves.
  */
 async function escalateToChairman(supabase, sd, violations) {
   const { error } = await supabase
@@ -156,9 +170,9 @@ async function escalateToChairman(supabase, sd, violations) {
     .insert({
       venture_id: sd.venture_id || null,
       lifecycle_stage: 'sd_creation',
-      decision_type: 'advisory',
+      decision_type: 'cascade_override',
       status: 'pending',
-      blocking: false,
+      blocking: true,
       summary: `Cascade validation: ${violations.length} violation(s) found for SD "${sd.title}"`,
       metadata: {
         sd_key: sd.sd_key || sd.id,
@@ -170,6 +184,24 @@ async function escalateToChairman(supabase, sd, violations) {
     });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Check if chairman has already approved a cascade override for this SD.
+ */
+async function checkCascadeOverride(supabase, sd) {
+  const sdKey = sd.sd_key || sd.id;
+  const { data } = await supabase
+    .from('chairman_decisions')
+    .select('id, status, metadata')
+    .eq('decision_type', 'cascade_override')
+    .eq('status', 'approved')
+    .limit(50);
+
+  if (data) {
+    return data.find(d => d.metadata?.sd_key === sdKey) || null;
+  }
+  return null;
 }
 
 /**

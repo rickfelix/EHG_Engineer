@@ -244,6 +244,39 @@ export async function handlePendingCommand() {
 /**
  * Handle precheck command
  */
+/**
+ * CLI introspection: JSON output for gate status queries.
+ * Part of SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-05-D
+ *
+ * @param {string} sdId - SD key
+ * @param {Object} [options] - { json: boolean }
+ * @returns {Promise<Object>} Gate status for all handoff types
+ */
+export async function introspectGateStatus(sdId, { json = true } = {}) {
+  const system = createHandoffSystem();
+  const handoffTypes = ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'];
+  const results = {};
+
+  for (const type of handoffTypes) {
+    try {
+      const result = await system.precheckHandoff(type, sdId);
+      results[type] = {
+        passed: result.success,
+        gateCount: result.gates?.length || 0,
+        failedGates: result.failedGates || [],
+        issues: result.issues || [],
+      };
+    } catch {
+      results[type] = { passed: false, error: 'not_applicable' };
+    }
+  }
+
+  if (json) {
+    console.log(JSON.stringify({ sd_id: sdId, gates: results }, null, 2));
+  }
+  return results;
+}
+
 export async function handlePrecheckCommand(precheckType, precheckSdId) {
   const system = createHandoffSystem();
 
@@ -963,6 +996,11 @@ export async function main() {
 
     case 'subagents':
       result = await handleSubagentsCommand(args[1], args[2]);
+      break;
+
+    case 'introspect':
+      // CLI introspection: JSON gate status query (SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-05-D)
+      result = await introspectGateStatus(args[1], { json: !args.includes('--text') });
       break;
 
     case 'help':

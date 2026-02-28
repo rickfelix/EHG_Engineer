@@ -1,11 +1,11 @@
 /**
- * OKR Cycle Guard — Day-28 Hard Stop
+ * OKR Cycle Guard — Day-28 Hard Stop (BLOCKING)
  *
- * Advisory guard that warns when new SD creation occurs within
- * the final days of an OKR cycle. Never blocks — only logs
- * and escalates to chairman_decisions.
+ * Blocking guard that prevents new SD creation within the final
+ * days of an OKR cycle. Escalates to chairman_decisions with
+ * blocking flag. Chairman can override with explicit reason.
  *
- * Part of SD-MAN-ORCH-VISION-HEAL-GOVERNANCE-001-04
+ * Part of SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-04-B
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -64,12 +64,13 @@ export async function checkDay28HardStop({
   const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (daysRemaining <= guardDays) {
-    const message = `Advisory: OKR cycle ends in ${daysRemaining} day(s) (${nearest.end_date}). Consider deferring new SD creation to next cycle.`;
+    const message = `BLOCKED: OKR cycle ends in ${daysRemaining} day(s) (${nearest.end_date}). SD creation blocked — defer to next cycle or request chairman override.`;
     logger.warn(`OKR cycle guard: ${message}`);
 
     return {
-      allowed: true, // Advisory only — never blocks
-      advisory: true,
+      allowed: false, // Blocking — prevents SD creation
+      blocked: true,
+      advisory: false,
       daysRemaining,
       message,
       nearestDeadline: nearest.end_date,
