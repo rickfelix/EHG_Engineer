@@ -8,7 +8,7 @@
  *   scripts/eva/doc-health-audit.mjs  (entry point)
  */
 
-import { letterGrade, GRADE_THRESHOLDS, THRESHOLD_ACTIONS } from './rubric.js';
+import { letterGrade, GRADE_THRESHOLDS } from './rubric.js';
 
 // ─── Console Report (full dimension table) ──────────────────────────────────
 
@@ -18,7 +18,7 @@ import { letterGrade, GRADE_THRESHOLDS, THRESHOLD_ACTIONS } from './rubric.js';
  * @param {{ fileCount: number, dirCount: number }} stats
  */
 export function printReport(scoreResult, stats) {
-  const { dimensions, totalScore, thresholdAction } = scoreResult;
+  const { dimensions, totalScore } = scoreResult;
 
   console.log('');
   console.log('\u2550'.repeat(59));
@@ -40,12 +40,22 @@ export function printReport(scoreResult, stats) {
   console.log('\u2502 ID   \u2502 Dimension                     \u2502 Score \u2502 Grade \u2502 Status   \u2502');
   console.log(hr('\u251C', '\u253C', '\u2524'));
 
+  let printedSeparator = false;
   for (const dim of dimensions) {
-    const grade = letterGrade(dim.score);
-    const status = formatStatus(dim.score);
+    // Visual separator before coverage dimensions (D11+)
+    if (!printedSeparator && dim.category === 'coverage') {
+      console.log(hr('\u251C', '\u253C', '\u2524'));
+      const label = ' Coverage Dimensions';
+      console.log(`\u2502 ${label.padEnd(W.id + W.name + 1)} \u2502${''.padEnd(W.score)}\u2502${''.padEnd(W.grade)}\u2502${''.padEnd(W.status)}\u2502`);
+      console.log(hr('\u251C', '\u253C', '\u2524'));
+      printedSeparator = true;
+    }
+
+    const grade = dim.score === -1 ? 'N/A' : letterGrade(dim.score);
+    const status = dim.score === -1 ? '  N/A    ' : formatStatus(dim.score);
     const id = dim.id.padEnd(4);
     const name = dim.name.padEnd(29);
-    const scoreStr = String(dim.score).padStart(3);
+    const scoreStr = dim.score === -1 ? 'N/A' : String(dim.score).padStart(3);
     const gradeStr = grade.padStart(3);
 
     console.log(`\u2502 ${id} \u2502 ${name} \u2502 ${scoreStr}   \u2502 ${gradeStr}   \u2502 ${status} \u2502`);
@@ -153,6 +163,90 @@ export function toJSON(scoreResult, stats) {
       ])
     ),
   };
+}
+
+// ─── Trend Display ──────────────────────────────────────────────────────────
+
+/**
+ * Print score trend comparing current to previous run.
+ * @param {{ totalScore: number, dimensions: object[] }} current
+ * @param {{ total_score: number, dimension_scores: object, scored_at: string }|null} previous
+ * @param {number} roundNumber - Which round of the heal loop (1-based)
+ */
+export function printTrend(current, previous, roundNumber) {
+  console.log('');
+  console.log('─'.repeat(59));
+
+  if (!previous) {
+    console.log('  TREND: First run (no previous data)');
+    console.log('─'.repeat(59));
+    return;
+  }
+
+  console.log(`  TREND (Round ${roundNumber} of heal loop):`);
+  console.log('');
+
+  const prevTotal = previous.total_score;
+  const curTotal = current.totalScore;
+  const delta = curTotal - prevTotal;
+  const arrow = delta > 0 ? `+${delta}` : delta === 0 ? '±0' : String(delta);
+  console.log(`  Total: ${prevTotal} → ${curTotal} (${arrow})`);
+  console.log('');
+
+  // Per-dimension deltas for dimensions that changed
+  const prevDims = previous.dimension_scores || {};
+  for (const dim of current.dimensions) {
+    const prev = prevDims[dim.id];
+    if (!prev) continue;
+
+    const prevScore = prev.score;
+    const curScore = dim.score;
+    if (prevScore === curScore) continue;
+
+    const d = curScore - prevScore;
+    const sign = d > 0 ? `+${d}` : String(d);
+    const label = `${dim.id} ${dim.name}:`;
+    console.log(`  ${label.padEnd(38)} ${String(prevScore).padStart(3)} → ${String(curScore).padStart(3)} (${sign})`);
+  }
+
+  const scoredAt = previous.scored_at
+    ? new Date(previous.scored_at).toLocaleDateString()
+    : 'unknown';
+  console.log('');
+  console.log(`  Previous scored: ${scoredAt}`);
+  console.log('─'.repeat(59));
+}
+
+// ─── Auto-Fix Summary ──────────────────────────────────────────────────────
+
+/**
+ * Print summary of auto-fix results.
+ * @param {{ fixed: Array<{dimension: string, file: string, action: string}>, skipped: string[] }} fixResult
+ */
+export function printAutoFixSummary(fixResult) {
+  const { fixed, skipped } = fixResult;
+
+  if (fixed.length === 0) {
+    console.log('  No auto-fixable issues found.');
+    return;
+  }
+
+  // Count by dimension
+  const counts = {};
+  for (const f of fixed) {
+    counts[f.dimension] = (counts[f.dimension] || 0) + 1;
+  }
+
+  const parts = Object.entries(counts).map(([dim, n]) => `${dim}: ${n}`);
+  console.log(`  Auto-fixed ${fixed.length} issues (${parts.join(', ')})`);
+
+  for (const f of fixed) {
+    console.log(`    ✓ [${f.dimension}] ${f.file} — ${f.action}`);
+  }
+
+  if (skipped.length > 0) {
+    console.log(`  Skipped ${skipped.length} (safety checks or parse errors)`);
+  }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
