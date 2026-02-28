@@ -80,7 +80,8 @@ export function calculateUrgencyScore({
   patterns = [],
   _retrospectives = [],
   learningUpdate = null,
-  okrImpact = null
+  okrImpact = null,
+  okrDateProximity = null
 }) {
   let score = 0.5; // Base score (medium priority)
   const reason_codes = [];
@@ -155,6 +156,23 @@ export function calculateUrgencyScore({
     reason_codes.push('okr_priority');
   }
 
+  // Factor 8: OKR Date Proximity (weight: 0.15)
+  // Boosts urgency for SDs linked to OKRs nearing their end_date.
+  // okrDateProximity can be provided as { daysRemaining: N } or read from sd.metadata.okr_days_remaining
+  const daysRemaining = okrDateProximity?.daysRemaining ?? sd?.metadata?.okr_days_remaining ?? null;
+  if (daysRemaining != null && daysRemaining >= 0) {
+    if (daysRemaining <= 3) {
+      score += 0.15; // Critical — OKR cycle ending imminently
+      reason_codes.push('okr_deadline_critical');
+    } else if (daysRemaining <= 7) {
+      score += 0.10; // Urgent — within a week
+      reason_codes.push('okr_deadline_urgent');
+    } else if (daysRemaining <= 14) {
+      score += 0.05; // Approaching
+      reason_codes.push('okr_deadline_approaching');
+    }
+  }
+
   // Clamp final score to valid range
   score = Math.max(0, Math.min(1, score));
 
@@ -162,7 +180,7 @@ export function calculateUrgencyScore({
     score: Math.round(score * 100) / 100,
     band: scoreToBand(score),
     reason_codes: reason_codes.length > 0 ? reason_codes : ['baseline'],
-    model_version: 'v1.1.0'
+    model_version: 'v1.2.0'
   };
 }
 
