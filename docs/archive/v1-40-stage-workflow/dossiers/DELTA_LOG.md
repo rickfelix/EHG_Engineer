@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Phase 3 Batch Delta Log
+
+
+## Table of Contents
+
+- [Summary](#summary)
+- [Delta 1: Recursion Blueprint Complexity Variation](#delta-1-recursion-blueprint-complexity-variation)
+- [Delta 2: Agent Orchestration Granularity](#delta-2-agent-orchestration-granularity)
+- [Delta 3: Metrics Thresholds Become More Specific](#delta-3-metrics-thresholds-become-more-specific)
+- [Delta 4: Gap Severity Increases with Stage Complexity](#delta-4-gap-severity-increases-with-stage-complexity)
+- [Delta 5: Substage Count Varies (3-4 substages)](#delta-5-substage-count-varies-3-4-substages)
+- [Delta 6: Evidence Format Consistency Maintained](#delta-6-evidence-format-consistency-maintained)
+- [Delta 7: Configurability Parameters Increase with Recursion](#delta-7-configurability-parameters-increase-with-recursion)
+- [Delta 8: Acceptance Scores Improve Slightly (88 → 90-91)](#delta-8-acceptance-scores-improve-slightly-88-90-91)
+- [Batch-Wide Patterns](#batch-wide-patterns)
+  - [Pattern 1: Recursion Centralization](#pattern-1-recursion-centralization)
+  - [Pattern 2: Automation Blockers Consistent](#pattern-2-automation-blockers-consistent)
+  - [Pattern 3: Chairman Controls Scale with Risk](#pattern-3-chairman-controls-scale-with-risk)
+- [Recommendations](#recommendations)
+- [Conclusion](#conclusion)
 
 **Generated**: 2025-11-05
 **Batch**: Stages 2, 3, 4

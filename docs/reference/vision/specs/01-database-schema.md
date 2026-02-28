@@ -1,5 +1,72 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Vision v2 Database Schema Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [RLS Posture (Prototype vs Production)](#rls-posture-prototype-vs-production)
+  - [Single-User Production Mode (Recommended for Rick-only)](#single-user-production-mode-recommended-for-rick-only)
+  - [Service Role Handling (Production Safety)](#service-role-handling-production-safety)
+- [0. Core Tables (Portfolios, Ventures, Crews)](#0-core-tables-portfolios-ventures-crews)
+  - [0.1 portfolios](#01-portfolios)
+  - [0.2 ventures](#02-ventures)
+  - [0.2.1 venture_inception_briefs (Stage 0 Primary Artifact)](#021-venture_inception_briefs-stage-0-primary-artifact)
+  - [0.2.2 venture_stage_transitions (Authoritative History + Promotion Audit)](#022-venture_stage_transitions-authoritative-history-promotion-audit)
+  - [0.2.3 Stage 0 → Stage 1 Promotion Function (Atomic + Idempotent)](#023-stage-0-stage-1-promotion-function-atomic-idempotent)
+  - [0.3 crewai_crews](#03-crewai_crews)
+  - [0.4 Opportunity Discovery (Deal Flow) Tables (AI-Generated Blueprints)](#04-opportunity-discovery-deal-flow-tables-ai-generated-blueprints)
+- [1. Command Chain Tables](#1-command-chain-tables)
+  - [1.1 chairman_directives](#11-chairman_directives)
+  - [1.2 directive_delegations](#12-directive_delegations)
+  - [1.3 agent_task_contracts](#13-agent_task_contracts)
+  - [1.4 agent_artifacts](#14-agent_artifacts)
+  - [1.5 venture_artifacts (with versioning)](#15-venture_artifacts-with-versioning)
+  - [1.6 chairman_alerts](#16-chairman_alerts)
+  - [1.7 venture_budget_settings](#17-venture_budget_settings)
+- [2. Venture Stage Management](#2-venture-stage-management)
+  - [2.0 lifecycle_stage_config](#20-lifecycle_stage_config)
+  - [2.1 venture_stage_assignments](#21-venture_stage_assignments)
+  - [2.2 chairman_decisions](#22-chairman_decisions)
+- [3. Golden Nugget Tables](#3-golden-nugget-tables)
+  - [3.1 venture_token_ledger](#31-venture_token_ledger)
+  - [3.2 assumption_sets](#32-assumption_sets)
+- [4. Database Functions](#4-database-functions)
+  - [4.1 fn_chairman_briefing()](#41-fn_chairman_briefing)
+  - [4.2 fn_advance_venture_stage()](#42-fn_advance_venture_stage)
+- [5. Migration File](#5-migration-file)
+- [6. Table Relationships](#6-table-relationships)
+- [7. Blue Sky Architecture Tables](#7-blue-sky-architecture-tables)
+  - [7.1 agent_execution_traces (Observability)](#71-agent_execution_traces-observability)
+  - [7.2 crew_prompt_versions (Prompt Versioning)](#72-crew_prompt_versions-prompt-versioning)
+  - [7.3 model_registry (Model Abstraction)](#73-model_registry-model-abstraction)
+  - [7.4 circuit_breaker_events (Cost Protection)](#74-circuit_breaker_events-cost-protection)
+- [8. Table Relationships (Updated)](#8-table-relationships-updated)
+- [9. Hierarchical Agent Tables](#9-hierarchical-agent-tables)
+  - [9.1 Table Summary](#91-table-summary)
+  - [9.2 Key Relationships](#92-key-relationships)
+- [10. Operational Handoff Tables (OpenAI Codex Assessment)](#10-operational-handoff-tables-openai-codex-assessment)
+  - [10.1 operational_handoff_packets](#101-operational_handoff_packets)
+  - [10.2 venture_constitutions](#102-venture_constitutions)
+  - [10.3 ceo_mode_transitions](#103-ceo_mode_transitions)
+  - [10.4 Table Relationships (Operational Phase)](#104-table-relationships-operational-phase)
+- [11. Strict RLS Policies (OpenAI Codex Assessment - P1 Priority)](#11-strict-rls-policies-openai-codex-assessment---p1-priority)
+  - [11.0 Modes: Single-User Production vs Multi-User Future](#110-modes-single-user-production-vs-multi-user-future)
+  - [11.1 Access Control Foundation Tables](#111-access-control-foundation-tables)
+  - [11.2 Reusable RLS Helper Functions](#112-reusable-rls-helper-functions)
+  - [11.3 Strict RLS Policy Patterns](#113-strict-rls-policy-patterns)
+  - [11.4 RLS Migration Strategy](#114-rls-migration-strategy)
+  - [11.5 Policy Reference Table](#115-policy-reference-table)
+- [References](#references)
 
 ## Metadata
 - **Category**: Database

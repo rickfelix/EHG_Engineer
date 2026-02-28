@@ -1,5 +1,54 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Response: Google (Gemini)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [1. Executive Summary](#1-executive-summary)
+- [2. The Legal Liability Landscape](#2-the-legal-liability-landscape)
+  - [2.1 The Unauthorized Practice of Law (UPL)](#21-the-unauthorized-practice-of-law-upl)
+  - [2.2 Negligent Misrepresentation and the "False Confidence" Trap](#22-negligent-misrepresentation-and-the-false-confidence-trap)
+  - [2.3 Contributory Infringement and Platform Liability](#23-contributory-infringement-and-platform-liability)
+- [3. Technical Reality: The USPTO Data Ecosystem](#3-technical-reality-the-uspto-data-ecosystem)
+  - [3.1 The Open Data Portal (ODP) Migration](#31-the-open-data-portal-odp-migration)
+  - [3.2 API Capabilities and Strategic Limitations](#32-api-capabilities-and-strategic-limitations)
+  - [3.3 The Engineering Reality of Bulk Data](#33-the-engineering-reality-of-bulk-data)
+- [4. Strategic Option Evaluation](#4-strategic-option-evaluation)
+  - [Option A: No Trademark Feature At All](#option-a-no-trademark-feature-at-all)
+  - [Option B: Disclaimer-Heavy Pre-Screen (Custom Build)](#option-b-disclaimer-heavy-pre-screen-custom-build)
+  - [Option C: Partner with Trademark Service (API Integration)](#option-c-partner-with-trademark-service-api-integration)
+  - [Option D: Attorney Referral Network (The "Warm Handoff")](#option-d-attorney-referral-network-the-warm-handoff)
+  - [Option E: Educational Content Only](#option-e-educational-content-only)
+- [5. Competitor Analysis: How Incumbents Manage Risk](#5-competitor-analysis-how-incumbents-manage-risk)
+  - [5.1 Namelix (Brandmark.io)](#51-namelix-brandmarkio)
+  - [5.2 Squadhelp](#52-squadhelp)
+  - [5.3 Looka](#53-looka)
+  - [5.4 LegalZoom / Rocket Lawyer](#54-legalzoom-rocket-lawyer)
+- [6. The Attorney Referral Model: Ethics and Economics](#6-the-attorney-referral-model-ethics-and-economics)
+  - [6.1 Navigating Fee-Splitting (ABA Model Rule 5.4)](#61-navigating-fee-splitting-aba-model-rule-54)
+  - [6.2 The Economics of Referrals](#62-the-economics-of-referrals)
+- [7. Recommended Strategic Roadmap](#7-recommended-strategic-roadmap)
+  - [Phase 1: MVP (Launch - Week 2)](#phase-1-mvp-launch---week-2)
+  - [Phase 2: V1 (Month 3)](#phase-2-v1-month-3)
+  - [Phase 3: Long Term (Mature Product)](#phase-3-long-term-mature-product)
+- [8. Implementation Guide](#8-implementation-guide)
+  - [8.1 Sample Disclaimer Language](#81-sample-disclaimer-language)
+  - [8.2 Designing the Attorney Referral Model (Ethical Compliance)](#82-designing-the-attorney-referral-model-ethical-compliance)
+  - [8.3 USPTO Technical Reality Checklist](#83-uspto-technical-reality-checklist)
+- [9. Key Insight: Certainty is a Liability](#9-key-insight-certainty-is-a-liability)
+- [Trademark Liability Analysis Summary](#trademark-liability-analysis-summary)
+  - [Liability Assessment](#liability-assessment)
+  - [Competitor Analysis Matrix](#competitor-analysis-matrix)
+  - [USPTO Technical Summary](#uspto-technical-summary)
 
 ## Metadata
 - **Category**: Guide

@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Identified Gaps (from Critique)](#identified-gaps-from-critique)
+  - [Gap #1: Limited Automation for Manual Processes](#gap-1-limited-automation-for-manual-processes)
+  - [Gap #2: Missing Concrete Success Metrics with Thresholds](#gap-2-missing-concrete-success-metrics-with-thresholds)
+  - [Gap #3: Unclear Data Transformation and Validation Rules](#gap-3-unclear-data-transformation-and-validation-rules)
+  - [Gap #4: No Rollback Procedures](#gap-4-no-rollback-procedures)
+  - [Gap #5: No Customer Validation Touchpoint](#gap-5-no-customer-validation-touchpoint)
+  - [Gap #6: Missing Specific Tool Integrations](#gap-6-missing-specific-tool-integrations)
+  - [Gap #7: No Explicit Error Handling](#gap-7-no-explicit-error-handling)
+- [Improvement Backlog (Prioritized)](#improvement-backlog-prioritized)
+  - [Backlog Item #1: Build Automation Workflows](#backlog-item-1-build-automation-workflows)
+  - [Backlog Item #2: Define Concrete KPIs with Targets](#backlog-item-2-define-concrete-kpis-with-targets)
+  - [Backlog Item #3: Document Data Schemas and Transformations](#backlog-item-3-document-data-schemas-and-transformations)
+  - [Backlog Item #4: Add Customer Validation Touchpoint](#backlog-item-4-add-customer-validation-touchpoint)
+  - [Backlog Item #5: Create Detailed Rollback Procedures](#backlog-item-5-create-detailed-rollback-procedures)
+  - [Backlog Item #6: Integrate Pricing Tools](#backlog-item-6-integrate-pricing-tools)
+  - [Backlog Item #7: Implement Error Handling](#backlog-item-7-implement-error-handling)
+- [Strategic Directive Cross-References](#strategic-directive-cross-references)
+  - [SD-AUTOMATION-001 (Proposed): Pricing Strategy Automation](#sd-automation-001-proposed-pricing-strategy-automation)
+  - [SD-METRICS-001 (Proposed): Define Pricing Strategy Success Metrics](#sd-metrics-001-proposed-define-pricing-strategy-success-metrics)
+  - [SD-DATA-QUALITY-001 (Proposed): Stage 15 Data Quality Framework](#sd-data-quality-001-proposed-stage-15-data-quality-framework)
+  - [SD-CUSTOMER-VALIDATION-001 (Proposed): Customer Validation for Pricing Strategy](#sd-customer-validation-001-proposed-customer-validation-for-pricing-strategy)
+  - [SD-ROLLBACK-001 (Proposed): Pricing Strategy Rollback Procedures](#sd-rollback-001-proposed-pricing-strategy-rollback-procedures)
+  - [SD-ERROR-HANDLING-001 (Proposed): Stage 15 Error Handling Framework](#sd-error-handling-001-proposed-stage-15-error-handling-framework)
+- [Gap Closure Roadmap](#gap-closure-roadmap)
+  - [Phase 1: Quick Wins (1-2 months)](#phase-1-quick-wins-1-2-months)
+  - [Phase 2: Data & Customer Validation (2-4 months)](#phase-2-data-customer-validation-2-4-months)
+  - [Phase 3: Automation & Tool Integration (6-12 months)](#phase-3-automation-tool-integration-6-12-months)
+- [Continuous Improvement Tracking](#continuous-improvement-tracking)
+
 <!-- ARCHIVED: 2026-01-26T16:26:53.831Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-15\10_gaps-backlog.md

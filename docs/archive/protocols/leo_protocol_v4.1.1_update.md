@@ -1,4 +1,24 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v4.1.1 - Database Verification Update
+
+
+## Table of Contents
+
+- [⚠️  DEPRECATION NOTICE](#-deprecation-notice)
+- [Critical Update: Database-First Validation](#critical-update-database-first-validation)
+  - [New Section 774: Database Verification Checkpoint](#new-section-774-database-verification-checkpoint)
+  - [Handoff Validation & Rejection Protocol ← ENHANCED v4.1.1](#handoff-validation-rejection-protocol-enhanced-v411)
+  - [Implementation Scripts](#implementation-scripts)
+  - [Mandatory Database Operations](#mandatory-database-operations)
+  - [Consequences of Non-Compliance](#consequences-of-non-compliance)
+- [Summary of Changes](#summary-of-changes)
 
 **Version**: 4.1.1  
 **Status**: ⚠️  SUPERSEDED BY LEO Protocol v4.1.2_database_first

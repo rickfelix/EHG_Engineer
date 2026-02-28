@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Phase 0: CONST-007 Rate Limiting Verification Report
 
 **SD**: SD-LEO-SELF-IMPROVE-001A

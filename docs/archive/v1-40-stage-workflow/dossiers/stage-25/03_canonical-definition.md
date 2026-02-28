@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 25: Canonical Definition
+
+
+## Table of Contents
+
+- [Source Authority](#source-authority)
+- [Full YAML Specification](#full-yaml-specification)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Basic Attributes](#basic-attributes)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 defined)](#inputs-3-defined)
+  - [Outputs (3 defined)](#outputs-3-defined)
+  - [Metrics (3 defined)](#metrics-3-defined)
+  - [Gates](#gates)
+  - [Substages (3 defined)](#substages-3-defined)
+  - [Notes](#notes)
+- [Validation Rules](#validation-rules)
+  - [Required Fields (All Present)](#required-fields-all-present)
+  - [Optional Fields](#optional-fields)
+  - [Schema Compliance](#schema-compliance)
+- [Interpretation Ambiguities](#interpretation-ambiguities)
+  - [Ambiguity 1: Test Coverage Thresholds](#ambiguity-1-test-coverage-thresholds)
+  - [Ambiguity 2: Quality Score Formula](#ambiguity-2-quality-score-formula)
+  - [Ambiguity 3: Automation Level](#ambiguity-3-automation-level)
+  - [Ambiguity 4: Bug Severity Classification](#ambiguity-4-bug-severity-classification)
+- [Sources Table](#sources-table)
 
 ## Source Authority
 

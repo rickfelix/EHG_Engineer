@@ -1,5 +1,53 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Stop Hook Sub-Agent Enforcement - Operational Runbook
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [System Architecture](#system-architecture)
+- [Configuration](#configuration)
+  - [Hook Registration](#hook-registration)
+  - [Environment Variables](#environment-variables)
+- [Sub-Agent Requirements Matrix](#sub-agent-requirements-matrix)
+  - [Required vs Recommended Behavior (v2.1)](#required-vs-recommended-behavior-v21)
+  - [By SD Type](#by-sd-type)
+  - [By Category](#by-category)
+  - [Universal Requirements](#universal-requirements)
+- [Phase Window Timing Rules](#phase-window-timing-rules)
+- [Caching Strategy](#caching-strategy)
+- [Exit Codes](#exit-codes)
+- [Bypass Mechanism](#bypass-mechanism)
+  - [When to Bypass](#when-to-bypass)
+  - [Bypass Process](#bypass-process)
+  - [Bypass Validation Failures](#bypass-validation-failures)
+- [Auto-Remediation](#auto-remediation)
+- [Monitoring and Observability](#monitoring-and-observability)
+  - [Logs](#logs)
+  - [Audit Trail](#audit-trail)
+  - [Metrics](#metrics)
+- [Troubleshooting](#troubleshooting)
+  - [Hook Not Triggering](#hook-not-triggering)
+  - [Hook Times Out](#hook-times-out)
+  - [False Positives](#false-positives)
+  - [SD Not Detected](#sd-not-detected)
+  - [Wrong Timing Detection](#wrong-timing-detection)
+  - [Post-Completion Validator False Positive (AUTO-PROCEED Blocking)](#post-completion-validator-false-positive-auto-proceed-blocking)
+- [Maintenance](#maintenance)
+  - [Updating Requirements Matrix](#updating-requirements-matrix)
+  - [Adding New Sub-Agents](#adding-new-sub-agents)
+  - [Disabling Hook (Emergency)](#disabling-hook-emergency)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Deployment

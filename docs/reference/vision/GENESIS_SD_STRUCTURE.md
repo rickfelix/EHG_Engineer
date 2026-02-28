@@ -1,5 +1,37 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Genesis Oath v3.1: Strategic Directive Structure
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [LEO Protocol Compliance](#leo-protocol-compliance)
+- [Velocity Assumptions](#velocity-assumptions)
+- [Vision Reference Metadata (Required in All SDs)](#vision-reference-metadata-required-in-all-sds)
+- [SD Hierarchy Overview](#sd-hierarchy-overview)
+- [Level 0: Parent SD (Orchestrator)](#level-0-parent-sd-orchestrator)
+  - [SD-GENESIS-V31-PARENT](#sd-genesis-v31-parent)
+- [Level 1: Sprint SDs (Children of Parent)](#level-1-sprint-sds-children-of-parent)
+  - [SD-GENESIS-V31-MASON (Sprint 1: The Mason)](#sd-genesis-v31-mason-sprint-1-the-mason)
+  - [SD-GENESIS-V31-DREAMCATCHER (Sprint 2: The Dreamcatcher)](#sd-genesis-v31-dreamcatcher-sprint-2-the-dreamcatcher)
+  - [SD-GENESIS-V31-MIRROR (Sprint 3: The Mirror)](#sd-genesis-v31-mirror-sprint-3-the-mirror)
+  - [SD-GENESIS-V31-RITUAL (Genesis Ritual Preparation)](#sd-genesis-v31-ritual-genesis-ritual-preparation)
+- [Level 2: Phase SDs (Children of Sprint SDs)](#level-2-phase-sds-children-of-sprint-sds)
+  - [Mason Phases](#mason-phases)
+  - [Dreamcatcher Phases](#dreamcatcher-phases)
+  - [Mirror Phases](#mirror-phases)
+- [Time Budget Summary](#time-budget-summary)
+- [Database Insertion](#database-insertion)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Guide

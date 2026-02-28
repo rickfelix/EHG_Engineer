@@ -1,4 +1,47 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Genesis Completion Blueprint
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Strategic Directive: SD-GENESIS-COMPLETE-001](#strategic-directive-sd-genesis-complete-001)
+- [Executive Summary](#executive-summary)
+- [Part 1: Triangulation Findings Summary](#part-1-triangulation-findings-summary)
+  - [What Works (GREEN)](#what-works-green)
+  - [What's Disconnected (YELLOW)](#whats-disconnected-yellow)
+  - [What's Stubbed/Missing (RED)](#whats-stubbedmissing-red)
+- [Part 2: Critical Gap — PRD ↔ SD Relationship](#part-2-critical-gap-prd-sd-relationship)
+  - [Current Data Model](#current-data-model)
+  - [Genesis Current Behavior](#genesis-current-behavior)
+  - [Required Behavior](#required-behavior)
+- [Part 3: Research Phase (Pre-Implementation)](#part-3-research-phase-pre-implementation)
+  - [3.1 Architecture Questions](#31-architecture-questions)
+  - [3.2 Integration Questions](#32-integration-questions)
+  - [3.3 UX Questions](#33-ux-questions)
+- [Part 4: Proposed Child SDs](#part-4-proposed-child-sds)
+  - [Phase A: Research & Design (1 SD)](#phase-a-research-design-1-sd)
+  - [Phase B: Data Model (1 SD)](#phase-b-data-model-1-sd)
+  - [Phase C: Core Integration (2 SDs)](#phase-c-core-integration-2-sds)
+  - [Phase D: User Interface (1-2 SDs)](#phase-d-user-interface-1-2-sds)
+  - [Phase E: Polish & Testing (1 SD)](#phase-e-polish-testing-1-sd)
+- [Part 5: Dependency Graph](#part-5-dependency-graph)
+- [Part 6: Success Criteria](#part-6-success-criteria)
+  - [MVP (Minimum Viable Genesis)](#mvp-minimum-viable-genesis)
+  - [Full Vision](#full-vision)
+- [Part 7: Risks & Mitigations](#part-7-risks-mitigations)
+- [Part 8: Immediate Next Steps](#part-8-immediate-next-steps)
+- [Appendix: File References](#appendix-file-references)
+  - [EHG_Engineer Codebase](#ehg_engineer-codebase)
+  - [EHG App Codebase](#ehg-app-codebase)
+  - [Documentation](#documentation)
 
 ## Metadata
 - **Category**: Architecture

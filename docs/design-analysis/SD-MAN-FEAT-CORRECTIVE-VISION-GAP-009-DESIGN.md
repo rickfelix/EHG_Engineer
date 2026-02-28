@@ -1,4 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # DESIGN Analysis: SD-MAN-FEAT-CORRECTIVE-VISION-GAP-009
+
+
+## Table of Contents
+
+- [1. COMPONENT ARCHITECTURE](#1-component-architecture)
+  - [Current State](#current-state)
+  - [Proposed Changes](#proposed-changes)
+- [2. DATA FLOW: Schema Validation Integration](#2-data-flow-schema-validation-integration)
+  - [Current Contract Validation Flow](#current-contract-validation-flow)
+  - [Enhanced Flow: Add Shape Validation](#enhanced-flow-add-shape-validation)
+  - [Schema Validation Details](#schema-validation-details)
+  - [Backward Compatibility](#backward-compatibility)
+- [3. ERROR REPORTING DESIGN](#3-error-reporting-design)
+  - [Error Structure](#error-structure)
+  - [Error Message Patterns](#error-message-patterns)
+  - [Logging & Observability](#logging-observability)
+- [4. TESTING STRATEGY](#4-testing-strategy)
+  - [Unit Tests: `contract-validator.test.js`](#unit-tests-contract-validatortestjs)
+  - [Integration Tests: `eva-pipeline.integration.js`](#integration-tests-eva-pipelineintegrationjs)
+  - [Manual Test Cases](#manual-test-cases)
+- [5. IMPLEMENTATION SEQUENCE](#5-implementation-sequence)
+  - [Phase 1: Add outputSchema to Templates (Stages 1-8)](#phase-1-add-outputschema-to-templates-stages-1-8)
+  - [Phase 2: Enhance contract-validator.js](#phase-2-enhance-contract-validatorjs)
+  - [Phase 3: Add Unit Tests](#phase-3-add-unit-tests)
+  - [Phase 4: Integration Tests](#phase-4-integration-tests)
+- [6. COMPONENT SIZING & QUALITY GATES](#6-component-sizing-quality-gates)
+- [7. DESIGN CHECKLIST](#7-design-checklist)
+  - [Architecture](#architecture)
+  - [Data Flow](#data-flow)
+  - [Error Reporting](#error-reporting)
+  - [Testing](#testing)
+  - [Code Quality](#code-quality)
+- [8. KNOWN CONSTRAINTS & EDGE CASES](#8-known-constraints-edge-cases)
+- [9. RISK MITIGATION](#9-risk-mitigation)
+- [10. SUMMARY](#10-summary)
 
 **Title**: Corrective Vision Gap - Add outputSchema to stage templates and enhance contract-validator
 

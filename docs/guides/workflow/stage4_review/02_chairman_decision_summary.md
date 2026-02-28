@@ -1,5 +1,35 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Chairman Decision Summary — Foundation Layer
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [TL;DR (30 seconds)](#tldr-30-seconds)
+- [What We Discovered](#what-we-discovered)
+  - [1. Database Reality Check](#1-database-reality-check)
+  - [2. P0 SD Dependency Analysis](#2-p0-sd-dependency-analysis)
+- [Chairman Decision Matrix](#chairman-decision-matrix)
+  - [Option A: Build All 3 P0 SDs Now (Dossier Proposal)](#option-a-build-all-3-p0-sds-now-dossier-proposal)
+  - [Option B: Defer All 3 P0 SDs, Start Stage 4 Manual (Evidence-Based)](#option-b-defer-all-3-p0-sds-start-stage-4-manual-evidence-based)
+  - [Option C: Hybrid — Minimal Stage 4 Crew Only](#option-c-hybrid-minimal-stage-4-crew-only)
+- [Recommended Path Forward](#recommended-path-forward)
+  - [Step 1: Chairman Decision (Now)](#step-1-chairman-decision-now)
+  - [Step 2: Stage 4 Exploration (This Week, if Option B/C)](#step-2-stage-4-exploration-this-week-if-option-bc)
+  - [Step 3: Iterate Stage-by-Stage (Weeks 2-12, if Option B/C)](#step-3-iterate-stage-by-stage-weeks-2-12-if-option-bc)
+- [Key Principle](#key-principle)
+- [What Breaks If We Defer P0 SDs?](#what-breaks-if-we-defer-p0-sds)
+  - [Short Answer: **Nothing**](#short-answer-nothing)
+- [Decision Required](#decision-required)
+- [Files Generated](#files-generated)
 
 ## Metadata
 - **Category**: Report

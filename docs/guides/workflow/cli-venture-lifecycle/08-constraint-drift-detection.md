@@ -1,3 +1,37 @@
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Architectural Position](#architectural-position)
+- [Comparison Flow](#comparison-flow)
+- [Assumption Categories](#assumption-categories)
+- [Drift Types](#drift-types)
+  - [Contradiction vs. Drift](#contradiction-vs-drift)
+- [Severity Levels](#severity-levels)
+- [Data Loading](#data-loading)
+  - [Baseline Assumptions](#baseline-assumptions)
+  - [Current Constraints](#current-constraints)
+  - [Content Extraction](#content-extraction)
+- [Comparison Process](#comparison-process)
+  - [Normalization](#normalization)
+  - [Deep Equality](#deep-equality)
+  - [Drift Computation](#drift-computation)
+- [Stage 25 Special Handling](#stage-25-special-handling)
+- [Decision Filter Engine Integration](#decision-filter-engine-integration)
+  - [buildFilterEnginePayload()](#buildfilterenginepayload)
+  - [Filter Threshold](#filter-threshold)
+- [Error Handling](#error-handling)
+- [Rationale Generation](#rationale-generation)
+- [Complete Process Flow](#complete-process-flow)
+- [Key Design Decisions](#key-design-decisions)
+  - [Why Stage 1 as Default Baseline?](#why-stage-1-as-default-baseline)
+  - [Why Flexible Content Extraction?](#why-flexible-content-extraction)
+  - [Why Not Block on Drift?](#why-not-block-on-drift)
+  - [Why Confidence Scores?](#why-confidence-scores)
+  - [Why 4 Categories?](#why-4-categories)
+- [Testing Considerations](#testing-considerations)
+- [Related Components](#related-components)
+
 ---
 Category: Architecture
 Status: Approved

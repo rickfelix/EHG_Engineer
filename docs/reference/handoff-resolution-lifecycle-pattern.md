@@ -1,4 +1,61 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Handoff Resolution Lifecycle Pattern
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+  - [Original Issue](#original-issue)
+  - [Root Cause (5-Whys Analysis)](#root-cause-5-whys-analysis)
+- [Solution: Resolution Lifecycle Tracking](#solution-resolution-lifecycle-tracking)
+  - [Database Schema Changes](#database-schema-changes)
+  - [Resolution Lifecycle States](#resolution-lifecycle-states)
+  - [Resolution Types](#resolution-types)
+  - [Updated Gate Query](#updated-gate-query)
+- [Usage Patterns](#usage-patterns)
+  - [Pattern 1: Automatic Resolution on Retry Success](#pattern-1-automatic-resolution-on-retry-success)
+  - [Pattern 2: Manual Resolution via RCA/Learning](#pattern-2-manual-resolution-via-rcalearning)
+  - [Pattern 3: Obsolete Resolution](#pattern-3-obsolete-resolution)
+  - [Pattern 4: Manual Override (Database Admin)](#pattern-4-manual-override-database-admin)
+- [Operational Queries](#operational-queries)
+  - [Find Unresolved Failures Blocking SDs](#find-unresolved-failures-blocking-sds)
+  - [Resolution Effectiveness Metrics](#resolution-effectiveness-metrics)
+  - [Resolution Type Distribution](#resolution-type-distribution)
+  - [Handoff Retry Effectiveness](#handoff-retry-effectiveness)
+- [Benefits](#benefits)
+  - [1. Unblocks Permanently Stuck SDs](#1-unblocks-permanently-stuck-sds)
+  - [2. Maintains Audit Trail](#2-maintains-audit-trail)
+  - [3. Enables Learning Loops](#3-enables-learning-loops)
+  - [4. Optimizes Query Performance](#4-optimizes-query-performance)
+- [Testing](#testing)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+- [Rollout Impact](#rollout-impact)
+  - [Database Changes](#database-changes)
+  - [Code Changes](#code-changes)
+  - [Risk Assessment](#risk-assessment)
+  - [Rollback Plan](#rollback-plan)
+- [Related Patterns](#related-patterns)
+  - [1. Terminal Identity Centralization](#1-terminal-identity-centralization)
+  - [2. Multi-Session Coordination](#2-multi-session-coordination)
+  - [3. RCA-Driven SD Creation](#3-rca-driven-sd-creation)
+- [Lessons Learned](#lessons-learned)
+  - [1. Database Lifecycle Design](#1-database-lifecycle-design)
+  - [2. Partial Indexes for Performance](#2-partial-indexes-for-performance)
+  - [3. Audit Trail Preservation](#3-audit-trail-preservation)
+  - [4. Resolution Type Enumeration](#4-resolution-type-enumeration)
+  - [5. Query Filter Clarity](#5-query-filter-clarity)
+- [Implementation Checklist](#implementation-checklist)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

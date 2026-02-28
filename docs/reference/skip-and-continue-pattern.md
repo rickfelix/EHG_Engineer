@@ -1,4 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Skip-and-Continue Pattern for Validation Gate Failures
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Decision Flow](#decision-flow)
+  - [Key Concepts](#key-concepts)
+- [API Reference](#api-reference)
+  - [`shouldSkipAndContinue(context)`](#shouldskipandcontinuecontext)
+  - [`markAsBlocked(supabase, sdId, blockingInfo)`](#markasblockedsupabase-sdid-blockinginfo)
+  - [`recordSkipEvent(supabase, eventData)`](#recordskipeventsupabase-eventdata)
+  - [`recordAllBlockedEvent(supabase, orchestratorId, blockedChildren, correlationId)`](#recordallblockedeventsupabase-orchestratorid-blockedchildren-correlationid)
+  - [`executeSkipAndContinue(params)`](#executeskipandcontinueparams)
+  - [`isTransientError(errorMessage)`](#istransienterrorerrormessage)
+- [Configuration](#configuration)
+  - [Constants](#constants)
+- [Integration](#integration)
+  - [BaseExecutor Integration](#baseexecutor-integration)
+- [Event Logging](#event-logging)
+  - [SKIP_AND_CONTINUE Event](#skip_and_continue-event)
+  - [ALL_CHILDREN_BLOCKED Event](#all_children_blocked-event)
+- [Usage Example](#usage-example)
+- [Console Output Format](#console-output-format)
+- [Error Handling](#error-handling)
+  - [Best-Effort Operations](#best-effort-operations)
+  - [Fatal Operations](#fatal-operations)
+- [Testing](#testing)
+  - [Test Scenarios](#test-scenarios)
+- [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
 
 ## Metadata
 - **Category**: Reference

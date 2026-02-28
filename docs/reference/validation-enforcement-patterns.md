@@ -1,5 +1,48 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Validation Enforcement Patterns Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Why Validation Gates Are Critical](#why-validation-gates-are-critical)
+  - [The Failure Cycle (Without Gates)](#the-failure-cycle-without-gates)
+  - [The Gate-Based Pattern (With Enforcement)](#the-gate-based-pattern-with-enforcement)
+- [Validation Failure Patterns Catalog](#validation-failure-patterns-catalog)
+  - [❌ Failure Pattern 1: No Backlog Validation](#-failure-pattern-1-no-backlog-validation)
+  - [❌ Failure Pattern 2: Skipping Duplicate Check](#-failure-pattern-2-skipping-duplicate-check)
+  - [❌ Failure Pattern 3: Trusting Claims Without Code Review](#-failure-pattern-3-trusting-claims-without-code-review)
+- [UI/UX Claim Verification (MANDATORY for GATE 1)](#uiux-claim-verification-mandatory-for-gate-1)
+  - [❌ Failure Pattern 4: Late-Stage Infrastructure Discovery](#-failure-pattern-4-late-stage-infrastructure-discovery)
+  - [❌ Failure Pattern 5: Missing User Story Validation](#-failure-pattern-5-missing-user-story-validation)
+  - [❌ Failure Pattern 6: Ignoring Existing Patterns](#-failure-pattern-6-ignoring-existing-patterns)
+- [GATE 3: Pattern Validation (MANDATORY before EXEC)](#gate-3-pattern-validation-mandatory-before-exec)
+- [Enforcement Mechanisms](#enforcement-mechanisms)
+  - [1. Database Constraints (Automatic Enforcement)](#1-database-constraints-automatic-enforcement)
+  - [2. Auto-Trigger System (Orchestration)](#2-auto-trigger-system-orchestration)
+  - [3. Script-Level Blocking (Handoff System)](#3-script-level-blocking-handoff-system)
+- [Detection Rules](#detection-rules)
+  - [BLOCKED PATTERNS (Validation Agent Required)](#blocked-patterns-validation-agent-required)
+  - [Auto-Trigger Keywords](#auto-trigger-keywords)
+- [Success Stories (When Gates Used Properly)](#success-stories-when-gates-used-properly)
+  - [Success 1: Duplicate Detection (SD-UAT-002)](#success-1-duplicate-detection-sd-uat-002)
+  - [Success 2: Infrastructure Reuse (SD-UAT-020)](#success-2-infrastructure-reuse-sd-uat-020)
+  - [Success 3: Backlog Enforcement (Database Constraint)](#success-3-backlog-enforcement-database-constraint)
+- [Failure Stories (When Gates Missed)](#failure-stories-when-gates-missed)
+  - [Failure 1: No Backlog Validation (SD-EXPORT-001)](#failure-1-no-backlog-validation-sd-export-001)
+  - [Failure 2: Skipped Duplicate Check (SD-UAT-020 - before gates)](#failure-2-skipped-duplicate-check-sd-uat-020---before-gates)
+- [Quick Reference](#quick-reference)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

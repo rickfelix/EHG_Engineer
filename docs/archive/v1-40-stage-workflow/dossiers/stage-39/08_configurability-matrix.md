@@ -1,4 +1,52 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 39: Multi-Venture Coordination — Configurability Matrix
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Configuration Categories](#configuration-categories)
+- [1. Venture Assessment Parameters](#1-venture-assessment-parameters)
+  - [Scoring Rubric Weights](#scoring-rubric-weights)
+  - [Assessment Thresholds](#assessment-thresholds)
+- [2. Synergy Identification Parameters](#2-synergy-identification-parameters)
+  - [Synergy Scoring Weights](#synergy-scoring-weights)
+  - [Synergy Type Priorities](#synergy-type-priorities)
+  - [Synergy Thresholds](#synergy-thresholds)
+- [3. Resource Allocation Parameters](#3-resource-allocation-parameters)
+  - [Allocation Constraints](#allocation-constraints)
+  - [Resource Reallocation Triggers](#resource-reallocation-triggers)
+- [4. Governance Parameters](#4-governance-parameters)
+  - [Decision Rights Thresholds](#decision-rights-thresholds)
+  - [Escalation Rules](#escalation-rules)
+- [5. Initiative Tracking Parameters](#5-initiative-tracking-parameters)
+  - [Progress Monitoring](#progress-monitoring)
+  - [Value Capture Thresholds](#value-capture-thresholds)
+- [6. Performance Metrics Parameters](#6-performance-metrics-parameters)
+  - [Portfolio Performance Targets](#portfolio-performance-targets)
+  - [Exit Gate Thresholds](#exit-gate-thresholds)
+- [7. Recursion Parameters](#7-recursion-parameters)
+  - [PORTFOLIO-001: Synergy Opportunity Detection](#portfolio-001-synergy-opportunity-detection)
+  - [PORTFOLIO-002: Resource Conflict Detection](#portfolio-002-resource-conflict-detection)
+  - [PORTFOLIO-003: Portfolio Performance Review](#portfolio-003-portfolio-performance-review)
+  - [PORTFOLIO-004: Interdependency Risk Assessment](#portfolio-004-interdependency-risk-assessment)
+- [Configuration Management](#configuration-management)
+  - [Storage](#storage)
+  - [Access Control](#access-control)
+  - [Versioning](#versioning)
+- [Tuning Playbook](#tuning-playbook)
+  - [Scenario 1: Portfolio Growing Rapidly (3+ ventures added per month)](#scenario-1-portfolio-growing-rapidly-3-ventures-added-per-month)
+  - [Scenario 2: Resource-Constrained Portfolio (Team <10 people)](#scenario-2-resource-constrained-portfolio-team-10-people)
+  - [Scenario 3: Early-Stage Automation (First 3 months)](#scenario-3-early-stage-automation-first-3-months)
+  - [Scenario 4: Mature Portfolio (10+ ventures, >2 years old)](#scenario-4-mature-portfolio-10-ventures-2-years-old)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

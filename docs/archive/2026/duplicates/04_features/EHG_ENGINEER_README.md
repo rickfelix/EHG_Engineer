@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 <!-- ARCHIVED: 2026-01-26T16:26:32.775Z
      Reason: Duplicate of canonical file
      Original location: docs\04_features\EHG_ENGINEER_README.md

@@ -1,5 +1,46 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Stage 20 Compliance Gate
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Purpose](#purpose)
+- [Architecture](#architecture)
+  - [Components](#components)
+  - [Database Tables](#database-tables)
+  - [Database Functions](#database-functions)
+- [How It Works](#how-it-works)
+  - [1. Checklist Assignment](#1-checklist-assignment)
+  - [2. Item Types](#2-item-types)
+  - [3. Evidence Tracking](#3-evidence-tracking)
+  - [4. Gate Evaluation](#4-gate-evaluation)
+  - [5. Stage Transition Enforcement](#5-stage-transition-enforcement)
+- [User Interface](#user-interface)
+  - [Compliance Gate Tab](#compliance-gate-tab)
+  - [Checklist UI](#checklist-ui)
+  - [Example](#example)
+- [Workflow](#workflow)
+  - [For Venture Teams](#for-venture-teams)
+  - [For Chairman/CEO Agent](#for-chairmanceo-agent)
+- [Configuration](#configuration)
+  - [Adding/Modifying Checklists](#addingmodifying-checklists)
+  - [Archetype Mapping](#archetype-mapping)
+- [Testing](#testing)
+  - [E2E Tests](#e2e-tests)
+  - [Manual Testing](#manual-testing)
+- [Metrics](#metrics)
+- [Related Documentation](#related-documentation)
+- [Change History](#change-history)
 
 ## Metadata
 - **Category**: Feature

@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 30: Agent Orchestration
+
+
+## Table of Contents
+
+- [Proposed DeploymentCrew (Python CrewAI)](#proposed-deploymentcrew-python-crewai)
+- [Agent Architecture](#agent-architecture)
+  - [Agent 1: PreDeploymentValidator](#agent-1-predeploymentvalidator)
+  - [Agent 2: BlueGreenOrchestrator](#agent-2-bluegreenorchestrator)
+  - [Agent 3: PostDeploymentVerifier](#agent-3-postdeploymentverifier)
+  - [Agent 4: RollbackCoordinator](#agent-4-rollbackcoordinator)
+- [Crew Workflow (Mermaid Diagram)](#crew-workflow-mermaid-diagram)
+- [Execution Flow](#execution-flow)
+  - [Phase 1: Pre-Deployment (Substage 30.1)](#phase-1-pre-deployment-substage-301)
+  - [Phase 2: Blue-Green Deployment (Substage 30.2)](#phase-2-blue-green-deployment-substage-302)
+  - [Phase 3: Post-Deployment (Substage 30.3)](#phase-3-post-deployment-substage-303)
+- [Handoff to Governance Layer](#handoff-to-governance-layer)
+- [Error Handling](#error-handling)
+  - [PreDeploymentValidator Failures](#predeploymentvalidator-failures)
+  - [BlueGreenOrchestrator Failures](#bluegreenorchestrator-failures)
+  - [PostDeploymentVerifier Failures](#postdeploymentverifier-failures)
+  - [RollbackCoordinator Failures](#rollbackcoordinator-failures)
+- [Proposed Implementation Path](#proposed-implementation-path)
+- [Sources Table](#sources-table)
 
 ## Proposed DeploymentCrew (Python CrewAI)
 

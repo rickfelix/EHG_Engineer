@@ -1,4 +1,68 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Agent Team Collaboration Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Concepts](#key-concepts)
+- [Single-Agent Invocation](#single-agent-invocation)
+  - [When to Use](#when-to-use)
+  - [How to Invoke](#how-to-invoke)
+  - [Institutional Memory](#institutional-memory)
+  - [Example: RCA Agent Invocation](#example-rca-agent-invocation)
+- [Universal Leader Architecture](#universal-leader-architecture)
+  - [Why All Agents Are Leaders](#why-all-agents-are-leaders)
+  - [Available Agents (All Leaders)](#available-agents-all-leaders)
+  - [Team Spawning Protocol (Injected in All Leaders)](#team-spawning-protocol-injected-in-all-leaders)
+  - [Example: Database Agent Spawns API Help](#example-database-agent-spawns-api-help)
+- [Multi-Agent Teams](#multi-agent-teams)
+  - [When to Use](#when-to-use)
+  - [Claude Code Teams Feature](#claude-code-teams-feature)
+  - [Team Structure](#team-structure)
+  - [Example: Feature Validation Team](#example-feature-validation-team)
+  - [Team Lead as Knowledge Distributor](#team-lead-as-knowledge-distributor)
+  - [SendMessage for Mid-Task Discovery](#sendmessage-for-mid-task-discovery)
+- [Dynamic Agent Creation](#dynamic-agent-creation)
+  - [When to Create Dynamic Agents](#when-to-create-dynamic-agents)
+  - [How to Create Dynamic Agents](#how-to-create-dynamic-agents)
+  - [Dynamic Agent Constraints](#dynamic-agent-constraints)
+  - [Example: Creating and Using a Dynamic Agent](#example-creating-and-using-a-dynamic-agent)
+  - [Dynamic Agent Lifecycle](#dynamic-agent-lifecycle)
+  - [Dynamic vs Compiled Agents](#dynamic-vs-compiled-agents)
+- [Knowledge Layers](#knowledge-layers)
+  - [When to Query Database Directly](#when-to-query-database-directly)
+- [Agent Capabilities](#agent-capabilities)
+  - [Registered Capabilities (From Database)](#registered-capabilities-from-database)
+  - [Registered Capabilities](#registered-capabilities)
+  - [Capability Discovery](#capability-discovery)
+- [Coordination Patterns](#coordination-patterns)
+  - [Pattern 1: Sequential Handoff](#pattern-1-sequential-handoff)
+  - [Pattern 2: Parallel Independent Work](#pattern-2-parallel-independent-work)
+  - [Pattern 3: Converge-Synthesize](#pattern-3-converge-synthesize)
+  - [Pattern 4: Librarian Agent](#pattern-4-librarian-agent)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Common Scenarios](#common-scenarios)
+  - [Scenario 1: Database Migration](#scenario-1-database-migration)
+  - [Scenario 2: Feature Validation](#scenario-2-feature-validation)
+  - [Scenario 3: Root Cause Analysis](#scenario-3-root-cause-analysis)
+  - [Scenario 4: Retrospective Generation](#scenario-4-retrospective-generation)
+- [Troubleshooting](#troubleshooting)
+  - [Agent Returns "Query database directly"](#agent-returns-query-database-directly)
+  - [Team Lead Not Sharing Knowledge](#team-lead-not-sharing-knowledge)
+  - [Agents Not Collaborating](#agents-not-collaborating)
+  - [Agent Arrives Without Institutional Memory](#agent-arrives-without-institutional-memory)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

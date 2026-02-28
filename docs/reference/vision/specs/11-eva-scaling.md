@@ -1,5 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EVA Scaling Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [EVA Instance Model](#eva-instance-model)
+  - [2.1 EVA Types](#21-eva-types)
+  - [2.2 Default EVA Allocation](#22-default-eva-allocation)
+- [Routing Layer](#routing-layer)
+  - [3.1 Command Router](#31-command-router)
+  - [3.2 Failover Protocol](#32-failover-protocol)
+- [State Partitioning](#state-partitioning)
+  - [4.1 EVA-Local vs Shared State](#41-eva-local-vs-shared-state)
+  - [4.2 State Synchronization](#42-state-synchronization)
+- [Cross-EVA Coordination](#cross-eva-coordination)
+  - [5.1 Ecosystem EVA Role](#51-ecosystem-eva-role)
+  - [5.2 Cross-Portfolio Programs](#52-cross-portfolio-programs)
+- [Database Schema](#database-schema)
+  - [6.1 eva_instances](#61-eva_instances)
+  - [6.2 eva_routing](#62-eva_routing)
+  - [6.3 eva_sync_log](#63-eva_sync_log)
+- [Critical Questions for the Chairman](#critical-questions-for-the-chairman)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

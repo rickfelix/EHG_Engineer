@@ -1,5 +1,43 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Enhanced Testing and Debugging Sub-Agents
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Key Features](#key-features)
+  - [🔧 Self-Healing Selectors](#-self-healing-selectors)
+  - [📋 Structured Handoff Protocol](#-structured-handoff-protocol)
+  - [🛠️ Actionable Remediation](#-actionable-remediation)
+  - [🔄 Intelligent Retry Logic](#-intelligent-retry-logic)
+  - [📡 Real-Time Collaboration](#-real-time-collaboration)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+  - [Installation](#installation)
+  - [Basic Usage](#basic-usage)
+  - [Playwright Integration](#playwright-integration)
+- [Performance Benefits](#performance-benefits)
+- [Key Performance Indicators](#key-performance-indicators)
+- [File Structure](#file-structure)
+- [Core Classes](#core-classes)
+  - [TestCollaborationCoordinator](#testcollaborationcoordinator)
+  - [EnhancedTestingSubAgent](#enhancedtestingsubagent)
+  - [EnhancedDebuggingSubAgent](#enhanceddebuggingsubagent)
+  - [TestHandoff](#testhandoff)
+- [Integration Points](#integration-points)
+- [Best Practices](#best-practices)
+- [Getting Help](#getting-help)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Metadata
 - **Category**: Testing

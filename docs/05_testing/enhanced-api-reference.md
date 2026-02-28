@@ -1,5 +1,49 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Enhanced Testing and Debugging Sub-Agents API Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [TestCollaborationCoordinator](#testcollaborationcoordinator)
+  - [Constructor](#constructor)
+  - [Methods](#methods)
+- [EnhancedTestingSubAgent](#enhancedtestingsubagent)
+  - [Constructor](#constructor)
+  - [Properties](#properties)
+  - [Methods](#methods)
+- [EnhancedDebuggingSubAgent](#enhanceddebuggingsubagent)
+  - [Constructor](#constructor)
+  - [Properties](#properties)
+  - [Methods](#methods)
+- [TestHandoff](#testhandoff)
+  - [Constructor](#constructor)
+  - [Properties](#properties)
+  - [Methods](#methods)
+- [Interfaces and Types](#interfaces-and-types)
+  - [ConsoleLog](#consolelog)
+  - [NetworkLog](#networklog)
+  - [Evidence](#evidence)
+  - [Recommendation](#recommendation)
+  - [FixScript](#fixscript)
+- [Error Classification](#error-classification)
+  - [Pattern Definitions](#pattern-definitions)
+  - [Severity Calculation](#severity-calculation)
+- [Fix Generation](#fix-generation)
+  - [Available Fix Generators](#available-fix-generators)
+  - [Custom Fix Generator](#custom-fix-generator)
+  - [Fix Script Template](#fix-script-template)
+- [Event System](#event-system)
+  - [Available Events](#available-events)
+  - [Event Handlers](#event-handlers)
 
 ## Metadata
 - **Category**: API

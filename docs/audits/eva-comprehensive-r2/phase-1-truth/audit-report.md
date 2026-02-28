@@ -1,4 +1,27 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Comprehensive Audit R2 — Phase 1: The Truth (Stages 1-5)
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [R1 Score Comparison](#r1-score-comparison)
+- [Findings](#findings)
+  - [CRITICAL](#critical)
+  - [HIGH](#high)
+  - [MEDIUM](#medium)
+  - [LOW](#low)
+- [Cross-Stage Data Contract Verification](#cross-stage-data-contract-verification)
+- [Summary of Findings by Severity](#summary-of-findings-by-severity)
+- [Remediation Priority](#remediation-priority)
+- [Files Audited](#files-audited)
 
 **SD**: SD-EVA-QA-AUDIT-R2-TRUTH-001
 **Parent**: SD-EVA-QA-AUDIT-R2-ORCH-001

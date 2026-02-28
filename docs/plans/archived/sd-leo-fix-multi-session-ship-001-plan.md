@@ -1,3 +1,11 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 <!-- Archived from: C:/Users/rickf/.claude/plans/radiant-toasting-kazoo.md -->
 <!-- SD Key: SD-LEO-FIX-MULTI-SESSION-SHIP-001 -->
 <!-- Archived at: 2026-02-11T15:43:48.791Z -->

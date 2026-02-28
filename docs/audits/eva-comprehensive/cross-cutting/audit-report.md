@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Cross-Cutting Consistency Audit Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Files Audited](#files-audited)
+- [Critical Findings](#critical-findings)
+  - [CRIT-001: 25 Identical Copies of parseJSON Utility](#crit-001-25-identical-copies-of-parsejson-utility)
+  - [CRIT-002: 68 Files Have No Logging (57% of EVA Codebase)](#crit-002-68-files-have-no-logging-57-of-eva-codebase)
+  - [CRIT-003: Two Competing Error Systems](#crit-003-two-competing-error-systems)
+- [High-Severity Findings](#high-severity-findings)
+  - [HIGH-001: Silent Catch Blocks (12+ Files)](#high-001-silent-catch-blocks-12-files)
+  - [HIGH-002: Three Competing Logging Approaches](#high-002-three-competing-logging-approaches)
+  - [HIGH-003: DI Parameter Naming Inconsistency (`db` vs `supabase`)](#high-003-di-parameter-naming-inconsistency-db-vs-supabase)
+- [Medium-Severity Findings](#medium-severity-findings)
+  - [MED-001: 60+ Unguarded JSON.parse Calls](#med-001-60-unguarded-jsonparse-calls)
+  - [MED-002: 28 Files Use Default Exports](#med-002-28-files-use-default-exports)
+  - [MED-003: Mixed Default + Named Exports](#med-003-mixed-default-named-exports)
+  - [MED-004: No Centralized Utility Library](#med-004-no-centralized-utility-library)
+- [Low-Severity Findings](#low-severity-findings)
+  - [LOW-001: Log Message Format Inconsistency](#low-001-log-message-format-inconsistency)
+- [Cross-Reference with Phase Audit Findings](#cross-reference-with-phase-audit-findings)
+- [Architecture Alignment](#architecture-alignment)
+- [Recommendations Summary](#recommendations-summary)
+  - [Immediate (P0)](#immediate-p0)
+  - [Short-Term (P1)](#short-term-p1)
+  - [Medium-Term (P2)](#medium-term-p2)
+- [Score Breakdown](#score-breakdown)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-CROSSCUT-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-ORCH-001

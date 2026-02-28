@@ -1,4 +1,71 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # E2E Testing Coverage Gap Analysis - 90% Target
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Coverage Metrics](#coverage-metrics)
+  - [Effort Estimation](#effort-estimation)
+- [Part 1: API Endpoints (Expanded from Initial Analysis)](#part-1-api-endpoints-expanded-from-initial-analysis)
+  - [1.1 SDIP (Directive Lab) APIs](#11-sdip-directive-lab-apis)
+  - [1.2 Backlog & Strategic Directives APIs](#12-backlog-strategic-directives-apis)
+  - [1.3 Venture Management APIs](#13-venture-management-apis)
+  - [1.4 Competitor Analysis & Discovery APIs](#14-competitor-analysis-discovery-apis)
+  - [1.5 AI Engines (Naming, Financial, Content Forge)](#15-ai-engines-naming-financial-content-forge)
+  - [1.6 Marketing Distribution APIs](#16-marketing-distribution-apis)
+  - [1.7 Testing Campaign APIs (QA Orchestration)](#17-testing-campaign-apis-qa-orchestration)
+  - [1.8 Story Management APIs (Release Gates)](#18-story-management-apis-release-gates)
+  - [1.9 PRD Management APIs](#19-prd-management-apis)
+  - [1.10 Calibration & Quality APIs (EVA Scoring)](#110-calibration-quality-apis-eva-scoring)
+  - [1.11 Venture-Scoped APIs (Multi-Tenancy)](#111-venture-scoped-apis-multi-tenancy)
+  - [1.12 Dashboard & State APIs](#112-dashboard-state-apis)
+  - [1.13 GitHub Integration APIs](#113-github-integration-apis)
+- [Part 2: Database Functions & Triggers](#part-2-database-functions-triggers)
+  - [2.1 Database Functions](#21-database-functions)
+  - [2.2 Database Triggers](#22-database-triggers)
+- [Part 3: WebSocket/Real-time Features](#part-3-websocketreal-time-features)
+  - [3.1 WebSocket Message Types](#31-websocket-message-types)
+- [Part 4: Background Jobs & Scheduled Tasks](#part-4-background-jobs-scheduled-tasks)
+  - [4.1 Background Jobs](#41-background-jobs)
+- [Part 5: Error Handling Paths](#part-5-error-handling-paths)
+  - [5.1 EVA Error Handling](#51-eva-error-handling)
+- [Part 6: Role-Based Access Control (RBAC)](#part-6-role-based-access-control-rbac)
+  - [6.1 RBAC Scenarios](#61-rbac-scenarios)
+- [Part 7: Edge Cases & Boundary Conditions](#part-7-edge-cases-boundary-conditions)
+  - [7.1 Edge Cases](#71-edge-cases)
+- [Part 8: Performance & Load Testing](#part-8-performance-load-testing)
+  - [8.1 Performance Scenarios](#81-performance-scenarios)
+- [Part 9: Security Testing](#part-9-security-testing)
+  - [9.1 Security Scenarios](#91-security-scenarios)
+- [Part 10: Integration Testing (Cross-System)](#part-10-integration-testing-cross-system)
+  - [10.1 Integration Scenarios](#101-integration-scenarios)
+- [Coverage Summary Table](#coverage-summary-table)
+- [Sprint Breakdown (4 Sprints to 90%)](#sprint-breakdown-4-sprints-to-90)
+  - [Sprint 1: Core Business Logic (Weeks 1-2)](#sprint-1-core-business-logic-weeks-1-2)
+  - [Sprint 2: AI Engines & Quality (Weeks 3-4)](#sprint-2-ai-engines-quality-weeks-3-4)
+  - [Sprint 3: Security & RBAC (Weeks 5-6)](#sprint-3-security-rbac-weeks-5-6)
+  - [Sprint 4: Edge Cases & Performance (Weeks 7-8)](#sprint-4-edge-cases-performance-weeks-7-8)
+- [Implementation Roadmap](#implementation-roadmap)
+  - [Week 1-2: EXEC Phase (Sprint 1)](#week-1-2-exec-phase-sprint-1)
+  - [Week 3-4: EXEC Phase (Sprint 2)](#week-3-4-exec-phase-sprint-2)
+  - [Week 5-6: EXEC Phase (Sprint 3)](#week-5-6-exec-phase-sprint-3)
+  - [Week 7-8: EXEC Phase (Sprint 4)](#week-7-8-exec-phase-sprint-4)
+- [Success Metrics](#success-metrics)
+  - [Coverage Targets](#coverage-targets)
+  - [Quality Targets](#quality-targets)
+- [Next Steps](#next-steps)
+  - [Immediate Actions (LEAD Approval Required)](#immediate-actions-lead-approval-required)
+  - [PLAN Phase](#plan-phase)
+  - [EXEC Phase](#exec-phase)
 
 ## Metadata
 - **Category**: Testing

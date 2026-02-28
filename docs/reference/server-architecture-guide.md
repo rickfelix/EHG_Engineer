@@ -1,5 +1,42 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Server Architecture Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [1. Server.js Orchestrator & WS Lifecycle](#1-serverjs-orchestrator-ws-lifecycle)
+  - [Express Server Setup](#express-server-setup)
+  - [WebSocket Lifecycle](#websocket-lifecycle)
+- [2. SDIP Route Extraction Module](#2-sdip-route-extraction-module)
+  - [Route Organization](#route-organization)
+  - [Route Extraction Pattern](#route-extraction-pattern)
+- [3. Domain Route Modules](#3-domain-route-modules)
+  - [Available Route Modules](#available-route-modules)
+  - [Standard Route Patterns](#standard-route-patterns)
+- [4. Central Route Registration](#4-central-route-registration)
+  - [Registration Pattern](#registration-pattern)
+- [5. Backlog Formatter Utility](#5-backlog-formatter-utility)
+  - [Purpose](#purpose)
+- [6. OpenAI Utilities & Error Norms](#6-openai-utilities-error-norms)
+  - [OpenAI Client Setup](#openai-client-setup)
+  - [Error Handling Norms](#error-handling-norms)
+- [API Response Standards](#api-response-standards)
+  - [Success Response](#success-response)
+  - [Error Response](#error-response)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Architecture

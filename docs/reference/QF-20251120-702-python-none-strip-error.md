@@ -1,5 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Lessons Learned: Python None Values Causing .strip() Failures
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Summary](#problem-summary)
+- [The Bug](#the-bug)
+  - [Incorrect Pattern (WILL FAIL):](#incorrect-pattern-will-fail)
+  - [Correct Pattern (SAFE):](#correct-pattern-safe)
+- [Files Fixed](#files-fixed)
+  - [1. `/mnt/c/_EHG/EHG/agent-platform/app/services/venture_input_validator.py`](#1-mntc_ehgehgagent-platformappservicesventure_input_validatorpy)
+  - [2. `/mnt/c/_EHG/EHG/agent-platform/app/services/input_enhancement.py`](#2-mntc_ehgehgagent-platformappservicesinput_enhancementpy)
+- [Quick-Fix Process Lessons](#quick-fix-process-lessons)
+  - [What Went Well ✅](#what-went-well-)
+  - [Challenges Encountered ⚠️](#challenges-encountered-)
+  - [Systemic Issues Discovered 🔍](#systemic-issues-discovered-)
+- [Prevention Strategies](#prevention-strategies)
+  - [Code Review Checklist](#code-review-checklist)
+  - [Testing Requirements](#testing-requirements)
+  - [Documentation Updates](#documentation-updates)
+- [Impact Metrics](#impact-metrics)
+- [Actionable Takeaways](#actionable-takeaways)
+  - [For Future Quick-Fixes:](#for-future-quick-fixes)
+  - [For Codebase Improvements:](#for-codebase-improvements)
+  - [For Quick-Fix Protocol:](#for-quick-fix-protocol)
+- [References](#references)
 
 ## Metadata
 - **Category**: Guide

@@ -1,3 +1,11 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Feedback Quality Config Migration - Execution Report
 
 **Migration File**: `database/migrations/20260131_feedback_quality_config.sql`

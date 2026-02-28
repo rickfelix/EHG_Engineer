@@ -1,3 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Configuration Categories](#configuration-categories)
+  - [1. API Integration Configuration](#1-api-integration-configuration)
+  - [2. Performance Testing Configuration](#2-performance-testing-configuration)
+  - [3. Circuit Breaker Configuration](#3-circuit-breaker-configuration)
+  - [4. Monitoring Configuration](#4-monitoring-configuration)
+  - [5. Exit Gate Thresholds](#5-exit-gate-thresholds)
+  - [6. Recursion Trigger Configuration](#6-recursion-trigger-configuration)
+- [Configuration Management](#configuration-management)
+  - [Configuration Loading Priority](#configuration-loading-priority)
+  - [Configuration Validation](#configuration-validation)
+  - [Configuration Documentation](#configuration-documentation)
+- [Venture-Specific Configuration Examples](#venture-specific-configuration-examples)
+  - [Example 1: E-commerce Venture (High Payment Reliability)](#example-1-e-commerce-venture-high-payment-reliability)
+  - [Example 2: AI SaaS Venture (High AI API Usage)](#example-2-ai-saas-venture-high-ai-api-usage)
+  - [Example 3: Low-Budget Startup (Minimal Testing)](#example-3-low-budget-startup-minimal-testing)
+- [Configuration Change Management](#configuration-change-management)
+
 <!-- ARCHIVED: 2026-01-26T16:26:49.623Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-19\08_configurability-matrix.md

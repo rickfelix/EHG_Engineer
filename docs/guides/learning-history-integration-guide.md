@@ -1,5 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Learning History System - Integration Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [System Components](#system-components)
+  - [1. Core Infrastructure](#1-core-infrastructure)
+  - [2. CLI Tools](#2-cli-tools)
+  - [3. Agent Persona Integration](#3-agent-persona-integration)
+- [Agent Workflows](#agent-workflows)
+  - [EXEC Agent - Implementation Phase](#exec-agent---implementation-phase)
+  - [PLAN Agent - Planning & Verification Phase](#plan-agent---planning-verification-phase)
+  - [LEAD Agent - Strategic Planning & Approval](#lead-agent---strategic-planning-approval)
+- [Automatic Retrospective Integration](#automatic-retrospective-integration)
+  - [How It Works](#how-it-works)
+  - [Manual Trigger](#manual-trigger)
+  - [What Gets Extracted](#what-gets-extracted)
+- [Database Schema](#database-schema)
+  - [issue_patterns Table](#issue_patterns-table)
+  - [Proven Solutions Structure](#proven-solutions-structure)
+- [Search Algorithm](#search-algorithm)
+- [Current Patterns (Seeded)](#current-patterns-seeded)
+- [Metrics & Reporting](#metrics-reporting)
+  - [Usage Statistics](#usage-statistics)
+  - [Success Metrics](#success-metrics)
+- [Best Practices](#best-practices)
+  - [For EXEC Agent](#for-exec-agent)
+  - [For PLAN Agent](#for-plan-agent)
+  - [For LEAD Agent](#for-lead-agent)
+  - [For All Agents](#for-all-agents)
+- [Troubleshooting](#troubleshooting)
+  - [Search Returns No Results](#search-returns-no-results)
+  - [Pattern Not Auto-Extracted from Retro](#pattern-not-auto-extracted-from-retro)
+  - [Success Rate Seems Wrong](#success-rate-seems-wrong)
+- [Future Enhancements](#future-enhancements)
+- [Quick Reference Card](#quick-reference-card)
 
 ## Metadata
 - **Category**: Guide

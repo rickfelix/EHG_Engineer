@@ -1,4 +1,36 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Feedback Resolution Enforcement Schema Design
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Schema Changes](#schema-changes)
+  - [1. New Columns](#1-new-columns)
+  - [2. Updated Status Constraint](#2-updated-status-constraint)
+  - [3. Foreign Key Constraints (TR-2)](#3-foreign-key-constraints-tr-2)
+  - [4. Status-Dependent CHECK Constraints (TR-1)](#4-status-dependent-check-constraints-tr-1)
+  - [5. Performance Indexes](#5-performance-indexes)
+- [Validation Rules by Status](#validation-rules-by-status)
+  - [Status: `resolved`](#status-resolved)
+  - [Status: `wont_fix`](#status-wont_fix)
+  - [Status: `duplicate`](#status-duplicate)
+  - [Status: `invalid`](#status-invalid)
+- [Structured Logging (TR-4)](#structured-logging-tr-4)
+- [Preflight Validation (TR-3)](#preflight-validation-tr-3)
+- [Migration Phases](#migration-phases)
+- [Rollback Script](#rollback-script)
+- [Application Code Changes Required](#application-code-changes-required)
+- [Testing the Migration](#testing-the-migration)
+- [Monitoring](#monitoring)
+- [Next Steps](#next-steps)
 
 **SD**: SD-LEO-INFRA-FEEDBACK-RESOLUTION-ENFORCEMENT-001
 **Database**: EHG_Engineer (dedlbzhpgkmetvhbkyzq)

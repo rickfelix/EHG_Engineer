@@ -1,4 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Sub-Agent Keyword Management Process
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [The Three-Source Problem](#the-three-source-problem)
+  - [Historical Context](#historical-context)
+  - [The Three Sources (Before Consolidation)](#the-three-sources-before-consolidation)
+  - [The Sync Problem](#the-sync-problem)
+  - [Impact](#impact)
+- [Single Source of Truth Architecture](#single-source-of-truth-architecture)
+  - [Design Decision (2026-01-25)](#design-decision-2026-01-25)
+  - [Architecture Diagram](#architecture-diagram)
+  - [Key Components](#key-components)
+- [Keyword Consolidation Process](#keyword-consolidation-process)
+  - [Consolidation Script: `scripts/consolidate-keywords.js`](#consolidation-script-scriptsconsolidate-keywordsjs)
+  - [How It Works](#how-it-works)
+  - [Running Consolidation](#running-consolidation)
+- [Keyword Maintenance Procedures](#keyword-maintenance-procedures)
+  - [Normal Workflow: Adding/Updating Keywords](#normal-workflow-addingupdating-keywords)
+  - [Keyword Design Guidelines](#keyword-design-guidelines)
+  - [Keyword Scoring Examples](#keyword-scoring-examples)
+- [CLAUDE.md Regeneration](#claudemd-regeneration)
+  - [When to Regenerate](#when-to-regenerate)
+  - [Regeneration Command](#regeneration-command)
+  - [What Gets Regenerated](#what-gets-regenerated)
+  - [Keyword Flow in Generation](#keyword-flow-in-generation)
+  - [Verification After Regeneration](#verification-after-regeneration)
+- [Troubleshooting](#troubleshooting)
+  - [Problem: Keywords Not Appearing in CLAUDE.md](#problem-keywords-not-appearing-in-claudemd)
+  - [Problem: CLAUDE.md and CLAUDE_CORE.md Show Different Keywords](#problem-claudemd-and-claude_coremd-show-different-keywords)
+  - [Problem: Sub-Agent Not Being Triggered](#problem-sub-agent-not-being-triggered)
+  - [Problem: Keyword Conflicts Between Agents](#problem-keyword-conflicts-between-agents)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
+  - [v1.0.0 (2026-01-25)](#v100-2026-01-25)
 
 ## Metadata
 - **Category**: Reference

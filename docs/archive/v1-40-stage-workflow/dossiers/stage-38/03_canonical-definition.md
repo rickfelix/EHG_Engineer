@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 38: Timing Optimization - Canonical Definition
+
+
+## Table of Contents
+
+- [Source Location](#source-location)
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Core Identity](#core-identity)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 defined)](#inputs-3-defined)
+  - [Outputs (3 defined)](#outputs-3-defined)
+  - [Metrics (3 defined)](#metrics-3-defined)
+  - [Gates](#gates)
+  - [Substages (3 defined)](#substages-3-defined)
+  - [Notes](#notes)
+- [Interpretation Notes](#interpretation-notes)
+  - [Design Patterns Observed](#design-patterns-observed)
+  - [Implicit Requirements](#implicit-requirements)
+  - [Ambiguities Requiring Clarification](#ambiguities-requiring-clarification)
+  - [Evolution Path](#evolution-path)
+- [Schema Recommendations](#schema-recommendations)
+  - [Proposed Database Tables](#proposed-database-tables)
+  - [Proposed Configuration Schema](#proposed-configuration-schema)
 
 ## Source Location
 **File**: `docs/workflow/stages.yaml`

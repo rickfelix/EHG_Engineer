@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 7: Professional Standard Operating Procedure
+
+
+## Table of Contents
+
+- [Prerequisites (Entry Gates)](#prerequisites-entry-gates)
+- [Substage 7.1: Business Planning](#substage-71-business-planning)
+  - [Step 7.1.1: Define Business Model](#step-711-define-business-model)
+  - [Step 7.1.2: Plan Go-to-Market Strategy](#step-712-plan-go-to-market-strategy)
+  - [Step 7.1.3: Design Operations](#step-713-design-operations)
+- [Substage 7.2: Technical Planning](#substage-72-technical-planning)
+  - [Step 7.2.1: Design Architecture](#step-721-design-architecture)
+  - [Step 7.2.2: Select Tech Stack](#step-722-select-tech-stack)
+  - [Step 7.2.3: Create Development Roadmap](#step-723-create-development-roadmap)
+- [Substage 7.3: Resource Planning](#substage-73-resource-planning)
+  - [Step 7.3.1: Define Team Requirements](#step-731-define-team-requirements)
+  - [Step 7.3.2: Allocate Budget](#step-732-allocate-budget)
+  - [Step 7.3.3: Set Timeline](#step-733-set-timeline)
+- [Exit Gates (Quality Checks)](#exit-gates-quality-checks)
+- [Rollback Procedures](#rollback-procedures)
+- [Common Pitfalls and Best Practices](#common-pitfalls-and-best-practices)
+  - [Pitfall 1: Over-Planning (Analysis Paralysis)](#pitfall-1-over-planning-analysis-paralysis)
+  - [Pitfall 2: Inconsistent Plans](#pitfall-2-inconsistent-plans)
+  - [Pitfall 3: Ignoring Risks](#pitfall-3-ignoring-risks)
+  - [Pitfall 4: Underestimating Resources](#pitfall-4-underestimating-resources)
+  - [Pitfall 5: Overly Optimistic Timelines](#pitfall-5-overly-optimistic-timelines)
+- [Sources Table](#sources-table)
 
 **Purpose**: Execute Comprehensive Planning Suite to create business, technical, and resource plans for venture execution
 

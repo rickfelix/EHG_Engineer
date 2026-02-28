@@ -1,5 +1,82 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Stage 02 – AI Review PRD (Enhanced Technical Specification v4)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EHG Management Model Integration](#ehg-management-model-integration)
+  - [Performance Drive Cycle Alignment](#performance-drive-cycle-alignment)
+  - [AI-Agent Coordination for Reviews](#ai-agent-coordination-for-reviews)
+  - [Multi-Company Portfolio Context](#multi-company-portfolio-context)
+- [1. Executive Summary](#1-executive-summary)
+  - [Implementation Readiness: ⚠️ **Needs Business Logic** → ✅ **Immediately Buildable**](#implementation-readiness-needs-business-logic-immediately-buildable)
+- [2. Business Logic Specification](#2-business-logic-specification)
+  - [2.1 Validation Rules Engine](#21-validation-rules-engine)
+  - [2.2 Scoring Algorithm](#22-scoring-algorithm)
+  - [2.3 LLM Augmentation Specification](#23-llm-augmentation-specification)
+- [3. Data Architecture](#3-data-architecture)
+  - [3.0 Database Schema Integration](#30-database-schema-integration)
+  - [Integration Hub Connectivity](#integration-hub-connectivity)
+  - [3.1 Core Data Schemas](#31-core-data-schemas)
+  - [3.2 Database Schema Specification](#32-database-schema-specification)
+- [4. Component Architecture](#4-component-architecture)
+  - [4.1 Component Hierarchy](#41-component-hierarchy)
+  - [4.2 Component Specifications](#42-component-specifications)
+- [5. Integration Patterns](#5-integration-patterns)
+  - [5.1 EVA LLM Router Integration](#51-eva-llm-router-integration)
+  - [5.2 Supabase Integration](#52-supabase-integration)
+  - [5.3 Voice Integration (OpenAI)](#53-voice-integration-openai)
+- [6. Error Handling & Edge Cases](#6-error-handling-edge-cases)
+  - [6.1 Error Scenarios](#61-error-scenarios)
+  - [6.2 Data Validation](#62-data-validation)
+- [7. Performance Requirements](#7-performance-requirements)
+  - [7.1 Response Time Targets](#71-response-time-targets)
+  - [7.2 Optimization Strategies](#72-optimization-strategies)
+- [8. Security & Privacy](#8-security-privacy)
+  - [8.1 Data Protection](#81-data-protection)
+  - [8.2 Prompt Injection Prevention](#82-prompt-injection-prevention)
+- [9. Testing Strategy](#9-testing-strategy)
+  - [9.1 Test Scenarios](#91-test-scenarios)
+  - [9.2 Test Data Sets](#92-test-data-sets)
+- [10. Monitoring & Analytics](#10-monitoring-analytics)
+  - [10.1 Key Metrics](#101-key-metrics)
+  - [10.2 Alerting Rules](#102-alerting-rules)
+- [11. Implementation Checklist](#11-implementation-checklist)
+  - [Phase 1: Foundation (Days 1-2)](#phase-1-foundation-days-1-2)
+  - [Phase 2: Core Logic (Days 3-5)](#phase-2-core-logic-days-3-5)
+  - [Phase 3: LLM Integration (Days 6-7)](#phase-3-llm-integration-days-6-7)
+  - [Phase 4: UI Components (Days 8-10)](#phase-4-ui-components-days-8-10)
+  - [Phase 5: Integration (Days 11-12)](#phase-5-integration-days-11-12)
+  - [Phase 6: Testing & Polish (Days 13-14)](#phase-6-testing-polish-days-13-14)
+- [12. Configuration Requirements](#12-configuration-requirements)
+  - [Environment Variables](#environment-variables)
+  - [Feature Toggles](#feature-toggles)
+- [13. Success Criteria](#13-success-criteria)
+  - [Definition of Done](#definition-of-done)
+  - [Acceptance Metrics](#acceptance-metrics)
+- [14. Migration & Versioning](#14-migration-versioning)
+  - [Schema Evolution Strategy](#schema-evolution-strategy)
+  - [Rollback Plan](#rollback-plan)
+- [15. Future Enhancements](#15-future-enhancements)
+  - [Planned Improvements (Not in MVP)](#planned-improvements-not-in-mvp)
+- [Appendix A: Validation Rule Taxonomy](#appendix-a-validation-rule-taxonomy)
+  - [Industry/Domain Terms (for TQ-003)](#industrydomain-terms-for-tq-003)
+  - [Clarity Indicators (for TQ-002)](#clarity-indicators-for-tq-002)
+  - [Problem Indicators (for DQ-002)](#problem-indicators-for-dq-002)
+  - [Solution Words (for DQ-003)](#solution-words-for-dq-003)
+- [Appendix B: LLM Prompt Templates](#appendix-b-llm-prompt-templates)
+  - [Primary Analysis Prompt](#primary-analysis-prompt)
+  - [Fallback Analysis Prompt (Simplified)](#fallback-analysis-prompt-simplified)
+- [Document Version History](#document-version-history)
 
 ## Metadata
 - **Category**: API

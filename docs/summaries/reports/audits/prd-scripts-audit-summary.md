@@ -1,5 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # PRD Scripts Audit Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [📊 Executive Summary](#-executive-summary)
+- [🚨 Top Issues](#-top-issues)
+  - [1. Missing `sd_uuid` Field (61 scripts - CRITICAL)](#1-missing-sd_uuid-field-61-scripts---critical)
+  - [2. Using `user_stories` Field (28 scripts)](#2-using-user_stories-field-28-scripts)
+  - [3. Using `success_metrics` Field (14 scripts)](#3-using-success_metrics-field-14-scripts)
+  - [4. Using `prd_id` Field (7 scripts)](#4-using-prd_id-field-7-scripts)
+  - [5. Using `strategic_directive_id` Field (2 scripts)](#5-using-strategic_directive_id-field-2-scripts)
+- [📋 Complete Field Mapping Guide](#-complete-field-mapping-guide)
+- [🔧 Scripts Already Fixed](#-scripts-already-fixed)
+- [📝 Scripts Requiring Critical Fixes (Missing sd_uuid)](#-scripts-requiring-critical-fixes-missing-sd_uuid)
+  - [High Priority (Create/Update PRD Scripts)](#high-priority-createupdate-prd-scripts)
+  - [Medium Priority (Helper/Utility Scripts)](#medium-priority-helperutility-scripts)
+- [🎯 Recommended Action Plan](#-recommended-action-plan)
+  - [Phase 1: Immediate (1 day)](#phase-1-immediate-1-day)
+  - [Phase 2: High Priority (2-3 days)](#phase-2-high-priority-2-3-days)
+  - [Phase 3: Cleanup (1 week)](#phase-3-cleanup-1-week)
+  - [Phase 4: Prevention (Ongoing)](#phase-4-prevention-ongoing)
+- [🛡️ Prevention Strategy](#-prevention-strategy)
+  - [1. Pre-Commit Hook](#1-pre-commit-hook)
+  - [2. Script Template](#2-script-template)
+  - [3. Documentation](#3-documentation)
+- [📈 Success Metrics](#-success-metrics)
+- [🔗 References](#-references)
+- [✅ Next Steps](#-next-steps)
 
 ## Metadata
 - **Category**: Report

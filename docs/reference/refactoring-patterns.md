@@ -1,5 +1,82 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Multi-File Refactoring Patterns Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Phase Integration](#phase-integration)
+  - [Phase 1/2: File Trees](#phase-12-file-trees)
+  - [Phase 3: Overflow Prevention](#phase-3-overflow-prevention)
+  - [Phase 4: Parallel Execution](#phase-4-parallel-execution)
+- [Dependency Analyzer](#dependency-analyzer)
+  - [Purpose](#purpose)
+  - [Usage](#usage)
+  - [Programmatic Usage](#programmatic-usage)
+  - [Features](#features)
+- [Context Packager](#context-packager)
+  - [Purpose](#purpose)
+  - [Usage](#usage)
+  - [Programmatic Usage](#programmatic-usage)
+  - [Package Structure](#package-structure)
+  - [Overflow Prevention](#overflow-prevention)
+- [Refactoring Executor](#refactoring-executor)
+  - [Purpose](#purpose)
+  - [Usage](#usage)
+  - [Execution Modes](#execution-modes)
+  - [Validation Features](#validation-features)
+  - [Rollback System](#rollback-system)
+  - [Results Structure](#results-structure)
+- [Common Refactoring Patterns](#common-refactoring-patterns)
+  - [Pattern 1: Rename Function Across Codebase](#pattern-1-rename-function-across-codebase)
+  - [Pattern 2: Add TypeScript Types](#pattern-2-add-typescript-types)
+  - [Pattern 3: Update Import Paths](#pattern-3-update-import-paths)
+  - [Pattern 4: Add Error Handling](#pattern-4-add-error-handling)
+  - [Pattern 5: Module Consolidation](#pattern-5-module-consolidation)
+  - [Pattern 6: Domain Extraction with Re-Export Wrapper](#pattern-6-domain-extraction-with-re-export-wrapper)
+- [Best Practices](#best-practices)
+  - [1. Always Analyze First](#1-always-analyze-first)
+  - [2. Use Related Files](#2-use-related-files)
+  - [3. Start with Small Scopes](#3-start-with-small-scopes)
+  - [4. Test Refactoring Function First](#4-test-refactoring-function-first)
+  - [5. Enable All Validation](#5-enable-all-validation)
+  - [6. Review Package Before Execution](#6-review-package-before-execution)
+  - [7. Handle Large Refactorings](#7-handle-large-refactorings)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Circular Dependencies Detected](#issue-circular-dependencies-detected)
+  - [Issue: Import Validation Failing](#issue-import-validation-failing)
+  - [Issue: Syntax Errors After Refactoring](#issue-syntax-errors-after-refactoring)
+  - [Issue: Package Too Large](#issue-package-too-large)
+  - [Issue: Refactoring Takes Too Long](#issue-refactoring-takes-too-long)
+- [Performance Tips](#performance-tips)
+  - [1. Optimize Dependency Analysis](#1-optimize-dependency-analysis)
+  - [2. Batch Related Refactorings](#2-batch-related-refactorings)
+  - [3. Use Selective Validation](#3-use-selective-validation)
+  - [4. Leverage Memory-First Strategy](#4-leverage-memory-first-strategy)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [LEAD Agent](#lead-agent)
+  - [PLAN Agent](#plan-agent)
+  - [EXEC Agent](#exec-agent)
+- [Examples](#examples)
+  - [Example 1: Analyze Project Structure](#example-1-analyze-project-structure)
+  - [Example 2: Create Refactoring Package](#example-2-create-refactoring-package)
+  - [Example 3: Execute Refactoring](#example-3-execute-refactoring)
+- [CLI Quick Reference](#cli-quick-reference)
+- [API Reference](#api-reference)
+  - [DependencyAnalyzer](#dependencyanalyzer)
+  - [ContextPackager](#contextpackager)
+  - [RefactoringExecutor](#refactoringexecutor)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Reference

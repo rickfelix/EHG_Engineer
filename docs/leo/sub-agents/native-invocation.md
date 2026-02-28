@@ -1,5 +1,47 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Native Sub-Agent Invocation Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Discovery Mechanism](#discovery-mechanism)
+  - [Requirements](#requirements)
+  - [Discovery Process](#discovery-process)
+  - [Verification](#verification)
+- [Invocation Mechanism](#invocation-mechanism)
+  - [What DOESN'T Work (Tested)](#what-doesnt-work-tested)
+  - [What DOES Work (Confirmed)](#what-does-work-confirmed)
+- [Tested Patterns](#tested-patterns)
+  - [Pattern 1: Advisory Mode ✅](#pattern-1-advisory-mode-)
+  - [Pattern 2: Targeted Validation ⚠️](#pattern-2-targeted-validation-)
+  - [Pattern 3: Direct Orchestration ✅](#pattern-3-direct-orchestration-)
+- [Agent File Structure](#agent-file-structure)
+  - [Minimal Agent](#minimal-agent)
+  - [Production Agent (database-agent example)](#production-agent-database-agent-example)
+- [Advisory Mode](#advisory-mode)
+- [Execution Mode](#execution-mode)
+- [Troubleshooting](#troubleshooting)
+  - [Agent Not Appearing in /agents Menu](#agent-not-appearing-in-agents-menu)
+  - [Agent Discovered But Not Invoked](#agent-discovered-but-not-invoked)
+  - [Sub-Agent Not Executing Scripts](#sub-agent-not-executing-scripts)
+- [Performance Metrics](#performance-metrics)
+- [Best Practices](#best-practices)
+  - [For Agent Creation](#for-agent-creation)
+  - [For Agent Usage](#for-agent-usage)
+  - [For Troubleshooting](#for-troubleshooting)
+- [Known Limitations](#known-limitations)
+- [Future Improvements](#future-improvements)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

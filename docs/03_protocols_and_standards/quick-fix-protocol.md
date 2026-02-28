@@ -1,5 +1,74 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Quick-Fix Protocol Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version 2.1.1 Fixes (2026-01-21)](#version-211-fixes-2026-01-21)
+- [Version 2.1 Enhancements (2025-12-08)](#version-21-enhancements-2025-12-08)
+- [Version 2.0 Enhancements (2025-11-27)](#version-20-enhancements-2025-11-27)
+- [⚠️ CRITICAL: Read Before Executing Quick-Fix](#-critical-read-before-executing-quick-fix)
+- [Philosophy](#philosophy)
+- [The Dual Nature of Quick-Fixes](#the-dual-nature-of-quick-fixes)
+- [Quick-Fix vs Strategic Directive](#quick-fix-vs-strategic-directive)
+- [When to Use Quick-Fix](#when-to-use-quick-fix)
+  - [✅ Use Quick-Fix For:](#-use-quick-fix-for)
+  - [❌ Escalate to SD For:](#-escalate-to-sd-for)
+- [Quick-Fix Workflow (11 Steps)](#quick-fix-workflow-11-steps)
+  - [Step 0: Application Context Verification (NEW v2.0)](#step-0-application-context-verification-new-v20)
+  - [Step 0.5: RCA Pattern Detection (NEW v2.0)](#step-05-rca-pattern-detection-new-v20)
+  - [Step 1: Issue Detection & Triage](#step-1-issue-detection-triage)
+  - [Step 2: Intelligent Specialist Invocation](#step-2-intelligent-specialist-invocation)
+  - [Step 2.5: Console Error Baseline Capture (NEW v2.0)](#step-25-console-error-baseline-capture-new-v20)
+  - [Step 3: Auto-Escalation Check](#step-3-auto-escalation-check)
+  - [Step 4: Implementation](#step-4-implementation)
+  - [Step 5: Self-Verification (6 Checks)](#step-5-self-verification-6-checks)
+  - [Step 6: Compliance Rubric (100-Point Scale)](#step-6-compliance-rubric-100-point-scale)
+  - [Step 7: Auto-Refinement (If Needed)](#step-7-auto-refinement-if-needed)
+  - [Step 8: Evidence Comparison (NEW v2.0)](#step-8-evidence-comparison-new-v20)
+  - [Step 9: Completion & Review](#step-9-completion-review)
+  - [Step 10: Merge to Main (MANDATORY)](#step-10-merge-to-main-mandatory)
+  - [Step 11: Pattern Promotion (Automatic)](#step-11-pattern-promotion-automatic)
+- [Quality Standards (Non-Negotiable)](#quality-standards-non-negotiable)
+  - [Testing Requirements](#testing-requirements)
+  - [Code Quality Requirements](#code-quality-requirements)
+  - [Process Requirements](#process-requirements)
+- [Self-Verification Checklist](#self-verification-checklist)
+- [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+  - [❌ Overconfidence Traps](#-overconfidence-traps)
+  - [❌ Quality Shortcuts](#-quality-shortcuts)
+  - [❌ Process Violations](#-process-violations)
+- [Specialist Sub-Agent Integration](#specialist-sub-agent-integration)
+  - [DATABASE Sub-Agent](#database-sub-agent)
+  - [SECURITY Sub-Agent](#security-sub-agent)
+  - [TESTING Sub-Agent](#testing-sub-agent)
+  - [DESIGN Sub-Agent](#design-sub-agent)
+- [Automated Validation Features](#automated-validation-features)
+  - [Console Error Monitoring](#console-error-monitoring)
+  - [Test Execution Verification](#test-execution-verification)
+  - [Git Diff Analysis](#git-diff-analysis)
+  - [Static Analysis](#static-analysis)
+- [Engagement Patterns](#engagement-patterns)
+  - [User Says:](#user-says)
+  - [QUICKFIX Response Pattern:](#quickfix-response-pattern)
+- [Success Metrics](#success-metrics)
+- [Failure Modes & Recovery](#failure-modes-recovery)
+  - [Compliance Score <70 (FAIL)](#compliance-score-70-fail)
+  - [Compliance Score 70-89 (WARN)](#compliance-score-70-89-warn)
+  - [Self-Verification Blockers](#self-verification-blockers)
+  - [Auto-Refinement Strategies](#auto-refinement-strategies)
+- [Database Schema](#database-schema)
+- [Key Reminders for Claude Code](#key-reminders-for-claude-code)
+- [Common Questions](#common-questions)
 
 ## Metadata
 - **Category**: Protocol

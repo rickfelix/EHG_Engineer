@@ -1,5 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # DirectiveLab Component Dependency Tree
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Component Hierarchy](#component-hierarchy)
+- [Data Flow Diagram](#data-flow-diagram)
+- [Component Communication Pattern](#component-communication-pattern)
+  - [Props Flow (Top-Down)](#props-flow-top-down)
+  - [Event Flow (Bottom-Up)](#event-flow-bottom-up)
+- [File Dependencies](#file-dependencies)
+- [State Management Summary](#state-management-summary)
+  - [Main State Variables (15 total)](#main-state-variables-15-total)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Test Coverage](#unit-test-coverage)
+  - [Integration Test Coverage](#integration-test-coverage)
+  - [E2E Test Coverage](#e2e-test-coverage)
 
 ## Metadata
 - **Category**: Report

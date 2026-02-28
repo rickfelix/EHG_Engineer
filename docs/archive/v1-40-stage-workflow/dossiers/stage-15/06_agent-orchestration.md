@@ -1,4 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 15: Agent Orchestration & Governance Mapping
+
+
+## Table of Contents
+
+- [Python CrewAI Implementation](#python-crewai-implementation)
+  - [Agent Definition](#agent-definition)
+  - [Task Definitions (3 Substages)](#task-definitions-3-substages)
+  - [Crew Assembly](#crew-assembly)
+  - [Entry Gate Validation (Pre-Execution)](#entry-gate-validation-pre-execution)
+  - [Exit Gate Validation (Post-Execution)](#exit-gate-validation-post-execution)
+  - [Execution Orchestration](#execution-orchestration)
+- [Governance Mapping](#governance-mapping)
+  - [RACI Matrix](#raci-matrix)
+  - [Decision Gates](#decision-gates)
+  - [Escalation Paths](#escalation-paths)
+  - [Handoff Protocols](#handoff-protocols)
+  - [Metrics Governance](#metrics-governance)
+- [Agent Collaboration Patterns](#agent-collaboration-patterns)
+- [Error Handling & Recovery](#error-handling-recovery)
+- [Automation Roadmap](#automation-roadmap)
+- [Governance Artifacts](#governance-artifacts)
+- [Continuous Improvement](#continuous-improvement)
 
 **Purpose**: CrewAI implementation guide and governance framework for Pricing Strategy & Revenue Architecture
 **Owner**: LEAD agent

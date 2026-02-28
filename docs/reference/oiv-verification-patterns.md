@@ -1,4 +1,50 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # OIV Verification Patterns
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Contract Patterns](#contract-patterns)
+  - [Pattern 1: Sub-Agent Integration Contract](#pattern-1-sub-agent-integration-contract)
+  - [Pattern 2: Workflow Entry Point Contract](#pattern-2-workflow-entry-point-contract)
+  - [Pattern 3: PRD Hook Contract](#pattern-3-prd-hook-contract)
+  - [Pattern 4: Handoff Gate Contract](#pattern-4-handoff-gate-contract)
+  - [Pattern 5: Event-Driven Integration](#pattern-5-event-driven-integration)
+- [Implementation Patterns](#implementation-patterns)
+  - [Pattern 6: Designing for L2 Success (Import Chain)](#pattern-6-designing-for-l2-success-import-chain)
+  - [Pattern 7: Designing for L3 Success (Export Exists)](#pattern-7-designing-for-l3-success-export-exists)
+  - [Pattern 8: Designing for L4 Success (Function Callable)](#pattern-8-designing-for-l4-success-function-callable)
+  - [Pattern 9: Designing for L5 Success (Args Compatible)](#pattern-9-designing-for-l5-success-args-compatible)
+- [Querying Patterns](#querying-patterns)
+  - [Pattern 10: Finding Contracts for SD Type](#pattern-10-finding-contracts-for-sd-type)
+  - [Pattern 11: Analyzing Verification History](#pattern-11-analyzing-verification-history)
+  - [Pattern 12: Identifying Failing Integration Points](#pattern-12-identifying-failing-integration-points)
+  - [Pattern 13: Monitoring OIV Performance](#pattern-13-monitoring-oiv-performance)
+- [Debugging Patterns](#debugging-patterns)
+  - [Pattern 14: Debugging L2 Import Chain Failures](#pattern-14-debugging-l2-import-chain-failures)
+  - [Pattern 15: Debugging L3 Export Failures](#pattern-15-debugging-l3-export-failures)
+  - [Pattern 16: Testing Contract Locally](#pattern-16-testing-contract-locally)
+- [Anti-Patterns](#anti-patterns)
+  - [Anti-Pattern 1: Over-Verification](#anti-pattern-1-over-verification)
+  - [Anti-Pattern 2: Runtime Verification Without Side Effect Protection](#anti-pattern-2-runtime-verification-without-side-effect-protection)
+  - [Anti-Pattern 3: Ignoring SD Type Scope](#anti-pattern-3-ignoring-sd-type-scope)
+  - [Anti-Pattern 4: Brittle Import Chain Specifications](#anti-pattern-4-brittle-import-chain-specifications)
+- [Integration with Validation Orchestrator](#integration-with-validation-orchestrator)
+  - [Pattern 17: Adding OIV to Custom Handoff](#pattern-17-adding-oiv-to-custom-handoff)
+  - [Pattern 18: Disabling OIV for Specific Handoffs](#pattern-18-disabling-oiv-for-specific-handoffs)
+- [Best Practices Summary](#best-practices-summary)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
+  - [v1.0.0 (2026-01-30)](#v100-2026-01-30)
 
 ## Metadata
 - **Category**: Reference

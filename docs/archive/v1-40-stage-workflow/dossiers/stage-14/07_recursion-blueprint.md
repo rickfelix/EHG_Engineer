@@ -1,4 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 Recursion Blueprint
+
+
+## Table of Contents
+
+- [Recursion Status](#recursion-status)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+- [Outbound Recursion Triggers (From Stage 14 to Earlier Stages)](#outbound-recursion-triggers-from-stage-14-to-earlier-stages)
+  - [Trigger: TECH-001 to Stage 8 (Task Decomposition)](#trigger-tech-001-to-stage-8-task-decomposition)
+  - [Trigger: TECH-001 to Stage 10 (Comprehensive Technical Review)](#trigger-tech-001-to-stage-10-comprehensive-technical-review)
+- [Proposed Recursion Triggers (Not Yet Implemented)](#proposed-recursion-triggers-not-yet-implemented)
+  - [Proposed Trigger: DEV-001 - Environment Setup Failures](#proposed-trigger-dev-001---environment-setup-failures)
+  - [Proposed Trigger: DEV-002 - Team Assembly Blockers](#proposed-trigger-dev-002---team-assembly-blockers)
+  - [Proposed Trigger: DEV-003 - Sprint Planning Misalignment](#proposed-trigger-dev-003---sprint-planning-misalignment)
+- [Recursion Decision Tree](#recursion-decision-tree)
+- [Recursion Impact Analysis](#recursion-impact-analysis)
+  - [Impact of TECH-001 Recursion FROM Stage 14](#impact-of-tech-001-recursion-from-stage-14)
+  - [Impact of Proposed DEV-001 Recursion](#impact-of-proposed-dev-001-recursion)
+- [Recursion Prevention Strategies](#recursion-prevention-strategies)
+  - [1. Pre-Flight Infrastructure Testing](#1-pre-flight-infrastructure-testing)
+  - [2. Early Team Scouting](#2-early-team-scouting)
+  - [3. Story Backlog Pre-Validation](#3-story-backlog-pre-validation)
+- [Recursion Metrics & Monitoring](#recursion-metrics-monitoring)
+  - [Recursion Rate Targets](#recursion-rate-targets)
+  - [Monitoring Queries](#monitoring-queries)
+  - [Escalation Thresholds](#escalation-thresholds)
+- [Handoff Requirements When Recursion Triggered](#handoff-requirements-when-recursion-triggered)
+  - [Handoff to Stage 8 (DEV-001)](#handoff-to-stage-8-dev-001)
+  - [Handoff to Stage 10 (DEV-001)](#handoff-to-stage-10-dev-001)
+  - [Handoff to Stage 6 (DEV-002)](#handoff-to-stage-6-dev-002)
+  - [Handoff to Stage 7 (DEV-003)](#handoff-to-stage-7-dev-003)
+- [Integration with SD-RECURSION-ENGINE-001](#integration-with-sd-recursion-engine-001)
+- [Source Tables](#source-tables)
 
 ## Recursion Status
 

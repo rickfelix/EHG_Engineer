@@ -1,5 +1,58 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Strategic Directives v2 - Field Reference Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🔑 Unique Identifiers (IMPORTANT)](#-unique-identifiers-important)
+  - [Primary Identifier: `id`](#primary-identifier-id)
+  - [Internal UUID: `uuid_id`](#internal-uuid-uuid_id)
+  - [Internal UUID (Alias): `uuid_internal_pk`](#internal-uuid-alias-uuid_internal_pk)
+  - [Legacy Identifier: `legacy_id`](#legacy-identifier-legacy_id)
+- [📋 Core Metadata Fields](#-core-metadata-fields)
+- [🎯 SD Type Classification (CANONICAL)](#-sd-type-classification-canonical)
+  - [Valid SD Types](#valid-sd-types)
+  - [Type Locking (governance_metadata.type_locked)](#type-locking-governance_metadatatype_locked)
+  - [sd_type vs category](#sd_type-vs-category)
+- [📝 Content Fields](#-content-fields)
+- [🎯 Structured Data (JSONB Arrays)](#-structured-data-jsonb-arrays)
+  - [⚠️ Handoff Validation Requirement (success_criteria / success_metrics)](#-handoff-validation-requirement-success_criteria-success_metrics)
+  - [🔒 Database Constraints (Added 2026-01-30)](#-database-constraints-added-2026-01-30)
+- [👥 Governance & Approval](#-governance-approval)
+- [📊 Backlog Metrics (Computed from sd_backlog_map)](#-backlog-metrics-computed-from-sd_backlog_map)
+- [🔄 Import/Sync Fields](#-importsync-fields)
+- [🎯 Execution Metadata](#-execution-metadata)
+- [🏷️ Status & Archival](#-status-archival)
+- [🎯 Application Targeting](#-application-targeting)
+- [📈 Progress Tracking](#-progress-tracking)
+- [🔄 LEO Protocol Workflow](#-leo-protocol-workflow)
+- [🚀 BMAD Enhancements](#-bmad-enhancements)
+- [🕐 Audit Trail](#-audit-trail)
+- [🗂️ Metadata Extensions](#-metadata-extensions)
+  - [governance_metadata Structure](#governance_metadata-structure)
+- [💡 Quick Reference](#-quick-reference)
+  - [When to use `id` vs `uuid_id`?](#when-to-use-id-vs-uuid_id)
+- [📊 Status Workflow](#-status-workflow)
+- [🎯 Priority Levels](#-priority-levels)
+- [📋 LEO Protocol Phases](#-leo-protocol-phases)
+- [🔍 Common Queries](#-common-queries)
+  - [Get SD by human-readable ID](#get-sd-by-human-readable-id)
+  - [Get SD by internal UUID](#get-sd-by-internal-uuid)
+  - [Get active SDs](#get-active-sds)
+  - [Get SDs in progress](#get-sds-in-progress)
+  - [Get high-priority SDs for EHG app](#get-high-priority-sds-for-ehg-app)
+- [Deprecated Fields](#deprecated-fields)
+  - [`category` (DEPRECATED)](#category-deprecated)
+  - [`metadata.sd_type` (REMOVED)](#metadatasd_type-removed)
 
 ## Metadata
 - **Category**: Reference

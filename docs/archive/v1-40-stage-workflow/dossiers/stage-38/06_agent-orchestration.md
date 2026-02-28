@@ -1,4 +1,36 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 38: Timing Optimization - Agent Orchestration
+
+
+## Table of Contents
+
+- [CrewAI Architecture](#crewai-architecture)
+- [Crew Overview](#crew-overview)
+- [Agent Definitions](#agent-definitions)
+  - [Agent 1: Market Condition Monitor](#agent-1-market-condition-monitor)
+  - [Agent 2: Decision Analysis Specialist](#agent-2-decision-analysis-specialist)
+  - [Agent 3: Execution Coordinator](#agent-3-execution-coordinator)
+  - [Agent 4: Strategic Timing Advisor](#agent-4-strategic-timing-advisor)
+- [Workflow Orchestration](#workflow-orchestration)
+  - [Phase 1: Condition Monitoring (Continuous)](#phase-1-condition-monitoring-continuous)
+  - [Phase 2: Decision Analysis (Sequential)](#phase-2-decision-analysis-sequential)
+  - [Phase 3: Execution Coordination (Sequential)](#phase-3-execution-coordination-sequential)
+- [Agent Interaction Matrix](#agent-interaction-matrix)
+- [Human-in-the-Loop Touchpoints](#human-in-the-loop-touchpoints)
+  - [LEAD Decision Points](#lead-decision-points)
+  - [Escalation Triggers](#escalation-triggers)
+- [Automation Metrics](#automation-metrics)
+- [Tool Requirements](#tool-requirements)
+  - [Required Integrations](#required-integrations)
+  - [Proposed Database Schema](#proposed-database-schema)
+- [Success Criteria](#success-criteria)
 
 ## CrewAI Architecture
 

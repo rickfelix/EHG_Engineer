@@ -1,5 +1,51 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Manual Test Guide: Mock Data Verification System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pre-Test Setup](#pre-test-setup)
+  - [Check Server Status](#check-server-status)
+- [Test 1: Backend Running - Real Data Flow (Happy Path)](#test-1-backend-running---real-data-flow-happy-path)
+  - [Setup](#setup)
+  - [Test Steps](#test-steps)
+  - [Expected Results ✅](#expected-results-)
+  - [If Test Fails ❌](#if-test-fails-)
+- [Test 2: Backend Stopped - Mock Data Dialog Flow](#test-2-backend-stopped---mock-data-dialog-flow)
+  - [Setup](#setup)
+  - [Test Steps](#test-steps)
+  - [Expected Results ✅](#expected-results-)
+  - [If Test Fails ❌](#if-test-fails-)
+- [Test 3: Connection Status Indicator Auto-Update](#test-3-connection-status-indicator-auto-update)
+  - [Test Steps](#test-steps)
+  - [Expected Results ✅](#expected-results-)
+- [Test 4: Browser Console Inspection](#test-4-browser-console-inspection)
+  - [Test Steps](#test-steps)
+  - [Expected Results ✅](#expected-results-)
+  - [Red Flags ❌](#red-flags-)
+- [Test 5: UI/UX Validation](#test-5-uiux-validation)
+  - [Test Steps](#test-steps)
+  - [Expected Results ✅](#expected-results-)
+- [Test 6: Accessibility Testing](#test-6-accessibility-testing)
+  - [Test Steps](#test-steps)
+  - [Expected Results ✅](#expected-results-)
+- [Test Completion Checklist](#test-completion-checklist)
+- [Reporting Results](#reporting-results)
+  - [If All Tests Pass ✅](#if-all-tests-pass-)
+  - [If Any Test Fails ❌](#if-any-test-fails-)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Backend Health Check Always Fails](#issue-backend-health-check-always-fails)
+  - [Issue: Dialog Doesn't Appear](#issue-dialog-doesnt-appear)
+  - [Issue: Mock Data Used Without User Consent](#issue-mock-data-used-without-user-consent)
 
 ## Metadata
 - **Category**: Testing

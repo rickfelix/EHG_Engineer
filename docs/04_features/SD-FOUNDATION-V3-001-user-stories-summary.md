@@ -1,5 +1,59 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # User Stories Summary: SD-FOUNDATION-V3-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Functional Requirements Mapping](#functional-requirements-mapping)
+- [User Stories Overview](#user-stories-overview)
+  - [US-001: Audit uuid_id column usage across codebase (3 points)](#us-001-audit-uuid_id-column-usage-across-codebase-3-points)
+  - [US-002: Verify FK referential integrity for sd_id columns (5 points)](#us-002-verify-fk-referential-integrity-for-sd_id-columns-5-points)
+  - [US-003: Standardize ID display format in scripts and terminal output (3 points)](#us-003-standardize-id-display-format-in-scripts-and-terminal-output-3-points)
+  - [US-004: Create uuid_id column removal migration with rollback (5 points)](#us-004-create-uuid_id-column-removal-migration-with-rollback-5-points)
+- [Implementation Plan](#implementation-plan)
+  - [Phase 1: Audit & Verification (Critical - 8 points)](#phase-1-audit-verification-critical---8-points)
+  - [Phase 2: Developer Experience (High - 3 points)](#phase-2-developer-experience-high---3-points)
+  - [Phase 3: Migration Creation (Medium - 5 points)](#phase-3-migration-creation-medium---5-points)
+- [INVEST Criteria Validation](#invest-criteria-validation)
+  - [Independent](#independent)
+  - [Negotiable](#negotiable)
+  - [Valuable](#valuable)
+  - [Estimable](#estimable)
+  - [Small](#small)
+  - [Testable](#testable)
+- [Technical Architecture](#technical-architecture)
+  - [New Files Created](#new-files-created)
+  - [Modified Files](#modified-files)
+  - [Database Tables Affected](#database-tables-affected)
+- [Acceptance Criteria Summary](#acceptance-criteria-summary)
+  - [Coverage Breakdown](#coverage-breakdown)
+  - [Given-When-Then Format](#given-when-then-format)
+- [Dependencies](#dependencies)
+  - [Prerequisites (Must Complete Before)](#prerequisites-must-complete-before)
+  - [Database Schema Requirements](#database-schema-requirements)
+  - [External Dependencies](#external-dependencies)
+  - [Story Dependencies](#story-dependencies)
+- [Success Metrics](#success-metrics)
+  - [Code Metrics](#code-metrics)
+  - [Functional Metrics](#functional-metrics)
+  - [Quality Metrics](#quality-metrics)
+- [Risk Mitigation](#risk-mitigation)
+  - [Risk 1: External Systems May Depend on uuid_id](#risk-1-external-systems-may-depend-on-uuid_id)
+  - [Risk 2: FK Migration May Have Missed Records](#risk-2-fk-migration-may-have-missed-records)
+  - [Risk 3: Migration May Break Production](#risk-3-migration-may-break-production)
+  - [Risk 4: Developer Confusion with ID Formats](#risk-4-developer-confusion-with-id-formats)
+- [Next Steps](#next-steps)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Report

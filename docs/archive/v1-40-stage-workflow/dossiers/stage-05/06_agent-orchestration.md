@@ -1,4 +1,26 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 5: Agent Orchestration
+
+
+## Table of Contents
+
+- [Agent Assignments (Inferred from stages.yaml)](#agent-assignments-inferred-from-stagesyaml)
+- [Workflow Orchestration](#workflow-orchestration)
+- [Agent Communication Patterns](#agent-communication-patterns)
+- [Recursion Engine Integration](#recursion-engine-integration)
+- [Chairman Approval Requirements](#chairman-approval-requirements)
+- [Performance Requirements](#performance-requirements)
+- [Integration Points](#integration-points)
+- [Known Gaps (from critique)](#known-gaps-from-critique)
+- [Proposed Artifacts (to close gaps)](#proposed-artifacts-to-close-gaps)
+- [Sources Table](#sources-table)
 
 **Status**: ⚠️ **Not Implemented** (PLAN agent referenced, financial modeling agents not mapped)
 

@@ -1,4 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Metrics & Monitoring: Stage 13 Exit-Oriented Design
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Primary Stage Metrics (from stages.yaml)](#primary-stage-metrics-from-stagesyaml)
+  - [Metric 1: Exit Readiness Score](#metric-1-exit-readiness-score)
+  - [Metric 2: Valuation Potential](#metric-2-valuation-potential)
+  - [Metric 3: Strategic Fit](#metric-3-strategic-fit)
+- [Secondary Execution Metrics](#secondary-execution-metrics)
+  - [Execution Metric 1: Stage 13 Duration](#execution-metric-1-stage-13-duration)
+  - [Execution Metric 2: Substage Completion Rate](#execution-metric-2-substage-completion-rate)
+  - [Execution Metric 3: Chairman Time Investment](#execution-metric-3-chairman-time-investment)
+  - [Execution Metric 4: Automation Achievement Rate](#execution-metric-4-automation-achievement-rate)
+- [Buyer Landscape Metrics](#buyer-landscape-metrics)
+  - [Buyer Metric 1: Longlist to Shortlist Conversion](#buyer-metric-1-longlist-to-shortlist-conversion)
+  - [Buyer Metric 2: Shortlist Strategic Fit Quality](#buyer-metric-2-shortlist-strategic-fit-quality)
+  - [Buyer Metric 3: Relationship Coverage](#buyer-metric-3-relationship-coverage)
+- [Value Driver Metrics](#value-driver-metrics)
+  - [Value Driver Metric 1: Metric Achievement Rate](#value-driver-metric-1-metric-achievement-rate)
+  - [Value Driver Metric 2: Valuation Impact Potential](#value-driver-metric-2-valuation-impact-potential)
+  - [Value Driver Metric 3: Growth Lever ROI](#value-driver-metric-3-growth-lever-roi)
+- [Recursion Metrics](#recursion-metrics)
+  - [Recursion Metric 1: Recursion Trigger Rate](#recursion-metric-1-recursion-trigger-rate)
+  - [Recursion Metric 2: Recursion Resolution Rate](#recursion-metric-2-recursion-resolution-rate)
+  - [Recursion Metric 3: Recursion Cost](#recursion-metric-3-recursion-cost)
+- [Dashboard Layout (Proposed)](#dashboard-layout-proposed)
+  - [Dashboard 1: Exit Strategy Health (Chairman View)](#dashboard-1-exit-strategy-health-chairman-view)
+  - [Dashboard 2: Buyer Landscape Analysis (CFO/BD View)](#dashboard-2-buyer-landscape-analysis-cfobd-view)
+  - [Dashboard 3: Value Driver Tracking (CFO View)](#dashboard-3-value-driver-tracking-cfo-view)
+  - [Dashboard 4: Execution Efficiency (Operations View)](#dashboard-4-execution-efficiency-operations-view)
+- [Monitoring Automation](#monitoring-automation)
+  - [Automated Monitoring Workflows](#automated-monitoring-workflows)
+- [Metrics Data Retention](#metrics-data-retention)
 
 ## Overview
 Comprehensive monitoring framework for tracking Stage 13 execution health, exit strategy quality, and value optimization progress.

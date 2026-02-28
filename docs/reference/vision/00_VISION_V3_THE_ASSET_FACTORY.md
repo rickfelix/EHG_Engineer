@@ -1,5 +1,74 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EHG VISION v3.3: THE ASSET FACTORY
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version History](#version-history)
+- [Executive Summary](#executive-summary)
+- [The Two Personas: Chairman & Solo Entrepreneur](#the-two-personas-chairman-solo-entrepreneur)
+  - [Persona Definitions](#persona-definitions)
+  - [The Progressive AI Maturity Model](#the-progressive-ai-maturity-model)
+  - [Solo Entrepreneur Responsibilities Transfer Schedule](#solo-entrepreneur-responsibilities-transfer-schedule)
+  - [Triggers for Phase Progression](#triggers-for-phase-progression)
+  - [The Disappearing Entrepreneur](#the-disappearing-entrepreneur)
+- [The Chairman's Operating Model](#the-chairmans-operating-model)
+  - [The Solo Chairman Constraint (Phase 0-2)](#the-solo-chairman-constraint-phase-0-2)
+- [The Progressive Approval Model](#the-progressive-approval-model)
+  - [Approval Stages](#approval-stages)
+  - [Risk-Based Routing (Hybrid & Exception Stages)](#risk-based-routing-hybrid-exception-stages)
+  - [Chairman Settings](#chairman-settings)
+  - [AI-Guided Progression](#ai-guided-progression)
+- [The Chairman's Interface (UI/UX Vision)](#the-chairmans-interface-uiux-vision)
+  - [Design Philosophy](#design-philosophy)
+  - [The Morning Digest (Primary View)](#the-morning-digest-primary-view)
+  - [Information Architecture](#information-architecture)
+  - [Key Screens](#key-screens)
+  - [Mobile Strategy (Future Roadmap)](#mobile-strategy-future-roadmap)
+- [EVA Safety Layers](#eva-safety-layers)
+  - [Layer Architecture](#layer-architecture)
+  - [Safety Layer 1: Policy Engine](#safety-layer-1-policy-engine)
+  - [Safety Layer 2: Budget Guards](#safety-layer-2-budget-guards)
+  - [Safety Layer 3: Rollback Engine](#safety-layer-3-rollback-engine)
+  - [Safety Layer 4: Immutable Audit Log](#safety-layer-4-immutable-audit-log)
+- [Incident Severity Matrix](#incident-severity-matrix)
+  - [Escalation Rules](#escalation-rules)
+- [Automated Kill/Sunset Criteria](#automated-killsunset-criteria)
+  - [Automatic Archive Triggers](#automatic-archive-triggers)
+  - [The Graveyard](#the-graveyard)
+  - [Resurrection](#resurrection)
+- [The Seed Agent MVP Specification](#the-seed-agent-mvp-specification)
+  - [What the Seed Agent IS](#what-the-seed-agent-is)
+  - [What the Seed Agent is NOT](#what-the-seed-agent-is-not)
+  - [MVP Agent Templates (4 Types)](#mvp-agent-templates-4-types)
+  - [Agent Creation Flow](#agent-creation-flow)
+  - [Future Expansion](#future-expansion)
+- [Pattern Versioning & Rollout](#pattern-versioning-rollout)
+  - [Semantic Versioning](#semantic-versioning)
+  - [Canary Rollout Process](#canary-rollout-process)
+  - [Pattern Deprecation](#pattern-deprecation)
+- [Triangulation Amendments (All Rounds)](#triangulation-amendments-all-rounds)
+  - [Round 1 Amendments (V3.1)](#round-1-amendments-v31)
+  - [Round 2 Amendments (V3.2)](#round-2-amendments-v32)
+  - [Round 3 Amendments (V3.3)](#round-3-amendments-v33)
+- [The Full-Stack Venture Lifecycle](#the-full-stack-venture-lifecycle)
+  - [The Nine Phases](#the-nine-phases)
+- [The Chain of Command](#the-chain-of-command)
+- [Success Metrics (V3.3)](#success-metrics-v33)
+  - [Portfolio Targets](#portfolio-targets)
+  - [Per-Venture Targets](#per-venture-targets)
+  - [UI/UX Targets](#uiux-targets)
+- [The Oath (V3.3)](#the-oath-v33)
+- [Document Governance](#document-governance)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 30: Configurability Matrix
+
+
+## Table of Contents
+
+- [Tunable Parameters](#tunable-parameters)
+- [Category 1: Deployment Thresholds](#category-1-deployment-thresholds)
+  - [Parameter: `deployment.timeout`](#parameter-deploymenttimeout)
+  - [Parameter: `deployment.healthCheckRetries`](#parameter-deploymenthealthcheckretries)
+  - [Parameter: `deployment.backupVerificationTimeout`](#parameter-deploymentbackupverificationtimeout)
+- [Category 2: Rollback Thresholds](#category-2-rollback-thresholds)
+  - [Parameter: `rollback.errorRateThreshold`](#parameter-rollbackerrorratethreshold)
+  - [Parameter: `rollback.responseTimeThreshold`](#parameter-rollbackresponsetimethreshold)
+  - [Parameter: `rollback.rollbackTimeout`](#parameter-rollbackrollbacktimeout)
+- [Category 3: Traffic Management](#category-3-traffic-management)
+  - [Parameter: `traffic.canaryStages`](#parameter-trafficcanarystages)
+  - [Parameter: `traffic.canaryMonitoringDuration`](#parameter-trafficcanarymonitoringduration)
+- [Category 4: Chairman Approval](#category-4-chairman-approval)
+  - [Parameter: `chairman.approvalRequired`](#parameter-chairmanapprovalrequired)
+  - [Parameter: `chairman.approvalTimeout`](#parameter-chairmanapprovaltimeout)
+- [Category 5: Monitoring & Alerting](#category-5-monitoring-alerting)
+  - [Parameter: `monitoring.alertChannels`](#parameter-monitoringalertchannels)
+  - [Parameter: `monitoring.metricsSamplingInterval`](#parameter-monitoringmetricssamplinginterval)
+- [Category 6: Smoke Tests](#category-6-smoke-tests)
+  - [Parameter: `smokeTests.timeout`](#parameter-smoketeststimeout)
+  - [Parameter: `smokeTests.criticalFlowsOnly`](#parameter-smoketestscriticalflowsonly)
+- [Configuration File Structure](#configuration-file-structure)
+- [Environment Variables (.env Template)](#environment-variables-env-template)
+- [Parameter Override Scenarios](#parameter-override-scenarios)
+  - [Scenario 1: Emergency Deployment (Bypass Chairman Approval)](#scenario-1-emergency-deployment-bypass-chairman-approval)
+  - [Scenario 2: Conservative Deployment (Lower Error Rate Threshold)](#scenario-2-conservative-deployment-lower-error-rate-threshold)
+  - [Scenario 3: Fast Smoke Tests (Critical Flows Only)](#scenario-3-fast-smoke-tests-critical-flows-only)
+- [Sources Table](#sources-table)
 
 ## Tunable Parameters
 

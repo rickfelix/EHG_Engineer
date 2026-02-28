@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 5: Dossier Acceptance Checklist
+
+
+## Table of Contents
+
+- [Scoring Rubric](#scoring-rubric)
+- [Gate Decision: **APPROVED with Implementation Gaps**](#gate-decision-approved-with-implementation-gaps)
+  - [Strengths](#strengths)
+  - [Implementation Gaps (Non-Blocking for Dossier)](#implementation-gaps-non-blocking-for-dossier)
+  - [Recommendations for Implementation](#recommendations-for-implementation)
+- [Boundary Check Detail](#boundary-check-detail)
+- [Recursion Blueprint Validation](#recursion-blueprint-validation)
+- [Evidence Quality Validation](#evidence-quality-validation)
+- [Comparison with Phase 3 Standards](#comparison-with-phase-3-standards)
+- [Reviewer Notes](#reviewer-notes)
+- [Critical Notes for Implementation Team](#critical-notes-for-implementation-team)
+  - [Most Important File: 07_recursion-blueprint.md](#most-important-file-07_recursion-blueprintmd)
+  - [Most Complex Gap: GAP-S5-003 (Financial Modeling Tools)](#most-complex-gap-gap-s5-003-financial-modeling-tools)
+- [Sources Table](#sources-table)
 
 **Target Score**: ≥85 / 100
 

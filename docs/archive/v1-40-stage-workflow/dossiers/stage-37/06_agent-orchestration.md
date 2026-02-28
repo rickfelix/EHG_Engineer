@@ -1,4 +1,48 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 37: Strategic Risk Forecasting - Agent Orchestration
+
+
+## Table of Contents
+
+- [CrewAI Crew Definition](#crewai-crew-definition)
+  - [RiskForecastingCrew](#riskforecastingcrew)
+- [Agent Roster (4 Agents)](#agent-roster-4-agents)
+  - [Agent 1: Risk Modeling Specialist](#agent-1-risk-modeling-specialist)
+  - [Agent 2: Impact Assessment Analyst](#agent-2-impact-assessment-analyst)
+  - [Agent 3: Contingency Planning Coordinator](#agent-3-contingency-planning-coordinator)
+  - [Agent 4: Strategic Risk Advisor](#agent-4-strategic-risk-advisor)
+- [Crew Workflow](#crew-workflow)
+  - [Sequential Execution Flow](#sequential-execution-flow)
+  - [Execution Timeline](#execution-timeline)
+- [Human-in-the-Loop Checkpoints](#human-in-the-loop-checkpoints)
+  - [Checkpoint 1: Scenario Approval (After Agent 1)](#checkpoint-1-scenario-approval-after-agent-1)
+  - [Checkpoint 2: Severity Validation (After Agent 2)](#checkpoint-2-severity-validation-after-agent-2)
+  - [Checkpoint 3: Resource Approval (After Agent 3)](#checkpoint-3-resource-approval-after-agent-3)
+  - [Checkpoint 4: Final Review (After Agent 4)](#checkpoint-4-final-review-after-agent-4)
+- [Agent Communication Protocol](#agent-communication-protocol)
+  - [Inter-Agent Communication](#inter-agent-communication)
+  - [Human Communication](#human-communication)
+- [Error Handling](#error-handling)
+  - [Agent Failure Scenarios](#agent-failure-scenarios)
+- [Automation Roadmap](#automation-roadmap)
+  - [Current State (Manual Execution)](#current-state-manual-execution)
+  - [Phase 1: Assisted Execution (RISK-FORECAST-001)](#phase-1-assisted-execution-risk-forecast-001)
+  - [Phase 2: Semi-Automated (RISK-FORECAST-001 + 002)](#phase-2-semi-automated-risk-forecast-001-002)
+  - [Phase 3: Fully Automated (RISK-FORECAST-001 through 004)](#phase-3-fully-automated-risk-forecast-001-through-004)
+- [Performance Metrics](#performance-metrics)
+  - [Agent-Level Metrics](#agent-level-metrics)
+  - [Crew-Level Metrics](#crew-level-metrics)
+- [Integration with Other Crews](#integration-with-other-crews)
+  - [Upstream: Stage 36 (Competitive Intelligence Gathering)](#upstream-stage-36-competitive-intelligence-gathering)
+  - [Downstream: Stage 38+ (Subsequent Stages)](#downstream-stage-38-subsequent-stages)
+  - [Cross-Stage: Stage 16 (Execution)](#cross-stage-stage-16-execution)
 
 ## CrewAI Crew Definition
 

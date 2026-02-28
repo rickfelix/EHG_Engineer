@@ -1,5 +1,43 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Migration Phase A Runbook: Kochel Integration
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [1. Scope & Assumptions](#1-scope-assumptions)
+  - [1.1 Target Environment](#11-target-environment)
+  - [1.2 Tables & Schemas Impacted](#12-tables-schemas-impacted)
+  - [1.3 Assumptions](#13-assumptions)
+- [2. Pre-Migration Checks](#2-pre-migration-checks)
+  - [2.1 Environment Sanity Check](#21-environment-sanity-check)
+  - [2.2 Existing Data State](#22-existing-data-state)
+  - [2.3 Prerequisite Table Verification](#23-prerequisite-table-verification)
+- [3. Execution Steps](#3-execution-steps)
+  - [3.1 Environment Setup](#31-environment-setup)
+  - [3.2 Migration Execution Order](#32-migration-execution-order)
+- [4. Post-Migration Verification](#4-post-migration-verification)
+  - [4.1 Lifecycle Stage Config Verification](#41-lifecycle-stage-config-verification)
+  - [4.2 Vision Transition SD Hierarchy Verification](#42-vision-transition-sd-hierarchy-verification)
+  - [4.3 Venture Artifacts Quality Score Verification](#43-venture-artifacts-quality-score-verification)
+  - [4.4 CrewAI Contracts Verification](#44-crewai-contracts-verification)
+- [5. Rollback Procedure](#5-rollback-procedure)
+  - [5.1 When to Rollback](#51-when-to-rollback)
+  - [5.2 Rollback Execution Order](#52-rollback-execution-order)
+  - [5.3 Rollback Verification](#53-rollback-verification)
+- [6. Sign-off Checklist](#6-sign-off-checklist)
+  - [6.1 Pre-Execution Checklist](#61-pre-execution-checklist)
+  - [6.2 Post-Migration Sign-off](#62-post-migration-sign-off)
+  - [6.3 Chairman Declaration](#63-chairman-declaration)
+- [Appendix A: Quick Reference Commands](#appendix-a-quick-reference-commands)
 
 ## Metadata
 - **Category**: Database

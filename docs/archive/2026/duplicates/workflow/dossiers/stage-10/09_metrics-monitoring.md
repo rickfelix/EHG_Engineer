@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Core Metrics (from stages.yaml)](#core-metrics-from-stagesyaml)
+  - [1. Technical Debt Score](#1-technical-debt-score)
+  - [2. Scalability Rating](#2-scalability-rating)
+  - [3. Security Score](#3-security-score)
+- [Recursion Metrics](#recursion-metrics)
+  - [TECH-001 Trigger Rate](#tech-001-trigger-rate)
+  - [TECH-001 Trigger Breakdown](#tech-001-trigger-breakdown)
+  - [Recursion Resolution Time](#recursion-resolution-time)
+  - [Chairman Approval Rate](#chairman-approval-rate)
+- [Issue Categorization Metrics](#issue-categorization-metrics)
+  - [Blocking Issues by Category](#blocking-issues-by-category)
+- [Performance Metrics](#performance-metrics)
+  - [Technical Review Duration](#technical-review-duration)
+  - [Recursion Detection Latency](#recursion-detection-latency)
+- [Quality Metrics](#quality-metrics)
+  - [First-Pass Success Rate](#first-pass-success-rate)
+  - [Exit Gate Pass Rate](#exit-gate-pass-rate)
+- [Dashboard Visualizations](#dashboard-visualizations)
+  - [Technical Health Dashboard](#technical-health-dashboard)
+  - [Recursion Analytics Dashboard](#recursion-analytics-dashboard)
+  - [Quality Trends Dashboard](#quality-trends-dashboard)
+- [Alert Configuration](#alert-configuration)
+  - [Critical Alerts](#critical-alerts)
+  - [Warning Alerts](#warning-alerts)
+  - [Performance Alerts](#performance-alerts)
+- [Reporting](#reporting)
+  - [Weekly Stage 10 Report](#weekly-stage-10-report)
+  - [Monthly Stage 10 Retrospective](#monthly-stage-10-retrospective)
+
 <!-- ARCHIVED: 2026-01-26T16:26:52.156Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-10\09_metrics-monitoring.md

@@ -1,5 +1,47 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Genesis Oath: Sprint Roadmap
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version History](#version-history)
+- [Overview](#overview)
+- [Sprint Timeline](#sprint-timeline)
+- [Sprint 1: The Mason (Capricorn)](#sprint-1-the-mason-capricorn)
+  - [Phase 1: Ephemeral Foundation (Dec 29 – Jan 5) — 40 SDs](#phase-1-ephemeral-foundation-dec-29-jan-5-40-sds)
+  - [Phase 2: Simulation Scaffolder (Jan 6 – Jan 12) — 35 SDs](#phase-2-simulation-scaffolder-jan-6-jan-12-35-sds)
+  - [Phase 3: Ephemeral Deploy (Jan 13 – Jan 19) — 35 SDs](#phase-3-ephemeral-deploy-jan-13-jan-19-35-sds)
+- [Sprint 2: The Dreamcatcher (Aquarius)](#sprint-2-the-dreamcatcher-aquarius)
+  - [Phase 1: PRD Generation (Jan 20 – Jan 26) — 45 SDs](#phase-1-prd-generation-jan-20-jan-26-45-sds)
+  - [Phase 2: Schema/Repo Simulation (Jan 27 – Feb 2) — 50 SDs](#phase-2-schemarepo-simulation-jan-27-feb-2-50-sds)
+  - [Phase 3: EVA + Approval Gate (Feb 3 – Feb 8) — 45 SDs](#phase-3-eva-approval-gate-feb-3-feb-8-45-sds)
+- [Sprint 3: The Mirror (Pisces)](#sprint-3-the-mirror-pisces)
+  - [Integration (Feb 9 – Feb 10) — 35 SDs](#integration-feb-9-feb-10-35-sds)
+  - [Elevation Logic (Feb 10 – Feb 11) — 25 SDs](#elevation-logic-feb-10-feb-11-25-sds)
+  - [Reflex Testing (Feb 11 – Feb 13) — 20 SDs](#reflex-testing-feb-11-feb-13-20-sds)
+- [Genesis Day: February 14, 2026](#genesis-day-february-14-2026)
+  - [Pre-Ritual Checklist (Feb 13, evening)](#pre-ritual-checklist-feb-13-evening)
+  - [Ritual Timeline (Feb 14)](#ritual-timeline-feb-14)
+  - [Post-Ritual Validation](#post-ritual-validation)
+- [Risk Mitigation](#risk-mitigation)
+  - [Technical Risks](#technical-risks)
+  - [Timeline Risks](#timeline-risks)
+  - [Fallback Plan](#fallback-plan)
+- [Success Metrics](#success-metrics)
+  - [Sprint 1 Exit](#sprint-1-exit)
+  - [Sprint 2 Exit](#sprint-2-exit)
+  - [Sprint 3 Exit](#sprint-3-exit)
+  - [Genesis Success](#genesis-success)
+- [Appendix: SD Naming Convention](#appendix-sd-naming-convention)
 
 ## Metadata
 - **Category**: Guide

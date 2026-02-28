@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Chairman Vision Dashboard Implementation
 
 **SD**: SD-MAN-FEAT-CHAIRMAN-DASHBOARD-VISION-001

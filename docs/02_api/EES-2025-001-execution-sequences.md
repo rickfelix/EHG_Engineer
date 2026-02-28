@@ -1,5 +1,37 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Execution Sequence Items for PRD-2025-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Execution Sequences](#execution-sequences)
+  - [EES-001: Infrastructure Setup](#ees-001-infrastructure-setup)
+  - [EES-002: WebRTC Client Implementation](#ees-002-webrtc-client-implementation)
+  - [EES-003: Function Calling Integration](#ees-003-function-calling-integration)
+  - [EES-004: Context & Cost Management](#ees-004-context-cost-management)
+  - [EES-005: Security Hardening](#ees-005-security-hardening)
+  - [EES-006: Legacy Code Removal](#ees-006-legacy-code-removal)
+  - [EES-007: Testing & Verification](#ees-007-testing-verification)
+- [Execution Timeline](#execution-timeline)
+  - [Day 1 (6 hours)](#day-1-6-hours)
+  - [Day 2 (7 hours)](#day-2-7-hours)
+  - [Day 3 (5 hours)](#day-3-5-hours)
+- [Sub-Agent Activation Schedule](#sub-agent-activation-schedule)
+  - [Immediate Activation (EES-001)](#immediate-activation-ees-001)
+  - [Phase 2 Activation (EES-002)](#phase-2-activation-ees-002)
+  - [Phase 4 Activation (EES-004)](#phase-4-activation-ees-004)
+  - [Phase 5 Activation (EES-005)](#phase-5-activation-ees-005)
+  - [Phase 7 Activation (EES-007)](#phase-7-activation-ees-007)
+- [Risk Tracking](#risk-tracking)
 
 ## Metadata
 - **Category**: API

@@ -1,5 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # PRD Table Cleanup - Ready for Execution
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Summary](#quick-summary)
+- [What Was Created](#what-was-created)
+  - [1. Comprehensive Analysis Report](#1-comprehensive-analysis-report)
+  - [2. Automated Migration Script](#2-automated-migration-script)
+  - [3. SQL Migration (Alternative)](#3-sql-migration-alternative)
+- [Dry-Run Results (Successful!)](#dry-run-results-successful)
+- [Orphaned Records to Migrate](#orphaned-records-to-migrate)
+- [Files to be Updated (23 total)](#files-to-be-updated-23-total)
+  - [API Endpoints (4 files)](#api-endpoints-4-files)
+  - [Scripts (15 files)](#scripts-15-files)
+  - [Tools (4 files)](#tools-4-files)
+- [Execution Options](#execution-options)
+  - [Option 1: Automated (Recommended)](#option-1-automated-recommended)
+  - [Option 2: Manual SQL (Alternative)](#option-2-manual-sql-alternative)
+- [Verification Checklist](#verification-checklist)
+  - [Immediate (5 minutes)](#immediate-5-minutes)
+  - [Testing (15 minutes)](#testing-15-minutes)
+  - [Manual spot-checks (10 minutes)](#manual-spot-checks-10-minutes)
+- [Rollback Plan (If Needed)](#rollback-plan-if-needed)
+- [Post-Migration Cleanup (30 days later)](#post-migration-cleanup-30-days-later)
+- [Risk Assessment](#risk-assessment)
+- [Recommendation](#recommendation)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Database

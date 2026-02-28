@@ -1,3 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Dependency Graph](#dependency-graph)
+  - [Upstream Dependencies](#upstream-dependencies)
+  - [Downstream Dependencies](#downstream-dependencies)
+- [Workflow Position](#workflow-position)
+  - [Sequential Context](#sequential-context)
+  - [Phase Alignment](#phase-alignment)
+  - [Parallel Execution Opportunities](#parallel-execution-opportunities)
+- [Dependency Criticality Matrix](#dependency-criticality-matrix)
+- [Entry and Exit Gates](#entry-and-exit-gates)
+  - [Entry Gates](#entry-gates)
+  - [Exit Gates](#exit-gates)
+- [Recursion Targets](#recursion-targets)
+  - [Backward Recursion (Stage 19 → Earlier Stages)](#backward-recursion-stage-19-earlier-stages)
+  - [Forward Recursion (Stage 19 → Stage 20)](#forward-recursion-stage-19-stage-20)
+- [Critical Path Analysis](#critical-path-analysis)
+- [Workflow Efficiency Metrics](#workflow-efficiency-metrics)
+  - [Stage 19 Execution Time](#stage-19-execution-time)
+  - [Stage 19 Success Rate](#stage-19-success-rate)
+  - [Dependency Delay Impact](#dependency-delay-impact)
+- [Visualization](#visualization)
+  - [Dependency Flow Diagram](#dependency-flow-diagram)
+  - [Substage Sequence](#substage-sequence)
+- [Related Documentation](#related-documentation)
+
 <!-- ARCHIVED: 2026-01-26T16:26:36.554Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-19\02_stage-map.md

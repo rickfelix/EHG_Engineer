@@ -1,4 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 26: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Defined Metrics](#defined-metrics)
+- [Extended Metrics (Proposed)](#extended-metrics-proposed)
+  - [Security Testing Metrics](#security-testing-metrics)
+  - [Compliance Validation Metrics](#compliance-validation-metrics)
+  - [Certification Process Metrics](#certification-process-metrics)
+  - [Recursion Metrics](#recursion-metrics)
+- [Database Schema (Proposed)](#database-schema-proposed)
+  - [Table: `stage_26_metrics`](#table-stage_26_metrics)
+  - [Table: `vulnerability_tracking`](#table-vulnerability_tracking)
+- [Supabase Queries](#supabase-queries)
+  - [Query 1: Get Security Score for Venture](#query-1-get-security-score-for-venture)
+  - [Query 2: Get Compliance Rate for Venture](#query-2-get-compliance-rate-for-venture)
+  - [Query 3: Get Open Vulnerabilities by Severity](#query-3-get-open-vulnerabilities-by-severity)
+  - [Query 4: Get Average Time to Remediate](#query-4-get-average-time-to-remediate)
+  - [Query 5: Get Metrics History](#query-5-get-metrics-history)
+  - [Query 6: Get Expiring Certificates](#query-6-get-expiring-certificates)
+  - [Query 7: Validate Exit Gates](#query-7-validate-exit-gates)
+- [Dashboards](#dashboards)
+  - [Dashboard 1: Security Overview](#dashboard-1-security-overview)
+  - [Dashboard 2: Compliance Status](#dashboard-2-compliance-status)
+  - [Dashboard 3: Certification Progress](#dashboard-3-certification-progress)
+- [Alerting Rules](#alerting-rules)
+  - [Alert 1: Critical Vulnerability Detected](#alert-1-critical-vulnerability-detected)
+  - [Alert 2: Compliance Audit Failed](#alert-2-compliance-audit-failed)
+  - [Alert 3: Certificate Expiring Soon](#alert-3-certificate-expiring-soon)
+  - [Alert 4: Security Score Below Target](#alert-4-security-score-below-target)
+- [Integration Points](#integration-points)
+  - [Data Collection](#data-collection)
+  - [Data Consumers](#data-consumers)
+- [Gaps Identified](#gaps-identified)
+- [Sources Table](#sources-table)
 
 **Purpose**: Track security and compliance certification performance.
 

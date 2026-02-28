@@ -1,5 +1,51 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage Review Best Practices - Index
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Core Policies](#core-policies)
+  - [1. CrewAI Compliance Policy](#1-crewai-compliance-policy)
+  - [2. Evidence Standards](#2-evidence-standards)
+  - [3. Technical Debt Management](#3-technical-debt-management)
+  - [4. Cross-Stage Pattern Reuse](#4-cross-stage-pattern-reuse)
+- [Living Documentation](#living-documentation)
+  - [Stage Review Lessons Learned](#stage-review-lessons-learned)
+- [Validation Checklist](#validation-checklist)
+  - [CrewAI Compliance](#crewai-compliance)
+  - [Evidence Quality](#evidence-quality)
+  - [Cross-Stage Reuse](#cross-stage-reuse)
+  - [Technical Debt](#technical-debt)
+  - [Outcome Log Completeness](#outcome-log-completeness)
+- [Best Practice Patterns](#best-practice-patterns)
+  - [Service Role Key Pattern](#service-role-key-pattern)
+  - [RLS Policy Separation (App vs Engineer)](#rls-policy-separation-app-vs-engineer)
+  - [Template Versioning](#template-versioning)
+  - [Error Handling Standards](#error-handling-standards)
+  - [Testing Coverage Tier Requirements](#testing-coverage-tier-requirements)
+- [KPI Targets](#kpi-targets)
+- [Quick Reference Commands](#quick-reference-commands)
+  - [Database Queries](#database-queries)
+  - [File Search Patterns](#file-search-patterns)
+- [Cross-References](#cross-references)
+  - [Core Framework](#core-framework)
+  - [Governance](#governance)
+  - [Protocol Reference](#protocol-reference)
+- [Continuous Improvement Process](#continuous-improvement-process)
+  - [After Every Review](#after-every-review)
+  - [After Every 5 Reviews](#after-every-5-reviews)
+  - [Quarterly](#quarterly)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

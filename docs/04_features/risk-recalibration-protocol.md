@@ -1,5 +1,42 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Risk Re-calibration Protocol
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Risk Re-calibration Gates](#risk-re-calibration-gates)
+  - [Gate Locations](#gate-locations)
+  - [Gate Requirements](#gate-requirements)
+- [Risk Categories](#risk-categories)
+  - [1. Market Risk](#1-market-risk)
+  - [2. Technical Risk](#2-technical-risk)
+  - [3. Financial Risk](#3-financial-risk)
+  - [4. Operational Risk](#4-operational-risk)
+- [Delta Requirement](#delta-requirement)
+  - [Delta Categories](#delta-categories)
+  - [Delta Example](#delta-example)
+- [Escalation Protocol](#escalation-protocol)
+  - [Tiered Escalation](#tiered-escalation)
+  - [Escalation Triggers](#escalation-triggers)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Phase Boundary Validation](#phase-boundary-validation)
+  - [LEO Protocol Handoff Integration](#leo-protocol-handoff-integration)
+- [Risk Re-calibration Form Template](#risk-re-calibration-form-template)
+- [Success Metrics](#success-metrics)
+- [Implementation References](#implementation-references)
+  - [Database](#database)
+  - [Application Logic](#application-logic)
+  - [Related Protocols](#related-protocols)
 
 ## Metadata
 - **Category**: Protocol

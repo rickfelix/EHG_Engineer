@@ -1,5 +1,54 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Gate 0: Workflow Entry Enforcement
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Problem Statement](#problem-statement)
+  - [The Anti-Pattern](#the-anti-pattern)
+  - [Root Cause](#root-cause)
+- [Gate 0 Architecture](#gate-0-architecture)
+  - [Layer 1: Pre-Commit Hook (Local)](#layer-1-pre-commit-hook-local)
+  - [Layer 2: CLAUDE_EXEC.md Mandatory Check (Agent)](#layer-2-claude_execmd-mandatory-check-agent)
+  - [Layer 3: LOC Threshold Trigger (Local)](#layer-3-loc-threshold-trigger-local)
+  - [Layer 4: Verification Script (Manual)](#layer-4-verification-script-manual)
+  - [Layer 5: GitHub Action (CI/CD)](#layer-5-github-action-cicd)
+  - [Layer 6: Orchestrator Progress Fix (Monitoring)](#layer-6-orchestrator-progress-fix-monitoring)
+- [Valid SD Phases for Implementation](#valid-sd-phases-for-implementation)
+  - [Blocking Phases (Cannot Implement)](#blocking-phases-cannot-implement)
+  - [Valid Phases (Can Implement)](#valid-phases-can-implement)
+  - [Completed Phases (Informational)](#completed-phases-informational)
+- [Enforcement Flow Diagram](#enforcement-flow-diagram)
+- [Remediation Workflows](#remediation-workflows)
+  - [Scenario 1: SD in Draft Status](#scenario-1-sd-in-draft-status)
+  - [Scenario 2: Large Change (>500 LOC) Without SD](#scenario-2-large-change-500-loc-without-sd)
+  - [Scenario 3: PR Blocked by GitHub Action](#scenario-3-pr-blocked-by-github-action)
+- [Emergency Bypass Procedures](#emergency-bypass-procedures)
+  - [Pre-Commit Hook Bypass](#pre-commit-hook-bypass)
+  - [GitHub Action Bypass](#github-action-bypass)
+  - [When to Bypass](#when-to-bypass)
+- [Monitoring and Metrics](#monitoring-and-metrics)
+  - [Gate 0 Effectiveness Metrics](#gate-0-effectiveness-metrics)
+- [Testing and Validation](#testing-and-validation)
+  - [Manual Testing](#manual-testing)
+  - [Automated Testing](#automated-testing)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Pre-commit hook blocks valid work](#issue-pre-commit-hook-blocks-valid-work)
+  - [Issue: GitHub Action fails with "SD not found"](#issue-github-action-fails-with-sd-not-found)
+  - [Issue: Orchestrator shows 0% despite children complete](#issue-orchestrator-shows-0-despite-children-complete)
+- [Related Documentation](#related-documentation)
+- [Change Log](#change-log)
+- [Appendix: Implementation SDs](#appendix-implementation-sds)
 
 ## Metadata
 - **Category**: Protocol

@@ -1,5 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Database Connection Guide - Multi-Database Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Key Discovery: Supabase Pooler Connection](#key-discovery-supabase-pooler-connection)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [Connection Architecture](#connection-architecture)
+  - [1. Connection String Format](#1-connection-string-format)
+  - [2. Connection Modes](#2-connection-modes)
+- [DatabaseManager Service](#databasemanager-service)
+  - [Core Implementation](#core-implementation)
+- [Environment Configuration](#environment-configuration)
+  - [Required Environment Variables](#required-environment-variables)
+- [Usage Examples](#usage-examples)
+  - [1. Single Database Connection](#1-single-database-connection)
+  - [2. Multiple Database Management](#2-multiple-database-management)
+  - [3. Migration Support](#3-migration-support)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues and Solutions](#common-issues-and-solutions)
+- [Security Considerations](#security-considerations)
+  - [1. Password Management](#1-password-management)
+  - [2. Connection Pooling](#2-connection-pooling)
+  - [3. SQL Injection Prevention](#3-sql-injection-prevention)
+- [Best Practices](#best-practices)
+  - [1. Connection Management](#1-connection-management)
+  - [2. Transaction Handling](#2-transaction-handling)
+  - [3. Error Handling](#3-error-handling)
+- [Testing the Connection](#testing-the-connection)
+  - [Quick Test Script](#quick-test-script)
+- [Migration from Hardcoded Paths](#migration-from-hardcoded-paths)
+  - [Before (Hardcoded)](#before-hardcoded)
+  - [After (Dynamic)](#after-dynamic)
+- [Integration with Sub-Agents](#integration-with-sub-agents)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

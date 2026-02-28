@@ -1,4 +1,49 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Protocol Improvements CLI Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Overview](#overview)
+- [Installation](#installation)
+- [CLI Scripts](#cli-scripts)
+  - [1. Protocol Improvements Management](#1-protocol-improvements-management)
+  - [2. Handoff Retrospectives](#2-handoff-retrospectives)
+- [Module Structure](#module-structure)
+  - [ImprovementExtractor](#improvementextractor)
+  - [ImprovementApplicator](#improvementapplicator)
+  - [EffectivenessTracker](#effectivenesstracker)
+- [Workflow Example](#workflow-example)
+  - [1. After Completing an SD with Retrospective](#1-after-completing-an-sd-with-retrospective)
+  - [2. Apply Approved Improvements](#2-apply-approved-improvements)
+  - [3. Track Effectiveness (After 7+ Days)](#3-track-effectiveness-after-7-days)
+  - [4. Create Handoff Retrospective](#4-create-handoff-retrospective)
+- [Database Schema](#database-schema)
+  - [protocol_improvement_queue](#protocol_improvement_queue)
+- [NPM Scripts Quick Reference](#npm-scripts-quick-reference)
+- [Best Practices](#best-practices)
+  - [Review Process](#review-process)
+  - [Application Strategy](#application-strategy)
+  - [Effectiveness Tracking](#effectiveness-tracking)
+- [Troubleshooting](#troubleshooting)
+  - [No Improvements Extracted](#no-improvements-extracted)
+  - [Auto-Apply Score Too Low](#auto-apply-score-too-low)
+  - [Application Failed](#application-failed)
+  - [Effectiveness Score Null](#effectiveness-score-null)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+- [Recent Improvements (January 2026)](#recent-improvements-january-2026)
+  - [SD-LEO-PROCESS-IMPROVEMENTS-001: Post Self-Improvement Loop Enhancements](#sd-leo-process-improvements-001-post-self-improvement-loop-enhancements)
+- [Future Enhancements](#future-enhancements)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Guide

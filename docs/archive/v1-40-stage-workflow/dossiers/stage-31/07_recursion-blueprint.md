@@ -1,4 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 31: MVP Launch — Recursion Blueprint
+
+
+## Table of Contents
+
+- [Recursion Philosophy for Stage 31](#recursion-philosophy-for-stage-31)
+- [Proposed Recursion Triggers (4 Triggers)](#proposed-recursion-triggers-4-triggers)
+  - [LAUNCH-001: Launch Issues Detected](#launch-001-launch-issues-detected)
+  - [LAUNCH-002: User Acquisition Below Target](#launch-002-user-acquisition-below-target)
+  - [LAUNCH-003: Support Overwhelmed](#launch-003-support-overwhelmed)
+  - [LAUNCH-004: Launch Success Confirmed](#launch-004-launch-success-confirmed)
+- [Recursion Decision Tree](#recursion-decision-tree)
+- [Recursion Thresholds & Configuration](#recursion-thresholds-configuration)
+- [Recursion Pattern Learning (Future Enhancement)](#recursion-pattern-learning-future-enhancement)
+- [Integration with Agent Orchestration](#integration-with-agent-orchestration)
+- [Recursion Testing Strategy](#recursion-testing-strategy)
+- [Recursion Metrics](#recursion-metrics)
+- [Sources Table](#sources-table)
 
 **Purpose**: Define recursive sub-agent triggers for Stage 31 launch issues, corrective actions, and success validation.
 

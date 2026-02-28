@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Configurability Matrix
+
+
+## Table of Contents
+
+- [Configuration Philosophy](#configuration-philosophy)
+- [Configuration Categories](#configuration-categories)
+  - [1. Actor Configuration](#1-actor-configuration)
+  - [2. Saga Configuration](#2-saga-configuration)
+  - [3. Event Sourcing Configuration](#3-event-sourcing-configuration)
+  - [4. Metrics & Monitoring Configuration](#4-metrics-monitoring-configuration)
+  - [5. Recursion Trigger Configuration](#5-recursion-trigger-configuration)
+- [Configuration Storage](#configuration-storage)
+  - [Proposed Schema](#proposed-schema)
+- [Configuration Validation](#configuration-validation)
+- [Configuration Override Hierarchy](#configuration-override-hierarchy)
+- [Configuration Change Management](#configuration-change-management)
+- [Tuning Recommendations](#tuning-recommendations)
+- [Sources Table](#sources-table)
 
 **Stage**: Actor Model & Saga Transaction Integration
 **Purpose**: Define tunable parameters for actor, saga, and event sourcing configuration

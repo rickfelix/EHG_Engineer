@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 25: Gaps & Backlog
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Universal Blocker (Affects All Stages)](#universal-blocker-affects-all-stages)
+  - [SD-METRICS-FRAMEWORK-001](#sd-metrics-framework-001)
+- [High-Priority Gaps (Block Production Use)](#high-priority-gaps-block-production-use)
+  - [Gap 1: Limited Automation](#gap-1-limited-automation)
+  - [Gap 2: No Rollback Procedures](#gap-2-no-rollback-procedures)
+  - [Gap 3: No Metric Thresholds](#gap-3-no-metric-thresholds)
+- [Medium-Priority Gaps (Reduce Effectiveness)](#medium-priority-gaps-reduce-effectiveness)
+  - [Gap 4: Unclear Data Flow](#gap-4-unclear-data-flow)
+  - [Gap 5: No Tool Standards](#gap-5-no-tool-standards)
+  - [Gap 6: No Error Handling](#gap-6-no-error-handling)
+- [Low-Priority Gaps (Nice-to-Have)](#low-priority-gaps-nice-to-have)
+  - [Gap 7: No Customer Validation](#gap-7-no-customer-validation)
+  - [Gap 8: Low Recursion Readiness](#gap-8-low-recursion-readiness)
+- [Proposed Strategic Directives](#proposed-strategic-directives)
+  - [SD-QA-AUTOMATION-001](#sd-qa-automation-001)
+  - [SD-CRITIQUE-TEMPLATE-UPDATE-001](#sd-critique-template-update-001)
+  - [SD-BETA-TESTING-FRAMEWORK-001](#sd-beta-testing-framework-001)
+- [Gap Resolution Summary](#gap-resolution-summary)
+- [Backlog Prioritization](#backlog-prioritization)
+  - [Sprint 1 (Immediate, Week 1-2)](#sprint-1-immediate-week-1-2)
+  - [Sprint 2 (High Priority, Week 3-6)](#sprint-2-high-priority-week-3-6)
+  - [Sprint 3 (Universal Blocker, Week 7-10)](#sprint-3-universal-blocker-week-7-10)
+  - [Sprint 4 (Enhancements, Week 11-12)](#sprint-4-enhancements-week-11-12)
+  - [Sprint 5 (Optional, Future)](#sprint-5-optional-future)
+- [Cross-Stage Dependencies](#cross-stage-dependencies)
+- [Sources Table](#sources-table)
 
 ## Overview
 

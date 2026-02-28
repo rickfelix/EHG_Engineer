@@ -1,4 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Documentation Cleanup - Quick Action Checklist
+
+
+## Table of Contents
+
+- [CRITICAL (Do First - 2-4 hours)](#critical-do-first---2-4-hours)
+  - [Issue #1: Version Inconsistency](#issue-1-version-inconsistency)
+  - [Issue #2: Database-First Compliance](#issue-2-database-first-compliance)
+- [HIGH PRIORITY (Week 1-2, 6-8 hours)](#high-priority-week-1-2-6-8-hours)
+  - [Issue #3: Root-Level File Bloat](#issue-3-root-level-file-bloat)
+  - [Issue #4: Consolidate Duplicate Directories](#issue-4-consolidate-duplicate-directories)
+  - [Issue #5: Add Missing READMEs](#issue-5-add-missing-readmes)
+- [Purpose](#purpose)
+- [What Belongs Here](#what-belongs-here)
+- [What Doesn't Belong Here](#what-doesnt-belong-here)
+- [Related Directories](#related-directories)
+- [Last Updated](#last-updated)
+- [MEDIUM PRIORITY (Week 3, 4-6 hours)](#medium-priority-week-3-4-6-hours)
+  - [Issue #6: Update Stale Dates](#issue-6-update-stale-dates)
+  - [Issue #7: Directory Audit & Consolidation](#issue-7-directory-audit-consolidation)
+- [LOW PRIORITY (Ongoing)](#low-priority-ongoing)
+  - [Issue #8: Naming Conventions](#issue-8-naming-conventions)
+  - [Issue #9: Metadata Headers](#issue-9-metadata-headers)
+- [VERIFICATION CHECKLIST](#verification-checklist)
+  - [Version Consistency](#version-consistency)
+  - [Database-First Compliance](#database-first-compliance)
+  - [Organization](#organization)
+  - [Documentation Health](#documentation-health)
+- [COMMANDS TO RUN](#commands-to-run)
+  - [Before Starting](#before-starting)
+  - [During Cleanup](#during-cleanup)
+  - [After Cleanup](#after-cleanup)
+- [RISK MITIGATION](#risk-mitigation)
+  - [Before Deleting Anything](#before-deleting-anything)
+  - [Before Moving Files](#before-moving-files)
+  - [Before Archiving](#before-archiving)
+- [COMPLETION CRITERIA](#completion-criteria)
+- [QUESTIONS/BLOCKERS](#questionsblockers)
 
 **Date**: 2025-12-29
 **Source**: [DOCUMENTATION_CLEANUP_AUDIT_2025-12-29.md](DOCUMENTATION_CLEANUP_AUDIT_2025-12-29.md)

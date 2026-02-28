@@ -1,5 +1,42 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol Repository Guidelines
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Repository Architecture](#repository-architecture)
+  - [1. LEO Protocol Tool Repository (EHG_Engineer)](#1-leo-protocol-tool-repository-ehg_engineer)
+  - [2. Application Repositories (e.g., EHG)](#2-application-repositories-eg-ehg)
+- [Critical Rules for Agents](#critical-rules-for-agents)
+  - [RULE 1: Know Your Repository](#rule-1-know-your-repository)
+  - [RULE 2: Commit to Correct Repository](#rule-2-commit-to-correct-repository)
+  - [RULE 3: Repository Handoff Information](#rule-3-repository-handoff-information)
+- [Common Scenarios](#common-scenarios)
+  - [Scenario 1: Creating Strategic Directive](#scenario-1-creating-strategic-directive)
+  - [Scenario 2: Protocol Improvement](#scenario-2-protocol-improvement)
+  - [Scenario 3: Adding New Agent Workflow](#scenario-3-adding-new-agent-workflow)
+- [Repository Initialization Checklist](#repository-initialization-checklist)
+  - [For LEO Protocol (EHG_Engineer)](#for-leo-protocol-ehg_engineer)
+  - [For Applications](#for-applications)
+- [Preventing Repository Confusion](#preventing-repository-confusion)
+  - [1. Pre-Commit Check](#1-pre-commit-check)
+  - [2. Clear File Headers](#2-clear-file-headers)
+  - [3. Handoff Repository Check](#3-handoff-repository-check)
+- [Handoff Control Point](#handoff-control-point)
+- [Recovery Procedures](#recovery-procedures)
+  - [If Protocol Files End Up in Application Repo](#if-protocol-files-end-up-in-application-repo)
+  - [If Application Files End Up in Protocol Repo](#if-application-files-end-up-in-protocol-repo)
+- [Audit Command](#audit-command)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Protocol

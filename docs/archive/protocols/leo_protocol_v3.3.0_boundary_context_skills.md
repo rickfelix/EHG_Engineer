@@ -1,4 +1,57 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v3.3.0 - Boundary Enforcement, Context Management & Specialized Skills
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Part 1: Agent Boundary Enforcement](#part-1-agent-boundary-enforcement)
+  - [The Problem](#the-problem)
+  - [Boundary Definition Framework](#boundary-definition-framework)
+  - [Boundary Enforcement Mechanism](#boundary-enforcement-mechanism)
+- [EXEC Boundary Check Protocol](#exec-boundary-check-protocol)
+- [Part 2: Context Window Management](#part-2-context-window-management)
+  - [The Challenge](#the-challenge)
+  - [Context Window Strategy](#context-window-strategy)
+- [Context Window Management Rules](#context-window-management-rules)
+  - [At Each Handoff:](#at-each-handoff)
+  - [During Long Tasks:](#during-long-tasks)
+  - [Context Budget:](#context-budget)
+- [Compression Strategies](#compression-strategies)
+- [Part 3: Specialized Sub-Agent Skills](#part-3-specialized-sub-agent-skills)
+  - [Core Sub-Agent Types](#core-sub-agent-types)
+  - [Sub-Agent Activation Protocol](#sub-agent-activation-protocol)
+- [When to Activate Sub-Agents](#when-to-activate-sub-agents)
+  - [Automatic Activation (based on PRD keywords):](#automatic-activation-based-on-prd-keywords)
+  - [Manual Activation (EXEC decision):](#manual-activation-exec-decision)
+  - [Sub-Agent Collaboration:](#sub-agent-collaboration)
+- [Part 4: Integrated Workflow](#part-4-integrated-workflow)
+  - [Enhanced EXEC Workflow with Boundaries & Sub-Agents](#enhanced-exec-workflow-with-boundaries-sub-agents)
+- [EXEC Agent Enhanced Workflow](#exec-agent-enhanced-workflow)
+  - [1. Receive Handoff from PLAN](#1-receive-handoff-from-plan)
+  - [2. Boundary Verification](#2-boundary-verification)
+  - [3. Sub-Agent Activation](#3-sub-agent-activation)
+  - [4. Context Management](#4-context-management)
+  - [5. Implementation (Within Boundaries)](#5-implementation-within-boundaries)
+  - [6. Sub-Agent Integration](#6-sub-agent-integration)
+  - [7. Boundary Final Check](#7-boundary-final-check)
+  - [8. Context Handoff Preparation](#8-context-handoff-preparation)
+- [Part 5: Enforcement and Monitoring](#part-5-enforcement-and-monitoring)
+  - [Boundary Violation Detection](#boundary-violation-detection)
+  - [Context Window Monitoring](#context-window-monitoring)
+- [Part 6: Success Metrics](#part-6-success-metrics)
+  - [Boundary Compliance Metrics](#boundary-compliance-metrics)
+  - [Context Management Metrics](#context-management-metrics)
+  - [Sub-Agent Effectiveness](#sub-agent-effectiveness)
+- [Implementation Checklist](#implementation-checklist)
+- [Conclusion](#conclusion)
 
 **Status**: Critical Enhancement
 **Date**: 2025-08-30

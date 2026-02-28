@@ -1,5 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # PRD Schema Validation - Automation Overview
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🤖 **What IS Fully Automated**](#-what-is-fully-automated)
+  - [1. Pre-Commit Hook ✅ **100% Automatic**](#1-pre-commit-hook-100-automatic)
+  - [2. CI/CD Pipeline ✅ **100% Automatic** (NEW!)](#2-cicd-pipeline-100-automatic-new)
+  - [3. Weekly Audit ✅ **100% Automatic** (NEW!)](#3-weekly-audit-100-automatic-new)
+- [⚡ **What CAN Be Automated** (Semi-Automatic)](#-what-can-be-automated-semi-automatic)
+  - [4. Script Generation 🆕 **One Command**](#4-script-generation-one-command)
+  - [5. Validation **One Command**](#5-validation-one-command)
+- [📋 **Summary Table**](#-summary-table)
+- [🔄 **Complete Automated Workflow**](#-complete-automated-workflow)
+  - [For Developers](#for-developers)
+  - [For Reviewers](#for-reviewers)
+- [🎯 **Automation Coverage**](#-automation-coverage)
+  - [Before This Implementation](#before-this-implementation)
+  - [After This Implementation](#after-this-implementation)
+- [🚀 **What You Can Do NOW**](#-what-you-can-do-now)
+  - [Fully Automated (Just Let It Run)](#fully-automated-just-let-it-run)
+  - [Semi-Automated (One Command)](#semi-automated-one-command)
+- [📊 **Effectiveness Metrics**](#-effectiveness-metrics)
+  - [Developer Time Saved](#developer-time-saved)
+  - [Quality Improvement](#quality-improvement)
+- [🔮 **Future: Even MORE Automation**](#-future-even-more-automation)
+  - [Potential Phase 2 Features](#potential-phase-2-features)
+- [✅ **Current Status: HIGHLY AUTOMATED**](#-current-status-highly-automated)
 
 ## Metadata
 - **Category**: Report

@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 3: Agent Orchestration
 
 **Status**: ⚠️ **Partially Defined** (PLAN agent referenced, validation agents not mapped)

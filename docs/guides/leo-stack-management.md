@@ -1,4 +1,44 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Stack Management - Cross-Platform Version
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Platform Support](#platform-support)
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+  - [Using the Cross-Platform Runner (Recommended)](#using-the-cross-platform-runner-recommended)
+  - [Using the /leo and /restart Slash Commands](#using-the-leo-and-restart-slash-commands)
+  - [Start Individual Servers](#start-individual-servers)
+- [Windows-Specific Notes](#windows-specific-notes)
+  - [PowerShell Direct Usage](#powershell-direct-usage)
+  - [Virtual Environment for Agent Platform](#virtual-environment-for-agent-platform)
+- [Prerequisites](#prerequisites)
+  - [For All Servers](#for-all-servers)
+  - [For Agent Platform (Port 8000)](#for-agent-platform-port-8000)
+- [Server URLs](#server-urls)
+- [Troubleshooting](#troubleshooting)
+  - [Port Already in Use](#port-already-in-use)
+  - [Agent Platform Not Starting](#agent-platform-not-starting)
+  - [Viewing Logs](#viewing-logs)
+- [Development Workflow](#development-workflow)
+  - [Standard Development Session](#standard-development-session)
+  - [Frontend-Only Development](#frontend-only-development)
+- [Configuration](#configuration)
+  - [Timing Settings](#timing-settings)
+  - [PID Files](#pid-files)
+  - [Log Files](#log-files)
+- [Commands Reference](#commands-reference)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Guide

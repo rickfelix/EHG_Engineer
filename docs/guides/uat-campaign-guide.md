@@ -1,5 +1,53 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # UAT Campaign Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Campaign Structure](#campaign-structure)
+  - [Orchestrator SD](#orchestrator-sd)
+  - [Child SDs (Test in Order)](#child-sds-test-in-order)
+- [Running Each Area](#running-each-area)
+  - [Step 1: Start UAT Session](#step-1-start-uat-session)
+  - [Step 2: Execute Test Scenarios](#step-2-execute-test-scenarios)
+  - [Step 3: Record Results](#step-3-record-results)
+  - [Step 4: Review Quality Gate](#step-4-review-quality-gate)
+  - [Step 5: Handle Defects](#step-5-handle-defects)
+- [Area-Specific Test Focus](#area-specific-test-focus)
+  - [SD-UAT-NAV-001: Core Navigation](#sd-uat-nav-001-core-navigation)
+  - [SD-UAT-VENTURE-001: Ventures & 25-Stage](#sd-uat-venture-001-ventures-25-stage)
+  - [SD-UAT-DASHBOARD-001: Dashboard](#sd-uat-dashboard-001-dashboard)
+  - [SD-UAT-AI-001: AI/EVA](#sd-uat-ai-001-aieva)
+  - [SD-UAT-PORTFOLIO-001: Portfolio](#sd-uat-portfolio-001-portfolio)
+  - [SD-UAT-REPORTS-001: Reports](#sd-uat-reports-001-reports)
+  - [SD-UAT-SETTINGS-001: Settings](#sd-uat-settings-001-settings)
+  - [SD-UAT-GOVERNANCE-001: Governance](#sd-uat-governance-001-governance)
+- [Session Management](#session-management)
+  - [Starting a New Session](#starting-a-new-session)
+  - [Pausing/Resuming](#pausingresuming)
+  - [Tracking Progress](#tracking-progress)
+- [Defect Routing](#defect-routing)
+  - [High-Risk Patterns](#high-risk-patterns)
+- [Quality Gates](#quality-gates)
+- [Tips for Effective Testing](#tips-for-effective-testing)
+- [After All Areas Complete](#after-all-areas-complete)
+- [Commands Reference](#commands-reference)
+- [Troubleshooting](#troubleshooting)
+  - [Servers Not Running](#servers-not-running)
+  - [Database Connection Issues](#database-connection-issues)
+  - [/uat Command Not Working](#uat-command-not-working)
 
 ## Metadata
 - **Category**: Guide

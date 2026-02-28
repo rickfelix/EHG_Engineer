@@ -1,5 +1,67 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Venture Stage Configuration Schema Audit
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. lifecycle_stage_config Table](#1-lifecycle_stage_config-table)
+  - [Schema](#schema)
+  - [Current State](#current-state)
+  - [Sample Data](#sample-data)
+  - [Indexes](#indexes)
+  - [Helper Functions](#helper-functions)
+- [2. lifecycle_phases Table](#2-lifecycle_phases-table)
+  - [Schema](#schema)
+  - [Current State](#current-state)
+  - [Phase Breakdown](#phase-breakdown)
+- [3. venture_stage_work Table](#3-venture_stage_work-table)
+  - [Schema](#schema)
+  - [Current State](#current-state)
+  - [Purpose](#purpose)
+- [4. ventures Table (Lifecycle Integration)](#4-ventures-table-lifecycle-integration)
+  - [Relevant Columns](#relevant-columns)
+  - [Current State](#current-state)
+  - [Code Usage (venture-state-machine.js)](#code-usage-venture-state-machinejs)
+- [5. fn_advance_venture_stage() Function](#5-fn_advance_venture_stage-function)
+  - [Migration](#migration)
+  - [Signature](#signature)
+  - [Logic Flow](#logic-flow)
+  - [Permissions](#permissions)
+  - [Supporting Table](#supporting-table)
+- [6. advisory_checkpoints Table](#6-advisory_checkpoints-table)
+  - [Schema](#schema)
+  - [Current State](#current-state)
+  - [Checkpoints](#checkpoints)
+- [7. Code Alignment Analysis](#7-code-alignment-analysis)
+  - [venture-state-machine.js Usage](#venture-state-machinejs-usage)
+- [8. Schema Gaps & Recommendations](#8-schema-gaps-recommendations)
+  - [Gap Analysis](#gap-analysis)
+  - [Deprecated/Legacy Columns (ventures table)](#deprecatedlegacy-columns-ventures-table)
+  - [Missing Validations (Possible Enhancements)](#missing-validations-possible-enhancements)
+- [9. Reference Documentation Status](#9-reference-documentation-status)
+  - [Schema Docs (Auto-Generated)](#schema-docs-auto-generated)
+  - [Migration Files](#migration-files)
+- [10. Verification Queries](#10-verification-queries)
+  - [Run These to Verify Schema State](#run-these-to-verify-schema-state)
+- [11. Integration Points](#11-integration-points)
+  - [What EHG_Engineer Expects](#what-ehg_engineer-expects)
+  - [Code Dependencies](#code-dependencies)
+- [12. Conclusion](#12-conclusion)
+  - [Overall Assessment: ✅ SCHEMA HEALTHY](#overall-assessment-schema-healthy)
+  - [Action Items](#action-items)
+- [Appendix A: Stage Configuration Summary](#appendix-a-stage-configuration-summary)
+  - [SD-Required Stages (12 Total)](#sd-required-stages-12-total)
+  - [Advisory Checkpoints (3 Total)](#advisory-checkpoints-3-total)
 
 ## Metadata
 - **Category**: Database

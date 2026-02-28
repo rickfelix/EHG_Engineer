@@ -1,5 +1,45 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # SD Script Fix Progress Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Summary](#summary)
+  - [Before Fix](#before-fix)
+  - [After Fix](#after-fix)
+- [Fields Added to Each SD](#fields-added-to-each-sd)
+  - [Required Fields (Critical)](#required-fields-critical)
+  - [Strongly Recommended Fields (LEO Protocol)](#strongly-recommended-fields-leo-protocol)
+- [Example: SD-QUALITY-001 Before and After](#example-sd-quality-001-before-and-after)
+  - [Before](#before)
+  - [After](#after)
+- [Validation Results](#validation-results)
+  - [Overall Script Statistics](#overall-script-statistics)
+  - [Field Coverage Improvement](#field-coverage-improvement)
+- [Remaining Work](#remaining-work)
+  - [Critical Priority (15 scripts with missing required fields)](#critical-priority-15-scripts-with-missing-required-fields)
+  - [High Priority (23 scripts missing `target_application`)](#high-priority-23-scripts-missing-target_application)
+  - [High Priority (16 scripts missing `sd_key`)](#high-priority-16-scripts-missing-sd_key)
+- [Tools Available](#tools-available)
+  - [1. Validation Script](#1-validation-script)
+  - [2. Automated Fix Script](#2-automated-fix-script)
+  - [3. Template for New Scripts](#3-template-for-new-scripts)
+- [Recommended Approach](#recommended-approach)
+  - [Option A: Manual Fix with Quality (Recommended for Critical Scripts)](#option-a-manual-fix-with-quality-recommended-for-critical-scripts)
+  - [Option B: Automated Fix + Manual Review](#option-b-automated-fix-manual-review)
+  - [Option C: Hybrid Approach (Best Balance)](#option-c-hybrid-approach-best-balance)
+- [Next Steps](#next-steps)
+- [Success Criteria](#success-criteria)
+- [Lessons Learned](#lessons-learned)
 
 ## Metadata
 - **Category**: Report

@@ -1,3 +1,26 @@
+
+## Table of Contents
+
+- [Venture Lifecycle Overview](#venture-lifecycle-overview)
+- [Step-by-Step Walkthrough](#step-by-step-walkthrough)
+  - [Step 1: Create the Venture Record](#step-1-create-the-venture-record)
+  - [Step 2: Set Active Venture Context](#step-2-set-active-venture-context)
+  - [Step 3: Configure Chairman Preferences](#step-3-configure-chairman-preferences)
+  - [Step 4: Create the Orchestrator](#step-4-create-the-orchestrator)
+  - [Step 5: Initialize the Orchestrator](#step-5-initialize-the-orchestrator)
+  - [Step 6: Process Stages](#step-6-process-stages)
+  - [Step 7: Handle Gates](#step-7-handle-gates)
+  - [Step 8: Handle the SD Bridge (Stage 18)](#step-8-handle-the-sd-bridge-stage-18)
+  - [Step 9: Handle Constraint Drift (Stage 25)](#step-9-handle-constraint-drift-stage-25)
+  - [Step 10: Venture Completion](#step-10-venture-completion)
+- [Venture Lifecycle Phases](#venture-lifecycle-phases)
+- [Resume and Recovery](#resume-and-recovery)
+  - [Resuming an Interrupted Venture](#resuming-an-interrupted-venture)
+  - [Handling Failed Gates on Resume](#handling-failed-gates-on-resume)
+  - [Idempotency Guarantees](#idempotency-guarantees)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+- [Related Documentation](#related-documentation)
+
 ---
 Category: Guide
 Status: Approved

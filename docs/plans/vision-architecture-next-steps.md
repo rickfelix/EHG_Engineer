@@ -1,4 +1,42 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # EVA Venture Lifecycle: Vision & Architecture Next Steps
+
+
+## Table of Contents
+
+- [Sequenced Plan](#sequenced-plan)
+- [All Decisions Captured](#all-decisions-captured)
+  - [From Original Brainstorming Points (1-6)](#from-original-brainstorming-points-1-6)
+  - [From Additional Brainstorming Points (7-12)](#from-additional-brainstorming-points-7-12)
+- [Architecture Decisions](#architecture-decisions)
+  - [Organizational Model](#organizational-model)
+  - [Key Principles](#key-principles)
+- [Vision Divergence Analysis (Gemini vs Current CLI)](#vision-divergence-analysis-gemini-vs-current-cli)
+  - [Five Major Philosophical Differences](#five-major-philosophical-differences)
+  - [Resolution Direction](#resolution-direction)
+- [Deliverable Outlines](#deliverable-outlines)
+  - [Step 1: Vision Document Outline](#step-1-vision-document-outline)
+  - [Step 2: Architecture Document Outline](#step-2-architecture-document-outline)
+- [Gap Analysis Cross-Reference Index](#gap-analysis-cross-reference-index)
+  - [Phase 1: THE TRUTH (Stages 1-5)](#phase-1-the-truth-stages-1-5)
+  - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
+  - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
+  - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
+  - [Phase 5: THE BUILD LOOP (Stages 17-22)](#phase-5-the-build-loop-stages-17-22)
+  - [Phase 6: LAUNCH & LEARN (Stages 23-25)](#phase-6-launch-learn-stages-23-25)
+  - [Universal Patterns Across All 25 Stages](#universal-patterns-across-all-25-stages)
+- [Reference Files](#reference-files)
+- [Existing EHG App Architecture (from codebase analysis)](#existing-ehg-app-architecture-from-codebase-analysis)
+  - [Entity Hierarchy](#entity-hierarchy)
+  - [What Already Exists in Database](#what-already-exists-in-database)
+  - [What's NOT Built Yet](#whats-not-built-yet)
 
 > **Created**: 2026-02-11
 > **Context**: Brainstorming session following completion of the 25-stage CLI vs GUI gap analysis (PR #1117)

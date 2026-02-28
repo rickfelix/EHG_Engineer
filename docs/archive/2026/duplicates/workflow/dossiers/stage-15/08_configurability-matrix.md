@@ -1,3 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Configuration Dimensions](#configuration-dimensions)
+  - [Dimension 1: Business Model Type](#dimension-1-business-model-type)
+  - [Dimension 2: Market Segment](#dimension-2-market-segment)
+  - [Dimension 3: Geographic Market](#dimension-3-geographic-market)
+- [Tunable Parameters by Substage](#tunable-parameters-by-substage)
+  - [Substage 15.1: Pricing Research](#substage-151-pricing-research)
+  - [Substage 15.2: Model Development](#substage-152-model-development)
+  - [Substage 15.3: Revenue Projection](#substage-153-revenue-projection)
+- [Configuration Profiles (Pre-Defined)](#configuration-profiles-pre-defined)
+  - [Profile 1: SaaS B2B (Default)](#profile-1-saas-b2b-default)
+  - [Profile 2: SaaS B2C (Consumer)](#profile-2-saas-b2c-consumer)
+  - [Profile 3: Enterprise SaaS](#profile-3-enterprise-saas)
+  - [Profile 4: E-Commerce](#profile-4-e-commerce)
+  - [Profile 5: Freemium SaaS](#profile-5-freemium-saas)
+- [Advanced Configuration Parameters](#advanced-configuration-parameters)
+  - [Parameter A1: Price Elasticity](#parameter-a1-price-elasticity)
+  - [Parameter A2: Customer Lifetime Value (CLV) Target](#parameter-a2-customer-lifetime-value-clv-target)
+  - [Parameter A3: Gross Margin Target](#parameter-a3-gross-margin-target)
+- [Configuration Override Mechanism](#configuration-override-mechanism)
+- [Configuration Validation](#configuration-validation)
+- [Configuration Best Practices](#configuration-best-practices)
+
 <!-- ARCHIVED: 2026-01-26T16:26:49.875Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-15\08_configurability-matrix.md

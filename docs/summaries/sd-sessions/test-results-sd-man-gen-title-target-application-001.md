@@ -1,4 +1,57 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Test Results: SD-MAN-GEN-TITLE-TARGET-APPLICATION-001
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Test Execution Results](#test-execution-results)
+  - [1. Unit Test Suite](#1-unit-test-suite)
+  - [2. Persona Config Provider Tests](#2-persona-config-provider-tests)
+  - [3. Persona Extractor (Async) Tests](#3-persona-extractor-async-tests)
+  - [4. Quality Generation Integration](#4-quality-generation-integration)
+  - [5. Database Migration Verification](#5-database-migration-verification)
+  - [6. Cache Performance Test](#6-cache-performance-test)
+  - [7. End-to-End Integration Test](#7-end-to-end-integration-test)
+- [Files Changed and Tested](#files-changed-and-tested)
+  - [Database Changes](#database-changes)
+  - [Library Changes](#library-changes)
+  - [Script Changes](#script-changes)
+- [Behavior Verification](#behavior-verification)
+  - [EHG Application (Business Users)](#ehg-application-business-users)
+  - [EHG_Engineer Application (Developers)](#ehg_engineer-application-developers)
+  - [Default Fallback](#default-fallback)
+- [Performance Metrics](#performance-metrics)
+  - [Cache Performance](#cache-performance)
+  - [Memory Impact](#memory-impact)
+- [Integration Test Suite Results](#integration-test-suite-results)
+- [Acceptance Criteria Validation](#acceptance-criteria-validation)
+  - [AC1: Database-driven configuration](#ac1-database-driven-configuration)
+  - [AC2: App-aware persona validation](#ac2-app-aware-persona-validation)
+  - [AC3: Backward compatibility](#ac3-backward-compatibility)
+  - [AC4: Cache performance](#ac4-cache-performance)
+  - [AC5: Async support in persona-extractor](#ac5-async-support-in-persona-extractor)
+  - [AC6: Story generation integration](#ac6-story-generation-integration)
+- [Known Issues and Limitations](#known-issues-and-limitations)
+  - [Pre-Existing Issues (Not Caused by This SD)](#pre-existing-issues-not-caused-by-this-sd)
+  - [Future Enhancements (Out of Scope)](#future-enhancements-out-of-scope)
+- [Security Considerations](#security-considerations)
+  - [Database Access](#database-access)
+  - [Cache Poisoning](#cache-poisoning)
+  - [Injection Risks](#injection-risks)
+- [Recommendations](#recommendations)
+  - [For Deployment](#for-deployment)
+  - [For Monitoring](#for-monitoring)
+  - [For Documentation](#for-documentation)
+- [Conclusion](#conclusion)
+- [Test Execution Log](#test-execution-log)
+
 **Target-Application-Aware Persona Validation**
 
 **Date**: 2026-02-06

@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Database Schema Compliance Audit Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Tables Audited](#tables-audited)
+- [Critical Findings](#critical-findings)
+  - [CRIT-001: Missing Per-Stage Data Tables](#crit-001-missing-per-stage-data-tables)
+  - [CRIT-002: Stage-Specific Enum Definitions Missing](#crit-002-stage-specific-enum-definitions-missing)
+- [High-Severity Findings](#high-severity-findings)
+  - [HIGH-001: RLS Policies Too Permissive](#high-001-rls-policies-too-permissive)
+  - [HIGH-002: Missing Stage-Specific Gate Constraints](#high-002-missing-stage-specific-gate-constraints)
+  - [HIGH-003: Missing Cross-Stage Data Contracts](#high-003-missing-cross-stage-data-contracts)
+- [Medium-Severity Findings](#medium-severity-findings)
+  - [MED-001: Naming Convention Inconsistency](#med-001-naming-convention-inconsistency)
+  - [MED-002: Missing Audit Trail Columns](#med-002-missing-audit-trail-columns)
+  - [MED-003: No Stage Advancement Constraints](#med-003-no-stage-advancement-constraints)
+- [Low-Severity Findings](#low-severity-findings)
+  - [LOW-001: Redundant Event Tables](#low-001-redundant-event-tables)
+  - [LOW-002: Missing Indexes for Common Queries](#low-002-missing-indexes-for-common-queries)
+  - [LOW-003: NULL Handling](#low-003-null-handling)
+- [Architecture Alignment Summary](#architecture-alignment-summary)
+- [Recommendations Summary](#recommendations-summary)
+  - [Immediate (P0)](#immediate-p0)
+  - [Short-Term (P1)](#short-term-p1)
+  - [Medium-Term (P2)](#medium-term-p2)
+- [Score Breakdown](#score-breakdown)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-DBSCHEMA-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-ORCH-001

@@ -1,5 +1,57 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SDKeyGenerator Module - Reference Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Format](#key-format)
+  - [Hierarchy Support](#hierarchy-support)
+- [Protocol File Validation (MANDATORY)](#protocol-file-validation-mandatory)
+  - [Why This Matters](#why-this-matters)
+  - [Validation Functions](#validation-functions)
+  - [Validation Errors](#validation-errors)
+  - [Partial Read Detection](#partial-read-detection)
+  - [Bypassing Validation (Emergency Use Only)](#bypassing-validation-emergency-use-only)
+  - [CLI Validation Commands](#cli-validation-commands)
+  - [Session State Integration](#session-state-integration)
+- [API Reference](#api-reference)
+  - [Core Functions](#core-functions)
+  - [Utility Functions](#utility-functions)
+- [Constants](#constants)
+  - [`SD_SOURCES`](#sd_sources)
+  - [`SD_TYPES`](#sd_types)
+- [Integration Points](#integration-points)
+  - [Scripts Using SDKeyGenerator](#scripts-using-sdkeygenerator)
+  - [Command Integration](#command-integration)
+- [Database Integration](#database-integration)
+  - [Collision Detection](#collision-detection)
+  - [Sequential Numbering](#sequential-numbering)
+- [Usage Examples](#usage-examples)
+  - [Create Root SD from UAT](#create-root-sd-from-uat)
+  - [Create Child SD](#create-child-sd)
+  - [Create SD from Feedback](#create-sd-from-feedback)
+  - [Create SD from Plan File (NEW)](#create-sd-from-plan-file-new)
+  - [Parse Existing Key](#parse-existing-key)
+- [CLI Usage](#cli-usage)
+- [Migration Notes](#migration-notes)
+  - [Before (Legacy Approach)](#before-legacy-approach)
+  - [After (Unified Approach)](#after-unified-approach)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Module Exports](#module-exports)
+  - [Functions](#functions)
+  - [Constants](#constants)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

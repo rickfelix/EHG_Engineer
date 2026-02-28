@@ -1,5 +1,34 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001D
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Test Coverage Metrics in Retrospectives](#test-coverage-metrics-in-retrospectives)
+- [1. Strategic Intent](#1-strategic-intent)
+- [2. Rationale](#2-rationale)
+  - [Evidence Base](#evidence-base)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+- [3. Scope](#3-scope)
+  - [In Scope](#in-scope)
+  - [Out of Scope](#out-of-scope)
+- [4. Key Changes](#4-key-changes)
+  - [New File: `database/migrations/20260105_add_retro_test_metrics.sql`](#new-file-databasemigrations20260105_add_retro_test_metricssql)
+  - [File: `lib/sub-agents/retro.js`](#file-libsub-agentsretrojs)
+- [5. Success Criteria](#5-success-criteria)
+- [6. New Columns Summary](#6-new-columns-summary)
+- [7. Acceptance Testing](#7-acceptance-testing)
+- [8. Estimated LOC](#8-estimated-loc)
 
 ## Metadata
 - **Category**: Testing

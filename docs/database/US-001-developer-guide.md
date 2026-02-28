@@ -1,4 +1,42 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # US-001 Developer Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Using Validation Modes in Sub-Agent Results](#using-validation-modes-in-sub-agent-results)
+- [What Changed?](#what-changed)
+- [Using the New Columns](#using-the-new-columns)
+  - [Column 1: validation_mode](#column-1-validation_mode)
+  - [Column 2: justification](#column-2-justification)
+  - [Column 3: conditions](#column-3-conditions)
+- [Real-World Examples](#real-world-examples)
+  - [Example 1: QA Agent - Prospective Pass](#example-1-qa-agent---prospective-pass)
+  - [Example 2: Testing Agent - Retrospective Conditional Pass](#example-2-testing-agent---retrospective-conditional-pass)
+  - [Example 3: Design Agent - Retrospective Conditional Pass](#example-3-design-agent---retrospective-conditional-pass)
+- [Error Scenarios & How to Fix](#error-scenarios-how-to-fix)
+  - [Error 1: CONDITIONAL_PASS in prospective mode](#error-1-conditional_pass-in-prospective-mode)
+  - [Error 2: Missing justification for CONDITIONAL_PASS](#error-2-missing-justification-for-conditional_pass)
+  - [Error 3: Justification too short](#error-3-justification-too-short)
+  - [Error 4: Empty conditions array](#error-4-empty-conditions-array)
+- [Querying Results with New Columns](#querying-results-with-new-columns)
+  - [Query 1: Get all CONDITIONAL_PASS entries](#query-1-get-all-conditional_pass-entries)
+  - [Query 2: Filter by validation mode](#query-2-filter-by-validation-mode)
+  - [Query 3: Get completion status (including CONDITIONAL_PASS)](#query-3-get-completion-status-including-conditional_pass)
+  - [Query 4: Get audit trail of all conditional passes by agent](#query-4-get-audit-trail-of-all-conditional-passes-by-agent)
+- [Best Practices](#best-practices)
+  - [✓ DO:](#-do)
+  - [✗ DON'T:](#-dont)
+- [When to Use Each Verdict](#when-to-use-each-verdict)
+- [Need Help?](#need-help)
 
 ## Metadata
 - **Category**: Guide

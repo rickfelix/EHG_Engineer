@@ -1,5 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EVA Manifesto v1.0
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Chairman's Preface](#chairmans-preface)
+- [Preamble](#preamble)
+  - [The Philosophy](#the-philosophy)
+  - [The Chain of Command](#the-chain-of-command)
+  - [The Glass Cockpit](#the-glass-cockpit)
+- [Part I: The Constitution](#part-i-the-constitution)
+  - [The Four Oaths](#the-four-oaths)
+- [Part II: Economic Doctrine](#part-ii-economic-doctrine)
+  - [Token Budget Philosophy](#token-budget-philosophy)
+  - [The Budget Hierarchy](#the-budget-hierarchy)
+  - [Spend Authority Rules](#spend-authority-rules)
+  - [Cost Accountability](#cost-accountability)
+- [Part III: Self-Replication Protocol](#part-iii-self-replication-protocol)
+  - [Agent Instantiation](#agent-instantiation)
+  - [The Four Levels](#the-four-levels)
+  - [Venture Instantiation](#venture-instantiation)
+- [Part IV: Continuity & Succession](#part-iv-continuity-succession)
+  - [Hard Halt Protocol](#hard-halt-protocol)
+  - [Hard Halt Triggers](#hard-halt-triggers)
+  - [Recovery Protocol](#recovery-protocol)
+  - [Dead-Man Switch](#dead-man-switch)
+- [Technical Appendix](#technical-appendix)
+  - [Source Specifications](#source-specifications)
+  - [Database References](#database-references)
+  - [Implementation Notes](#implementation-notes)
+- [Document Governance](#document-governance)
 
 ## Metadata
 - **Category**: Guide

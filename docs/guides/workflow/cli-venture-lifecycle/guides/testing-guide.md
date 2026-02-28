@@ -1,3 +1,35 @@
+
+## Table of Contents
+
+- [Test Architecture Overview](#test-architecture-overview)
+- [Unit Tests](#unit-tests)
+  - [Location and Framework](#location-and-framework)
+  - [Dependency Injection Pattern](#dependency-injection-pattern)
+  - [Test Categories](#test-categories)
+  - [Mock Construction Patterns](#mock-construction-patterns)
+  - [Running Unit Tests](#running-unit-tests)
+- [Stage Template Tests](#stage-template-tests)
+  - [Per-Template Validation](#per-template-validation)
+  - [Template Test Pattern](#template-test-pattern)
+- [Integration Tests](#integration-tests)
+  - [Setup Requirements](#setup-requirements)
+  - [Test Categories](#test-categories)
+  - [Test Data Management](#test-data-management)
+  - [Running Integration Tests](#running-integration-tests)
+- [UAT Tests](#uat-tests)
+  - [Framework and Location](#framework-and-location)
+  - [Prerequisites](#prerequisites)
+  - [Test Scenarios](#test-scenarios)
+  - [Running UAT Tests](#running-uat-tests)
+- [Test Coverage Strategy](#test-coverage-strategy)
+  - [What to Cover](#what-to-cover)
+  - [What NOT to Test](#what-not-to-test)
+- [Debugging Test Failures](#debugging-test-failures)
+  - [Common Vitest Issues](#common-vitest-issues)
+  - [Common Integration Test Issues](#common-integration-test-issues)
+  - [Common Playwright Issues](#common-playwright-issues)
+- [Related Documentation](#related-documentation)
+
 ---
 Category: Guide
 Status: Approved

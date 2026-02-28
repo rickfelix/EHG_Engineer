@@ -1,5 +1,63 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Quality Lifecycle System - Workflow Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Core Workflow](#core-workflow)
+  - [The Five-Stage Lifecycle](#the-five-stage-lifecycle)
+  - [Stage 1: Prevention (PLAN Phase)](#stage-1-prevention-plan-phase)
+  - [Stage 2: Capture (POST-EXEC)](#stage-2-capture-post-exec)
+  - [Stage 3: Triage (Filter)](#stage-3-triage-filter)
+  - [Stage 4: Resolution (Fix/Build)](#stage-4-resolution-fixbuild)
+  - [Stage 5: Learning (Improve)](#stage-5-learning-improve)
+- [Feedback Capture Workflows](#feedback-capture-workflows)
+  - [Workflow 1: Manual Issue Reporting (CLI)](#workflow-1-manual-issue-reporting-cli)
+  - [Workflow 2: Manual Enhancement Request (Web UI)](#workflow-2-manual-enhancement-request-web-ui)
+  - [Workflow 3: Automatic Error Capture](#workflow-3-automatic-error-capture)
+  - [Workflow 4: UAT Test Failure](#workflow-4-uat-test-failure)
+- [Triage Workflows](#triage-workflows)
+  - [Workflow 5: Priority Calculation (Issues)](#workflow-5-priority-calculation-issues)
+  - [Workflow 6: Priority Calculation (Enhancements)](#workflow-6-priority-calculation-enhancements)
+  - [Workflow 7: Burst Grouping](#workflow-7-burst-grouping)
+  - [Workflow 8: Snooze Feedback](#workflow-8-snooze-feedback)
+  - [Workflow 9: Won't Fix / Won't Do](#workflow-9-wont-fix-wont-do)
+- [Resolution Workflows](#resolution-workflows)
+  - [Workflow 10: Quick Fix (<50 LOC)](#workflow-10-quick-fix-50-loc)
+  - [Workflow 11: Full SD for Complex Issue](#workflow-11-full-sd-for-complex-issue)
+  - [Workflow 12: Convert Issue ↔ Enhancement](#workflow-12-convert-issue-enhancement)
+- [Release Planning Workflows](#release-planning-workflows)
+  - [Workflow 13: Create Release](#workflow-13-create-release)
+  - [Workflow 14: Add Enhancements to Release](#workflow-14-add-enhancements-to-release)
+  - [Workflow 15: Bundle Enhancements into SD](#workflow-15-bundle-enhancements-into-sd)
+  - [Workflow 16: Track Release Progress](#workflow-16-track-release-progress)
+  - [Workflow 17: Ship Release](#workflow-17-ship-release)
+- [Integration Workflows](#integration-workflows)
+  - [Workflow 18: /uat → Feedback Integration](#workflow-18-uat-feedback-integration)
+  - [Workflow 19: Risk Router Integration](#workflow-19-risk-router-integration)
+  - [Workflow 20: /learn Integration](#workflow-20-learn-integration)
+- [Chairman Workflows](#chairman-workflows)
+  - [Workflow 21: Weekly Triage Session](#workflow-21-weekly-triage-session)
+  - [Workflow 22: Monthly Release Planning](#workflow-22-monthly-release-planning)
+  - [Workflow 23: Cross-Venture Pattern Review](#workflow-23-cross-venture-pattern-review)
+- [Phase Transition Workflows](#phase-transition-workflows)
+  - [Workflow 24: LEAD → Capture Integration](#workflow-24-lead-capture-integration)
+  - [Workflow 25: PLAN → EXEC Integration](#workflow-25-plan-exec-integration)
+  - [Workflow 26: EXEC → POST-EXEC Integration](#workflow-26-exec-post-exec-integration)
+- [Appendix](#appendix)
+  - [Workflow Metrics](#workflow-metrics)
+  - [Best Practices](#best-practices)
+  - [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Vision v4.7 Compliance Audit Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Scope](#scope)
+- [Critical Findings](#critical-findings)
+  - [CRIT-001: Chairman Blocking Decisions Missing at Stages 10, 22, 25](#crit-001-chairman-blocking-decisions-missing-at-stages-10-22-25)
+  - [CRIT-002: Decision Enum Types Not Enforced in Database](#crit-002-decision-enum-types-not-enforced-in-database)
+- [High-Severity Findings](#high-severity-findings)
+  - [HIGH-001: Reality Gate Boundary Misalignment (20->21 vs 22->23)](#high-001-reality-gate-boundary-misalignment-20-21-vs-22-23)
+  - [HIGH-002: Stage 25 Decision Routing Not Implemented](#high-002-stage-25-decision-routing-not-implemented)
+  - [HIGH-003: Venture Template Application Incomplete](#high-003-venture-template-application-incomplete)
+- [Medium-Severity Findings](#medium-severity-findings)
+  - [MED-001: Advisory Checkpoints Not Enforced at Runtime](#med-001-advisory-checkpoints-not-enforced-at-runtime)
+  - [MED-002: Portfolio Prioritization Not Integrated into Workflow](#med-002-portfolio-prioritization-not-integrated-into-workflow)
+  - [MED-003: Stage 19 Decision Value Divergence](#med-003-stage-19-decision-value-divergence)
+- [Low-Severity Findings](#low-severity-findings)
+  - [LOW-001: DFE Escalation Log Format](#low-001-dfe-escalation-log-format)
+  - [LOW-002: Stage 22 Decision Values Diverge](#low-002-stage-22-decision-values-diverge)
+- [Cross-Reference with Sibling Audit Reports](#cross-reference-with-sibling-audit-reports)
+- [Vision Alignment Matrix](#vision-alignment-matrix)
+- [Recommendations Summary](#recommendations-summary)
+  - [Immediate (P0)](#immediate-p0)
+  - [Short-Term (P1)](#short-term-p1)
+  - [Medium-Term (P2)](#medium-term-p2)
+- [Score Breakdown](#score-breakdown)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-VISION-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-ORCH-001

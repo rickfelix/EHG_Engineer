@@ -1,4 +1,57 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SD Type Classification Module
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Purpose](#purpose)
+- [Module Location](#module-location)
+- [SD Type Profiles](#sd-type-profiles)
+- [API Reference](#api-reference)
+  - [SDTypeClassifier Class](#sdtypeclassifier-class)
+- [Classification Rules](#classification-rules)
+- [Keyword Categories](#keyword-categories)
+- [Integration](#integration)
+  - [In SD Creation Workflow](#in-sd-creation-workflow)
+  - [With LEO Create Command](#with-leo-create-command)
+- [Examples](#examples)
+  - [Example 1: Feature Classification](#example-1-feature-classification)
+  - [Example 2: Infrastructure Classification](#example-2-infrastructure-classification)
+  - [Example 3: Library Classification](#example-3-library-classification)
+  - [Example 4: Security Classification](#example-4-security-classification)
+- [Error Handling](#error-handling)
+  - [GPT API Unavailable](#gpt-api-unavailable)
+  - [Invalid SD Type](#invalid-sd-type)
+- [Testing](#testing)
+- [Configuration](#configuration)
+  - [OpenAI API Key](#openai-api-key)
+  - [Model Selection](#model-selection)
+- [Type Locking Governance](#type-locking-governance)
+  - [Purpose](#purpose)
+  - [How It Works](#how-it-works)
+  - [Integration Points](#integration-points)
+  - [When to Use Type Locking](#when-to-use-type-locking)
+  - [Checking Lock Status](#checking-lock-status)
+  - [Unlocking Types](#unlocking-types)
+  - [Benefits](#benefits)
+  - [Implementation Details](#implementation-details)
+- [Related Documentation](#related-documentation)
+- [Troubleshooting](#troubleshooting)
+  - [Low Confidence Classifications](#low-confidence-classifications)
+  - [Wrong Type Recommended](#wrong-type-recommended)
+  - [GPT Classification Failures](#gpt-classification-failures)
+- [Version History](#version-history)
+  - [v1.1.0 (2026-01-24)](#v110-2026-01-24)
+  - [v1.0.0 (2026-01-23)](#v100-2026-01-23)
 
 ## Metadata
 - **Category**: Reference

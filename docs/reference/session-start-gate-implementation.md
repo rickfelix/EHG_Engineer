@@ -1,4 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SESSION_START Gate Implementation
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+  - [State Structure Mismatch Bug](#state-structure-mismatch-bug)
+  - [Missing SESSION_START Gate](#missing-session_start-gate)
+- [Solution](#solution)
+  - [1. Fixed State Structure Compatibility](#1-fixed-state-structure-compatibility)
+  - [2. Implemented SESSION_START Gate](#2-implemented-session_start-gate)
+  - [3. Fixed Hook Module Format](#3-fixed-hook-module-format)
+- [Architecture](#architecture)
+  - [State Tracking Mechanism](#state-tracking-mechanism)
+  - [Trigger Points](#trigger-points)
+  - [Handoff-Specific Phase File Validation (v1.2.0)](#handoff-specific-phase-file-validation-v120)
+- [Implementation Files](#implementation-files)
+  - [Modified Files](#modified-files)
+  - [Code Locations](#code-locations)
+- [Testing](#testing)
+  - [Manual Validation](#manual-validation)
+  - [Integration Testing](#integration-testing)
+- [Usage](#usage)
+  - [Invoking SESSION_START Gate](#invoking-session_start-gate)
+  - [Invoking SD_START Gate with Handoff Type (v1.2.0)](#invoking-sd_start-gate-with-handoff-type-v120)
+  - [Integration with LEO Session Init](#integration-with-leo-session-init)
+- [Troubleshooting](#troubleshooting)
+  - [Gate Fails Even After Reading File](#gate-fails-even-after-reading-file)
+  - [Hook Not Running](#hook-not-running)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

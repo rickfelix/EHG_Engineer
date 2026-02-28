@@ -1,4 +1,62 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Weighted Keyword Scoring Implementation - Summary
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+  - [What Was Missing](#what-was-missing)
+  - [Core Insight](#core-insight)
+  - [Decision Rationale](#decision-rationale)
+- [Solution Implemented](#solution-implemented)
+  - [Architecture](#architecture)
+  - [Files Created/Modified](#files-createdmodified)
+- [Architecture Evolution: Code-Only Keywords (2026-01-24)](#architecture-evolution-code-only-keywords-2026-01-24)
+  - [The Sync Problem](#the-sync-problem)
+  - [Three Options Considered](#three-options-considered)
+  - [Decision: Option A (Code-Only) ✅](#decision-option-a-code-only-)
+  - [Implementation](#implementation)
+  - [Workflow: Updating Keywords](#workflow-updating-keywords)
+  - [Verification](#verification)
+- [Technical Details](#technical-details)
+  - [Scoring Algorithm](#scoring-algorithm)
+  - [Keyword Design Principles](#keyword-design-principles)
+  - [Phrase-Aware Matching](#phrase-aware-matching)
+- [Testing](#testing)
+  - [Test Suite](#test-suite)
+  - [Test Cases (16 total)](#test-cases-16-total)
+  - [Manual Testing](#manual-testing)
+- [Performance Metrics](#performance-metrics)
+- [Results](#results)
+  - [Routing Accuracy](#routing-accuracy)
+  - [Benefits Achieved](#benefits-achieved)
+  - [Workflow Impact](#workflow-impact)
+- [Known Limitations](#known-limitations)
+- [Future Enhancements](#future-enhancements)
+- [Keyword Storage Reference](#keyword-storage-reference)
+  - [Code-Only Architecture (2026-01-24)](#code-only-architecture-2026-01-24)
+- [LEO Protocol Workflow](#leo-protocol-workflow)
+  - [Handoffs Completed](#handoffs-completed)
+  - [Decision Log](#decision-log)
+- [Documentation Updated](#documentation-updated)
+- [Success Criteria](#success-criteria)
+- [Lessons Learned](#lessons-learned)
+  - [What Went Well ✅](#what-went-well-)
+  - [Challenges Encountered ⚠️](#challenges-encountered-)
+  - [Technical Debt Created 📋](#technical-debt-created-)
+- [Conclusion](#conclusion)
+- [Version History](#version-history)
+  - [v1.1.0 (2026-01-24)](#v110-2026-01-24)
+  - [v1.0.0 (2026-01-24)](#v100-2026-01-24)
 
 ## Metadata
 - **Category**: Feature

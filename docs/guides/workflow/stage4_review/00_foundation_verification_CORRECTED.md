@@ -1,5 +1,34 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Foundation Verification — P0 Strategic Directives (CORRECTED)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [CORRECTION: RLS Was Blocking Queries](#correction-rls-was-blocking-queries)
+- [Queried P0 Strategic Directives (Corrected Status)](#queried-p0-strategic-directives-corrected-status)
+- [Detailed Status of Existing P0 SDs](#detailed-status-of-existing-p0-sds)
+  - [SD-RECURSION-ENGINE-001 ✅](#sd-recursion-engine-001-)
+  - [SD-CREWAI-ARCHITECTURE-001 ✅](#sd-crewai-architecture-001-)
+  - [SD-METRICS-FRAMEWORK-001 ❌](#sd-metrics-framework-001-)
+- [Revised Analysis](#revised-analysis)
+  - [What Actually Exists](#what-actually-exists)
+  - [Key Findings](#key-findings)
+  - [Implications for Stage 4 Exploration](#implications-for-stage-4-exploration)
+- [Corrected Recommendation](#corrected-recommendation)
+  - [Option B Remains Valid: Defer Foundation, Start Stage 4](#option-b-remains-valid-defer-foundation-start-stage-4)
+- [Next Steps](#next-steps)
+  - [1. Chairman Decision on Existing SDs](#1-chairman-decision-on-existing-sds)
+  - [2. Stage 4 Exploration (Proceed Immediately)](#2-stage-4-exploration-proceed-immediately)
+- [Files Corrected](#files-corrected)
 
 ## Metadata
 - **Category**: Guide

@@ -1,5 +1,33 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Audit-to-SD Pipeline
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Principles](#key-principles)
+- [Pipeline Stages](#pipeline-stages)
+- [Commands](#commands)
+- [Database Schema](#database-schema)
+  - [audit_finding_sd_mapping](#audit_finding_sd_mapping)
+  - [audit_finding_sd_links](#audit_finding_sd_links)
+  - [audit_coverage_report (View)](#audit_coverage_report-view)
+- [SD Types](#sd-types)
+- [Two-Track Triangulation](#two-track-triangulation)
+  - [Track A: Verification (Consensus Required)](#track-a-verification-consensus-required)
+  - [Track B: Preservation (Chairman Authority)](#track-b-preservation-chairman-authority)
+- [Coverage Gate](#coverage-gate)
+- [Retrospective Quality Criteria](#retrospective-quality-criteria)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

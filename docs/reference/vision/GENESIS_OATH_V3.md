@@ -1,5 +1,60 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Genesis Oath: The Simulation Chamber
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version History](#version-history)
+- [Executive Summary](#executive-summary)
+- [The Vision](#the-vision)
+  - [The Problem We Solved](#the-problem-we-solved)
+  - [The Solution: The Simulation Chamber](#the-solution-the-simulation-chamber)
+  - [The Cosmic Alignment](#the-cosmic-alignment)
+- [Architecture](#architecture)
+  - [Namespace Split (Hard Isolation)](#namespace-split-hard-isolation)
+  - [Infrastructure Mapping](#infrastructure-mapping)
+  - [PRD Scope Clarification](#prd-scope-clarification)
+  - [Epistemic Tagging (Canon Law)](#epistemic-tagging-canon-law)
+  - [Lifecycle States](#lifecycle-states)
+  - [The `/ratify` Command: Scope Definition](#the-ratify-command-scope-definition)
+- [The Ritual: Collapse of the Wave Function](#the-ritual-collapse-of-the-wave-function)
+  - [Timing](#timing)
+  - [The Five Acts](#the-five-acts)
+- [Integration with 25-Stage Workflow](#integration-with-25-stage-workflow)
+  - [How Simulations Flow Through Stages](#how-simulations-flow-through-stages)
+  - [Elevation Mechanics (Simulation → Reality)](#elevation-mechanics-simulation-reality)
+  - [TTL Enforcement (Non-Negotiable)](#ttl-enforcement-non-negotiable)
+- [Safeguards](#safeguards)
+  - [Against False Commitment](#against-false-commitment)
+  - [Against Resource Drain](#against-resource-drain)
+  - [Against Schema Drift](#against-schema-drift)
+- [Implementation Roadmap](#implementation-roadmap)
+  - [Sprint 1: The Mason (Dec 29 – Jan 19)](#sprint-1-the-mason-dec-29-jan-19)
+  - [Sprint 2: The Dreamcatcher (Jan 20 – Feb 8)](#sprint-2-the-dreamcatcher-jan-20-feb-8)
+  - [Sprint 3: The Mirror (Feb 9 – Feb 13)](#sprint-3-the-mirror-feb-9-feb-13)
+  - [Genesis (Feb 14)](#genesis-feb-14)
+- [Success Criteria](#success-criteria)
+  - [Feb 14 Ritual Success](#feb-14-ritual-success)
+  - [Post-Ritual Validation](#post-ritual-validation)
+- [Philosophical Foundation](#philosophical-foundation)
+  - [The Metaphysics](#the-metaphysics)
+  - [The Simulation Paradox (Critical Framing)](#the-simulation-paradox-critical-framing)
+  - [The Contract of Pain](#the-contract-of-pain)
+  - [The Meritocratic Machine](#the-meritocratic-machine)
+  - [Why This Works](#why-this-works)
+- [Appendix: Council Deliberations](#appendix-council-deliberations)
+  - [OpenAI Verdict](#openai-verdict)
+  - [AntiGravity Verdict](#antigravity-verdict)
+  - [Oracle Verdict](#oracle-verdict)
 
 ## Metadata
 - **Category**: Guide

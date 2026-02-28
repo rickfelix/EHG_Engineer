@@ -1,5 +1,64 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage [XX] Review - [Stage Name]
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [1. Dossier Summary](#1-dossier-summary)
+  - [Stage Purpose](#stage-purpose)
+  - [Expected Deliverables](#expected-deliverables)
+  - [Success Criteria](#success-criteria)
+  - [Dependencies](#dependencies)
+  - [Original Intent](#original-intent)
+- [2. As-Built Inventory](#2-as-built-inventory)
+  - [Database Tables](#database-tables)
+  - [Code Components](#code-components)
+  - [Features Implemented](#features-implemented)
+  - [Configuration & Environment](#configuration-environment)
+  - [UI Routes & Navigation](#ui-routes-navigation)
+  - [2.6 CrewAI Agent & Crew Registry ⚠️ MANDATORY](#26-crewai-agent-crew-registry-mandatory)
+- [3. Gap Analysis](#3-gap-analysis)
+  - [Executive Summary](#executive-summary)
+  - [3.2 CrewAI Compliance Gaps ⚠️ MANDATORY CATEGORY](#32-crewai-compliance-gaps-mandatory-category)
+  - [Critical Gaps (Blockers)](#critical-gaps-blockers)
+  - [High Priority Gaps](#high-priority-gaps)
+  - [Medium Priority Gaps](#medium-priority-gaps)
+  - [Low Priority Gaps](#low-priority-gaps)
+  - [3.7 Technical Debt Register ⚠️ REQUIRED FOR DEFERRED GAPS](#37-technical-debt-register-required-for-deferred-gaps)
+  - [3.8 Cross-Stage Reuse Opportunities ⚠️ REQUIRED](#38-cross-stage-reuse-opportunities-required)
+  - [Deviations from Dossier Intent](#deviations-from-dossier-intent)
+  - [Dependencies Impact](#dependencies-impact)
+  - [Recommendations Summary](#recommendations-summary)
+- [4. Chairman Decision](#4-chairman-decision)
+  - [Decision](#decision)
+  - [Rationale](#rationale)
+  - [If Strategic Directive(s) Spawned](#if-strategic-directives-spawned)
+  - [If Accepted As-Is](#if-accepted-as-is)
+  - [If Deferred](#if-deferred)
+  - [If Cancelled](#if-cancelled)
+  - [Next Steps](#next-steps)
+- [5. Review Outcome Log](#5-review-outcome-log)
+  - [Review Summary](#review-summary)
+  - [5.2 CrewAI Compliance Score ⚠️ MANDATORY](#52-crewai-compliance-score-mandatory)
+  - [5.3 Technical Debt Summary ⚠️ MANDATORY](#53-technical-debt-summary-mandatory)
+  - [5.4 Cross-Stage Patterns Applied ⚠️ MANDATORY](#54-cross-stage-patterns-applied-mandatory)
+  - [Actions Taken](#actions-taken)
+  - [Stage Status Update](#stage-status-update)
+  - [Governance Trail](#governance-trail)
+  - [Dependencies & Next Steps](#dependencies-next-steps)
+  - [5.9 Lessons Learned (Enhanced with Best Practices)](#59-lessons-learned-enhanced-with-best-practices)
+  - [5.10 Metrics (Enhanced with New KPIs)](#510-metrics-enhanced-with-new-kpis)
+  - [Audit Confirmation](#audit-confirmation)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

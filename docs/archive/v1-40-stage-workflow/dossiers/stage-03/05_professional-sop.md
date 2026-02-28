@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 3: Professional SOP
 
 **Purpose**: Validate problem-solution fit, willingness to pay, and make Kill/Revise/Proceed decision

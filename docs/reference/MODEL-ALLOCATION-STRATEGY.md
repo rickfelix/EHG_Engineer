@@ -1,5 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Model Allocation Strategy - Haiku-First (LEO Protocol v4.3.3)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Philosophy](#philosophy)
+- [Model Tier Assignments](#model-tier-assignments)
+  - [TIER 1: Haiku (Deterministic/Operational)](#tier-1-haiku-deterministicoperational)
+  - [TIER 2: Sonnet (Mid-Level Reasoning)](#tier-2-sonnet-mid-level-reasoning)
+  - [TIER 3: Opus (Security-Critical, Non-Negotiable)](#tier-3-opus-security-critical-non-negotiable)
+- [Phase-Specific Strategy](#phase-specific-strategy)
+  - [LEAD Phase (Ideation & Planning)](#lead-phase-ideation-planning)
+  - [PLAN Phase (Design & Detailed Planning)](#plan-phase-design-detailed-planning)
+  - [EXEC Phase (Implementation & Verification)](#exec-phase-implementation-verification)
+- [Calibration: Weekly Model Review](#calibration-weekly-model-review)
+  - [When to PROMOTE (upgrade assignment):](#when-to-promote-upgrade-assignment)
+  - [When to KEEP (assignment is working):](#when-to-keep-assignment-is-working)
+  - [When to INVESTIGATE (unexpected behavior):](#when-to-investigate-unexpected-behavior)
+- [Safety Guarantees](#safety-guarantees)
+  - [NEVER Violations](#never-violations)
+- [Budget Zone Guidance (Informational)](#budget-zone-guidance-informational)
+- [Token Logging (For Calibration)](#token-logging-for-calibration)
+- [Example: Weekly Calibration](#example-weekly-calibration)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Sub-Agent Executor (`lib/sub-agent-executor.js`)](#sub-agent-executor-libsub-agent-executorjs)
+  - [Phase Transitions](#phase-transitions)
+- [Failure Recovery](#failure-recovery)
+- [Commands for Operations](#commands-for-operations)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

@@ -1,5 +1,46 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.4.2 - Testing Governance Changelog
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Summary](#summary)
+- [New Features](#new-features)
+  - [1. MANDATORY_TESTING_VALIDATION Gate (BLOCKING)](#1-mandatory_testing_validation-gate-blocking)
+  - [2. TEST_EVIDENCE_AUTO_CAPTURE Gate (ADVISORY)](#2-test_evidence_auto_capture-gate-advisory)
+  - [3. Schema Context Loader](#3-schema-context-loader)
+  - [4. Test Coverage Metrics in Retrospectives](#4-test-coverage-metrics-in-retrospectives)
+- [Updated Components](#updated-components)
+  - [EXEC-TO-PLAN Gate Sequence (v4.4.2)](#exec-to-plan-gate-sequence-v442)
+- [Documentation Updates](#documentation-updates)
+  - [New Documentation](#new-documentation)
+  - [Updated Documentation](#updated-documentation)
+- [Migration Guide](#migration-guide)
+  - [For Projects on v4.3.x](#for-projects-on-v43x)
+  - [Backward Compatibility](#backward-compatibility)
+- [Impact Analysis](#impact-analysis)
+  - [Time Savings](#time-savings)
+  - [Quality Metrics](#quality-metrics)
+- [Configuration Reference](#configuration-reference)
+  - [Environment Variables](#environment-variables)
+  - [Usage Examples](#usage-examples)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Related Documentation](#related-documentation)
+  - [Core Protocol Docs](#core-protocol-docs)
+  - [Implementation Details](#implementation-details)
+  - [Schema Documentation](#schema-documentation)
+- [Version History](#version-history)
+- [Future Enhancements](#future-enhancements)
 
 ## Metadata
 - **Category**: Protocol

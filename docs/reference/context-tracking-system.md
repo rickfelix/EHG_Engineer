@@ -1,5 +1,66 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Context Tracking System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Improvements](#key-improvements)
+- [Architecture](#architecture)
+- [Components](#components)
+  - [1. Status Line Script](#1-status-line-script)
+  - [2. Sync Script](#2-sync-script)
+  - [3. Database Tables](#3-database-tables)
+- [Installation](#installation)
+  - [1. Enable Status Line](#1-enable-status-line)
+  - [2. Apply Database Migration](#2-apply-database-migration)
+  - [3. Verify Installation](#3-verify-installation)
+- [Token Calculation Formula](#token-calculation-formula)
+- [Thresholds](#thresholds)
+- [Status Line Indicators](#status-line-indicators)
+- [Compaction Detection](#compaction-detection)
+  - [Compaction Analysis Output](#compaction-analysis-output)
+- [NPM Scripts](#npm-scripts)
+- [Database Queries](#database-queries)
+  - [Recent Sessions](#recent-sessions)
+  - [Weekly Summary](#weekly-summary)
+  - [Compaction Analysis](#compaction-analysis)
+  - [High Usage Sessions](#high-usage-sessions)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Handoff Context Health](#handoff-context-health)
+- [Context Health](#context-health)
+  - [Phase Preflight](#phase-preflight)
+- [Troubleshooting](#troubleshooting)
+  - [Status Line Not Updating](#status-line-not-updating)
+  - [Logs Not Being Created](#logs-not-being-created)
+  - [Sync Failing](#sync-failing)
+- [Context Preservation System (PreCompact + SessionStart Hooks)](#context-preservation-system-precompact-sessionstart-hooks)
+  - [Problem Statement](#problem-statement)
+  - [Solution Architecture](#solution-architecture)
+  - [Hook 1: PreCompact (Save State)](#hook-1-precompact-save-state)
+- [Git Status](#git-status)
+- [Current Branch](#current-branch)
+  - [Hook 2: SessionStart (Restore Reminder)](#hook-2-sessionstart-restore-reminder)
+  - [Integration with CLAUDE_CORE.md](#integration-with-claude_coremd)
+  - [Manual State Management](#manual-state-management)
+  - [Usage Workflow](#usage-workflow)
+  - [Verification](#verification)
+- [Related: Unified Context Preservation System](#related-unified-context-preservation-system)
+  - [Integration Points](#integration-points)
+- [Unified State Manager v2.0 Upgrade](#unified-state-manager-v20-upgrade)
+  - [Problem Statement](#problem-statement)
+  - [v2.0 Enhancements](#v20-enhancements)
+- [Future Enhancements](#future-enhancements)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

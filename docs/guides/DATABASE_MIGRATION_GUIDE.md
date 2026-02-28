@@ -1,4 +1,32 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # 🎯 Database Migration Execution Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [SD-VIDEO-VARIANT-001 - LEAD→PLAN Handoff Unblock](#sd-video-variant-001---leadplan-handoff-unblock)
+- [📊 Database Architect Assessment](#-database-architect-assessment)
+  - [Root Cause Confirmed](#root-cause-confirmed)
+- [🚀 EXECUTION STEPS (3 phases, <5 min total)](#-execution-steps-3-phases-5-min-total)
+  - [Phase 1: Execute Migration SQL (1 minute)](#phase-1-execute-migration-sql-1-minute)
+  - [Phase 2: Populate SD Fields (1 minute)](#phase-2-populate-sd-fields-1-minute)
+  - [Phase 3: Verify LEAD→PLAN Handoff (1 minute)](#phase-3-verify-leadplan-handoff-1-minute)
+- [✅ Success Criteria](#-success-criteria)
+- [🔍 Troubleshooting](#-troubleshooting)
+  - [Issue: Migration SQL fails with "column already exists"](#issue-migration-sql-fails-with-column-already-exists)
+  - [Issue: Populate script still fails with trigger error](#issue-populate-script-still-fails-with-trigger-error)
+  - [Issue: Handoff still rejected with <85% score](#issue-handoff-still-rejected-with-85-score)
+- [📋 Post-Migration Verification](#-post-migration-verification)
+- [🎯 Next Steps After Success](#-next-steps-after-success)
+- [📚 Related Documentation](#-related-documentation)
 
 ## Metadata
 - **Category**: Guide

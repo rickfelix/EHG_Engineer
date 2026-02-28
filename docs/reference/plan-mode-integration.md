@@ -1,5 +1,42 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Plan Mode Integration Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Design Approach: Permission Bundling](#design-approach-permission-bundling)
+- [Integration Points](#integration-points)
+- [Module Structure](#module-structure)
+- [Phase Permissions](#phase-permissions)
+  - [LEAD Phase](#lead-phase)
+  - [PLAN Phase](#plan-phase)
+  - [EXEC Phase](#exec-phase)
+  - [VERIFY Phase](#verify-phase)
+  - [FINAL Phase](#final-phase)
+- [Configuration](#configuration)
+  - [Options](#options)
+- [State Files](#state-files)
+- [API Reference](#api-reference)
+  - [LEOPlanModeOrchestrator](#leoplanmodeorchestrator)
+  - [Phase Permissions API](#phase-permissions-api)
+- [Integration with Handoff System](#integration-with-handoff-system)
+- [Integration with Session Init](#integration-with-session-init)
+- [Disabling Plan Mode Integration](#disabling-plan-mode-integration)
+- [Troubleshooting](#troubleshooting)
+  - [Plan Mode not activating](#plan-mode-not-activating)
+  - [Permission prompts still appearing](#permission-prompts-still-appearing)
+  - [State file issues](#state-file-issues)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

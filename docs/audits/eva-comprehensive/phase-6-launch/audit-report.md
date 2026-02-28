@@ -1,4 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Comprehensive Audit — Phase 6: LAUNCH & LEARN (Stages 23-25)
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Stage 23: Launch Execution (Kill Gate)](#stage-23-launch-execution-kill-gate)
+  - [Gold Standard Requirements (v1.6 Section 8.6.1)](#gold-standard-requirements-v16-section-861)
+  - [Template Implementation (`lib/eva/stage-templates/stage-23.js`)](#template-implementation-libevastage-templatesstage-23js)
+  - [Analysis Step (`lib/eva/stage-templates/analysis-steps/stage-23-launch-execution.js`)](#analysis-step-libevastage-templatesanalysis-stepsstage-23-launch-executionjs)
+  - [Stage 23 Gap Summary](#stage-23-gap-summary)
+- [Stage 24: Metrics & Learning](#stage-24-metrics-learning)
+  - [Gold Standard Requirements (v1.6 Section 8.6.2)](#gold-standard-requirements-v16-section-862)
+  - [Template Implementation (`lib/eva/stage-templates/stage-24.js`)](#template-implementation-libevastage-templatesstage-24js)
+  - [Analysis Step (`lib/eva/stage-templates/analysis-steps/stage-24-metrics-learning.js`)](#analysis-step-libevastage-templatesanalysis-stepsstage-24-metrics-learningjs)
+  - [Stage 24 Gap Summary](#stage-24-gap-summary)
+- [Stage 25: Venture Review (Capstone)](#stage-25-venture-review-capstone)
+  - [Gold Standard Requirements (v1.6 Section 8.6.3)](#gold-standard-requirements-v16-section-863)
+  - [Template Implementation (`lib/eva/stage-templates/stage-25.js`)](#template-implementation-libevastage-templatesstage-25js)
+  - [Analysis Step (`lib/eva/stage-templates/analysis-steps/stage-25-venture-review.js`)](#analysis-step-libevastage-templatesanalysis-stepsstage-25-venture-reviewjs)
+  - [Stage 25 Gap Summary](#stage-25-gap-summary)
+- [Cross-Cutting Findings](#cross-cutting-findings)
+  - [CC-1: Schema-Generation Gap (HIGH)](#cc-1-schema-generation-gap-high)
+  - [CC-2: `parseJSON()` Duplication (LOW)](#cc-2-parsejson-duplication-low)
+  - [CC-3: No Upstream Prerequisite Validation (MEDIUM)](#cc-3-no-upstream-prerequisite-validation-medium)
+  - [CC-4: Scale Inconsistency (MEDIUM)](#cc-4-scale-inconsistency-medium)
+- [Remediation Roadmap](#remediation-roadmap)
+  - [Priority 1 — Schema Alignment (HIGH, ~90 LOC total)](#priority-1-schema-alignment-high-90-loc-total)
+  - [Priority 2 — Validation & Scale Fixes (MEDIUM, ~65 LOC total)](#priority-2-validation-scale-fixes-medium-65-loc-total)
+  - [Priority 3 — Analysis Step Alignment (LOW, ~45 LOC total)](#priority-3-analysis-step-alignment-low-45-loc-total)
+- [Appendix: Files Audited](#appendix-files-audited)
 
 **SD**: SD-EVA-QA-AUDIT-LAUNCH-001
 **Auditor**: Claude Opus 4.6 (automated)

@@ -1,4 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 16 Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+  - [Primary Metrics (Stage Definition)](#primary-metrics-stage-definition)
+  - [Secondary Metrics (Operational Health)](#secondary-metrics-operational-health)
+  - [Safety Metrics (Failsafes)](#safety-metrics-failsafes)
+- [Dashboard Specifications](#dashboard-specifications)
+  - [Dashboard 1: AI CEO Executive Summary](#dashboard-1-ai-ceo-executive-summary)
+  - [Dashboard 2: AI CEO Operational Metrics](#dashboard-2-ai-ceo-operational-metrics)
+  - [Dashboard 3: AI CEO Safety & Compliance](#dashboard-3-ai-ceo-safety-compliance)
+- [Alerting Rules](#alerting-rules)
+  - [Alert Channels](#alert-channels)
+  - [Alert Definitions](#alert-definitions)
+- [Monitoring Queries Library](#monitoring-queries-library)
+  - [Query 1: Decision Accuracy Trend](#query-1-decision-accuracy-trend)
+  - [Query 2: Automation Rate by Decision Type](#query-2-automation-rate-by-decision-type)
+  - [Query 3: Top Escalation Reasons](#query-3-top-escalation-reasons)
+  - [Query 4: Decision Latency by Stakes Level](#query-4-decision-latency-by-stakes-level)
+  - [Query 5: Constraint Violation Analysis](#query-5-constraint-violation-analysis)
+- [Metrics Storage & Retention](#metrics-storage-retention)
+  - [Time-Series Database (Prometheus)](#time-series-database-prometheus)
+  - [Relational Database (PostgreSQL)](#relational-database-postgresql)
+  - [Log Aggregation (ELK Stack)](#log-aggregation-elk-stack)
+- [Monitoring Best Practices](#monitoring-best-practices)
+  - [1. Proactive vs. Reactive Monitoring](#1-proactive-vs-reactive-monitoring)
+  - [2. Alert Fatigue Prevention](#2-alert-fatigue-prevention)
+  - [3. Dashboard Usability](#3-dashboard-usability)
+  - [4. Continuous Improvement](#4-continuous-improvement)
+- [Runbooks for Common Scenarios](#runbooks-for-common-scenarios)
+  - [Runbook: Decision Accuracy Degradation](#runbook-decision-accuracy-degradation)
+  - [Runbook: Circuit Breaker Activated](#runbook-circuit-breaker-activated)
+  - [Runbook: High Error Rate](#runbook-high-error-rate)
 
 ## Overview
 

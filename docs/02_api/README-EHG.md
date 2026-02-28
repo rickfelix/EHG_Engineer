@@ -1,5 +1,46 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # EHG Engineer - LEO Protocol Development Environment
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [📋 Overview](#-overview)
+  - [🌟 Key Features](#-key-features)
+- [🚀 Quick Start](#-quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [🏗️ Architecture](#-architecture)
+  - [LEO Protocol Workflow](#leo-protocol-workflow)
+  - [Sub-Agents](#sub-agents)
+- [📚 Usage](#-usage)
+  - [Creating a Strategic Directive](#creating-a-strategic-directive)
+  - [Running Sub-Agent Analysis](#running-sub-agent-analysis)
+  - [LEO Protocol Commands](#leo-protocol-commands)
+- [🛠️ Development](#-development)
+  - [Project Structure](#project-structure)
+  - [Running Tests](#running-tests)
+  - [Development Mode Features](#development-mode-features)
+- [🔒 Security](#-security)
+  - [Using the Log Sanitizer](#using-the-log-sanitizer)
+- [📊 Dashboard](#-dashboard)
+- [🤝 Contributing](#-contributing)
+  - [Commit Message Format](#commit-message-format)
+- [📝 API Documentation](#-api-documentation)
+  - [REST Endpoints](#rest-endpoints)
+  - [WebSocket Events](#websocket-events)
+- [🐛 Troubleshooting](#-troubleshooting)
+  - [Common Issues](#common-issues)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
 
 ## Metadata
 - **Category**: API

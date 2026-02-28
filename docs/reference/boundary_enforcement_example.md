@@ -1,5 +1,37 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Boundary Enforcement Example: SD-002 Analysis
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [What Actually Happened vs. What Should Have Happened](#what-actually-happened-vs-what-should-have-happened)
+  - [Original SD-002 Scope (LEAD)](#original-sd-002-scope-lead)
+  - [What EXEC Actually Did (Boundary Violations)](#what-exec-actually-did-boundary-violations)
+  - [With Proper Boundaries](#with-proper-boundaries)
+- [Pre-Implementation Boundary Check](#pre-implementation-boundary-check)
+- [Context Window Management Example](#context-window-management-example)
+  - [What Happened (Poor Context Management):](#what-happened-poor-context-management)
+  - [With Proper Context Management:](#with-proper-context-management)
+- [Context Budget Allocation](#context-budget-allocation)
+- [Sub-Agent Activation Example](#sub-agent-activation-example)
+  - [What Could Have Happened:](#what-could-have-happened)
+- [The Ideal SD-002 Execution](#the-ideal-sd-002-execution)
+  - [With All Enhancements:](#with-all-enhancements)
+- [EXEC Workflow for SD-002](#exec-workflow-for-sd-002)
+- [Lessons Learned](#lessons-learned)
+  - [Without Boundaries:](#without-boundaries)
+  - [With Boundaries:](#with-boundaries)
+  - [Key Insight:](#key-insight)
+- [Boundary Enforcement Benefits](#boundary-enforcement-benefits)
 
 ## Metadata
 - **Category**: Guide

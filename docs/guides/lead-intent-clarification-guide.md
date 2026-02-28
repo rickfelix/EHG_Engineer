@@ -1,5 +1,49 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEAD Agent Intent Clarification Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Core Principle: Adjacent Truths](#core-principle-adjacent-truths)
+  - [Key Recognition Patterns](#key-recognition-patterns)
+- [Evaluation Thresholds](#evaluation-thresholds)
+- [Scenario Examples](#scenario-examples)
+  - [Scenario 1: Technical Jargon Hiding Simple Intent](#scenario-1-technical-jargon-hiding-simple-intent)
+  - [Scenario 2: Implicit Strategic Value](#scenario-2-implicit-strategic-value)
+  - [Scenario 3: Complex Description, Simple Solution](#scenario-3-complex-description-simple-solution)
+  - [Scenario 4: Missing Business Context](#scenario-4-missing-business-context)
+- [Best Practices for LEAD Agents](#best-practices-for-lead-agents)
+  - [1. Always Ask "Why?" First](#1-always-ask-why-first)
+  - [2. Look for Patterns](#2-look-for-patterns)
+  - [3. Use the Rubric Tools](#3-use-the-rubric-tools)
+  - [4. Present Options to Human](#4-present-options-to-human)
+  - [5. Document the Clarification](#5-document-the-clarification)
+- [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+  - [❌ DON'T: Reject Based on Wording Alone](#-dont-reject-based-on-wording-alone)
+  - [❌ DON'T: Assume Intent Without Asking](#-dont-assume-intent-without-asking)
+  - [❌ DON'T: Over-Clarify Simple Cases](#-dont-over-clarify-simple-cases)
+  - [❌ DON'T: Skip Human Review in Clarification Zone](#-dont-skip-human-review-in-clarification-zone)
+- [Metrics & Success Criteria](#metrics-success-criteria)
+  - [Success Metrics](#success-metrics)
+  - [Target Outcomes](#target-outcomes)
+- [Integration with Existing Workflow](#integration-with-existing-workflow)
+  - [Pre-Clarification (Current State)](#pre-clarification-current-state)
+  - [Post-Clarification (New State)](#post-clarification-new-state)
+  - [Database Schema](#database-schema)
+- [Quick Reference Card](#quick-reference-card)
+  - [When to Trigger Clarification](#when-to-trigger-clarification)
+  - [How to Clarify](#how-to-clarify)
+  - [Decision Matrix](#decision-matrix)
 
 ## Metadata
 - **Category**: Guide

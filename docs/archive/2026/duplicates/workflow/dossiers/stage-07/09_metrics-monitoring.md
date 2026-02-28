@@ -1,3 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Stage-Specific Metrics](#stage-specific-metrics)
+  - [Metric 1: Plan Completeness](#metric-1-plan-completeness)
+  - [Metric 2: Timeline Feasibility](#metric-2-timeline-feasibility)
+  - [Metric 3: Resource Efficiency](#metric-3-resource-efficiency)
+- [Performance Metrics](#performance-metrics)
+  - [Metric 4: Stage Completion Time](#metric-4-stage-completion-time)
+  - [Metric 5: Revision Cycles](#metric-5-revision-cycles)
+- [Recursion Metrics](#recursion-metrics)
+  - [Metric 6: Inbound Recursion Rate](#metric-6-inbound-recursion-rate)
+  - [Metric 7: Recursion Trigger Distribution](#metric-7-recursion-trigger-distribution)
+  - [Metric 8: Average Recursion Resolution Time](#metric-8-average-recursion-resolution-time)
+- [Quality Metrics](#quality-metrics)
+  - [Metric 9: Chairman Approval Rate](#metric-9-chairman-approval-rate)
+  - [Metric 10: Plan Consistency Score](#metric-10-plan-consistency-score)
+- [Outcome Metrics (Post-Launch)](#outcome-metrics-post-launch)
+  - [Metric 11: Plan Accuracy (Post-Launch)](#metric-11-plan-accuracy-post-launch)
+- [Dashboard Queries](#dashboard-queries)
+  - [Query 1: Stage 7 Health Dashboard](#query-1-stage-7-health-dashboard)
+  - [Query 2: Recursion Heatmap](#query-2-recursion-heatmap)
+  - [Query 3: Planning Efficiency Trends](#query-3-planning-efficiency-trends)
+  - [Query 4: Resource Estimation Accuracy](#query-4-resource-estimation-accuracy)
+- [Alerting Rules](#alerting-rules)
+  - [Alert 1: Stage Duration Exceeded](#alert-1-stage-duration-exceeded)
+  - [Alert 2: Low Plan Completeness](#alert-2-low-plan-completeness)
+  - [Alert 3: High Recursion Rate](#alert-3-high-recursion-rate)
+  - [Alert 4: Recursion Loop Approaching Max](#alert-4-recursion-loop-approaching-max)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:52.406Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-07\09_metrics-monitoring.md

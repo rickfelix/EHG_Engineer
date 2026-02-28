@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Phase 6: Launch & Learn — Round 2 Audit Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Stage 23: Launch Execution — Kill Gate](#stage-23-launch-execution-kill-gate)
+  - [Files Audited](#files-audited)
+  - [Findings](#findings)
+  - [Stage 23 Compliance: 72%](#stage-23-compliance-72)
+- [Stage 24: Metrics & Learning](#stage-24-metrics-learning)
+  - [Files Audited](#files-audited)
+  - [Findings](#findings)
+  - [Stage 24 Compliance: 67%](#stage-24-compliance-67)
+- [Stage 25: Venture Review (Capstone)](#stage-25-venture-review-capstone)
+  - [Files Audited](#files-audited)
+  - [Findings](#findings)
+  - [Stage 25 Compliance: 55%](#stage-25-compliance-55)
+- [Cross-Stage Contract Analysis](#cross-stage-contract-analysis)
+  - [Stage 22 → Stage 23 Contract](#stage-22-stage-23-contract)
+  - [Stage 23 → Stage 24 Contract](#stage-23-stage-24-contract)
+  - [Stage 24 → Stage 25 Contract](#stage-24-stage-25-contract)
+  - [All Stages → Stage 25 (Capstone Consumption)](#all-stages-stage-25-capstone-consumption)
+- [Summary of Findings by Severity](#summary-of-findings-by-severity)
+- [Recurring Pattern: Template vs Analysis Step Divergence](#recurring-pattern-template-vs-analysis-step-divergence)
+- [Recommendations](#recommendations)
 
 **SD**: SD-EVA-QA-AUDIT-R2-LAUNCH-001
 **Date**: 2026-02-14

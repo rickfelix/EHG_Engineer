@@ -1,4 +1,51 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Sub-Agent Assessment Review - Issues to Fix
+
+## Table of Contents
+
+- [SD-VIDEO-VARIANT-001](#sd-video-variant-001)
+- [Overview](#overview)
+- [BLOCKING ISSUES (Must fix NOW)](#blocking-issues-must-fix-now)
+  - [❌ ISSUE #1: Missing Backlog Items](#-issue-1-missing-backlog-items)
+  - [❌ ISSUE #2: No PRD Exists](#-issue-2-no-prd-exists)
+- [SCOPE ADJUSTMENTS REQUIRED](#scope-adjustments-required)
+  - [⚠️ ADJUSTMENT #1: Add Database Schema Enhancement](#-adjustment-1-add-database-schema-enhancement)
+  - [⚠️ ADJUSTMENT #2: Clarify Component Sizing Target](#-adjustment-2-clarify-component-sizing-target)
+  - [⚠️ ADJUSTMENT #3: Formalize Week 4 Checkpoint](#-adjustment-3-formalize-week-4-checkpoint)
+- [TECHNICAL DEBT TO ADDRESS](#technical-debt-to-address)
+  - [📋 DEBT #1: Zero Test Coverage in Video Area](#-debt-1-zero-test-coverage-in-video-area)
+  - [📋 DEBT #2: No Error Handling in Existing Sora Integration](#-debt-2-no-error-handling-in-existing-sora-integration)
+- [CLARIFICATIONS NEEDED](#clarifications-needed)
+  - [❓ CLARIFICATION #1: Phase 0 API Credentials](#-clarification-1-phase-0-api-credentials)
+  - [❓ CLARIFICATION #2: Manual Workflow Cost Estimate](#-clarification-2-manual-workflow-cost-estimate)
+  - [❓ CLARIFICATION #3: "Round 2" Automation Scope](#-clarification-3-round-2-automation-scope)
+- [RECOMMENDATIONS TO INCORPORATE](#recommendations-to-incorporate)
+  - [✅ RECOMMENDATION #1: Two-Step Migration for Circular FK](#-recommendation-1-two-step-migration-for-circular-fk)
+  - [✅ RECOMMENDATION #2: Partitioning Strategy for Metrics](#-recommendation-2-partitioning-strategy-for-metrics)
+  - [✅ RECOMMENDATION #3: Progressive Disclosure in UI](#-recommendation-3-progressive-disclosure-in-ui)
+- [RISK MITIGATION GAPS](#risk-mitigation-gaps)
+  - [⚠️ GAP #1: No Rollback Testing Plan](#-gap-1-no-rollback-testing-plan)
+  - [⚠️ GAP #2: No User Testing Plan](#-gap-2-no-user-testing-plan)
+  - [⚠️ GAP #3: No Monitoring Alert Thresholds](#-gap-3-no-monitoring-alert-thresholds)
+- [SCOPE CREEP RISKS](#scope-creep-risks)
+  - [🚨 CREEP RISK #1: "Integration with Existing Workflows"](#-creep-risk-1-integration-with-existing-workflows)
+  - [🚨 CREEP RISK #2: "Chairman Approval Integration"](#-creep-risk-2-chairman-approval-integration)
+- [PRIORITIZED ACTIONS](#prioritized-actions)
+  - [IMMEDIATE (Before Phase 0)](#immediate-before-phase-0)
+  - [BEFORE PLAN PHASE](#before-plan-phase)
+  - [BEFORE EXEC PHASE](#before-exec-phase)
+- [SUMMARY](#summary)
+  - [Issues Found](#issues-found)
+  - [Recommendations to Incorporate](#recommendations-to-incorporate)
+  - [Actions Required Before Proceeding](#actions-required-before-proceeding)
+
 ## SD-VIDEO-VARIANT-001
 
 **Date**: 2025-10-10

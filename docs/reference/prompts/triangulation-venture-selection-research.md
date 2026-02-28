@@ -1,5 +1,41 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Venture Selection Framework
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Research Context](#research-context)
+- [Current Pattern Library (Ground Truth)](#current-pattern-library-ground-truth)
+- [OpenAI Research Prompt](#openai-research-prompt)
+- [Context](#context)
+- [Research Topics](#research-topics)
+  - [Topic 1: Incremental Progress Business Models](#topic-1-incremental-progress-business-models)
+  - [Topic 2: Pattern-Based Venture Selection](#topic-2-pattern-based-venture-selection)
+  - [Topic 3: Venture Selection Configurability](#topic-3-venture-selection-configurability)
+- [Output Format](#output-format)
+- [Gemini Research Prompt](#gemini-research-prompt)
+- [Context](#context)
+- [Research Topics](#research-topics)
+  - [Topic 1: Replit Success Stories](#topic-1-replit-success-stories)
+  - [Topic 2: Lovable Success Stories](#topic-2-lovable-success-stories)
+  - [Topic 3: Clone Opportunity Framework](#topic-3-clone-opportunity-framework)
+  - [Topic 4: Research Paper Opportunities](#topic-4-research-paper-opportunities)
+- [Output Format](#output-format)
+- [Claude Code Research Tasks](#claude-code-research-tasks)
+  - [Task 1: Pattern Library Maturity Analysis](#task-1-pattern-library-maturity-analysis)
+  - [Task 2: Venture-Pattern Mapping](#task-2-venture-pattern-mapping)
+  - [Task 3: Incremental Progress Scoring Model](#task-3-incremental-progress-scoring-model)
+- [Triangulation Questions](#triangulation-questions)
+- [Expected Outputs](#expected-outputs)
 
 ## Metadata
 - **Category**: Guide

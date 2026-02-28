@@ -1,5 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Checkpoint 3 Clean Branch Strategy
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+- [Strategy: Cherry-Pick to Clean Branch](#strategy-cherry-pick-to-clean-branch)
+  - [Step 1: Create Clean Branch from Main](#step-1-create-clean-branch-from-main)
+  - [Step 2: Cherry-Pick CP2 + CP3 Commits](#step-2-cherry-pick-cp2-cp3-commits)
+  - [Step 3: Verify CI/CD Will Pass](#step-3-verify-cicd-will-pass)
+  - [Step 4: Push and Create PR](#step-4-push-and-create-pr)
+- [Summary](#summary)
+- [Checkpoints Included](#checkpoints-included)
+- [Testing](#testing)
+- [Clean Branch Strategy](#clean-branch-strategy)
+- [Retrospective](#retrospective)
+  - [Step 5: Monitor CI/CD](#step-5-monitor-cicd)
+- [Verification Checklist](#verification-checklist)
+- [Alternative: Rebase Feature Branch (NOT RECOMMENDED)](#alternative-rebase-feature-branch-not-recommended)
+- [Post-Merge Actions](#post-merge-actions)
+- [Lessons Learned](#lessons-learned)
 
 ## Metadata
 - **Category**: Report

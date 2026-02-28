@@ -1,5 +1,45 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # 25-Stage Venture Lifecycle Overview
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Visual Overview](#visual-overview)
+- [The 6 Phases](#the-6-phases)
+  - [Phase 1: THE TRUTH (Stages 1-5)](#phase-1-the-truth-stages-1-5)
+  - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
+  - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
+  - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
+  - [Phase 5: THE BUILD LOOP (Stages 17-20)](#phase-5-the-build-loop-stages-17-20)
+  - [Phase 6: LAUNCH & LEARN (Stages 21-25)](#phase-6-launch-learn-stages-21-25)
+- [Phase 7: THE ORBIT (Post-Stage 25)](#phase-7-the-orbit-post-stage-25)
+- [Key Mechanisms](#key-mechanisms)
+  - [1. Work Types](#1-work-types)
+  - [2. Advisory Checkpoints](#2-advisory-checkpoints)
+  - [3. Golden Nuggets](#3-golden-nuggets)
+  - [4. Token Budget Profiles](#4-token-budget-profiles)
+- [Stage Dependencies](#stage-dependencies)
+- [Artifacts by Phase](#artifacts-by-phase)
+  - [Phase 1: THE TRUTH](#phase-1-the-truth)
+  - [Phase 2: THE ENGINE](#phase-2-the-engine)
+  - [Phase 3: THE IDENTITY](#phase-3-the-identity)
+  - [Phase 4: THE BLUEPRINT](#phase-4-the-blueprint)
+  - [Phase 5: THE BUILD LOOP](#phase-5-the-build-loop)
+  - [Phase 6: LAUNCH & LEARN](#phase-6-launch-learn)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+- [Evolution from 40-Stage Model](#evolution-from-40-stage-model)
+- [Quick Reference Card](#quick-reference-card)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

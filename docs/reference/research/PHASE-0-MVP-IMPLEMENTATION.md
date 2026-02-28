@@ -1,5 +1,48 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Phase 0 MVP: Haiku-First Model Allocation (Week 1)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Task Breakdown & Time Estimates](#task-breakdown-time-estimates)
+  - [TASK 1: Update Sub-Agent Executor with Haiku Defaults](#task-1-update-sub-agent-executor-with-haiku-defaults)
+  - [TASK 2: Create Token Logging Infrastructure](#task-2-create-token-logging-infrastructure)
+  - [TASK 3: Add Model Recommendation to CLAUDE.md](#task-3-add-model-recommendation-to-claudemd)
+- [Model Assignment Strategy (Haiku-First)](#model-assignment-strategy-haiku-first)
+  - [Sub-Agent Model Defaults](#sub-agent-model-defaults)
+  - [Budget Zones & Model Selection](#budget-zones-model-selection)
+  - [Recommended Model for Current SD](#recommended-model-for-current-sd)
+  - [Manual Override](#manual-override)
+  - [See Also](#see-also)
+  - [TASK 4: Create Traffic-Light Budget Display](#task-4-create-traffic-light-budget-display)
+  - [TASK 5: Create Quick Reference Card for Chairman](#task-5-create-quick-reference-card-for-chairman)
+- [Before Each SD](#before-each-sd)
+- [After Each Phase](#after-each-phase)
+- [Never Violate These Rules](#never-violate-these-rules)
+- [Models](#models)
+- [Budget Zones](#budget-zones)
+- [Commands](#commands)
+- [When to Escalate Haiku to Sonnet](#when-to-escalate-haiku-to-sonnet)
+  - [TASK 6: Update .gitignore](#task-6-update-gitignore)
+- [Implementation Order (Recommended)](#implementation-order-recommended)
+- [Testing Checklist](#testing-checklist)
+- [First SD with Haiku (Validation Run)](#first-sd-with-haiku-validation-run)
+  - [SD Selection Criteria](#sd-selection-criteria)
+  - [Expected Behavior](#expected-behavior)
+  - [Success Criteria](#success-criteria)
+- [Rollback Plan](#rollback-plan)
+- [Success Metrics (Week 1)](#success-metrics-week-1)
+- [Next Steps (Week 2+)](#next-steps-week-2)
 
 ## Metadata
 - **Category**: Guide

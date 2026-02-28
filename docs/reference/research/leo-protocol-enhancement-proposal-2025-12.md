@@ -1,5 +1,59 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # LEO Protocol Enhancement Proposal
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Part 1: Current State Analysis](#part-1-current-state-analysis)
+  - [1.1 What LEO Protocol Does Well](#11-what-leo-protocol-does-well)
+  - [1.2 Identified Gaps](#12-identified-gaps)
+  - [1.3 Current Playwright Configuration](#13-current-playwright-configuration)
+- [Part 2: Research Sources](#part-2-research-sources)
+  - [2.1 Source Summary Table](#21-source-summary-table)
+  - [2.2 Key Research Insights](#22-key-research-insights)
+- [Part 3: Proposed Patches](#part-3-proposed-patches)
+  - [3.1 Patch Overview](#31-patch-overview)
+  - [3.2 Patch Details](#32-patch-details)
+- [Part 4: Implementation Roadmap](#part-4-implementation-roadmap)
+  - [4.1 Recommended Sequence (Updated per Cross-AI Review v1.1)](#41-recommended-sequence-updated-per-cross-ai-review-v11)
+  - [4.2 Minimum Viable Playwright Changes (Storage-Conscious per Cross-AI Review)](#42-minimum-viable-playwright-changes-storage-conscious-per-cross-ai-review)
+- [Part 5: Risk Analysis](#part-5-risk-analysis)
+  - [5.1 Risks of Implementing](#51-risks-of-implementing)
+  - [5.2 Risks of NOT Implementing](#52-risks-of-not-implementing)
+- [Part 6: Questions for Reviewers](#part-6-questions-for-reviewers)
+  - [For Anti-Gravity / OpenAI Codex](#for-anti-gravity-openai-codex)
+- [Appendix A: Anti-Patterns to Avoid](#appendix-a-anti-patterns-to-avoid)
+- [Appendix B: Glossary](#appendix-b-glossary)
+- [Document History](#document-history)
+- [Appendix E: "LEO 4.4 Lite" Pareto Sprint (v1.4 - FINAL)](#appendix-e-leo-44-lite-pareto-sprint-v14---final)
+  - [Overview](#overview)
+  - [Final Sprint Plan (5 Days)](#final-sprint-plan-5-days)
+  - [Anti-Gravity's Systemic Improvements (v1.4 Additions)](#anti-gravitys-systemic-improvements-v14-additions)
+  - [Critical Safety Addition (Anti-Gravity)](#critical-safety-addition-anti-gravity)
+  - [Deliverables Checklist](#deliverables-checklist)
+  - [Files to Modify](#files-to-modify)
+  - [What's Deferred (and Why It's OK)](#whats-deferred-and-why-its-ok)
+  - [Success Metrics](#success-metrics)
+  - [Anti-Gravity's Risk Assessment](#anti-gravitys-risk-assessment)
+- [Appendix C: Cross-AI Review Synthesis (v1.1)](#appendix-c-cross-ai-review-synthesis-v11)
+  - [Reviewers](#reviewers)
+  - [Consensus Findings](#consensus-findings)
+  - [Accepted Changes (Incorporated in v1.1)](#accepted-changes-incorporated-in-v11)
+  - [Enforcement Architecture (Codex Request)](#enforcement-architecture-codex-request)
+  - [Resolved Questions (Finalized 2025-12-18)](#resolved-questions-finalized-2025-12-18)
+- [Appendix D: Reviewer Comments (Verbatim Excerpts)](#appendix-d-reviewer-comments-verbatim-excerpts)
+  - [Codex Key Quotes](#codex-key-quotes)
+  - [Anti-Gravity Key Quotes](#anti-gravity-key-quotes)
 
 ## Metadata
 - **Category**: Protocol

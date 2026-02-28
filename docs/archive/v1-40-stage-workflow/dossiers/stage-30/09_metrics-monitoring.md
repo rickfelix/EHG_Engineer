@@ -1,4 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 30: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+- [Metric 1: Deployment Success Rate](#metric-1-deployment-success-rate)
+  - [Data Collection](#data-collection)
+  - [Supabase Query](#supabase-query)
+  - [Alert Thresholds](#alert-thresholds)
+- [Metric 2: Downtime](#metric-2-downtime)
+  - [Data Collection](#data-collection)
+  - [Supabase Query](#supabase-query)
+  - [Alert Thresholds](#alert-thresholds)
+- [Metric 3: Rollback Time](#metric-3-rollback-time)
+  - [Data Collection](#data-collection)
+  - [Supabase Query](#supabase-query)
+  - [Alert Thresholds](#alert-thresholds)
+- [Deployment Dashboard (Proposed)](#deployment-dashboard-proposed)
+  - [Panel 1: Deployment Success Rate (30-day rolling)](#panel-1-deployment-success-rate-30-day-rolling)
+  - [Panel 2: Downtime Incidents (30-day rolling)](#panel-2-downtime-incidents-30-day-rolling)
+  - [Panel 3: Rollback Performance (30-day rolling)](#panel-3-rollback-performance-30-day-rolling)
+  - [Panel 4: Real-Time Deployment Status](#panel-4-real-time-deployment-status)
+- [Secondary Metrics (Operational)](#secondary-metrics-operational)
+  - [Metric 4: Error Rate During Deployment](#metric-4-error-rate-during-deployment)
+  - [Metric 5: Response Time (p95)](#metric-5-response-time-p95)
+  - [Metric 6: Database Connection Pool Utilization](#metric-6-database-connection-pool-utilization)
+- [Alerting Configuration](#alerting-configuration)
+  - [Alert 1: Deployment Failure](#alert-1-deployment-failure)
+  - [Alert 2: Downtime Detected](#alert-2-downtime-detected)
+  - [Alert 3: Rollback Time SLA Breach](#alert-3-rollback-time-sla-breach)
+- [Monitoring Stack (Proposed)](#monitoring-stack-proposed)
+- [Metrics Integration with SD-METRICS-FRAMEWORK-001](#metrics-integration-with-sd-metrics-framework-001)
+- [Supabase Function: Calculate Deployment Success Rate](#supabase-function-calculate-deployment-success-rate)
+- [Sources Table](#sources-table)
 
 ## Key Performance Indicators (KPIs)
 

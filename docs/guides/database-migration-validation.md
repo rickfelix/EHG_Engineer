@@ -1,5 +1,52 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Database Migration Validation Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [The SD-AGENT-PLATFORM-001 Pattern](#the-sd-agent-platform-001-pattern)
+  - [What Happened](#what-happened)
+  - [Why It Was Bad](#why-it-was-bad)
+  - [How This Script Prevents It](#how-this-script-prevents-it)
+- [Validation Script: `validate-migration-files.js`](#validation-script-validate-migration-filesjs)
+  - [Phase 1: Static File Validation (Always Runs)](#phase-1-static-file-validation-always-runs)
+  - [Phase 2: Database Verification (Optional)](#phase-2-database-verification-optional)
+- [Usage Examples](#usage-examples)
+  - [Basic Validation (File-only)](#basic-validation-file-only)
+  - [Full Validation (File + Database)](#full-validation-file-database)
+  - [Comprehensive Check (File + Database + Seed Data)](#comprehensive-check-file-database-seed-data)
+  - [Check Different Database](#check-different-database)
+- [Verdicts Explained](#verdicts-explained)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [PLAN Agent Pre-EXEC Checklist](#plan-agent-pre-exec-checklist)
+  - [EXEC Agent Pre-Handoff Checklist](#exec-agent-pre-handoff-checklist)
+  - [Database Architect Sub-Agent Trigger](#database-architect-sub-agent-trigger)
+- [Example Output](#example-output)
+  - [Phase 1: File Validation](#phase-1-file-validation)
+  - [Phase 2: Database Verification](#phase-2-database-verification)
+  - [Final Verdict](#final-verdict)
+- [Troubleshooting](#troubleshooting)
+  - ["Missing EHG Supabase credentials"](#missing-ehg-supabase-credentials)
+  - ["relation does not exist"](#relation-does-not-exist)
+  - ["schema cache error"](#schema-cache-error)
+  - ["SEED_DATA_MISSING but seed data should exist"](#seed_data_missing-but-seed-data-should-exist)
+- [Best Practices](#best-practices)
+  - [1. Always Add SD Reference in Comments](#1-always-add-sd-reference-in-comments)
+  - [2. Separate Schema from Seed Data](#2-separate-schema-from-seed-data)
+  - [3. Use Idempotent Operations](#3-use-idempotent-operations)
+  - [4. Validate Before and After](#4-validate-before-and-after)
+  - [5. Document Expected Row Counts](#5-document-expected-row-counts)
+- [CLAUDE.md Integration](#claudemd-integration)
 
 ## Metadata
 - **Category**: Guide

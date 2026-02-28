@@ -1,5 +1,61 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # SD-ARTIFACT-INTEGRATION-001: Decision Log
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Decision 1: Boundary Enforcement Model](#decision-1-boundary-enforcement-model)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 2: Stage Policy Location](#decision-2-stage-policy-location)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 3: Gate Enforcement Model](#decision-3-gate-enforcement-model)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 4: SuperDesign vs Nano Banana Ownership](#decision-4-superdesign-vs-nano-banana-ownership)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 5: Artifact Storage Strategy](#decision-5-artifact-storage-strategy)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 6: Stage Viewer Expansion Scope](#decision-6-stage-viewer-expansion-scope)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 7: Quality Threshold Value](#decision-7-quality-threshold-value)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Decision 8: Artifact Panel Position in UI](#decision-8-artifact-panel-position-in-ui)
+  - [Decision](#decision)
+  - [Alternatives Considered](#alternatives-considered)
+  - [Rationale](#rationale)
+  - [Tradeoffs Accepted](#tradeoffs-accepted)
+- [Summary: Decision Matrix](#summary-decision-matrix)
+- [Open Questions for Chairman Approval](#open-questions-for-chairman-approval)
+- [Revision History](#revision-history)
 
 ## Metadata
 - **Category**: Architecture

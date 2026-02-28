@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 31: MVP Launch — Dependency Map
 
 **Purpose**: Visualize Stage 31's position in the 40-stage workflow, dependencies, and data flow.

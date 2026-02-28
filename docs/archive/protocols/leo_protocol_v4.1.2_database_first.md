@@ -1,4 +1,50 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v4.1.2 - Database-First Enforcement Update
+
+
+## Table of Contents
+
+- [🟢 CURRENT ACTIVE VERSION](#-current-active-version)
+- [CRITICAL: Database-First Policy](#critical-database-first-policy)
+  - [Absolute Rules (NO EXCEPTIONS)](#absolute-rules-no-exceptions)
+- [Mandatory Database Scripts](#mandatory-database-scripts)
+  - [LEAD Agent Database Operations](#lead-agent-database-operations)
+  - [PLAN Agent Database Operations](#plan-agent-database-operations)
+  - [EXEC Agent Database Operations](#exec-agent-database-operations)
+- [Sub-Agent Integration (Enhanced for v4.1.2)](#sub-agent-integration-enhanced-for-v412)
+  - [GitHub Deployment Sub-Agent (NEW)](#github-deployment-sub-agent-new)
+  - [Existing Sub-Agents](#existing-sub-agents)
+- [Enhanced Verification Checkpoints](#enhanced-verification-checkpoints)
+  - [Checkpoint 1: LEAD → PLAN Handoff](#checkpoint-1-lead-plan-handoff)
+  - [Checkpoint 2: PLAN → EXEC Handoff](#checkpoint-2-plan-exec-handoff)
+  - [Checkpoint 3: EXEC → PLAN Handback](#checkpoint-3-exec-plan-handback)
+  - [Checkpoint 4: PLAN → LEAD Approval](#checkpoint-4-plan-lead-approval)
+- [Database Schema References](#database-schema-references)
+  - [Required Tables](#required-tables)
+- [Enforcement Mechanisms](#enforcement-mechanisms)
+  - [Automatic File Detection](#automatic-file-detection)
+  - [Mandatory Audit Trail](#mandatory-audit-trail)
+- [Agent Workflow with Database-First](#agent-workflow-with-database-first)
+  - [LEAD Agent Workflow](#lead-agent-workflow)
+  - [PLAN Agent Workflow](#plan-agent-workflow)
+  - [EXEC Agent Workflow](#exec-agent-workflow)
+- [Violations and Consequences](#violations-and-consequences)
+  - [Level 1 Violations (Warning)](#level-1-violations-warning)
+  - [Level 2 Violations (Work Suspension)](#level-2-violations-work-suspension)
+  - [Level 3 Violations (Agent Termination)](#level-3-violations-agent-termination)
+- [Migration from File-Based Workflow](#migration-from-file-based-workflow)
+- [Quick Reference Card](#quick-reference-card)
+  - [✅ ALLOWED](#-allowed)
+  - [❌ FORBIDDEN](#-forbidden)
+  - [📜 REQUIRED SCRIPTS](#-required-scripts)
+- [Summary](#summary)
 
 **Version**: 4.1.2  
 **Status**: 🟢 CURRENT ACTIVE VERSION  

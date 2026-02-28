@@ -1,4 +1,26 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 5 "Profitability" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. ROI Threshold Recommendation](#2-roi-threshold-recommendation)
+  - [3. Unit Economics Decision](#3-unit-economics-decision)
+  - [4. Financial Model Generation](#4-financial-model-generation)
+  - [5. Kill Behavior Recommendation](#5-kill-behavior-recommendation)
+  - [6. Stage 4 -> Stage 5 Pipeline](#6-stage-4---stage-5-pipeline)
+  - [7. CLI Superiorities (preserve these)](#7-cli-superiorities-preserve-these)
+  - [8. Recommended Stage 5 Schema](#8-recommended-stage-5-schema)
+  - [9. Minimum Viable Change](#9-minimum-viable-change)
+  - [10. Cross-Stage Impact](#10-cross-stage-impact)
 
 > Independent response to the Stage 5 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

@@ -1,3 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Recursion Role in Unified Venture Creation System](#recursion-role-in-unified-venture-creation-system)
+- [Outbound Recursion Triggers](#outbound-recursion-triggers)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+  - [PRIMARY TRIGGER: RESOURCE-001 from Stage 8 (Problem Decomposition)](#primary-trigger-resource-001-from-stage-8-problem-decomposition)
+  - [SECONDARY TRIGGER: TIMELINE-001 from Stage 8 (Problem Decomposition)](#secondary-trigger-timeline-001-from-stage-8-problem-decomposition)
+  - [TERTIARY TRIGGER: TECH-001 from Stage 10 (Technical Review)](#tertiary-trigger-tech-001-from-stage-10-technical-review)
+- [RESOURCE-001 Recursion Logic (from Stage 8)](#resource-001-recursion-logic-from-stage-8)
+  - [Full Recursion Logic (Proposed - Not Yet Implemented)](#full-recursion-logic-proposed---not-yet-implemented)
+  - [Why Stage 7?](#why-stage-7)
+  - [Trigger Data Payload](#trigger-data-payload)
+- [TIMELINE-001 Recursion Logic (from Stage 8)](#timeline-001-recursion-logic-from-stage-8)
+  - [Scenario: Task Breakdown Exceeds Timeline Constraints](#scenario-task-breakdown-exceeds-timeline-constraints)
+  - [Recursion Thresholds](#recursion-thresholds)
+- [TECH-001 Recursion Logic (from Stage 10)](#tech-001-recursion-logic-from-stage-10)
+  - [Scenario: Timeline Infeasible Due to Technical Complexity](#scenario-timeline-infeasible-due-to-technical-complexity)
+  - [Recursion Thresholds](#recursion-thresholds)
+- [Loop Prevention](#loop-prevention)
+- [Chairman Controls](#chairman-controls)
+  - [HIGH Severity (RESOURCE-001, TECH-001)](#high-severity-resource-001-tech-001)
+  - [MEDIUM Severity (TIMELINE-001)](#medium-severity-timeline-001)
+- [Performance Requirements](#performance-requirements)
+- [UI/UX Implications](#uiux-implications)
+  - [Pre-emptive Warning System (Proposed)](#pre-emptive-warning-system-proposed)
+  - [Recursion Explanation Modal (Proposed)](#recursion-explanation-modal-proposed)
+  - [Plan Comparison View (Proposed)](#plan-comparison-view-proposed)
+- [Integration Points](#integration-points)
+  - [1. recursionEngine.ts](#1-recursionenginets)
+  - [2. recursion_events Table](#2-recursion_events-table)
+  - [3. validationFramework.ts](#3-validationframeworkts)
+- [Recursion Flow Diagram](#recursion-flow-diagram)
+- [Testing Strategy](#testing-strategy)
+- [Known Gaps](#known-gaps)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:48.323Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-07\07_recursion-blueprint.md

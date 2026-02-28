@@ -1,4 +1,52 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Blind Spots
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [OpenAI Research Response](#openai-research-response)
+- [Section 1: Multi-Venture Portfolio Management](#section-1-multi-venture-portfolio-management)
+  - [Q1.1 — What a "Venture Portfolio Operating System" (EVA) looks like (architecture)](#q11-what-a-venture-portfolio-operating-system-eva-looks-like-architecture)
+  - [Q1.2 — How successful holding companies manage portfolios (and lessons for solo+AI)](#q12-how-successful-holding-companies-manage-portfolios-and-lessons-for-soloai)
+  - [Q1.3 — "Management Cliff" definition and warning signs](#q13-management-cliff-definition-and-warning-signs)
+  - [Q1.4 — Venture Lifecycle State Machine (states, triggers, decision maker)](#q14-venture-lifecycle-state-machine-states-triggers-decision-maker)
+  - [Q1.5 — When to hire humans vs rely on AI (roles)](#q15-when-to-hire-humans-vs-rely-on-ai-roles)
+- [Section 2: Pattern Deprecation](#section-2-pattern-deprecation)
+  - [Q2.1 — Detecting outdated patterns (signals)](#q21-detecting-outdated-patterns-signals)
+  - [Q2.2 — Pattern Lifecycle: Draft -> Active -> Deprecated -> Archived](#q22-pattern-lifecycle-draft---active---deprecated---archived)
+  - [Q2.3 — Handling ventures using deprecated patterns](#q23-handling-ventures-using-deprecated-patterns)
+  - [Q2.4 — Pattern Maintenance Budget ratio](#q24-pattern-maintenance-budget-ratio)
+- [Section 3: Failure Learning](#section-3-failure-learning)
+  - [Q3.1 — Venture Post-Mortem template](#q31-venture-post-mortem-template)
+  - [Q3.2 — Feedback loop into the pattern library](#q32-feedback-loop-into-the-pattern-library)
+  - [Q3.3 — How successful companies capture lessons](#q33-how-successful-companies-capture-lessons)
+  - [Q3.4 — "Failure Pattern Library" concept](#q34-failure-pattern-library-concept)
+- [Section 4: Team/Skill Requirements](#section-4-teamskill-requirements)
+  - [Q4.1 — Skills Inventory system design](#q41-skills-inventory-system-design)
+  - [Q4.2 — Learn vs hire/contract vs partner vs avoid (decision framework)](#q42-learn-vs-hirecontract-vs-partner-vs-avoid-decision-framework)
+  - [Q4.3 — Assess "skill distance"](#q43-assess-skill-distance)
+  - [Q4.4 — Minimum viable skill set for solo operator with AI](#q44-minimum-viable-skill-set-for-solo-operator-with-ai)
+- [Section 5: Legal/Compliance Patterns](#section-5-legalcompliance-patterns)
+  - [Q5.1 — Legal/compliance patterns to include in the pattern library](#q51-legalcompliance-patterns-to-include-in-the-pattern-library)
+  - [Q5.2 — Trigger points table (expand)](#q52-trigger-points-table-expand)
+  - [Q5.3 — Maintaining templates across 10-32 ventures (central vs per venture)](#q53-maintaining-templates-across-10-32-ventures-central-vs-per-venture)
+  - [Q5.4 — Legal structure for holding company with many ventures (trade-offs)](#q54-legal-structure-for-holding-company-with-many-ventures-trade-offs)
+- [Section 6: Pricing Patterns](#section-6-pricing-patterns)
+  - [Q6.1 — Pricing patterns library (when to use, pros/cons, complexity)](#q61-pricing-patterns-library-when-to-use-proscons-complexity)
+  - [Q6.2 — Pricing Decision Framework (inputs -> recommended structure)](#q62-pricing-decision-framework-inputs---recommended-structure)
+  - [Q6.3 — Minimum viable pricing experiment (A/B)](#q63-minimum-viable-pricing-experiment-ab)
+  - [Q6.4 — Pricing changes as you scale (raise prices + grandfathering)](#q64-pricing-changes-as-you-scale-raise-prices-grandfathering)
+  - [Q6.5 — Most compatible pricing patterns with "vending machine" model](#q65-most-compatible-pricing-patterns-with-vending-machine-model)
+- [Recommendations: which blind spots to address first (and why)](#recommendations-which-blind-spots-to-address-first-and-why)
+- [Prioritization Matrix (Urgency / Impact / Effort)](#prioritization-matrix-urgency-impact-effort)
 
 ## Metadata
 - **Category**: Guide

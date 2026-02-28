@@ -1,5 +1,34 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # User Story Auto-Validation Monitoring Checklist
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Root Cause Review](#root-cause-review)
+- [Monitoring Schedule](#monitoring-schedule)
+  - [SD #1: _________________](#sd-1-_________________)
+  - [SD #2: _________________](#sd-2-_________________)
+  - [SD #3: _________________](#sd-3-_________________)
+- [Success Criteria](#success-criteria)
+- [Verification Commands](#verification-commands)
+- [Edge Cases to Monitor](#edge-cases-to-monitor)
+  - [Case 1: SD with no user stories](#case-1-sd-with-no-user-stories)
+  - [Case 2: User stories already validated](#case-2-user-stories-already-validated)
+  - [Case 3: Deliverables incomplete](#case-3-deliverables-incomplete)
+  - [Case 4: Database error during validation](#case-4-database-error-during-validation)
+- [Remediation Plan (If Prevention Fails)](#remediation-plan-if-prevention-fails)
+- [Completion Status](#completion-status)
+- [Next Actions](#next-actions)
 
 ## Metadata
 - **Category**: Guide

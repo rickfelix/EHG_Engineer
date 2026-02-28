@@ -1,5 +1,61 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Validation Agent Proactive Gates Quick Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Core Principle](#core-principle)
+- [4 Mandatory Validation Gates](#4-mandatory-validation-gates)
+  - [GATE 1: LEAD Pre-Approval (BLOCKING)](#gate-1-lead-pre-approval-blocking)
+  - [GATE 2: PLAN PRD Creation (BLOCKING)](#gate-2-plan-prd-creation-blocking)
+  - [GATE 2.5: Infrastructure Consumer Check (WARNING)](#gate-25-infrastructure-consumer-check-warning)
+  - [GATE 3: EXEC Pre-Implementation (WARNING)](#gate-3-exec-pre-implementation-warning)
+  - [GATE 4: PLAN Verification (AUDIT)](#gate-4-plan-verification-audit)
+- [How to Invoke Validation Agent](#how-to-invoke-validation-agent)
+  - [With SD Context (Most Common)](#with-sd-context-most-common)
+  - [Advisory Mode (No SD Context)](#advisory-mode-no-sd-context)
+- [Pre-Gate-Work Checklist](#pre-gate-work-checklist)
+  - [Before GATE 1 (LEAD Pre-Approval)](#before-gate-1-lead-pre-approval)
+  - [Before GATE 2 (PLAN PRD Creation)](#before-gate-2-plan-prd-creation)
+  - [Before GATE 3 (EXEC Pre-Implementation)](#before-gate-3-exec-pre-implementation)
+  - [Before GATE 4 (PLAN Verification)](#before-gate-4-plan-verification)
+- [Integration with LEO Protocol Phases](#integration-with-leo-protocol-phases)
+  - [LEAD Pre-Approval](#lead-pre-approval)
+  - [PLAN PRD Creation](#plan-prd-creation)
+  - [PLAN to EXEC Handoff (includes Infrastructure Consumer Check)](#plan-to-exec-handoff-includes-infrastructure-consumer-check)
+  - [EXEC Implementation](#exec-implementation)
+  - [PLAN Verification](#plan-verification)
+- [Success Patterns (Proven Examples)](#success-patterns-proven-examples)
+  - [Pattern 1: Early Duplicate Detection](#pattern-1-early-duplicate-detection)
+  - [Pattern 2: Infrastructure Reuse](#pattern-2-infrastructure-reuse)
+  - [Pattern 3: Backlog Enforcement](#pattern-3-backlog-enforcement)
+- [Failure Patterns (When Gates Missed)](#failure-patterns-when-gates-missed)
+  - [Failure 1: No Backlog Validation](#failure-1-no-backlog-validation)
+  - [Failure 2: Late Infrastructure Discovery](#failure-2-late-infrastructure-discovery)
+  - [Failure 3: Missing User Story Validation](#failure-3-missing-user-story-validation)
+  - [Failure 4: UI Integration Verification Gap](#failure-4-ui-integration-verification-gap)
+- [Quick Decision Matrix](#quick-decision-matrix)
+- [Enforcement Mechanisms](#enforcement-mechanisms)
+  - [Database Constraints (Automatic)](#database-constraints-automatic)
+  - [Auto-Trigger System (Orchestration)](#auto-trigger-system-orchestration)
+  - [Script-Level Blocking (Handoff System)](#script-level-blocking-handoff-system)
+- [Performance Metrics](#performance-metrics)
+- [Related Documentation](#related-documentation)
+- [Cheat Sheet](#cheat-sheet)
+  - [One-Line Decision](#one-line-decision)
+  - [Four Gates, Four Questions](#four-gates-four-questions)
+  - [Three Rules](#three-rules)
+  - [Remember](#remember)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

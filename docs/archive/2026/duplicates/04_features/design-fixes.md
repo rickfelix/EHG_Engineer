@@ -1,3 +1,67 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Fixes](#critical-fixes)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_ALT_TEXT](#accessibility-missing_alt_text)
+  - [Accessibility: MISSING_ALT_TEXT](#accessibility-missing_alt_text)
+  - [Accessibility: MISSING_ALT_TEXT](#accessibility-missing_alt_text)
+  - [Accessibility: MISSING_ALT_TEXT](#accessibility-missing_alt_text)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_ALT_TEXT](#accessibility-missing_alt_text)
+
 <!-- ARCHIVED: 2026-01-26T16:26:32.670Z
      Reason: Duplicate of canonical file
      Original location: docs\04_features\design-fixes.md

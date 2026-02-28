@@ -1,4 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 8 Gaps & Backlog
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Gap #1: Missing Metric Thresholds](#gap-1-missing-metric-thresholds)
+- [Gap #2: Undefined Data Schemas](#gap-2-undefined-data-schemas)
+  - [Input Schemas (3 missing):](#input-schemas-3-missing)
+  - [Output Schemas (3 missing):](#output-schemas-3-missing)
+- [Gap #3: Missing Rollback Procedures](#gap-3-missing-rollback-procedures)
+- [Gap #4: No Customer Validation Checkpoint](#gap-4-no-customer-validation-checkpoint)
+- [Gap #5: Missing CrewAI Agent Mapping](#gap-5-missing-crewai-agent-mapping)
+- [Gap #6: No Automated WBS Generation Logic](#gap-6-no-automated-wbs-generation-logic)
+- [Gap #7: No Technical Feasibility Pre-Check](#gap-7-no-technical-feasibility-pre-check)
+- [Gap #8: Missing WBS Versioning System](#gap-8-missing-wbs-versioning-system)
+- [Gap #9: No Task Granularity Guidelines](#gap-9-no-task-granularity-guidelines)
+- [Gap #10: Missing Dependency Visualization Tools](#gap-10-missing-dependency-visualization-tools)
+- [Gap Summary Table](#gap-summary-table)
+- [Prioritization Roadmap](#prioritization-roadmap)
+  - [Phase 1: Critical Foundations (P0 - 168 hours)](#phase-1-critical-foundations-p0---168-hours)
+  - [Phase 2: Automation & Recursion (P1 - 232 hours)](#phase-2-automation-recursion-p1---232-hours)
+  - [Phase 3: Quality & UX Enhancements (P2 - 40 hours)](#phase-3-quality-ux-enhancements-p2---40-hours)
+- [SD Cross-Reference Summary](#sd-cross-reference-summary)
+- [Proposed Artifacts](#proposed-artifacts)
+  - [Artifact 1: Stage 8 Metrics Configuration](#artifact-1-stage-8-metrics-configuration)
+  - [Artifact 2: Stage 8 Data Schema Definitions](#artifact-2-stage-8-data-schema-definitions)
+  - [Artifact 3: CrewAI Agent Definitions](#artifact-3-crewai-agent-definitions)
+  - [Artifact 4: WBS Versioning System](#artifact-4-wbs-versioning-system)
+  - [Artifact 5: Technical Feasibility Pre-Check Module](#artifact-5-technical-feasibility-pre-check-module)
+  - [Artifact 6: Dependency Visualization Dashboard](#artifact-6-dependency-visualization-dashboard)
+  - [Artifact 7: Rollback Procedures SOP](#artifact-7-rollback-procedures-sop)
+  - [Artifact 8: Task Granularity Guidelines](#artifact-8-task-granularity-guidelines)
+  - [Artifact 9: Customer Validation Checkpoint](#artifact-9-customer-validation-checkpoint)
+- [Metrics for Gap Resolution Success](#metrics-for-gap-resolution-success)
+- [Sources Table](#sources-table)
 
 ## Overview
 

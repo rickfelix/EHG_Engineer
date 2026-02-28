@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Input/Output Schemas](#inputoutput-schemas)
+  - [Input Schema 1: Business Plan](#input-schema-1-business-plan)
+  - [Input Schema 2: Technical Requirements](#input-schema-2-technical-requirements)
+  - [Input Schema 3: Complexity Assessment](#input-schema-3-complexity-assessment)
+  - [Output Schema 1: Decomposed Tasks](#output-schema-1-decomposed-tasks)
+  - [Output Schema 2: Work Breakdown Structure (WBS)](#output-schema-2-work-breakdown-structure-wbs)
+  - [Output Schema 3: Dependencies Map](#output-schema-3-dependencies-map)
+- [Tunable Parameters](#tunable-parameters)
+  - [Category 1: WBS Depth Constraints](#category-1-wbs-depth-constraints)
+  - [Category 2: Task Clarity Thresholds](#category-2-task-clarity-thresholds)
+  - [Category 3: Dependency Resolution Rules](#category-3-dependency-resolution-rules)
+  - [Category 4: Task Effort Estimation](#category-4-task-effort-estimation)
+  - [Category 5: Recursion Control](#category-5-recursion-control)
+  - [Category 6: Automation Tuning](#category-6-automation-tuning)
+  - [Category 7: Performance Limits](#category-7-performance-limits)
+  - [Category 8: Validation Rules](#category-8-validation-rules)
+- [Configuration Examples](#configuration-examples)
+  - [Example 1: Low Complexity Venture](#example-1-low-complexity-venture)
+  - [Example 2: High Complexity Venture](#example-2-high-complexity-venture)
+  - [Example 3: AI-Assisted Automation Mode](#example-3-ai-assisted-automation-mode)
+- [Parameter Dependencies](#parameter-dependencies)
+- [Configuration Storage](#configuration-storage)
+  - [Option 1: Environment Variables (Static)](#option-1-environment-variables-static)
+  - [Option 2: Database Table (Dynamic)](#option-2-database-table-dynamic)
+  - [Option 3: YAML Config File (Hybrid)](#option-3-yaml-config-file-hybrid)
+- [Gap Analysis for Configurability](#gap-analysis-for-configurability)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.382Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\08_configurability-matrix.md

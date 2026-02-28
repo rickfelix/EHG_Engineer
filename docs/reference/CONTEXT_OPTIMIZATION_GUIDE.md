@@ -1,5 +1,59 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Context Optimization Guide - Multi-File CLAUDE.md System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [File Structure](#file-structure)
+  - [Generated Files](#generated-files)
+  - [Context Budget Impact](#context-budget-impact)
+- [How It Works](#how-it-works)
+  - [1. Router System (CLAUDE.md)](#1-router-system-claudemd)
+  - [2. Core Context (CLAUDE_CORE.md)](#2-core-context-claude_coremd)
+  - [3. Phase Files (Self-Contained)](#3-phase-files-self-contained)
+  - [4. Reference Documentation (On-Demand)](#4-reference-documentation-on-demand)
+- [Database Architecture](#database-architecture)
+  - [Tables Enhanced](#tables-enhanced)
+  - [Section Classification](#section-classification)
+- [Generator Script](#generator-script)
+  - [Version 3 (Multi-File)](#version-3-multi-file)
+  - [Backward Compatibility](#backward-compatibility)
+- [AI Loading Strategy](#ai-loading-strategy)
+  - [Session Start](#session-start)
+  - [Phase Detection](#phase-detection)
+  - [Example Flows](#example-flows)
+- [Maintenance](#maintenance)
+  - [Adding New Sections](#adding-new-sections)
+  - [Modifying Existing Sections](#modifying-existing-sections)
+  - [Reclassifying Sections](#reclassifying-sections)
+- [Troubleshooting](#troubleshooting)
+  - [Files Not Generating](#files-not-generating)
+  - [Router Content Outdated](#router-content-outdated)
+  - [Wrong Context Tier](#wrong-context-tier)
+  - [Reference Docs Missing](#reference-docs-missing)
+- [Performance Metrics](#performance-metrics)
+  - [Achieved Results](#achieved-results)
+  - [Expected Impact](#expected-impact)
+- [Future Enhancements](#future-enhancements)
+  - [Potential Improvements](#potential-improvements)
+  - [Monitoring](#monitoring)
+- [Context Health](#context-health)
+- [Scripts Reference](#scripts-reference)
+  - [Classification & Setup](#classification-setup)
+  - [Generation](#generation)
+  - [Verification](#verification)
+- [Success Criteria ✅](#success-criteria-)
+- [Contact & Support](#contact-support)
 
 ## Metadata
 - **Category**: Guide

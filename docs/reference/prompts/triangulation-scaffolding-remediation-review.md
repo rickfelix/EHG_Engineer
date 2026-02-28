@@ -1,5 +1,54 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Scaffolding Remediation Strategic Directives
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Unified Prompt for OpenAI and AntiGravity (Gemini)](#unified-prompt-for-openai-and-antigravity-gemini)
+- [What is Triangulation?](#what-is-triangulation)
+- [Context](#context)
+- [Audit Findings Summary](#audit-findings-summary)
+  - [What Was Found](#what-was-found)
+  - [The Core Problem](#the-core-problem)
+- [Proposed Strategic Directives](#proposed-strategic-directives)
+  - [SD 1: SD-SCAFFOLDING-CLEANUP-001 (P0 - Immediate)](#sd-1-sd-scaffolding-cleanup-001-p0---immediate)
+  - [SD 2: SD-SUBAGENT-COMPLETION-001 (P0 - Critical Foundation)](#sd-2-sd-subagent-completion-001-p0---critical-foundation)
+  - [SD 3: SD-CONTENT-FORGE-IMPL-001 (P1)](#sd-3-sd-content-forge-impl-001-p1)
+  - [SD 4: SD-MARKETING-AUTOMATION-001 (P1 - After Content Forge)](#sd-4-sd-marketing-automation-001-p1---after-content-forge)
+  - [SD 5: SD-NAMING-ENGINE-001 (P1)](#sd-5-sd-naming-engine-001-p1)
+  - [SD 6: SD-FINANCIAL-ENGINE-001 (P1 - HIGH VENTURE POTENTIAL)](#sd-6-sd-financial-engine-001-p1---high-venture-potential)
+  - [SD 7: SD-LEGAL-GENERATOR-001 (Research First)](#sd-7-sd-legal-generator-001-research-first)
+  - [SD 8: SD-GENESIS-STAGES-001 (P2 - Deferred)](#sd-8-sd-genesis-stages-001-p2---deferred)
+- [Dependency Graph](#dependency-graph)
+- [Execution Tracks (Proposed)](#execution-tracks-proposed)
+- [Your Review Tasks](#your-review-tasks)
+  - [Task 1: Structure Validation](#task-1-structure-validation)
+  - [Task 2: Risk Assessment](#task-2-risk-assessment)
+  - [Task 3: Alternative Approaches](#task-3-alternative-approaches)
+  - [Task 4: Sequencing Feedback](#task-4-sequencing-feedback)
+  - [Task 5: Venture Potential Reality Check](#task-5-venture-potential-reality-check)
+- [Output Format](#output-format)
+- [Overall Assessment](#overall-assessment)
+- [SD-by-SD Feedback](#sd-by-sd-feedback)
+  - [SD-SCAFFOLDING-CLEANUP-001](#sd-scaffolding-cleanup-001)
+- [Structural Recommendations](#structural-recommendations)
+- [Missing Considerations](#missing-considerations)
+- [Alternative Approaches](#alternative-approaches)
+- [Sequencing Recommendations](#sequencing-recommendations)
+- [Venture Potential Assessment](#venture-potential-assessment)
+- [Top 3 Concerns](#top-3-concerns)
+- [Top 3 Strengths](#top-3-strengths)
+- [Ground Rules](#ground-rules)
+- [Key Context](#key-context)
 
 ## Metadata
 - **Category**: Guide

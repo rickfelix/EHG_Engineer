@@ -1,4 +1,57 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Triangulation Synthesis: Bridging Agent Systems
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Consensus Summary](#consensus-summary)
+  - [Key Insight from AntiGravity (Critical)](#key-insight-from-antigravity-critical)
+- [Triangulated Findings](#triangulated-findings)
+  - [1. Approach Validation](#1-approach-validation)
+  - [2. Risks Identified (Triangulated)](#2-risks-identified-triangulated)
+  - [3. Git Strategy (Strong Consensus)](#3-git-strategy-strong-consensus)
+  - [4. Long-Term Convergence (Strong Consensus)](#4-long-term-convergence-strong-consensus)
+  - [5. Framework Precedents (AntiGravity)](#5-framework-precedents-antigravity)
+  - [6. Claude Code Agent Teams Perspective (Opus 4.6 — Internal Analysis)](#6-claude-code-agent-teams-perspective-opus-46-internal-analysis)
+- [Phase 0: Full Agent Reconciliation Audit](#phase-0-full-agent-reconciliation-audit)
+  - [Audit Scope](#audit-scope)
+  - [Audit Dimensions (Per Agent)](#audit-dimensions-per-agent)
+  - [Expected Findings](#expected-findings)
+  - [Audit Output Format](#audit-output-format)
+  - [Audit Method](#audit-method)
+  - [Audit Decisions Required](#audit-decisions-required)
+- [Phase 4: Team-Capable Agents](#phase-4-team-capable-agents)
+  - [What Changes from Today](#what-changes-from-today)
+  - [Example: RCA Agent Forms an Investigation Team](#example-rca-agent-forms-an-investigation-team)
+  - [Example: Database Agent Forms a Migration Team](#example-database-agent-forms-a-migration-team)
+  - [What Needs to Be Built](#what-needs-to-be-built)
+  - [Team Formation Decision Logic](#team-formation-decision-logic)
+  - [Prerequisites](#prerequisites)
+  - [Maturity Model](#maturity-model)
+- [Synthesis: Recommended Architecture](#synthesis-recommended-architecture)
+- [Top 6 Areas for Improvement](#top-6-areas-for-improvement)
+  - [1. Knowledge Gap: Agents Operating Without Institutional Memory (THE CORE ISSUE)](#1-knowledge-gap-agents-operating-without-institutional-memory-the-core-issue)
+  - [2. Dual Source of Truth: Agent Identity Split Across Files and Database](#2-dual-source-of-truth-agent-identity-split-across-files-and-database)
+  - [3. Unregistered Agents: RCA and Orchestrator-Child Missing from Config](#3-unregistered-agents-rca-and-orchestrator-child-missing-from-config)
+  - [4. False Confidence Trap: Agents May Stop Querying After Seeing Injected Patterns](#4-false-confidence-trap-agents-may-stop-querying-after-seeing-injected-patterns)
+  - [5. Teams Protocol Gap: No Guidance for Knowledge Distribution in Team Contexts](#5-teams-protocol-gap-no-guidance-for-knowledge-distribution-in-team-contexts)
+  - [6. AGENT-MANIFEST.md Is Stale and Incomplete](#6-agent-manifestmd-is-stale-and-incomplete)
+- [Action Items](#action-items)
+  - [Phase 0 (Audit — Do First)](#phase-0-audit-do-first)
+  - [Phase 1 (Bridge — After Audit)](#phase-1-bridge-after-audit)
+  - [Phase 1.5 (Teams — Alongside Phase 1)](#phase-15-teams-alongside-phase-1)
+  - [Phase 2-3 (Convergence)](#phase-2-3-convergence)
+  - [Phase 4 (Team-Capable Agents)](#phase-4-team-capable-agents)
+  - [Documentation (All Phases)](#documentation-all-phases)
+- [GPT 5.3 Meta-Feedback (Process Improvement)](#gpt-53-meta-feedback-process-improvement)
 
 ## Metadata
 - **Date**: 2026-02-11

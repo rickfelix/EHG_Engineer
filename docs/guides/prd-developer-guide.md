@@ -1,5 +1,44 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # PRD Script Developer Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🚀 Quick Start](#-quick-start)
+  - [Creating a New PRD Script](#creating-a-new-prd-script)
+- [📝 npm Scripts](#-npm-scripts)
+  - [Audit & Validation](#audit-validation)
+  - [Existing PRD Tools](#existing-prd-tools)
+- [🛡️ Pre-Commit Hook](#-pre-commit-hook)
+  - [What It Checks](#what-it-checks)
+  - [If Validation Fails](#if-validation-fails)
+  - [Bypass (Emergency Only)](#bypass-emergency-only)
+- [📋 Valid Schema Fields Reference](#-valid-schema-fields-reference)
+  - [✅ Always Valid Fields](#-always-valid-fields)
+  - [❌ Invalid Fields (Use Instead)](#-invalid-fields-use-instead)
+- [🔍 Using the Schema Validator](#-using-the-schema-validator)
+  - [In Your Scripts](#in-your-scripts)
+  - [Sanitize Data Automatically](#sanitize-data-automatically)
+- [🎯 Required Pattern: sd_uuid Population](#-required-pattern-sd_uuid-population)
+- [🏗️ Storing Custom Fields](#-storing-custom-fields)
+- [🧪 Testing Your Script](#-testing-your-script)
+  - [Before Committing](#before-committing)
+  - [After Creating PRD](#after-creating-prd)
+- [🔧 Common Issues & Fixes](#-common-issues-fixes)
+  - [Issue: "Missing sd_uuid field"](#issue-missing-sd_uuid-field)
+  - [Issue: "user_stories field doesn't exist"](#issue-user_stories-field-doesnt-exist)
+  - [Issue: "strategic_directive_id not recognized"](#issue-strategic_directive_id-not-recognized)
+- [📚 Additional Resources](#-additional-resources)
+- [🎓 Best Practices Checklist](#-best-practices-checklist)
 
 ## Metadata
 - **Category**: Guide

@@ -1,3 +1,36 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Recursion Thresholds (Tunable)](#recursion-thresholds-tunable)
+  - [TECH-001 Trigger Thresholds](#tech-001-trigger-thresholds)
+- [Technical Metrics Calculation (Configurable Weights)](#technical-metrics-calculation-configurable-weights)
+  - [Technical Debt Score Components](#technical-debt-score-components)
+  - [Security Score Components](#security-score-components)
+  - [Scalability Rating Thresholds](#scalability-rating-thresholds)
+  - [Solution Feasibility Score Factors](#solution-feasibility-score-factors)
+- [Loop Prevention Parameters](#loop-prevention-parameters)
+- [Chairman Override Rules](#chairman-override-rules)
+- [Performance Tuning Parameters](#performance-tuning-parameters)
+- [Substage Execution Mode](#substage-execution-mode)
+- [Automation Level Configuration](#automation-level-configuration)
+- [Venture-Type Specific Configurations](#venture-type-specific-configurations)
+  - [Strategic Ventures](#strategic-ventures)
+  - [Experimental Ventures](#experimental-ventures)
+  - [Enterprise Ventures](#enterprise-ventures)
+  - [Fast-Track Ventures](#fast-track-ventures)
+- [Configuration Storage](#configuration-storage)
+- [Configuration Inheritance](#configuration-inheritance)
+- [Change Management](#change-management)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.217Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-10\08_configurability-matrix.md

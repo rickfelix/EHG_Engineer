@@ -1,4 +1,61 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Post-Completion Integration Gap Detector
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Key Features](#key-features)
+  - [1. Automatic Gap Detection (Post-Completion Hook)](#1-automatic-gap-detection-post-completion-hook)
+  - [2. Retroactive Analysis (CLI Tool)](#2-retroactive-analysis-cli-tool)
+  - [3. Multi-Strategy Git Analysis](#3-multi-strategy-git-analysis)
+  - [4. Keyword-Based Requirement Matching](#4-keyword-based-requirement-matching)
+  - [5. Root Cause Classification](#5-root-cause-classification)
+  - [6. Automatic Corrective SD Creation](#6-automatic-corrective-sd-creation)
+- [Architecture](#architecture)
+  - [Pipeline Flow](#pipeline-flow)
+  - [Module Responsibilities](#module-responsibilities)
+  - [Database Schema](#database-schema)
+- [Usage Examples](#usage-examples)
+  - [1. Single SD Analysis](#1-single-sd-analysis)
+  - [2. Batch Analysis](#2-batch-analysis)
+  - [3. JSON Output (for automation)](#3-json-output-for-automation)
+  - [4. Automatic Post-Completion](#4-automatic-post-completion)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [CLI Options](#cli-options)
+  - [Analysis Options (Programmatic)](#analysis-options-programmatic)
+- [Coverage Score Calculation](#coverage-score-calculation)
+- [Integration Points](#integration-points)
+  - [1. Orchestrator Completion Hook](#1-orchestrator-completion-hook)
+  - [2. Database Tables](#2-database-tables)
+  - [3. Git Analysis](#3-git-analysis)
+- [Limitations & Known Issues](#limitations-known-issues)
+  - [1. Keyword Matching Only](#1-keyword-matching-only)
+  - [2. No Semantic Analysis](#2-no-semantic-analysis)
+  - [3. Requires PRD](#3-requires-prd)
+  - [4. Merged Branch Detection](#4-merged-branch-detection)
+- [Success Metrics](#success-metrics)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: 0 files analyzed](#issue-0-files-analyzed)
+  - [Issue: Null coverage score](#issue-null-coverage-score)
+  - [Issue: High false positive rate](#issue-high-false-positive-rate)
+- [Future Enhancements](#future-enhancements)
+  - [1. Semantic Code Analysis (Phase 2)](#1-semantic-code-analysis-phase-2)
+  - [2. Test Coverage Integration (Phase 3)](#2-test-coverage-integration-phase-3)
+  - [3. Machine Learning Scoring (Phase 4)](#3-machine-learning-scoring-phase-4)
+  - [4. Real-Time Gap Alerts (Phase 5)](#4-real-time-gap-alerts-phase-5)
+- [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
+  - [v1.0.0 (2026-02-11)](#v100-2026-02-11)
 
 ## Metadata
 - **Category**: Feature

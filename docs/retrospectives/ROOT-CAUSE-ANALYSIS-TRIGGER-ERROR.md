@@ -1,5 +1,56 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Root Cause Analysis: Migration Trigger Already Exists Error
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Phase 1: Understanding the Error](#phase-1-understanding-the-error)
+  - [Error Code Analysis](#error-code-analysis)
+  - [Error Context](#error-context)
+- [Phase 2: Root Cause Identification](#phase-2-root-cause-identification)
+  - [Investigation Findings](#investigation-findings)
+  - [Root Causes Identified](#root-causes-identified)
+  - [Likely Scenario Timeline](#likely-scenario-timeline)
+- [Phase 3: Solution Design](#phase-3-solution-design)
+  - [Fixed Migration Pattern](#fixed-migration-pattern)
+  - [Migration Components Fixed](#migration-components-fixed)
+- [Phase 4: Deliverables](#phase-4-deliverables)
+  - [1. Fixed Migration Script](#1-fixed-migration-script)
+  - [2. Pre-Migration Verification Script](#2-pre-migration-verification-script)
+  - [3. Post-Migration Verification](#3-post-migration-verification)
+- [Verification Queries](#verification-queries)
+  - [Before Running Migration](#before-running-migration)
+  - [After Running Migration](#after-running-migration)
+- [Impact Assessment](#impact-assessment)
+  - [Affected Objects](#affected-objects)
+  - [Risk Analysis](#risk-analysis)
+- [Lessons Learned](#lessons-learned)
+  - [What Went Wrong](#what-went-wrong)
+  - [Best Practices for Future Migrations](#best-practices-for-future-migrations)
+- [Execution Plan](#execution-plan)
+  - [Step 1: Run Pre-Migration Verification](#step-1-run-pre-migration-verification)
+  - [Step 2: Execute Idempotent Migration](#step-2-execute-idempotent-migration)
+  - [Step 3: Verify Success](#step-3-verify-success)
+  - [Step 4: Test Idempotency (Optional)](#step-4-test-idempotency-optional)
+- [Technical Details](#technical-details)
+  - [PostgreSQL Version Compatibility](#postgresql-version-compatibility)
+  - [Transaction Isolation](#transaction-isolation)
+  - [RLS Policy Behavior](#rls-policy-behavior)
+  - [Trigger Behavior](#trigger-behavior)
+- [Monitoring and Validation](#monitoring-and-validation)
+  - [Success Criteria](#success-criteria)
+  - [Rollback Plan](#rollback-plan)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Report

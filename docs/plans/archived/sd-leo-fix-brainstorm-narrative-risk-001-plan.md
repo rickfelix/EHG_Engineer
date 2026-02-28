@@ -1,3 +1,50 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+- [Discovery Summary](#discovery-summary)
+  - [User's Core Insight](#users-core-insight)
+  - [Narrative Risk (NR) KPI Definition](#narrative-risk-nr-kpi-definition)
+  - [NR Governance Bands](#nr-governance-bands)
+  - [NR Volatility (NR-V) — Future KPI](#nr-volatility-nr-v-future-kpi)
+  - [Data Source Strategy](#data-source-strategy)
+- [Analysis](#analysis)
+  - [Arguments For](#arguments-for)
+  - [Arguments Against](#arguments-against)
+- [Team Perspectives](#team-perspectives)
+  - [Challenger](#challenger)
+  - [Visionary](#visionary)
+  - [Pragmatist](#pragmatist)
+  - [Synthesis](#synthesis)
+- [Design Responses to Key Critiques](#design-responses-to-key-critiques)
+  - [1. Advisory First, Gating Later](#1-advisory-first-gating-later)
+  - [2. Vulnerability Over Exposure](#2-vulnerability-over-exposure)
+  - [3. Bias Disclosure](#3-bias-disclosure)
+  - [4. Archetype-Specific Calibration](#4-archetype-specific-calibration)
+- [Minimum Viable Implementation](#minimum-viable-implementation)
+  - [What Ships (Tier 2, ~80-120 LOC)](#what-ships-tier-2-80-120-loc)
+  - [What Does NOT Ship Initially](#what-does-not-ship-initially)
+  - [Calibration Plan](#calibration-plan)
+- [Full Vision (Future SDs)](#full-vision-future-sds)
+  - [Phase 2: Research Department Integration](#phase-2-research-department-integration)
+  - [Phase 3: NR Volatility (NR-V)](#phase-3-nr-volatility-nr-v)
+  - [Phase 4: Portfolio Dashboard](#phase-4-portfolio-dashboard)
+  - [Phase 5: NR as Gating Threshold](#phase-5-nr-as-gating-threshold)
+  - [Phase 6: External Data Enrichment](#phase-6-external-data-enrichment)
+  - [Phase 7: NR as External Product](#phase-7-nr-as-external-product)
+- [Agent Architecture (Full Vision, Phase 6+)](#agent-architecture-full-vision-phase-6)
+- [Open Questions](#open-questions)
+- [Suggested Next Steps](#suggested-next-steps)
+
 <!-- Archived from: brainstorm/2026-02-21-narrative-risk-model-venture-ideation.md -->
 <!-- SD Key: SD-LEO-FIX-BRAINSTORM-NARRATIVE-RISK-001 -->
 <!-- Archived at: 2026-02-22T01:09:46.827Z -->

@@ -1,4 +1,78 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Unified State Manager v2.0 - Implementation Complete
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Strategic Directive](#strategic-directive)
+- [Executive Summary](#executive-summary)
+  - [What Was Implemented](#what-was-implemented)
+  - [Key Enhancements](#key-enhancements)
+- [Problem Statement](#problem-statement)
+  - [Gap 1: Missing Decisions Tracking](#gap-1-missing-decisions-tracking)
+  - [Gap 2: Missing Constraints](#gap-2-missing-constraints)
+  - [Gap 3: Paraphrasing Errors](#gap-3-paraphrasing-errors)
+  - [Gap 4: Lost Open Questions](#gap-4-lost-open-questions)
+  - [Gap 5: No Token Budget](#gap-5-no-token-budget)
+- [Implementation Details](#implementation-details)
+  - [Files Modified](#files-modified)
+  - [Code Architecture](#code-architecture)
+  - [New Public Methods](#new-public-methods)
+  - [Schema Evolution](#schema-evolution)
+  - [Migration Strategy](#migration-strategy)
+- [Testing](#testing)
+  - [Test Coverage](#test-coverage)
+  - [Test Execution](#test-execution)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Recording a Decision](#example-1-recording-a-decision)
+  - [Example 2: Tracking Constraints](#example-2-tracking-constraints)
+  - [Example 3: Managing Open Questions](#example-3-managing-open-questions)
+  - [Example 4: Preserving Verbatim Evidence](#example-4-preserving-verbatim-evidence)
+- [Research Integration](#research-integration)
+  - [ReSum (2025) - Reasoning State Checkpoints](#resum-2025---reasoning-state-checkpoints)
+  - [RECOMP (ICLR 2024) - Utility-Optimized Compression](#recomp-iclr-2024---utility-optimized-compression)
+  - [MemGPT (2023) - OS-Like Memory Hierarchy](#memgpt-2023---os-like-memory-hierarchy)
+- [Benefits Achieved](#benefits-achieved)
+  - [1. Decision Continuity](#1-decision-continuity)
+  - [2. Constraint Awareness](#2-constraint-awareness)
+  - [3. Question Tracking](#3-question-tracking)
+  - [4. Evidence Preservation](#4-evidence-preservation)
+  - [5. Token Efficiency](#5-token-efficiency)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Handoff Integration](#handoff-integration)
+- [Context Preservation (v2.0)](#context-preservation-v20)
+  - [Phase-Specific Usage](#phase-specific-usage)
+- [Known Limitations](#known-limitations)
+  - [1. Token Estimation](#1-token-estimation)
+  - [2. Manual Invocation](#2-manual-invocation)
+  - [3. No Semantic Search](#3-no-semantic-search)
+  - [4. Single-File State](#4-single-file-state)
+- [Future Enhancements](#future-enhancements)
+  - [Short-term (1-2 months)](#short-term-1-2-months)
+  - [Medium-term (3-6 months)](#medium-term-3-6-months)
+  - [Long-term (6-12 months)](#long-term-6-12-months)
+- [Success Metrics](#success-metrics)
+  - [Implementation Success ✅](#implementation-success-)
+  - [Adoption Metrics (Future Measurement)](#adoption-metrics-future-measurement)
+- [Documentation Updated](#documentation-updated)
+  - [Primary Documentation](#primary-documentation)
+  - [Code Documentation](#code-documentation)
+  - [Protocol Documentation](#protocol-documentation)
+- [Lessons Learned](#lessons-learned)
+  - [What Worked Well](#what-worked-well)
+  - [Challenges Overcome](#challenges-overcome)
+  - [Best Practices Established](#best-practices-established)
+- [Conclusion](#conclusion)
+- [References](#references)
 
 ## Metadata
 - **Category**: Report

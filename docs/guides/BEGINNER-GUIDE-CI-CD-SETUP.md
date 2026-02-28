@@ -1,5 +1,71 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Beginner's Guide: Fix CI/CD Secrets (Step-by-Step)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [What Are We Fixing?](#what-are-we-fixing)
+- [Part 1: Add Database Access Key (5 minutes)](#part-1-add-database-access-key-5-minutes)
+  - [What is this?](#what-is-this)
+  - [Step 1: Open Supabase Dashboard](#step-1-open-supabase-dashboard)
+  - [Step 2: Find the Service Role Key](#step-2-find-the-service-role-key)
+  - [Step 3: Open Your Terminal](#step-3-open-your-terminal)
+  - [Step 4: Navigate to Your Project Folder](#step-4-navigate-to-your-project-folder)
+  - [Step 5: Add the Secret to GitHub](#step-5-add-the-secret-to-github)
+  - [Step 6: Verify It Worked](#step-6-verify-it-worked)
+- [Part 2: Add GitHub Personal Access Token (10 minutes)](#part-2-add-github-personal-access-token-10-minutes)
+  - [What is this?](#what-is-this)
+  - [Step 1: Create the Token on GitHub](#step-1-create-the-token-on-github)
+  - [Step 2: Configure the Token](#step-2-configure-the-token)
+  - [Step 3: Generate and Copy the Token](#step-3-generate-and-copy-the-token)
+  - [Step 4: Add the Token to GitHub Secrets](#step-4-add-the-token-to-github-secrets)
+  - [Step 5: Verify the Token](#step-5-verify-the-token)
+- [Part 3: Re-enable the UAT Testing Workflow (2 minutes)](#part-3-re-enable-the-uat-testing-workflow-2-minutes)
+  - [What is this?](#what-is-this)
+  - [Step 1: Open the Workflow File](#step-1-open-the-workflow-file)
+  - [Step 2: Make Two Changes](#step-2-make-two-changes)
+  - [Step 3: Save the File](#step-3-save-the-file)
+  - [Step 4: Commit and Push the Changes](#step-4-commit-and-push-the-changes)
+- [Part 4: Verify Everything Works (3 minutes)](#part-4-verify-everything-works-3-minutes)
+  - [Step 1: Check All Secrets](#step-1-check-all-secrets)
+  - [Step 2: Trigger a Test Workflow](#step-2-trigger-a-test-workflow)
+  - [Step 3: Watch the Workflow Run](#step-3-watch-the-workflow-run)
+  - [Step 4: Check Recent Workflow Runs](#step-4-check-recent-workflow-runs)
+- [Part 5: Troubleshooting](#part-5-troubleshooting)
+  - [Problem: "gh: command not found"](#problem-gh-command-not-found)
+  - [Problem: Workflow fails with "secret not found"](#problem-workflow-fails-with-secret-not-found)
+  - [Problem: "Permission denied" when running commands](#problem-permission-denied-when-running-commands)
+  - [Problem: Workflow fails with "authentication failed"](#problem-workflow-fails-with-authentication-failed)
+  - [Problem: Can't find the Supabase key](#problem-cant-find-the-supabase-key)
+  - [Problem: YAML file won't save or shows errors](#problem-yaml-file-wont-save-or-shows-errors)
+- [Part 6: What to Expect Now](#part-6-what-to-expect-now)
+  - [Workflows That Should Now Work](#workflows-that-should-now-work)
+  - [How to Check Health](#how-to-check-health)
+  - [When to Repeat This](#when-to-repeat-this)
+- [Quick Reference Card](#quick-reference-card)
+  - [Add a Secret](#add-a-secret)
+  - [List All Secrets](#list-all-secrets)
+  - [Check Recent Workflows](#check-recent-workflows)
+  - [Run a Workflow Manually](#run-a-workflow-manually)
+  - [Watch a Workflow](#watch-a-workflow)
+  - [View Workflow Logs](#view-workflow-logs)
+- [Summary Checklist](#summary-checklist)
+- [Next Steps (Optional)](#next-steps-optional)
+  - [Set Up Reminders](#set-up-reminders)
+  - [Monitor CI/CD Health](#monitor-cicd-health)
+  - [Learn More](#learn-more)
+- [Getting Help](#getting-help)
+  - [If Stuck](#if-stuck)
+  - [Useful Commands for Debugging](#useful-commands-for-debugging)
 
 ## Metadata
 - **Category**: Guide

@@ -1,5 +1,43 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Protocol Command Center - Dashboard Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Features](#features)
+  - [Left Sidebar](#left-sidebar)
+  - [Main Terminal](#main-terminal)
+  - [Quick Actions](#quick-actions)
+  - [Live Activity Feed](#live-activity-feed)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Starting the Dashboard](#starting-the-dashboard)
+  - [Stopping the Dashboard](#stopping-the-dashboard)
+  - [Other Commands](#other-commands)
+- [Configuration](#configuration)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Working with Claude Code](#working-with-claude-code)
+- [Typical Workflow](#typical-workflow)
+- [Troubleshooting](#troubleshooting)
+  - [Dashboard won't start](#dashboard-wont-start)
+  - [Terminal not working](#terminal-not-working)
+  - [Can't connect to WebSocket](#cant-connect-to-websocket)
+  - [Performance issues](#performance-issues)
+- [Architecture](#architecture)
+- [Security](#security)
+- [Performance](#performance)
+- [Future Enhancements](#future-enhancements)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Guide

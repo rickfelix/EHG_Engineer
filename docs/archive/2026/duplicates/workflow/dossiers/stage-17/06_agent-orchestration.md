@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Agent Requirements](#agent-requirements)
+- [Proposed CrewAI Architecture: GTMStrategistCrew](#proposed-crewai-architecture-gtmstrategistcrew)
+  - [Crew Configuration](#crew-configuration)
+  - [Agent Definitions](#agent-definitions)
+  - [Task Definitions](#task-definitions)
+  - [Crew Execution Flow](#crew-execution-flow)
+- [Integration with EVA Framework](#integration-with-eva-framework)
+- [CrewAI Registry Integration](#crewai-registry-integration)
+- [Performance Characteristics](#performance-characteristics)
+  - [Expected Execution Times](#expected-execution-times)
+  - [Scalability](#scalability)
+- [Error Handling and Resilience](#error-handling-and-resilience)
+  - [Agent-Level Error Handling](#agent-level-error-handling)
+  - [Crew-Level Error Handling](#crew-level-error-handling)
+- [Monitoring and Observability](#monitoring-and-observability)
+  - [Metrics to Track](#metrics-to-track)
+  - [Logging Requirements](#logging-requirements)
+  - [Dashboard Requirements](#dashboard-requirements)
+- [Deployment Considerations](#deployment-considerations)
+  - [Infrastructure Requirements](#infrastructure-requirements)
+  - [Dependencies](#dependencies)
+  - [Configuration Management](#configuration-management)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Tests (per agent)](#unit-tests-per-agent)
+  - [Integration Tests (crew level)](#integration-tests-crew-level)
+  - [End-to-End Tests (Stage 17)](#end-to-end-tests-stage-17)
+- [Future Enhancements](#future-enhancements)
+
 <!-- ARCHIVED: 2026-01-26T16:26:45.365Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-17\06_agent-orchestration.md

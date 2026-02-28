@@ -1,5 +1,30 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Database Query Best Practices
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Database Query Best Practices (Context Efficiency)](#database-query-best-practices-context-efficiency)
+  - [Core Principles](#core-principles)
+  - [Rule 1: Select Specific Columns Only](#rule-1-select-specific-columns-only)
+  - [Rule 2: Limit Results and Paginate](#rule-2-limit-results-and-paginate)
+  - [Rule 3: Use File Read Offset/Limit](#rule-3-use-file-read-offsetlimit)
+  - [Rule 4: Summarize Large Results](#rule-4-summarize-large-results)
+  - [Rule 5: Batch Related Reads](#rule-5-batch-related-reads)
+  - [Rule 6: Use Grep for Targeted Search](#rule-6-use-grep-for-targeted-search)
+  - [Rule 7: Reference Instead of Dump](#rule-7-reference-instead-of-dump)
+  - [Practical Examples](#practical-examples)
+  - [Integration with Agent Workflows](#integration-with-agent-workflows)
+  - [Expected Impact](#expected-impact)
 
 ## Metadata
 - **Category**: Reference

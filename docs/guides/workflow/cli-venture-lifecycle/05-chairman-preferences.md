@@ -1,3 +1,35 @@
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Architectural Position](#architectural-position)
+- [Scoped Resolution Model](#scoped-resolution-model)
+  - [Resolution Diagram](#resolution-diagram)
+  - [Scope Tag on Results](#scope-tag-on-results)
+- [Database Schema](#database-schema)
+  - [chairman_preferences Table (9 Columns)](#chairman_preferences-table-9-columns)
+  - [chairman_decisions Table (13 Columns)](#chairman_decisions-table-13-columns)
+- [CRUD Operations](#crud-operations)
+  - [setPreference()](#setpreference)
+  - [getPreference()](#getpreference)
+  - [getPreferences() (Batch)](#getpreferences-batch)
+  - [deletePreference()](#deletepreference)
+- [Built-in Validators](#built-in-validators)
+  - [Value Types](#value-types)
+- [Source Tracking](#source-tracking)
+- [Audit Trail: Decision-to-Preference Linkage](#audit-trail-decision-to-preference-linkage)
+  - [linkDecisionToPreferences()](#linkdecisiontopreferences)
+  - [Snapshot Structure](#snapshot-structure)
+- [Integration with Decision Filter Engine](#integration-with-decision-filter-engine)
+- [Constructor and Factory](#constructor-and-factory)
+- [Error Handling Patterns](#error-handling-patterns)
+- [Key Design Decisions](#key-design-decisions)
+  - [Why Scoped Resolution Instead of Flat Key-Value?](#why-scoped-resolution-instead-of-flat-key-value)
+  - [Why JSONB for preference_value?](#why-jsonb-for-preference_value)
+  - [Why Snapshot in Decisions?](#why-snapshot-in-decisions)
+- [Testing Considerations](#testing-considerations)
+- [Related Components](#related-components)
+
 ---
 Category: Architecture
 Status: Approved

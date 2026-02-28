@@ -1,5 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage Review Lessons Learned - Living Log
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [How to Use This Log](#how-to-use-this-log)
+  - [After Completing a Stage Review:](#after-completing-a-stage-review)
+  - [When Starting a New Review:](#when-starting-a-new-review)
+- [Entry Template](#entry-template)
+- [Stage [XX] Review - [DATE]](#stage-xx-review---date)
+  - [Lessons Learned](#lessons-learned)
+  - [Best Practices Validated](#best-practices-validated)
+  - [Anti-Patterns Detected](#anti-patterns-detected)
+  - [Cross-Stage Patterns Discovered](#cross-stage-patterns-discovered)
+  - [Protocol Enhancements Triggered](#protocol-enhancements-triggered)
+  - [Metrics](#metrics)
+- [Placeholder - First Review Pending](#placeholder---first-review-pending)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Stage 4 Retroactive Entry (Hypothetical)](#example-1-stage-4-retroactive-entry-hypothetical)
+- [Stage 4 Review - 2025-11-06](#stage-4-review---2025-11-06)
+  - [Lessons Learned](#lessons-learned)
+  - [Best Practices Validated](#best-practices-validated)
+  - [Anti-Patterns Detected](#anti-patterns-detected)
+  - [Cross-Stage Patterns Discovered](#cross-stage-patterns-discovered)
+  - [Protocol Enhancements Triggered](#protocol-enhancements-triggered)
+  - [Metrics](#metrics)
+- [Trend Analysis (Updated Quarterly)](#trend-analysis-updated-quarterly)
+  - [Common Lessons (Top 3)](#common-lessons-top-3)
+  - [Recurring Anti-Patterns (Top 3)](#recurring-anti-patterns-top-3)
+  - [Most Reused Patterns (Top 5)](#most-reused-patterns-top-5)
+  - [Framework Evolution Triggers](#framework-evolution-triggers)
+- [Guidelines for Writing Effective Lessons](#guidelines-for-writing-effective-lessons)
+  - [Do's ✅](#dos-)
+  - [Don'ts ❌](#donts-)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

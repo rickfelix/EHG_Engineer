@@ -1,5 +1,29 @@
 # LEO Self-Improvement Data Contracts
 
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Proposal Lifecycle](#proposal-lifecycle)
+  - [State Transitions](#state-transitions)
+- [Tables](#tables)
+  - [leo_proposals](#leo_proposals)
+  - [leo_vetting_rubrics](#leo_vetting_rubrics)
+  - [leo_prioritization_config](#leo_prioritization_config)
+  - [leo_audit_config](#leo_audit_config)
+  - [leo_feature_flags](#leo_feature_flags)
+  - [leo_events](#leo_events)
+  - [leo_prompts](#leo_prompts)
+- [Database Functions](#database-functions)
+  - [leo_get_active_configs()](#leo_get_active_configs)
+  - [leo_get_active_prompt(p_name TEXT)](#leo_get_active_promptp_name-text)
+- [TypeScript Types](#typescript-types)
+  - [Available Types](#available-types)
+- [RLS Policies](#rls-policies)
+- [Migration](#migration)
+- [Verification](#verification)
+- [Related Documentation](#related-documentation)
+
 **SD**: SD-LEO-SELF-IMPROVE-001B (Phase 0.5: Data Contracts)
 
 This document describes the database schema and TypeScript interfaces for the LEO Protocol self-improvement system.

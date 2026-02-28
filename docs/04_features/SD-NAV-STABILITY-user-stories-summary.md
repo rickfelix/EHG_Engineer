@@ -1,5 +1,56 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # User Stories for SD-NAV-STABILITY
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Metrics](#metrics)
+  - [Priority Breakdown](#priority-breakdown)
+- [User Stories Overview](#user-stories-overview)
+  - [US-001: Fix 404 errors on Go-To-Market navigation routes](#us-001-fix-404-errors-on-go-to-market-navigation-routes)
+  - [US-002: Fix 404 errors on Admin navigation routes](#us-002-fix-404-errors-on-admin-navigation-routes)
+  - [US-003: Fix 404 errors on AI & Automation navigation routes](#us-003-fix-404-errors-on-ai-automation-navigation-routes)
+  - [US-004: Fix permission errors on valid Admin routes](#us-004-fix-permission-errors-on-valid-admin-routes)
+  - [US-005: Fix crashes and errors on Chairman Dashboard tabs](#us-005-fix-crashes-and-errors-on-chairman-dashboard-tabs)
+  - [US-006: Fix broken CTAs - Chairman Portfolio navigation](#us-006-fix-broken-ctas---chairman-portfolio-navigation)
+  - [US-007: Fix broken CTAs - New Ventures button](#us-007-fix-broken-ctas---new-ventures-button)
+  - [US-008: Fix Settings System tab crash](#us-008-fix-settings-system-tab-crash)
+  - [US-009: Fix Settings Mobile Companion error](#us-009-fix-settings-mobile-companion-error)
+  - [US-010: Fix Agent Management data fetching error](#us-010-fix-agent-management-data-fetching-error)
+  - [US-011: Fix Analytics Profitability missing table error](#us-011-fix-analytics-profitability-missing-table-error)
+  - [US-012: Fix Admin Integration Status loading error](#us-012-fix-admin-integration-status-loading-error)
+  - [US-013: Fix Admin Governance error](#us-013-fix-admin-governance-error)
+- [Implementation Context](#implementation-context)
+  - [Key Files by Story Category](#key-files-by-story-category)
+- [Patterns & Best Practices](#patterns-best-practices)
+  - [Error Handling Pattern](#error-handling-pattern)
+  - [Testing Pattern](#testing-pattern)
+  - [Given-When-Then Format](#given-when-then-format)
+- [E2E Test Coverage](#e2e-test-coverage)
+  - [Recommended E2E Test Structure](#recommended-e2e-test-structure)
+  - [Test Naming Convention](#test-naming-convention)
+- [Success Criteria](#success-criteria)
+  - [Definition of Done (All Stories)](#definition-of-done-all-stories)
+  - [Overall SD Success Metrics](#overall-sd-success-metrics)
+- [Integration with LEO Protocol v2.0.0](#integration-with-leo-protocol-v200)
+  - [STORIES Agent Improvements Applied](#stories-agent-improvements-applied)
+- [Execution Recommendations](#execution-recommendations)
+  - [Phase 1: 404 Errors (US-001, US-002, US-003)](#phase-1-404-errors-us-001-us-002-us-003)
+  - [Phase 2: Permission Errors (US-004)](#phase-2-permission-errors-us-004)
+  - [Phase 3: Crashes & CTAs (US-005, US-006, US-007, US-008, US-009, US-013)](#phase-3-crashes-ctas-us-005-us-006-us-007-us-008-us-009-us-013)
+  - [Phase 4: Data Fetching (US-010, US-011, US-012)](#phase-4-data-fetching-us-010-us-011-us-012)
+- [Database Records](#database-records)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Report

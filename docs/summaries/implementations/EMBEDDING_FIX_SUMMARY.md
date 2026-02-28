@@ -1,5 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Retrospective Trigger Fix Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+  - [Error 1: Missing Field Reference](#error-1-missing-field-reference)
+  - [Error 2: Overly Strict Validation](#error-2-overly-strict-validation)
+- [Root Cause Analysis](#root-cause-analysis)
+- [Solution Design](#solution-design)
+  - [Key Insight](#key-insight)
+  - [Fix Strategy](#fix-strategy)
+  - [Implementation](#implementation)
+- [Files Created](#files-created)
+- [How to Apply](#how-to-apply)
+  - [Recommended: Manual via Supabase SQL Editor](#recommended-manual-via-supabase-sql-editor)
+  - [Alternative: Command Line](#alternative-command-line)
+  - [Quick Temporary Fix (if urgent)](#quick-temporary-fix-if-urgent)
+- [Verification Steps](#verification-steps)
+- [Impact Assessment](#impact-assessment)
+  - [Before Fix](#before-fix)
+  - [After Fix](#after-fix)
+  - [Validation Coverage](#validation-coverage)
+- [Lessons Learned](#lessons-learned)
+- [Next Actions](#next-actions)
+- [Rollback Plan](#rollback-plan)
+- [References](#references)
 
 ## Metadata
 - **Category**: Report

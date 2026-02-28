@@ -1,5 +1,60 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EHG_Engineer Documentation Index
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [⚠️ DATABASE-FIRST DOCUMENTATION ARCHITECTURE](#-database-first-documentation-architecture)
+  - [Source of Truth](#source-of-truth)
+  - [Updating LEO Protocol Documentation](#updating-leo-protocol-documentation)
+  - [Key Database Tables](#key-database-tables)
+  - [Documentation Principles](#documentation-principles)
+  - [For AI Models Crawling This Repo](#for-ai-models-crawling-this-repo)
+- [Quick Start](#quick-start)
+- [LEO Protocol (Core)](#leo-protocol-core)
+  - [Protocol Files](#protocol-files)
+  - [Protocol Reference](#protocol-reference)
+- [API Documentation](#api-documentation)
+- [Database](#database)
+  - [Primary Documentation](#primary-documentation)
+  - [Schema Reference](#schema-reference)
+  - [Database Patterns](#database-patterns)
+- [Architecture](#architecture)
+- [Guides](#guides)
+  - [Development Guides](#development-guides)
+  - [Operations](#operations)
+- [Reference](#reference)
+  - [Core Reference](#core-reference)
+  - [Schema Reference](#schema-reference)
+- [Testing](#testing)
+- [Features](#features)
+- [Vision & Specs](#vision-specs)
+- [Workflows](#workflows)
+- [Planning](#planning)
+- [Research](#research)
+- [By Topic](#by-topic)
+  - [Getting Started](#getting-started)
+  - [LEO Protocol](#leo-protocol)
+  - [Database Work](#database-work)
+  - [API Development](#api-development)
+  - [Testing](#testing)
+- [Regenerating Documentation](#regenerating-documentation)
+  - [Schema Docs](#schema-docs)
+  - [CLAUDE.md](#claudemd)
+  - [All Background Docs](#all-background-docs)
+- [Finding Documentation](#finding-documentation)
+  - [By Keyword](#by-keyword)
+  - [By Category](#by-category)
+- [Documentation Stats](#documentation-stats)
 
 ## Metadata
 - **Category**: Guide

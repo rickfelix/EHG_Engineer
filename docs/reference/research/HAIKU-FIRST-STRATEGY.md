@@ -1,5 +1,61 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Haiku-First Model Allocation Strategy
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Haiku-First Philosophy](#1-haiku-first-philosophy)
+  - [The Principle](#the-principle)
+  - [Why This Works](#why-this-works)
+- [2. Sub-Agent Model Floor Matrix](#2-sub-agent-model-floor-matrix)
+  - [Assignments by Sub-Agent](#assignments-by-sub-agent)
+  - [Tier Summary](#tier-summary)
+- [3. Static Model Assignment (No Escalation Logic)](#3-static-model-assignment-no-escalation-logic)
+  - [The Assignment Rule](#the-assignment-rule)
+  - [Weekly Calibration (Not Runtime Escalation)](#weekly-calibration-not-runtime-escalation)
+- [4. Weekly Budget Allocation (Haiku-First)](#4-weekly-budget-allocation-haiku-first)
+  - [OLD STRATEGY (Sonnet-Heavy, Current State)](#old-strategy-sonnet-heavy-current-state)
+  - [NEW STRATEGY (Haiku-First)](#new-strategy-haiku-first)
+- [5. Safety Guarantees (Quality Floors)](#5-safety-guarantees-quality-floors)
+  - [Never Violate These Rules](#never-violate-these-rules)
+- [6. Phase-Specific Guidance (LEAD → PLAN → EXEC)](#6-phase-specific-guidance-lead-plan-exec)
+  - [LEAD Phase (Ideation & Planning)](#lead-phase-ideation-planning)
+  - [PLAN Phase (Design & Detailed Planning)](#plan-phase-design-detailed-planning)
+  - [EXEC Phase (Implementation & Verification)](#exec-phase-implementation-verification)
+- [7. Immediate Implementation Plan (Week 1)](#7-immediate-implementation-plan-week-1)
+  - [Today (P0 Critical)](#today-p0-critical)
+  - [Tomorrow (P1 High)](#tomorrow-p1-high)
+  - [This Week (P2 Medium)](#this-week-p2-medium)
+- [8. Success Metrics (Haiku-First)](#8-success-metrics-haiku-first)
+  - [Financial Efficiency](#financial-efficiency)
+  - [Quality Metrics](#quality-metrics)
+  - [Velocity Metrics](#velocity-metrics)
+- [9. Risk Mitigation](#9-risk-mitigation)
+  - [Risk 1: Haiku Output Quality Too Low](#risk-1-haiku-output-quality-too-low)
+  - [Risk 2: Escalation Logic Doesn't Work](#risk-2-escalation-logic-doesnt-work)
+  - [Risk 3: Sonnet/Opus Budget Exhausted](#risk-3-sonnetopus-budget-exhausted)
+  - [Risk 4: Chairman Overrides Haiku Default Too Often](#risk-4-chairman-overrides-haiku-default-too-often)
+- [10. Implementation Checklist](#10-implementation-checklist)
+  - [Week 1 (MVP - This Week)](#week-1-mvp---this-week)
+  - [Week 2 (Refinement)](#week-2-refinement)
+  - [Week 3+ (Sophistication)](#week-3-sophistication)
+- [11. FAQ & Clarifications](#11-faq-clarifications)
+  - [Q: Why Haiku-first instead of Sonnet-default?](#q-why-haiku-first-instead-of-sonnet-default)
+  - [Q: Won't Haiku produce worse outputs?](#q-wont-haiku-produce-worse-outputs)
+  - [Q: What if escalation logic is wrong?](#q-what-if-escalation-logic-is-wrong)
+  - [Q: Can we ever downgrade from Opus?](#q-can-we-ever-downgrade-from-opus)
+  - [Q: How often will we escalate?](#q-how-often-will-we-escalate)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

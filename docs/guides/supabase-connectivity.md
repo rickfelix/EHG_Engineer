@@ -1,5 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Supabase Connectivity Guide - Complete Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🚨 CRITICAL: Read This First](#-critical-read-this-first)
+  - [The IPv6 Problem (Why Direct Connection Fails)](#the-ipv6-problem-why-direct-connection-fails)
+- [✅ Working Connection Methods](#-working-connection-methods)
+  - [Method 1: psql via Supavisor Pooler (RECOMMENDED)](#method-1-psql-via-supavisor-pooler-recommended)
+  - [Method 2: JavaScript Client (Always Works)](#method-2-javascript-client-always-works)
+- [❌ What DOESN'T Work (and Why)](#-what-doesnt-work-and-why)
+  - [1. Direct Connection (IPv6 Issue)](#1-direct-connection-ipv6-issue)
+  - [2. Wrong Username Format](#2-wrong-username-format)
+  - [3. Unencoded Password](#3-unencoded-password)
+- [📁 Project Files & Scripts](#-project-files-scripts)
+  - [Environment Variables (`.env`)](#environment-variables-env)
+  - [Helper Scripts](#helper-scripts)
+- [🗂️ Database Schema Reference](#-database-schema-reference)
+  - [Tables That Exist](#tables-that-exist)
+  - [Tables That DON'T Exist (yet)](#tables-that-dont-exist-yet)
+- [🔧 Troubleshooting Guide](#-troubleshooting-guide)
+  - [Problem: "Network is unreachable"](#problem-network-is-unreachable)
+  - [Problem: "password authentication failed"](#problem-password-authentication-failed)
+  - [Problem: "Could not find table in schema cache"](#problem-could-not-find-table-in-schema-cache)
+- [🚀 Quick Start Commands](#-quick-start-commands)
+  - [Test Connection](#test-connection)
+  - [Common Queries](#common-queries)
+  - [Create/Drop Tables](#createdrop-tables)
+- [📊 Connection String Comparison](#-connection-string-comparison)
+- [🔐 Security Notes](#-security-notes)
+  - [Password Encoding Rules](#password-encoding-rules)
+  - [Best Practices](#best-practices)
+- [📝 Historical Context](#-historical-context)
+  - [Timeline](#timeline)
+  - [Why This Happened](#why-this-happened)
+- [✅ Validation Checklist](#-validation-checklist)
+- [🆘 If All Else Fails](#-if-all-else-fails)
 
 ## Metadata
 - **Category**: Guide

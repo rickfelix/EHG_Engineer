@@ -1,4 +1,34 @@
 # Test Evidence: SD-VERIFY-LADDER-001
+
+## Table of Contents
+
+- [Quick Summary](#quick-summary)
+- [Evidence Files](#evidence-files)
+- [Test Results at a Glance](#test-results-at-a-glance)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [Live Execution](#live-execution)
+- [PRD Test Scenario Coverage](#prd-test-scenario-coverage)
+- [Why No Playwright E2E Tests?](#why-no-playwright-e2e-tests)
+- [How to Review This Evidence](#how-to-review-this-evidence)
+  - [1. Read Test Coverage Summary](#1-read-test-coverage-summary)
+  - [2. Review Unit Test Results](#2-review-unit-test-results)
+  - [3. Check Live Execution Output](#3-check-live-execution-output)
+  - [4. Understand Infrastructure Testing](#4-understand-infrastructure-testing)
+  - [5. Run Tests Yourself](#5-run-tests-yourself)
+- [Test Files Reference](#test-files-reference)
+  - [Implementation Files](#implementation-files)
+  - [Test Files](#test-files)
+  - [Database](#database)
+- [Security Testing Results](#security-testing-results)
+  - [1. Command Injection Prevention](#1-command-injection-prevention)
+  - [2. Hardcoded Commands](#2-hardcoded-commands)
+  - [3. Timeout Enforcement](#3-timeout-enforcement)
+- [Weighted Scoring Validation](#weighted-scoring-validation)
+- [EXEC-TO-PLAN Handoff Status](#exec-to-plan-handoff-status)
+- [Next Steps](#next-steps)
+- [Contact](#contact)
+
 # Gate 0: Static Analysis Verification
 
 **Strategic Directive**: SD-VERIFY-LADDER-001

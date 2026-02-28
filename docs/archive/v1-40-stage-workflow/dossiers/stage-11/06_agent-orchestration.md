@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 11: Agent Orchestration & Governance
+
+
+## Table of Contents
+
+- [Agent Roles (Proposed CrewAI Implementation)](#agent-roles-proposed-crewai-implementation)
+  - [Primary Agent: BrandStrategist](#primary-agent-brandstrategist)
+  - [Supporting Agent: TrademarkAnalyst](#supporting-agent-trademarkanalyst)
+  - [Supporting Agent: BrandDesigner](#supporting-agent-branddesigner)
+  - [Supporting Agent: LinguisticAnalyzer (Optional, for assisted automation)](#supporting-agent-linguisticanalyzer-optional-for-assisted-automation)
+- [CrewAI Workflow (Proposed)](#crewai-workflow-proposed)
+  - [Phase 1: Entry Gate Validation](#phase-1-entry-gate-validation)
+  - [Phase 2: Substage 11.1 (Name Generation)](#phase-2-substage-111-name-generation)
+  - [Phase 3: Substage 11.2 (Trademark Search)](#phase-3-substage-112-trademark-search)
+  - [Phase 4: Substage 11.3 (Brand Foundation)](#phase-4-substage-113-brand-foundation)
+  - [Phase 5: Exit Gate Validation](#phase-5-exit-gate-validation)
+  - [Full Crew Assembly](#full-crew-assembly)
+- [Governance Mappings](#governance-mappings)
+  - [Chairman Approval Points](#chairman-approval-points)
+  - [Quality Gates](#quality-gates)
+  - [Metric Thresholds (Proposed)](#metric-thresholds-proposed)
+  - [Error Handling](#error-handling)
+  - [Rollback Triggers](#rollback-triggers)
+- [Integration with SD-CREWAI-ARCHITECTURE-001](#integration-with-sd-crewai-architecture-001)
 
 **Agent Framework**: Python CrewAI (future implementation)
 

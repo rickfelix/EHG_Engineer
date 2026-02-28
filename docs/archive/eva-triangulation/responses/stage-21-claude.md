@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 21 "Integration Testing" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. Stage 20/21 Overlap Resolution](#2-stage-2021-overlap-resolution)
+  - [3. AnalysisStep Design](#3-analysisstep-design)
+  - [4. Review Decision](#4-review-decision)
+  - [5. Integration Severity](#5-integration-severity)
+  - [6. Architecture Layer Reference](#6-architecture-layer-reference)
+  - [7. Environment Enum](#7-environment-enum)
+  - [8. UAT Component Decision](#8-uat-component-decision)
+  - [9. Stage Identity Recommendation](#9-stage-identity-recommendation)
+  - [10. CLI Superiorities (preserve these)](#10-cli-superiorities-preserve-these)
+  - [11. Recommended Stage 21 Schema](#11-recommended-stage-21-schema)
+  - [12. Minimum Viable Change (Priority-Ordered)](#12-minimum-viable-change-priority-ordered)
+  - [13. Cross-Stage Impact](#13-cross-stage-impact)
+  - [14. Dependency Conflicts (with Stages 1-20 decisions)](#14-dependency-conflicts-with-stages-1-20-decisions)
+  - [15. Contrarian Take](#15-contrarian-take)
 
 > Independent response to the Stage 21 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

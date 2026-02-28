@@ -1,4 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v3.1.6 - Proposed Improvements
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [1. Pre-Implementation Health Assessment (NEW)](#1-pre-implementation-health-assessment-new)
+  - [Stage 0: Environment Health Check](#stage-0-environment-health-check)
+  - [Required Health Checks:](#required-health-checks)
+  - [Health Check Report Template:](#health-check-report-template)
+- [2. Enhanced Definition of Done](#2-enhanced-definition-of-done)
+  - [Mandatory Completion Criteria](#mandatory-completion-criteria)
+  - [Code Complete Checklist:](#code-complete-checklist)
+  - [UI/UX Complete Checklist (when applicable):](#uiux-complete-checklist-when-applicable)
+  - [Documentation Complete Checklist:](#documentation-complete-checklist)
+- [3. Blocker Escalation Framework](#3-blocker-escalation-framework)
+  - [Types of Blockers and Responses](#types-of-blockers-and-responses)
+  - [Blocker Classification:](#blocker-classification)
+  - [Escalation Template:](#escalation-template)
+- [4. Iterative Feedback Loops](#4-iterative-feedback-loops)
+  - [Feedback Checkpoints](#feedback-checkpoints)
+  - [Mandatory Feedback Points:](#mandatory-feedback-points)
+  - [Feedback Response Protocol:](#feedback-response-protocol)
+- [5. Quality Gates Implementation](#5-quality-gates-implementation)
+  - [Automated Quality Gates](#automated-quality-gates)
+- [6. Technical Debt Registry](#6-technical-debt-registry)
+  - [Technical Debt Tracking](#technical-debt-tracking)
+  - [Technical Debt Log Format:](#technical-debt-log-format)
+  - [Registry Location:](#registry-location)
+  - [Review Cadence:](#review-cadence)
+- [7. Visual Verification Protocol](#7-visual-verification-protocol)
+  - [For All UI Changes](#for-all-ui-changes)
+- [8. Continuous Improvement Loop](#8-continuous-improvement-loop)
+  - [Protocol Evolution Process](#protocol-evolution-process)
+  - [After Each Strategic Directive:](#after-each-strategic-directive)
+  - [Success Metrics:](#success-metrics)
+- [Implementation Priority](#implementation-priority)
+- [Conclusion](#conclusion)
 
 **Based on**: SD-002 Implementation Retrospective
 **Date**: 2025-08-30

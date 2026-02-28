@@ -1,3 +1,58 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Pre-Execution Checklist](#pre-execution-checklist)
+  - [Entry Gate 1: Documentation Complete](#entry-gate-1-documentation-complete)
+  - [Entry Gate 2: Code Ready](#entry-gate-2-code-ready)
+- [Substage 18.1: Repository Setup](#substage-181-repository-setup)
+  - [Step 1.1: Create GitHub Organization (if needed)](#step-11-create-github-organization-if-needed)
+  - [Step 1.2: Create Repository](#step-12-create-repository)
+  - [Step 1.3: Define Repository Structure](#step-13-define-repository-structure)
+  - [Step 1.4: Set Permissions](#step-14-set-permissions)
+  - [Substage 18.1 Exit Criteria](#substage-181-exit-criteria)
+- [Substage 18.2: Content Migration](#substage-182-content-migration)
+  - [Step 2.1: Initialize Git (if not already done)](#step-21-initialize-git-if-not-already-done)
+  - [Step 2.2: Create .gitignore](#step-22-create-gitignore)
+  - [Step 2.3: Push Code](#step-23-push-code)
+  - [Step 2.4: Upload Documentation](#step-24-upload-documentation)
+  - [Step 2.5: Store Assets](#step-25-store-assets)
+  - [Substage 18.2 Exit Criteria](#substage-182-exit-criteria)
+- [Substage 18.3: Automation Configuration](#substage-183-automation-configuration)
+  - [Step 3.1: Configure Webhooks](#step-31-configure-webhooks)
+  - [Step 3.2: Set Up CI/CD (GitHub Actions)](#step-32-set-up-cicd-github-actions)
+  - [Step 3.3: Enable Auto-Sync (Documentation Site)](#step-33-enable-auto-sync-documentation-site)
+  - [Substage 18.3 Exit Criteria](#substage-183-exit-criteria)
+- [Exit Gate Validation](#exit-gate-validation)
+  - [Exit Gate 1: Repos Synchronized](#exit-gate-1-repos-synchronized)
+  - [Exit Gate 2: CI/CD Connected](#exit-gate-2-cicd-connected)
+  - [Exit Gate 3: Access Configured](#exit-gate-3-access-configured)
+- [Post-Execution Tasks](#post-execution-tasks)
+  - [1. Update Stage 18 Metrics](#1-update-stage-18-metrics)
+  - [2. Create Stage 18 Completion Handoff](#2-create-stage-18-completion-handoff)
+- [Completion Summary](#completion-summary)
+- [Outputs Delivered](#outputs-delivered)
+- [Metrics Achieved](#metrics-achieved)
+- [Exit Gates Passed](#exit-gates-passed)
+- [Next Stage Readiness](#next-stage-readiness)
+- [Issues/Risks](#issuesrisks)
+  - [3. Notify Downstream Stage (Stage 19)](#3-notify-downstream-stage-stage-19)
+- [Error Recovery Procedures](#error-recovery-procedures)
+  - [Scenario 1: Git Push Rejected (Divergent Branches)](#scenario-1-git-push-rejected-divergent-branches)
+  - [Scenario 2: GitHub API Rate Limit (429 Error)](#scenario-2-github-api-rate-limit-429-error)
+  - [Scenario 3: Large File Rejected (>100MB)](#scenario-3-large-file-rejected-100mb)
+  - [Scenario 4: CI/CD Pipeline Fails](#scenario-4-cicd-pipeline-fails)
+- [SOP Version History](#sop-version-history)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.148Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-18\05_professional-sop.md

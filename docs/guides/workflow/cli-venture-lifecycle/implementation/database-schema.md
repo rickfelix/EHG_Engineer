@@ -1,3 +1,33 @@
+
+## Table of Contents
+
+- [Table Overview](#table-overview)
+- [Entity Relationship Diagram](#entity-relationship-diagram)
+- [Core Tables](#core-tables)
+  - [1. ventures (68 columns)](#1-ventures-68-columns)
+  - [2. venture_artifacts (19 columns)](#2-venture_artifacts-19-columns)
+  - [3. venture_stage_transitions (10 columns)](#3-venture_stage_transitions-10-columns)
+  - [4. lifecycle_stage_config (14 columns)](#4-lifecycle_stage_config-14-columns)
+  - [5. eva_ventures (15 columns)](#5-eva_ventures-15-columns)
+  - [6. eva_events (8 columns)](#6-eva_events-8-columns)
+  - [7. eva_decisions (17 columns)](#7-eva_decisions-17-columns)
+  - [8. eva_audit_log (8 columns)](#8-eva_audit_log-8-columns)
+  - [9. chairman_preferences (9 columns)](#9-chairman_preferences-9-columns)
+  - [10. chairman_decisions (13 columns)](#10-chairman_decisions-13-columns)
+- [Related Tables](#related-tables)
+  - [assumption_sets](#assumption_sets)
+  - [brand_genomes](#brand_genomes)
+  - [competitive_intelligence](#competitive_intelligence)
+  - [venture_research_sessions](#venture_research_sessions)
+- [Indexes](#indexes)
+  - [Performance Indexes](#performance-indexes)
+  - [Index Design Rationale](#index-design-rationale)
+- [RLS (Row-Level Security) Policies](#rls-row-level-security-policies)
+  - [Policy Summary](#policy-summary)
+  - [Policy Design Notes](#policy-design-notes)
+- [Data Flow](#data-flow)
+- [Migration Reference](#migration-reference)
+
 ---
 Category: Implementation
 Status: Approved

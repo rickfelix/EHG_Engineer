@@ -1,5 +1,38 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Root-Level Files Categorization & Move Plan
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Categorization by Target Directory](#categorization-by-target-directory)
+  - [Keep at Root (5 files)](#keep-at-root-5-files)
+  - [Move to `/docs/guides/` (33 files)](#move-to-docsguides-33-files)
+  - [Move to `/docs/reference/` (12 files)](#move-to-docsreference-12-files)
+  - [Move to `/docs/database/` (8 files)](#move-to-docsdatabase-8-files)
+  - [Move to `/docs/05_testing/` (14 files)](#move-to-docs05_testing-14-files)
+  - [Move to `/docs/03_protocols_and_standards/` (5 files)](#move-to-docs03_protocols_and_standards-5-files)
+  - [Move to `/docs/summaries/` (25 files)](#move-to-docssummaries-25-files)
+  - [Move to `/docs/reports/` (13 files)](#move-to-docsreports-13-files)
+  - [Move to `/docs/02_api/` (1 file)](#move-to-docs02_api-1-file)
+  - [Move to `/docs/04_features/` (1 file)](#move-to-docs04_features-1-file)
+- [Move Strategy](#move-strategy)
+  - [Phase 1: Create Missing Subdirectories](#phase-1-create-missing-subdirectories)
+  - [Phase 2: Move Files by Category](#phase-2-move-files-by-category)
+  - [Phase 3: Update Cross-References](#phase-3-update-cross-references)
+  - [Phase 4: Update Navigation](#phase-4-update-navigation)
+- [Priority Order](#priority-order)
+- [Benefits](#benefits)
+- [Implementation Plan](#implementation-plan)
 
 ## Metadata
 - **Category**: Architecture

@@ -1,4 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 39: Multi-Venture Coordination — Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Primary KPIs (Canonical)](#primary-kpis-canonical)
+  - [1. Portfolio Performance](#1-portfolio-performance)
+  - [2. Synergy Value](#2-synergy-value)
+  - [3. Resource Efficiency](#3-resource-efficiency)
+- [Secondary KPIs (Derived)](#secondary-kpis-derived)
+  - [4. Synergy Capture Rate](#4-synergy-capture-rate)
+  - [5. Coordination Overhead](#5-coordination-overhead)
+  - [6. Conflict Resolution Time](#6-conflict-resolution-time)
+  - [7. Initiative Success Rate](#7-initiative-success-rate)
+- [Dashboard Architecture](#dashboard-architecture)
+  - [Dashboard 1: Portfolio Performance Dashboard](#dashboard-1-portfolio-performance-dashboard)
+  - [Dashboard 2: Synergy Value Dashboard](#dashboard-2-synergy-value-dashboard)
+  - [Dashboard 3: Resource Efficiency Dashboard](#dashboard-3-resource-efficiency-dashboard)
+  - [Dashboard 4: Initiative Tracking Dashboard](#dashboard-4-initiative-tracking-dashboard)
+- [Alerting Rules](#alerting-rules)
+  - [Alert 1: Portfolio Performance Degradation](#alert-1-portfolio-performance-degradation)
+  - [Alert 2: Synergy Initiative Delayed](#alert-2-synergy-initiative-delayed)
+  - [Alert 3: Resource Conflict Detected](#alert-3-resource-conflict-detected)
+  - [Alert 4: Synergy Capture Rate Below Target](#alert-4-synergy-capture-rate-below-target)
+  - [Alert 5: Coordination Overhead Exceeds Threshold](#alert-5-coordination-overhead-exceeds-threshold)
+- [Monitoring SLAs](#monitoring-slas)
+- [Data Sources](#data-sources)
+  - [Source 1: `venture_metrics` table](#source-1-venture_metrics-table)
+  - [Source 2: `value_capture_log` table](#source-2-value_capture_log-table)
+  - [Source 3: `synergy_opportunities` table](#source-3-synergy_opportunities-table)
+  - [Source 4: `resource_conflicts` table](#source-4-resource_conflicts-table)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

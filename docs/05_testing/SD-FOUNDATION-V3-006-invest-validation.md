@@ -1,5 +1,44 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # INVEST Criteria Validation: SD-FOUNDATION-V3-006
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [INVEST Criteria Overview](#invest-criteria-overview)
+- [Story-by-Story Validation](#story-by-story-validation)
+  - [US-001: Define Crew Types for THE_ENGINE Phase (Stages 7-9)](#us-001-define-crew-types-for-the_engine-phase-stages-7-9)
+  - [US-002: Define Crew Types for THE_IDENTITY Phase (Stages 10-13)](#us-002-define-crew-types-for-the_identity-phase-stages-10-13)
+  - [US-003: Define Crew Types for THE_BLUEPRINT Phase (Stages 14-18)](#us-003-define-crew-types-for-the_blueprint-phase-stages-14-18)
+  - [US-004: Define Crew Types for THE_BUILD_LOOP Phase (Stages 19-23)](#us-004-define-crew-types-for-the_build_loop-phase-stages-19-23)
+  - [US-005: Define Crew Types for LAUNCH_LEARN Phase (Stages 24-25)](#us-005-define-crew-types-for-launch_learn-phase-stages-24-25)
+  - [US-006: Extend STAGE_CREW_MAP for All 25 Stages](#us-006-extend-stage_crew_map-for-all-25-stages)
+  - [US-007: Add Co-Execution Patterns to STAGE_CO_EXECUTION_MAP](#us-007-add-co-execution-patterns-to-stage_co_execution_map)
+  - [US-008: Integration Tests for Stages 7-25 Dispatch](#us-008-integration-tests-for-stages-7-25-dispatch)
+- [Overall INVEST Compliance](#overall-invest-compliance)
+  - [Summary Table](#summary-table)
+  - [Compliance Rate by Criterion](#compliance-rate-by-criterion)
+- [Independence Analysis](#independence-analysis)
+  - [Dependency Graph](#dependency-graph)
+  - [Parallel Development Opportunities](#parallel-development-opportunities)
+  - [Sprint Planning Recommendation](#sprint-planning-recommendation)
+- [Quality Metrics](#quality-metrics)
+  - [Acceptance Criteria Quality](#acceptance-criteria-quality)
+  - [Test Coverage](#test-coverage)
+- [Recommendations](#recommendations)
+  - [Strengths](#strengths)
+  - [Areas for Improvement](#areas-for-improvement)
+  - [Best Practices Demonstrated](#best-practices-demonstrated)
+- [Validation Conclusion](#validation-conclusion)
+- [Document Metadata](#document-metadata)
 
 ## Metadata
 - **Category**: Guide

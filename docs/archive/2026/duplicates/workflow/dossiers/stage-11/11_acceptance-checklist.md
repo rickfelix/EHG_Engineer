@@ -1,3 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Evaluation Criteria (8 dimensions)](#evaluation-criteria-8-dimensions)
+  - [1. Completeness (0-5)](#1-completeness-0-5)
+  - [2. Evidence Quality (0-5)](#2-evidence-quality-0-5)
+  - [3. Recursion Depth (0-5)](#3-recursion-depth-0-5)
+  - [4. Practical Usability (0-5)](#4-practical-usability-0-5)
+  - [5. Configurability Documentation (0-5)](#5-configurability-documentation-0-5)
+  - [6. Metrics Depth (0-5)](#6-metrics-depth-0-5)
+  - [7. Gap Honesty & SD Cross-Refs (0-5)](#7-gap-honesty-sd-cross-refs-0-5)
+  - [8. Footer & Regeneration Standards (0-5)](#8-footer-regeneration-standards-0-5)
+- [Final Score Calculation](#final-score-calculation)
+- [Acceptance Decision](#acceptance-decision)
+- [Phase 6 Contract Compliance](#phase-6-contract-compliance)
+- [Critical Notes](#critical-notes)
+  - [1. No Recursion in Source Material (Honest Gap)](#1-no-recursion-in-source-material-honest-gap)
+  - [2. Customer Validation Gap (UX/Customer Signal: 1/5)](#2-customer-validation-gap-uxcustomer-signal-15)
+  - [3. Not on Critical Path (No Time Pressure)](#3-not-on-critical-path-no-time-pressure)
+  - [4. Proposed Thresholds (Not in stages.yaml)](#4-proposed-thresholds-not-in-stagesyaml)
+  - [5. SD Cross-References (9 SDs Identified)](#5-sd-cross-references-9-sds-identified)
+- [Maintenance & Updates](#maintenance-updates)
+
 <!-- ARCHIVED: 2026-01-26T16:26:56.086Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-11\11_acceptance-checklist.md

@@ -1,5 +1,59 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # LEO Protocol Agent & Sub-Agent Backstory System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Database-First Design](#database-first-design)
+  - [Backstory Structure](#backstory-structure)
+- [Sub-Agent Roster](#sub-agent-roster)
+  - [1. Debugging Sub-Agent (DEBUGGING)](#1-debugging-sub-agent-debugging)
+  - [2. Security Sub-Agent (SECURITY)](#2-security-sub-agent-security)
+  - [3. Performance Sub-Agent (PERFORMANCE)](#3-performance-sub-agent-performance)
+  - [4. Database Sub-Agent (DATABASE)](#4-database-sub-agent-database)
+  - [5. Design Sub-Agent (DESIGN)](#5-design-sub-agent-design)
+  - [6. Testing Sub-Agent (TESTING)](#6-testing-sub-agent-testing)
+  - [7. Cost Optimization Sub-Agent (COST)](#7-cost-optimization-sub-agent-cost)
+- [How Backstories Shape Behavior](#how-backstories-shape-behavior)
+  - [1. Identity Formation](#1-identity-formation)
+  - [2. Behavioral Instructions](#2-behavioral-instructions)
+  - [3. Decision Making](#3-decision-making)
+  - [4. Communication Style](#4-communication-style)
+- [Triggering System](#triggering-system)
+  - [Automatic Activation](#automatic-activation)
+  - [Example Trigger Flow](#example-trigger-flow)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [EXEC Agent Coordination](#exec-agent-coordination)
+  - [Handoff with Backstory Context](#handoff-with-backstory-context)
+- [Benefits of Backstory System](#benefits-of-backstory-system)
+  - [1. Consistency](#1-consistency)
+  - [2. Expertise Depth](#2-expertise-depth)
+  - [3. Believable Personas](#3-believable-personas)
+  - [4. Clear Mental Models](#4-clear-mental-models)
+  - [5. Improved Results](#5-improved-results)
+- [Adding New Sub-Agents](#adding-new-sub-agents)
+- [Best Practices](#best-practices)
+  - [1. Backstory Design](#1-backstory-design)
+  - [2. Trigger Selection](#2-trigger-selection)
+  - [3. Metadata Structure](#3-metadata-structure)
+  - [4. Testing](#4-testing)
+- [Monitoring & Metrics](#monitoring-metrics)
+- [Future Enhancements](#future-enhancements)
+  - [1. Dynamic Backstory Evolution](#1-dynamic-backstory-evolution)
+  - [2. Cross-Agent Collaboration](#2-cross-agent-collaboration)
+  - [3. User-Defined Backstories](#3-user-defined-backstories)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Reference

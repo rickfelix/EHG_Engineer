@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 15 "Resource Planning" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Architecture → Team Mapping](#3-architecture-team-mapping)
+  - [4. Phase-Based Staffing Decision](#4-phase-based-staffing-decision)
+  - [5. Budget Constraint Decision](#5-budget-constraint-decision)
+  - [6. Skill Gap Enhancement](#6-skill-gap-enhancement)
+  - [7. Hiring Plan Alignment](#7-hiring-plan-alignment)
+  - [8. Sales Model → Team Composition](#8-sales-model-team-composition)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 15 Schema](#10-recommended-stage-15-schema)
+  - [11. Minimum Viable Change (priority-ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-14 decisions)](#13-dependency-conflicts-with-stages-1-14-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 15 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

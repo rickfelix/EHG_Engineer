@@ -1,5 +1,66 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Strategic Analysis: Legal Infrastructure Strategy for Venture Studios
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Key Findings](#key-findings)
+  - [Verdict](#verdict)
+- [1. Problem Validation: The Venture Factory's "Legal Debt" Dilemma](#1-problem-validation-the-venture-factorys-legal-debt-dilemma)
+  - [1.1 The Context of "Legal Debt" in Venture Creation](#11-the-context-of-legal-debt-in-venture-creation)
+  - [1.2 Founder Pain Points: Perception vs. Reality](#12-founder-pain-points-perception-vs-reality)
+  - [1.3 Is This a "Hair on Fire" Problem?](#13-is-this-a-hair-on-fire-problem)
+  - [1.4 The "Unfair Advantage" Question](#14-the-unfair-advantage-question)
+- [2. Competitive and Peer Analysis: What Do the Leaders Do?](#2-competitive-and-peer-analysis-what-do-the-leaders-do)
+  - [2.1 Y Combinator (YC): The "Open Standard" Strategist](#21-y-combinator-yc-the-open-standard-strategist)
+  - [2.2 Techstars: The "Perks Marketplace" Model](#22-techstars-the-perks-marketplace-model)
+  - [2.3 Antler: The "Global Localization" Specialist](#23-antler-the-global-localization-specialist)
+  - [2.4 The Incumbents: Stripe Atlas & Clerky](#24-the-incumbents-stripe-atlas-clerky)
+  - [Competitive Landscape Summary](#competitive-landscape-summary)
+- [3. Evaluation of Strategic Options](#3-evaluation-of-strategic-options)
+  - [3.1 Option A: Skip Entirely (The "Hands-Off" Approach)](#31-option-a-skip-entirely-the-hands-off-approach)
+  - [3.2 Option B: Curated Template Library (The "YC/Common Paper" Approach)](#32-option-b-curated-template-library-the-yccommon-paper-approach)
+  - [3.3 Option C: Template Fill-In Wizard (The "Internal Tool" Approach)](#33-option-c-template-fill-in-wizard-the-internal-tool-approach)
+  - [3.4 Option D: LLM-Assisted Generation (The "AI" Approach)](#34-option-d-llm-assisted-generation-the-ai-approach)
+  - [3.5 Option E: Partner/Integrate (The "Reseller" Approach)](#35-option-e-partnerintegrate-the-reseller-approach)
+  - [3.6 Option F: Attorney Network (The "Boutique" Approach)](#36-option-f-attorney-network-the-boutique-approach)
+- [4. Liability and Risk Assessment: The "Unauthorized Practice of Law" (UPL)](#4-liability-and-risk-assessment-the-unauthorized-practice-of-law-upl)
+  - [4.1 The "Scrivener" Exception vs. UPL](#41-the-scrivener-exception-vs-upl)
+  - [4.2 The "DoNotPay" Warning](#42-the-donotpay-warning)
+  - [4.3 Disclaimer Efficacy](#43-disclaimer-efficacy)
+  - [4.4 Insurance Implications](#44-insurance-implications)
+- [5. Multi-Jurisdictional Complexity: Why "One Template" Fails](#5-multi-jurisdictional-complexity-why-one-template-fails)
+  - [5.1 The "Cookie" Divergence: Opt-In vs. Opt-Out](#51-the-cookie-divergence-opt-in-vs-opt-out)
+  - [5.2 Privacy Policy Nuances](#52-privacy-policy-nuances)
+- [6. Build vs. Buy Economics](#6-build-vs-buy-economics)
+  - [6.1 The Cost to Build (Option C - Custom Wizard)](#61-the-cost-to-build-option-c---custom-wizard)
+  - [6.2 The Cost to Buy (Option E - Agency Partner)](#62-the-cost-to-buy-option-e---agency-partner)
+  - [6.3 The Cost to Use Standard/Free (Option B - Contracts)](#63-the-cost-to-use-standardfree-option-b---contracts)
+  - [6.4 Economic Verdict](#64-economic-verdict)
+- [7. Deep Dive: The "Buy" Candidates & Solution Selection](#7-deep-dive-the-buy-candidates-solution-selection)
+  - [7.1 GetTerms.io (The "MVP" Choice)](#71-gettermsio-the-mvp-choice)
+  - [7.2 Iubenda (The "Compliance Powerhouse")](#72-iubenda-the-compliance-powerhouse)
+  - [7.3 Termly (The "Design" Choice)](#73-termly-the-design-choice)
+  - [7.4 Common Paper (The "Contract" Standard)](#74-common-paper-the-contract-standard)
+- [8. Strategic Recommendation](#8-strategic-recommendation)
+  - [Verdict: BUY & CURATE (Hybrid of Options B and E)](#verdict-buy-curate-hybrid-of-options-b-and-e)
+  - [Recommended Strategy: The "EHG Legal Stack"](#recommended-strategy-the-ehg-legal-stack)
+- [9. Implementation Plan](#9-implementation-plan)
+  - [Phase 1: Vendor Selection & Setup (Week 1)](#phase-1-vendor-selection-setup-week-1)
+  - [Phase 2: Internal Knowledge Base (Week 2)](#phase-2-internal-knowledge-base-week-2)
+  - [Phase 3: Rollout (Week 3)](#phase-3-rollout-week-3)
+  - [Message to Founders (The "Skip" Narrative)](#message-to-founders-the-skip-narrative)
+- [10. Key Insight](#10-key-insight)
 
 ## Metadata
 - **Category**: Guide

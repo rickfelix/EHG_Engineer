@@ -1,4 +1,77 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # LEO Protocol Enhancement Specification
+
+## Table of Contents
+
+- [Claude Code 2.1.0 Integration](#claude-code-210-integration)
+- [1. Executive Summary](#1-executive-summary)
+  - [Key Claude Code 2.1.0 Features Leveraged](#key-claude-code-210-features-leveraged)
+- [2. Agreed Enhancements](#2-agreed-enhancements)
+  - [2.1 Context Fork (Selective Use)](#21-context-fork-selective-use)
+  - [2.2 Hooks in Agent Frontmatter](#22-hooks-in-agent-frontmatter)
+  - [2.3 Once:True Hooks for Session Initialization](#23-oncetrue-hooks-for-session-initialization)
+  - [2.4 Hot-Reload Migration (Agents to Skills)](#24-hot-reload-migration-agents-to-skills)
+  - [2.5 Wildcard Bash Permissions](#25-wildcard-bash-permissions)
+  - [2.6 Improved Subagent Resilience](#26-improved-subagent-resilience)
+  - [2.7 YAML-Style Frontmatter](#27-yaml-style-frontmatter)
+  - [2.8 Phase Transition Enforcement via Hooks](#28-phase-transition-enforcement-via-hooks)
+  - [2.9 /escalate Enhancement with Agent Field](#29-escalate-enhancement-with-agent-field)
+  - [2.10 /leo-continuous Skill](#210-leo-continuous-skill)
+- [3. Dropped Items](#3-dropped-items)
+- [4. Hook Catalog](#4-hook-catalog)
+  - [4.1 Universal Hooks (All Agents)](#41-universal-hooks-all-agents)
+  - [4.2 Agent-Specific Hooks](#42-agent-specific-hooks)
+  - [4.3 Phase Transition Hooks](#43-phase-transition-hooks)
+  - [4.4 Anti-Pattern Detection Hooks](#44-anti-pattern-detection-hooks)
+- [5. Handoff-Based Phase Detection](#5-handoff-based-phase-detection)
+  - [5.1 Problem Statement](#51-problem-statement)
+  - [5.2 Handoff Types (Database Constraint)](#52-handoff-types-database-constraint)
+  - [5.3 Phase Detection Logic](#53-phase-detection-logic)
+  - [5.4 Implementation](#54-implementation)
+  - [5.5 Track-Specific Context](#55-track-specific-context)
+- [6. Baseline-Aware Continuous Execution System](#6-baseline-aware-continuous-execution-system)
+  - [6.1 System Overview](#61-system-overview)
+  - [6.2 Database Tables Used](#62-database-tables-used)
+  - [6.3 Hook Chain Architecture](#63-hook-chain-architecture)
+  - [6.4 Baseline Test State Capture](#64-baseline-test-state-capture)
+  - [6.5 Session Recovery System](#65-session-recovery-system)
+  - [6.6 Leo Continuous Skill](#66-leo-continuous-skill)
+- [Operating Rules](#operating-rules)
+- [Escalation Protocol (Auto-Triggered)](#escalation-protocol-auto-triggered)
+- [Checkpoints](#checkpoints)
+- [Recovery](#recovery)
+- [Continue Until](#continue-until)
+- [Commands](#commands)
+  - [6.7 Issue Auto-Detection Script](#67-issue-auto-detection-script)
+  - [6.8 Health Metrics Update](#68-health-metrics-update)
+- [7. Agent to Skills Migration](#7-agent-to-skills-migration)
+  - [7.1 Current State](#71-current-state)
+  - [7.2 Migration Strategy: Dual-Path Support](#72-migration-strategy-dual-path-support)
+  - [7.3 Migration Order](#73-migration-order)
+  - [7.4 Agent Frontmatter Updates](#74-agent-frontmatter-updates)
+- [8. Implementation Roadmap](#8-implementation-roadmap)
+  - [Phase 1: Foundation (Week 1)](#phase-1-foundation-week-1)
+  - [Phase 2: Hook Infrastructure (Week 2)](#phase-2-hook-infrastructure-week-2)
+  - [Phase 3: Baseline Integration (Week 3)](#phase-3-baseline-integration-week-3)
+  - [Phase 4: Agent Migration (Week 4)](#phase-4-agent-migration-week-4)
+  - [Phase 5: Validation & Cleanup (Week 5)](#phase-5-validation-cleanup-week-5)
+- [9. Script Specifications](#9-script-specifications)
+  - [9.1 Directory Structure](#91-directory-structure)
+  - [9.2 Environment Variables](#92-environment-variables)
+  - [9.3 Script Template](#93-script-template)
+- [Appendix A: Complete Hook Reference](#appendix-a-complete-hook-reference)
+  - [A.1 PreToolUse Hooks](#a1-pretooluse-hooks)
+  - [A.2 PostToolUse Hooks](#a2-posttooluse-hooks)
+  - [A.3 Stop Hooks](#a3-stop-hooks)
+- [Appendix B: Approval Checklist](#appendix-b-approval-checklist)
+
 ## Claude Code 2.1.0 Integration
 
 **Version**: 1.0.0

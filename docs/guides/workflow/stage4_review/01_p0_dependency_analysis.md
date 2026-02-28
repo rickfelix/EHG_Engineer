@@ -1,5 +1,49 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # P0 Strategic Directive Dependency Analysis
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [P0 SD #1: METRICS-FRAMEWORK-001](#p0-sd-1-metrics-framework-001)
+  - [Dossier Claim](#dossier-claim)
+  - [Reality Check](#reality-check)
+  - [Dependency Analysis](#dependency-analysis)
+  - [True Blocker Status: ❌ **NOT A BLOCKER**](#true-blocker-status-not-a-blocker)
+- [P0 SD #2: RECURSION-ENGINE-001](#p0-sd-2-recursion-engine-001)
+  - [Dossier Claim](#dossier-claim)
+  - [Reality Check](#reality-check)
+  - [Dependency Analysis](#dependency-analysis)
+  - [True Blocker Status: ❌ **NOT A BLOCKER**](#true-blocker-status-not-a-blocker)
+- [P0 SD #3: CREWAI-ARCHITECTURE-001 / EXPANSION-001](#p0-sd-3-crewai-architecture-001-expansion-001)
+  - [Dossier Claim](#dossier-claim)
+  - [Reality Check](#reality-check)
+  - [Dependency Analysis](#dependency-analysis)
+  - [True Blocker Status: ❌ **NOT A BLOCKER** (full architecture), ⚠️ **MAYBE** (Stage 4 specific crew)](#true-blocker-status-not-a-blocker-full-architecture-maybe-stage-4-specific-crew)
+- [Dependency Map: Which Stages Actually Need Which P0 SDs](#dependency-map-which-stages-actually-need-which-p0-sds)
+  - [METRICS-FRAMEWORK-001](#metrics-framework-001)
+  - [RECURSION-ENGINE-001](#recursion-engine-001)
+  - [CREWAI-ARCHITECTURE (40 crews)](#crewai-architecture-40-crews)
+- [Chairman Decision Matrix](#chairman-decision-matrix)
+  - [Option A: Build All 3 P0 SDs Now (Wave 1 as Proposed)](#option-a-build-all-3-p0-sds-now-wave-1-as-proposed)
+  - [Option B: Defer All 3 P0 SDs (Start Stage 4 Manual)](#option-b-defer-all-3-p0-sds-start-stage-4-manual)
+  - [Option C: Hybrid — Build Minimal Stage 4 Crew Only](#option-c-hybrid-build-minimal-stage-4-crew-only)
+- [Deferral Risk Assessment](#deferral-risk-assessment)
+  - [What Happens If We Defer All P0 SDs?](#what-happens-if-we-defer-all-p0-sds)
+- [Recommended Path Forward](#recommended-path-forward)
+  - [Phase 1: Stage 4 Exploration (This Week)](#phase-1-stage-4-exploration-this-week)
+  - [Phase 2: Chairman Decision (End of Week)](#phase-2-chairman-decision-end-of-week)
+  - [Phase 3: Iterate Stage-by-Stage (Weeks 2-12)](#phase-3-iterate-stage-by-stage-weeks-2-12)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Report

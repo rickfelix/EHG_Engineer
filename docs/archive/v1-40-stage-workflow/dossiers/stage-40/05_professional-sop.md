@@ -1,4 +1,27 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Professional Standard Operating Procedure
+
+
+## Table of Contents
+
+- [Entry Gate Checklist](#entry-gate-checklist)
+- [Execution Steps](#execution-steps)
+  - [Substage 40.1: Growth Management](#substage-401-growth-management)
+  - [Substage 40.2: Exit Preparation](#substage-402-exit-preparation)
+  - [Substage 40.3: Value Realization](#substage-403-value-realization)
+- [Exit Gate Criteria](#exit-gate-criteria)
+- [Error Handling](#error-handling)
+  - [Proposed Error Scenarios](#proposed-error-scenarios)
+- [Rollback Procedures](#rollback-procedures)
+- [Timeline Estimates](#timeline-estimates)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1812-1837 (gates & substages)
 

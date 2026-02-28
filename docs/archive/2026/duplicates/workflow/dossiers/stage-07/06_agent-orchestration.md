@@ -1,3 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Agent Assignments (Inferred from stages.yaml)](#agent-assignments-inferred-from-stagesyaml)
+- [Workflow Orchestration](#workflow-orchestration)
+- [Agent Communication Patterns](#agent-communication-patterns)
+- [Recursion Engine Integration (Inbound)](#recursion-engine-integration-inbound)
+  - [RESOURCE-001 from Stage 8 (Problem Decomposition)](#resource-001-from-stage-8-problem-decomposition)
+  - [TIMELINE-001 from Stage 8 (Problem Decomposition)](#timeline-001-from-stage-8-problem-decomposition)
+  - [TECH-001 from Stage 10 (Technical Review)](#tech-001-from-stage-10-technical-review)
+- [Recursion Thresholds (Inbound)](#recursion-thresholds-inbound)
+- [Chairman Approval Requirements](#chairman-approval-requirements)
+- [Performance Requirements](#performance-requirements)
+- [Integration Points](#integration-points)
+- [Known Gaps (from critique)](#known-gaps-from-critique)
+- [Proposed Artifacts (to close gaps)](#proposed-artifacts-to-close-gaps)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:46.233Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-07\06_agent-orchestration.md

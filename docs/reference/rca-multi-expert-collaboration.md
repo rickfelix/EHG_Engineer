@@ -1,4 +1,35 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # RCA Multi-Expert Collaboration Protocol
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Why Multi-Expert Collaboration?](#why-multi-expert-collaboration)
+- [When to Use Multi-Expert Collaboration](#when-to-use-multi-expert-collaboration)
+  - [Automatic Triggers](#automatic-triggers)
+- [Domain Expert Routing Map](#domain-expert-routing-map)
+- [Collaboration Flow](#collaboration-flow)
+- [Critical: Independent Analysis (Not Confirmation)](#critical-independent-analysis-not-confirmation)
+  - [Independent Analysis Template](#independent-analysis-template)
+- [Example: Invoking Multiple Experts (Updated v1.1)](#example-invoking-multiple-experts-updated-v11)
+- [What Each Agent Contributes](#what-each-agent-contributes)
+- [Output Format](#output-format)
+- [Benefits](#benefits)
+- [Implementation Changes (v1.1 - 2026-01-31)](#implementation-changes-v11---2026-01-31)
+  - [What Changed](#what-changed)
+  - [Files Modified](#files-modified)
+  - [Evidence of Improvement](#evidence-of-improvement)
+  - [Verification](#verification)
+- [Related Patterns](#related-patterns)
+- [Verification](#verification)
 
 **Version**: 1.1
 **Pattern ID**: PAT-RCA-MULTI-001

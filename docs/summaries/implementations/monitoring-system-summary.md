@@ -1,5 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Intelligent Campaign Monitoring System - Implementation Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Request](#request)
+- [Solution Delivered](#solution-delivered)
+  - [5 Monitoring Components Implemented](#5-monitoring-components-implemented)
+- [Monitoring Files](#monitoring-files)
+  - [Heartbeat File (`/tmp/campaign-heartbeat.txt`)](#heartbeat-file-tmpcampaign-heartbeattxt)
+  - [Checkpoint File (`/tmp/campaign-checkpoint.json`)](#checkpoint-file-tmpcampaign-checkpointjson)
+  - [Status File (`/tmp/campaign-status.json`)](#status-file-tmpcampaign-statusjson)
+- [Usage Guide](#usage-guide)
+  - [Start Campaign with Auto-Restart (RECOMMENDED)](#start-campaign-with-auto-restart-recommended)
+  - [Monitor Campaign Health](#monitor-campaign-health)
+  - [View Logs in Real-Time](#view-logs-in-real-time)
+  - [Stop Campaign](#stop-campaign)
+- [Health Status Detection](#health-status-detection)
+- [Recovery Procedures](#recovery-procedures)
+  - [Campaign Stalled (STALE)](#campaign-stalled-stale)
+  - [Campaign Crashed](#campaign-crashed)
+- [Implementation Details](#implementation-details)
+  - [Files Modified](#files-modified)
+  - [Files Created](#files-created)
+- [Benefits](#benefits)
+  - [Before](#before)
+  - [After](#after)
+- [Testing](#testing)
+  - [Test 1: Normal Operation ✅](#test-1-normal-operation-)
+  - [Test 2: Graceful Shutdown ✅](#test-2-graceful-shutdown-)
+  - [Test 3: Crash Recovery ✅](#test-3-crash-recovery-)
+- [Quick Reference Card](#quick-reference-card)
+- [Summary](#summary)
 
 ## Metadata
 - **Category**: Report

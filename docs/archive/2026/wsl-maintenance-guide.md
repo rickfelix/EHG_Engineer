@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # WSL Maintenance Guide
+
+
+## Table of Contents
+
+- [Issue Summary](#issue-summary)
+- [Solution Implemented](#solution-implemented)
+- [Applying the Configuration](#applying-the-configuration)
+  - [Step 1: Shutdown WSL](#step-1-shutdown-wsl)
+  - [Step 2: Verify Shutdown](#step-2-verify-shutdown)
+  - [Step 3: Restart WSL](#step-3-restart-wsl)
+  - [Step 4: Verify Configuration Applied](#step-4-verify-configuration-applied)
+- [Verification Checklist](#verification-checklist)
+- [Monitoring Commands](#monitoring-commands)
+  - [Check WSL Status (from Windows)](#check-wsl-status-from-windows)
+  - [Monitor WSL Health (inside WSL)](#monitor-wsl-health-inside-wsl)
+- [Maintenance Schedule](#maintenance-schedule)
+  - [Daily](#daily)
+  - [Weekly](#weekly)
+  - [Monthly](#monthly)
+- [Troubleshooting](#troubleshooting)
+  - [WSL Still Shutting Down?](#wsl-still-shutting-down)
+  - [Memory Issues](#memory-issues)
+  - [Performance Issues](#performance-issues)
+- [Advanced Configuration](#advanced-configuration)
+  - [Optional .wslconfig Settings](#optional-wslconfig-settings)
+  - [Emergency Shutdown](#emergency-shutdown)
+- [Resources](#resources)
+- [Change Log](#change-log)
+  - [2025-11-04](#2025-11-04)
 
 **Created**: 2025-11-04
 **Purpose**: Prevent automatic WSL shutdowns and maintain system stability

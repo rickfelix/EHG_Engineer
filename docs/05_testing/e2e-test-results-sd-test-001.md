@@ -1,5 +1,41 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # End-to-End Test Results: SD Testing Status System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Test Results Summary](#test-results-summary)
+- [Detailed Test Results](#detailed-test-results)
+  - [Test 1: Query Untested SDs (Default Behavior)](#test-1-query-untested-sds-default-behavior)
+  - [Test 2: Query with Filters](#test-2-query-with-filters)
+  - [Test 3: Insert Test Record](#test-3-insert-test-record)
+  - [Test 4: Verify Auto-Calculate Trigger](#test-4-verify-auto-calculate-trigger)
+  - [Test 5: Query View (Tested vs Untested)](#test-5-query-view-tested-vs-untested)
+  - [Test 6: Update Test Record](#test-6-update-test-record)
+  - [Test 7: Verify Updated_At Trigger](#test-7-verify-updated_at-trigger)
+  - [Test 8: Data Verification (Final State)](#test-8-data-verification-final-state)
+- [Component Verification](#component-verification)
+  - [Database Objects](#database-objects)
+  - [Scripts](#scripts)
+  - [Documentation](#documentation)
+- [Performance Metrics](#performance-metrics)
+- [Data Integrity Verification](#data-integrity-verification)
+  - [Constraints Tested](#constraints-tested)
+- [Known Limitations & Notes](#known-limitations-notes)
+- [Recommendations](#recommendations)
+  - [✅ System Ready for Production Use](#-system-ready-for-production-use)
+  - [Next Steps](#next-steps)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Testing

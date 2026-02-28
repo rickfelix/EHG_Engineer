@@ -1,5 +1,31 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Genesis Troubleshooting Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Diagnostic](#quick-diagnostic)
+- [Common Issues](#common-issues)
+  - [1. Database Constraint Violation (epistemic_status)](#1-database-constraint-violation-epistemic_status)
+  - [2. genesis_deployments Table Missing](#2-genesis_deployments-table-missing)
+  - [3. Vercel CLI Not Installed/Authenticated](#3-vercel-cli-not-installedauthenticated)
+  - [4. PRD Generation Returns Stubs](#4-prd-generation-returns-stubs)
+  - [5. Preview URLs Always Null](#5-preview-urls-always-null)
+  - [6. Tier Selection Not Working](#6-tier-selection-not-working)
+- [Architecture Overview](#architecture-overview)
+  - [Tiered Simulation System](#tiered-simulation-system)
+- [Database Tables](#database-tables)
+- [Migrations to Apply](#migrations-to-apply)
+- [Getting Help](#getting-help)
 
 ## Metadata
 - **Category**: Guide

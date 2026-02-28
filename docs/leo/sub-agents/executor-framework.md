@@ -1,5 +1,49 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Generic Sub-Agent Executor Framework
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🎯 Problem Solved](#-problem-solved)
+- [📦 Components Created](#-components-created)
+  - [1. Core Library (`lib/sub-agent-executor.js` - 400+ lines)](#1-core-library-libsub-agent-executorjs---400-lines)
+  - [2. CLI Script (`scripts/execute-subagent.js` - 280+ lines)](#2-cli-script-scriptsexecute-subagentjs---280-lines)
+  - [3. Sub-Agent Modules (`lib/sub-agents/*.js`)](#3-sub-agent-modules-libsub-agentsjs)
+- [🚀 How It Works](#-how-it-works)
+  - [Execution Flow](#execution-flow)
+  - [Database Schema Compliance](#database-schema-compliance)
+- [📊 Usage Examples](#-usage-examples)
+  - [Example 1: VALIDATION Sub-Agent](#example-1-validation-sub-agent)
+  - [Example 2: TESTING Sub-Agent (Full E2E)](#example-2-testing-sub-agent-full-e2e)
+  - [Example 3: DATABASE Sub-Agent (Full Verification)](#example-3-database-sub-agent-full-verification)
+- [🎨 Formatted Instructions Display](#-formatted-instructions-display)
+- [🔧 Creating New Sub-Agent Modules](#-creating-new-sub-agent-modules)
+  - [Template](#template)
+  - [File Location](#file-location)
+- [📈 Benefits](#-benefits)
+  - [Before (Manual Querying)](#before-manual-querying)
+  - [After (Generic Executor)](#after-generic-executor)
+- [🔄 Migration Guide for Existing Scripts](#-migration-guide-for-existing-scripts)
+  - [Step 1: Identify Script to Migrate](#step-1-identify-script-to-migrate)
+  - [Step 2: Create Module](#step-2-create-module)
+  - [Step 3: Update Script to Wrapper](#step-3-update-script-to-wrapper)
+- [📊 Statistics](#-statistics)
+  - [Framework Impact](#framework-impact)
+  - [Sub-Agent Enhancement Impact](#sub-agent-enhancement-impact)
+- [🎯 Next Steps](#-next-steps)
+  - [Immediate (SD-SUBAGENT-IMPROVE-001)](#immediate-sd-subagent-improve-001)
+  - [Future Enhancements](#future-enhancements)
+- [📚 Documentation](#-documentation)
+- [✅ Success Criteria Met](#-success-criteria-met)
 
 ## Metadata
 - **Category**: Guide

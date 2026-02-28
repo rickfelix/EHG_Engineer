@@ -1,4 +1,28 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 9: Acceptance Checklist
+
+
+## Table of Contents
+
+- [Scoring Criteria (8 dimensions)](#scoring-criteria-8-dimensions)
+  - [1. Evidence Completeness (15 points)](#1-evidence-completeness-15-points)
+  - [2. Sources Table Presence (10 points)](#2-sources-table-presence-10-points)
+  - [3. Footer Comment Consistency (10 points)](#3-footer-comment-consistency-10-points)
+  - [4. Recursion Blueprint Integrity (15 points)](#4-recursion-blueprint-integrity-15-points)
+  - [5. Regeneration Note (5 points)](#5-regeneration-note-5-points)
+  - [6. SD Cross-References in File 10 (10 points)](#6-sd-cross-references-in-file-10-10-points)
+  - [7. Comprehensive Coverage (20 points)](#7-comprehensive-coverage-20-points)
+  - [8. Honest Gap Handling (15 points)](#8-honest-gap-handling-15-points)
+- [Total Score Calculation](#total-score-calculation)
+- [Acceptance Decision](#acceptance-decision)
+- [Sources Table](#sources-table)
 
 **Purpose**: Quality gate scoring for Stage 9 Operating Dossier (Phase 5 contract).
 

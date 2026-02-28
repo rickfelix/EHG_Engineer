@@ -1,5 +1,38 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SD Validation Profiles Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Valid SD Status Values](#valid-sd-status-values)
+- [Valid SD Type Values](#valid-sd-type-values)
+- [Type-Specific Required Fields](#type-specific-required-fields)
+  - [All Types (Required)](#all-types-required)
+  - [bugfix / feature Types](#bugfix-feature-types)
+  - [refactor Type](#refactor-type)
+  - [orchestrator Type](#orchestrator-type)
+  - [infrastructure / documentation Types](#infrastructure-documentation-types)
+- [Feedback Table Schema](#feedback-table-schema)
+  - [Valid source_type Values](#valid-source_type-values)
+  - [Valid type Values](#valid-type-values)
+  - [Valid status Values](#valid-status-values)
+  - [Valid priority Values](#valid-priority-values)
+- [Handoff Requirements by Type](#handoff-requirements-by-type)
+  - [LEAD-TO-PLAN Handoff](#lead-to-plan-handoff)
+  - [PLAN-TO-EXEC Handoff](#plan-to-exec-handoff)
+  - [EXEC-TO-PLAN Handoff](#exec-to-plan-handoff)
+- [Quick Reference Matrix](#quick-reference-matrix)
+- [Related Scripts](#related-scripts)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

@@ -1,5 +1,57 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # UI Components Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Design Philosophy](#design-philosophy)
+  - [Core Principles](#core-principles)
+  - [Production UI Requirements (Non-Negotiable)](#production-ui-requirements-non-negotiable)
+  - [Visual Language](#visual-language)
+- [Component Hierarchy](#component-hierarchy)
+- [Opportunity Discovery (Deal Flow) UI (Autonomous Ideation)](#opportunity-discovery-deal-flow-ui-autonomous-ideation)
+  - [Chairman’s Office Additions](#chairmans-office-additions)
+  - [Factory Floor / Venture Creation Integration](#factory-floor-venture-creation-integration)
+- [Chairman's Office Components](#chairmans-office-components)
+  - [BriefingDashboard](#briefingdashboard)
+  - [DecisionStack](#decisionstack)
+  - [DecisionCard](#decisioncard)
+  - [PortfolioSummary](#portfoliosummary)
+- [Factory Floor Components](#factory-floor-components)
+  - [VentureDetail](#venturedetail)
+  - [StageTimeline](#stagetimeline)
+  - [ArtifactViewer + ArtifactEditorModal](#artifactviewer-artifacteditormodal)
+  - [TelemetryPanel (Live Telemetry)](#telemetrypanel-live-telemetry)
+  - [CrewDispatchModal (Manual Crew Trigger)](#crewdispatchmodal-manual-crew-trigger)
+  - [AssumptionRegistry](#assumptionregistry)
+  - [TokenLedger](#tokenledger)
+  - [Stage 0: Inception Brief + Promotion UX (Factory Floor)](#stage-0-inception-brief-promotion-ux-factory-floor)
+- [God View Widgets (New)](#god-view-widgets-new)
+  - [QuickStatCard](#quickstatcard)
+  - [RiskWidget](#riskwidget)
+  - [ActiveAgentsWidget](#activeagentswidget)
+  - [FinancialWidget](#financialwidget)
+- [Shared Components](#shared-components)
+  - [HealthBadge](#healthbadge)
+  - [ProgressRing](#progressring)
+- [State Management](#state-management)
+  - [Global State Architecture](#global-state-architecture)
+  - [React Query Integration](#react-query-integration)
+  - [Realtime Wiring (SSE)](#realtime-wiring-sse)
+- [Migration from Legacy 7-Stage](#migration-from-legacy-7-stage)
+  - [Zombie Code Identification](#zombie-code-identification)
+  - [Stage Constants File](#stage-constants-file)
+  - [Migration Checklist](#migration-checklist)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,54 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 32: Customer Success & Retention Engineering — Agent Orchestration
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Crew Structure](#crew-structure)
+  - [CustomerSuccessCrew](#customersuccesscrew)
+- [Agent 1: SuccessInfrastructureArchitect](#agent-1-successinfrastructurearchitect)
+  - [Responsibilities](#responsibilities)
+  - [Capabilities](#capabilities)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Success Criteria](#success-criteria)
+- [Agent 2: HealthMonitoringSpecialist](#agent-2-healthmonitoringspecialist)
+  - [Responsibilities](#responsibilities)
+  - [Capabilities](#capabilities)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Success Criteria](#success-criteria)
+- [Agent 3: RetentionProgramDesigner](#agent-3-retentionprogramdesigner)
+  - [Responsibilities](#responsibilities)
+  - [Capabilities](#capabilities)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Success Criteria](#success-criteria)
+- [Agent 4: NPSTracker](#agent-4-npstracker)
+  - [Responsibilities](#responsibilities)
+  - [Capabilities](#capabilities)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Success Criteria](#success-criteria)
+- [Agent Coordination](#agent-coordination)
+  - [Sequential Flow (for initial setup)](#sequential-flow-for-initial-setup)
+  - [Parallel Operations (after setup)](#parallel-operations-after-setup)
+- [Chairman Escalation Protocol](#chairman-escalation-protocol)
+- [Monitoring & Feedback Loops](#monitoring-feedback-loops)
+  - [Agent Performance Metrics](#agent-performance-metrics)
+  - [Crew-Level Metrics](#crew-level-metrics)
+- [Recursion Integration](#recursion-integration)
+- [Implementation Status](#implementation-status)
+- [Agent Platform Integration](#agent-platform-integration)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

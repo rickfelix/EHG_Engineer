@@ -1,5 +1,43 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol Gate System Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Gate Structure](#gate-structure)
+  - [Gate 2A: Architecture / Interfaces / Tech Design](#gate-2a-architecture-interfaces-tech-design)
+  - [Gate 2B: Design & DB Interfaces](#gate-2b-design-db-interfaces)
+  - [Gate 2C: Security & Risk](#gate-2c-security-risk)
+  - [Gate 2D: NFR & Test Plan](#gate-2d-nfr-test-plan)
+  - [Gate 3: Supervisor Final Verification](#gate-3-supervisor-final-verification)
+- [Running Gates Locally](#running-gates-locally)
+  - [Prerequisites](#prerequisites)
+  - [Running Individual Gates](#running-individual-gates)
+  - [Running All Gates](#running-all-gates)
+- [CI Integration](#ci-integration)
+  - [Triggering Manual Validation](#triggering-manual-validation)
+- [Evidence Collection](#evidence-collection)
+- [Scoring Algorithm](#scoring-algorithm)
+  - [Monotonic Scoring](#monotonic-scoring)
+  - [Example Calculation (Gate 2A)](#example-calculation-gate-2a)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Debugging](#debugging)
+- [Best Practices](#best-practices)
+- [Gate Dependencies](#gate-dependencies)
+- [Compliance](#compliance)
+- [Gate 1 (PLAN→EXEC) - Additional Validators](#gate-1-planexec---additional-validators)
+  - [Integration Section Validation](#integration-section-validation)
 
 ## Metadata
 - **Category**: Guide

@@ -1,3 +1,35 @@
+
+## Table of Contents
+
+- [Performance Targets](#performance-targets)
+  - [Latency Budget Breakdown](#latency-budget-breakdown)
+- [Query Performance Estimates](#query-performance-estimates)
+  - [Per-Query Estimates](#per-query-estimates)
+  - [Query Access Patterns](#query-access-patterns)
+- [Database Index Strategy](#database-index-strategy)
+  - [Index Inventory](#index-inventory)
+  - [Partial Index Design](#partial-index-design)
+  - [Index vs. Write Tradeoff](#index-vs-write-tradeoff)
+- [Scaling Considerations](#scaling-considerations)
+  - [N+1 Query Prevention](#n1-query-prevention)
+  - [Event Queue Management](#event-queue-management)
+  - [LLM Token Budgets](#llm-token-budgets)
+  - [Stage Template Caching](#stage-template-caching)
+  - [Preference Caching](#preference-caching)
+- [Bottleneck Analysis](#bottleneck-analysis)
+  - [Primary Bottleneck: LLM API Latency](#primary-bottleneck-llm-api-latency)
+  - [Secondary Bottleneck: Database Round-Trips](#secondary-bottleneck-database-round-trips)
+  - [Idempotency as Performance Feature](#idempotency-as-performance-feature)
+- [Monitoring Recommendations](#monitoring-recommendations)
+  - [Query Performance Monitoring](#query-performance-monitoring)
+  - [Token Usage Tracking](#token-usage-tracking)
+  - [Event Queue Health](#event-queue-health)
+  - [Table Bloat Monitoring](#table-bloat-monitoring)
+  - [Dashboard Metrics](#dashboard-metrics)
+- [Capacity Planning](#capacity-planning)
+  - [Growth Projections](#growth-projections)
+  - [When to Consider Optimization](#when-to-consider-optimization)
+
 ---
 Category: Implementation
 Status: Approved

@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 25: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Recursion Trigger Catalog](#recursion-trigger-catalog)
+  - [QA-001: Test Coverage Below Threshold](#qa-001-test-coverage-below-threshold)
+  - [QA-002: Critical Bug Detected (P0/P1)](#qa-002-critical-bug-detected-p0p1)
+  - [QA-003: Regression Test Failures](#qa-003-regression-test-failures)
+  - [QA-004: Quality Score Below Threshold](#qa-004-quality-score-below-threshold)
+- [Recursion Decision Matrix](#recursion-decision-matrix)
+- [Self-Recursion (Within Stage 25)](#self-recursion-within-stage-25)
+  - [Substage 25.1 → Substage 25.1 (Re-run Tests)](#substage-251-substage-251-re-run-tests)
+  - [Substage 25.2 → Substage 25.2 (Fix More Bugs)](#substage-252-substage-252-fix-more-bugs)
+  - [Substage 25.3 → Substage 25.1 (Re-test After Quality Fail)](#substage-253-substage-251-re-test-after-quality-fail)
+- [Backward Recursion (Stage 25 → Earlier Stages)](#backward-recursion-stage-25-earlier-stages)
+  - [Stage 25 → Stage 24 (MVP Engine)](#stage-25-stage-24-mvp-engine)
+  - [Stage 25 → Stage 23 (Feedback Loop: Real-Time UX)](#stage-25-stage-23-feedback-loop-real-time-ux)
+  - [Stage 25 → Stage 22 (Iterative Development)](#stage-25-stage-22-iterative-development)
+  - [Stage 25 → Stage 12 (PRD) or Stage 14 (Technical Design)](#stage-25-stage-12-prd-or-stage-14-technical-design)
+- [Forward Recursion (Stage 25 → Later Stages)](#forward-recursion-stage-25-later-stages)
+- [Recursion Metrics](#recursion-metrics)
+  - [Track Recursion Frequency](#track-recursion-frequency)
+  - [Query Recursion Patterns](#query-recursion-patterns)
+- [Recursion Prevention Strategies](#recursion-prevention-strategies)
+  - [Strategy 1: Shift-Left Testing](#strategy-1-shift-left-testing)
+  - [Strategy 2: Early Bug Detection](#strategy-2-early-bug-detection)
+  - [Strategy 3: Regression Test Suite](#strategy-3-regression-test-suite)
+  - [Strategy 4: Quality Metrics Monitoring](#strategy-4-quality-metrics-monitoring)
+- [Recursion Readiness Scoring](#recursion-readiness-scoring)
+- [Sources Table](#sources-table)
 
 ## Overview
 

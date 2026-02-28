@@ -1,5 +1,34 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Enhancement: Auto-Populate Deliverables During PLAN→EXEC Handoff
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+  - [Immediate Issue (SD-VIF-INTEL-001)](#immediate-issue-sd-vif-intel-001)
+  - [Root Cause](#root-cause)
+- [Impact](#impact)
+- [Proposed Solution](#proposed-solution)
+  - [Enhancement to PLAN→EXEC Handoff](#enhancement-to-planexec-handoff)
+- [Implementation Steps](#implementation-steps)
+  - [Phase 1: Core Enhancement (2-3 hours)](#phase-1-core-enhancement-2-3-hours)
+  - [Phase 2: PRD Template Update (1 hour)](#phase-2-prd-template-update-1-hour)
+  - [Phase 3: Testing (1-2 hours)](#phase-3-testing-1-2-hours)
+  - [Phase 4: Documentation (30 min)](#phase-4-documentation-30-min)
+- [Benefits](#benefits)
+- [Validation](#validation)
+- [Acceptance Criteria](#acceptance-criteria)
+- [Rollout Plan](#rollout-plan)
+- [Related Issues](#related-issues)
 
 ## Metadata
 - **Category**: Guide

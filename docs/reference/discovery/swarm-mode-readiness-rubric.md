@@ -1,4 +1,38 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Claude Code Swarm Mode Readiness Rubric
+
+
+## Table of Contents
+
+- [Background](#background)
+- [Scoring Dimensions](#scoring-dimensions)
+- [Scoring Criteria Detail](#scoring-criteria-detail)
+  - [1. Parallelizability (25%)](#1-parallelizability-25)
+  - [2. Specialist Benefit (20%)](#2-specialist-benefit-20)
+  - [3. Current Bottleneck Severity (20%)](#3-current-bottleneck-severity-20)
+  - [4. Context Isolation Value (15%)](#4-context-isolation-value-15)
+  - [5. Coordination Simplicity (10%)](#5-coordination-simplicity-10)
+  - [6. Failure Isolation (10%)](#6-failure-isolation-10)
+- [LEO Protocol Areas Scored](#leo-protocol-areas-scored)
+- [Top 3 Swarm Implementation Candidates](#top-3-swarm-implementation-candidates)
+  - [P0: Validation Gates (Score: 4.55)](#p0-validation-gates-score-455)
+  - [P1: User Story Generation (Score: 4.30)](#p1-user-story-generation-score-430)
+  - [P1: Multi-Sub-Agent Orchestration (Score: 4.30)](#p1-multi-sub-agent-orchestration-score-430)
+- [Priority Thresholds](#priority-thresholds)
+- [When to Re-Apply This Rubric](#when-to-re-apply-this-rubric)
+- [Implementation Checklist (When Swarm Releases)](#implementation-checklist-when-swarm-releases)
+  - [Phase 1: Validation Gates (P0)](#phase-1-validation-gates-p0)
+  - [Phase 2: User Stories (P1)](#phase-2-user-stories-p1)
+  - [Phase 3: Sub-Agent Orchestration (P1)](#phase-3-sub-agent-orchestration-p1)
+- [References](#references)
+- [Changelog](#changelog)
 
 **Created**: 2026-02-02
 **Status**: Ready for Implementation (awaiting Claude Code Swarm release)

@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 18 "Sprint Planning" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Roadmap-to-Sprint Derivation](#3-roadmap-to-sprint-derivation)
+  - [4. Capacity Planning Decision](#4-capacity-planning-decision)
+  - [5. Stage 17 Readiness Gate](#5-stage-17-readiness-gate)
+  - [6. Phase Alignment](#6-phase-alignment)
+  - [7. Budget Tracking Decision](#7-budget-tracking-decision)
+  - [8. SD Bridge Enhancement](#8-sd-bridge-enhancement)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 18 Schema](#10-recommended-stage-18-schema)
+  - [11. Minimum Viable Change (Priority-Ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-17 decisions)](#13-dependency-conflicts-with-stages-1-17-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 18 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

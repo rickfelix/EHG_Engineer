@@ -1,4 +1,47 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Working with Worktrees
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+  - [Automatic Worktree Creation](#automatic-worktree-creation)
+  - [Switching to Worktree](#switching-to-worktree)
+  - [Main Repo Never Moves](#main-repo-never-moves)
+- [Manual Worktree Management](#manual-worktree-management)
+  - [Create Worktree Manually](#create-worktree-manually)
+  - [List Active Worktrees](#list-active-worktrees)
+  - [Remove Worktree Manually](#remove-worktree-manually)
+- [Common Workflows](#common-workflows)
+  - [Working on Multiple SDs](#working-on-multiple-sds)
+  - [IDE Integration](#ide-integration)
+  - [Terminal Session Management](#terminal-session-management)
+- [Troubleshooting](#troubleshooting)
+  - ["CONFLICT: Another active session is already working on SD-XXX-001"](#conflict-another-active-session-is-already-working-on-sd-xxx-001)
+  - ["Branch is already checked out"](#branch-is-already-checked-out)
+  - ["node_modules not found"](#node_modules-not-found)
+  - ["Worktree creation failed"](#worktree-creation-failed)
+  - ["Cleanup failed: dirty worktree"](#cleanup-failed-dirty-worktree)
+- [Best Practices](#best-practices)
+  - [Always Work in Worktrees](#always-work-in-worktrees)
+  - [One Worktree Per SD](#one-worktree-per-sd)
+  - [Main Repo Stays Clean](#main-repo-stays-clean)
+- [FAQ](#faq)
+  - [Why not just use `git checkout`?](#why-not-just-use-git-checkout)
+  - [Do I need to install node_modules in each worktree?](#do-i-need-to-install-node_modules-in-each-worktree)
+  - [What happens to the worktree when the SD is completed?](#what-happens-to-the-worktree-when-the-sd-is-completed)
+  - [Can I create a worktree for non-SD work?](#can-i-create-a-worktree-for-non-sd-work)
+  - [How do I know which worktrees exist?](#how-do-i-know-which-worktrees-exist)
+- [Command Reference](#command-reference)
+- [Related Documentation](#related-documentation)
 
 **Quick Reference**: How to use the worktree-first workflow for SD work
 

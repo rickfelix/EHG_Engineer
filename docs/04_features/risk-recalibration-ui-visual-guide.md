@@ -1,5 +1,43 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Risk Re-calibration UI Components - Visual Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Component Visual Reference](#component-visual-reference)
+  - [1. RiskRecalibrationForm](#1-riskrecalibrationform)
+  - [2. ChairmanReviewPanel](#2-chairmanreviewpanel)
+  - [3. RiskGateDashboard](#3-riskgatedashboard)
+  - [4. EscalationAlertBanner](#4-escalationalertbanner)
+  - [5. RiskLevelBadge](#5-risklevelbadge)
+  - [6. RiskDeltaIndicator](#6-riskdeltaindicator)
+- [Color Palette Reference](#color-palette-reference)
+  - [Risk Levels](#risk-levels)
+  - [Risk Deltas](#risk-deltas)
+  - [Gate Status](#gate-status)
+  - [Chairman UI](#chairman-ui)
+- [Responsive Behavior](#responsive-behavior)
+  - [Mobile (< 640px)](#mobile-640px)
+  - [Tablet (640px - 1024px)](#tablet-640px---1024px)
+  - [Desktop (> 1024px)](#desktop-1024px)
+- [Animation Reference](#animation-reference)
+  - [Pulse Animation](#pulse-animation)
+  - [Hover Effects](#hover-effects)
+  - [Transition Effects](#transition-effects)
+- [Icon Reference](#icon-reference)
+- [Accessibility Annotations](#accessibility-annotations)
+  - [Screen Reader Announcements](#screen-reader-announcements)
+  - [Focus Management](#focus-management)
+  - [Color Contrast](#color-contrast)
 
 ## Metadata
 - **Category**: Feature

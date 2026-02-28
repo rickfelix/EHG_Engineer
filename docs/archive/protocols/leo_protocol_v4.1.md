@@ -1,4 +1,70 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v4.1 - Complete Implementation Guide with Verification Cycles
+
+
+## Table of Contents
+
+- [⚠️  DEPRECATION NOTICE](#-deprecation-notice)
+- [Executive Summary](#executive-summary)
+  - [Key Improvements from v4.0](#key-improvements-from-v40)
+- [Valid Status Values for Database Documents](#valid-status-values-for-database-documents)
+  - [Strategic Directive (SD) Status Values](#strategic-directive-sd-status-values)
+  - [Product Requirements Document (PRD) Status Values](#product-requirements-document-prd-status-values)
+  - [Execution Sequence (EES) Status Values](#execution-sequence-ees-status-values)
+- [Core Architecture](#core-architecture)
+  - [Complete Agent Workflow Cycle](#complete-agent-workflow-cycle)
+  - [Progress Weighting (NEW)](#progress-weighting-new)
+- [Agent Specifications](#agent-specifications)
+  - [LEAD Agent](#lead-agent)
+  - [PLAN Agent](#plan-agent)
+  - [EXEC Agent](#exec-agent)
+- [Handoff & Handback Control System](#handoff-handback-control-system)
+  - [Forward Handoffs (Planning → Implementation)](#forward-handoffs-planning-implementation)
+  - [Reverse Handbacks (Verification) ← NEW](#reverse-handbacks-verification-new)
+  - [Verification Failure Handling ← NEW](#verification-failure-handling-new)
+- [Complete Workflow Example](#complete-workflow-example)
+  - [Success Path](#success-path)
+  - [Failure & Rework Path](#failure-rework-path)
+- [Progress Calculation Formula](#progress-calculation-formula)
+- [Quality Gates](#quality-gates)
+  - [Handoff Gates (Forward)](#handoff-gates-forward)
+  - [Handback Gates (Reverse) ← NEW](#handback-gates-reverse-new)
+- [Status Transition Rules](#status-transition-rules)
+  - [SD Status Transitions](#sd-status-transitions)
+  - [PRD Status Transitions](#prd-status-transitions)
+  - [EES Status Transitions](#ees-status-transitions)
+  - [Agent Responsibilities for Status Updates](#agent-responsibilities-for-status-updates)
+- [Sub-Agent Integration](#sub-agent-integration)
+  - [Mandatory Sub-Agent Activation Criteria ← ENHANCED](#mandatory-sub-agent-activation-criteria-enhanced)
+  - [Sub-Agent Activation Decision Tree ← NEW](#sub-agent-activation-decision-tree-new)
+  - [Sub-Agent Verification Process](#sub-agent-verification-process)
+  - [Sub-Agent Handoff Requirements ← NEW](#sub-agent-handoff-requirements-new)
+- [Context Management Updates](#context-management-updates)
+  - [Token Budget with Verification Cycles](#token-budget-with-verification-cycles)
+- [Handoff Communication Standards ← NEW](#handoff-communication-standards-new)
+  - [Mandatory Handoff Package Structure](#mandatory-handoff-package-structure)
+  - [Handoff Communication Templates](#handoff-communication-templates)
+  - [Handoff Validation & Rejection Protocol ← NEW](#handoff-validation-rejection-protocol-new)
+- [Inter-Agent Communication Protocol ← ENHANCED](#inter-agent-communication-protocol-enhanced)
+  - [Required Communication Points](#required-communication-points)
+- [Exception Process Updates](#exception-process-updates)
+  - [Verification Exceptions ← NEW](#verification-exceptions-new)
+- [Success Metrics](#success-metrics)
+  - [Updated Target Performance](#updated-target-performance)
+- [Migration from v4.0](#migration-from-v40)
+  - [Breaking Changes](#breaking-changes)
+  - [Migration Steps](#migration-steps)
+- [Best Practices](#best-practices)
+  - [DO's](#dos)
+  - [DON'Ts](#donts)
+- [Conclusion](#conclusion)
 
 **Version**: 4.1  
 **Status**: ⚠️  SUPERSEDED BY LEO Protocol v4.1.2_database_first

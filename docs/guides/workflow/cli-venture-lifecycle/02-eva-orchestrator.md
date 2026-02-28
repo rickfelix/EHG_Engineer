@@ -1,3 +1,35 @@
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Module Identity](#module-identity)
+- [Public API](#public-api)
+  - [processStage(params, deps)](#processstageparams-deps)
+  - [run(params, deps)](#runparams-deps)
+- [processStage Workflow](#processstage-workflow)
+  - [Step-by-Step Description](#step-by-step-description)
+- [run Loop](#run-loop)
+- [Status Result Contract](#status-result-contract)
+  - [Status Semantics](#status-semantics)
+  - [Filter Decision Sub-Structure](#filter-decision-sub-structure)
+  - [Action to Behavior Mapping](#action-to-behavior-mapping)
+- [Dependency Injection](#dependency-injection)
+- [Idempotency](#idempotency)
+- [Stage Template Loading](#stage-template-loading)
+- [Gate Evaluation Pipeline](#gate-evaluation-pipeline)
+- [Devils Advocate Integration](#devils-advocate-integration)
+  - [When It Runs](#when-it-runs)
+  - [Advisory Nature](#advisory-nature)
+  - [Graceful Degradation](#graceful-degradation)
+- [Lifecycle-to-SD Bridge](#lifecycle-to-sd-bridge)
+- [Artifact Persistence](#artifact-persistence)
+- [Stage Advancement](#stage-advancement)
+- [Error Handling Philosophy](#error-handling-philosophy)
+  - [Fatal Errors (return FAILED)](#fatal-errors-return-failed)
+  - [Non-Fatal Errors (logged, continue)](#non-fatal-errors-logged-continue)
+  - [Blocking Conditions (return BLOCKED)](#blocking-conditions-return-blocked)
+- [Internal Helpers](#internal-helpers)
+
 ---
 Category: Architecture
 Status: Approved

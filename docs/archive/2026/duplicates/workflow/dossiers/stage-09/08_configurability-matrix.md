@@ -1,3 +1,36 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Tunable Parameters](#tunable-parameters)
+  - [Substage 9.1: Capability Assessment](#substage-91-capability-assessment)
+  - [Substage 9.2: Gap Identification](#substage-92-gap-identification)
+  - [Substage 9.3: Opportunity Modeling](#substage-93-opportunity-modeling)
+- [Quality Gate Thresholds](#quality-gate-thresholds)
+  - [Entry Gates](#entry-gates)
+  - [Exit Gates](#exit-gates)
+- [Metric Thresholds](#metric-thresholds)
+  - [Gap Coverage](#gap-coverage)
+  - [Opportunity Size](#opportunity-size)
+  - [Capability Score](#capability-score)
+- [Automation Levels (Progression Mode)](#automation-levels-progression-mode)
+- [Chairman Override Controls](#chairman-override-controls)
+  - [High-Level Controls](#high-level-controls)
+  - [Granular Controls (Per-Gap Decisions)](#granular-controls-per-gap-decisions)
+- [Risk Tolerance Settings](#risk-tolerance-settings)
+- [Data Source Configuration](#data-source-configuration)
+- [Notification & Escalation Rules](#notification-escalation-rules)
+- [Example Configuration File](#example-configuration-file)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.300Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-09\08_configurability-matrix.md

@@ -1,5 +1,56 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Strategic Directive Parent-Child Hierarchy Schema Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Schema Overview](#schema-overview)
+  - [Key Hierarchy Fields](#key-hierarchy-fields)
+- [Required vs Optional Fields](#required-vs-optional-fields)
+  - [REQUIRED FIELDS (Must provide on INSERT)](#required-fields-must-provide-on-insert)
+  - [OPTIONAL FIELDS (Have defaults or can be NULL)](#optional-fields-have-defaults-or-can-be-null)
+- [Parent-Child Hierarchy Fields](#parent-child-hierarchy-fields)
+  - [1. For PARENT (Orchestrator) SDs](#1-for-parent-orchestrator-sds)
+  - [2. For CHILD SDs](#2-for-child-sds)
+- [Valid Enum Values](#valid-enum-values)
+  - [Status Values](#status-values)
+  - [Priority Values](#priority-values)
+  - [SD Type Values](#sd-type-values)
+  - [Relationship Type Values](#relationship-type-values)
+  - [Complexity Level Values](#complexity-level-values)
+  - [Current Phase Values](#current-phase-values)
+  - [Target Application Values](#target-application-values)
+- [Validation Profiles by SD Type](#validation-profiles-by-sd-type)
+- [Existing Parent-Child Examples](#existing-parent-child-examples)
+  - [Example 1: SD-INDUSTRIAL-2025-001 (4 children)](#example-1-sd-industrial-2025-001-4-children)
+  - [Example 2: SD-HARDENING-V2-002 (3 children)](#example-2-sd-hardening-v2-002-3-children)
+- [Creation Workflow](#creation-workflow)
+  - [Step 1: Create Parent SD](#step-1-create-parent-sd)
+  - [Step 2: Create Child SDs](#step-2-create-child-sds)
+  - [Step 3: Update Parent with Dependency Chain (Optional)](#step-3-update-parent-with-dependency-chain-optional)
+- [Common Patterns](#common-patterns)
+  - [Pattern 1: Orchestrator with Sequential Children](#pattern-1-orchestrator-with-sequential-children)
+  - [Pattern 2: Orchestrator with Parallel Children](#pattern-2-orchestrator-with-parallel-children)
+  - [Pattern 3: Multi-Level Hierarchy](#pattern-3-multi-level-hierarchy)
+- [Database Triggers & Constraints](#database-triggers-constraints)
+  - [Auto-Assigned Fields](#auto-assigned-fields)
+  - [Validation Triggers](#validation-triggers)
+  - [Important Constraints](#important-constraints)
+- [Query Examples](#query-examples)
+  - [Find All Parent SDs](#find-all-parent-sds)
+  - [Find Children of a Parent](#find-children-of-a-parent)
+  - [Find Full Hierarchy Tree](#find-full-hierarchy-tree)
+- [Best Practices](#best-practices)
+- [References](#references)
 
 ## Metadata
 - **Category**: Guide

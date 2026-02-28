@@ -1,4 +1,61 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Column Rename Migration Notes
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Migration Overview](#migration-overview)
+- [Naming Rationale](#naming-rationale)
+  - [Before (Misleading)](#before-misleading)
+  - [After (Self-Documenting)](#after-self-documenting)
+- [Migration Strategy](#migration-strategy)
+  - [Phase 1: Add New Columns (Backward Compatible)](#phase-1-add-new-columns-backward-compatible)
+  - [Phase 2: Sync Triggers (Transition Period)](#phase-2-sync-triggers-transition-period)
+  - [Phase 3: Verification](#phase-3-verification)
+- [Codebase Migration](#codebase-migration)
+  - [Old Code Pattern (Deprecated)](#old-code-pattern-deprecated)
+  - [New Code Pattern (Recommended)](#new-code-pattern-recommended)
+  - [Foreign Key Relationships](#foreign-key-relationships)
+- [Migration Files](#migration-files)
+  - [File 1: Rename `id` → `sd_code_user_facing`](#file-1-rename-id-sd_code_user_facing)
+  - [File 2: Rename `uuid_id` → `uuid_internal_pk`](#file-2-rename-uuid_id-uuid_internal_pk)
+- [Rollback Procedure](#rollback-procedure)
+  - [Rollback: sd_code_user_facing](#rollback-sd_code_user_facing)
+  - [Rollback: uuid_internal_pk](#rollback-uuid_internal_pk)
+- [Testing](#testing)
+  - [Pre-Migration Tests](#pre-migration-tests)
+  - [Post-Migration Tests](#post-migration-tests)
+- [Performance Impact](#performance-impact)
+  - [Index Creation](#index-creation)
+  - [Trigger Overhead](#trigger-overhead)
+- [Future Phases (Not Yet Implemented)](#future-phases-not-yet-implemented)
+  - [Phase 4: Update Codebase](#phase-4-update-codebase)
+  - [Phase 5: Remove Old Columns (Final)](#phase-5-remove-old-columns-final)
+- [Related Tables](#related-tables)
+- [Common Queries](#common-queries)
+  - [Get SD by User-Facing Code](#get-sd-by-user-facing-code)
+  - [Join on Internal PK](#join-on-internal-pk)
+  - [Insert New SD](#insert-new-sd)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Data Mismatch After Migration](#issue-data-mismatch-after-migration)
+  - [Issue: Trigger Not Firing](#issue-trigger-not-firing)
+  - [Issue: Foreign Key Violations](#issue-foreign-key-violations)
+- [Documentation Updates](#documentation-updates)
+- [Lessons Learned](#lessons-learned)
+  - [What Worked Well](#what-worked-well)
+  - [What Could Be Improved](#what-could-be-improved)
+- [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
+  - [v1.0.0 (2026-01-24)](#v100-2026-01-24)
 
 ## Metadata
 - **Category**: Database

@@ -1,5 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Retrospective Patterns Skill
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Skill Purpose](#skill-purpose)
+- [When to Create Handoff Retrospectives](#when-to-create-handoff-retrospectives)
+  - [MANDATORY Retrospectives](#mandatory-retrospectives)
+  - [OPTIONAL Retrospectives (Recommended)](#optional-retrospectives-recommended)
+- [Focus Areas by Handoff Type](#focus-areas-by-handoff-type)
+  - [LEAD→PLAN Retrospective](#leadplan-retrospective)
+  - [PLAN→EXEC Retrospective](#planexec-retrospective)
+  - [EXEC→PLAN Retrospective (MOST CRITICAL)](#execplan-retrospective-most-critical)
+- [How to Ensure Retrospectives Feed Improvement Pipeline](#how-to-ensure-retrospectives-feed-improvement-pipeline)
+  - [1. Set learning_category Correctly](#1-set-learning_category-correctly)
+  - [2. Structure protocol_improvements for Auto-Extraction](#2-structure-protocol_improvements-for-auto-extraction)
+  - [3. Document Pain Points with Context](#3-document-pain-points-with-context)
+  - [4. Capture Success Stories with Patterns](#4-capture-success-stories-with-patterns)
+  - [5. Link Testing Learnings to Protocol](#5-link-testing-learnings-to-protocol)
+- [Anti-Patterns (Avoid These)](#anti-patterns-avoid-these)
+  - [1. Empty Retrospectives](#1-empty-retrospectives)
+  - [2. Generic Improvements](#2-generic-improvements)
+  - [3. Missing Evidence](#3-missing-evidence)
+  - [4. No Affected Phase](#4-no-affected-phase)
+  - [5. Improvements Without Pain Points](#5-improvements-without-pain-points)
+- [Quality Checklist](#quality-checklist)
+- [Integration with Self-Improvement System](#integration-with-self-improvement-system)
+  - [Automatic Analysis](#automatic-analysis)
+  - [Threshold-Based Application](#threshold-based-application)
+  - [Effectiveness Measurement](#effectiveness-measurement)
+- [Real-World Examples (Evidence-Based)](#real-world-examples-evidence-based)
+  - [Example 1: Testing Enforcement (SD-EXPORT-001)](#example-1-testing-enforcement-sd-export-001)
+  - [Example 2: User Story Validation (SD-EVA-MEETING-001)](#example-2-user-story-validation-sd-eva-meeting-001)
+  - [Example 3: Sub-Agent Orchestration (SD-EXPORT-001)](#example-3-sub-agent-orchestration-sd-export-001)
+- [Reference Documentation](#reference-documentation)
+- [Summary: Creating Improvement-Ready Retrospectives](#summary-creating-improvement-ready-retrospectives)
 
 ## Metadata
 - **Category**: Reference

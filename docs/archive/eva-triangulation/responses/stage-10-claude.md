@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 10 "Naming / Brand" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Brand Genome Structure Decision](#3-brand-genome-structure-decision)
+  - [4. Name Candidate Generation Design](#4-name-candidate-generation-design)
+  - [5. Domain & Trademark: Include or Defer?](#5-domain-trademark-include-or-defer)
+  - [6. Visual Identity: Include or Defer?](#6-visual-identity-include-or-defer)
+  - [7. Scoring Criteria Design](#7-scoring-criteria-design)
+  - [8. Stage 9 → 10 Consumption Mapping](#8-stage-9-10-consumption-mapping)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 10 Schema](#10-recommended-stage-10-schema)
+  - [11. Minimum Viable Change (priority-ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-9 decisions)](#13-dependency-conflicts-with-stages-1-9-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 10 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

@@ -1,5 +1,52 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage 25: Professional SOP (Standard Operating Procedures)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Prerequisites (Entry Gates)](#prerequisites-entry-gates)
+  - [Gate 1: Test Plans Approved](#gate-1-test-plans-approved)
+  - [Gate 2: Environment Ready](#gate-2-environment-ready)
+- [Substage 25.1: Test Execution](#substage-251-test-execution)
+  - [Step 1: Unit Tests Execution](#step-1-unit-tests-execution)
+  - [Step 2: Integration Tests Execution](#step-2-integration-tests-execution)
+  - [Step 3: E2E Tests Execution](#step-3-e2e-tests-execution)
+  - [Substage 25.1 Exit Validation](#substage-251-exit-validation)
+- [Substage 25.2: Bug Management](#substage-252-bug-management)
+  - [Step 1: Bug Logging](#step-1-bug-logging)
+  - [Step 2: Bug Fixes Verification](#step-2-bug-fixes-verification)
+  - [Step 3: Regression Testing](#step-3-regression-testing)
+  - [Substage 25.2 Exit Validation](#substage-252-exit-validation)
+- [Substage 25.3: Quality Certification](#substage-253-quality-certification)
+  - [Step 1: Quality Criteria Validation](#step-1-quality-criteria-validation)
+  - [Step 2: Documentation Completion](#step-2-documentation-completion)
+- [Executive Summary](#executive-summary)
+- [Test Results](#test-results)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [E2E Tests](#e2e-tests)
+- [Bug Summary](#bug-summary)
+- [Quality Certification](#quality-certification)
+  - [Step 3: Sign-off](#step-3-sign-off)
+  - [Substage 25.3 Exit Validation](#substage-253-exit-validation)
+- [Stage 25 Exit Gates](#stage-25-exit-gates)
+  - [Exit Gate Validation (All 3 Must Pass)](#exit-gate-validation-all-3-must-pass)
+  - [If Exit Gates Fail](#if-exit-gates-fail)
+- [Rollback Procedures](#rollback-procedures)
+  - [Rollback Decision Tree](#rollback-decision-tree)
+- [Error Handling](#error-handling)
+  - [Common Error Scenarios](#common-error-scenarios)
+- [Execution Time Tracking](#execution-time-tracking)
 
 ## Metadata
 - **Category**: Guide

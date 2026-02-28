@@ -1,5 +1,44 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Vision V2 Reset and Seed Migration Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Migration Results](#migration-results)
+  - [Archive Created](#archive-created)
+  - [Vision V2 SDs Created](#vision-v2-sds-created)
+  - [Parent-Child Relationships](#parent-child-relationships)
+  - [Vision Specification References](#vision-specification-references)
+  - [CLAUDE Protocol Sections Added](#claude-protocol-sections-added)
+- [Post-Migration Verification](#post-migration-verification)
+  - [Database Queries Executed](#database-queries-executed)
+  - [Verification Checks](#verification-checks)
+- [Rollback Instructions](#rollback-instructions)
+- [Next Steps](#next-steps)
+- [Migration Artifacts](#migration-artifacts)
+- [Issues and Resolutions](#issues-and-resolutions)
+  - [Issue: PostgreSQL Connection Errors](#issue-postgresql-connection-errors)
+  - [Issue: relationship_type Not Set Correctly](#issue-relationship_type-not-set-correctly)
+- [Schema Changes Summary](#schema-changes-summary)
+  - [New Schemas](#new-schemas)
+  - [New Tables (Archive)](#new-tables-archive)
+  - [New Functions](#new-functions)
+  - [New Protocol Sections](#new-protocol-sections)
+- [Compliance and Governance](#compliance-and-governance)
+  - [25-Stage Workflow Insulation](#25-stage-workflow-insulation)
+  - [Vision Specification Traceability](#vision-specification-traceability)
+- [Success Criteria Met](#success-criteria-met)
+- [Appendix: Vision V2 SD Metadata Example](#appendix-vision-v2-sd-metadata-example)
 
 ## Metadata
 - **Category**: Database

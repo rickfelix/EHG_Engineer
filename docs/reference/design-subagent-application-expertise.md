@@ -1,5 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Design Sub-Agent Application Expertise Enhancement
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [What Changed](#what-changed)
+  - [1. Database Schema (New)](#1-database-schema-new)
+  - [2. Design Agent Persona Enhancement](#2-design-agent-persona-enhancement)
+  - [3. Context Builder Script (New)](#3-context-builder-script-new)
+  - [4. Slash Command Update](#4-slash-command-update)
+  - [5. Database Record Update](#5-database-record-update)
+- [Decision Framework](#decision-framework)
+  - [Step 1: Analyze Context](#step-1-analyze-context)
+  - [Step 2: Evaluate Placement](#step-2-evaluate-placement)
+  - [Step 3: Component Reuse](#step-3-component-reuse)
+  - [Step 4: Workflow Integration](#step-4-workflow-integration)
+  - [Step 5: Document Decision](#step-5-document-decision)
+- [Example Output](#example-output)
+- [Seeded Data](#seeded-data)
+  - [Feature Areas (10)](#feature-areas-10)
+  - [Page Routes (8)](#page-routes-8)
+  - [Component Patterns (4)](#component-patterns-4)
+  - [User Workflows (3)](#user-workflows-3)
+- [Pre-Implementation Questions](#pre-implementation-questions)
+- [Success Metrics](#success-metrics)
+- [Files Modified](#files-modified)
+- [Testing](#testing)
+- [Next Steps](#next-steps)
+- [Usage in LEO Protocol](#usage-in-leo-protocol)
+- [Benefits](#benefits)
 
 ## Metadata
 - **Category**: Reference

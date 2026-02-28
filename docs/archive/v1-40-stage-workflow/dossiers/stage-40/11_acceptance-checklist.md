@@ -1,4 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Dossier Acceptance Checklist
+
+
+## Table of Contents
+
+- [Scoring Rubric](#scoring-rubric)
+- [Gate Decision: **APPROVED**](#gate-decision-approved)
+  - [Strengths](#strengths)
+  - [Minor Gaps (Non-Blocking)](#minor-gaps-non-blocking)
+- [Criterion-by-Criterion Assessment](#criterion-by-criterion-assessment)
+  - [1. Definition Completeness (10/10) ✅](#1-definition-completeness-1010-)
+  - [2. Assessment Fidelity (10/10) ✅](#2-assessment-fidelity-1010-)
+  - [3. Recursion Blueprint Accuracy (10/10) ✅](#3-recursion-blueprint-accuracy-1010-)
+  - [4. Agent Orchestration Correctness (9/10) ✅](#4-agent-orchestration-correctness-910-)
+  - [5. Configurability Clarity (10/10) ✅](#5-configurability-clarity-1010-)
+  - [6. Metrics/Monitoring Specificity (9/10) ✅](#6-metricsmonitoring-specificity-910-)
+  - [7. Evidence Appendix Quality (10/10) ✅](#7-evidence-appendix-quality-1010-)
+  - [8. Boundary Check (10/10) ✅](#8-boundary-check-1010-)
+- [Recommendations for Improvement](#recommendations-for-improvement)
+  - [1. Validate Agent Crew Design (Optional)](#1-validate-agent-crew-design-optional)
+  - [2. Prototype Metrics Dashboard (Optional)](#2-prototype-metrics-dashboard-optional)
+  - [3. Test Recursion Triggers (Optional)](#3-test-recursion-triggers-optional)
+- [Comparison to Stage 1 Dossier (Pilot)](#comparison-to-stage-1-dossier-pilot)
+- [Terminal Stage Special Considerations](#terminal-stage-special-considerations)
+- [Boundary Check Detail](#boundary-check-detail)
+- [Reviewer Notes](#reviewer-notes)
+- [Implementation Readiness](#implementation-readiness)
+- [Sources Table](#sources-table)
 
 **Target Score**: ≥85 / 100
 

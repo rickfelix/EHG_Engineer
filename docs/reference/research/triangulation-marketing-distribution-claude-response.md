@@ -1,5 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Response: Anthropic (Claude)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Option ranking for solo operators managing 5-10 ventures](#option-ranking-for-solo-operators-managing-5-10-ventures)
+  - [1st: Option E — Hybrid (Generate + Review Queue + Manual Post)](#1st-option-e-hybrid-generate-review-queue-manual-post)
+  - [2nd: Option C — Third-Party Tool API (Buffer, Hootsuite, Late, Publer)](#2nd-option-c-third-party-tool-api-buffer-hootsuite-late-publer)
+  - [3rd: Option A — Manual Copy/Paste](#3rd-option-a-manual-copypaste)
+  - [4th: Option B — Direct Platform APIs (LinkedIn, X, Facebook, Instagram)](#4th-option-b-direct-platform-apis-linkedin-x-facebook-instagram)
+  - [5th: Option D — Computer Use Automation (Claude, Playwright)](#5th-option-d-computer-use-automation-claude-playwright)
+- [Hidden costs and risks by option](#hidden-costs-and-risks-by-option)
+  - [Option A — Manual Copy/Paste](#option-a-manual-copypaste)
+  - [Option B — Direct Platform APIs](#option-b-direct-platform-apis)
+  - [Option C — Third-Party Tool API](#option-c-third-party-tool-api)
+  - [Option D — Computer Use Automation](#option-d-computer-use-automation)
+  - [Option E — Hybrid (Review Queue + Scheduled Post)](#option-e-hybrid-review-queue-scheduled-post)
+- [Recommended phased approach](#recommended-phased-approach)
+  - [Phase 1: Foundation (Now → 2 weeks) — 1-2 ventures](#phase-1-foundation-now-2-weeks-1-2-ventures)
+  - [Phase 2: Scale to Portfolio (2-6 months) — 5-10 ventures](#phase-2-scale-to-portfolio-2-6-months-5-10-ventures)
+  - [Phase 3: Venture Factory Scale (6+ months) — 20+ ventures](#phase-3-venture-factory-scale-6-months-20-ventures)
+- [Platform priority for B2B venture factory](#platform-priority-for-b2b-venture-factory)
+  - [Tier 1 — LinkedIn (B2B foundation)](#tier-1-linkedin-b2b-foundation)
+  - [Tier 2 — X/Twitter (Tech community + speed)](#tier-2-xtwitter-tech-community-speed)
+  - [Tier 3 — Facebook (Reach + groups)](#tier-3-facebook-reach-groups)
+  - [Tier 4 — Instagram (Visual + younger audience)](#tier-4-instagram-visual-younger-audience)
+- [Tool recommendation: Late (getlate.dev) as primary](#tool-recommendation-late-getlatedev-as-primary)
+  - [Why Late beats alternatives](#why-late-beats-alternatives)
+  - [Late limitations to know](#late-limitations-to-know)
+  - [Alternative recommendation: Publer Business ($21/month)](#alternative-recommendation-publer-business-21month)
+- [Key insight: The "3am rule" decides everything](#key-insight-the-3am-rule-decides-everything)
 
 ## Metadata
 - **Category**: Guide

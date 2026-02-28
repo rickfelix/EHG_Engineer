@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Primary Configuration Parameters](#primary-configuration-parameters)
+  - [1. Hidden Cost Recursion Threshold](#1-hidden-cost-recursion-threshold)
+  - [2. Risk Severity Thresholds](#2-risk-severity-thresholds)
+  - [3. Risk Coverage Target](#3-risk-coverage-target)
+  - [4. Mitigation Effectiveness Target](#4-mitigation-effectiveness-target)
+  - [5. Maximum Risk Score](#5-maximum-risk-score)
+  - [6. Minimum Risk Count by Domain](#6-minimum-risk-count-by-domain)
+  - [7. Max Recursions from Stage 6](#7-max-recursions-from-stage-6)
+  - [8. Chairman Approval Requirements](#8-chairman-approval-requirements)
+- [Industry-Specific Configuration](#industry-specific-configuration)
+  - [SaaS Configuration](#saas-configuration)
+  - [Hardware Configuration](#hardware-configuration)
+  - [Healthcare Configuration](#healthcare-configuration)
+- [Environment-Specific Configuration](#environment-specific-configuration)
+- [Configuration Storage](#configuration-storage)
+- [Chairman Override Capabilities](#chairman-override-capabilities)
+- [Configuration Change Management](#configuration-change-management)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.464Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-06\08_configurability-matrix.md

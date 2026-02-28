@@ -1,5 +1,53 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Agent Runtime Service Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [Runtime Topology](#runtime-topology)
+  - [2.1 Worker Types](#21-worker-types)
+  - [2.2 Deployment Model](#22-deployment-model)
+  - [2.3 Event-Driven vs Polling](#23-event-driven-vs-polling)
+- [Claim and Lease Model](#claim-and-lease-model)
+  - [3.1 Task Claiming](#31-task-claiming)
+  - [3.2 Lease Heartbeat](#32-lease-heartbeat)
+  - [3.3 Lease Expiration Recovery](#33-lease-expiration-recovery)
+- [Idempotency and Replay](#idempotency-and-replay)
+  - [4.1 Idempotency Keys](#41-idempotency-keys)
+  - [4.2 Task Checkpoints](#42-task-checkpoints)
+  - [4.3 Safe Replay](#43-safe-replay)
+- [Failure Recovery](#failure-recovery)
+  - [5.1 Retry Policy](#51-retry-policy)
+  - [5.2 Poison Queue](#52-poison-queue)
+  - [5.3 Dead Letter Queue](#53-dead-letter-queue)
+- [Concurrency and Backpressure](#concurrency-and-backpressure)
+  - [6.1 Global Concurrency Limits](#61-global-concurrency-limits)
+  - [6.2 Admission Control](#62-admission-control)
+  - [6.3 Backpressure Signals](#63-backpressure-signals)
+- [Memory Management](#memory-management)
+  - [7.1 CEO/VP Memory Architecture](#71-ceovp-memory-architecture)
+  - [7.2 Memory Pruning Policy](#72-memory-pruning-policy)
+  - [7.3 Summarization](#73-summarization)
+- [Database Schema](#database-schema)
+  - [8.1 Enhanced agent_task_contracts](#81-enhanced-agent_task_contracts)
+  - [8.2 idempotent_actions](#82-idempotent_actions)
+  - [8.3 dead_letter_queue](#83-dead_letter_queue)
+  - [8.4 concurrency_limits](#84-concurrency_limits)
+  - [8.5 agent_memory_archives](#85-agent_memory_archives)
+- [Critical Questions for the Chairman](#critical-questions-for-the-chairman)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

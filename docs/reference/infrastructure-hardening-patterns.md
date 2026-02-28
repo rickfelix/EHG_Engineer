@@ -1,4 +1,65 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Infrastructure Hardening Patterns
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Atomic State Transitions](#atomic-state-transitions)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [Migration Required](#migration-required)
+- [Parallel Execution Patterns](#parallel-execution-patterns)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [File Modified](#file-modified)
+- [SD-Type-Specific Thresholds](#sd-type-specific-thresholds)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [Files Modified](#files-modified)
+- [Context Deep-Copy Protection](#context-deep-copy-protection)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [Caveats](#caveats)
+  - [File Modified](#file-modified)
+- [Timeout Wrappers](#timeout-wrappers)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [Configuration](#configuration)
+  - [File Modified](#file-modified)
+- [Idempotency Keys](#idempotency-keys)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [Time Window Strategy](#time-window-strategy)
+  - [File Modified](#file-modified)
+- [Schema Validation](#schema-validation)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [File Created](#file-created)
+  - [File Modified](#file-modified)
+- [Centralized Skip Conditions](#centralized-skip-conditions)
+  - [Pattern Overview](#pattern-overview)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+  - [Usage](#usage)
+  - [File Modified](#file-modified)
+- [Cross-References](#cross-references)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

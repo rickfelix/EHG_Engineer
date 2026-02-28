@@ -1,5 +1,50 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Protocol Self-Improvement Documentation - Creation Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Files Created](#files-created)
+  - [1. Main Reference Documentation](#1-main-reference-documentation)
+  - [2. CLAUDE.md Router Entry Proposal](#2-claudemd-router-entry-proposal)
+  - [3. Retrospective Patterns Skill Content](#3-retrospective-patterns-skill-content)
+- [Documentation Architecture](#documentation-architecture)
+- [Key Concepts Documented](#key-concepts-documented)
+  - [1. Evidence-Based Improvement](#1-evidence-based-improvement)
+  - [2. Automated Learning Loop](#2-automated-learning-loop)
+  - [3. Database-First Architecture](#3-database-first-architecture)
+  - [4. Threshold-Based Application](#4-threshold-based-application)
+  - [5. Success Patterns (Evidence)](#5-success-patterns-evidence)
+- [Commands Reference](#commands-reference)
+  - [Analysis](#analysis)
+  - [Application](#application)
+  - [Migration](#migration)
+  - [Queries](#queries)
+- [Integration Points](#integration-points)
+  - [1. Retrospective Creation](#1-retrospective-creation)
+  - [2. Pattern Detection](#2-pattern-detection)
+  - [3. Protocol Updates](#3-protocol-updates)
+  - [4. Context Generation](#4-context-generation)
+  - [5. Effectiveness Tracking](#5-effectiveness-tracking)
+- [Next Steps for Users](#next-steps-for-users)
+  - [1. Apply CLAUDE.md Section](#1-apply-claudemd-section)
+  - [2. Apply Skill File](#2-apply-skill-file)
+  - [3. Run Analysis (Monthly)](#3-run-analysis-monthly)
+  - [4. Apply Improvements (As Needed)](#4-apply-improvements-as-needed)
+  - [5. Track Effectiveness (Quarterly)](#5-track-effectiveness-quarterly)
+- [Success Metrics](#success-metrics)
+- [Related Documentation](#related-documentation)
+- [Documentation Quality](#documentation-quality)
+- [Summary](#summary)
 
 ## Metadata
 - **Category**: Protocol

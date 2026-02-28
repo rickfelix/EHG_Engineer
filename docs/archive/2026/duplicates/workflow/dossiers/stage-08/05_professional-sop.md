@@ -1,3 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Scope](#scope)
+- [Prerequisites](#prerequisites)
+  - [Entry Gate Validation](#entry-gate-validation)
+  - [Required Inputs](#required-inputs)
+  - [Required Resources](#required-resources)
+- [Procedure](#procedure)
+  - [Substage 8.1: Problem Analysis](#substage-81-problem-analysis)
+  - [Substage 8.2: Task Breakdown](#substage-82-task-breakdown)
+  - [Substage 8.3: Dependency Mapping](#substage-83-dependency-mapping)
+  - [Exit Gate Validation](#exit-gate-validation)
+  - [Metrics Validation](#metrics-validation)
+- [Outputs](#outputs)
+- [Recursion Handling](#recursion-handling)
+  - [Receiving TECH-001 from Stage 10 (Primary Recursion)](#receiving-tech-001-from-stage-10-primary-recursion)
+  - [Triggering Recursion to Stage 7](#triggering-recursion-to-stage-7)
+  - [Loop Prevention](#loop-prevention)
+- [Common Issues and Resolutions](#common-issues-and-resolutions)
+- [Roles and Responsibilities](#roles-and-responsibilities)
+- [Performance Standards](#performance-standards)
+- [Document References](#document-references)
+- [Revision History](#revision-history)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:44.047Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\05_professional-sop.md

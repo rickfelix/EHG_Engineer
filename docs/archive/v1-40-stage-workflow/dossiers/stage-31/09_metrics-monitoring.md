@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 31: MVP Launch — Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Primary Metrics (From stages.yaml)](#primary-metrics-from-stagesyaml)
+  - [1. Launch Success Rate](#1-launch-success-rate)
+  - [2. User Acquisition](#2-user-acquisition)
+  - [3. Engagement Metrics](#3-engagement-metrics)
+- [Secondary Metrics (Supporting Launch Analysis)](#secondary-metrics-supporting-launch-analysis)
+  - [4. Marketing Campaign Performance](#4-marketing-campaign-performance)
+  - [5. Support Ticket Volume](#5-support-ticket-volume)
+  - [6. System Health (DevOps Metrics)](#6-system-health-devops-metrics)
+- [Dashboards (3 Levels)](#dashboards-3-levels)
+  - [Dashboard 1: Executive Summary (LEAD View)](#dashboard-1-executive-summary-lead-view)
+  - [Dashboard 2: Operational Details (DevOps/Marketing View)](#dashboard-2-operational-details-devopsmarketing-view)
+  - [Dashboard 3: User Behavior Analytics (Product View)](#dashboard-3-user-behavior-analytics-product-view)
+- [Alerting Strategy](#alerting-strategy)
+  - [Critical Alerts (Immediate Response)](#critical-alerts-immediate-response)
+  - [Warning Alerts (Attention Needed)](#warning-alerts-attention-needed)
+  - [Info Alerts (FYI)](#info-alerts-fyi)
+- [Monitoring Tools & Integration](#monitoring-tools-integration)
+  - [Recommended Stack](#recommended-stack)
+  - [Integration Example (MetricsTracker Agent)](#integration-example-metricstracker-agent)
+- [Metrics Validation (Substage 31.3 Exit Gate)](#metrics-validation-substage-313-exit-gate)
+- [Historical Data Retention](#historical-data-retention)
+- [Sources Table](#sources-table)
 
 **Purpose**: Define KPIs, measurement methods, Supabase queries, and dashboards for tracking Stage 31 launch performance.
 

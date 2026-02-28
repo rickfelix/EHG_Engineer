@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Vision v4.7 Compliance Audit Report — Round 2
+
+
+## Table of Contents
+
+- [1. Score Comparison](#1-score-comparison)
+- [2. Remediation Verification Matrix](#2-remediation-verification-matrix)
+  - [Remediation Summary](#remediation-summary)
+- [3. Category Score Breakdown](#3-category-score-breakdown)
+- [4. Detailed Finding Analysis](#4-detailed-finding-analysis)
+  - [CRIT-001: Chairman Blocking Decisions — **FIXED**](#crit-001-chairman-blocking-decisions-fixed)
+  - [CRIT-002: Decision Enum Types Not Enforced in Database — **NOT FIXED**](#crit-002-decision-enum-types-not-enforced-in-database-not-fixed)
+  - [HIGH-001: Reality Gate Boundary Misalignment — **FIXED**](#high-001-reality-gate-boundary-misalignment-fixed)
+  - [HIGH-002: Stage 25 Decision Routing — **PARTIALLY FIXED**](#high-002-stage-25-decision-routing-partially-fixed)
+  - [HIGH-003: Venture Template Application — **FIXED**](#high-003-venture-template-application-fixed)
+  - [MED-001: Advisory Checkpoints Not Enforced at Runtime — **NOT FIXED**](#med-001-advisory-checkpoints-not-enforced-at-runtime-not-fixed)
+  - [MED-002: Portfolio Prioritization Not Integrated — **NOT FIXED**](#med-002-portfolio-prioritization-not-integrated-not-fixed)
+  - [MED-003: Stage 19 Decision Value Divergence — **NOT FIXED**](#med-003-stage-19-decision-value-divergence-not-fixed)
+  - [LOW-001: DFE Escalation Log Format — **FIXED**](#low-001-dfe-escalation-log-format-fixed)
+  - [LOW-002: Stage 22 Decision Values — **FIXED**](#low-002-stage-22-decision-values-fixed)
+- [5. New R2 Findings](#5-new-r2-findings)
+  - [R2-NEW-01: Stage 25 Template/Analysis Step Enum Divergence](#r2-new-01-stage-25-templateanalysis-step-enum-divergence)
+- [6. Cross-Reference with R2 Phase Audit Findings](#6-cross-reference-with-r2-phase-audit-findings)
+- [7. Vision Alignment Matrix (Updated)](#7-vision-alignment-matrix-updated)
+- [8. Net Delta Analysis](#8-net-delta-analysis)
+  - [Improvements (+12 points)](#improvements-12-points)
+  - [Unchanged or Worsened](#unchanged-or-worsened)
+- [9. Recommendations](#9-recommendations)
+  - [P0 — Immediate](#p0-immediate)
+  - [P1 — Short-Term](#p1-short-term)
+  - [P2 — Medium-Term](#p2-medium-term)
+- [10. Conclusion](#10-conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-R2-VISION-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-R2-ORCH-001

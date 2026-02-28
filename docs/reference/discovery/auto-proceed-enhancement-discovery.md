@@ -1,5 +1,76 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # AUTO-PROCEED Enhancement Discovery Session
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Key Insights Captured](#key-insights-captured)
+  - [1. Core Philosophy](#1-core-philosophy)
+  - [2. Human Intervention Points](#2-human-intervention-points)
+  - [3. Learning Flow Between SDs](#3-learning-flow-between-sds)
+  - [4. Documentation Gaps Identified](#4-documentation-gaps-identified)
+  - [5. Session Continuity Architecture (Already Built)](#5-session-continuity-architecture-already-built)
+  - [6. Session Inheritance Message](#6-session-inheritance-message)
+  - [7. Orchestrator Completion Behavior](#7-orchestrator-completion-behavior)
+- [Round 2: Robustness & Sustainability](#round-2-robustness-sustainability)
+  - [8. Error Handling](#8-error-handling)
+  - [9. Progress Visibility](#9-progress-visibility)
+  - [10. Execution Limits](#10-execution-limits)
+  - [11. UAT Handling](#11-uat-handling)
+  - [12. Notifications](#12-notifications)
+  - [13. Learning Review Trigger](#13-learning-review-trigger)
+  - [14. Post-Learn Behavior](#14-post-learn-behavior)
+  - [15. Context Management](#15-context-management)
+  - [16. Restart Handling](#16-restart-handling)
+  - [17. Handoff Script Integration](#17-handoff-script-integration)
+- [Round 3: Activation & Boundaries](#round-3-activation-boundaries)
+  - [18. Activation Mechanism](#18-activation-mechanism)
+  - [19. User Interruption](#19-user-interruption)
+  - [20. Multi-Orchestrator Queue Display](#20-multi-orchestrator-queue-display)
+  - [21. Orchestrator Chaining](#21-orchestrator-chaining)
+- [Round 4: Gaps & Edge Cases](#round-4-gaps-edge-cases)
+  - [22. Validation Gate Failures (D16 - IMPLEMENTED)](#22-validation-gate-failures-d16---implemented)
+  - [23. Session Summary](#23-session-summary)
+  - [24. Crash Recovery](#24-crash-recovery)
+  - [25. Metrics Tracking](#25-metrics-tracking)
+  - [26. Sensitive SD Types](#26-sensitive-sd-types)
+  - [27. Mid-Execution Blockers](#27-mid-execution-blockers)
+  - [28. Learning-Based Re-Prioritization](#28-learning-based-re-prioritization)
+  - [29. All Children Blocked](#29-all-children-blocked)
+  - [30. AUTO-PROCEED Mode Reminder](#30-auto-proceed-mode-reminder)
+- [Round 5: User Experience Enhancements](#round-5-user-experience-enhancements)
+  - [31. Status Line Integration](#31-status-line-integration)
+  - [32. Completion Acknowledgment](#32-completion-acknowledgment)
+  - [33. Context Compaction Notice](#33-context-compaction-notice)
+  - [34. Error Retry Visibility](#34-error-retry-visibility)
+  - [35. Post-Interruption Context Reminder](#35-post-interruption-context-reminder)
+- [Final Architecture Requirements](#final-architecture-requirements)
+  - [Must Implement](#must-implement)
+  - [Already Handled (Verify)](#already-handled-verify)
+  - [Database Schema Needs](#database-schema-needs)
+- [Proposed SD Structure](#proposed-sd-structure)
+  - [SD-FEAT-AUTO-PROCEED-ENH-001: Enhance AUTO-PROCEED for Long Runs](#sd-feat-auto-proceed-enh-001-enhance-auto-proceed-for-long-runs)
+- [Summary of User Decisions](#summary-of-user-decisions)
+- [Round 3: Background Task Prevention (Added 2026-02-01)](#round-3-background-task-prevention-added-2026-02-01)
+  - [30. Background Task Prevention](#30-background-task-prevention)
+- [Proposed SD Structure (Updated)](#proposed-sd-structure-updated)
+  - [SD-ENH-AUTO-PROCEED-001: Enhance AUTO-PROCEED for Long Runs](#sd-enh-auto-proceed-001-enhance-auto-proceed-for-long-runs)
+- [Implementation Status (SD-LEO-ENH-AUTO-PROCEED-001)](#implementation-status-sd-leo-enh-auto-proceed-001)
+- [Round 6: Complete SD Continuation Specification (Added 2026-02-01)](#round-6-complete-sd-continuation-specification-added-2026-02-01)
+  - [36. AUTO-PROCEED + Chaining Interaction (v1)](#36-auto-proceed-chaining-interaction-v1)
+  - [37. Child-to-Child Continuation (v2 - expanded scope)](#37-child-to-child-continuation-v2---expanded-scope)
+  - [38. Grandchild Continuation](#38-grandchild-continuation)
+- [Round 5: Terminal Handoffs (Added 2026-02-06)](#round-5-terminal-handoffs-added-2026-02-06)
+  - [34. Handoff Chaining Within SD](#34-handoff-chaining-within-sd)
 
 ## Metadata
 - **Category**: Guide

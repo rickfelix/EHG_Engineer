@@ -1,4 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SD Review: Claude Code Independent Analysis
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Ground-Truth Validation](#ground-truth-validation)
+- [SD 1: SD-GENESIS-COMPLETE-001](#sd-1-sd-genesis-complete-001)
+  - [Ground-Truth Validation](#ground-truth-validation)
+- [SD 2: SD-VENTURE-SELECTION-001](#sd-2-sd-venture-selection-001)
+  - [Ground-Truth Validation](#ground-truth-validation)
+- [SD 3: SD-BLIND-SPOTS-001](#sd-3-sd-blind-spots-001)
+  - [Ground-Truth Validation](#ground-truth-validation)
+- [User Stories](#user-stories)
+  - [SD-GENESIS-PRD-001: LLM-Integrated PRD Generation](#sd-genesis-prd-001-llm-integrated-prd-generation)
+  - [SD-GENESIS-STAGE16-17-001: Wire Soul-Extractor and Production-Generator](#sd-genesis-stage16-17-001-wire-soul-extractor-and-production-generator)
+  - [SD-VS-CHAIRMAN-SETTINGS-001: Configurable Portfolio Logic](#sd-vs-chairman-settings-001-configurable-portfolio-logic)
+  - [SD-EVA-DASHBOARD-001: Chairman Health Grid View](#sd-eva-dashboard-001-chairman-health-grid-view)
+  - [SD-BLIND-SPOT-LEGAL-001: Series LLC Foundation](#sd-blind-spot-legal-001-series-llc-foundation)
+- [PRD Details](#prd-details)
+  - [SD-GENESIS-UI-001: Simulation Creation Wizard](#sd-genesis-ui-001-simulation-creation-wizard)
+  - [SD-VS-SCORING-RUBRIC-001: Automated Scoring Engine](#sd-vs-scoring-rubric-001-automated-scoring-engine)
+- [Missing Considerations](#missing-considerations)
+  - [1. Security: RBAC on Genesis Endpoints](#1-security-rbac-on-genesis-endpoints)
+  - [2. Pattern Dependency Resolution](#2-pattern-dependency-resolution)
+  - [3. Simulation Data Migration](#3-simulation-data-migration)
+  - [4. EVA Without Ventures](#4-eva-without-ventures)
+  - [5. Genesis ↔ Orchestrator Architecture Gap](#5-genesis-orchestrator-architecture-gap)
+  - [6. Pattern Library Gaps](#6-pattern-library-gaps)
+- [Priority and Sequencing Feedback](#priority-and-sequencing-feedback)
+  - [Critical Blocker Identified](#critical-blocker-identified)
+  - [Recommended Sequence](#recommended-sequence)
+  - [Parallelization Opportunities](#parallelization-opportunities)
+- [Summary Table](#summary-table)
 
 ## Metadata
 - **Category**: Guide

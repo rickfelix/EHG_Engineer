@@ -1,4 +1,43 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Product Requirements V2 Table Audit Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Duplicate SDs Found (13 total)](#duplicate-sds-found-13-total)
+  - [Critical Duplicates](#critical-duplicates)
+  - [High-Priority Duplicates (2+ PRDs each)](#high-priority-duplicates-2-prds-each)
+- [Full Duplicate Details](#full-duplicate-details)
+  - [Example 1: SD with UUID + Named PRD](#example-1-sd-with-uuid-named-prd)
+  - [Example 2: Multiple orchestrator/rename children](#example-2-multiple-orchestratorrename-children)
+- [Root Cause Analysis](#root-cause-analysis)
+  - [Why Duplicates Occur](#why-duplicates-occur)
+  - [Entry Points to Investigate](#entry-points-to-investigate)
+- [Recommended Cleanup Strategy](#recommended-cleanup-strategy)
+  - [Phase 1: Manual Review (Required)](#phase-1-manual-review-required)
+  - [Phase 2: Delete Obsolete PRDs](#phase-2-delete-obsolete-prds)
+  - [Phase 3: Add UNIQUE Constraint](#phase-3-add-unique-constraint)
+  - [Phase 4: Update Code](#phase-4-update-code)
+  - [Phase 5: Add Data Validation Tests](#phase-5-add-data-validation-tests)
+- [Impact Assessment](#impact-assessment)
+  - [Current Issues](#current-issues)
+  - [Benefits of Cleanup](#benefits-of-cleanup)
+- [Migration Plan](#migration-plan)
+  - [Pre-Migration Checklist](#pre-migration-checklist)
+  - [Migration Steps](#migration-steps)
+  - [Rollback Plan](#rollback-plan)
+- [Next Steps](#next-steps)
+- [Appendix: Query Results](#appendix-query-results)
+  - [Query 1: Duplicate SDs (Raw Output)](#query-1-duplicate-sds-raw-output)
+  - [Query 3: NULL sd_id (Result)](#query-3-null-sd_id-result)
 
 **Date**: 2026-02-06
 **Database**: EHG_Engineer (Supabase Project: dedlbzhpgkmetvhbkyzq)

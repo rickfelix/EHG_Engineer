@@ -1,5 +1,35 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Enterprise Database Schema & Entity Relationship Diagram
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Core Entity Relationships](#core-entity-relationships)
+- [Data Access Patterns & Row Level Security](#data-access-patterns-row-level-security)
+  - [1. Company-Based Access Control](#1-company-based-access-control)
+  - [2. Role-Based Permissions](#2-role-based-permissions)
+  - [3. Data Lineage & Audit Trail](#3-data-lineage-audit-trail)
+- [Performance Optimization](#performance-optimization)
+  - [Strategic Indexes](#strategic-indexes)
+  - [Query Optimization Guidelines](#query-optimization-guidelines)
+- [Data Integrity & Constraints](#data-integrity-constraints)
+  - [Business Rules Enforcement](#business-rules-enforcement)
+  - [Referential Integrity](#referential-integrity)
+- [Migration & Versioning Strategy](#migration-versioning-strategy)
+  - [Migration Naming Convention](#migration-naming-convention)
+  - [Rollback Capabilities](#rollback-capabilities)
+- [Contract Enforcement](#contract-enforcement)
+  - [Zod Validation Schemas](#zod-validation-schemas)
+  - [Error Handling](#error-handling)
 
 ## Metadata
 - **Category**: Feature

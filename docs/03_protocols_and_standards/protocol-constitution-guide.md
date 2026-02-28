@@ -1,4 +1,71 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Protocol Constitution Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [The Eleven Constitutional Rules](#the-eleven-constitutional-rules)
+  - [CONST-001: Human Approval for GOVERNED Tier](#const-001-human-approval-for-governed-tier)
+  - [CONST-002: Separation of Proposer and Evaluator](#const-002-separation-of-proposer-and-evaluator)
+  - [CONST-003: Audit Logging Requirement](#const-003-audit-logging-requirement)
+  - [CONST-004: Reversibility Requirement](#const-004-reversibility-requirement)
+  - [CONST-005: Database-First Architecture](#const-005-database-first-architecture)
+  - [CONST-006: Zero-Sum Complexity (Complexity Conservation)](#const-006-zero-sum-complexity-complexity-conservation)
+  - [CONST-007: Rate Limiting for AUTO Tier](#const-007-rate-limiting-for-auto-tier)
+  - [CONST-008: Chesterton's Fence](#const-008-chestertons-fence)
+  - [CONST-009: Human FREEZE Command](#const-009-human-freeze-command)
+  - [CONST-010: Non-Manipulation Principle](#const-010-non-manipulation-principle)
+  - [CONST-011: Value Priority Hierarchy](#const-011-value-priority-hierarchy)
+- [Enforcement Mechanisms](#enforcement-mechanisms)
+  - [Layer 1: Constitution Validator](#layer-1-constitution-validator)
+  - [Layer 2: RLS Policies](#layer-2-rls-policies)
+  - [Layer 3: AI Quality Judge Integration](#layer-3-ai-quality-judge-integration)
+  - [Layer 4: CLI Integration](#layer-4-cli-integration)
+- [Violation Severity Levels](#violation-severity-levels)
+  - [CRITICAL (Auto-Reject)](#critical-auto-reject)
+  - [HIGH (Flag for Review)](#high-flag-for-review)
+  - [MEDIUM (Advisory)](#medium-advisory)
+  - [ADVISORY (Informational)](#advisory-informational)
+- [Integration with AI Quality Judge](#integration-with-ai-quality-judge)
+  - [Phase 1 Implementation (Current)](#phase-1-implementation-current)
+  - [Phase 2 (Future)](#phase-2-future)
+  - [Constitution Check Integration](#constitution-check-integration)
+- [Relationship to Other Governance](#relationship-to-other-governance)
+  - [Governance Hierarchy](#governance-hierarchy)
+  - [Comparison Table](#comparison-table)
+  - [Overlap and Coordination](#overlap-and-coordination)
+- [Technical Implementation](#technical-implementation)
+  - [Database Schema](#database-schema)
+  - [Constitution Validator Class](#constitution-validator-class)
+  - [AI Quality Judge Integration](#ai-quality-judge-integration)
+  - [CLI Commands](#cli-commands)
+- [Use Cases and Examples](#use-cases-and-examples)
+  - [Example 1: Valid Improvement (Passes Constitution)](#example-1-valid-improvement-passes-constitution)
+  - [Example 2: CRITICAL Violation (Auto-Reject)](#example-2-critical-violation-auto-reject)
+  - [Example 3: Rate Limit Violation](#example-3-rate-limit-violation)
+  - [Example 4: Same Model Family Violation](#example-4-same-model-family-violation)
+  - [Example 5: Removal Without Retrospective Review](#example-5-removal-without-retrospective-review)
+- [Amendment Process](#amendment-process)
+  - [Can the Constitution Be Changed?](#can-the-constitution-be-changed)
+  - [Amendment Principles](#amendment-principles)
+  - [Amendment Process](#amendment-process)
+  - [Historical Amendments](#historical-amendments)
+- [Related Documentation](#related-documentation)
+  - [Primary References](#primary-references)
+  - [Related Governance](#related-governance)
+  - [Schema Documentation](#schema-documentation)
+  - [Implementation Files](#implementation-files)
+- [Changelog](#changelog)
+  - [Version 1.0.0 (2026-01-23)](#version-100-2026-01-23)
 
 ## Metadata
 - **Category**: Protocol

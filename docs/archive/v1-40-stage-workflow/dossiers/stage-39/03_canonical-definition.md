@@ -1,4 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 39: Multi-Venture Coordination — Canonical Definition
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Breakdown](#field-by-field-breakdown)
+  - [Core Identity](#core-identity)
+  - [Dependencies](#dependencies)
+  - [Inputs (from Stage 38)](#inputs-from-stage-38)
+  - [Outputs (to Stage 40)](#outputs-to-stage-40)
+  - [Metrics (KPIs)](#metrics-kpis)
+  - [Entry Gates](#entry-gates)
+  - [Exit Gates](#exit-gates)
+  - [Substages](#substages)
+  - [Notes](#notes)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

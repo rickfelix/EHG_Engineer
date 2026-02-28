@@ -1,5 +1,40 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # INVEST Criteria Validation: SD-VISION-V2-011
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [INVEST Criteria Analysis](#invest-criteria-analysis)
+  - [I - Independent (Score: 100/100)](#i---independent-score-100100)
+  - [N - Negotiable (Score: 95/100)](#n---negotiable-score-95100)
+  - [V - Valuable (Score: 100/100)](#v---valuable-score-100100)
+  - [E - Estimable (Score: 90/100)](#e---estimable-score-90100)
+  - [S - Small (Score: 90/100)](#s---small-score-90100)
+  - [T - Testable (Score: 100/100)](#t---testable-score-100100)
+- [Overall INVEST Score: 95/100](#overall-invest-score-95100)
+  - [Score Breakdown](#score-breakdown)
+  - [Quality Rating: EXCELLENT](#quality-rating-excellent)
+- [Compliance with STORIES v2.0.0](#compliance-with-stories-v200)
+  - [Improvement #1: E2E Test Mapping (CRITICAL)](#improvement-1-e2e-test-mapping-critical)
+  - [Improvement #2: Auto-Validation on EXEC Completion (HIGH)](#improvement-2-auto-validation-on-exec-completion-high)
+  - [Improvement #3: INVEST Criteria Enforcement (MEDIUM)](#improvement-3-invest-criteria-enforcement-medium)
+  - [Improvement #4: Acceptance Criteria Templates (MEDIUM)](#improvement-4-acceptance-criteria-templates-medium)
+  - [Improvement #5: Rich Implementation Context (LOW)](#improvement-5-rich-implementation-context-low)
+- [Recommendations](#recommendations)
+  - [Immediate Actions (Before EXEC Phase)](#immediate-actions-before-exec-phase)
+  - [During EXEC Phase](#during-exec-phase)
+  - [Quality Gates](#quality-gates)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

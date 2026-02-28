@@ -1,5 +1,72 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.2.0 - Git Commit Guidelines
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Commit Message Format](#commit-message-format)
+  - [Standard Structure](#standard-structure)
+  - [Required Elements](#required-elements)
+- [Commit Timing Guidelines](#commit-timing-guidelines)
+  - [During EXEC Implementation Phase](#during-exec-implementation-phase)
+  - [Commit Frequency Rules](#commit-frequency-rules)
+- [Commit Size and Scope](#commit-size-and-scope)
+  - [Atomic Commits](#atomic-commits)
+  - [Size Guidelines](#size-guidelines)
+  - [File Scope](#file-scope)
+- [Branch-Specific Requirements](#branch-specific-requirements)
+  - [Development Branches (EXEC Phase)](#development-branches-exec-phase)
+  - [Main Branch (Post-LEAD Approval Only)](#main-branch-post-lead-approval-only)
+- [LEO Protocol Phase Integration](#leo-protocol-phase-integration)
+  - [Phase 1-2: LEAD/PLAN (Database-First)](#phase-1-2-leadplan-database-first)
+  - [Phase 3: EXEC Implementation](#phase-3-exec-implementation)
+  - [Phase 4: PLAN Verification](#phase-4-plan-verification)
+  - [Phase 5: LEAD Approval](#phase-5-lead-approval)
+  - [Post-Approval: GitHub Sub-Agent](#post-approval-github-sub-agent)
+- [Gate 0: Pre-Commit Validation](#gate-0-pre-commit-validation)
+  - [How It Works](#how-it-works)
+  - [Blocked Phases](#blocked-phases)
+  - [Valid Phases](#valid-phases)
+  - [LOC Threshold Trigger](#loc-threshold-trigger)
+  - [Emergency Bypass](#emergency-bypass)
+- [Practical Examples](#practical-examples)
+  - [Feature Implementation](#feature-implementation)
+  - [Documentation Update](#documentation-update)
+  - [Refactoring](#refactoring)
+- [AI-Assisted Development](#ai-assisted-development)
+  - [When AI Generates Code](#when-ai-generates-code)
+  - [AI Review Guidelines](#ai-review-guidelines)
+- [Validation and Enforcement](#validation-and-enforcement)
+  - [Pre-Commit Hooks](#pre-commit-hooks)
+  - [Validation Rules](#validation-rules)
+  - [CI/CD Integration](#cicd-integration)
+- [Git Configuration](#git-configuration)
+  - [Commit Template](#commit-template)
+  - [Template Content (.gitmessage)](#template-content-gitmessage)
+- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+  - [❌ DON'T](#-dont)
+  - [✅ DO](#-do)
+- [Integration with Tools](#integration-with-tools)
+  - [VS Code Settings](#vs-code-settings)
+  - [Git Aliases](#git-aliases)
+- [Metrics and Reporting](#metrics-and-reporting)
+  - [Commit Quality Metrics](#commit-quality-metrics)
+  - [Reporting Commands](#reporting-commands)
+- [Migration from Previous Practices](#migration-from-previous-practices)
+  - [For Existing Repositories](#for-existing-repositories)
+  - [Transition Period](#transition-period)
+- [Quick Reference Card](#quick-reference-card)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Protocol

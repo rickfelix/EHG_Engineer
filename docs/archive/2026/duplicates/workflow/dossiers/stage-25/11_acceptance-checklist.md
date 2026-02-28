@@ -1,3 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Scoring Rubric](#scoring-rubric)
+  - [Criterion 1: Completeness (0-15 points)](#criterion-1-completeness-0-15-points)
+  - [Criterion 2: Evidence Quality (0-15 points)](#criterion-2-evidence-quality-0-15-points)
+  - [Criterion 3: Actionability (0-15 points)](#criterion-3-actionability-0-15-points)
+  - [Criterion 4: Recursion Depth (0-15 points)](#criterion-4-recursion-depth-0-15-points)
+  - [Criterion 5: Configurability (0-15 points)](#criterion-5-configurability-0-15-points)
+  - [Criterion 6: Metrics Observability (0-15 points)](#criterion-6-metrics-observability-0-15-points)
+  - [Criterion 7: Gap Analysis Rigor (0-15 points)](#criterion-7-gap-analysis-rigor-0-15-points)
+  - [Criterion 8: Cross-Stage Integration (0-15 points)](#criterion-8-cross-stage-integration-0-15-points)
+- [Final Score Calculation](#final-score-calculation)
+- [Assessment](#assessment)
+- [Strengths](#strengths)
+- [Areas for Improvement (None Blocking)](#areas-for-improvement-none-blocking)
+- [Production Readiness Checklist](#production-readiness-checklist)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:55.767Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-25\11_acceptance-checklist.md

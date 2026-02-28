@@ -1,4 +1,53 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # PRD Grounding Validation to Prevent LLM Scope Drift
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Problem Statement](#problem-statement)
+  - [Solution](#solution)
+- [Architecture](#architecture)
+  - [System Components](#system-components)
+  - [Data Flow](#data-flow)
+- [Implementation Details](#implementation-details)
+  - [1. Database Migration](#1-database-migration)
+  - [2. PRD Generator Enhancement](#2-prd-generator-enhancement)
+  - [3. Grounding Validator Module](#3-grounding-validator-module)
+  - [4. Integration into PRD Pipeline](#4-integration-into-prd-pipeline)
+- [Configuration](#configuration)
+  - [Implementation Context Values](#implementation-context-values)
+  - [Confidence Thresholds](#confidence-thresholds)
+- [Usage](#usage)
+  - [Setting Implementation Context on SD Creation](#setting-implementation-context-on-sd-creation)
+  - [Manual Validation of Existing PRD](#manual-validation-of-existing-prd)
+- [User Stories](#user-stories)
+  - [US-001: Implementation Context Guides PRD Generation](#us-001-implementation-context-guides-prd-generation)
+  - [US-002: Context Exclusions Prevent Scope Drift](#us-002-context-exclusions-prevent-scope-drift)
+  - [US-003: Grounding Validator Flags Ungrounded Requirements](#us-003-grounding-validator-flags-ungrounded-requirements)
+  - [US-004: Discovery Documents Inform Grounding Validation](#us-004-discovery-documents-inform-grounding-validation)
+- [Testing](#testing)
+  - [Test Scenarios](#test-scenarios)
+- [Risks and Mitigation](#risks-and-mitigation)
+  - [Risk 1: False Positives (Valid Requirements Flagged)](#risk-1-false-positives-valid-requirements-flagged)
+  - [Risk 2: Context Patterns Become Outdated](#risk-2-context-patterns-become-outdated)
+  - [Risk 3: Performance Impact on PRD Generation](#risk-3-performance-impact-on-prd-generation)
+- [Success Metrics](#success-metrics)
+- [Future Enhancements](#future-enhancements)
+  - [Phase 2: ML-Based Confidence Scoring](#phase-2-ml-based-confidence-scoring)
+  - [Phase 3: Interactive Refinement](#phase-3-interactive-refinement)
+  - [Phase 4: Context Auto-Detection](#phase-4-context-auto-detection)
+- [Related Documentation](#related-documentation)
+- [Retrospective Insights](#retrospective-insights)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Feature

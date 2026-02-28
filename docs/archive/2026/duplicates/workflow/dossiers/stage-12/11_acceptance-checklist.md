@@ -1,3 +1,50 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Acceptance Criteria (8 Dimensions)](#acceptance-criteria-8-dimensions)
+- [Dimension 1: Evidence Completeness (15 points)](#dimension-1-evidence-completeness-15-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 2: Structural Consistency (10 points)](#dimension-2-structural-consistency-10-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 3: Recursion Blueprint Quality (15 points)](#dimension-3-recursion-blueprint-quality-15-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 4: Cross-File Integration (10 points)](#dimension-4-cross-file-integration-10-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 5: SD Cross-Reference Quality (10 points)](#dimension-5-sd-cross-reference-quality-10-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 6: Acceptance Score Calculation (10 points)](#dimension-6-acceptance-score-calculation-10-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 7: Technical Depth (15 points)](#dimension-7-technical-depth-15-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Dimension 8: Usability & Navigability (15 points)](#dimension-8-usability-navigability-15-points)
+  - [Scoring Rubric](#scoring-rubric)
+  - [Self-Assessment](#self-assessment)
+- [Final Acceptance Score](#final-acceptance-score)
+  - [Score Summary](#score-summary)
+- [Critical Notes & Recommendations](#critical-notes-recommendations)
+  - [Critical Success Factors](#critical-success-factors)
+  - [Recommendations for Future Dossiers](#recommendations-for-future-dossiers)
+  - [Known Limitations](#known-limitations)
+  - [Post-Phase 6 Action Items](#post-phase-6-action-items)
+- [Acceptance Decision](#acceptance-decision)
+- [Dossier Metadata](#dossier-metadata)
+
 <!-- ARCHIVED: 2026-01-26T16:26:56.003Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-12\11_acceptance-checklist.md

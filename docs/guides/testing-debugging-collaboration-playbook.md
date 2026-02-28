@@ -1,5 +1,55 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Testing & Debugging Sub-Agents Collaboration Playbook
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🎯 Executive Summary](#-executive-summary)
+- [📚 Table of Contents](#-table-of-contents)
+- [Core Architecture](#core-architecture)
+  - [Enhanced Sub-Agent Responsibilities](#enhanced-sub-agent-responsibilities)
+- [Structured Handoff Protocol](#structured-handoff-protocol)
+  - [TestHandoff Interface](#testhandoff-interface)
+  - [Implementation Example](#implementation-example)
+- [Self-Healing Selectors](#self-healing-selectors)
+  - [Strategy Chain Pattern](#strategy-chain-pattern)
+  - [Recommended Selector Strategies](#recommended-selector-strategies)
+  - [Best Practices](#best-practices)
+- [Actionable Remediation](#actionable-remediation)
+  - [Fix Generator Categories](#fix-generator-categories)
+  - [Auto-Executable vs Manual Fixes](#auto-executable-vs-manual-fixes)
+  - [Fix Execution Flow](#fix-execution-flow)
+- [Real-Time Collaboration](#real-time-collaboration)
+  - [Event-Driven Communication](#event-driven-communication)
+  - [WebSocket Integration (Future)](#websocket-integration-future)
+- [Implementation Guide](#implementation-guide)
+  - [Step 1: Initialize Enhanced Agents](#step-1-initialize-enhanced-agents)
+  - [Step 2: Define Test Suite](#step-2-define-test-suite)
+  - [Step 3: Execute with Collaboration](#step-3-execute-with-collaboration)
+  - [Step 4: Apply Fixes](#step-4-apply-fixes)
+- [Success Metrics](#success-metrics)
+  - [Key Performance Indicators](#key-performance-indicators)
+  - [Tracking Implementation](#tracking-implementation)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues and Solutions](#common-issues-and-solutions)
+- [Best Practices Checklist](#best-practices-checklist)
+  - [For Testing Sub-Agent](#for-testing-sub-agent)
+  - [For Debugging Sub-Agent](#for-debugging-sub-agent)
+  - [For Collaboration](#for-collaboration)
+- [Advanced Patterns](#advanced-patterns)
+  - [Pattern 1: Predictive Failure Prevention](#pattern-1-predictive-failure-prevention)
+  - [Pattern 2: Self-Improving Tests](#pattern-2-self-improving-tests)
+  - [Pattern 3: Distributed Diagnosis](#pattern-3-distributed-diagnosis)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Testing

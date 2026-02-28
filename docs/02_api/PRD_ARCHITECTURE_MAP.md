@@ -1,5 +1,55 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # PRD Architecture Map
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Architecture Categories Overview](#architecture-categories-overview)
+  - [🏗️ Platform PRDs (Build in Lovable - 19 PRDs)](#-platform-prds-build-in-lovable---19-prds)
+  - [📋 Workflow PRDs (Store as Configuration - 40 PRDs)](#-workflow-prds-store-as-configuration---40-prds)
+  - [🤖 Agent PRDs (AI Orchestrators - 8 PRDs)](#-agent-prds-ai-orchestrators---8-prds)
+  - [🔄 Meta PRDs (Recursive Capabilities - 1 PRD)](#-meta-prds-recursive-capabilities---1-prd)
+  - [📚 Supporting PRDs (Cross-cutting Tools - 14 PRDs)](#-supporting-prds-cross-cutting-tools---14-prds)
+- [🏗️ PLATFORM PRDs (Build These First)](#-platform-prds-build-these-first)
+  - [Priority 1: Foundation (Week 1)](#priority-1-foundation-week-1)
+  - [Priority 2: Core UI (Week 2)](#priority-2-core-ui-week-2)
+  - [Priority 3: Integration & Data (Week 3)](#priority-3-integration-data-week-3)
+  - [Priority 4: Analytics & Communication (Week 4)](#priority-4-analytics-communication-week-4)
+  - [Priority 5: Quality & Compliance (Week 5)](#priority-5-quality-compliance-week-5)
+  - [Priority 6: Advanced UI Components (Week 6)](#priority-6-advanced-ui-components-week-6)
+- [📋 WORKFLOW PRDs (Configuration Data - 40 PRDs)](#-workflow-prds-configuration-data---40-prds)
+  - [Venture Ideation & Validation (Stages 1-10)](#venture-ideation-validation-stages-1-10)
+  - [Venture Design & Naming (Stages 11-15)](#venture-design-naming-stages-11-15)
+  - [Development & Integration (Stages 18-30)](#development-integration-stages-18-30)
+  - [Launch & Growth (Stages 31-40)](#launch-growth-stages-31-40)
+- [🤖 AGENT PRDs (AI Orchestrators - 8 PRDs)](#-agent-prds-ai-orchestrators---8-prds)
+- [🔄 META PRDs (Recursive Capabilities - 1 PRD)](#-meta-prds-recursive-capabilities---1-prd)
+- [📚 SUPPORTING PRDs (Cross-cutting Tools - 14 PRDs)](#-supporting-prds-cross-cutting-tools---14-prds)
+  - [Integration & Intelligence Tools](#integration-intelligence-tools)
+  - [Content & Media Tools](#content-media-tools)
+  - [Templates & Frameworks](#templates-frameworks)
+- [🚀 Platform Development Priority Order](#-platform-development-priority-order)
+  - [Phase 1: Foundation (Weeks 1-2)](#phase-1-foundation-weeks-1-2)
+  - [Phase 2: Core Platform (Weeks 3-4)](#phase-2-core-platform-weeks-3-4)
+  - [Phase 3: Orchestration (Week 5)](#phase-3-orchestration-week-5)
+  - [Phase 4: Analytics & Quality (Week 6)](#phase-4-analytics-quality-week-6)
+  - [Phase 5: Advanced Features (Week 7+)](#phase-5-advanced-features-week-7)
+- [📝 Development Guidelines](#-development-guidelines)
+  - [When Building Platform PRDs:](#when-building-platform-prds)
+  - [When Implementing Workflow PRDs:](#when-implementing-workflow-prds)
+  - [When Implementing Agent PRDs:](#when-implementing-agent-prds)
+  - [When Implementing Meta PRDs:](#when-implementing-meta-prds)
+- [🎯 Key Development Principles](#-key-development-principles)
+- [✅ Success Criteria](#-success-criteria)
 
 ## Metadata
 - **Category**: Architecture

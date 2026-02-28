@@ -1,5 +1,45 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Stage 04 – Competitive Intelligence Enhanced PRD (v4)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EHG Management Model Integration](#ehg-management-model-integration)
+  - [Strategic Intelligence Framework](#strategic-intelligence-framework)
+  - [Multi-Agent Intelligence Coordination](#multi-agent-intelligence-coordination)
+  - [Multi-Company Competitive Intelligence](#multi-company-competitive-intelligence)
+- [1) Purpose & Scope](#1-purpose-scope)
+- [2) Objectives & KPIs](#2-objectives-kpis)
+- [3) Data Contracts (TypeScript/Zod)](#3-data-contracts-typescriptzod)
+- [4) Business Logic (Deterministic Analytics)](#4-business-logic-deterministic-analytics)
+  - [4.1 Weighted Coverage Score](#41-weighted-coverage-score)
+  - [4.2 Differentiation Score (vs. best competitor)](#42-differentiation-score-vs-best-competitor)
+  - [4.3 Defensibility Grade](#43-defensibility-grade)
+- [5) UI Component Specs (React + Tailwind)](#5-ui-component-specs-react-tailwind)
+- [5.5) Database Schema Integration](#55-database-schema-integration)
+  - [Integration Hub Connectivity](#integration-hub-connectivity)
+- [6) B2C SaaS Competitive Intelligence Integration](#6-b2c-saas-competitive-intelligence-integration)
+- [7) SaaS Intelligence & Replication System Integration](#7-saas-intelligence-replication-system-integration)
+- [7) Optional AI Hooks (Provider-Agnostic via EVA)](#7-optional-ai-hooks-provider-agnostic-via-eva)
+- [7) API Contracts](#7-api-contracts)
+  - [7.1 Supabase Tables (preferred)](#71-supabase-tables-preferred)
+  - [7.2 HTTP Endpoints (fallback)](#72-http-endpoints-fallback)
+- [8) Eventing & Voice](#8-eventing-voice)
+- [9) Error Handling & UX](#9-error-handling-ux)
+- [10) Security & Privacy](#10-security-privacy)
+- [11) Test Plan](#11-test-plan)
+- [12) Acceptance Criteria (DoD)](#12-acceptance-criteria-dod)
+- [13) Development Checklist](#13-development-checklist)
+- [14) Changelog](#14-changelog)
 
 ## Metadata
 - **Category**: API

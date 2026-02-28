@@ -1,5 +1,78 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Hierarchical Agent Architecture Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Problem with Flat Hierarchies](#the-problem-with-flat-hierarchies)
+  - [The Fractal Solution](#the-fractal-solution)
+- [Portfolio-Level Deal Flow (Autonomous Ideation)](#portfolio-level-deal-flow-autonomous-ideation)
+- [The Four-Level Hierarchy](#the-four-level-hierarchy)
+  - [L1: The Chairman (Human)](#l1-the-chairman-human)
+  - [L2: Venture CEO Agents](#l2-venture-ceo-agents)
+  - [L3: Executive Agents (VPs)](#l3-executive-agents-vps)
+  - [L4: Departmental Crews](#l4-departmental-crews)
+  - [2.5 Agent-Stage Accountability Matrix (OpenAI Codex Assessment)](#25-agent-stage-accountability-matrix-openai-codex-assessment)
+- [Agent Registry Schema](#agent-registry-schema)
+  - [3.1 agent_registry](#31-agent_registry)
+  - [3.2 agent_relationships](#32-agent_relationships)
+  - [3.3 agent_memory_stores](#33-agent_memory_stores)
+- [Shared Tool Registry](#shared-tool-registry)
+  - [4.1 tool_registry](#41-tool_registry)
+  - [4.2 tool_access_grants](#42-tool_access_grants)
+  - [4.3 Seed Data: Core Tools](#43-seed-data-core-tools)
+- [Cross-Agent Communication Protocol](#cross-agent-communication-protocol)
+  - [5.1 Message Types](#51-message-types)
+  - [5.2 agent_messages Table](#52-agent_messages-table)
+  - [5.3 Communication Patterns](#53-communication-patterns)
+- [Venture Instantiation Pattern](#venture-instantiation-pattern)
+  - [6.1 The Template System](#61-the-template-system)
+  - [6.2 Instantiation Function](#62-instantiation-function)
+- [EVA's Evolved Role](#evas-evolved-role)
+  - [7.1 From Orchestrator to Chief Operating Officer](#71-from-orchestrator-to-chief-operating-officer)
+  - [7.2 EVA's New Responsibilities](#72-evas-new-responsibilities)
+- [Implementation Roadmap](#implementation-roadmap)
+  - [Phase 1: Schema Foundation (Week 1)](#phase-1-schema-foundation-week-1)
+  - [Phase 2: Instantiation Engine (Week 2)](#phase-2-instantiation-engine-week-2)
+  - [Phase 3: Communication Protocol (Week 3)](#phase-3-communication-protocol-week-3)
+  - [Phase 4: EVA Evolution (Week 4)](#phase-4-eva-evolution-week-4)
+  - [Phase 5: Agent Runtime (Week 5+)](#phase-5-agent-runtime-week-5)
+- [Agent Runtime Service](#agent-runtime-service)
+  - [9.1 The Runtime Problem](#91-the-runtime-problem)
+  - [9.2 Agent Runtime Architecture](#92-agent-runtime-architecture)
+  - [9.3 Agent Runtime Loop](#93-agent-runtime-loop)
+  - [9.4 Message Claim with Advisory Lock](#94-message-claim-with-advisory-lock)
+  - [9.5 Handler Registry by Agent Type](#95-handler-registry-by-agent-type)
+  - [9.6 Deadline Watchdog](#96-deadline-watchdog)
+  - [9.7 Status Aggregation & Rollup](#97-status-aggregation-rollup)
+- [State Consistency & Handoff Protocol](#state-consistency-handoff-protocol)
+  - [10.1 The Consistency Problem](#101-the-consistency-problem)
+  - [10.2 Control Plane Decision](#102-control-plane-decision)
+  - [10.3 Venture State Machine (CEO-Owned)](#103-venture-state-machine-ceo-owned)
+  - [10.4 Handoff Protocol](#104-handoff-protocol)
+- [Tool Contention & Quota Enforcement](#tool-contention-quota-enforcement)
+  - [11.1 The Contention Problem](#111-the-contention-problem)
+  - [11.2 Tool Execution Gateway](#112-tool-execution-gateway)
+  - [11.3 Venture Tool Quotas Table](#113-venture-tool-quotas-table)
+- [Bootstrap & Seed Procedure](#bootstrap-seed-procedure)
+  - [12.1 The Bootstrap Problem](#121-the-bootstrap-problem)
+  - [12.2 Bootstrap Migration](#122-bootstrap-migration)
+  - [12.3 Well-Known Agent IDs](#123-well-known-agent-ids)
+- [Control Plane Resolution](#control-plane-resolution)
+  - [13.1 The Conflict](#131-the-conflict)
+  - [13.2 Resolution](#132-resolution)
+  - [13.3 Updated EVA Responsibilities](#133-updated-eva-responsibilities)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Architecture

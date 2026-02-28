@@ -1,5 +1,63 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Risk Re-calibration UI Components
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Components Delivered](#components-delivered)
+  - [1. Core Components (6 files)](#1-core-components-6-files)
+  - [2. Supporting Files](#2-supporting-files)
+- [Component Size Compliance](#component-size-compliance)
+- [Key Features Implemented](#key-features-implemented)
+  - [RiskRecalibrationForm](#riskrecalibrationform)
+  - [ChairmanReviewPanel](#chairmanreviewpanel)
+  - [RiskGateDashboard](#riskgatedashboard)
+  - [EscalationAlertBanner](#escalationalertbanner)
+  - [Utility Components](#utility-components)
+- [Design Compliance](#design-compliance)
+  - [✅ Accessibility (WCAG 2.1 AA)](#-accessibility-wcag-21-aa)
+  - [✅ Responsive Design](#-responsive-design)
+  - [✅ User Feedback](#-user-feedback)
+  - [✅ Shadcn UI Pattern Compliance](#-shadcn-ui-pattern-compliance)
+- [Integration Points](#integration-points)
+  - [Database Schema](#database-schema)
+  - [Database Functions (Backend)](#database-functions-backend)
+  - [Views](#views)
+  - [API Integration Needed (Next Step)](#api-integration-needed-next-step)
+- [Testing Considerations](#testing-considerations)
+  - [E2E Tests (Playwright)](#e2e-tests-playwright)
+  - [Unit Tests (Vitest)](#unit-tests-vitest)
+- [Known Patterns Applied](#known-patterns-applied)
+  - [Pattern 1: Component Sizing (SD-UAT-020)](#pattern-1-component-sizing-sd-uat-020)
+  - [Pattern 2: Accessibility-First Design (SD-A11Y-FEATURE-BRANCH-001)](#pattern-2-accessibility-first-design-sd-a11y-feature-branch-001)
+  - [Pattern 3: Shadcn UI Consistency](#pattern-3-shadcn-ui-consistency)
+  - [Pattern 4: Conditional Rendering (SD-VWC-PRESETS-001)](#pattern-4-conditional-rendering-sd-vwc-presets-001)
+  - [Pattern 5: Dev Server Restart (PAT-004)](#pattern-5-dev-server-restart-pat-004)
+- [File Locations](#file-locations)
+  - [Components (EHG Repository)](#components-ehg-repository)
+  - [Documentation (EHG_Engineer Repository)](#documentation-ehg_engineer-repository)
+- [Next Steps](#next-steps)
+  - [1. Backend API Implementation](#1-backend-api-implementation)
+  - [2. Service Layer Implementation](#2-service-layer-implementation)
+  - [3. Page Integration](#3-page-integration)
+  - [4. E2E Testing](#4-e2e-testing)
+  - [5. Phase Transition Integration](#5-phase-transition-integration)
+- [Success Metrics](#success-metrics)
+- [Evidence of Design Patterns](#evidence-of-design-patterns)
+  - [Pattern Evidence: Shadcn UI Imports](#pattern-evidence-shadcn-ui-imports)
+  - [Pattern Evidence: Chairman Patterns](#pattern-evidence-chairman-patterns)
+  - [Pattern Evidence: Executive Alerts](#pattern-evidence-executive-alerts)
+- [Deliverables Summary](#deliverables-summary)
 
 ## Metadata
 - **Category**: Feature

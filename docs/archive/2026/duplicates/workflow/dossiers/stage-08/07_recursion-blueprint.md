@@ -1,3 +1,52 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Intelligent Dependency-Driven Recursion](#intelligent-dependency-driven-recursion)
+- [Inbound Recursion Triggers (TO Stage 8)](#inbound-recursion-triggers-to-stage-8)
+  - [Primary Trigger: Stage 10 TECH-001 (Blocking Technical Issues)](#primary-trigger-stage-10-tech-001-blocking-technical-issues)
+  - [Secondary Trigger: Stage 14 TECH-001 (Development Complexity Issues)](#secondary-trigger-stage-14-tech-001-development-complexity-issues)
+  - [Tertiary Trigger: Stage 22 TECH-001 (Architectural Limitations)](#tertiary-trigger-stage-22-tech-001-architectural-limitations)
+- [Recursion Behavior When Triggered](#recursion-behavior-when-triggered)
+  - [Step 1: Preserve Original Decomposition](#step-1-preserve-original-decomposition)
+  - [Step 2: Re-decompose with Technical Constraints](#step-2-re-decompose-with-technical-constraints)
+  - [Step 3: Adjust Task Granularity](#step-3-adjust-task-granularity)
+  - [Step 4: Update Dependency Map](#step-4-update-dependency-map)
+  - [Step 5: Comparison Analysis](#step-5-comparison-analysis)
+- [Outbound Recursion Triggers (FROM Stage 8)](#outbound-recursion-triggers-from-stage-8)
+  - [Trigger 1: RESOURCE-001 to Stage 7 (Resource Shortage)](#trigger-1-resource-001-to-stage-7-resource-shortage)
+  - [Trigger 2: TIMELINE-001 to Stage 7 (Timeline Exceeded)](#trigger-2-timeline-001-to-stage-7-timeline-exceeded)
+- [Loop Prevention](#loop-prevention)
+  - [Max Recursions Rule](#max-recursions-rule)
+  - [Escalation After 3rd Recursion](#escalation-after-3rd-recursion)
+  - [WBS Versioning and Change Tracking](#wbs-versioning-and-change-tracking)
+- [Chairman Controls](#chairman-controls)
+  - [HIGH Severity Recursion (TECH-001 Blocking Issues)](#high-severity-recursion-tech-001-blocking-issues)
+  - [Override Capability](#override-capability)
+- [Performance Requirements](#performance-requirements)
+- [UI/UX Implications](#uiux-implications)
+  - [Recursion Context Panel](#recursion-context-panel)
+  - [Task Delta Visualization](#task-delta-visualization)
+  - [Approval Interface (Chairman)](#approval-interface-chairman)
+- [Integration Points](#integration-points)
+  - [Stage 7 (Comprehensive Planning)](#stage-7-comprehensive-planning)
+  - [Stage 10 (Technical Review)](#stage-10-technical-review)
+  - [Stage 14 (Development Prep)](#stage-14-development-prep)
+  - [validationFramework.ts](#validationframeworkts)
+  - [recursionEngine.ts](#recursionenginets)
+  - [recursion_events Table](#recursion_events-table)
+- [Gap Analysis for Recursion Implementation](#gap-analysis-for-recursion-implementation)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:48.231Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\07_recursion-blueprint.md

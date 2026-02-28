@@ -1,5 +1,84 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.2 - Enhanced PRD to Playwright Testing Integration
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Key Innovation: Test-Driven PRD Development](#key-innovation-test-driven-prd-development)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [Architecture Overview](#architecture-overview)
+- [Database Schema Enhancement](#database-schema-enhancement)
+  - [New Tables Created](#new-tables-created)
+- [Enhanced PRD Structure](#enhanced-prd-structure)
+  - [Traditional PRD Fields](#traditional-prd-fields)
+  - [New Playwright-Enhanced Fields](#new-playwright-enhanced-fields)
+- [Workflow Integration](#workflow-integration)
+  - [1. LEAD Phase - Strategic Direction](#1-lead-phase---strategic-direction)
+  - [2. PLAN Phase - Enhanced PRD Creation](#2-plan-phase---enhanced-prd-creation)
+  - [3. EXEC Phase - Implementation with Testing in Mind](#3-exec-phase---implementation-with-testing-in-mind)
+  - [4. Testing Sub-Agent - Automatic Test Generation](#4-testing-sub-agent---automatic-test-generation)
+  - [5. Test Execution](#5-test-execution)
+  - [6. Test Result Mapping](#6-test-result-mapping)
+- [Key Components](#key-components)
+  - [1. PRD Playwright Generator (`lib/testing/prd-playwright-generator.js`)](#1-prd-playwright-generator-libtestingprd-playwright-generatorjs)
+  - [2. PRD Test Mapper (`lib/dashboard/prd-test-mapper.js`)](#2-prd-test-mapper-libdashboardprd-test-mapperjs)
+  - [3. Enhanced PRD Creation Script (`scripts/create-prd-with-playwright.js`)](#3-enhanced-prd-creation-script-scriptscreate-prd-with-playwrightjs)
+- [Test Scenario Structure](#test-scenario-structure)
+- [Coverage and Verification](#coverage-and-verification)
+  - [Coverage Metrics](#coverage-metrics)
+  - [Verification States](#verification-states)
+  - [Coverage Report Example](#coverage-report-example)
+- [Coverage Summary](#coverage-summary)
+- [Benefits of Integration](#benefits-of-integration)
+  - [1. **Complete Traceability**](#1-complete-traceability)
+  - [2. **Shift-Left Testing**](#2-shift-left-testing)
+  - [3. **Automated Test Generation**](#3-automated-test-generation)
+  - [4. **Real-Time Verification**](#4-real-time-verification)
+  - [5. **Quality Gates Enforcement**](#5-quality-gates-enforcement)
+- [Implementation Checklist](#implementation-checklist)
+  - [For PLAN Agent](#for-plan-agent)
+  - [For EXEC Agent](#for-exec-agent)
+  - [For Testing Sub-Agent](#for-testing-sub-agent)
+- [Example: Complete Flow](#example-complete-flow)
+  - [1. PLAN creates enhanced PRD](#1-plan-creates-enhanced-prd)
+  - [2. EXEC implements with test IDs](#2-exec-implements-with-test-ids)
+  - [3. Testing Sub-Agent generates tests](#3-testing-sub-agent-generates-tests)
+  - [4. Run tests](#4-run-tests)
+  - [5. Map results to PRD](#5-map-results-to-prd)
+- [Database Queries](#database-queries)
+  - [Get PRD test coverage](#get-prd-test-coverage)
+  - [Get failing scenarios](#get-failing-scenarios)
+  - [Get untested requirements](#get-untested-requirements)
+- [CI/CD Integration](#cicd-integration)
+  - [GitHub Actions Example](#github-actions-example)
+- [Monitoring and Alerts](#monitoring-and-alerts)
+  - [Real-time Test Monitoring](#real-time-test-monitoring)
+  - [Coverage Alerts](#coverage-alerts)
+- [Migration Guide](#migration-guide)
+  - [For Existing PRDs](#for-existing-prds)
+  - [For New PRDs](#for-new-prds)
+- [Best Practices](#best-practices)
+  - [1. Selector Naming](#1-selector-naming)
+  - [2. Test Scenario Design](#2-test-scenario-design)
+  - [3. Assertion Strategy](#3-assertion-strategy)
+  - [4. Test Data Management](#4-test-data-management)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Future Enhancements](#future-enhancements)
+  - [Planned Features](#planned-features)
+  - [Research Areas](#research-areas)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Protocol

@@ -1,5 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Synthesis: Scaffolding Feature Decisions
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Verdicts at a Glance](#verdicts-at-a-glance)
+- [Topic 1: Legal Infrastructure (Document Generator)](#topic-1-legal-infrastructure-document-generator)
+  - [The Question](#the-question)
+  - [Triangulated Findings](#triangulated-findings)
+  - [Convergent Insights](#convergent-insights)
+  - [Recommended Action](#recommended-action)
+- [Topic 2: Marketing Distribution](#topic-2-marketing-distribution)
+  - [The Question](#the-question)
+  - [Triangulated Findings](#triangulated-findings)
+  - [Option Rankings Consensus](#option-rankings-consensus)
+  - [Convergent Insights](#convergent-insights)
+  - [Recommended Action](#recommended-action)
+- [Topic 3: Trademark Guidance](#topic-3-trademark-guidance)
+  - [The Question](#the-question)
+  - [Triangulated Findings](#triangulated-findings)
+  - [Option Analysis Consensus](#option-analysis-consensus)
+  - [Convergent Insights](#convergent-insights)
+  - [Recommended Action](#recommended-action)
+- [Strategic Implications](#strategic-implications)
+  - [The "Solo Operator Constraint" Principle](#the-solo-operator-constraint-principle)
+  - [Build vs Buy Decision Framework](#build-vs-buy-decision-framework)
+  - [Cost Summary](#cost-summary)
+  - [Action Items](#action-items)
+- [Appendix: Source Documents](#appendix-source-documents)
 
 ## Metadata
 - **Category**: Feature

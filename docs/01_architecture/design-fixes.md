@@ -1,5 +1,79 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Design Fix Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Fixes](#critical-fixes)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: MISSING_FORM_LABELS](#accessibility-missing_form_labels)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Accessibility: KEYBOARD_TRAP](#accessibility-keyboard_trap)
+  - [Responsive: Missing viewport meta tag](#responsive-missing-viewport-meta-tag)
 
 ## Metadata
 - **Category**: Architecture

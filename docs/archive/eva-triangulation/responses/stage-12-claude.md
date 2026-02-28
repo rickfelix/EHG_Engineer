@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 12 "Sales Logic" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Sales Model Selection Logic](#3-sales-model-selection-logic)
+  - [4. Deal Stages vs Funnel Stages Decision](#4-deal-stages-vs-funnel-stages-decision)
+  - [5. Conversion Rates Decision](#5-conversion-rates-decision)
+  - [6. Sales Metrics Decision](#6-sales-metrics-decision)
+  - [7. Customer Journey Design](#7-customer-journey-design)
+  - [8. Reality Gate Enhancement](#8-reality-gate-enhancement)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 12 Schema](#10-recommended-stage-12-schema)
+  - [11. Minimum Viable Change (priority-ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-11 decisions)](#13-dependency-conflicts-with-stages-1-11-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 12 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

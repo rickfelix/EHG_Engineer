@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Current State Assessment](#current-state-assessment)
+- [KPI Definitions](#kpi-definitions)
+  - [KPI 1: Transaction Success Rate](#kpi-1-transaction-success-rate)
+  - [KPI 2: Latency Metrics](#kpi-2-latency-metrics)
+  - [KPI 3: Consistency Score](#kpi-3-consistency-score)
+- [Supabase Queries](#supabase-queries)
+  - [Query 1: Transaction Success Rate (Last 24 Hours)](#query-1-transaction-success-rate-last-24-hours)
+  - [Query 2: Actor Message Processing Latency (Last 1 Hour)](#query-2-actor-message-processing-latency-last-1-hour)
+  - [Query 3: Saga Step Execution Latency (Last 1 Hour)](#query-3-saga-step-execution-latency-last-1-hour)
+  - [Query 4: Consistency Score (Last 24 Hours)](#query-4-consistency-score-last-24-hours)
+  - [Query 5: Recursion Trigger Detection (SAGA-001)](#query-5-recursion-trigger-detection-saga-001)
+- [Dashboard Specifications](#dashboard-specifications)
+  - [Grafana Dashboard Layout (Proposed)](#grafana-dashboard-layout-proposed)
+- [Alerting Rules (Prometheus/Grafana)](#alerting-rules-prometheusgrafana)
+  - [Alert 1: Low Transaction Success Rate (SAGA-001 Trigger)](#alert-1-low-transaction-success-rate-saga-001-trigger)
+  - [Alert 2: High Actor Message Latency](#alert-2-high-actor-message-latency)
+  - [Alert 3: Low Consistency Score](#alert-3-low-consistency-score)
+- [Monitoring Implementation Checklist](#monitoring-implementation-checklist)
+- [Sources Table](#sources-table)
 
 **Stage**: Actor Model & Saga Transaction Integration
 **Metrics Defined**: 3 (from stages.yaml)

@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 8 Current Assessment (Critique Rubric)
+
+
+## Table of Contents
+
+- [Overall Rubric Score](#overall-rubric-score)
+- [Scoring Analysis](#scoring-analysis)
+  - [High-Performing Areas (Score ≥4)](#high-performing-areas-score-4)
+  - [Medium-Performing Areas (Score 3)](#medium-performing-areas-score-3)
+  - [Low-Performing Areas (Score ≤2)](#low-performing-areas-score-2)
+- [Strengths Summary](#strengths-summary)
+- [Weaknesses Summary](#weaknesses-summary)
+- [Risk Assessment Deep Dive](#risk-assessment-deep-dive)
+  - [Primary Risk: Process Delays](#primary-risk-process-delays)
+  - [Additional Risks](#additional-risks)
+- [Recommendations Priority](#recommendations-priority)
+  - [Recommendation Details](#recommendation-details)
+- [Score Improvement Roadmap](#score-improvement-roadmap)
+- [Sources Table](#sources-table)
 
 ## Overall Rubric Score
 

@@ -1,5 +1,41 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage 8 Critique: Problem Decomposition Engine
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Rubric Scoring (0-5 scale)](#rubric-scoring-0-5-scale)
+- [Strengths](#strengths)
+- [Weaknesses](#weaknesses)
+- [Recursive Workflow Behavior (SD-VENTURE-UNIFICATION-001)](#recursive-workflow-behavior-sd-venture-unification-001)
+  - [Intelligent Dependency-Driven Recursion](#intelligent-dependency-driven-recursion)
+  - [Recursion Triggers That May RETURN TO This Stage](#recursion-triggers-that-may-return-to-this-stage)
+  - [Recursion Behavior When Triggered](#recursion-behavior-when-triggered)
+  - [Recursion Triggers FROM This Stage](#recursion-triggers-from-this-stage)
+  - [Recursion Logic (SC-004)](#recursion-logic-sc-004)
+  - [Loop Prevention](#loop-prevention)
+  - [Chairman Controls](#chairman-controls)
+  - [Performance Requirements](#performance-requirements)
+  - [UI/UX Implications](#uiux-implications)
+  - [Integration Points](#integration-points)
+- [Specific Improvements](#specific-improvements)
+  - [1. Enhance Automation](#1-enhance-automation)
+  - [2. Define Clear Metrics](#2-define-clear-metrics)
+  - [3. Improve Data Flow](#3-improve-data-flow)
+  - [4. Add Rollback Procedures](#4-add-rollback-procedures)
+  - [5. Customer Integration](#5-customer-integration)
+- [Dependencies Analysis](#dependencies-analysis)
+- [Risk Assessment](#risk-assessment)
+- [Recommendations Priority](#recommendations-priority)
 
 ## Metadata
 - **Category**: Guide

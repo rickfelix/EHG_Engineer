@@ -1,3 +1,37 @@
+
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [Prerequisites](#prerequisites)
+  - [Node.js Runtime](#nodejs-runtime)
+  - [Package Manager](#package-manager)
+- [Required Environment Variables](#required-environment-variables)
+  - [Database Connection (Required)](#database-connection-required)
+  - [LLM Configuration (Required)](#llm-configuration-required)
+  - [Devil's Advocate Integration (Optional)](#devils-advocate-integration-optional)
+  - [Session Management (Auto-configured)](#session-management-auto-configured)
+- [Database Setup](#database-setup)
+  - [Required Tables](#required-tables)
+  - [Migration Files](#migration-files)
+  - [Seed Data](#seed-data)
+- [LLM Configuration](#llm-configuration)
+  - [Client Factory Integration](#client-factory-integration)
+  - [Token Budget Management](#token-budget-management)
+  - [Model Registry](#model-registry)
+- [Module Entry Points](#module-entry-points)
+  - [Primary Entry: lib/eva/index.js](#primary-entry-libevaindexjs)
+  - [Stage Template Registry: lib/eva/stage-templates/index.js](#stage-template-registry-libevastage-templatesindexjs)
+  - [Services Layer: lib/eva/services/](#services-layer-libevaservices)
+- [Dependency Chain](#dependency-chain)
+  - [Required Internal Modules](#required-internal-modules)
+  - [External Dependencies](#external-dependencies)
+- [Test Environment](#test-environment)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [UAT / E2E Tests](#uat-e2e-tests)
+- [Quick Verification Checklist](#quick-verification-checklist)
+- [Related Documentation](#related-documentation)
+
 ---
 Category: Guide
 Status: Approved

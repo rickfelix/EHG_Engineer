@@ -1,5 +1,52 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Researcher Agent Workflow
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [When to Use](#when-to-use)
+- [Key Differences from Implementation SDs](#key-differences-from-implementation-sds)
+- [Workflow Phases](#workflow-phases)
+  - [1. LEAD Phase](#1-lead-phase)
+  - [2. PLAN Phase](#2-plan-phase)
+- [Research Plan: [SD Title]](#research-plan-sd-title)
+  - [Questions to Answer](#questions-to-answer)
+  - [Information Sources](#information-sources)
+  - [Time Box](#time-box)
+  - [Decision Criteria](#decision-criteria)
+  - [3. EXEC Phase](#3-exec-phase)
+- [Context](#context)
+- [Options Considered](#options-considered)
+  - [Option A: [Name]](#option-a-name)
+  - [Option B: [Name]](#option-b-name)
+- [Recommendation](#recommendation)
+- [Implementation Path](#implementation-path)
+- [Appendix](#appendix)
+- [Time Boxes by Type](#time-boxes-by-type)
+- [Deliverables](#deliverables)
+  - [Discovery Spike](#discovery-spike)
+  - [Architectural Review](#architectural-review)
+  - [Strategic Observation](#strategic-observation)
+  - [Product Decision](#product-decision)
+- [SD Completion Criteria](#sd-completion-criteria)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Handoffs](#handoffs)
+  - [Sub-Agents](#sub-agents)
+- [Examples](#examples)
+  - [Example 1: Discovery Spike](#example-1-discovery-spike)
+  - [Example 2: Architectural Review](#example-2-architectural-review)
+- [Decision Storage](#decision-storage)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

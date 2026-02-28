@@ -1,5 +1,42 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol - Automatic PRD Generation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Canonical Method](#canonical-method)
+- [Automatic Workflow](#automatic-workflow)
+  - [Complete LEAD→PLAN Flow](#complete-leadplan-flow)
+- [What Gets Automated](#what-gets-automated)
+  - [100% Automatic](#100-automatic)
+- [Architecture](#architecture)
+  - [Component Diagram](#component-diagram)
+  - [Key Files](#key-files)
+- [Example Output](#example-output)
+  - [LEAD→PLAN Handoff with Automatic PRD](#leadplan-handoff-with-automatic-prd)
+- [SD Field Derivation](#sd-field-derivation)
+  - [Example Derivation](#example-derivation)
+- [Consolidated vs Legacy Approach](#consolidated-vs-legacy-approach)
+  - [Consolidated (Current)](#consolidated-current)
+  - [Legacy (Archived)](#legacy-archived)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Manual Fallback](#manual-fallback)
+- [Metrics](#metrics)
+  - [Automation Coverage](#automation-coverage)
+  - [Quality Improvements](#quality-improvements)
+- [Related Documentation](#related-documentation)
+- [History](#history)
 
 ## Metadata
 - **Category**: Protocol

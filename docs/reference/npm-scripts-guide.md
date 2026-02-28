@@ -1,5 +1,92 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # NPM Scripts Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [LEO Protocol Management](#leo-protocol-management)
+  - [Core Commands](#core-commands)
+  - [Orchestration](#orchestration)
+  - [Maintenance](#maintenance)
+  - [Refresh & Generate](#refresh-generate)
+  - [Schema Discovery](#schema-discovery)
+  - [Genesis Branches](#genesis-branches)
+  - [Artifacts](#artifacts)
+  - [Git Operations](#git-operations)
+  - [Gap Analysis](#gap-analysis)
+- [Strategic Directive Operations](#strategic-directive-operations)
+  - [Queue & Navigation](#queue-navigation)
+  - [Baseline Management](#baseline-management)
+  - [Session Management](#session-management)
+  - [Creating SDs](#creating-sds)
+  - [Gap Analysis](#gap-analysis)
+- [PRD Management](#prd-management)
+  - [Validation](#validation)
+  - [Diagnostics](#diagnostics)
+  - [Generation & Audit](#generation-audit)
+- [Database Operations](#database-operations)
+  - [Connection & Setup](#connection-setup)
+  - [Schema Creation](#schema-creation)
+  - [Schema Documentation](#schema-documentation)
+- [Testing](#testing)
+  - [Unit & Integration Tests](#unit-integration-tests)
+  - [E2E Tests](#e2e-tests)
+  - [User Acceptance Testing](#user-acceptance-testing)
+  - [RCA Tests](#rca-tests)
+  - [Validation](#validation)
+  - [Story Mapping](#story-mapping)
+  - [LEO Protocol Validation](#leo-protocol-validation)
+- [Context Management](#context-management)
+  - [Usage & Monitoring](#usage-monitoring)
+  - [Optimization](#optimization)
+  - [Memory](#memory)
+- [Pattern Management](#pattern-management)
+  - [Core Operations](#core-operations)
+  - [Sync & Ingest](#sync-ingest)
+  - [Extraction & Maintenance](#extraction-maintenance)
+  - [Alerts](#alerts)
+- [Handoffs](#handoffs)
+- [RCA (Root Cause Analysis)](#rca-root-cause-analysis)
+  - [Core Operations](#core-operations)
+  - [CAPA (Corrective Actions)](#capa-corrective-actions)
+  - [Learning](#learning)
+- [Session Management](#session-management)
+  - [Git Worktree Management](#git-worktree-management)
+- [Baseline Operations](#baseline-operations)
+- [Audit & Compliance](#audit-compliance)
+- [Protocol Improvements](#protocol-improvements)
+- [Proposals](#proposals)
+- [Gate Health](#gate-health)
+- [Documentation](#documentation)
+- [Evidence & Tracing](#evidence-tracing)
+- [Tokens & Budget](#tokens-budget)
+- [Agent Operations](#agent-operations)
+- [Priority & Planning](#priority-planning)
+- [Application Management](#application-management)
+- [Linting](#linting)
+- [Build](#build)
+- [Git Hooks](#git-hooks)
+- [Untrack Operations](#untrack-operations)
+- [CLI](#cli)
+- [Common Workflows](#common-workflows)
+  - [Starting a New Session](#starting-a-new-session)
+  - [Before Committing](#before-committing)
+  - [After Completing Work](#after-completing-work)
+  - [Database Changes](#database-changes)
+  - [Debugging Issues](#debugging-issues)
+  - [Validating Protocol Integrity](#validating-protocol-integrity)
+- [Environment Variables](#environment-variables)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

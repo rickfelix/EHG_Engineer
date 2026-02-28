@@ -1,3 +1,51 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Scope](#scope)
+- [Prerequisites (Entry Gate Validation)](#prerequisites-entry-gate-validation)
+  - [1. Verify Business Model Defined](#1-verify-business-model-defined)
+  - [2. Verify Market Position Clear](#2-verify-market-position-clear)
+  - [3. Gather Required Inputs](#3-gather-required-inputs)
+- [Execution Workflow](#execution-workflow)
+  - [Phase 1: Substage 13.1 - Exit Strategy Definition](#phase-1-substage-131---exit-strategy-definition)
+  - [Phase 2: Substage 13.2 - Value Driver Identification](#phase-2-substage-132---value-driver-identification)
+  - [Phase 3: Substage 13.3 - Buyer Landscape](#phase-3-substage-133---buyer-landscape)
+- [Exit Gate Validation](#exit-gate-validation)
+  - [Gate 1: Exit Strategy Approved](#gate-1-exit-strategy-approved)
+  - [Gate 2: Value Drivers Identified](#gate-2-value-drivers-identified)
+  - [Gate 3: Timeline Set](#gate-3-timeline-set)
+- [Outputs Verification](#outputs-verification)
+  - [Output 1: Exit Strategy Document](#output-1-exit-strategy-document)
+  - [Output 2: Value Drivers Package](#output-2-value-drivers-package)
+  - [Output 3: Acquisition Targets Database](#output-3-acquisition-targets-database)
+- [Metrics Collection](#metrics-collection)
+  - [Metric 1: Exit Readiness Score](#metric-1-exit-readiness-score)
+  - [Metric 2: Valuation Potential](#metric-2-valuation-potential)
+  - [Metric 3: Strategic Fit](#metric-3-strategic-fit)
+- [Rollback Procedures (Proposed)](#rollback-procedures-proposed)
+  - [Rollback Trigger 1: Valuation Potential Below Threshold](#rollback-trigger-1-valuation-potential-below-threshold)
+  - [Rollback Trigger 2: No Viable Exit Path](#rollback-trigger-2-no-viable-exit-path)
+  - [Rollback Trigger 3: Strategic Fit Score Too Low](#rollback-trigger-3-strategic-fit-score-too-low)
+- [Automation Opportunities (Proposed)](#automation-opportunities-proposed)
+  - [Current Automation Level: 20% (Manual Process)](#current-automation-level-20-manual-process)
+  - [Automation Roadmap:](#automation-roadmap)
+  - [Manual Judgment Reserved For:](#manual-judgment-reserved-for)
+- [Common Issues & Troubleshooting](#common-issues-troubleshooting)
+  - [Issue 1: Chairman Availability Delays](#issue-1-chairman-availability-delays)
+  - [Issue 2: Insufficient Market Data](#issue-2-insufficient-market-data)
+  - [Issue 3: Low Strategic Fit Scores](#issue-3-low-strategic-fit-scores)
+- [SOP Revision History](#sop-revision-history)
+- [References](#references)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.592Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-13\05_professional-sop.md

@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Entry Criteria Verification](#entry-criteria-verification)
+- [Substage 10.1: Architecture Review](#substage-101-architecture-review)
+  - [Step 1: Design Validation](#step-1-design-validation)
+  - [Step 2: Patterns Approval](#step-2-patterns-approval)
+  - [Step 3: Standards Met](#step-3-standards-met)
+- [Substage 10.2: Scalability Assessment](#substage-102-scalability-assessment)
+  - [Step 4: Load Projections Validated](#step-4-load-projections-validated)
+  - [Step 5: Scaling Strategy Defined](#step-5-scaling-strategy-defined)
+- [Substage 10.3: Security Review](#substage-103-security-review)
+  - [Step 6: Security Assessment Complete](#step-6-security-assessment-complete)
+  - [Step 7: Compliance Verified](#step-7-compliance-verified)
+  - [Step 8: Risks Mitigated](#step-8-risks-mitigated)
+- [Substage 10.4: Implementation Planning](#substage-104-implementation-planning)
+  - [Step 9: Development Approach Set](#step-9-development-approach-set)
+  - [Step 10: Timeline Validated](#step-10-timeline-validated)
+  - [Step 11: Resources Confirmed](#step-11-resources-confirmed)
+- [Technical Metrics Calculation](#technical-metrics-calculation)
+  - [Metric 1: Technical Debt Score (0-100)](#metric-1-technical-debt-score-0-100)
+  - [Metric 2: Scalability Rating (1-5 stars)](#metric-2-scalability-rating-1-5-stars)
+  - [Metric 3: Security Score (0-100)](#metric-3-security-score-0-100)
+- [Recursion Decision Logic](#recursion-decision-logic)
+  - [Check 1: Blocking Issues](#check-1-blocking-issues)
+  - [Check 2: Solution Feasibility](#check-2-solution-feasibility)
+  - [Check 3: Timeline Impact](#check-3-timeline-impact)
+  - [Check 4: Cost Impact](#check-4-cost-impact)
+- [Exit Criteria Verification](#exit-criteria-verification)
+- [Outputs Deliverables](#outputs-deliverables)
+- [Handoff to Stage 11](#handoff-to-stage-11)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.869Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-10\05_professional-sop.md

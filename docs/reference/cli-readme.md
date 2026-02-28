@@ -1,4 +1,73 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Script Management CLI
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Interactive Mode (Recommended for Exploration)](#interactive-mode-recommended-for-exploration)
+  - [Command-Line Mode (For Automation)](#command-line-mode-for-automation)
+- [Commands](#commands)
+  - [search <keyword>](#search-keyword)
+  - [info <filename>](#info-filename)
+  - [run <filename> [args...]](#run-filename-args)
+  - [list [limit]](#list-limit)
+  - [categories](#categories)
+  - [category <name>](#category-name)
+  - [stats](#stats)
+  - [help](#help)
+- [Interactive Mode](#interactive-mode)
+  - [Main Menu](#main-menu)
+  - [Navigation](#navigation)
+- [Architecture](#architecture)
+  - [Files Structure](#files-structure)
+  - [Components](#components)
+- [Integration with A1.3](#integration-with-a13)
+  - [Uses Script Inventory (A1.3)](#uses-script-inventory-a13)
+  - [Inventory Structure](#inventory-structure)
+- [Use Cases](#use-cases)
+  - [Use Case 1: Find Scripts for Task](#use-case-1-find-scripts-for-task)
+  - [Use Case 2: Execute Script with Args](#use-case-2-execute-script-with-args)
+  - [Use Case 3: Browse by Category](#use-case-3-browse-by-category)
+  - [Use Case 4: Get Script Details](#use-case-4-get-script-details)
+  - [Use Case 5: Analyze Codebase](#use-case-5-analyze-codebase)
+  - [Use Case 6: Interactive Exploration](#use-case-6-interactive-exploration)
+- [Performance](#performance)
+  - [Command Execution Times](#command-execution-times)
+  - [Optimizations](#optimizations)
+- [Color Coding](#color-coding)
+- [Error Handling](#error-handling)
+  - [Common Errors](#common-errors)
+- [Best Practices](#best-practices)
+  - [1. Use Search for Discovery](#1-use-search-for-discovery)
+  - [2. Check Script Info Before Running](#2-check-script-info-before-running)
+  - [3. Use Interactive Mode for Exploration](#3-use-interactive-mode-for-exploration)
+  - [4. Leverage Categories](#4-leverage-categories)
+  - [5. Automate with Command-Line Mode](#5-automate-with-command-line-mode)
+- [Examples](#examples)
+  - [Example 1: Find and Run Handoff Script](#example-1-find-and-run-handoff-script)
+  - [Example 2: Explore Testing Infrastructure](#example-2-explore-testing-infrastructure)
+  - [Example 3: Analyze Codebase Complexity](#example-3-analyze-codebase-complexity)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: "Cannot find module"](#issue-cannot-find-module)
+  - [Issue: "Permission denied"](#issue-permission-denied)
+  - [Issue: Slow performance](#issue-slow-performance)
+  - [Issue: Colors not displaying](#issue-colors-not-displaying)
+- [Future Enhancements (Phase 2)](#future-enhancements-phase-2)
+  - [Planned Features](#planned-features)
+  - [Integration Opportunities](#integration-opportunities)
+- [API (Programmatic Usage)](#api-programmatic-usage)
+- [Metrics Summary](#metrics-summary)
+- [Related Documentation](#related-documentation)
 
 **Version**: 1.0.0
 **Task**: A1.2 - Unified CLI for Scripts

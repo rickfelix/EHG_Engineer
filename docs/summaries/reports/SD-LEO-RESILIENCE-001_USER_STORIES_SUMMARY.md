@@ -1,5 +1,71 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # SD-LEO-RESILIENCE-001 User Stories Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Purpose](#purpose)
+- [User Stories Created](#user-stories-created)
+  - [US-001: PLAN Phase Gate (3 pts, high priority)](#us-001-plan-phase-gate-3-pts-high-priority)
+  - [US-002: EXEC Phase PRD Gate (5 pts, high priority)](#us-002-exec-phase-prd-gate-5-pts-high-priority)
+  - [US-003: EXEC Phase User Stories Gate (3 pts, high priority)](#us-003-exec-phase-user-stories-gate-3-pts-high-priority)
+  - [US-004: EXEC Phase Handoff Gate (3 pts, high priority)](#us-004-exec-phase-handoff-gate-3-pts-high-priority)
+  - [US-005: Completion Prerequisites Gate (5 pts, high priority)](#us-005-completion-prerequisites-gate-5-pts-high-priority)
+  - [US-006: SD Type Bypass Mechanism (3 pts, high priority)](#us-006-sd-type-bypass-mechanism-3-pts-high-priority)
+  - [US-007: Clear Error Messages (2 pts, medium priority)](#us-007-clear-error-messages-2-pts-medium-priority)
+- [INVEST Criteria Validation](#invest-criteria-validation)
+  - [Independent](#independent)
+  - [Negotiable](#negotiable)
+  - [Valuable](#valuable)
+  - [Estimable](#estimable)
+  - [Small](#small)
+  - [Testable](#testable)
+- [Quality Score: GOLD (90%)](#quality-score-gold-90)
+  - [Architecture References ✅](#architecture-references-)
+  - [Example Code Patterns ✅](#example-code-patterns-)
+  - [Testing Scenarios ✅](#testing-scenarios-)
+  - [Integration Points ✅](#integration-points-)
+  - [Edge Cases ✅](#edge-cases-)
+  - [Security Considerations ✅](#security-considerations-)
+- [Coverage Analysis](#coverage-analysis)
+  - [Database Triggers](#database-triggers)
+  - [Table Coverage](#table-coverage)
+  - [Test Coverage](#test-coverage)
+- [Expected Impact](#expected-impact)
+  - [Time Savings per SD](#time-savings-per-sd)
+  - [Quality Impact](#quality-impact)
+  - [Annual Impact (assuming 50 SDs/year)](#annual-impact-assuming-50-sdsyear)
+- [Implementation Context](#implementation-context)
+  - [Database Migration Strategy](#database-migration-strategy)
+  - [Testing Strategy](#testing-strategy)
+  - [Rollout Strategy](#rollout-strategy)
+- [Next Steps](#next-steps)
+  - [Immediate (PLAN Phase)](#immediate-plan-phase)
+  - [EXEC Phase](#exec-phase)
+  - [EXEC-TO-PLAN Handoff](#exec-to-plan-handoff)
+  - [PLAN Verification](#plan-verification)
+- [Files Created](#files-created)
+  - [Script](#script)
+  - [Documentation](#documentation)
+- [Database Records](#database-records)
+  - [User Stories Table](#user-stories-table)
+- [Stories Agent v2.0.0 Features Demonstrated](#stories-agent-v200-features-demonstrated)
+  - [Improvement #1: Automated E2E Test Mapping (CRITICAL)](#improvement-1-automated-e2e-test-mapping-critical)
+  - [Improvement #2: Auto-Validation on EXEC Completion (HIGH)](#improvement-2-auto-validation-on-exec-completion-high)
+  - [Improvement #3: INVEST Criteria Enforcement (MEDIUM)](#improvement-3-invest-criteria-enforcement-medium)
+  - [Improvement #4: Acceptance Criteria Templates (MEDIUM)](#improvement-4-acceptance-criteria-templates-medium)
+  - [Improvement #5: Rich Implementation Context (LOW)](#improvement-5-rich-implementation-context-low)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Report

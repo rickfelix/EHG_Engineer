@@ -1,5 +1,33 @@
 # UAT System - Quick Start Guide
 
+
+## Table of Contents
+
+- [Overview](#overview)
+- [🚀 5-Minute Getting Started](#-5-minute-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Step 1: Initialize Database (One-time setup)](#step-1-initialize-database-one-time-setup)
+  - [Step 2: Compile TypeScript Files](#step-2-compile-typescript-files)
+  - [Step 3: Start UAT Lead (Terminal 1)](#step-3-start-uat-lead-terminal-1)
+  - [Step 4: Start UAT Wizard (Terminal 2)](#step-4-start-uat-wizard-terminal-2)
+  - [Step 5: Execute Tests](#step-5-execute-tests)
+  - [Step 6: Monitor Progress (Terminal 1 - UAT Lead)](#step-6-monitor-progress-terminal-1---uat-lead)
+  - [Step 7: Check Status](#step-7-check-status)
+- [📊 Gate Rules](#-gate-rules)
+- [🔧 Advanced Usage](#-advanced-usage)
+  - [Export Results](#export-results)
+  - [Resume Testing Session](#resume-testing-session)
+  - [Direct Database Queries](#direct-database-queries)
+- [📁 File Structure](#-file-structure)
+- [🐛 Troubleshooting](#-troubleshooting)
+  - [Database Connection Issues](#database-connection-issues)
+  - [TypeScript Compilation Errors](#typescript-compilation-errors)
+  - [Payload Not Processing](#payload-not-processing)
+  - [Tests Not Loading](#tests-not-loading)
+- [📈 Optional: UAT Dashboard](#-optional-uat-dashboard)
+- [🎯 Tips for Effective UAT](#-tips-for-effective-uat)
+- [📚 Further Resources](#-further-resources)
+
 ## Overview
 
 A simple, database-backed User Acceptance Testing system for the EHG application with two cooperating agents:

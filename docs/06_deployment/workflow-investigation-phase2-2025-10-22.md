@@ -1,4 +1,37 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # GitHub Actions Workflow Investigation - Phase 2
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Investigation Summary](#investigation-summary)
+  - [1. WSJF Recommendations (Staging)](#1-wsjf-recommendations-staging)
+  - [2. WSJF Recommendations (Prod)](#2-wsjf-recommendations-prod)
+  - [3. Schema & System Consistency Validation](#3-schema-system-consistency-validation)
+  - [4. UAT Testing Pipeline for EHG Application](#4-uat-testing-pipeline-for-ehg-application)
+- [Summary of Required Fixes](#summary-of-required-fixes)
+  - [Immediate Fixes (Can Implement Now)](#immediate-fixes-can-implement-now)
+  - [Configuration-Dependent Fixes (Require Secrets/Access)](#configuration-dependent-fixes-require-secretsaccess)
+- [Recommended Implementation Plan](#recommended-implementation-plan)
+  - [Phase 2A: Immediate Fixes (Can Deploy Now)](#phase-2a-immediate-fixes-can-deploy-now)
+  - [Phase 2B: Configuration Fixes (Requires Decision)](#phase-2b-configuration-fixes-requires-decision)
+  - [Phase 2C: Prevention Measures](#phase-2c-prevention-measures)
+- [Files to Modify](#files-to-modify)
+  - [Code Changes](#code-changes)
+  - [Workflow Changes](#workflow-changes)
+  - [Optional Changes (Configuration-Dependent)](#optional-changes-configuration-dependent)
+- [Testing Strategy](#testing-strategy)
+- [Context for Fixes](#context-for-fixes)
+- [Lessons Learned](#lessons-learned)
 
 ## Metadata
 - **Category**: Guide

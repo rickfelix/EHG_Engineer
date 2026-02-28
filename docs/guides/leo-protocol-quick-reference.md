@@ -1,5 +1,43 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Protocol v4.3.3 - Quick Reference Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🚀 Quick Start Commands](#-quick-start-commands)
+- [📋 Agent Cheat Sheet](#-agent-cheat-sheet)
+  - [LEAD Agent](#lead-agent)
+  - [PLAN Agent](#plan-agent)
+  - [EXEC Agent](#exec-agent)
+- [✅ Handoff Checklists](#-handoff-checklists)
+  - [LEAD → PLAN](#lead-plan)
+  - [PLAN → EXEC](#plan-exec)
+  - [EXEC → COMPLETE](#exec-complete)
+- [🚨 Boundary Rules](#-boundary-rules)
+  - [Before ANY Implementation](#before-any-implementation)
+  - [Exception Process](#exception-process)
+- [📊 Context Management](#-context-management)
+  - [Thresholds](#thresholds)
+  - [Quick Actions](#quick-actions)
+- [🤖 Sub-Agent Triggers](#-sub-agent-triggers)
+- [📁 File Structure](#-file-structure)
+- [🔧 Troubleshooting](#-troubleshooting)
+  - [Context Overflow](#context-overflow)
+  - [Handoff Blocked](#handoff-blocked)
+  - [Boundary Violation](#boundary-violation)
+- [📈 Success Metrics](#-success-metrics)
+- [🎯 Golden Rules](#-golden-rules)
+- [🚦 Decision Tree](#-decision-tree)
+- [💡 Pro Tips](#-pro-tips)
 
 ## Metadata
 - **Category**: Protocol

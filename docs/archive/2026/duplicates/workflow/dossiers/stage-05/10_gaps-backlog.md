@@ -1,3 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Gaps (Block Automation)](#critical-gaps-block-automation)
+  - [GAP-S5-001: Recursion Engine Not Implemented](#gap-s5-001-recursion-engine-not-implemented)
+  - [GAP-S5-002: Recursion Events Table Not Created](#gap-s5-002-recursion-events-table-not-created)
+  - [GAP-S5-003: Financial Modeling Tools Not Implemented](#gap-s5-003-financial-modeling-tools-not-implemented)
+- [Important Gaps (Reduce Quality)](#important-gaps-reduce-quality)
+  - [GAP-S5-004: ROI Real-Time Indicator UI Missing](#gap-s5-004-roi-real-time-indicator-ui-missing)
+  - [GAP-S5-005: Recursion Explanation Modal Missing](#gap-s5-005-recursion-explanation-modal-missing)
+  - [GAP-S5-006: Financial Comparison View Missing](#gap-s5-006-financial-comparison-view-missing)
+  - [GAP-S5-007: Chairman Approval Workflow Not Implemented](#gap-s5-007-chairman-approval-workflow-not-implemented)
+  - [GAP-S5-008: Rollback Procedures Not Defined](#gap-s5-008-rollback-procedures-not-defined)
+- [Minor Gaps (Nice-to-Have)](#minor-gaps-nice-to-have)
+  - [GAP-S5-009: Accounting Tool Integration Missing](#gap-s5-009-accounting-tool-integration-missing)
+  - [GAP-S5-010: Customer Validation Touchpoint Missing](#gap-s5-010-customer-validation-touchpoint-missing)
+  - [GAP-S5-011: Performance Monitoring Not Implemented](#gap-s5-011-performance-monitoring-not-implemented)
+  - [GAP-S5-012: Financial Model History Not Implemented](#gap-s5-012-financial-model-history-not-implemented)
+  - [GAP-S5-013: Metrics Implementation Missing](#gap-s5-013-metrics-implementation-missing)
+  - [GAP-S5-014: Data Transformation Rules Not Documented](#gap-s5-014-data-transformation-rules-not-documented)
+- [Backlog Summary](#backlog-summary)
+- [Recommended Implementation Order](#recommended-implementation-order)
+  - [Phase 1: Recursion Foundation (P0 - 16-24 days)](#phase-1-recursion-foundation-p0---16-24-days)
+  - [Phase 2: UX & Governance (P1 - 10-17 days)](#phase-2-ux-governance-p1---10-17-days)
+  - [Phase 3: Enhancement (P2 - 16-23 days)](#phase-3-enhancement-p2---16-23-days)
+  - [Phase 4: Documentation (P3 - 2-3 days)](#phase-4-documentation-p3---2-3-days)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:54.560Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-05\10_gaps-backlog.md

@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Comprehensive Audit Round 2 - PRD-EXEC Gap Analysis
 
 **SD**: SD-EVA-QA-AUDIT-R2-PRD-EXEC-001

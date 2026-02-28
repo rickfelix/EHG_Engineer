@@ -1,4 +1,62 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v4.0 - Complete Implementation Guide
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+  - [Key Improvements](#key-improvements)
+- [Core Architecture](#core-architecture)
+  - [Agent Hierarchy](#agent-hierarchy)
+  - [Context Window Management](#context-window-management)
+- [Agent Specifications](#agent-specifications)
+  - [LEAD Agent](#lead-agent)
+  - [PLAN Agent](#plan-agent)
+  - [EXEC Agent](#exec-agent)
+- [Sub-Agent Specifications](#sub-agent-specifications)
+  - [Automatic Activation Triggers](#automatic-activation-triggers)
+  - [Sub-Agent Capabilities](#sub-agent-capabilities)
+- [Handoff Control System](#handoff-control-system)
+  - [Mandatory Checkpoints](#mandatory-checkpoints)
+  - [Exception Process](#exception-process)
+  - [Handoff Automation](#handoff-automation)
+- [Context Management System](#context-management-system)
+  - [Monitoring Commands](#monitoring-commands)
+  - [Context Thresholds](#context-thresholds)
+  - [Optimization Strategies](#optimization-strategies)
+  - [Emergency Recovery](#emergency-recovery)
+- [CLAUDE.md Integration](#claudemd-integration)
+  - [File Hierarchy](#file-hierarchy)
+  - [Essential Commands](#essential-commands)
+  - [Agent Templates](#agent-templates)
+- [Implementation Workflow](#implementation-workflow)
+  - [Complete SD Lifecycle](#complete-sd-lifecycle)
+  - [Quality Gates](#quality-gates)
+- [Success Metrics](#success-metrics)
+  - [Target Performance](#target-performance)
+  - [Monitoring Dashboard](#monitoring-dashboard)
+- [Repository Structure](#repository-structure)
+  - [LEO Protocol Framework](#leo-protocol-framework)
+  - [Implementation Projects](#implementation-projects)
+- [Common Issues and Solutions](#common-issues-and-solutions)
+  - [Issue: Context Overflow](#issue-context-overflow)
+  - [Issue: Boundary Violation](#issue-boundary-violation)
+  - [Issue: Handoff Blocked](#issue-handoff-blocked)
+  - [Issue: Sub-Agent Not Activated](#issue-sub-agent-not-activated)
+- [Migration from v3.x](#migration-from-v3x)
+  - [Breaking Changes](#breaking-changes)
+  - [Migration Steps](#migration-steps)
+- [Best Practices](#best-practices)
+  - [DO's](#dos)
+  - [DON'Ts](#donts)
+- [Conclusion](#conclusion)
 
 **Version**: 4.0.0
 **Status**: Active

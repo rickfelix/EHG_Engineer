@@ -1,5 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # PR Summary: Authentication Pages Enhancement
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [PR Title](#pr-title)
+- [PR Description](#pr-description)
+  - [Summary](#summary)
+  - [Changes](#changes)
+  - [Test Plan](#test-plan)
+  - [Files Changed](#files-changed)
+  - [CI/CD Considerations](#cicd-considerations)
+  - [Rollback Plan](#rollback-plan)
+  - [Post-Deployment Validation](#post-deployment-validation)
+  - [Dependencies](#dependencies)
+  - [Documentation Updates Needed](#documentation-updates-needed)
+  - [Related Issues/PRs](#related-issuesprs)
+- [Merge Checklist](#merge-checklist)
 
 ## Metadata
 - **Category**: Report

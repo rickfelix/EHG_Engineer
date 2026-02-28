@@ -1,3 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Entry Conditions (Gates)](#entry-conditions-gates)
+  - [Gate 1: Market Strategy Defined](#gate-1-market-strategy-defined)
+  - [Gate 2: Segments Identified](#gate-2-segments-identified)
+- [Substage Execution Procedures](#substage-execution-procedures)
+  - [Substage 17.1: Strategy Configuration](#substage-171-strategy-configuration)
+  - [Substage 17.2: Campaign Development](#substage-172-campaign-development)
+  - [Substage 17.3: Automation Setup](#substage-173-automation-setup)
+- [Exit Conditions (Gates)](#exit-conditions-gates)
+  - [Gate 1: GTM Agent Deployed](#gate-1-gtm-agent-deployed)
+  - [Gate 2: Campaigns Configured](#gate-2-campaigns-configured)
+  - [Gate 3: Workflows Active](#gate-3-workflows-active)
+- [Handoff to Stage 18](#handoff-to-stage-18)
+- [Rollback Procedures](#rollback-procedures)
+- [Common Issues and Resolutions](#common-issues-and-resolutions)
+- [Tools and Resources](#tools-and-resources)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.235Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-17\05_professional-sop.md

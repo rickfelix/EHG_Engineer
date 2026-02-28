@@ -1,5 +1,35 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol API Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Base URL](#base-url)
+- [Authentication](#authentication)
+- [Rate Limiting](#rate-limiting)
+- [Endpoints](#endpoints)
+  - [GET /api/leo/gate-scores](#get-apileogate-scores)
+  - [POST /api/leo/sub-agent-reports](#post-apileosub-agent-reports)
+- [WebSocket Events](#websocket-events)
+  - [Event Types](#event-types)
+  - [Event Debouncing](#event-debouncing)
+- [Status Machine](#status-machine)
+- [Error Responses](#error-responses)
+- [Examples](#examples)
+  - [Check if PRD is ready for implementation](#check-if-prd-is-ready-for-implementation)
+  - [Submit security sub-agent results](#submit-security-sub-agent-results)
+  - [Monitor real-time updates](#monitor-real-time-updates)
+- [SDK Support](#sdk-support)
 
 ## Metadata
 - **Category**: API

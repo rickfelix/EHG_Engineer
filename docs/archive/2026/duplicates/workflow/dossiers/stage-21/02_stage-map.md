@@ -1,3 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Workflow Position](#workflow-position)
+- [Direct Dependencies](#direct-dependencies)
+  - [Upstream: Stage 19 (Tri-Party Integration Verification)](#upstream-stage-19-tri-party-integration-verification)
+  - [Downstream: Stage 21 (Final Pre-Flight Check)](#downstream-stage-21-final-pre-flight-check)
+- [Parallel Execution Opportunities](#parallel-execution-opportunities)
+- [Recursion Relationships](#recursion-relationships)
+  - [Backward Recursion (Stage 21 → Stage 19)](#backward-recursion-stage-21-stage-19)
+  - [Backward Recursion (Stage 21 → Stage 16)](#backward-recursion-stage-21-stage-16)
+  - [Self-Recursion (Stage 21 → Stage 21)](#self-recursion-stage-21-stage-21)
+- [Critical Path Analysis](#critical-path-analysis)
+- [Stage Timing](#stage-timing)
+- [Cross-Venture Dependencies](#cross-venture-dependencies)
+- [Stage 21 Success Gates](#stage-21-success-gates)
+  - [Entry Gates](#entry-gates)
+  - [Exit Gates](#exit-gates)
+- [Visualization: Stage 21 Position](#visualization-stage-21-position)
+- [Dependency Diagram](#dependency-diagram)
+
 <!-- ARCHIVED: 2026-01-26T16:26:36.366Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-21\02_stage-map.md

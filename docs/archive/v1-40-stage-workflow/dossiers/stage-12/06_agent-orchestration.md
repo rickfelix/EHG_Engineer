@@ -1,4 +1,58 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 12: Agent Orchestration & Governance
+
+
+## Table of Contents
+
+- [Python CrewAI Mappings](#python-crewai-mappings)
+  - [Stage 12 Crew Definition](#stage-12-crew-definition)
+- [Agent Definitions](#agent-definitions)
+  - [Agent 1: Localization Strategist](#agent-1-localization-strategist)
+  - [Agent 2: Translation Specialist](#agent-2-translation-specialist)
+  - [Agent 3: Market Research Analyst](#agent-3-market-research-analyst)
+  - [Agent 4: Cultural Consultant (Support)](#agent-4-cultural-consultant-support)
+  - [Agent 5: QA Validator](#agent-5-qa-validator)
+- [Task Definitions](#task-definitions)
+  - [Task 1: Market Analysis (Substage 12.1)](#task-1-market-analysis-substage-121)
+  - [Task 2: Name Adaptation (Substage 12.2)](#task-2-name-adaptation-substage-122)
+  - [Task 3: Testing & Validation (Substage 12.3)](#task-3-testing-validation-substage-123)
+  - [Task 4: Localization Guide (Exit Deliverable)](#task-4-localization-guide-exit-deliverable)
+- [Governance Mappings](#governance-mappings)
+  - [LEAD Agent Role](#lead-agent-role)
+  - [PLAN Agent Role](#plan-agent-role)
+  - [EXEC Agent Role](#exec-agent-role)
+  - [QA Agent Role](#qa-agent-role)
+- [Inter-Agent Communication Protocols](#inter-agent-communication-protocols)
+  - [PLAN ↔ LEAD](#plan-lead)
+  - [PLAN ↔ Localization Strategist](#plan-localization-strategist)
+  - [PLAN ↔ Translation Specialist](#plan-translation-specialist)
+  - [PLAN ↔ Market Research Analyst](#plan-market-research-analyst)
+  - [Translation Specialist ↔ Cultural Consultant](#translation-specialist-cultural-consultant)
+  - [QA Validator ↔ PLAN](#qa-validator-plan)
+- [Parallel Execution Opportunities](#parallel-execution-opportunities)
+  - [Substage 12.1 Parallelization](#substage-121-parallelization)
+  - [Substage 12.2 Parallelization](#substage-122-parallelization)
+  - [Substage 12.3 Parallelization](#substage-123-parallelization)
+- [Error Handling & Rollback](#error-handling-rollback)
+  - [Agent-Level Error Handling](#agent-level-error-handling)
+  - [Stage-Level Rollback Protocol](#stage-level-rollback-protocol)
+- [Metrics & Monitoring (Agent Perspective)](#metrics-monitoring-agent-perspective)
+  - [Localization Strategist Metrics](#localization-strategist-metrics)
+  - [Translation Specialist Metrics](#translation-specialist-metrics)
+  - [Market Research Analyst Metrics](#market-research-analyst-metrics)
+  - [QA Validator Metrics](#qa-validator-metrics)
+- [Agent Outputs & Artifacts](#agent-outputs-artifacts)
+  - [Localization Strategist Outputs](#localization-strategist-outputs)
+  - [Translation Specialist Outputs](#translation-specialist-outputs)
+  - [Market Research Analyst Outputs](#market-research-analyst-outputs)
+  - [QA Validator Outputs](#qa-validator-outputs)
 
 ## Python CrewAI Mappings
 

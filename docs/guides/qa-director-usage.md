@@ -1,5 +1,54 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # QA Engineering Director Usage Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+  - [Test Any Strategic Directive](#test-any-strategic-directive)
+  - [With Options](#with-options)
+- [7 Intelligence Modules](#7-intelligence-modules)
+  - [1. Pre-test Build Validation](#1-pre-test-build-validation)
+  - [2. Database Migration Verification](#2-database-migration-verification)
+  - [3. Component Integration Checking](#3-component-integration-checking)
+  - [4. Smart Test Tier Selection](#4-smart-test-tier-selection)
+  - [5. Test Infrastructure Discovery](#5-test-infrastructure-discovery)
+  - [6. Cross-SD Dependency Detection](#6-cross-sd-dependency-detection)
+  - [7. Automated Migration Execution](#7-automated-migration-execution)
+- [5-Phase Workflow](#5-phase-workflow)
+  - [Phase 1: Pre-flight Checks](#phase-1-pre-flight-checks)
+  - [Phase 2: Smart Test Planning](#phase-2-smart-test-planning)
+  - [Phase 3: Test Execution](#phase-3-test-execution)
+  - [Phase 4: Evidence Collection](#phase-4-evidence-collection)
+  - [Phase 5: Verdict & Handoff](#phase-5-verdict-handoff)
+- [Command Options](#command-options)
+- [Success Criteria](#success-criteria)
+  - [PASS Verdict](#pass-verdict)
+  - [CONDITIONAL_PASS](#conditional_pass)
+  - [BLOCKED](#blocked)
+- [Results Storage](#results-storage)
+- [Examples](#examples)
+  - [Example 1: Test SD with Full Automation](#example-1-test-sd-with-full-automation)
+  - [Example 2: Skip Build, Manual Migration](#example-2-skip-build-manual-migration)
+  - [Example 3: Test EHG_Engineer SD](#example-3-test-ehg_engineer-sd)
+- [Integration with SD Testing Status](#integration-with-sd-testing-status)
+- [Troubleshooting](#troubleshooting)
+  - ["Build FAILED - blocking test execution"](#build-failed---blocking-test-execution)
+  - ["Pending migrations detected"](#pending-migrations-detected)
+  - ["Component built but not integrated (0 imports)"](#component-built-but-not-integrated-0-imports)
+  - ["Cross-SD dependency conflict detected"](#cross-sd-dependency-conflict-detected)
+- [Best Practices](#best-practices)
+- [Related Scripts](#related-scripts)
 
 ## Metadata
 - **Category**: Guide

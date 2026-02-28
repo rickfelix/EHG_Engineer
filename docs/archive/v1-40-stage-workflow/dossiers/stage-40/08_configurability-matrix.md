@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Configurability Matrix
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Configuration Dimensions](#configuration-dimensions)
+  - [1. Entry Gate Thresholds](#1-entry-gate-thresholds)
+  - [2. Exit Gate Thresholds](#2-exit-gate-thresholds)
+  - [3. Substage Timing](#3-substage-timing)
+  - [4. Automation Level](#4-automation-level)
+  - [5. Growth Strategy Parameters](#5-growth-strategy-parameters)
+  - [6. Exit Preparation Parameters](#6-exit-preparation-parameters)
+  - [7. Value Realization Parameters](#7-value-realization-parameters)
+  - [8. Monitoring & Alerting](#8-monitoring-alerting)
+- [Configuration Profiles](#configuration-profiles)
+  - [Profile 1: Conservative Approach](#profile-1-conservative-approach)
+  - [Profile 2: Balanced Approach (Default)](#profile-2-balanced-approach-default)
+  - [Profile 3: Aggressive Approach](#profile-3-aggressive-approach)
+- [Configuration Management](#configuration-management)
+  - [Storage Location](#storage-location)
+  - [Configuration Override](#configuration-override)
+- [Validation Rules](#validation-rules)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1794-1839
 

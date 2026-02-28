@@ -1,4 +1,60 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Self-Improvement Operations Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Capabilities](#key-capabilities)
+  - [Two Input Streams](#two-input-streams)
+- [System Architecture](#system-architecture)
+  - [Infrastructure Components](#infrastructure-components)
+  - [Key Tables](#key-tables)
+- [Data Flow Diagrams](#data-flow-diagrams)
+  - [Complete Pipeline Flow](#complete-pipeline-flow)
+  - [Internal Discovery Flow](#internal-discovery-flow)
+- [Pipeline Stages](#pipeline-stages)
+  - [Stage 1: Feedback Ingestion (95% Automated)](#stage-1-feedback-ingestion-95-automated)
+  - [Stage 2: Quality Processing (100% Automated)](#stage-2-quality-processing-100-automated)
+  - [Stage 3: Proposal Creation (80% Automated)](#stage-3-proposal-creation-80-automated)
+  - [Stage 4: Prioritization (100% Automated)](#stage-4-prioritization-100-automated)
+  - [Stage 5: Vetting - Rubric Assessment (100% Automated)](#stage-5-vetting---rubric-assessment-100-automated)
+  - [Stage 6: Vetting - AEGIS Constitutional (100% Automated)](#stage-6-vetting---aegis-constitutional-100-automated)
+  - [Stage 7: Board Vetting - Multi-Model Debate (100% Automated)](#stage-7-board-vetting---multi-model-debate-100-automated)
+  - [Stage 8: Board Verdict Calculation (100% Automated)](#stage-8-board-verdict-calculation-100-automated)
+  - [Stage 9: /learn Review & SD Creation (90% Automated)](#stage-9-learn-review-sd-creation-90-automated)
+  - [Stage 10: SD Implementation (Manual by Design)](#stage-10-sd-implementation-manual-by-design)
+  - [Stage 11: Auto-Resolution (100% Automated)](#stage-11-auto-resolution-100-automated)
+  - [Stage 12: Outcome Tracking (100% Automated)](#stage-12-outcome-tracking-100-automated)
+- [Commands Reference](#commands-reference)
+  - [Primary Commands](#primary-commands)
+  - [Unified Inbox Sections](#unified-inbox-sections)
+  - [Analytics Output](#analytics-output)
+- [Database Schema](#database-schema)
+  - [Core Tables Relationships](#core-tables-relationships)
+  - [Key Schema Details](#key-schema-details)
+- [Automation Status](#automation-status)
+  - [Current State: 95% Automated](#current-state-95-automated)
+  - [Completed Integrations (Self-Improving LEO Orchestrator)](#completed-integrations-self-improving-leo-orchestrator)
+- [Operations Procedures](#operations-procedures)
+  - [Daily Operations](#daily-operations)
+  - [Weekly Operations](#weekly-operations)
+  - [Monthly Operations](#monthly-operations)
+- [Troubleshooting](#troubleshooting)
+  - [Feedback Not Appearing in Inbox](#feedback-not-appearing-in-inbox)
+  - [Proposal Not Being Vetted](#proposal-not-being-vetted)
+  - [SD Not Auto-Resolving Patterns](#sd-not-auto-resolving-patterns)
+  - [Multi-Model Debate Not Running](#multi-model-debate-not-running)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

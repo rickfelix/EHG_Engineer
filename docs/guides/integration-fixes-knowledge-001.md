@@ -1,4 +1,36 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Integration Fixes: SD-KNOWLEDGE-001
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Issue #1: RLS Policies Blocking Inserts](#issue-1-rls-policies-blocking-inserts)
+- [Issue #2: Retrospectives Table Schema Mismatch](#issue-2-retrospectives-table-schema-mismatch)
+- [Issue #3: Audit Log RLS Policy](#issue-3-audit-log-rls-policy)
+- [Issue #4: PostgreSQL Doesn't Support CREATE POLICY IF NOT EXISTS](#issue-4-postgresql-doesnt-support-create-policy-if-not-exists)
+- [Issue #5: ANON Role Access for Cache Tables](#issue-5-anon-role-access-for-cache-tables)
+- [Issue #6: Cache Unique Constraint Violation](#issue-6-cache-unique-constraint-violation)
+- [Summary of Fixes](#summary-of-fixes)
+- [Prevention Measures Added](#prevention-measures-added)
+  - [1. Schema Verification Checklist](#1-schema-verification-checklist)
+  - [2. RLS Policy Testing Checklist](#2-rls-policy-testing-checklist)
+  - [3. Migration Validation Script](#3-migration-validation-script)
+- [Lessons Learned](#lessons-learned)
+  - [What Worked Well](#what-worked-well)
+  - [What Didn't Work](#what-didnt-work)
+  - [Root Causes Identified](#root-causes-identified)
+  - [Prevention Measures Implemented](#prevention-measures-implemented)
+  - [Improvements for Next SD](#improvements-for-next-sd)
+  - [Key Insight: Retrospective-Driven Development](#key-insight-retrospective-driven-development)
+  - [Metrics](#metrics)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Agent Orchestration (ActorSagaCrew Proposal)
+
+
+## Table of Contents
+
+- [Motivation](#motivation)
+- [Proposed Crew: ActorSagaCrew](#proposed-crew-actorsagacrew)
+- [Agent 1: Actor Architect](#agent-1-actor-architect)
+- [Agent 2: Saga Orchestrator](#agent-2-saga-orchestrator)
+- [Agent 3: Event Sourcing Specialist](#agent-3-event-sourcing-specialist)
+- [Agent 4: Consistency Validator](#agent-4-consistency-validator)
+- [Crew Workflow](#crew-workflow)
+- [Crew Configuration (Proposed)](#crew-configuration-proposed)
+- [Success Metrics](#success-metrics)
+- [Comparison to Existing Agents](#comparison-to-existing-agents)
+- [Implementation Roadmap](#implementation-roadmap)
+- [Open Questions](#open-questions)
+- [Sources Table](#sources-table)
 
 **Stage**: Actor Model & Saga Transaction Integration
 **Automation Level**: Manual → Assisted → Auto (suggested)

@@ -1,5 +1,45 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Vision Brief & Visualization Runbook
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+  - [Required Environment Variables](#required-environment-variables)
+  - [Recommended Environment Variables](#recommended-environment-variables)
+  - [Preflight Check](#preflight-check)
+- [Happy Path: Full Workflow](#happy-path-full-workflow)
+  - [Step 1: Generate Vision Brief (Draft)](#step-1-generate-vision-brief-draft)
+  - [Step 2: Approve Vision Brief](#step-2-approve-vision-brief)
+  - [Step 3: Generate Visualization](#step-3-generate-visualization)
+- [Feature Flags](#feature-flags)
+  - [PERSONA_SOFT_GATE_ENABLED](#persona_soft_gate_enabled)
+  - [Visualization Provider Selection](#visualization-provider-selection)
+- [Common Failure Modes & Fixes](#common-failure-modes-fixes)
+  - [1. Missing GEMINI_API_KEY (OpenAI Fallback)](#1-missing-gemini_api_key-openai-fallback)
+  - [2. Vision Brief JSON Parse Failure](#2-vision-brief-json-parse-failure)
+  - [3. Storage Bucket Does Not Exist](#3-storage-bucket-does-not-exist)
+  - [4. Visualization Gate (Unapproved Brief)](#4-visualization-gate-unapproved-brief)
+  - [5. SD Not Found](#5-sd-not-found)
+- [Safe Rollback Procedures](#safe-rollback-procedures)
+  - [Rollback Vision Brief](#rollback-vision-brief)
+  - [Rollback Visualization Only](#rollback-visualization-only)
+  - [Rollback Feature (Full Git Revert)](#rollback-feature-full-git-revert)
+  - [Disable Soft Gate Immediately](#disable-soft-gate-immediately)
+- [Monitoring & Verification](#monitoring-verification)
+  - [Check Vision Brief Status](#check-vision-brief-status)
+  - [List All SDs with Vision Briefs](#list-all-sds-with-vision-briefs)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

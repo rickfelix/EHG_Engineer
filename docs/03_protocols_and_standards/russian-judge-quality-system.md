@@ -1,5 +1,44 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Russian Judge AI Quality Assessment System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. The Role of Russian Judge in LEO Protocol Evolution](#1-the-role-of-russian-judge-in-leo-protocol-evolution)
+  - [1.1 Continuous Improvement Philosophy](#11-continuous-improvement-philosophy)
+  - [1.2 Current State: Advisory Mode (Non-Blocking)](#12-current-state-advisory-mode-non-blocking)
+  - [1.3 How Russian Judge Improves LEO Protocol](#13-how-russian-judge-improves-leo-protocol)
+- [2. Architecture & Implementation](#2-architecture-implementation)
+  - [2.1 Core Components](#21-core-components)
+  - [2.2 Evaluation Flow](#22-evaluation-flow)
+  - [2.3 SD Type Awareness (NEW in v1.1.0)](#23-sd-type-awareness-new-in-v110)
+  - [2.4 Boilerplate Detection (NEW in v1.2.0)](#24-boilerplate-detection-new-in-v120)
+- [3. Using Russian Judge Data for Future Tightening](#3-using-russian-judge-data-for-future-tightening)
+  - [3.1 When to Tighten Thresholds](#31-when-to-tighten-thresholds)
+  - [3.2 Meta-Analysis Queries](#32-meta-analysis-queries)
+  - [3.3 Continuous Improvement Workflow](#33-continuous-improvement-workflow)
+- [4. Technical Reference](#4-technical-reference)
+  - [4.1 Environment Configuration](#41-environment-configuration)
+  - [4.2 Database Schema](#42-database-schema)
+  - [4.3 Rubric Structure](#43-rubric-structure)
+  - [4.4 Cost Analysis](#44-cost-analysis)
+- [5. Future Enhancements](#5-future-enhancements)
+  - [5.1 Phase 2: Soft Enforcement (Planned)](#51-phase-2-soft-enforcement-planned)
+  - [5.2 Phase 3: Selective Hard Enforcement (Future)](#52-phase-3-selective-hard-enforcement-future)
+  - [5.3 Advanced Analytics](#53-advanced-analytics)
+  - [5.4 Integration with Other Tools](#54-integration-with-other-tools)
+- [6. FAQs](#6-faqs)
+- [7. Conclusion](#7-conclusion)
 
 ## Metadata
 - **Category**: Protocol

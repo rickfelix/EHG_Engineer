@@ -1,3 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Configuration Schema](#configuration-schema)
+  - [Table: `stage_25_configuration`](#table-stage_25_configuration)
+  - [Configuration Access Pattern](#configuration-access-pattern)
+- [Tunable Parameters](#tunable-parameters)
+  - [Category 1: Test Coverage Thresholds](#category-1-test-coverage-thresholds)
+  - [Category 2: Defect Density Threshold](#category-2-defect-density-threshold)
+  - [Category 3: Quality Score Threshold](#category-3-quality-score-threshold)
+  - [Category 4: Quality Score Formula Weights](#category-4-quality-score-formula-weights)
+  - [Category 5: Bug Severity Blocking Rules](#category-5-bug-severity-blocking-rules)
+  - [Category 6: Test Execution Timeouts](#category-6-test-execution-timeouts)
+  - [Category 7: Regression Test Scope](#category-7-regression-test-scope)
+  - [Category 8: Test Parallelization](#category-8-test-parallelization)
+  - [Category 9: Test Retry Logic](#category-9-test-retry-logic)
+  - [Category 10: Sign-off Approvers](#category-10-sign-off-approvers)
+- [Configuration Management](#configuration-management)
+  - [Setting Configuration (CLI)](#setting-configuration-cli)
+  - [Getting Configuration (SQL)](#getting-configuration-sql)
+  - [Updating Configuration (API)](#updating-configuration-api)
+- [Configuration Validation](#configuration-validation)
+  - [Validation Rules](#validation-rules)
+  - [Validation Query](#validation-query)
+- [Configuration Presets](#configuration-presets)
+  - [Preset 1: MVP (Fast Iteration)](#preset-1-mvp-fast-iteration)
+  - [Preset 2: Production (High Quality)](#preset-2-production-high-quality)
+  - [Preset 3: Regulatory (Strict Compliance)](#preset-3-regulatory-strict-compliance)
+  - [Applying Presets](#applying-presets)
+- [Configuration Audit Trail](#configuration-audit-trail)
+  - [Table: `stage_25_configuration_history`](#table-stage_25_configuration_history)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:49.108Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-25\08_configurability-matrix.md

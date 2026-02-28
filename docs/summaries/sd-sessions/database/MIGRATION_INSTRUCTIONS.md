@@ -1,5 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # 🗄️ Database Migration Instructions for SD-DATA-INTEGRITY-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [📋 Migration Overview](#-migration-overview)
+- [🚀 How to Apply Migrations](#-how-to-apply-migrations)
+  - [Option 1: Via Supabase Dashboard (RECOMMENDED)](#option-1-via-supabase-dashboard-recommended)
+  - [Option 2: Via Supabase CLI](#option-2-via-supabase-cli)
+- [📄 Migration 1: Handoff Triggers (COPY THIS)](#-migration-1-handoff-triggers-copy-this)
+- [📄 Migration 2: Legacy Table Deprecation (COPY THIS)](#-migration-2-legacy-table-deprecation-copy-this)
+- [✅ Verification Steps](#-verification-steps)
+  - [1. Check Trigger Installation](#1-check-trigger-installation)
+  - [2. Check Migration Status](#2-check-migration-status)
+  - [3. Check Legacy View](#3-check-legacy-view)
+- [⚠️ Important Notes](#-important-notes)
+- [🆘 Troubleshooting](#-troubleshooting)
+  - [Error: "function calculate_sd_progress does not exist"](#error-function-calculate_sd_progress-does-not-exist)
+  - [Error: "table sd_phase_handoffs does not exist"](#error-table-sd_phase_handoffs-does-not-exist)
+  - [Error: "permission denied"](#error-permission-denied)
+- [📊 Expected Results](#-expected-results)
+- [🎯 Next Steps After Migration](#-next-steps-after-migration)
 
 ## Metadata
 - **Category**: Database

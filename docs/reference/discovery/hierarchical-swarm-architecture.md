@@ -1,4 +1,51 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Hierarchical Swarm Architecture for LEO Protocol
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Current Architecture (Single-Agent Model)](#current-architecture-single-agent-model)
+- [Proposed Architecture: Hierarchical Swarms](#proposed-architecture-hierarchical-swarms)
+  - [Level 1: Board of Directors Swarms](#level-1-board-of-directors-swarms)
+  - [Level 2: Sub-Agent Swarms](#level-2-sub-agent-swarms)
+- [Swarm Communication Patterns](#swarm-communication-patterns)
+  - [Pattern 1: Fire-and-Forget (Board Advisors)](#pattern-1-fire-and-forget-board-advisors)
+  - [Pattern 2: Progressive Refinement (RCA Swarm)](#pattern-2-progressive-refinement-rca-swarm)
+  - [Pattern 3: Competitive Analysis (Validation Swarm)](#pattern-3-competitive-analysis-validation-swarm)
+- [Intelligence Amplification Analysis](#intelligence-amplification-analysis)
+  - [Board of Directors: Before vs After](#board-of-directors-before-vs-after)
+  - [Sub-Agents: Before vs After](#sub-agents-before-vs-after)
+- [Implementation Priority](#implementation-priority)
+  - [Phase 1: Board of Directors Swarms (Highest Impact)](#phase-1-board-of-directors-swarms-highest-impact)
+  - [Phase 2: High-Frequency Sub-Agent Swarms](#phase-2-high-frequency-sub-agent-swarms)
+  - [Phase 3: Remaining Sub-Agents](#phase-3-remaining-sub-agents)
+- [Database Schema Extensions](#database-schema-extensions)
+  - [New Tables for Swarm Tracking](#new-tables-for-swarm-tracking)
+  - [Views for Swarm Analytics](#views-for-swarm-analytics)
+- [Swarm Prompts: Board Advisor Templates](#swarm-prompts-board-advisor-templates)
+  - [Skeptic's Security Analyst Prompt](#skeptics-security-analyst-prompt)
+  - [Pragmatist's Resource Estimator Prompt](#pragmatists-resource-estimator-prompt)
+- [Swarm Prompts: Sub-Agent Advisor Templates](#swarm-prompts-sub-agent-advisor-templates)
+  - [Database Swarm: RLS Policy Expert Prompt](#database-swarm-rls-policy-expert-prompt)
+  - [Testing Swarm: E2E Automation Engineer Prompt](#testing-swarm-e2e-automation-engineer-prompt)
+- [Cost-Benefit Analysis](#cost-benefit-analysis)
+  - [Cost Factors](#cost-factors)
+  - [Benefit Factors](#benefit-factors)
+  - [ROI Calculation](#roi-calculation)
+- [Implementation Checklist](#implementation-checklist)
+  - [Phase 1: Board of Directors Swarms](#phase-1-board-of-directors-swarms)
+  - [Phase 2: Sub-Agent Swarms (DATABASE, TESTING)](#phase-2-sub-agent-swarms-database-testing)
+  - [Phase 3: Sub-Agent Swarms (RCA, VALIDATION)](#phase-3-sub-agent-swarms-rca-validation)
+- [Related Documents](#related-documents)
+- [Changelog](#changelog)
 
 **Created**: 2026-02-02
 **Status**: Design Ready (awaiting Claude Code Swarm release)

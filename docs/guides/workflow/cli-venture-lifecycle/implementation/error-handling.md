@@ -1,3 +1,34 @@
+
+## Table of Contents
+
+- [Error Handling Philosophy](#error-handling-philosophy)
+- [Error Category Taxonomy](#error-category-taxonomy)
+- [Detailed Error Categories](#detailed-error-categories)
+  - [Template Load Error](#template-load-error)
+  - [Context Load Error](#context-load-error)
+  - [LLM Execution Error](#llm-execution-error)
+  - [Decision Filter Error](#decision-filter-error)
+  - [Reality Gate Error](#reality-gate-error)
+  - [Stage Gate Error](#stage-gate-error)
+  - [Artifact Persistence Error](#artifact-persistence-error)
+  - [State Transition Error](#state-transition-error)
+- [Status Result Contract](#status-result-contract)
+  - [Status Transition Rules](#status-transition-rules)
+- [Retry Strategy Summary](#retry-strategy-summary)
+  - [Backoff Parameters](#backoff-parameters)
+- [Non-Retryable Error Codes](#non-retryable-error-codes)
+- [Fail-Closed Behaviors](#fail-closed-behaviors)
+  - [Reality Gates](#reality-gates)
+  - [Decision Filter Engine](#decision-filter-engine)
+  - [Devil's Advocate (Exception: Fail-Open)](#devils-advocate-exception-fail-open)
+- [Recovery Patterns](#recovery-patterns)
+  - [Kill Gate Rejection Recovery](#kill-gate-rejection-recovery)
+  - [Reality Gate Failure Recovery](#reality-gate-failure-recovery)
+  - [Promotion Gate Rejection Recovery](#promotion-gate-rejection-recovery)
+  - [LLM Timeout Recovery](#llm-timeout-recovery)
+- [Error Propagation](#error-propagation)
+- [Logging Standards](#logging-standards)
+
 ---
 Category: Implementation
 Status: Approved

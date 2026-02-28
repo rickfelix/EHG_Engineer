@@ -1,5 +1,37 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # 🔍 Deep Research Prompt: Claude Code Sub-Agent Automatic Delegation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Research Query for Browser/Forums](#research-query-for-browserforums)
+- [Detailed Context for Deep Research](#detailed-context-for-deep-research)
+  - [Problem Statement](#problem-statement)
+  - [What We've Tried](#what-weve-tried)
+  - [File Structure](#file-structure)
+  - [Current database-agent.md File (Full Content)](#current-database-agentmd-file-full-content)
+- [Core Responsibilities](#core-responsibilities)
+- [Invocation Pattern](#invocation-pattern)
+- [Success Patterns](#success-patterns)
+- [Failure Patterns to Avoid](#failure-patterns-to-avoid)
+  - [Questions for Research](#questions-for-research)
+  - [Environment Details](#environment-details)
+  - [What IS Working](#what-is-working)
+  - [Search Terms to Use](#search-terms-to-use)
+  - [Resources to Check](#resources-to-check)
+  - [Specific Information Needed](#specific-information-needed)
+  - [Success Criteria](#success-criteria)
+  - [Return Format](#return-format)
+- [Additional Context: Our Use Case](#additional-context-our-use-case)
 
 ## Metadata
 - **Category**: Guide

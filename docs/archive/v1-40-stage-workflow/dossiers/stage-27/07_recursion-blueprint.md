@@ -1,4 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Recursion Blueprint (SAGA Triggers)
+
+
+## Table of Contents
+
+- [Current State](#current-state)
+- [Recursion Trigger Philosophy](#recursion-trigger-philosophy)
+- [Proposed Recursion Triggers](#proposed-recursion-triggers)
+  - [SAGA-001: Transaction Failure Detected](#saga-001-transaction-failure-detected)
+  - [SAGA-002: Compensation Required](#saga-002-compensation-required)
+  - [SAGA-003: Actor Supervision Failure](#saga-003-actor-supervision-failure)
+  - [SAGA-004: Consistency Verified (Success Path)](#saga-004-consistency-verified-success-path)
+- [Recursion Trigger Matrix](#recursion-trigger-matrix)
+- [Integration with ActorSagaCrew](#integration-with-actorsagacrew)
+- [Recursion Flow Example (SAGA-001)](#recursion-flow-example-saga-001)
+- [Metrics for Recursion Effectiveness](#metrics-for-recursion-effectiveness)
+- [Open Questions](#open-questions)
+- [Sources Table](#sources-table)
 
 **Stage**: Actor Model & Saga Transaction Integration
 **Recursion Readiness**: 2/5 (Generic recursion support pending)

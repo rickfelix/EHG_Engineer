@@ -1,5 +1,45 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # ✅ Sub-Agent Automation: IMPLEMENTATION COMPLETE
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🎉 What's Been Implemented](#-whats-been-implemented)
+  - [✅ Working Automation (No Manual Steps Required)](#-working-automation-no-manual-steps-required)
+- [🚀 How to Use (Simple 2-Step Process)](#-how-to-use-simple-2-step-process)
+  - [Step 1: When SD is Completed](#step-1-when-sd-is-completed)
+  - [Step 2: Before LEAD Approval](#step-2-before-lead-approval)
+- [📋 Trigger Events Available](#-trigger-events-available)
+- [✅ Test Results from SD-UAT-021](#-test-results-from-sd-uat-021)
+- [🔄 Integration into Workflow](#-integration-into-workflow)
+  - [Option A: Manual (Current)](#option-a-manual-current)
+  - [Option B: Script Integration](#option-b-script-integration)
+  - [Option C: Dashboard Integration (Future)](#option-c-dashboard-integration-future)
+- [📊 What Gets Automated](#-what-gets-automated)
+  - [Before This System](#before-this-system)
+  - [After This System](#after-this-system)
+- [🎛️ Configuration](#-configuration)
+  - [Adding New Sub-Agents](#adding-new-sub-agents)
+- [🔮 Future Enhancements (Optional)](#-future-enhancements-optional)
+  - [Phase 2: Database Triggers (Advanced)](#phase-2-database-triggers-advanced)
+  - [Phase 3: Dashboard Integration](#phase-3-dashboard-integration)
+- [💡 Best Practices](#-best-practices)
+  - [1. Always Run Before Approval](#1-always-run-before-approval)
+  - [2. Check Exit Codes](#2-check-exit-codes)
+  - [3. Review Output](#3-review-output)
+  - [4. Keep Scripts Updated](#4-keep-scripts-updated)
+- [❓ FAQ](#-faq)
+- [🎯 Success Criteria](#-success-criteria)
+- [📞 Support](#-support)
 
 ## Metadata
 - **Category**: Report

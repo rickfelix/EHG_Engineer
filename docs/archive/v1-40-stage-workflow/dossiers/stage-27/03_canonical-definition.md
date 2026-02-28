@@ -1,4 +1,28 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Canonical Definition (YAML Extract)
+
+
+## Table of Contents
+
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Core Identification](#core-identification)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 items)](#inputs-3-items)
+  - [Outputs (3 items)](#outputs-3-items)
+  - [Metrics (3 items)](#metrics-3-items)
+  - [Gates](#gates)
+  - [Substages (3 items)](#substages-3-items)
+  - [Notes](#notes)
+- [Validation Results](#validation-results)
+- [Sources Table](#sources-table)
 
 **Source**: `docs/workflow/stages.yaml` (lines 1195-1240)
 **Commit**: `EHG_Engineer@6ef8cf4`

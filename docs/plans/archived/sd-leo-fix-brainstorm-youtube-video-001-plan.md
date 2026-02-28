@@ -1,3 +1,11 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 <!-- Archived from: brainstorm/2026-02-23-youtube-video-intelligence-capture-time.md -->
 <!-- SD Key: SD-LEO-FIX-BRAINSTORM-YOUTUBE-VIDEO-001 -->
 <!-- Archived at: 2026-02-23T11:28:38.075Z -->

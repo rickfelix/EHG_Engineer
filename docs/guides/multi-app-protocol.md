@@ -1,4 +1,60 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Multi-Application Management Protocol
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [LEO Protocol v3.1.5 Extension for Multi-App Support](#leo-protocol-v315-extension-for-multi-app-support)
+  - [Version: 1.0.0](#version-100)
+  - [Status: ACTIVE](#status-active)
+  - [Last Updated: 2025-01-15](#last-updated-2025-01-15)
+- [Executive Summary](#executive-summary)
+- [Core Concepts](#core-concepts)
+  - [1. Application Context](#1-application-context)
+  - [2. Naming Conventions](#2-naming-conventions)
+  - [3. Directory Structure](#3-directory-structure)
+- [Database Schema](#database-schema)
+  - [New Tables](#new-tables)
+  - [Modified Tables](#modified-tables)
+- [Workflows](#workflows)
+  - [1. Application Registration](#1-application-registration)
+  - [2. Context Switching](#2-context-switching)
+  - [3. Synchronization](#3-synchronization)
+  - [4. Strategic Directive Creation](#4-strategic-directive-creation)
+- [Communication Standards](#communication-standards)
+  - [Enhanced Header Format](#enhanced-header-format)
+  - [Agent Responsibilities](#agent-responsibilities)
+- [Security](#security)
+  - [Credential Encryption](#credential-encryption)
+  - [Access Control](#access-control)
+- [CLI Commands](#cli-commands)
+  - [Core Commands](#core-commands)
+- [Best Practices](#best-practices)
+  - [1. Always Set Context](#1-always-set-context)
+  - [2. Regular Synchronization](#2-regular-synchronization)
+  - [3. Branch Strategy](#3-branch-strategy)
+  - [4. Commit Messages](#4-commit-messages)
+  - [5. PR Descriptions](#5-pr-descriptions)
+- [APP001 - Strategic Directive Implementation](#app001---strategic-directive-implementation)
+- [Monitoring](#monitoring)
+  - [Sync Status](#sync-status)
+  - [Active Contexts](#active-contexts)
+  - [Deployment Status](#deployment-status)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Migration Guide](#migration-guide)
+  - [From Single-App to Multi-App](#from-single-app-to-multi-app)
+- [Future Enhancements](#future-enhancements)
+  - [Planned Features](#planned-features)
+- [Compliance](#compliance)
 
 ## Metadata
 - **Category**: Protocol

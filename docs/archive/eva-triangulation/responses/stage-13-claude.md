@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 13 "Product Roadmap" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Milestone Structure Decision](#3-milestone-structure-decision)
+  - [4. Feature Prioritization Decision](#4-feature-prioritization-decision)
+  - [5. Dependency Management Decision](#5-dependency-management-decision)
+  - [6. Sales Model → Roadmap Alignment](#6-sales-model-roadmap-alignment)
+  - [7. Kill Gate Enhancement](#7-kill-gate-enhancement)
+  - [8. Phase Structure Decision](#8-phase-structure-decision)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 13 Schema](#10-recommended-stage-13-schema)
+  - [11. Minimum Viable Change (priority-ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-12 decisions)](#13-dependency-conflicts-with-stages-1-12-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 13 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

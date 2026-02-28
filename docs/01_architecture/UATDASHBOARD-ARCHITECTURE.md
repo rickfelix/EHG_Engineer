@@ -1,5 +1,41 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # UATDashboard Component Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Component Hierarchy](#component-hierarchy)
+- [Data Flow](#data-flow)
+- [Props Interfaces](#props-interfaces)
+  - [UATMetrics](#uatmetrics)
+  - [UATFilters](#uatfilters)
+  - [TestCaseList](#testcaselist)
+- [Component Responsibilities](#component-responsibilities)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [E2E Tests](#e2e-tests)
+- [Performance Considerations](#performance-considerations)
+  - [Optimizations](#optimizations)
+  - [Bundle Size](#bundle-size)
+- [Migration Guide](#migration-guide)
+  - [Before](#before)
+  - [After (No change required)](#after-no-change-required)
+  - [New: Import sub-components directly](#new-import-sub-components-directly)
+- [Future Enhancements](#future-enhancements)
+  - [Phase 1 (Immediate)](#phase-1-immediate)
+  - [Phase 2 (Short-term)](#phase-2-short-term)
+  - [Phase 3 (Long-term)](#phase-3-long-term)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Architecture

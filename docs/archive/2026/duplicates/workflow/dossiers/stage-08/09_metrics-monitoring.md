@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Primary Metrics (from stages.yaml)](#primary-metrics-from-stagesyaml)
+  - [Metric 1: Decomposition Depth](#metric-1-decomposition-depth)
+  - [Metric 2: Task Clarity](#metric-2-task-clarity)
+  - [Metric 3: Dependency Resolution](#metric-3-dependency-resolution)
+- [Secondary Metrics (Performance & Quality)](#secondary-metrics-performance-quality)
+  - [Metric 4: WBS Versioning Rate](#metric-4-wbs-versioning-rate)
+  - [Metric 5: Recursion Trigger Breakdown](#metric-5-recursion-trigger-breakdown)
+  - [Metric 6: Stage 8 Execution Time](#metric-6-stage-8-execution-time)
+  - [Metric 7: Exit Gate Pass Rate](#metric-7-exit-gate-pass-rate)
+  - [Metric 8: Critical Path Accuracy](#metric-8-critical-path-accuracy)
+  - [Metric 9: Task Granularity Distribution](#metric-9-task-granularity-distribution)
+- [Recursion-Specific Metrics](#recursion-specific-metrics)
+  - [Metric 10: Chairman Approval Time](#metric-10-chairman-approval-time)
+  - [Metric 11: WBS Version Effort Drift](#metric-11-wbs-version-effort-drift)
+- [Monitoring Dashboards](#monitoring-dashboards)
+  - [Dashboard 1: Stage 8 Health Overview](#dashboard-1-stage-8-health-overview)
+  - [Dashboard 2: Recursion Analytics](#dashboard-2-recursion-analytics)
+  - [Dashboard 3: Automation ROI](#dashboard-3-automation-roi)
+- [Alerting Rules](#alerting-rules)
+  - [Critical Alerts (Immediate Action Required)](#critical-alerts-immediate-action-required)
+  - [Warning Alerts (Proactive Monitoring)](#warning-alerts-proactive-monitoring)
+  - [Informational Alerts (Trend Monitoring)](#informational-alerts-trend-monitoring)
+- [Database Queries (Copy-Paste Ready)](#database-queries-copy-paste-ready)
+  - [Query 1: Stage 8 Metrics Summary (Single Venture)](#query-1-stage-8-metrics-summary-single-venture)
+  - [Query 2: Weekly Aggregate Metrics](#query-2-weekly-aggregate-metrics)
+- [Gap Analysis for Metrics & Monitoring](#gap-analysis-for-metrics-monitoring)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:52.323Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\09_metrics-monitoring.md

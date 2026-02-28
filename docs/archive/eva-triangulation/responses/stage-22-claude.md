@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 22 "Release Readiness" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Promotion Gate Update](#3-promotion-gate-update)
+  - [4. Sprint Review / Retrospective](#4-sprint-review-retrospective)
+  - [5. Release Item Categories](#5-release-item-categories)
+  - [6. Release Decision](#6-release-decision)
+  - [7. Sprint Summary](#7-sprint-summary)
+  - [8. Deployment Readiness Decision](#8-deployment-readiness-decision)
+  - [9. target_date Fix](#9-target_date-fix)
+  - [10. CLI Superiorities (preserve these)](#10-cli-superiorities-preserve-these)
+  - [11. Recommended Stage 22 Schema](#11-recommended-stage-22-schema)
+  - [12. Minimum Viable Change (Priority-Ordered)](#12-minimum-viable-change-priority-ordered)
+  - [13. Cross-Stage Impact](#13-cross-stage-impact)
+  - [14. Dependency Conflicts (with Stages 1-21 decisions)](#14-dependency-conflicts-with-stages-1-21-decisions)
+  - [15. Contrarian Take](#15-contrarian-take)
 
 > Independent response to the Stage 22 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

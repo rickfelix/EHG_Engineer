@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA R2 Audit: Phase 4 — THE BLUEPRINT (Stages 13-16)
 
 **SD**: `SD-EVA-QA-AUDIT-R2-BLUEPRINT-001`

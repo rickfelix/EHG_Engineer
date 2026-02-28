@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Configurability Matrix: Stage 13 Exit-Oriented Design
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Configuration Categories](#configuration-categories)
+  - [1. Metric Thresholds](#1-metric-thresholds)
+  - [2. Timeline Parameters](#2-timeline-parameters)
+  - [3. Strategic Fit Criteria Weightings](#3-strategic-fit-criteria-weightings)
+  - [4. Buyer Landscape Parameters](#4-buyer-landscape-parameters)
+  - [5. Automation Configuration](#5-automation-configuration)
+  - [6. Recursion Configuration](#6-recursion-configuration)
+  - [7. Stakeholder Configuration](#7-stakeholder-configuration)
+  - [8. Metrics Collection Configuration](#8-metrics-collection-configuration)
+- [Configuration Profiles (Pre-Defined Templates)](#configuration-profiles-pre-defined-templates)
+  - [Profile 1: Fast-Track Opportunistic Exit](#profile-1-fast-track-opportunistic-exit)
+  - [Profile 2: Standard Strategic Exit](#profile-2-standard-strategic-exit)
+  - [Profile 3: Comprehensive IPO Preparation](#profile-3-comprehensive-ipo-preparation)
+- [Configuration Storage](#configuration-storage)
+- [Configuration Validation Rules](#configuration-validation-rules)
 
 ## Overview
 This document defines all tunable parameters for Stage 13 execution, enabling customization based on venture characteristics, market conditions, and stakeholder preferences.

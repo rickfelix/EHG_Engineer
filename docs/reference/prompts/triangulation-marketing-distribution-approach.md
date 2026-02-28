@@ -1,5 +1,47 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Marketing Content Distribution Approach
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Unified Prompt for OpenAI and AntiGravity (Gemini)](#unified-prompt-for-openai-and-antigravity-gemini)
+- [Context](#context)
+- [The Question](#the-question)
+- [Options to Evaluate](#options-to-evaluate)
+  - [Option A: Manual Copy/Paste](#option-a-manual-copypaste)
+  - [Option B: Direct Platform APIs](#option-b-direct-platform-apis)
+  - [Option C: Third-Party Tool API (Buffer, Hootsuite, etc.)](#option-c-third-party-tool-api-buffer-hootsuite-etc)
+  - [Option D: Computer Use Automation (Claude/Playwright)](#option-d-computer-use-automation-claudeplaywright)
+  - [Option E: Hybrid (Generate + Review Queue + Manual Post)](#option-e-hybrid-generate-review-queue-manual-post)
+- [Evaluation Criteria](#evaluation-criteria)
+- [Specific Questions](#specific-questions)
+- [Your Analysis Tasks](#your-analysis-tasks)
+  - [Task 1: Option Ranking](#task-1-option-ranking)
+  - [Task 2: Hidden Costs & Risks](#task-2-hidden-costs-risks)
+  - [Task 3: Recommended Approach](#task-3-recommended-approach)
+  - [Task 4: Platform Priority](#task-4-platform-priority)
+  - [Task 5: Tool Recommendations](#task-5-tool-recommendations)
+- [Output Format](#output-format)
+- [Option Ranking (Best to Worst)](#option-ranking-best-to-worst)
+- [Hidden Costs & Risks](#hidden-costs-risks)
+  - [Option A](#option-a)
+- [Recommended Approach](#recommended-approach)
+  - [Phase 1 (Now - 2 weeks)](#phase-1-now---2-weeks)
+  - [Phase 2 (5 ventures)](#phase-2-5-ventures)
+  - [Phase 3 (20+ ventures)](#phase-3-20-ventures)
+- [Platform Priority](#platform-priority)
+- [Tool Recommendation](#tool-recommendation)
+- [Key Insight](#key-insight)
+- [Ground Rules](#ground-rules)
 
 ## Metadata
 - **Category**: Guide

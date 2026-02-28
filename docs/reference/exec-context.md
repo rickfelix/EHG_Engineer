@@ -1,5 +1,53 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EXEC_CONTEXT.md - Lean Implementation Guide for EXEC Agents
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [📍 CRITICAL: Application Architecture](#-critical-application-architecture)
+  - [Two Distinct Applications](#two-distinct-applications)
+  - [⚠️ Pre-Implementation Verification](#-pre-implementation-verification)
+- [✅ EXEC Pre-Implementation Checklist](#-exec-pre-implementation-checklist)
+- [EXEC Pre-Implementation Checklist](#exec-pre-implementation-checklist)
+  - [Step-by-Step Verification](#step-by-step-verification)
+- [🔄 MANDATORY: Server Restart Protocol](#-mandatory-server-restart-protocol)
+- [📝 Git Commit Guidelines](#-git-commit-guidelines)
+- [🧪 Testing Requirements](#-testing-requirements)
+  - [Dual Test Execution (MANDATORY)](#dual-test-execution-mandatory)
+  - [Test Execution Checklist](#test-execution-checklist)
+- [📏 Component Sizing Guidelines](#-component-sizing-guidelines)
+- [🗄️ Database Operations](#-database-operations)
+  - [Connection Pattern](#connection-pattern)
+  - [Query Efficiency (CRITICAL for Context)](#query-efficiency-critical-for-context)
+  - [Database-First Architecture](#database-first-architecture)
+- [🧠 Context Efficiency Rules](#-context-efficiency-rules)
+  - [Status Thresholds](#status-thresholds)
+  - [Efficiency Patterns](#efficiency-patterns)
+- [📋 Quick Reference Commands](#-quick-reference-commands)
+  - [Application Navigation](#application-navigation)
+  - [Development Server](#development-server)
+  - [Build & Validation](#build-validation)
+  - [Testing](#testing)
+  - [Git Operations](#git-operations)
+  - [CI/CD Verification](#cicd-verification)
+- [🚨 Common Mistakes to Avoid](#-common-mistakes-to-avoid)
+  - [1. Wrong Directory](#1-wrong-directory)
+  - [2. No Server Restart](#2-no-server-restart)
+  - [3. Skipped Pre-Verification](#3-skipped-pre-verification)
+  - [4. Tests Not Run](#4-tests-not-run)
+  - [5. Large Components](#5-large-components)
+  - [6. Inefficient Queries](#6-inefficient-queries)
+- [📚 Reference Documentation](#-reference-documentation)
+- [✅ EXEC Implementation Workflow](#-exec-implementation-workflow)
 
 ## Metadata
 - **Category**: Reference

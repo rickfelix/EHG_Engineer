@@ -1,4 +1,35 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol Checklist Enforcement Amendment
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version 4.1.3 - Dashboard Checklist Integration](#version-413---dashboard-checklist-integration)
+  - [Critical Change: Mandatory Checklist Updates](#critical-change-mandatory-checklist-updates)
+- [Enforcement Rules](#enforcement-rules)
+  - [1. PLAN Phase Handoff to EXEC](#1-plan-phase-handoff-to-exec)
+  - [2. EXEC Phase Handoff to PLAN (Verification)](#2-exec-phase-handoff-to-plan-verification)
+  - [3. PLAN Verification Handoff to LEAD](#3-plan-verification-handoff-to-lead)
+- [Dashboard Integration](#dashboard-integration)
+  - [Real-time Progress Tracking](#real-time-progress-tracking)
+- [Implementation Scripts](#implementation-scripts)
+  - [1. Update Checklist Script Template](#1-update-checklist-script-template)
+  - [2. Verification Script](#2-verification-script)
+  - [3. Handoff Record Creation](#3-handoff-record-creation)
+- [Compliance Monitoring](#compliance-monitoring)
+  - [Dashboard Alerts](#dashboard-alerts)
+  - [Audit Trail](#audit-trail)
+  - [Smart Refresh Integration](#smart-refresh-integration)
+- [Benefits](#benefits)
+- [Migration for Existing Projects](#migration-for-existing-projects)
 
 ## Metadata
 - **Category**: Protocol

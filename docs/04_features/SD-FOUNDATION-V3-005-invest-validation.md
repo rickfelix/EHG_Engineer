@@ -1,4 +1,57 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # INVEST Criteria Validation: SD-FOUNDATION-V3-005
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EVA Directive Execution Engine](#eva-directive-execution-engine)
+- [INVEST Criteria Overview](#invest-criteria-overview)
+- [Story-by-Story Validation](#story-by-story-validation)
+  - [US-001: Create Command Parser Service](#us-001-create-command-parser-service)
+  - [US-002: Extend Parser with Validation](#us-002-extend-parser-with-validation)
+  - [US-003: Create Directive Router](#us-003-create-directive-router)
+  - [US-004: Create Execution Dispatcher](#us-004-create-execution-dispatcher)
+  - [US-005: Task Dependency Orchestration](#us-005-task-dependency-orchestration)
+  - [US-006: Status Polling API Endpoint](#us-006-status-polling-api-endpoint)
+  - [US-007: Result Aggregator](#us-007-result-aggregator)
+  - [US-008: Result Integration](#us-008-result-integration)
+- [Overall INVEST Compliance](#overall-invest-compliance)
+  - [Summary Scores](#summary-scores)
+  - [Compliance Rates](#compliance-rates)
+- [Strengths](#strengths)
+- [Areas for Improvement](#areas-for-improvement)
+  - [Size (Small) - 85% Compliance](#size-small---85-compliance)
+- [Dependencies and Sequencing](#dependencies-and-sequencing)
+  - [Dependency Graph](#dependency-graph)
+  - [Critical Path](#critical-path)
+- [Risk Assessment](#risk-assessment)
+  - [High-Risk Stories](#high-risk-stories)
+  - [Medium-Risk Stories](#medium-risk-stories)
+- [Acceptance Criteria Quality](#acceptance-criteria-quality)
+  - [Strengths](#strengths)
+  - [Coverage Analysis](#coverage-analysis)
+- [Definition of Done Quality](#definition-of-done-quality)
+  - [Completeness Check](#completeness-check)
+  - [DOD Examples](#dod-examples)
+- [Test Coverage Strategy](#test-coverage-strategy)
+  - [Unit Tests (60% of testing effort)](#unit-tests-60-of-testing-effort)
+  - [Integration Tests (30% of testing effort)](#integration-tests-30-of-testing-effort)
+  - [E2E Tests (10% of testing effort)](#e2e-tests-10-of-testing-effort)
+- [Recommendations](#recommendations)
+  - [1. Story Splitting (Optional)](#1-story-splitting-optional)
+  - [2. Acceptance Criteria Enhancements](#2-acceptance-criteria-enhancements)
+  - [3. Definition of Done Enhancements](#3-definition-of-done-enhancements)
+  - [4. Dependency Management](#4-dependency-management)
+  - [5. Risk Mitigation](#5-risk-mitigation)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

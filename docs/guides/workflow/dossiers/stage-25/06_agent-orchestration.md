@@ -1,5 +1,40 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage 25: Agent Orchestration (QualityAssuranceCrew)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Crew Architecture](#crew-architecture)
+  - [High-Level Design](#high-level-design)
+- [Agent Specifications](#agent-specifications)
+  - [Agent 1: TestExecutionEngineer](#agent-1-testexecutionengineer)
+  - [Agent 2: BugAnalyst](#agent-2-buganalyst)
+  - [Agent 3: CertificationValidator](#agent-3-certificationvalidator)
+  - [Agent 4: RegressionCoordinator](#agent-4-regressioncoordinator)
+- [Crew Workflow](#crew-workflow)
+  - [Stage 25 Execution Flow](#stage-25-execution-flow)
+  - [Agent Interactions](#agent-interactions)
+- [Implementation Plan](#implementation-plan)
+  - [Phase 1: Tool Development (Week 1-2)](#phase-1-tool-development-week-1-2)
+  - [Phase 2: Agent Configuration (Week 2)](#phase-2-agent-configuration-week-2)
+  - [Phase 3: Crew Integration (Week 3)](#phase-3-crew-integration-week-3)
+  - [Phase 4: Testing & Deployment (Week 4)](#phase-4-testing-deployment-week-4)
+- [Database Schema (for Agent Tools)](#database-schema-for-agent-tools)
+  - [Table: `stage_25_test_results`](#table-stage_25_test_results)
+  - [Table: `stage_25_bugs`](#table-stage_25_bugs)
+  - [Table: `stage_25_quality_metrics`](#table-stage_25_quality_metrics)
+- [Human-in-the-Loop (HITL) Checkpoints](#human-in-the-loop-hitl-checkpoints)
+- [Sources Table](#sources-table)
 
 ## Metadata
 - **Category**: Guide

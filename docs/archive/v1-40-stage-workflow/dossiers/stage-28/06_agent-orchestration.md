@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 28: Agent Orchestration
+
+
+## Table of Contents
+
+- [Python CrewAI Agents (EHG App)](#python-crewai-agents-ehg-app)
+  - [Agent Scan Results](#agent-scan-results)
+- [Proposed Agent Orchestration: PerformanceOptimizationCrew](#proposed-agent-orchestration-performanceoptimizationcrew)
+  - [Crew Structure](#crew-structure)
+- [Agent Definitions (4 Proposed Agents)](#agent-definitions-4-proposed-agents)
+  - [1. Performance Profiler Agent](#1-performance-profiler-agent)
+  - [2. Cache Architect Agent](#2-cache-architect-agent)
+  - [3. Code Optimizer Agent](#3-code-optimizer-agent)
+  - [4. Bottleneck Analyst Agent](#4-bottleneck-analyst-agent)
+- [Crew Execution Flow](#crew-execution-flow)
+- [Integration Points](#integration-points)
+  - [Input Sources (From Stage 27)](#input-sources-from-stage-27)
+  - [Output Destinations (To Stage 29)](#output-destinations-to-stage-29)
+- [Governance Handoffs (Node.js Sub-Agents)](#governance-handoffs-nodejs-sub-agents)
+- [Automation Roadmap](#automation-roadmap)
+  - [Phase 1: Manual → Assisted](#phase-1-manual-assisted)
+  - [Phase 2: Assisted → Auto](#phase-2-assisted-auto)
+- [Gap Analysis](#gap-analysis)
+- [Sources Table](#sources-table)
 
 ## Python CrewAI Agents (EHG App)
 

@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 26: Agent Orchestration
+
+
+## Table of Contents
+
+- [Agent/Crew Mapping Status](#agentcrew-mapping-status)
+- [Proposed: SecurityComplianceCrew](#proposed-securitycompliancecrew)
+- [Proposed Agent Definitions](#proposed-agent-definitions)
+  - [Agent 1: PenetrationTesterAgent](#agent-1-penetrationtesteragent)
+  - [Agent 2: ComplianceAuditorAgent](#agent-2-complianceauditoragent)
+  - [Agent 3: CertificateCoordinatorAgent](#agent-3-certificatecoordinatoragent)
+  - [Agent 4: VulnerabilityRemediationAgent](#agent-4-vulnerabilityremediationagent)
+- [Crew Orchestration Flow](#crew-orchestration-flow)
+- [Crew Configuration (Proposed)](#crew-configuration-proposed)
+- [Integration Points](#integration-points)
+  - [Input Integration](#input-integration)
+  - [Output Integration](#output-integration)
+- [Metrics Instrumentation](#metrics-instrumentation)
+- [Automation Roadmap](#automation-roadmap)
+- [Gaps Identified](#gaps-identified)
+- [Sources Table](#sources-table)
 
 ## Agent/Crew Mapping Status
 

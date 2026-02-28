@@ -1,3 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Metric 1: Sync Completeness](#metric-1-sync-completeness)
+  - [Definition](#definition)
+  - [SQL Query (Metric Calculation)](#sql-query-metric-calculation)
+  - [SQL Query (Historical Trend)](#sql-query-historical-trend)
+  - [SQL Query (Alert Trigger)](#sql-query-alert-trigger)
+  - [Dashboard Visualization](#dashboard-visualization)
+- [Metric 2: Documentation Coverage](#metric-2-documentation-coverage)
+  - [Definition](#definition)
+  - [SQL Query (Metric Calculation)](#sql-query-metric-calculation)
+  - [SQL Query (Coverage by Component Type)](#sql-query-coverage-by-component-type)
+  - [SQL Query (Alert Trigger)](#sql-query-alert-trigger)
+  - [Dashboard Visualization](#dashboard-visualization)
+- [Metric 3: Version Control Compliance](#metric-3-version-control-compliance)
+  - [Definition](#definition)
+  - [SQL Query (Metric Calculation)](#sql-query-metric-calculation)
+  - [SQL Query (Non-Compliant Commits)](#sql-query-non-compliant-commits)
+  - [SQL Query (Alert Trigger)](#sql-query-alert-trigger)
+  - [Dashboard Visualization](#dashboard-visualization)
+- [Operational Metrics (Stage 18 Performance)](#operational-metrics-stage-18-performance)
+  - [Metric 4: Stage 18 Execution Time](#metric-4-stage-18-execution-time)
+  - [Metric 5: Stage 18 Success Rate](#metric-5-stage-18-success-rate)
+  - [Metric 6: Recursion Frequency](#metric-6-recursion-frequency)
+- [Alerting Configuration](#alerting-configuration)
+  - [Alert 1: Sync Completeness Below Threshold](#alert-1-sync-completeness-below-threshold)
+  - [Alert 2: Documentation Coverage Below Threshold](#alert-2-documentation-coverage-below-threshold)
+  - [Alert 3: CI/CD Pipeline Failures](#alert-3-cicd-pipeline-failures)
+  - [Alert 4: Version Control Compliance Drop](#alert-4-version-control-compliance-drop)
+  - [Alert 5: Stage 18 Execution Timeout](#alert-5-stage-18-execution-timeout)
+- [Dashboard Layout](#dashboard-layout)
+
 <!-- ARCHIVED: 2026-01-26T16:26:51.560Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-18\09_metrics-monitoring.md

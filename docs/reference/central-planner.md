@@ -1,4 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Central Planner Reference
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Usage](#usage)
+  - [CLI](#cli)
+  - [Programmatic](#programmatic)
+- [Source Integration](#source-integration)
+- [Scoring Model](#scoring-model)
+  - [Weights (v1.0.0)](#weights-v100)
+  - [Urgency Bands](#urgency-bands)
+- [Deduplication](#deduplication)
+- [Stability Checks](#stability-checks)
+- [Output Schema](#output-schema)
+- [Integration with /leo assist](#integration-with-leo-assist)
+- [Success Metrics](#success-metrics)
+- [Database Tables](#database-tables)
+  - [leo_planner_rankings](#leo_planner_rankings)
+  - [leo_sub_agents (Registration)](#leo_sub_agents-registration)
+- [Trigger Keywords](#trigger-keywords)
+- [Related Files](#related-files)
+- [Troubleshooting](#troubleshooting)
+  - ["No proposals found"](#no-proposals-found)
+  - [Low stability score](#low-stability-score)
+  - [Deduplication not working](#deduplication-not-working)
 
 **SD**: SD-LEO-SELF-IMPROVE-001H (Phase 3b: Central Planner Orchestration)
 

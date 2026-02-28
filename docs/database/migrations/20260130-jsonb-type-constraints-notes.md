@@ -1,4 +1,43 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Migration: JSONB Type Validation Constraints
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Root Cause: PAT-JSONB-STRING-TYPE](#root-cause-pat-jsonb-string-type)
+- [Migration File](#migration-file)
+  - [Constraints Added](#constraints-added)
+  - [NOT VALID Clause](#not-valid-clause)
+  - [Validation After Data Cleanup](#validation-after-data-cleanup)
+- [Data Healing Workflow](#data-healing-workflow)
+  - [Step 1: Integrity Check](#step-1-integrity-check)
+  - [Step 2: Automated Fix](#step-2-automated-fix)
+  - [Step 3: Heal Empty Metrics](#step-3-heal-empty-metrics)
+  - [Step 4: Manual Fixes (Edge Cases)](#step-4-manual-fixes-edge-cases)
+  - [Final State](#final-state)
+- [Quality Control Scripts](#quality-control-scripts)
+  - [Created Scripts](#created-scripts)
+  - [Integrity Check Features](#integrity-check-features)
+- [Code Fixes](#code-fixes)
+  - [Legacy Scripts Fixed](#legacy-scripts-fixed)
+  - [Correct Pattern](#correct-pattern)
+- [Rollout Timeline](#rollout-timeline)
+- [Validation Checklist](#validation-checklist)
+- [Lessons Learned](#lessons-learned)
+  - [✅ What Worked](#-what-worked)
+  - [❌ What to Avoid](#-what-to-avoid)
+  - [📚 Knowledge Transfer](#-knowledge-transfer)
+- [Related Documentation](#related-documentation)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Database

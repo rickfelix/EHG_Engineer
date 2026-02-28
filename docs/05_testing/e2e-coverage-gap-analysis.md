@@ -1,4 +1,85 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # E2E Testing Coverage Gap Analysis
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Critical Findings](#critical-findings)
+- [Application Architecture Context](#application-architecture-context)
+  - [Tech Stack](#tech-stack)
+  - [API Structure](#api-structure)
+- [Coverage Matrix](#coverage-matrix)
+  - [Legend](#legend)
+- [1. SDIP (Directive Lab) APIs](#1-sdip-directive-lab-apis)
+  - [Coverage Status: ⚠️ PARTIAL](#coverage-status-partial)
+- [2. Backlog & Strategic Directives](#2-backlog-strategic-directives)
+  - [Coverage Status: ⚠️ PARTIAL](#coverage-status-partial)
+- [3. Venture Management APIs](#3-venture-management-apis)
+  - [Coverage Status: ⚠️ PARTIAL](#coverage-status-partial)
+- [4. Competitor Analysis & Discovery](#4-competitor-analysis-discovery)
+  - [Coverage Status: ❌ MISSING](#coverage-status-missing)
+- [5. AI Engines (Naming, Financial, Content)](#5-ai-engines-naming-financial-content)
+  - [Coverage Status: ❌ MISSING (CRITICAL)](#coverage-status-missing-critical)
+  - [5.1 Naming Engine (SD-NAMING-ENGINE-001)](#51-naming-engine-sd-naming-engine-001)
+  - [5.2 Financial Engine (SD-FINANCIAL-ENGINE-001)](#52-financial-engine-sd-financial-engine-001)
+  - [5.3 Content Forge (SD-CONTENT-FORGE-IMPL-001)](#53-content-forge-sd-content-forge-impl-001)
+- [6. Marketing Distribution (NEW - CRITICAL GAP)](#6-marketing-distribution-new---critical-gap)
+  - [Coverage Status: ✅ COVERED (Excellent!)](#coverage-status-covered-excellent)
+- [7. Testing Campaign APIs](#7-testing-campaign-apis)
+  - [Coverage Status: ❌ MISSING](#coverage-status-missing)
+- [8. Story Management APIs](#8-story-management-apis)
+  - [Coverage Status: ⚠️ PARTIAL](#coverage-status-partial)
+- [9. PRD Management APIs](#9-prd-management-apis)
+  - [Coverage Status: ⚠️ PARTIAL](#coverage-status-partial)
+- [10. Calibration & Quality APIs](#10-calibration-quality-apis)
+  - [Coverage Status: ❌ MISSING](#coverage-status-missing)
+- [11. Venture-Scoped APIs (v2 Routes)](#11-venture-scoped-apis-v2-routes)
+  - [Coverage Status: ❌ MISSING](#coverage-status-missing)
+- [12. WebSocket Real-Time Features](#12-websocket-real-time-features)
+  - [Coverage Status: ❌ MISSING (CRITICAL)](#coverage-status-missing-critical)
+- [13. GitHub Integration](#13-github-integration)
+  - [Coverage Status: ❌ MISSING](#coverage-status-missing)
+- [14. Context & State APIs (Dashboard)](#14-context-state-apis-dashboard)
+  - [Coverage Status: ❌ MISSING](#coverage-status-missing)
+- [Priority Summary](#priority-summary)
+  - [CRITICAL Gaps (26 endpoints)](#critical-gaps-26-endpoints)
+  - [MEDIUM Gaps (15 endpoints)](#medium-gaps-15-endpoints)
+  - [LOW Gaps (10 endpoints)](#low-gaps-10-endpoints)
+- [Recommended Testing Priorities](#recommended-testing-priorities)
+  - [Phase 1: Core Business Logic (Sprint 1)](#phase-1-core-business-logic-sprint-1)
+  - [Phase 2: Integration & Discovery (Sprint 2)](#phase-2-integration-discovery-sprint-2)
+  - [Phase 3: Quality & Multi-Tenancy (Sprint 3)](#phase-3-quality-multi-tenancy-sprint-3)
+- [Test Implementation Strategy](#test-implementation-strategy)
+  - [1. API-First Testing (Recommended)](#1-api-first-testing-recommended)
+  - [2. Test Data Management](#2-test-data-management)
+  - [3. Environment Setup](#3-environment-setup)
+  - [4. Test Structure Template](#4-test-structure-template)
+- [User Story Coverage Mapping](#user-story-coverage-mapping)
+  - [Example: SDIP Flow](#example-sdip-flow)
+- [Metrics & Success Criteria](#metrics-success-criteria)
+  - [Current State (Estimated)](#current-state-estimated)
+  - [Target State (Post Phase 1-3)](#target-state-post-phase-1-3)
+  - [Success Metrics](#success-metrics)
+- [Appendix A: Existing Test Files](#appendix-a-existing-test-files)
+  - [E2E Tests (`/tests/e2e/`)](#e2e-tests-testse2e)
+  - [UAT Tests (`/tests/uat/`)](#uat-tests-testsuat)
+- [Appendix B: Quick Wins (Highest ROI)](#appendix-b-quick-wins-highest-roi)
+  - [1. SDIP Complete Flow (US-SDIP-E2E-001)](#1-sdip-complete-flow-us-sdip-e2e-001)
+  - [2. Venture Artifacts (US-VENTURE-ARTIFACTS-001)](#2-venture-artifacts-us-venture-artifacts-001)
+  - [3. AI Engines Smoke Tests (US-AI-ENGINE-SMOKE-001)](#3-ai-engines-smoke-tests-us-ai-engine-smoke-001)
+  - [4. Story Release Gate (US-STORY-GATE-001)](#4-story-release-gate-us-story-gate-001)
+  - [5. Calibration Threshold (US-CALIBRATION-THRESHOLD-001)](#5-calibration-threshold-us-calibration-threshold-001)
+- [Appendix C: Reference Implementation](#appendix-c-reference-implementation)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Testing

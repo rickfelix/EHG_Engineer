@@ -1,5 +1,43 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # INVEST Criteria Validation: SD-FOUNDATION-V3-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [INVEST Criteria Score: 100%](#invest-criteria-score-100)
+- [Story-by-Story Validation](#story-by-story-validation)
+  - [US-001: Audit uuid_id column usage across codebase](#us-001-audit-uuid_id-column-usage-across-codebase)
+  - [US-002: Verify FK referential integrity for sd_id columns](#us-002-verify-fk-referential-integrity-for-sd_id-columns)
+  - [US-003: Standardize ID display format in scripts and terminal output](#us-003-standardize-id-display-format-in-scripts-and-terminal-output)
+  - [US-004: Create uuid_id column removal migration with rollback](#us-004-create-uuid_id-column-removal-migration-with-rollback)
+- [Aggregate INVEST Scores](#aggregate-invest-scores)
+- [Detailed INVEST Analysis](#detailed-invest-analysis)
+  - [1. Independent (94%)](#1-independent-94)
+  - [2. Negotiable (100%)](#2-negotiable-100)
+  - [3. Valuable (100%)](#3-valuable-100)
+  - [4. Estimable (100%)](#4-estimable-100)
+  - [5. Small (100%)](#5-small-100)
+  - [6. Testable (100%)](#6-testable-100)
+- [Context Engineering Quality](#context-engineering-quality)
+  - [Implementation Context (BMAD Enhancement)](#implementation-context-bmad-enhancement)
+- [Improvement Opportunities](#improvement-opportunities)
+  - [Minor Enhancements](#minor-enhancements)
+  - [No Critical Issues](#no-critical-issues)
+- [Lessons Learned Application](#lessons-learned-application)
+  - [SD-VIF-INTEL-001 (E2E Test Mapping)](#sd-vif-intel-001-e2e-test-mapping)
+  - [SD-TEST-MOCK-001 (Auto-Validation)](#sd-test-mock-001-auto-validation)
+  - [INVEST Criteria Enforcement](#invest-criteria-enforcement)
+  - [Context Enrichment](#context-enrichment)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

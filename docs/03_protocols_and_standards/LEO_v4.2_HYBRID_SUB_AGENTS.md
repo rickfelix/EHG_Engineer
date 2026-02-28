@@ -1,5 +1,60 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.2 - Hybrid Sub-Agent System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview: The Two-Layer Sub-Agent System](#overview-the-two-layer-sub-agent-system)
+- [Sub-Agent Components](#sub-agent-components)
+  - [1. Context File (Persona)](#1-context-file-persona)
+  - [2. Executable Tool (Validator)](#2-executable-tool-validator)
+- [Available Sub-Agents](#available-sub-agents)
+  - [🔐 Security Sub-Agent](#-security-sub-agent)
+  - [⚡ Performance Sub-Agent](#-performance-sub-agent)
+  - [🧪 Testing Sub-Agent](#-testing-sub-agent)
+  - [🎨 Design Sub-Agent](#-design-sub-agent)
+  - [🗄️ Database Sub-Agent](#-database-sub-agent)
+  - [💰 Cost Optimization Sub-Agent](#-cost-optimization-sub-agent)
+  - [📚 Documentation Sub-Agent](#-documentation-sub-agent)
+- [Activation Mechanisms](#activation-mechanisms)
+  - [1. Keyword Activation (Proactive)](#1-keyword-activation-proactive)
+  - [2. Handoff Requirements (Mandatory)](#2-handoff-requirements-mandatory)
+- [Usage Workflow](#usage-workflow)
+  - [For EXEC (Implementation Phase)](#for-exec-implementation-phase)
+  - [Batch Activation](#batch-activation)
+- [Handoff Requirements](#handoff-requirements)
+  - [EXEC → PLAN Handoff](#exec-plan-handoff)
+  - [PLAN → LEAD Handoff](#plan-lead-handoff)
+- [Tool Execution](#tool-execution)
+  - [Running Individual Tools](#running-individual-tools)
+  - [Understanding Tool Output](#understanding-tool-output)
+  - [Exit Codes](#exit-codes)
+- [Benefits of Hybrid Approach](#benefits-of-hybrid-approach)
+  - [Context Files (Personas)](#context-files-personas)
+  - [Executable Tools](#executable-tools)
+  - [Combined Benefits](#combined-benefits)
+- [Integration with Handoff Validator](#integration-with-handoff-validator)
+- [Best Practices](#best-practices)
+  - [For EXEC Role](#for-exec-role)
+  - [For PLAN Role](#for-plan-role)
+  - [For LEAD Role](#for-lead-role)
+- [Common Patterns](#common-patterns)
+  - [Pattern 1: Security-Critical Feature](#pattern-1-security-critical-feature)
+  - [Pattern 2: Performance-Sensitive Feature](#pattern-2-performance-sensitive-feature)
+- [Troubleshooting](#troubleshooting)
+  - [Sub-Agent Not Activating](#sub-agent-not-activating)
+  - [Tool Failing](#tool-failing)
+  - [Handoff Blocked](#handoff-blocked)
+- [Summary](#summary)
 
 ## Metadata
 - **Category**: Protocol

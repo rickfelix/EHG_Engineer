@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 32: Customer Success & Retention Engineering — Recursion Blueprint
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Recursion Architecture](#recursion-architecture)
+  - [Integration Points](#integration-points)
+- [RETENTION-001: Customer Health Score Drops](#retention-001-customer-health-score-drops)
+  - [Trigger Condition](#trigger-condition)
+  - [Automated Response](#automated-response)
+  - [Recursion Depth](#recursion-depth)
+- [RETENTION-002: Retention Rate Below Target](#retention-002-retention-rate-below-target)
+  - [Trigger Condition](#trigger-condition)
+  - [Automated Response](#automated-response)
+  - [Recursion Depth](#recursion-depth)
+- [RETENTION-003: NPS Negative](#retention-003-nps-negative)
+  - [Trigger Condition](#trigger-condition)
+  - [Automated Response](#automated-response)
+  - [Recursion Depth](#recursion-depth)
+- [RETENTION-004: Success System Active](#retention-004-success-system-active)
+  - [Trigger Condition](#trigger-condition)
+  - [Automated Response](#automated-response)
+  - [Recursion Depth](#recursion-depth)
+- [Recursion Metrics](#recursion-metrics)
+- [Chairman Override Scenarios](#chairman-override-scenarios)
+- [Implementation Blockers](#implementation-blockers)
+- [Precedent: Stage 16 & 24 Recursion Patterns](#precedent-stage-16-24-recursion-patterns)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

@@ -1,4 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Audit: Dossier Reconciliation Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [1. Stage Directory Inventory](#1-stage-directory-inventory)
+  - [Gold Standard: Vision v4.7 Section 5 — 25-Stage Inventory](#gold-standard-vision-v47-section-5-25-stage-inventory)
+  - [Summary](#summary)
+- [2. Stage Name Mismatches](#2-stage-name-mismatches)
+  - [Critical Mismatches (stage purpose fundamentally different)](#critical-mismatches-stage-purpose-fundamentally-different)
+- [3. Stale 40-Stage Era Content](#3-stale-40-stage-era-content)
+  - [Root-Level Files (14 files, all from 40-stage era)](#root-level-files-14-files-all-from-40-stage-era)
+  - [Stale Content in Existing Stage Directories](#stale-content-in-existing-stage-directories)
+- [4. README Accuracy Assessment](#4-readme-accuracy-assessment)
+- [5. Remediation Roadmap](#5-remediation-roadmap)
+  - [Priority 1: Critical (Misleading Documentation)](#priority-1-critical-misleading-documentation)
+  - [Priority 2: High (Content Gaps)](#priority-2-high-content-gaps)
+  - [Priority 3: Medium (Quality)](#priority-3-medium-quality)
+  - [Estimated Total Effort](#estimated-total-effort)
+- [6. Compliance Scorecard](#6-compliance-scorecard)
+- [Appendix A: Expected Dossier File Set (11 files per stage)](#appendix-a-expected-dossier-file-set-11-files-per-stage)
+- [Appendix B: Archive Location](#appendix-b-archive-location)
 
 **SD**: SD-EVA-QA-AUDIT-DOSSIER-001
 **Parent**: SD-EVA-QA-AUDIT-ORCH-001 (EVA Comprehensive Audit)

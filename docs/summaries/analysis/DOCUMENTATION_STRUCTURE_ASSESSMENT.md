@@ -1,4 +1,80 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Documentation Structure & Information Architecture Assessment
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Directory Organization Assessment](#1-directory-organization-assessment)
+  - [1.1 Current Structure (STRENGTHS)](#11-current-structure-strengths)
+  - [1.2 Root-Level Clutter Analysis](#12-root-level-clutter-analysis)
+- [2. Naming Conventions Assessment](#2-naming-conventions-assessment)
+  - [2.1 Current Standards](#21-current-standards)
+  - [2.2 Consistency Analysis](#22-consistency-analysis)
+- [3. Cross-References Assessment](#3-cross-references-assessment)
+  - [3.1 Link Analysis](#31-link-analysis)
+  - [3.2 Orphaned Documentation](#32-orphaned-documentation)
+  - [3.3 Cross-Reference Recommendations](#33-cross-reference-recommendations)
+- [Related Documentation](#related-documentation)
+  - [Prerequisites](#prerequisites)
+  - [Related Guides](#related-guides)
+  - [Advanced Topics](#advanced-topics)
+- [4. Entry Points Assessment](#4-entry-points-assessment)
+  - [4.1 Current Entry Points](#41-current-entry-points)
+  - [4.2 New Developer Journey](#42-new-developer-journey)
+  - [4.3 Missing Entry Points](#43-missing-entry-points)
+- [5. Table of Contents / Navigation Aids](#5-table-of-contents-navigation-aids)
+  - [5.1 Current State](#51-current-state)
+  - [5.2 Navigation Recommendations](#52-navigation-recommendations)
+- [6. Audience Separation Assessment](#6-audience-separation-assessment)
+  - [6.1 Current Audience Segmentation](#61-current-audience-segmentation)
+  - [6.2 Segmentation Analysis](#62-segmentation-analysis)
+  - [6.3 Audience-Based Improvements](#63-audience-based-improvements)
+- [7. Specific Issues & Recommendations](#7-specific-issues-recommendations)
+  - [7.1 Critical Issues](#71-critical-issues)
+  - [7.2 Quick Wins (Immediate Improvements)](#72-quick-wins-immediate-improvements)
+- [8. Proposed Reorganization](#8-proposed-reorganization)
+  - [8.1 Root-Level Cleanup](#81-root-level-cleanup)
+  - [8.2 Create Missing Navigation Files](#82-create-missing-navigation-files)
+- [Getting Started (New Developers)](#getting-started-new-developers)
+- [LEO Protocol Workflows](#leo-protocol-workflows)
+- [Database & Architecture](#database-architecture)
+- [Testing & Quality](#testing-quality)
+- [Sub-Agents & Automation](#sub-agents-automation)
+- [Operations & Deployment](#operations-deployment)
+- [Patterns & Best Practices](#patterns-best-practices)
+- [Quick References](#quick-references)
+- [System Guides](#system-guides)
+- [I'm new to the project](#im-new-to-the-project)
+- [I'm implementing a feature](#im-implementing-a-feature)
+- [I'm troubleshooting an issue](#im-troubleshooting-an-issue)
+- [I'm deploying to production](#im-deploying-to-production)
+  - [8.3 Consolidate Duplicate Directories](#83-consolidate-duplicate-directories)
+- [9. Implementation Roadmap](#9-implementation-roadmap)
+  - [Phase 1: Immediate Fixes (Week 1) - 4-6 hours](#phase-1-immediate-fixes-week-1---4-6-hours)
+  - [Phase 2: Quality Improvements (Week 2) - 6-8 hours](#phase-2-quality-improvements-week-2---6-8-hours)
+  - [Phase 3: Consolidation (Week 3) - 4-6 hours](#phase-3-consolidation-week-3---4-6-hours)
+  - [Phase 4: Automation (Week 4) - 3-4 hours](#phase-4-automation-week-4---3-4-hours)
+- [10. Success Metrics](#10-success-metrics)
+  - [Before Improvements (Current State)](#before-improvements-current-state)
+  - [After Improvements (Week 4)](#after-improvements-week-4)
+- [11. Maintenance Plan](#11-maintenance-plan)
+  - [Weekly Tasks (15 minutes)](#weekly-tasks-15-minutes)
+  - [Monthly Tasks (1 hour)](#monthly-tasks-1-hour)
+  - [Quarterly Tasks (3-4 hours)](#quarterly-tasks-3-4-hours)
+- [12. Conclusion](#12-conclusion)
+- [Appendices](#appendices)
+  - [Appendix A: Full File Inventory](#appendix-a-full-file-inventory)
+  - [Appendix B: Link Analysis Report](#appendix-b-link-analysis-report)
+  - [Appendix C: Metadata Compliance Report](#appendix-c-metadata-compliance-report)
 
 ## Metadata
 - **Category**: Report

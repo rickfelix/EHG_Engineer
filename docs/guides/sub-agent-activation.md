@@ -1,5 +1,49 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Sub-Agent Activation Guide for LEO Protocol v4.1.2_database_first
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Mandatory Activation Triggers](#mandatory-activation-triggers)
+  - [1. Database Sub-Agent](#1-database-sub-agent)
+  - [2. Security Sub-Agent](#2-security-sub-agent)
+  - [3. Performance Sub-Agent](#3-performance-sub-agent)
+  - [4. Design Sub-Agent](#4-design-sub-agent)
+  - [5. Testing Sub-Agent](#5-testing-sub-agent)
+  - [6. Documentation Sub-Agent](#6-documentation-sub-agent)
+  - [7. Cost Optimization Sub-Agent](#7-cost-optimization-sub-agent)
+- [Activation Process](#activation-process)
+  - [Step 1: Detection](#step-1-detection)
+  - [Step 2: Handoff Creation](#step-2-handoff-creation)
+  - [Step 3: Handoff Validation](#step-3-handoff-validation)
+  - [Step 4: Sub-Agent Execution](#step-4-sub-agent-execution)
+- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+  - [❌ WRONG: Skipping Sub-Agents](#-wrong-skipping-sub-agents)
+  - [✅ RIGHT: Proper Activation](#-right-proper-activation)
+  - [❌ WRONG: Late Activation](#-wrong-late-activation)
+  - [✅ RIGHT: Early Detection](#-right-early-detection)
+- [SDIP Case Study: What We Should Have Done](#sdip-case-study-what-we-should-have-done)
+  - [Triggers Detected in SDIP:](#triggers-detected-in-sdip)
+  - [Proper Execution Flow:](#proper-execution-flow)
+- [Automation Tools](#automation-tools)
+  - [Check for Required Sub-Agents](#check-for-required-sub-agents)
+  - [Auto-Generate Handoffs](#auto-generate-handoffs)
+  - [Validate Handoff Completeness](#validate-handoff-completeness)
+- [Enforcement](#enforcement)
+  - [Pre-EXEC Checkpoint](#pre-exec-checkpoint)
+  - [Dashboard Integration](#dashboard-integration)
+- [Key Takeaways](#key-takeaways)
+- [Quick Reference Card](#quick-reference-card)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 30: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Recursion Triggers (Proposed)](#recursion-triggers-proposed)
+- [Trigger DEPLOY-001: Health Checks Fail](#trigger-deploy-001-health-checks-fail)
+- [Trigger DEPLOY-002: Smoke Tests Fail](#trigger-deploy-002-smoke-tests-fail)
+- [Trigger DEPLOY-003: Zero-Downtime Violated](#trigger-deploy-003-zero-downtime-violated)
+- [Trigger DEPLOY-004: Deployment Successful](#trigger-deploy-004-deployment-successful)
+- [Recursion Decision Matrix](#recursion-decision-matrix)
+- [Error Rate Monitoring (DEPLOY-002 Extension)](#error-rate-monitoring-deploy-002-extension)
+- [Integration with RollbackCoordinator Agent](#integration-with-rollbackcoordinator-agent)
+- [Recursion Automation Path](#recursion-automation-path)
+  - [Phase 1: Detection (50% automation)](#phase-1-detection-50-automation)
+  - [Phase 2: Response (75% automation)](#phase-2-response-75-automation)
+  - [Phase 3: Full Automation (90% automation)](#phase-3-full-automation-90-automation)
+- [Recursion Metrics](#recursion-metrics)
+- [Chairman Override (Manual Recursion)](#chairman-override-manual-recursion)
+- [Sources Table](#sources-table)
 
 ## Recursion Triggers (Proposed)
 

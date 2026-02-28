@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # AI Agents Page Investigation Report
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🔍 Executive Summary](#-executive-summary)
+- [📊 Database Investigation Results](#-database-investigation-results)
+  - [Tables Status](#tables-status)
+- [🚨 Critical Issues Identified](#-critical-issues-identified)
+  - [Issue 1: Empty Database Tables](#issue-1-empty-database-tables)
+  - [Issue 2: RLS Policy Access Issues](#issue-2-rls-policy-access-issues)
+  - [Issue 3: UI Querying Wrong Table](#issue-3-ui-querying-wrong-table)
+- [🎯 Why You're Not Seeing Agents](#-why-youre-not-seeing-agents)
+  - [Current UI Behavior](#current-ui-behavior)
+  - [Expected vs. Actual](#expected-vs-actual)
+- [📋 Root Cause Analysis](#-root-cause-analysis)
+  - [Migration vs. Reality](#migration-vs-reality)
+- [🛠️ Detailed Recommendations](#-detailed-recommendations)
+  - [Recommendation 1: Re-run Seed Data (IMMEDIATE)](#recommendation-1-re-run-seed-data-immediate)
+  - [Recommendation 2: Fix RLS Policies (HIGH PRIORITY)](#recommendation-2-fix-rls-policies-high-priority)
+  - [Recommendation 3: Update UI to Query All Agent Tables (MEDIUM PRIORITY)](#recommendation-3-update-ui-to-query-all-agent-tables-medium-priority)
+  - [Recommendation 4: Create Agent Deploy Functionality (MEDIUM PRIORITY)](#recommendation-4-create-agent-deploy-functionality-medium-priority)
+  - [Recommendation 5: Add Departments & Crews Views (LOW PRIORITY)](#recommendation-5-add-departments-crews-views-low-priority)
+- [📈 Expected Outcome After Fixes](#-expected-outcome-after-fixes)
+  - [After Applying Seed Data](#after-applying-seed-data)
+  - [UI Display](#ui-display)
+- [🎯 Immediate Next Steps (Priority Order)](#-immediate-next-steps-priority-order)
+- [🔗 Related Files](#-related-files)
+- [✅ Verification Steps](#-verification-steps)
 
 ## Metadata
 - **Category**: Report

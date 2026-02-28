@@ -1,5 +1,62 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Known Issues - Unit Test Failures
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Issue 1: VentureForm.test.tsx](#issue-1-ventureformtesttsx)
+  - [Status](#status)
+  - [Failing Test](#failing-test)
+  - [Error Details](#error-details)
+  - [Analysis](#analysis)
+  - [Recommended Fix](#recommended-fix)
+  - [Assigned To](#assigned-to)
+- [Issue 2: evaValidation.test.ts](#issue-2-evavalidationtestts)
+  - [Status](#status)
+  - [Failing Tests](#failing-tests)
+  - [Analysis](#analysis)
+  - [Potential Root Causes](#potential-root-causes)
+  - [Recommended Fix](#recommended-fix)
+  - [Risk Assessment](#risk-assessment)
+  - [Assigned To](#assigned-to)
+- [Issue 3: RecursionHistoryPanel.test.tsx](#issue-3-recursionhistorypaneltesttsx)
+  - [Status](#status)
+  - [Failing Test Categories](#failing-test-categories)
+  - [Recommended Fix Strategy](#recommended-fix-strategy)
+  - [Component Complexity](#component-complexity)
+  - [Assigned To](#assigned-to)
+- [Issue 4-5: Additional Test Files](#issue-4-5-additional-test-files)
+  - [Status](#status)
+  - [Recommended Action](#recommended-action)
+  - [Assigned To](#assigned-to)
+- [Summary Statistics](#summary-statistics)
+- [Impact Analysis](#impact-analysis)
+  - [CI/CD Pipeline Impact](#cicd-pipeline-impact)
+  - [Production Risk Assessment](#production-risk-assessment)
+  - [Recommendation](#recommendation)
+- [Action Plan](#action-plan)
+  - [Immediate (This Week)](#immediate-this-week)
+  - [Short-Term (Next Sprint)](#short-term-next-sprint)
+  - [Long-Term (Future Sprints)](#long-term-future-sprints)
+- [Investigation Commands](#investigation-commands)
+  - [Run Tests Locally](#run-tests-locally)
+  - [Check CI/CD Logs](#check-cicd-logs)
+- [Related Documentation](#related-documentation)
+- [Notes for Developers](#notes-for-developers)
+  - [Before Starting Fixes](#before-starting-fixes)
+  - [While Fixing](#while-fixing)
+  - [After Fixing](#after-fixing)
+- [Change Log](#change-log)
 
 ## Metadata
 - **Category**: Testing

@@ -1,5 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # QA Engineering Director v2.1 - Improvement Proposal
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Current Issues (from E2E Authentication Fix Retrospective)](#current-issues-from-e2e-authentication-fix-retrospective)
+  - [Problem 1: Execution Error When Running E2E Tests](#problem-1-execution-error-when-running-e2e-tests)
+  - [Problem 2: No Pre-flight Check for Dev Server](#problem-2-no-pre-flight-check-for-dev-server)
+  - [Problem 3: Build Mode Not Configurable](#problem-3-build-mode-not-configurable)
+- [Proposed Improvements](#proposed-improvements)
+  - [Enhancement 1: Fix E2E Test Execution](#enhancement-1-fix-e2e-test-execution)
+  - [Enhancement 2: Add Dev Server Health Check](#enhancement-2-add-dev-server-health-check)
+  - [Enhancement 3: Test Mode Configuration](#enhancement-3-test-mode-configuration)
+  - [Enhancement 4: Better Test Result Parsing](#enhancement-4-better-test-result-parsing)
+  - [Enhancement 5: Evidence Collection Improvements](#enhancement-5-evidence-collection-improvements)
+- [Testing the Improvements](#testing-the-improvements)
+  - [Validation Steps:](#validation-steps)
+  - [Success Criteria:](#success-criteria)
+- [Continuous Improvement Path](#continuous-improvement-path)
+  - [v2.1 (Immediate - This Release)](#v21-immediate---this-release)
+  - [v2.5 (Future - 2-3 SDs)](#v25-future---2-3-sds)
+  - [v3.0 (Future - 5-10 SDs)](#v30-future---5-10-sds)
+- [Implementation Priority](#implementation-priority)
+- [Files to Modify](#files-to-modify)
+- [Estimated Effort](#estimated-effort)
+- [Benefits](#benefits)
 
 ## Metadata
 - **Category**: Report

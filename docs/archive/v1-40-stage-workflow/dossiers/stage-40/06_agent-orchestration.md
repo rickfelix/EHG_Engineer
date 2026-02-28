@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Agent Orchestration
+
+
+## Table of Contents
+
+- [Python CrewAI Agents (EHG App)](#python-crewai-agents-ehg-app)
+  - [Proposed Agent Crew: VentureActiveCrew](#proposed-agent-crew-ventureactivecrew)
+- [Proposed Agent Roles](#proposed-agent-roles)
+  - [Agent 1: Growth Management Specialist](#agent-1-growth-management-specialist)
+  - [Agent 2: Exit Preparation Advisor](#agent-2-exit-preparation-advisor)
+  - [Agent 3: Value Realization Manager](#agent-3-value-realization-manager)
+  - [Agent 4: Active Venture Coordinator](#agent-4-active-venture-coordinator)
+- [Crew Execution Flow](#crew-execution-flow)
+- [Agent Interaction Matrix](#agent-interaction-matrix)
+- [Governance Handoffs (Node.js Sub-Agents)](#governance-handoffs-nodejs-sub-agents)
+  - [Potential Handoff: Exit Documentation](#potential-handoff-exit-documentation)
+- [Implementation Notes](#implementation-notes)
+- [Automation Level](#automation-level)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1794-1839 (no explicit agent mapping)
 

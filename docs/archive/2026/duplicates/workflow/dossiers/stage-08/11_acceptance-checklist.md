@@ -1,3 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Scoring Criteria (8 Categories)](#scoring-criteria-8-categories)
+  - [1. Evidence Quality (20 points max)](#1-evidence-quality-20-points-max)
+  - [2. Completeness (15 points max)](#2-completeness-15-points-max)
+  - [3. Recursion Blueprint Detail (15 points max)](#3-recursion-blueprint-detail-15-points-max)
+  - [4. SD Cross-References (10 points max)](#4-sd-cross-references-10-points-max)
+  - [5. Footer Compliance (5 points max)](#5-footer-compliance-5-points-max)
+  - [6. Regeneration Documentation (10 points max)](#6-regeneration-documentation-10-points-max)
+  - [7. Actionability (15 points max)](#7-actionability-15-points-max)
+  - [8. Consistency & Coherence (10 points max)](#8-consistency-coherence-10-points-max)
+- [Final Score Calculation](#final-score-calculation)
+- [Quality Assessment](#quality-assessment)
+- [Critical Notes](#critical-notes)
+  - [Strengths](#strengths)
+  - [Areas of Excellence](#areas-of-excellence)
+  - [Opportunities for Enhancement (Beyond Current Scope)](#opportunities-for-enhancement-beyond-current-scope)
+  - [Maintenance Recommendations](#maintenance-recommendations)
+- [Acceptance Decision](#acceptance-decision)
+- [Evaluator Sign-Off](#evaluator-sign-off)
+
 <!-- ARCHIVED: 2026-01-26T16:26:56.241Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\11_acceptance-checklist.md

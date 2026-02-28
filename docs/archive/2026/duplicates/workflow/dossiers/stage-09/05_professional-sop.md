@@ -1,3 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pre-Execution Checklist](#pre-execution-checklist)
+- [Substage 9.1: Capability Assessment](#substage-91-capability-assessment)
+  - [Step 1.1: Inventory Current Capabilities](#step-11-inventory-current-capabilities)
+  - [Step 1.2: Define Required Capabilities](#step-12-define-required-capabilities)
+- [Substage 9.2: Gap Identification](#substage-92-gap-identification)
+  - [Step 2.1: Calculate Capability Gaps](#step-21-calculate-capability-gaps)
+  - [Step 2.2: Assess Gap Severity](#step-22-assess-gap-severity)
+  - [Step 2.3: Prioritize Gaps](#step-23-prioritize-gaps)
+- [Substage 9.3: Opportunity Modeling](#substage-93-opportunity-modeling)
+  - [Step 3.1: Map Market Opportunities](#step-31-map-market-opportunities)
+  - [Step 3.2: Estimate Market Size](#step-32-estimate-market-size)
+  - [Step 3.3: Project ROI](#step-33-project-roi)
+- [Capability Roadmap Creation](#capability-roadmap-creation)
+- [Post-Execution Checklist](#post-execution-checklist)
+- [Metrics Tracking](#metrics-tracking)
+- [Common Pitfalls](#common-pitfalls)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.961Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-09\05_professional-sop.md

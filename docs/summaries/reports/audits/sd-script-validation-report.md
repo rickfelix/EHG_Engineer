@@ -1,5 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # SD Script Validation Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Schema Requirements](#schema-requirements)
+  - [Required Fields (Database Constraints)](#required-fields-database-constraints)
+  - [Strongly Recommended Fields (LEO Protocol Compliance)](#strongly-recommended-fields-leo-protocol-compliance)
+  - [Optional But Useful Fields](#optional-but-useful-fields)
+- [Critical Issues (Must Fix)](#critical-issues-must-fix)
+  - [Scripts Missing Required Fields](#scripts-missing-required-fields)
+- [High Priority Issues](#high-priority-issues)
+  - [Missing `target_application` (24 scripts)](#missing-target_application-24-scripts)
+  - [Missing `sd_key` (17 scripts)](#missing-sd_key-17-scripts)
+- [Medium Priority Issues](#medium-priority-issues)
+  - [Missing `current_phase` (32 scripts)](#missing-current_phase-32-scripts)
+- [Best Practices](#best-practices)
+  - [1. Use the Template](#1-use-the-template)
+  - [2. Standard Field Values](#2-standard-field-values)
+  - [3. Validation Before Running](#3-validation-before-running)
+  - [4. Field Type Guidelines](#4-field-type-guidelines)
+- [Validation Tool](#validation-tool)
+  - [Running the Validator](#running-the-validator)
+  - [Output Sections](#output-sections)
+  - [Example Output](#example-output)
+- [Migration Guide](#migration-guide)
+  - [For Existing Scripts](#for-existing-scripts)
+  - [Quick Fix Template](#quick-fix-template)
+- [Scripts with Perfect Compliance](#scripts-with-perfect-compliance)
+- [Field Usage Statistics](#field-usage-statistics)
+- [Next Steps](#next-steps)
+  - [Immediate Actions (Critical)](#immediate-actions-critical)
+  - [Short-term Actions (High Priority)](#short-term-actions-high-priority)
+  - [Long-term Actions (Quality Improvement)](#long-term-actions-quality-improvement)
+- [Resources](#resources)
 
 ## Metadata
 - **Category**: Report

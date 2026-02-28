@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 Configurability Matrix
+
+
+## Table of Contents
+
+- [Tunable Parameters](#tunable-parameters)
+  - [1. Metrics Thresholds](#1-metrics-thresholds)
+  - [2. Quality Gate Thresholds](#2-quality-gate-thresholds)
+  - [3. Substage Completion Criteria](#3-substage-completion-criteria)
+  - [4. Rollback Triggers](#4-rollback-triggers)
+  - [5. Automation Configuration](#5-automation-configuration)
+  - [6. Measurement Frequency](#6-measurement-frequency)
+- [Configuration Schema](#configuration-schema)
+- [Configuration Override Patterns](#configuration-override-patterns)
+  - [Per-Venture Overrides](#per-venture-overrides)
+  - [Environment-Based Overrides](#environment-based-overrides)
+- [Immutable vs Configurable Parameters](#immutable-vs-configurable-parameters)
+  - [Immutable (Core Identity)](#immutable-core-identity)
+  - [Configurable (Tunable)](#configurable-tunable)
+  - [Advisory (Non-Enforced)](#advisory-non-enforced)
+- [Configuration Validation Rules](#configuration-validation-rules)
+- [Default vs Recommended vs Minimum Configurations](#default-vs-recommended-vs-minimum-configurations)
+  - [Default Configuration (Conservative)](#default-configuration-conservative)
+  - [Recommended Configuration (Balanced)](#recommended-configuration-balanced)
+  - [Minimum Configuration (MVP)](#minimum-configuration-mvp)
+- [Source Tables](#source-tables)
 
 ## Tunable Parameters
 

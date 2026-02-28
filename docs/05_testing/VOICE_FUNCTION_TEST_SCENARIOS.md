@@ -1,5 +1,49 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Voice Function Test Scenarios
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Test Categories](#test-categories)
+  - [1. Portfolio Overview Queries](#1-portfolio-overview-queries)
+  - [2. Company-Specific Queries](#2-company-specific-queries)
+  - [3. Venture Queries](#3-venture-queries)
+  - [4. Idea Management Queries](#4-idea-management-queries)
+  - [5. Task Management Queries](#5-task-management-queries)
+  - [6. Search Queries](#6-search-queries)
+  - [7. Metrics and Analytics Queries](#7-metrics-and-analytics-queries)
+  - [8. Activity Tracking Queries](#8-activity-tracking-queries)
+  - [9. Note Creation Commands](#9-note-creation-commands)
+  - [10. Context Queries](#10-context-queries)
+- [Testing Procedure](#testing-procedure)
+  - [Setup](#setup)
+  - [For Each Test Query](#for-each-test-query)
+  - [Console Output Examples](#console-output-examples)
+- [Troubleshooting Guide](#troubleshooting-guide)
+  - [Function Not Triggered](#function-not-triggered)
+  - [Wrong Function Called](#wrong-function-called)
+  - [Function Execution Fails](#function-execution-fails)
+  - [No Voice Response](#no-voice-response)
+- [Performance Benchmarks](#performance-benchmarks)
+- [Advanced Testing](#advanced-testing)
+  - [Compound Queries](#compound-queries)
+  - [Error Recovery](#error-recovery)
+  - [Context Switching](#context-switching)
+- [Validation Checklist](#validation-checklist)
+- [Notes for Developers](#notes-for-developers)
+  - [Adding New Test Cases](#adding-new-test-cases)
+  - [Monitoring Production Usage](#monitoring-production-usage)
+  - [Continuous Improvement](#continuous-improvement)
 
 ## Metadata
 - **Category**: Testing

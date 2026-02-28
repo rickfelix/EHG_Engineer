@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 28: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+- [1. Response Time Metrics](#1-response-time-metrics)
+  - [1.1 API Response Time](#11-api-response-time)
+  - [1.2 Page Load Time](#12-page-load-time)
+- [2. Cache Performance Metrics](#2-cache-performance-metrics)
+  - [2.1 Cache Hit Rate](#21-cache-hit-rate)
+  - [2.2 Cache Miss Penalty](#22-cache-miss-penalty)
+- [3. Resource Utilization Metrics](#3-resource-utilization-metrics)
+  - [3.1 CPU Utilization](#31-cpu-utilization)
+  - [3.2 Memory Utilization](#32-memory-utilization)
+  - [3.3 Database Connection Pool](#33-database-connection-pool)
+- [4. Bottleneck Identification Metrics](#4-bottleneck-identification-metrics)
+  - [4.1 Slow Query Log](#41-slow-query-log)
+  - [4.2 Hot Path Execution Count](#42-hot-path-execution-count)
+- [Database Schema (Proposed)](#database-schema-proposed)
+  - [Performance Metrics Table](#performance-metrics-table)
+  - [Cache Metrics Table](#cache-metrics-table)
+  - [Resource Metrics Table](#resource-metrics-table)
+  - [Slow Query Log Table](#slow-query-log-table)
+- [Monitoring Dashboard (Proposed)](#monitoring-dashboard-proposed)
+  - [Supabase Dashboard Configuration](#supabase-dashboard-configuration)
+- [Integration with APM Tools](#integration-with-apm-tools)
+  - [New Relic Integration (Example)](#new-relic-integration-example)
+- [Alert Configuration](#alert-configuration)
+  - [Alert Rules (4 rules)](#alert-rules-4-rules)
+- [Gap Analysis](#gap-analysis)
+- [Sources Table](#sources-table)
 
 ## Key Performance Indicators (KPIs)
 

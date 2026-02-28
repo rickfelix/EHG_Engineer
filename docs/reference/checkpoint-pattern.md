@@ -1,5 +1,51 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Checkpoint Pattern for Large Strategic Directives
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+- [When to Use Checkpoints](#when-to-use-checkpoints)
+  - [Size Thresholds](#size-thresholds)
+  - [Complexity Indicators](#complexity-indicators)
+- [Checkpoint Structure](#checkpoint-structure)
+  - [Example: SD-SETTINGS-2025-10-12 (12 User Stories)](#example-sd-settings-2025-10-12-12-user-stories)
+- [Checkpoint Workflow](#checkpoint-workflow)
+  - [1. Planning Phase (PLAN Agent)](#1-planning-phase-plan-agent)
+- [Implementation Checkpoints](#implementation-checkpoints)
+  - [2. Execution Phase (EXEC Agent)](#2-execution-phase-exec-agent)
+  - [3. Verification Phase (PLAN Agent)](#3-verification-phase-plan-agent)
+- [Benefits](#benefits)
+  - [Context Management](#context-management)
+  - [Risk Reduction](#risk-reduction)
+  - [Flexibility](#flexibility)
+- [Anti-Patterns](#anti-patterns)
+  - [❌ Too Many Checkpoints](#-too-many-checkpoints)
+  - [❌ Uneven Checkpoint Distribution](#-uneven-checkpoint-distribution)
+  - [❌ No Validation Between Checkpoints](#-no-validation-between-checkpoints)
+- [Checkpoint Decision Tree](#checkpoint-decision-tree)
+- [Templates](#templates)
+  - [Checkpoint Summary Template](#checkpoint-summary-template)
+- [Checkpoint [N] of [TOTAL]: [NAME]](#checkpoint-n-of-total-name)
+  - [Deliverables Completed](#deliverables-completed)
+  - [Validation Results](#validation-results)
+  - [Issues Encountered](#issues-encountered)
+  - [Context Health](#context-health)
+  - [Next Steps](#next-steps)
+  - [Evidence](#evidence)
+- [Success Metrics](#success-metrics)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

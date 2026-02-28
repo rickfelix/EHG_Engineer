@@ -1,4 +1,50 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Retrospective Signals API Reference
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Public API](#public-api)
+  - [Import](#import)
+- [Functions](#functions)
+  - [captureSignals(text, options)](#capturesignalstext-options)
+  - [hasLearningMoments(text)](#haslearningmomentstext)
+  - [getAggregatedSignals(sdId, options)](#getaggregatedsignalssdid-options)
+  - [enhanceRetrospective(retroData, sdId)](#enhanceretrospectiveretrodata-sdid)
+  - [getStats(sdId)](#getstatssdid)
+- [Signal Categories](#signal-categories)
+  - [Category Definitions](#category-definitions)
+  - [Full Pattern List](#full-pattern-list)
+- [Submodule Access](#submodule-access)
+- [Storage Format](#storage-format)
+  - [File-Based Storage](#file-based-storage)
+- [Integration Examples](#integration-examples)
+  - [During Session (Real-Time Capture)](#during-session-real-time-capture)
+  - [At Retrospective Generation](#at-retrospective-generation)
+  - [Manual Signal Capture](#manual-signal-capture)
+- [Performance Characteristics](#performance-characteristics)
+  - [Detection](#detection)
+  - [Storage](#storage)
+  - [Aggregation](#aggregation)
+- [Error Handling](#error-handling)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Optional Configuration](#optional-configuration)
+- [Debugging](#debugging)
+  - [Check if signals captured](#check-if-signals-captured)
+  - [Get signal stats](#get-signal-stats)
+- [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
+  - [v1.0.0 (2026-01-23)](#v100-2026-01-23)
 
 ## Metadata
 - **Category**: Reference

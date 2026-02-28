@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 6: Professional Standard Operating Procedure
+
+
+## Table of Contents
+
+- [Pre-Execution Checklist](#pre-execution-checklist)
+- [Execution Procedure (3 Substages)](#execution-procedure-3-substages)
+  - [Substage 6.1: Risk Identification](#substage-61-risk-identification)
+- [Technical Risks](#technical-risks)
+- [Market Risks](#market-risks)
+- [Operational Risks](#operational-risks)
+  - [Substage 6.2: Risk Scoring](#substage-62-risk-scoring)
+  - [Substage 6.3: Mitigation Planning](#substage-63-mitigation-planning)
+- [Exit Gates Verification](#exit-gates-verification)
+- [Outputs Checklist](#outputs-checklist)
+- [Rollback Procedures](#rollback-procedures)
+- [Common Pitfalls & Mitigations](#common-pitfalls-mitigations)
+- [Performance Targets](#performance-targets)
+- [Sources Table](#sources-table)
 
 **Purpose**: Step-by-step execution guide for completing Stage 6 (Risk Evaluation) according to governance standards.
 

@@ -1,5 +1,46 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Agentic Context Engineering v3.0
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Solved](#problem-solved)
+- [Architecture Overview](#architecture-overview)
+- [Components](#components)
+  - [1. Database Tables](#1-database-tables)
+  - [2. Core Library Functions](#2-core-library-functions)
+  - [3. Configuration](#3-configuration)
+  - [4. Automatic Result Compression](#4-automatic-result-compression)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Automatic Contract Creation](#example-1-automatic-contract-creation)
+  - [Example 2: Sub-Agent Reading Artifacts](#example-2-sub-agent-reading-artifacts)
+  - [Example 3: Storing Output Artifacts](#example-3-storing-output-artifacts)
+- [Benefits](#benefits)
+  - [Context Reduction](#context-reduction)
+  - [Additional Benefits](#additional-benefits)
+- [Database Migrations](#database-migrations)
+  - [Required Migrations (Applied)](#required-migrations-applied)
+- [Testing](#testing)
+  - [Integration Test Script](#integration-test-script)
+  - [Test Coverage](#test-coverage)
+- [Extending to Sub-Agents](#extending-to-sub-agents)
+  - [Step 1: Import Helper Functions](#step-1-import-helper-functions)
+  - [Step 2: Check for Contract Mode](#step-2-check-for-contract-mode)
+  - [Step 3: Store Large Outputs as Artifacts](#step-3-store-large-outputs-as-artifacts)
+- [Troubleshooting](#troubleshooting)
+  - [Contract Creation Fails](#contract-creation-fails)
+  - [Artifact Type Constraint Error](#artifact-type-constraint-error)
+  - [Source Tool Constraint Error](#source-tool-constraint-error)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

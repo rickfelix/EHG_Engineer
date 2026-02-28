@@ -1,5 +1,71 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # VentureCreationPage Accessibility Patterns
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [📚 Table of Contents](#-table-of-contents)
+- [🎨 Color System](#-color-system)
+  - [Color Contrast Requirements](#color-contrast-requirements)
+  - [Color Palette with Contrast Ratios](#color-palette-with-contrast-ratios)
+  - [Usage Pattern](#usage-pattern)
+  - [Tools for Verification](#tools-for-verification)
+- [🎯 Focus Indicators](#-focus-indicators)
+  - [Implementation](#implementation)
+  - [Why `:focus-visible`?](#why-focus-visible)
+  - [High Contrast Mode Enhancement](#high-contrast-mode-enhancement)
+  - [Testing Pattern](#testing-pattern)
+- [⌨️ Keyboard Navigation](#-keyboard-navigation)
+  - [Tab Order](#tab-order)
+  - [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Implementation Pattern](#implementation-pattern)
+  - [Skip Link Pattern](#skip-link-pattern)
+- [🔊 Screen Reader Support](#-screen-reader-support)
+  - [ARIA Labels for Tier Buttons](#aria-labels-for-tier-buttons)
+  - [Screen Reader Only Text](#screen-reader-only-text)
+  - [Form Field Labels](#form-field-labels)
+  - [Error States](#error-states)
+  - [Alert Announcements](#alert-announcements)
+- [🎬 Motion Accessibility](#-motion-accessibility)
+  - [Respecting `prefers-reduced-motion`](#respecting-prefers-reduced-motion)
+  - [Testing](#testing)
+  - [Implementation Pattern](#implementation-pattern)
+- [🔲 High Contrast Mode](#-high-contrast-mode)
+  - [Windows High Contrast Mode (WHCM)](#windows-high-contrast-mode-whcm)
+  - [Forced Colors Mode](#forced-colors-mode)
+  - [Testing](#testing)
+- [📱 Responsive Accessibility](#-responsive-accessibility)
+  - [Mobile Considerations](#mobile-considerations)
+  - [Zoom and Text Scaling](#zoom-and-text-scaling)
+  - [Testing](#testing)
+- [🏷️ ARIA Patterns](#-aria-patterns)
+  - [Tier Selection (Toggle Buttons)](#tier-selection-toggle-buttons)
+  - [Progress Stepper](#progress-stepper)
+  - [Form Validation](#form-validation)
+  - [Loading States](#loading-states)
+- [✅ Testing Checklist](#-testing-checklist)
+  - [Automated Testing](#automated-testing)
+  - [Manual Testing](#manual-testing)
+- [🛠️ Maintenance Guidelines](#-maintenance-guidelines)
+  - [When Adding New Components](#when-adding-new-components)
+  - [Color Changes](#color-changes)
+  - [ARIA Changes](#aria-changes)
+  - [CSS Class Pattern](#css-class-pattern)
+  - [Documentation Updates](#documentation-updates)
+- [📚 Resources](#-resources)
+  - [WCAG Guidelines](#wcag-guidelines)
+  - [Tools](#tools)
+  - [Screen Readers](#screen-readers)
+  - [Testing Guides](#testing-guides)
 
 ## Metadata
 - **Category**: Guide

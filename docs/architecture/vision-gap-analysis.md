@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EHG Vision Gap Analysis
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [HIGH-SEVERITY GAPS](#high-severity-gaps)
+  - [VGAP-V03 — decision_filter_engine_escalation](#vgap-v03-decision_filter_engine_escalation)
+  - [VGAP-V02 — chairman_governance_model](#vgap-v02-chairman_governance_model)
+- [MEDIUM-SEVERITY GAPS](#medium-severity-gaps)
+  - [VGAP-A03 — eva_hub_and_orchestration_model](#vgap-a03-eva_hub_and_orchestration_model)
+  - [VGAP-V04 — analysisstep_active_intelligence](#vgap-v04-analysisstep_active_intelligence)
+  - [VGAP-A01 — stateless_shared_services](#vgap-a01-stateless_shared_services)
+- [Trajectory Summary (LEARN-031 cohort)](#trajectory-summary-learn-031-cohort)
+- [LEARN-033 Cohort — Near-Zero Vision Gaps (2026-02-19)](#learn-033-cohort-near-zero-vision-gaps-2026-02-19)
+  - [VGAP-V01 — automation_by_default](#vgap-v01-automation_by_default)
+  - [VGAP-V06 — cli_authoritative_workflow](#vgap-v06-cli_authoritative_workflow)
+  - [VGAP-V07 — chairman_dashboard_scope](#vgap-v07-chairman_dashboard_scope)
+  - [VGAP-A07 — chairman_governance_gatekeeping](#vgap-a07-chairman_governance_gatekeeping)
+  - [VGAP-V08 — unlimited_compute_posture](#vgap-v08-unlimited_compute_posture)
+- [Trajectory Summary (LEARN-033 cohort)](#trajectory-summary-learn-033-cohort)
 
 **Vision Document**: VISION-EHG-L1-001 (EHG-2028)
 **Architecture Document**: ARCH-EHG-L1-001

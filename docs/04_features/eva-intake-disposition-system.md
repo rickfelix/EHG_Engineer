@@ -1,4 +1,62 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # EVA Intake Disposition Classification System
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [System Architecture](#system-architecture)
+  - [Key Components](#key-components)
+- [Disposition Taxonomy](#disposition-taxonomy)
+  - [6-Bucket Classification](#6-bucket-classification)
+  - [Confidence Scoring](#confidence-scoring)
+  - [Conflict Detection](#conflict-detection)
+- [Pipeline Integration](#pipeline-integration)
+  - [Evaluation Bridge Flow](#evaluation-bridge-flow)
+  - [Performance Impact](#performance-impact)
+- [Processing Modes](#processing-modes)
+  - [Bulk Mode (Default)](#bulk-mode-default)
+  - [Interactive Mode](#interactive-mode)
+  - [Mode Comparison](#mode-comparison)
+- [Deeper Analysis Router](#deeper-analysis-router)
+  - [Analysis Tools](#analysis-tools)
+  - [Routing Logic](#routing-logic)
+  - [Keyword Patterns](#keyword-patterns)
+  - [Example Routing](#example-routing)
+  - [Integration with Evaluation Bridge](#integration-with-evaluation-bridge)
+- [Capability Detection](#capability-detection)
+  - [Capability Ledger](#capability-ledger)
+  - [Seeded Capabilities (53 total)](#seeded-capabilities-53-total)
+  - [Capability Seeder Usage](#capability-seeder-usage)
+- [Routing Logic](#routing-logic)
+  - [Disposition Classification](#disposition-classification)
+  - [Context Loading Strategy](#context-loading-strategy)
+- [Database Schema](#database-schema)
+  - [feedback table (existing, repurposed column)](#feedback-table-existing-repurposed-column)
+  - [eva_todoist_intake / eva_youtube_intake](#eva_todoist_intake-eva_youtube_intake)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Actionable Item (Continues to Vetting)](#example-1-actionable-item-continues-to-vetting)
+  - [Example 2: Already Exists (Stops at Triage)](#example-2-already-exists-stops-at-triage)
+  - [Example 3: Research Needed (Stops at Triage)](#example-3-research-needed-stops-at-triage)
+- [Testing](#testing)
+  - [Test Coverage](#test-coverage)
+  - [Test Scenarios](#test-scenarios)
+  - [Calibration Test Suite](#calibration-test-suite)
+  - [Smoke Tests (All Pass)](#smoke-tests-all-pass)
+- [Performance Metrics](#performance-metrics)
+  - [Throughput](#throughput)
+  - [Accuracy](#accuracy)
+  - [Cost Savings](#cost-savings)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Feature

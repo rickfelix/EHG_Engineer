@@ -1,4 +1,50 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SD Review Triangulation Synthesis
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Cross-AI Analysis: OpenAI + AntiGravity + Claude Code](#cross-ai-analysis-openai-antigravity-claude-code)
+- [Executive Summary](#executive-summary)
+  - [Consensus Completion Estimates](#consensus-completion-estimates)
+  - [Top 3 Blocking Issues (Unanimous)](#top-3-blocking-issues-unanimous)
+- [1. SD-GENESIS-COMPLETE-001: Consensus Analysis](#1-sd-genesis-complete-001-consensus-analysis)
+  - [1.1 What All Three AIs Confirmed EXISTS](#11-what-all-three-ais-confirmed-exists)
+  - [1.2 What All Three AIs Confirmed BROKEN](#12-what-all-three-ais-confirmed-broken)
+  - [1.3 Unique Findings](#13-unique-findings)
+  - [1.4 Recommended Priority (Triangulated)](#14-recommended-priority-triangulated)
+- [2. SD-VENTURE-SELECTION-001: Consensus Analysis](#2-sd-venture-selection-001-consensus-analysis)
+  - [2.1 What EXISTS (Consensus)](#21-what-exists-consensus)
+  - [2.2 Key Disagreement: Pattern Status](#22-key-disagreement-pattern-status)
+  - [2.3 OpenAI-only Finding: DB Table Missing](#23-openai-only-finding-db-table-missing)
+  - [2.4 Recommended Priority (Triangulated)](#24-recommended-priority-triangulated)
+- [3. SD-BLIND-SPOTS-001: Consensus Analysis](#3-sd-blind-spots-001-consensus-analysis)
+  - [3.1 EVA Infrastructure (All Three Agree: Robust)](#31-eva-infrastructure-all-three-agree-robust)
+  - [3.2 Non-EVA Blind Spots (All Three Agree: Minimal Progress)](#32-non-eva-blind-spots-all-three-agree-minimal-progress)
+  - [3.3 Critical Insight (Unanimous)](#33-critical-insight-unanimous)
+- [4. Missing Considerations (Combined)](#4-missing-considerations-combined)
+  - [From All Three AIs](#from-all-three-ais)
+  - [New Insight from OpenAI (Not in SDs)](#new-insight-from-openai-not-in-sds)
+- [5. User Story Synthesis (Best from Each AI)](#5-user-story-synthesis-best-from-each-ai)
+  - [SD-GENESIS-PRD-001](#sd-genesis-prd-001)
+  - [SD-VS-CHAIRMAN-SETTINGS-001](#sd-vs-chairman-settings-001)
+  - [SD-EVA-DASHBOARD-001](#sd-eva-dashboard-001)
+- [6. Final Priority Matrix (Triangulated)](#6-final-priority-matrix-triangulated)
+- [7. Action Items to Incorporate into SDs](#7-action-items-to-incorporate-into-sds)
+  - [Immediate Corrections](#immediate-corrections)
+- [8. Recommendations for Next Steps](#8-recommendations-for-next-steps)
+  - [Option A: Fix Foundation First (Recommended)](#option-a-fix-foundation-first-recommended)
+  - [Option B: Parallel Tracks](#option-b-parallel-tracks)
+  - [What NOT to Do](#what-not-to-do)
+- [9. Consensus Verdict](#9-consensus-verdict)
 
 ## Metadata
 - **Category**: Guide

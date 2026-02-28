@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Configuration Parameters](#configuration-parameters)
+- [Entry Gate Configuration](#entry-gate-configuration)
+- [Exit Gate Configuration](#exit-gate-configuration)
+- [Recursion Configuration](#recursion-configuration)
+- [Financial Model Configuration](#financial-model-configuration)
+- [Progression Mode Configuration](#progression-mode-configuration)
+- [Chairman Override Capabilities](#chairman-override-capabilities)
+  - [ROI Threshold Overrides](#roi-threshold-overrides)
+  - [Recursion Overrides](#recursion-overrides)
+- [UI/UX Configuration](#uiux-configuration)
+- [Performance Configuration](#performance-configuration)
+- [Environment-Specific Configuration](#environment-specific-configuration)
+  - [Development Environment](#development-environment)
+  - [Staging Environment](#staging-environment)
+  - [Production Environment](#production-environment)
+- [Configuration Storage](#configuration-storage)
+- [Configuration Management API](#configuration-management-api)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.550Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-05\08_configurability-matrix.md

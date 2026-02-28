@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 17 "Pre-Build Checklist" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Prior-Stage Seeding (Category → Stage Mapping)](#3-prior-stage-seeding-category-stage-mapping)
+  - [4. Go/No-Go Threshold Decision](#4-gono-go-threshold-decision)
+  - [5. Item Enrichment](#5-item-enrichment)
+  - [6. Blocker Severity Enum](#6-blocker-severity-enum)
+  - [7. Financial Readiness Integration](#7-financial-readiness-integration)
+  - [8. Category Coverage Decision](#8-category-coverage-decision)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 17 Schema](#10-recommended-stage-17-schema)
+  - [11. Minimum Viable Change (Priority-Ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-16 decisions)](#13-dependency-conflicts-with-stages-1-16-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 17 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

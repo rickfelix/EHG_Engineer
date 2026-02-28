@@ -1,5 +1,34 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # SD-ARTIFACT-INTEGRATION-001: Proposed File Tree Changes
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Boundary Overview](#boundary-overview)
+- [New Files: EHG_Engineering (Governance)](#new-files-ehg_engineering-governance)
+  - [1. Stage Policy Configuration](#1-stage-policy-configuration)
+  - [2. Artifact Contract Schema](#2-artifact-contract-schema)
+  - [3. Artifact Generation Scripts (Future Enhancement)](#3-artifact-generation-scripts-future-enhancement)
+- [New Files: EHG (Runtime)](#new-files-ehg-runtime)
+  - [4. Artifact Display Components](#4-artifact-display-components)
+  - [5. Gate Enforcement Components](#5-gate-enforcement-components)
+  - [6. Stage Viewer Extensions](#6-stage-viewer-extensions)
+  - [7. Runtime Stage Policy Hook](#7-runtime-stage-policy-hook)
+  - [8. Artifact Service Layer](#8-artifact-service-layer)
+- [Modified Files: EHG (Runtime)](#modified-files-ehg-runtime)
+  - [9. Workflow Orchestrator](#9-workflow-orchestrator)
+- [Summary: File Tree](#summary-file-tree)
+- [Phase Mapping](#phase-mapping)
+- [Boundary Enforcement Verification](#boundary-enforcement-verification)
 
 ## Metadata
 - **Category**: Architecture

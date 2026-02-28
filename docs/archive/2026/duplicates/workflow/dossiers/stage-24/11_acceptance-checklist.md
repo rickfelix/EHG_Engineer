@@ -1,3 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Scoring System](#scoring-system)
+- [8-Criterion Rubric](#8-criterion-rubric)
+  - [Criterion 1: Evidence Citation Density (15 points)](#criterion-1-evidence-citation-density-15-points)
+  - [Criterion 2: Recursion Blueprint Quality (15 points)](#criterion-2-recursion-blueprint-quality-15-points)
+  - [Criterion 3: SD Cross-Reference Accuracy (10 points)](#criterion-3-sd-cross-reference-accuracy-10-points)
+  - [Criterion 4: Agent Orchestration Specification (10 points)](#criterion-4-agent-orchestration-specification-10-points)
+  - [Criterion 5: Metrics Monitoring Implementation (10 points)](#criterion-5-metrics-monitoring-implementation-10-points)
+  - [Criterion 6: Gaps-to-SD Mapping (10 points)](#criterion-6-gaps-to-sd-mapping-10-points)
+  - [Criterion 7: Professional SOP Usability (15 points)](#criterion-7-professional-sop-usability-15-points)
+  - [Criterion 8: Configurability Matrix (15 points)](#criterion-8-configurability-matrix-15-points)
+- [Scoring Summary](#scoring-summary)
+- [Pass/Fail Decision](#passfail-decision)
+- [Validation Checklist (Pre-Approval)](#validation-checklist-pre-approval)
+- [Footer Compliance](#footer-compliance)
+
 <!-- ARCHIVED: 2026-01-26T16:26:55.369Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-24\11_acceptance-checklist.md

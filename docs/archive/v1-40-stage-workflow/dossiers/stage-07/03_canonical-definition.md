@@ -1,4 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 7: Canonical Definition
+
+
+## Table of Contents
+
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Breakdown](#field-by-field-breakdown)
+  - [Core Metadata](#core-metadata)
+  - [Dependencies](#dependencies)
+  - [Inputs (from Stage 6)](#inputs-from-stage-6)
+  - [Outputs (to Stages 8, 9, 10)](#outputs-to-stages-8-9-10)
+  - [Metrics](#metrics)
+  - [Entry Gates](#entry-gates)
+  - [Exit Gates](#exit-gates)
+  - [Substages](#substages)
+  - [Notes](#notes)
+- [Comparison with Critique Assessment](#comparison-with-critique-assessment)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:274-319
 

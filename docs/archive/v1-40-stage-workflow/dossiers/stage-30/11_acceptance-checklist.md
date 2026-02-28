@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 30: Acceptance Checklist
+
+
+## Table of Contents
+
+- [Scoring Criteria (8 Dimensions)](#scoring-criteria-8-dimensions)
+- [1. Evidence Integrity (15 points)](#1-evidence-integrity-15-points)
+  - [Checklist:](#checklist)
+- [2. Canonical Fidelity (15 points)](#2-canonical-fidelity-15-points)
+  - [Checklist:](#checklist)
+- [3. Cross-Dossier Consistency (10 points)](#3-cross-dossier-consistency-10-points)
+  - [Checklist:](#checklist)
+- [4. Unique Characteristics Highlighted (10 points)](#4-unique-characteristics-highlighted-10-points)
+  - [Checklist:](#checklist)
+- [5. Actionable SOP (15 points)](#5-actionable-sop-15-points)
+  - [Checklist:](#checklist)
+- [6. Agent/Recursion Proposals (10 points)](#6-agentrecursion-proposals-10-points)
+  - [Checklist:](#checklist)
+- [7. Gap Analysis & Backlog (15 points)](#7-gap-analysis-backlog-15-points)
+  - [Checklist:](#checklist)
+- [8. Metrics & Monitoring (10 points)](#8-metrics-monitoring-10-points)
+  - [Checklist:](#checklist)
+- [Final Score](#final-score)
+- [Quality Assurance Notes](#quality-assurance-notes)
+  - [Strengths:](#strengths)
+  - [Areas for Future Enhancement:](#areas-for-future-enhancement)
+  - [Regeneration Reproducibility:](#regeneration-reproducibility)
+- [Acceptance Decision](#acceptance-decision)
+- [Sources Table](#sources-table)
 
 ## Scoring Criteria (8 Dimensions)
 

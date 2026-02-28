@@ -1,4 +1,27 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 15: Canonical YAML Definition
+
+
+## Table of Contents
+
+- [Full YAML Block](#full-yaml-block)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Core Identification](#core-identification)
+  - [Dependency Configuration](#dependency-configuration)
+  - [Data Contracts](#data-contracts)
+  - [Measurement Framework](#measurement-framework)
+  - [Quality Gates](#quality-gates)
+  - [Substage Breakdown](#substage-breakdown)
+  - [Metadata & Notes](#metadata-notes)
+- [YAML Validation Status](#yaml-validation-status)
+- [Canonical Authority Statement](#canonical-authority-statement)
 
 **Source File**: `/mnt/c/_EHG/EHG_Engineer/docs/workflow/stages.yaml`
 **Line Range**: 643-688 (46 lines)

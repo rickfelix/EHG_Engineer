@@ -1,4 +1,38 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Session Summary Feature
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Purpose](#purpose)
+- [Module Structure](#module-structure)
+- [Core Components](#core-components)
+  - [1. SessionEventCollector](#1-sessioneventcollector)
+  - [2. SummaryGenerator](#2-summarygenerator)
+  - [3. SecretRedactor](#3-secretredactor)
+- [Integration Point](#integration-point)
+- [Performance Targets](#performance-targets)
+- [Test Coverage](#test-coverage)
+  - [Unit Tests (82 total)](#unit-tests-82-total)
+  - [E2E Tests (45 total)](#e2e-tests-45-total)
+- [Usage Example](#usage-example)
+- [Schema Evolution](#schema-evolution)
+- [Related Documentation](#related-documentation)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Summary generation timing out](#issue-summary-generation-timing-out)
+  - [Issue: Secrets not being redacted](#issue-secrets-not-being-redacted)
+  - [Issue: Negative durations](#issue-negative-durations)
+- [Version History](#version-history)
+  - [1.0.0 (2026-01-25)](#100-2026-01-25)
 
 ## Metadata
 - **Category**: Deployment

@@ -1,5 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation: Stop Hook Sub-Agent Enforcement Design Review
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Context: LEO Protocol Overview](#context-leo-protocol-overview)
+  - [Key Concepts](#key-concepts)
+  - [Current State](#current-state)
+  - [Problem Statement](#problem-statement)
+- [Context: Claude Code Hooks](#context-claude-code-hooks)
+  - [Hook Capabilities](#hook-capabilities)
+  - [Current Hook Usage](#current-hook-usage)
+- [Proposed Solution: Stop Hook Sub-Agent Enforcement](#proposed-solution-stop-hook-sub-agent-enforcement)
+  - [Core Logic](#core-logic)
+  - [Sub-Agent Enforcement Matrix](#sub-agent-enforcement-matrix)
+  - [Timing Validation](#timing-validation)
+  - [Example Output (Blocking)](#example-output-blocking)
+- [Your Task: Pros/Cons Analysis](#your-task-proscons-analysis)
+  - [1. Pros Analysis](#1-pros-analysis)
+  - [2. Cons Analysis](#2-cons-analysis)
+  - [3. Risk Assessment](#3-risk-assessment)
+  - [4. Alternative Approaches](#4-alternative-approaches)
+  - [5. Recommendations](#5-recommendations)
+- [Output Format](#output-format)
+- [Pros Analysis](#pros-analysis)
+  - [Quality Improvement](#quality-improvement)
+  - [Process Enforcement](#process-enforcement)
+- [Cons Analysis](#cons-analysis)
+  - [Complexity](#complexity)
+- [Alternative Approaches](#alternative-approaches)
+- [Recommendations](#recommendations)
+- [Overall Assessment](#overall-assessment)
+- [Additional Context (Reference Only)](#additional-context-reference-only)
+  - [Evidence: Current Sub-Agent Usage](#evidence-current-sub-agent-usage)
+  - [Evidence: Retrospective Gap](#evidence-retrospective-gap)
+  - [Evidence: Validator Effectiveness](#evidence-validator-effectiveness)
 
 ## Metadata
 - **Category**: Guide

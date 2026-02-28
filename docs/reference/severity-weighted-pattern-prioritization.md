@@ -1,4 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Severity-Weighted Pattern Prioritization
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Composite Scoring Formula](#composite-scoring-formula)
+  - [Components](#components)
+  - [Weight Rationale](#weight-rationale)
+- [Severity Weights](#severity-weights)
+  - [Mapping Table](#mapping-table)
+  - [Assignment Guidelines](#assignment-guidelines)
+- [Occurrence Thresholds](#occurrence-thresholds)
+  - [Bypass Logic](#bypass-logic)
+- [Database Schema](#database-schema)
+  - [View: `v_patterns_with_decay`](#view-v_patterns_with_decay)
+  - [New Columns](#new-columns)
+  - [Query Usage](#query-usage)
+- [Implementation Details](#implementation-details)
+  - [Context Builder Changes](#context-builder-changes)
+  - [Migration](#migration)
+- [Examples](#examples)
+  - [Example 1: Critical Security Issue (Single Occurrence)](#example-1-critical-security-issue-single-occurrence)
+  - [Example 2: Low Severity Polish (10 Occurrences)](#example-2-low-severity-polish-10-occurrences)
+  - [Example 3: Medium Severity Pattern (2 Occurrences, No Solution)](#example-3-medium-severity-pattern-2-occurrences-no-solution)
+  - [Example 4: High Severity with Solution (Single Occurrence)](#example-4-high-severity-with-solution-single-occurrence)
+  - [Score Comparison Table](#score-comparison-table)
+- [Related Documentation](#related-documentation)
+  - [Database](#database)
+  - [Learning System](#learning-system)
+  - [Implementation](#implementation)
+  - [LEO Protocol](#leo-protocol)
+- [Changelog](#changelog)
 
 ## Metadata
 - **Category**: Reference

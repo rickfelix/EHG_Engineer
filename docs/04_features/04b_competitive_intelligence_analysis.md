@@ -1,4 +1,46 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Stage 4: Competitive Intelligence Agent - Enhanced with Automated Analysis
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Enhanced Agent Architecture](#1-enhanced-agent-architecture)
+  - [1.1 Core Components](#11-core-components)
+  - [1.2 Automated Competitor Discovery](#12-automated-competitor-discovery)
+- [2. Deep Competitor Analysis](#2-deep-competitor-analysis)
+  - [2.1 Multi-Modal Data Extraction](#21-multi-modal-data-extraction)
+  - [2.2 Feature Extraction Engine](#22-feature-extraction-engine)
+- [3. Market Sentiment Analysis](#3-market-sentiment-analysis)
+  - [3.1 Review Platform Integration](#31-review-platform-integration)
+  - [3.2 Topic Modeling & Insights](#32-topic-modeling-insights)
+- [4. Market Gap Analysis](#4-market-gap-analysis)
+  - [4.1 Comprehensive Gap Detection](#41-comprehensive-gap-detection)
+- [5. Strategic Analysis & Synthesis](#5-strategic-analysis-synthesis)
+  - [5.1 SWOT Generation](#51-swot-generation)
+- [6. Continuous Monitoring](#6-continuous-monitoring)
+  - [6.1 Real-time Market Monitoring](#61-real-time-market-monitoring)
+  - [6.2 Alert Generation & Notification](#62-alert-generation-notification)
+- [7. Integration with Other Stages](#7-integration-with-other-stages)
+  - [7.1 Stage 9 (Gap Analysis) Integration](#71-stage-9-gap-analysis-integration)
+  - [7.2 Stage 1 (Idea Generation) Feedback](#72-stage-1-idea-generation-feedback)
+- [8. Implementation Requirements](#8-implementation-requirements)
+  - [8.1 Technical Infrastructure](#81-technical-infrastructure)
+- [9. Success Metrics](#9-success-metrics)
+  - [9.1 Performance KPIs](#91-performance-kpis)
+- [10. Database Schema Integration](#10-database-schema-integration)
+  - [Core Entity Dependencies](#core-entity-dependencies)
+- [11. Integration Hub Connectivity](#11-integration-hub-connectivity)
+  - [Integration Requirements](#integration-requirements)
+- [12. Conclusion](#12-conclusion)
 
 ## Metadata
 - **Category**: Feature

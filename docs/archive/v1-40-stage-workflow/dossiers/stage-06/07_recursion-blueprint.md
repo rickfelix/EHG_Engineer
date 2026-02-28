@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 6: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Important Note: Recursion Inferred from Stage 5](#important-note-recursion-inferred-from-stage-5)
+- [Outbound Recursion Triggers](#outbound-recursion-triggers)
+- [PRIMARY TRIGGER: FIN-001 to Stage 5 (Proposed)](#primary-trigger-fin-001-to-stage-5-proposed)
+  - [Recursion Scenario](#recursion-scenario)
+  - [Why Stage 5?](#why-stage-5)
+  - [Proposed Implementation Code](#proposed-implementation-code)
+  - [Trigger Data Payload (Proposed)](#trigger-data-payload-proposed)
+- [Recursion Threshold (Proposed)](#recursion-threshold-proposed)
+  - [Threshold Rationale (Proposed)](#threshold-rationale-proposed)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+- [Loop Prevention (Proposed)](#loop-prevention-proposed)
+- [Recursion Flow Diagram (Proposed)](#recursion-flow-diagram-proposed)
+- [Chairman Controls (Proposed)](#chairman-controls-proposed)
+  - [HIGH Severity (Hidden Costs 10-25% OpEx)](#high-severity-hidden-costs-10-25-opex)
+  - [CRITICAL Severity (Hidden Costs > 25% OpEx) - Proposed](#critical-severity-hidden-costs-25-opex---proposed)
+- [Performance Requirements (Proposed)](#performance-requirements-proposed)
+- [UI/UX Implications (Proposed)](#uiux-implications-proposed)
+  - [Pre-emptive Warning System](#pre-emptive-warning-system)
+  - [Recursion Explanation Modal (Proposed)](#recursion-explanation-modal-proposed)
+- [Integration Points (Proposed)](#integration-points-proposed)
+  - [1. recursionEngine.ts (Proposed)](#1-recursionenginets-proposed)
+  - [2. recursion_events Table (Proposed)](#2-recursion_events-table-proposed)
+- [Testing Strategy (Proposed)](#testing-strategy-proposed)
+- [Implementation Status](#implementation-status)
+- [Sources Table](#sources-table)
 
 **Status**: ⚠️ **PROPOSED RECURSION SUPPORT** (Referenced in Stage 5, not detailed in Stage 6 critique)
 

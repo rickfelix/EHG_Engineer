@@ -1,5 +1,46 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Trademark Guidance Without Liability
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Unified Prompt for OpenAI and AntiGravity (Gemini)](#unified-prompt-for-openai-and-antigravity-gemini)
+- [Context](#context)
+- [The Question](#the-question)
+- [Options to Evaluate](#options-to-evaluate)
+  - [Option A: No Trademark Feature At All](#option-a-no-trademark-feature-at-all)
+  - [Option B: Disclaimer-Heavy Pre-Screen](#option-b-disclaimer-heavy-pre-screen)
+  - [Option C: Partner with Trademark Service](#option-c-partner-with-trademark-service)
+  - [Option D: Attorney Referral Network](#option-d-attorney-referral-network)
+  - [Option E: Educational Content Only](#option-e-educational-content-only)
+- [Evaluation Criteria](#evaluation-criteria)
+- [Specific Questions](#specific-questions)
+- [Your Analysis Tasks](#your-analysis-tasks)
+  - [Task 1: Liability Assessment](#task-1-liability-assessment)
+  - [Task 2: Competitor Analysis](#task-2-competitor-analysis)
+  - [Task 3: Recommended Approach](#task-3-recommended-approach)
+  - [Task 4: Disclaimer Language](#task-4-disclaimer-language)
+  - [Task 5: USPTO Technical Reality](#task-5-uspto-technical-reality)
+- [Output Format](#output-format)
+- [Liability Assessment](#liability-assessment)
+- [Competitor Analysis](#competitor-analysis)
+- [Recommended Approach](#recommended-approach)
+  - [MVP (Now)](#mvp-now)
+  - [V1 (3 months)](#v1-3-months)
+  - [Long-term](#long-term)
+- [Sample Disclaimer Language](#sample-disclaimer-language)
+- [USPTO Technical Reality](#uspto-technical-reality)
+- [Key Insight](#key-insight)
+- [Ground Rules](#ground-rules)
 
 ## Metadata
 - **Category**: Guide

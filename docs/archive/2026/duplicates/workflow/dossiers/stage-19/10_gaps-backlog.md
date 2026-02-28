@@ -1,3 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Gap Overview](#gap-overview)
+- [Gap 1: Limited Automation for Manual Processes](#gap-1-limited-automation-for-manual-processes)
+  - [Current State](#current-state)
+  - [Proposed Solution: SD-INTEGRATION-AUTOMATION-001](#proposed-solution-sd-integration-automation-001)
+- [Gap 2: Unclear Metrics Thresholds](#gap-2-unclear-metrics-thresholds)
+  - [Current State](#current-state)
+  - [Proposed Solution: SD-METRICS-FRAMEWORK-001](#proposed-solution-sd-metrics-framework-001)
+- [Gap 3: Missing Specific Tool Integrations](#gap-3-missing-specific-tool-integrations)
+  - [Current State](#current-state)
+  - [Proposed Solution: SD-TOOL-INTEGRATION-PATTERNS-001](#proposed-solution-sd-tool-integration-patterns-001)
+- [Gap 4: No Explicit Error Handling](#gap-4-no-explicit-error-handling)
+  - [Current State](#current-state)
+  - [Proposed Solution: SD-ERROR-HANDLING-FRAMEWORK-001](#proposed-solution-sd-error-handling-framework-001)
+- [Gap 5: No Rollback Procedures](#gap-5-no-rollback-procedures)
+  - [Current State](#current-state)
+  - [Proposed Solution: SD-ROLLBACK-PROCEDURES-001](#proposed-solution-sd-rollback-procedures-001)
+- [Additional Improvement Opportunities](#additional-improvement-opportunities)
+  - [Opportunity 6: Add Customer Validation Touchpoint](#opportunity-6-add-customer-validation-touchpoint)
+- [Implementation Roadmap](#implementation-roadmap)
+- [Prioritization Rationale](#prioritization-rationale)
+- [Success Metrics for Gap Closure](#success-metrics-for-gap-closure)
+- [Conclusion](#conclusion)
+
 <!-- ARCHIVED: 2026-01-26T16:26:53.582Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-19\10_gaps-backlog.md

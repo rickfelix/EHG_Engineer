@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 8 "Business Model Canvas" -- OpenAI Response
 
 > Independent response to the Stage 8 triangulation prompt.
