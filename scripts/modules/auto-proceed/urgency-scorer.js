@@ -237,8 +237,31 @@ export function checkJitterProtection({
 }
 
 /**
+ * Determine OKR hard tier for an SD.
+ * OKR-linked SDs get tier 0 (highest), non-OKR SDs get tier 1.
+ * This acts as a hard boundary: all OKR-linked SDs appear before non-OKR SDs
+ * within the same priority band.
+ *
+ * Part of SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070
+ *
+ * @param {Object} sd - SD object with metadata
+ * @returns {number} 0 for OKR-linked, 1 for non-OKR
+ */
+export function getOkrHardTier(sd) {
+  const hasOkr = sd?.metadata?.okr_id != null
+    || (Array.isArray(sd?.metadata?.objective_ids) && sd.metadata.objective_ids.length > 0)
+    || sd?.metadata?.okr_impact_score > 0;
+  return hasOkr ? 0 : 1;
+}
+
+/**
  * Compare two SDs for queue ordering
- * Orders by: band (P0 first) > score (descending) > enqueue_time (ascending)
+ * Orders by: band (P0 first) > OKR hard tier > score (descending) > enqueue_time (ascending)
+ *
+ * SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070: Added OKR hard tier between band and score.
+ * Within the same priority band, OKR-linked SDs always appear before non-OKR SDs.
+ * Non-OKR SDs still get a minimum slot allocation (they're not starved — they appear
+ * after OKR-linked SDs within each band, maintaining fairness).
  *
  * @param {Object} a - First SD with urgency data
  * @param {Object} b - Second SD with urgency data
@@ -253,7 +276,15 @@ export function compareByUrgency(a, b) {
     return bandA - bandB;
   }
 
-  // Secondary: Score (descending)
+  // Secondary: OKR hard tier (0 = OKR-linked, 1 = non-OKR)
+  const okrTierA = getOkrHardTier(a);
+  const okrTierB = getOkrHardTier(b);
+
+  if (okrTierA !== okrTierB) {
+    return okrTierA - okrTierB;
+  }
+
+  // Tertiary: Score (descending)
   const scoreA = a.urgency_score ?? 0.5;
   const scoreB = b.urgency_score ?? 0.5;
 
@@ -261,7 +292,7 @@ export function compareByUrgency(a, b) {
     return scoreB - scoreA; // Higher score first
   }
 
-  // Tertiary: Enqueue time (ascending - older first for FIFO within same priority)
+  // Quaternary: Enqueue time (ascending - older first for FIFO within same priority)
   const timeA = new Date(a.enqueue_time || a.created_at || 0).getTime();
   const timeB = new Date(b.enqueue_time || b.created_at || 0).getTime();
 
@@ -298,6 +329,7 @@ export default {
   calculateUrgencyScore,
   shouldReprioritize,
   checkJitterProtection,
+  getOkrHardTier,
   compareByUrgency,
   sortByUrgency
 };

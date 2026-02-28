@@ -1,6 +1,6 @@
 /**
  * Tests for Guardrail Registry (V11: governance_guardrail_enforcement)
- * SD-MAN-FEAT-CORRECTIVE-VISION-GAP-069
+ * SD-MAN-FEAT-CORRECTIVE-VISION-GAP-069, SD-MAN-FEAT-CORRECTIVE-VISION-GAP-071
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -17,9 +17,9 @@ beforeEach(() => {
 });
 
 describe('Guardrail Registry - list()', () => {
-  it('returns all default guardrails', () => {
+  it('returns all 9 default guardrails', () => {
     const guardrails = list();
-    expect(guardrails.length).toBeGreaterThanOrEqual(5);
+    expect(guardrails.length).toBe(9);
     expect(guardrails[0]).toHaveProperty('id');
     expect(guardrails[0]).toHaveProperty('name');
     expect(guardrails[0]).toHaveProperty('mode');
@@ -178,6 +178,166 @@ describe('Guardrail Registry - reset()', () => {
     const withCustom = list().length;
     reset();
     expect(list().length).toBe(withCustom - 1);
+  });
+});
+
+describe('Guardrail Registry - GR-BULK-SD-BLOCK', () => {
+  it('blocks when sessionSdCount >= 4 without orchestrator plan', () => {
+    const result = check({ sessionSdCount: 4 });
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.guardrail === 'GR-BULK-SD-BLOCK');
+    expect(violation).toBeDefined();
+    expect(violation.mode).toBe(MODES.BLOCKING);
+  });
+
+  it('passes when sessionSdCount < 4', () => {
+    const result = check({
+      sessionSdCount: 3,
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-BULK-SD-BLOCK');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes when orchestrator plan ref exists', () => {
+    const result = check({
+      sessionSdCount: 5,
+      metadata: { orchestrator_plan_ref: 'ARCH-001' },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-BULK-SD-BLOCK');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes with architecture_plan_ref in metadata', () => {
+    const result = check({
+      sessionSdCount: 10,
+      metadata: { architecture_plan_ref: 'ARCH-002' },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-BULK-SD-BLOCK');
+    expect(violation).toBeUndefined();
+  });
+});
+
+describe('Guardrail Registry - GR-ORCHESTRATOR-ARCH-PLAN', () => {
+  it('blocks orchestrator with 3+ children and no arch plan', () => {
+    const result = check({ childrenCount: 3 });
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.guardrail === 'GR-ORCHESTRATOR-ARCH-PLAN');
+    expect(violation).toBeDefined();
+  });
+
+  it('passes orchestrator with arch plan ref', () => {
+    const result = check({
+      childrenCount: 5,
+      metadata: { arch_plan_key: 'ARCH-001' },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-ORCHESTRATOR-ARCH-PLAN');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes non-orchestrator SD', () => {
+    const result = check({
+      childrenCount: 0,
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-ORCHESTRATOR-ARCH-PLAN');
+    expect(violation).toBeUndefined();
+  });
+
+  it('detects orchestrator by sd_type', () => {
+    const result = check({ sd_type: 'orchestrator' });
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.guardrail === 'GR-ORCHESTRATOR-ARCH-PLAN');
+    expect(violation).toBeDefined();
+  });
+});
+
+describe('Guardrail Registry - GR-BRAINSTORM-INTENT', () => {
+  it('warns brainstorm-sourced SD without session ID', () => {
+    const result = check({
+      metadata: { source: 'brainstorm' },
+      strategic_objectives: ['OKR-1'],
+    });
+    expect(result.passed).toBe(true); // advisory, not blocking
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-BRAINSTORM-INTENT');
+    expect(warning).toBeDefined();
+  });
+
+  it('passes brainstorm SD with session ID', () => {
+    const result = check({
+      metadata: { source: 'brainstorm', brainstorm_session_id: 'sess-123' },
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-BRAINSTORM-INTENT');
+    expect(warning).toBeUndefined();
+  });
+
+  it('ignores non-brainstorm SDs', () => {
+    const result = check({
+      metadata: { source: 'manual' },
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-BRAINSTORM-INTENT');
+    expect(warning).toBeUndefined();
+  });
+
+  it('detects brainstorm_origin flag', () => {
+    const result = check({
+      metadata: { brainstorm_origin: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-BRAINSTORM-INTENT');
+    expect(warning).toBeDefined();
+  });
+});
+
+describe('Guardrail Registry - GR-OKR-HARD-STOP', () => {
+  it('blocks after OKR cycle day 28', () => {
+    const result = check({ okrCycleDay: 29 });
+    expect(result.passed).toBe(false);
+    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
+    expect(violation).toBeDefined();
+    expect(violation.severity).toBe('critical');
+  });
+
+  it('passes on day 28', () => {
+    const result = check({
+      okrCycleDay: 28,
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
+    expect(violation).toBeUndefined();
+  });
+
+  it('allows chairman override after day 28', () => {
+    const result = check({
+      okrCycleDay: 30,
+      chairmanOverride: true,
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
+    expect(violation).toBeUndefined();
+  });
+
+  it('allows metadata chairman_override', () => {
+    const result = check({
+      okrCycleDay: 30,
+      metadata: { chairman_override: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
+    expect(violation).toBeUndefined();
+  });
+
+  it('skips check when no OKR cycle data', () => {
+    const result = check({
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-OKR-HARD-STOP');
+    expect(violation).toBeUndefined();
   });
 });
 

@@ -1226,6 +1226,61 @@ async function createSD(options) {
     archKey: metadata?.arch_key
   });
 
+  // OKR Auto-Mapping at SD creation (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070)
+  // Automatically link new SDs to the most relevant active OKR objective
+  if (!parentId) { // Skip for child SDs (they inherit parent's OKR alignment)
+    try {
+      const { data: activeObjectives } = await supabase
+        .from('objectives')
+        .select('id, title, description, is_active')
+        .eq('is_active', true)
+        .limit(20);
+
+      if (activeObjectives && activeObjectives.length > 0) {
+        // Simple keyword matching: find the OKR with the best title/description overlap
+        const sdWords = new Set(
+          `${title} ${description || ''}`.toLowerCase()
+            .split(/\W+/)
+            .filter(w => w.length > 3)
+        );
+
+        let bestMatch = null;
+        let bestScore = 0;
+
+        for (const obj of activeObjectives) {
+          const okrWords = `${obj.title} ${obj.description || ''}`.toLowerCase()
+            .split(/\W+/)
+            .filter(w => w.length > 3);
+          const overlap = okrWords.filter(w => sdWords.has(w)).length;
+          if (overlap > bestScore) {
+            bestScore = overlap;
+            bestMatch = obj;
+          }
+        }
+
+        if (bestMatch && bestScore >= 2) {
+          // Link SD to best-match OKR
+          await supabase
+            .from('strategic_directives_v2')
+            .update({
+              metadata: {
+                ...sdData.metadata,
+                okr_id: bestMatch.id,
+                okr_title: bestMatch.title,
+                okr_auto_mapped: true,
+                objective_ids: [bestMatch.id],
+              },
+            })
+            .eq('id', data.id);
+
+          console.log(`   OKR:      ${bestMatch.title} (auto-mapped, ${bestScore} keyword matches)`);
+        }
+      }
+    } catch {
+      // Non-fatal: OKR auto-mapping should not block SD creation
+    }
+  }
+
   console.log('\n' + '═'.repeat(60));
   console.log('✅ SD CREATED');
   console.log('═'.repeat(60));

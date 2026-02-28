@@ -92,13 +92,17 @@ export async function checkDay28HardStop({
   const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (daysRemaining <= guardDays) {
-    const message = `BLOCKED: OKR cycle ends in ${daysRemaining} day(s) (${nearest.end_date}). SD creation blocked — defer to next cycle or request chairman override.`;
+    // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070: Changed from hard-block to
+    // auto-deferral with advisory notification. Unfinished OKR-linked work
+    // is deferred to the next cycle instead of simply blocking SD creation.
+    const message = `ADVISORY: OKR cycle ends in ${daysRemaining} day(s) (${nearest.end_date}). Unfinished OKR-linked SDs will auto-defer to next cycle.`;
     logger.warn(`OKR cycle guard: ${message}`);
 
     return {
-      allowed: false, // Blocking — prevents SD creation
-      blocked: true,
-      advisory: false,
+      allowed: true,  // Advisory — no longer blocks SD creation
+      blocked: false,
+      advisory: true,  // Signals that deferral should be offered
+      autoDeferral: true,
       daysRemaining,
       message,
       nearestDeadline: nearest.end_date,
@@ -156,4 +160,87 @@ export async function getOkrDateProximity({
   const daysRemaining = Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
   return { daysRemaining };
+}
+
+/**
+ * Auto-defer unfinished OKR-linked SDs at day-28.
+ * Queries in-progress SDs that have OKR linkage and defers them
+ * to the next cycle by updating status to 'deferred'.
+ *
+ * Part of SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070
+ *
+ * @param {Object} options
+ * @param {Object} [options.supabase] - Supabase client
+ * @param {Object} [options.logger] - Logger
+ * @param {boolean} [options.dryRun=false] - Preview without persisting
+ * @returns {Promise<{deferred: Array, skipped: Array, error: string|null}>}
+ */
+export async function autoDeferOkrLinkedSDs({
+  supabase: supabaseClient,
+  logger = console,
+  dryRun = false,
+} = {}) {
+  const supabase = supabaseClient || createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  // Check if we're in the deferral window
+  const guardResult = await checkDay28HardStop({ supabase, logger });
+  if (!guardResult.autoDeferral) {
+    return { deferred: [], skipped: [], error: null };
+  }
+
+  // Find in-progress SDs with OKR linkage (metadata.objective_ids is not empty)
+  const { data: sds, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status, metadata')
+    .in('status', ['in_progress', 'draft'])
+    .not('metadata->objective_ids', 'is', null);
+
+  if (error) {
+    logger.error(`OKR auto-deferral: query failed: ${error.message}`);
+    return { deferred: [], skipped: [], error: error.message };
+  }
+
+  const okrLinked = (sds || []).filter(sd => {
+    const ids = sd.metadata?.objective_ids;
+    return Array.isArray(ids) && ids.length > 0;
+  });
+
+  if (okrLinked.length === 0) {
+    return { deferred: [], skipped: [], error: null };
+  }
+
+  const deferred = [];
+  const skipped = [];
+
+  for (const sd of okrLinked) {
+    if (dryRun) {
+      deferred.push({ sd_key: sd.sd_key, title: sd.title, action: 'would_defer' });
+      continue;
+    }
+
+    const { error: updateErr } = await supabase
+      .from('strategic_directives_v2')
+      .update({
+        status: 'deferred',
+        metadata: {
+          ...sd.metadata,
+          deferred_reason: 'okr_cycle_end',
+          deferred_at: new Date().toISOString(),
+          deferred_from_deadline: guardResult.nearestDeadline,
+        },
+      })
+      .eq('id', sd.id);
+
+    if (updateErr) {
+      skipped.push({ sd_key: sd.sd_key, reason: updateErr.message });
+    } else {
+      deferred.push({ sd_key: sd.sd_key, title: sd.title, action: 'deferred' });
+      logger.log(`OKR auto-deferral: Deferred ${sd.sd_key} (${sd.title})`);
+    }
+  }
+
+  return { deferred, skipped, error: null };
 }
