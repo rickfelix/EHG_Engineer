@@ -82,18 +82,33 @@ describe('Guardrail Registry - check()', () => {
     expect(scopeViolation).toBeDefined();
   });
 
-  it('warns when no strategic objectives', () => {
+  it('blocks when no strategic objectives and no parent_sd_id', () => {
+    // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-067: GR-GOVERNANCE-CASCADE is now BLOCKING
     const result = check({
       sd_type: 'feature',
       scope: 'Add optimization',
       priority: 'medium',
     });
-    // GR-GOVERNANCE-CASCADE is advisory, not blocking
-    expect(result.passed).toBe(true);
-    const cascadeWarning = result.warnings.find(
-      (w) => w.guardrail === 'GR-GOVERNANCE-CASCADE'
+    expect(result.passed).toBe(false);
+    const cascadeViolation = result.violations.find(
+      (v) => v.guardrail === 'GR-GOVERNANCE-CASCADE'
     );
-    expect(cascadeWarning).toBeDefined();
+    expect(cascadeViolation).toBeDefined();
+    expect(cascadeViolation.mode).toBe(MODES.BLOCKING);
+    expect(cascadeViolation.severity).toBe('high');
+  });
+
+  it('passes cascade when parent_sd_id provided (without strategic_objectives)', () => {
+    const result = check({
+      sd_type: 'feature',
+      scope: 'Add optimization',
+      priority: 'medium',
+      parent_sd_id: 'some-parent-uuid',
+    });
+    const cascadeViolation = result.violations.find(
+      (v) => v.guardrail === 'GR-GOVERNANCE-CASCADE'
+    );
+    expect(cascadeViolation).toBeUndefined();
   });
 
   it('warns when high priority SD has no risks', () => {
@@ -114,6 +129,7 @@ describe('Guardrail Registry - check()', () => {
     const result = check({
       visionScore: 10,
       metadata: { source: 'corrective_sd_generator' },
+      strategic_objectives: ['OKR-1'],
     });
     // The corrective exempt guardrail should mark as exempt
     // but GR-VISION-ALIGNMENT still fires since it has its own check
