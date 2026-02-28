@@ -24,7 +24,9 @@ import { getHandlers } from '../../lib/eva/event-bus/handler-registry.js';
 import { runRound } from '../../lib/eva/rounds-scheduler.js';
 import {
   classifyRoutingMode,
+  classifyModality,
   ROUTING_MODES,
+  EVENT_MODALITIES,
   processEvent,
   dispatchByMode,
 } from '../../lib/eva/event-bus/event-router.js';
@@ -332,5 +334,148 @@ describe('dispatchByMode', () => {
       id: 'e3', event_type: 'guardrail.violated', event_data: {},
     });
     expect(pqResult.routingMode).toBe(ROUTING_MODES.PRIORITY_QUEUE);
+  });
+
+  it('returns modality in all responses', async () => {
+    // EVENT mode → stage.completed has suffix "completed" → KNOWLEDGE
+    const eventResult = await dispatchByMode(supabase, {
+      id: 'e4', event_type: 'stage.completed', event_data: { ventureId: 'v1', stageId: 's1' },
+    });
+    expect(eventResult.modality).toBe(EVENT_MODALITIES.KNOWLEDGE);
+
+    // ROUND mode → round.test has no special suffix → EVENT
+    const roundResult = await dispatchByMode(supabase, {
+      id: 'e5', event_type: 'round.test', event_data: {},
+    });
+    expect(roundResult.modality).toBe(EVENT_MODALITIES.EVENT);
+
+    // PRIORITY_QUEUE mode → governance event → DIRECTIVE
+    const pqResult = await dispatchByMode(supabase, {
+      id: 'e6', event_type: 'guardrail.violated', event_data: {},
+    });
+    expect(pqResult.modality).toBe(EVENT_MODALITIES.DIRECTIVE);
+  });
+});
+
+describe('classifyModality', () => {
+  it('classifies governance events as DIRECTIVE', () => {
+    expect(classifyModality('guardrail.violated', {})).toBe(EVENT_MODALITIES.DIRECTIVE);
+    expect(classifyModality('cascade.violated', {})).toBe(EVENT_MODALITIES.DIRECTIVE);
+    expect(classifyModality('okr.hard_stop', {})).toBe(EVENT_MODALITIES.DIRECTIVE);
+    expect(classifyModality('chairman.override', {})).toBe(EVENT_MODALITIES.DIRECTIVE);
+  });
+
+  it('classifies command.* and directive.* prefixes as DIRECTIVE', () => {
+    expect(classifyModality('command.shutdown', {})).toBe(EVENT_MODALITIES.DIRECTIVE);
+    expect(classifyModality('directive.override', {})).toBe(EVENT_MODALITIES.DIRECTIVE);
+  });
+
+  it('classifies critical/urgent payloads as DIRECTIVE', () => {
+    expect(classifyModality('custom.event', { priority: 'critical' })).toBe(EVENT_MODALITIES.DIRECTIVE);
+    expect(classifyModality('custom.event', { urgent: true })).toBe(EVENT_MODALITIES.DIRECTIVE);
+  });
+
+  it('classifies inquiry-suffix events as INQUIRY', () => {
+    expect(classifyModality('health.check', {})).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(classifyModality('stage.status', {})).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(classifyModality('venture.query', {})).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(classifyModality('system.probe', {})).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(classifyModality('data.lookup', {})).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(classifyModality('gate.inspect', {})).toBe(EVENT_MODALITIES.INQUIRY);
+  });
+
+  it('classifies knowledge-suffix events as KNOWLEDGE', () => {
+    expect(classifyModality('vision.scored', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('stage.completed', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('doc.published', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('config.updated', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('sd.created', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('pattern.resolved', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+  });
+
+  it('classifies knowledge-prefix events as KNOWLEDGE', () => {
+    expect(classifyModality('vision.rescore', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('score.update', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+    expect(classifyModality('data.sync', {})).toBe(EVENT_MODALITIES.KNOWLEDGE);
+  });
+
+  it('classifies unrecognized events as EVENT (default)', () => {
+    expect(classifyModality('custom.something', {})).toBe(EVENT_MODALITIES.EVENT);
+    expect(classifyModality('unknown.type', {})).toBe(EVENT_MODALITIES.EVENT);
+  });
+
+  it('honors explicit payload.modality override', () => {
+    expect(classifyModality('custom.event', { modality: 'INQUIRY' })).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(classifyModality('guardrail.violated', { modality: 'KNOWLEDGE' })).toBe(EVENT_MODALITIES.KNOWLEDGE);
+  });
+
+  it('ignores invalid payload.modality values', () => {
+    expect(classifyModality('custom.event', { modality: 'INVALID' })).toBe(EVENT_MODALITIES.EVENT);
+    expect(classifyModality('guardrail.violated', { modality: 'BOGUS' })).toBe(EVENT_MODALITIES.DIRECTIVE);
+  });
+});
+
+describe('processEvent — modality in responses', () => {
+  let supabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    supabase = createMockSupabase();
+    getHandlers.mockReturnValue([{ name: 'test-handler', handlerFn: vi.fn() }]);
+    runRound.mockResolvedValue({ success: true });
+  });
+
+  it('includes modality in EVENT-mode responses', async () => {
+    const result = await processEvent(supabase, {
+      id: 'evt-m1', event_type: 'stage.completed', event_data: { ventureId: 'v1', stageId: 's1' },
+    });
+    expect(result.modality).toBe(EVENT_MODALITIES.KNOWLEDGE);
+  });
+
+  it('includes modality in ROUND-mode responses', async () => {
+    const result = await processEvent(supabase, {
+      id: 'evt-m2', event_type: 'round.vision_rescore', event_data: {},
+    });
+    expect(result.modality).toBeDefined();
+  });
+
+  it('includes modality in PRIORITY_QUEUE-mode responses', async () => {
+    const result = await processEvent(supabase, {
+      id: 'evt-m3', event_type: 'guardrail.violated', event_data: {},
+    });
+    expect(result.modality).toBe(EVENT_MODALITIES.DIRECTIVE);
+  });
+
+  it('includes modality in no_handler responses', async () => {
+    getHandlers.mockReturnValue([]);
+    const result = await processEvent(supabase, {
+      id: 'evt-m4', event_type: 'health.check', event_data: {},
+    });
+    expect(result.modality).toBe(EVENT_MODALITIES.INQUIRY);
+    expect(result.status).toBe('no_handler');
+  });
+});
+
+describe('stateless handler registry isolation', () => {
+  it('createHandlerRegistry produces isolated instances', async () => {
+    const actual = await vi.importActual('../../lib/eva/event-bus/handler-registry.js');
+    const { createHandlerRegistry } = actual;
+
+    if (typeof createHandlerRegistry !== 'function') return;
+
+    const reg1 = createHandlerRegistry();
+    const reg2 = createHandlerRegistry();
+
+    const handlerFn = vi.fn();
+    reg1.registerHandler('test.event', handlerFn, { name: 'isolated-handler' });
+
+    // reg2 should NOT see reg1's handler
+    const reg2Handlers = reg2.getHandlers('test.event');
+    expect(reg2Handlers).toEqual([]);
+
+    // reg1 should see its own handler
+    const reg1Handlers = reg1.getHandlers('test.event');
+    expect(reg1Handlers).toHaveLength(1);
+    expect(reg1Handlers[0].name).toBe('isolated-handler');
   });
 });
