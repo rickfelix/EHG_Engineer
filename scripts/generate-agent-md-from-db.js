@@ -175,7 +175,8 @@ function generateFrontmatter(agentName, agent) {
   const firstLine = fullDesc.split(/\n/)[0].replace(/^#+\s*/, '').trim();
   const description = firstLine.length > 300 ? firstLine.substring(0, 297) + '...' : firstLine;
 
-  return `---\nname: ${agentName}\ndescription: ${JSON.stringify(description)}\ntools: ${tools}\nmodel: ${model}\n---\n`;
+  const profileComment = profile !== 'full' ? `\n# tool_policy_profile: ${profile}` : '';
+  return `---\nname: ${agentName}\ndescription: ${JSON.stringify(description)}\ntools: ${tools}\nmodel: ${model}\n---${profileComment}\n`;
 }
 
 // ─── Knowledge Block Composition ─────────────────────────────────────────────
