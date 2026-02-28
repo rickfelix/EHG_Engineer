@@ -13,25 +13,53 @@ import { createClient } from '@supabase/supabase-js';
 const DEFAULT_GUARD_DAYS = 3; // Warn when ≤3 days remain in OKR cycle
 
 /**
+ * Load guard_days threshold from leo_config table, falling back to default.
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<number>}
+ */
+async function loadGuardDaysFromConfig(supabase) {
+  try {
+    const { data } = await supabase
+      .from('leo_config')
+      .select('value')
+      .eq('key', 'okr_guard_days')
+      .single();
+
+    if (data?.value != null) {
+      const parsed = parseInt(data.value, 10);
+      if (!isNaN(parsed) && parsed >= 0) return parsed;
+    }
+  } catch {
+    // Fall through to default
+  }
+  return DEFAULT_GUARD_DAYS;
+}
+
+/**
  * Check if current date is within the hard-stop window of any active OKR cycle.
  *
  * @param {Object} options
  * @param {Object} [options.supabase] - Supabase client
  * @param {Object} [options.logger] - Logger
  * @param {string} [options.ventureId] - Filter to specific venture
- * @param {number} [options.guardDays] - Days before cycle end to trigger (default: 3)
+ * @param {number} [options.guardDays] - Days before cycle end to trigger (default: from leo_config or 3)
  * @returns {Promise<{allowed: boolean, advisory: boolean, daysRemaining: number|null, message: string, nearestDeadline: string|null}>}
  */
 export async function checkDay28HardStop({
   supabase: supabaseClient,
   logger = console,
   ventureId = null,
-  guardDays = DEFAULT_GUARD_DAYS,
+  guardDays = null,
 } = {}) {
   const supabase = supabaseClient || createClient(
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
+
+  // Load threshold from DB config if not explicitly provided
+  if (guardDays === null) {
+    guardDays = await loadGuardDaysFromConfig(supabase);
+  }
 
   // Query active key results with end_date
   let query = supabase
