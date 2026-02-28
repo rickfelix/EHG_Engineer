@@ -1,7 +1,9 @@
 /**
- * Doc-Audit Scorer — 10-dimension automated scoring engine
+ * Doc-Audit Scorer — 13-dimension automated scoring engine
  *
- * All dimensions are mechanically computable (no LLM needed).
+ * D01-D10: Structural dimensions (sync, no DB required).
+ * D11-D13: Coverage dimensions (async, requires Supabase).
+ *
  * Each scoreD0N function returns { id, name, score, weight, findings, gaps }.
  *
  * Used by:
@@ -9,18 +11,21 @@
  */
 
 import { existsSync } from 'fs';
-import { join, dirname, normalize } from 'path';
-import { DIMENSIONS, classifyScore } from './rubric.js';
+import { join, dirname, normalize, relative } from 'path';
+import { getDimensions, classifyScore } from './rubric.js';
 import { PROHIBITED_DIRS } from './scanner.js';
+import { scoreD11, scoreD12, scoreD13 } from './coverage-scorer.js';
 
 /**
- * Score all 10 dimensions given scan results.
+ * Score structural dimensions (D01-D10) only.
+ * Sync, no database needed. Weights rescaled to sum to 1.0.
  * @param {{ files: FileInfo[], directories: DirInfo[] }} scanResult
  * @param {string} rootDir
  * @returns {{ dimensions: DimensionScore[], totalScore: number, thresholdAction: string }}
  */
 export function scoreAllDimensions(scanResult, rootDir) {
   const { files, directories } = scanResult;
+  const dims = getDimensions('structural');
 
   const scorers = [
     scoreD01, scoreD02, scoreD03, scoreD04, scoreD05,
@@ -28,7 +33,7 @@ export function scoreAllDimensions(scanResult, rootDir) {
   ];
 
   const dimensions = scorers.map((fn, i) => {
-    const dim = DIMENSIONS[i];
+    const dim = dims[i];
     const result = fn(files, directories, rootDir);
     return {
       id: dim.id,
@@ -49,6 +54,204 @@ export function scoreAllDimensions(scanResult, rootDir) {
     totalScore,
     thresholdAction: classifyScore(totalScore),
   };
+}
+
+/**
+ * Score all 13 dimensions (structural + coverage).
+ * Async — D11-D13 query the database.
+ * @param {{ files: FileInfo[], directories: DirInfo[] }} scanResult
+ * @param {string} rootDir
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<{ dimensions: DimensionScore[], totalScore: number, thresholdAction: string }>}
+ */
+export async function scoreAllDimensionsAsync(scanResult, rootDir, supabase) {
+  const { files, directories } = scanResult;
+  const allDims = getDimensions('full');
+
+  // D01-D10: sync structural scoring
+  const structuralScorers = [
+    scoreD01, scoreD02, scoreD03, scoreD04, scoreD05,
+    scoreD06, scoreD07, scoreD08, scoreD09, scoreD10,
+  ];
+
+  const dimensions = structuralScorers.map((fn, i) => {
+    const dim = allDims[i];
+    const result = fn(files, directories, rootDir);
+    return {
+      id: dim.id,
+      name: dim.name,
+      score: Math.round(Math.max(0, Math.min(100, result.score))),
+      weight: dim.weight,
+      findings: result.findings,
+      gaps: result.gaps,
+      category: 'structural',
+    };
+  });
+
+  // D11-D13: async coverage scoring
+  const coverageScorers = [
+    { fn: scoreD11, idx: 10 },
+    { fn: scoreD12, idx: 11 },
+    { fn: scoreD13, idx: 12 },
+  ];
+
+  const coverageResults = await Promise.all(
+    coverageScorers.map(({ fn }) => fn(files, supabase))
+  );
+
+  for (let i = 0; i < coverageScorers.length; i++) {
+    const dim = allDims[coverageScorers[i].idx];
+    const result = coverageResults[i];
+    dimensions.push({
+      id: dim.id,
+      name: dim.name,
+      score: Math.round(Math.max(0, Math.min(100, result.score))),
+      weight: dim.weight,
+      findings: result.findings,
+      gaps: result.gaps,
+      category: 'coverage',
+    });
+  }
+
+  const totalScore = Math.round(
+    dimensions.reduce((sum, d) => sum + d.score * d.weight, 0)
+  );
+
+  return {
+    dimensions,
+    totalScore,
+    thresholdAction: classifyScore(totalScore),
+  };
+}
+
+// ─── Impact Scoring (Smart Gap Prioritization) ──────────────────────────────
+
+/**
+ * Build an index of inbound links: how many files link TO each file.
+ * @param {object[]} files - Scanned file objects with .links arrays
+ * @param {string} rootDir
+ * @returns {Map<string, number>} relPath → inbound link count
+ */
+export function buildInboundLinkIndex(files, rootDir) {
+  const index = new Map();
+
+  for (const f of files) {
+    for (const link of f.links) {
+      // Resolve the target relative to the source file's directory
+      const sourceDir = dirname(join(rootDir, f.relPath));
+      const targetPath = normalize(join(sourceDir, link.target));
+      const targetRel = relative(rootDir, targetPath).replace(/\\/g, '/');
+
+      index.set(targetRel, (index.get(targetRel) || 0) + 1);
+    }
+  }
+
+  return index;
+}
+
+const CRITICAL_DIRS = {
+  architecture: 30, '01_architecture': 30,
+  api: 30, '02_api': 30,
+  protocols: 20, '03_protocols_and_standards': 20, protocols_and_standards: 20,
+  features: 15, '04_features': 15,
+  database: 15,
+};
+
+/**
+ * Compute impact score for a single gap.
+ * @param {string} gapFilePath - Relative file path from the gap
+ * @param {Map<string, number>} linkIndex - Inbound link counts
+ * @param {Map<string, Date>} recencyMap - relPath → git last modified date
+ * @returns {number} 0-100 impact score
+ */
+function computeImpactScore(gapFilePath, linkIndex, recencyMap) {
+  if (!gapFilePath) return 0;
+
+  // Factor 1: Inbound links (0-40)
+  const linkCount = linkIndex.get(gapFilePath.replace(/\\/g, '/')) || 0;
+  const linkScore = Math.min(40, linkCount * 10);
+
+  // Factor 2: Critical directory (0-30)
+  const parts = gapFilePath.replace(/\\/g, '/').split('/');
+  const subdir = parts.length > 1 ? parts[1] : parts[0];
+  const dirScore = CRITICAL_DIRS[subdir] || 0;
+
+  // Factor 3: Recency (0-30)
+  const lastMod = recencyMap.get(gapFilePath.replace(/\\/g, '/'));
+  let recencyScore = 0;
+  if (lastMod) {
+    const ageMs = Date.now() - lastMod.getTime();
+    const ageDays = ageMs / (24 * 60 * 60 * 1000);
+    if (ageDays < 30) recencyScore = 30;
+    else if (ageDays < 90) recencyScore = 20;
+    else if (ageDays < 180) recencyScore = 10;
+  }
+
+  return linkScore + dirScore + recencyScore;
+}
+
+/**
+ * Extract a file path from a gap string using multiple patterns.
+ * Returns null if no path can be extracted.
+ */
+function extractPathFromGap(gap) {
+  // Pattern: "relPath — description" (D01, D02, D03, D05, D07, D08, D09)
+  let m = gap.match(/^(.+?)\s+—\s+/);
+  if (m) return m[1].trim();
+
+  // Pattern: "relPath/ — description" (D06)
+  m = gap.match(/^(.+?\/)\s+—\s+/);
+  if (m) return m[1].trim().replace(/\/$/, '');
+
+  // Pattern: "source → target (broken)" (D04)
+  m = gap.match(/^(.+?)\s+→\s+/);
+  if (m) return m[1].trim();
+
+  // Pattern: 'Potential duplicate "name": path1, path2' (D10)
+  m = gap.match(/Potential duplicate ".*?":\s*(.+)/);
+  if (m) {
+    const paths = m[1].split(',').map(p => p.trim());
+    return paths[0] || null;
+  }
+
+  return null;
+}
+
+/**
+ * Enrich score result dimensions with impact scores on each gap.
+ * Gaps are sorted by impactScore descending within each dimension.
+ * @param {{ dimensions: object[] }} scoreResult
+ * @param {object[]} files - Scanned file objects
+ * @param {string} rootDir
+ * @returns {{ dimensions: object[] }} Same structure with gaps as {text, impactScore, filePath} objects
+ */
+export function enrichGapsWithImpact(scoreResult, files, rootDir) {
+  const linkIndex = buildInboundLinkIndex(files, rootDir);
+
+  // Build recency map from scanned files
+  const recencyMap = new Map();
+  for (const f of files) {
+    if (f.gitLastModified) {
+      recencyMap.set(f.relPath.replace(/\\/g, '/'), f.gitLastModified);
+    }
+  }
+
+  const enrichedDimensions = scoreResult.dimensions.map(dim => {
+    if (!dim.gaps || dim.gaps.length === 0) return dim;
+
+    const enrichedGaps = dim.gaps.map(gap => {
+      const filePath = extractPathFromGap(gap);
+      const impactScore = computeImpactScore(filePath, linkIndex, recencyMap);
+      return { text: gap, impactScore, filePath };
+    });
+
+    // Sort by impact descending
+    enrichedGaps.sort((a, b) => b.impactScore - a.impactScore);
+
+    return { ...dim, enrichedGaps };
+  });
+
+  return { ...scoreResult, dimensions: enrichedDimensions };
 }
 
 // ─── D01: Location Compliance (15%) ─────────────────────────────────────────
@@ -276,7 +479,7 @@ function scoreD07(files) {
 
 // ─── D08: Database-First Compliance (8%) ────────────────────────────────────
 
-function scoreD08(files, _directories, rootDir) {
+function scoreD08(files, _directories, _rootDir) {
   const findings = [];
   const gaps = [];
 
@@ -289,7 +492,7 @@ function scoreD08(files, _directories, rootDir) {
     'CLAUDE_EXEC.md', 'CLAUDE_EXEC_DIGEST.md',
   ]);
 
-  const protocolKeywords = ['leo protocol', 'phase handoff', 'lead phase', 'plan phase', 'exec phase'];
+  const _protocolKeywords = ['leo protocol', 'phase handoff', 'lead phase', 'plan phase', 'exec phase'];
 
   let checks = 0;
   let compliant = 0;
@@ -394,11 +597,11 @@ function scoreD10(files) {
 
   // Find groups with >1 file (potential duplicates)
   let duplicateGroups = 0;
-  let duplicateFiles = 0;
+  let _duplicateFiles = 0;
   for (const [name, paths] of nameMap) {
     if (paths.length > 1) {
       duplicateGroups++;
-      duplicateFiles += paths.length;
+      _duplicateFiles += paths.length;
       gaps.push(`Potential duplicate "${name}": ${paths.join(', ')}`);
     }
   }
