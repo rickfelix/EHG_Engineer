@@ -1,5 +1,55 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Enhanced Testing and Debugging Sub-Agents Troubleshooting Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Diagnostics](#quick-diagnostics)
+  - [Health Check Script](#health-check-script)
+- [Common Issues](#common-issues)
+  - [Issue 1: Self-Healing Selectors Not Working](#issue-1-self-healing-selectors-not-working)
+  - [Issue 2: Fix Scripts Not Executing](#issue-2-fix-scripts-not-executing)
+  - [Issue 3: Handoff Data Too Large](#issue-3-handoff-data-too-large)
+  - [Issue 4: Diagnosis Taking Too Long](#issue-4-diagnosis-taking-too-long)
+- [Error Messages](#error-messages)
+  - [Database Connection Errors](#database-connection-errors)
+  - [Playwright Errors](#playwright-errors)
+  - [Import/Module Errors](#importmodule-errors)
+- [Performance Problems](#performance-problems)
+  - [Slow Test Execution](#slow-test-execution)
+  - [Memory Usage Issues](#memory-usage-issues)
+- [Configuration Issues](#configuration-issues)
+  - [Environment Variables Not Loaded](#environment-variables-not-loaded)
+  - [Database Schema Issues](#database-schema-issues)
+  - [Playwright Configuration Conflicts](#playwright-configuration-conflicts)
+- [Integration Problems](#integration-problems)
+  - [Jest Integration Issues](#jest-integration-issues)
+  - [CI/CD Pipeline Issues](#cicd-pipeline-issues)
+- [Best Practices](#best-practices)
+  - [Debugging Best Practices](#debugging-best-practices)
+  - [Performance Best Practices](#performance-best-practices)
+- [Frequently Asked Questions](#frequently-asked-questions)
+  - [Q: Do enhanced agents work with existing Playwright tests?](#q-do-enhanced-agents-work-with-existing-playwright-tests)
+  - [Q: How do I disable auto-fix for critical tests?](#q-how-do-i-disable-auto-fix-for-critical-tests)
+  - [Q: Can I use enhanced agents with headless browsers?](#q-can-i-use-enhanced-agents-with-headless-browsers)
+  - [Q: How do I handle custom authentication in enhanced tests?](#q-how-do-i-handle-custom-authentication-in-enhanced-tests)
+  - [Q: How do I handle tests that require specific data setup?](#q-how-do-i-handle-tests-that-require-specific-data-setup)
+- [Debug Utilities](#debug-utilities)
+  - [Enhanced Debug Console](#enhanced-debug-console)
+  - [Test Recorder](#test-recorder)
+- [Support Resources](#support-resources)
+  - [Getting Help](#getting-help)
+  - [Documentation Links](#documentation-links)
+  - [Community Resources](#community-resources)
 
 ## Metadata
 - **Category**: Testing

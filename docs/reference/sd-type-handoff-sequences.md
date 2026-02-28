@@ -1,4 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SD Type Handoff Sequences Reference
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Quick Reference Table](#quick-reference-table)
+- [Detailed SD Type Workflows](#detailed-sd-type-workflows)
+  - [Feature SD](#feature-sd)
+  - [Infrastructure SD](#infrastructure-sd)
+  - [Documentation SD](#documentation-sd)
+  - [Database SD](#database-sd)
+  - [Security SD](#security-sd)
+  - [Refactor SD](#refactor-sd)
+  - [Bugfix SD](#bugfix-sd)
+  - [Performance SD](#performance-sd)
+  - [Orchestrator SD](#orchestrator-sd)
+- [AUTO-PROCEED Workflow Routing Logic](#auto-proceed-workflow-routing-logic)
+  - [Implementation (Updated 2026-02-06)](#implementation-updated-2026-02-06)
+- [Child SD Selection (Within Orchestrators)](#child-sd-selection-within-orchestrators)
+- [Workflow Validation Gate Enforcement](#workflow-validation-gate-enforcement)
+  - [SD Type-Aware Validation Policy](#sd-type-aware-validation-policy)
+- [Progress Calculation by SD Type](#progress-calculation-by-sd-type)
+- [Common Workflow Failures (Root Causes)](#common-workflow-failures-root-causes)
+  - [1. AUTO-PROCEED Stops After PLAN-TO-LEAD (97%)](#1-auto-proceed-stops-after-plan-to-lead-97)
+  - [2. Orchestrator SD Fails EXEC-TO-PLAN Gate](#2-orchestrator-sd-fails-exec-to-plan-gate)
+  - [3. Refactor SD Rejected at 75% (3 Handoffs)](#3-refactor-sd-rejected-at-75-3-handoffs)
+  - [4. Child SD Selector Returns Wrong Workflow](#4-child-sd-selector-returns-wrong-workflow)
+- [Integration with AUTO-PROCEED](#integration-with-auto-proceed)
+  - [SD Continuation Truth Table](#sd-continuation-truth-table)
+- [Related Documentation](#related-documentation)
+- [Summary](#summary)
 
 ## Metadata
 - **Category**: Reference

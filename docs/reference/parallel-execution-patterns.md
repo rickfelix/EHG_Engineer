@@ -1,5 +1,74 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Parallel Sub-Agent Execution Patterns Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Database Schema](#database-schema)
+  - [Sub-Agent Executions Table](#sub-agent-executions-table)
+  - [Execution Batches Table](#execution-batches-table)
+- [Parallel Executor](#parallel-executor)
+  - [Basic Usage](#basic-usage)
+  - [Configuration Options](#configuration-options)
+  - [Execution Flow](#execution-flow)
+  - [Circuit Breaker Pattern](#circuit-breaker-pattern)
+  - [Retry Logic with Exponential Backoff](#retry-logic-with-exponential-backoff)
+- [Result Aggregator](#result-aggregator)
+  - [Basic Usage](#basic-usage)
+  - [Conflict Resolution](#conflict-resolution)
+  - [Verdict Determination](#verdict-determination)
+  - [Confidence Scoring](#confidence-scoring)
+- [CLI Usage](#cli-usage)
+  - [Sequential Mode (Default)](#sequential-mode-default)
+  - [Parallel Mode (60% Faster)](#parallel-mode-60-faster)
+  - [Verification Levels](#verification-levels)
+  - [JSON Output](#json-output)
+- [Performance Metrics](#performance-metrics)
+  - [Execution Metrics](#execution-metrics)
+  - [Performance Comparison](#performance-comparison)
+- [Integration Patterns](#integration-patterns)
+  - [Pattern 1: PLAN Supervisor Verification](#pattern-1-plan-supervisor-verification)
+  - [Pattern 2: Selective Parallel Execution](#pattern-2-selective-parallel-execution)
+  - [Pattern 3: Fallback to Sequential](#pattern-3-fallback-to-sequential)
+  - [Pattern 4: Progressive Verification](#pattern-4-progressive-verification)
+- [Error Handling](#error-handling)
+  - [Timeout Handling](#timeout-handling)
+  - [Partial Success Handling](#partial-success-handling)
+  - [Circuit Breaker Recovery](#circuit-breaker-recovery)
+- [Best Practices](#best-practices)
+  - [1. Use Parallel Mode for Verification](#1-use-parallel-mode-for-verification)
+  - [2. Set Appropriate Timeouts](#2-set-appropriate-timeouts)
+  - [3. Monitor Circuit Breaker](#3-monitor-circuit-breaker)
+  - [4. Handle Partial Results](#4-handle-partial-results)
+  - [5. Log Performance Metrics](#5-log-performance-metrics)
+  - [6. Use Priority-Based Ordering](#6-use-priority-based-ordering)
+  - [7. Store Results for Audit Trail](#7-store-results-for-audit-trail)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: All Sub-Agents Timing Out](#issue-all-sub-agents-timing-out)
+  - [Issue: Circuit Breaker Constantly Open](#issue-circuit-breaker-constantly-open)
+  - [Issue: Low Confidence Scores](#issue-low-confidence-scores)
+  - [Issue: Partial Results Only](#issue-partial-results-only)
+- [Database Queries](#database-queries)
+  - [Query Recent Executions](#query-recent-executions)
+  - [Query Batch Summary](#query-batch-summary)
+  - [Query Failure Analysis](#query-failure-analysis)
+  - [Query Performance Metrics](#query-performance-metrics)
+- [CLI Quick Reference](#cli-quick-reference)
+- [API Reference](#api-reference)
+  - [ParallelExecutor](#parallelexecutor)
+  - [ResultAggregator](#resultaggregator)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Reference

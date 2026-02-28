@@ -1,5 +1,56 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # User Stories Summary: SD-VISION-V2-011
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Functional Requirements Mapping](#functional-requirements-mapping)
+- [User Stories Overview](#user-stories-overview)
+  - [Phase 1: Backend Foundation (Critical)](#phase-1-backend-foundation-critical)
+  - [Phase 2: Frontend Integration (High Priority)](#phase-2-frontend-integration-high-priority)
+  - [Phase 3: Real-time Enhancement (Optional)](#phase-3-real-time-enhancement-optional)
+- [Implementation Plan](#implementation-plan)
+  - [Phase 1: Backend Foundation (Critical - 16 points)](#phase-1-backend-foundation-critical---16-points)
+  - [Phase 2: Frontend Integration (High - 11 points)](#phase-2-frontend-integration-high---11-points)
+  - [Phase 3: Real-time Enhancement (Optional - 5 points)](#phase-3-real-time-enhancement-optional---5-points)
+- [INVEST Criteria Validation](#invest-criteria-validation)
+  - [Independent](#independent)
+  - [Negotiable](#negotiable)
+  - [Valuable](#valuable)
+  - [Estimable](#estimable)
+  - [Small](#small)
+  - [Testable](#testable)
+- [Technical Architecture](#technical-architecture)
+  - [New Files Created](#new-files-created)
+  - [Modified Files](#modified-files)
+  - [Database Tables Used](#database-tables-used)
+- [Acceptance Criteria Summary](#acceptance-criteria-summary)
+  - [Coverage Breakdown](#coverage-breakdown)
+  - [Given-When-Then Format](#given-when-then-format)
+- [Dependencies](#dependencies)
+  - [Prerequisites (Must Complete Before)](#prerequisites-must-complete-before)
+  - [Database Schema Requirements](#database-schema-requirements)
+  - [External Dependencies](#external-dependencies)
+- [Success Metrics](#success-metrics)
+  - [Code Metrics](#code-metrics)
+  - [Functional Metrics](#functional-metrics)
+  - [Quality Metrics](#quality-metrics)
+- [Risk Mitigation](#risk-mitigation)
+  - [Risk 1: EVA Backend Services May Need Refactoring](#risk-1-eva-backend-services-may-need-refactoring)
+  - [Risk 2: Real Insights May Be Less Polished Than Mocks](#risk-2-real-insights-may-be-less-polished-than-mocks)
+  - [Risk 3: Performance Degradation](#risk-3-performance-degradation)
+- [Next Steps](#next-steps)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Report

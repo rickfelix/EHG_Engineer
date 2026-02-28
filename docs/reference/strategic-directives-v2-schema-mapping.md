@@ -1,5 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Strategic Directives v2 Schema Mapping Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Required Fields (NOT NULL)](#critical-required-fields-not-null)
+- [Common Field Name Changes (v1 → v2)](#common-field-name-changes-v1-v2)
+- [JSONB Field Structures](#jsonb-field-structures)
+  - [success_criteria (JSONB Array)](#success_criteria-jsonb-array)
+  - [risks (JSONB Array)](#risks-jsonb-array)
+  - [dependencies (JSONB Array)](#dependencies-jsonb-array)
+  - [success_metrics (JSONB Object - NESTED!)](#success_metrics-jsonb-object---nested)
+  - [stakeholders (JSONB Array)](#stakeholders-jsonb-array)
+- [CHECK Constraints (Enum Values)](#check-constraints-enum-values)
+  - [priority](#priority)
+  - [status](#status)
+  - [sd_type](#sd_type)
+  - [target_application](#target_application)
+- [Optional But Recommended Fields](#optional-but-recommended-fields)
+- [Workflow Fields (Auto-Managed)](#workflow-fields-auto-managed)
+- [RLS Policies](#rls-policies)
+- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+  - [❌ Mistake 1: Using `key` instead of `id`](#-mistake-1-using-key-instead-of-id)
+  - [❌ Mistake 2: Uppercase enum values](#-mistake-2-uppercase-enum-values)
+  - [❌ Mistake 3: Missing sd_key](#-mistake-3-missing-sd_key)
+  - [❌ Mistake 4: Wrong JSONB structure for success_metrics](#-mistake-4-wrong-jsonb-structure-for-success_metrics)
+  - [❌ Mistake 5: Using removed fields](#-mistake-5-using-removed-fields)
+- [Quick Reference SQL Template](#quick-reference-sql-template)
+- [Node.js Template (Recommended)](#nodejs-template-recommended)
+- [Schema Documentation Locations](#schema-documentation-locations)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

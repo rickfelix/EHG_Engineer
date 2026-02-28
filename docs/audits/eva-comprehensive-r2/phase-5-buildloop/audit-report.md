@@ -1,4 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Comprehensive Audit Round 2 - Phase 5: The Build Loop (Stages 17-22)
+
+
+## Table of Contents
+
+- [1. Score Comparison](#1-score-comparison)
+- [2. Remediation Verification Matrix](#2-remediation-verification-matrix)
+  - [R1 Systemic Finding: Decision Objects Not Validated/Persisted](#r1-systemic-finding-decision-objects-not-validatedpersisted)
+  - [R1 Systemic Finding: Enum Fields Validated as Free Text](#r1-systemic-finding-enum-fields-validated-as-free-text)
+  - [Individual Finding Remediation](#individual-finding-remediation)
+  - [Remediation Summary](#remediation-summary)
+- [3. New R2 Findings](#3-new-r2-findings)
+  - [R2-NEW-01: SD_TYPES Enum Mismatch Between Analysis and Template (Stage 18)](#r2-new-01-sd_types-enum-mismatch-between-analysis-and-template-stage-18)
+  - [R2-NEW-02: ISSUE_STATUSES Enum Mismatch Between Analysis and Template (Stage 19)](#r2-new-02-issue_statuses-enum-mismatch-between-analysis-and-template-stage-19)
+  - [R2-NEW-03: DEFECT_STATUSES Enum Mismatch Between Analysis and Template (Stage 20)](#r2-new-03-defect_statuses-enum-mismatch-between-analysis-and-template-stage-20)
+  - [R2-NEW-04: RELEASE_CATEGORIES Enum Mismatch Between Analysis and Template (Stage 22)](#r2-new-04-release_categories-enum-mismatch-between-analysis-and-template-stage-22)
+  - [R2-NEW-05: Analysis-Produced Fields Not in Template Schema (Stages 20-21)](#r2-new-05-analysis-produced-fields-not-in-template-schema-stages-20-21)
+  - [R2-NEW-06: Template Fields Declared But Not Validated (Stages 18, 20)](#r2-new-06-template-fields-declared-but-not-validated-stages-18-20)
+  - [R2-NEW-07: Promotion Gate V1 Fallback Paths Still Active (Stage 22)](#r2-new-07-promotion-gate-v1-fallback-paths-still-active-stage-22)
+  - [R2-NEW-08: Chairman Governance Gate Added Without Analysis Step Integration](#r2-new-08-chairman-governance-gate-added-without-analysis-step-integration)
+- [4. Net Delta Analysis](#4-net-delta-analysis)
+  - [Improvements (+27 points)](#improvements-27-points)
+  - [Remaining Gaps](#remaining-gaps)
+  - [Systemic Pattern Evolution](#systemic-pattern-evolution)
+  - [Recommendations](#recommendations)
+- [5. Finding Severity Summary](#5-finding-severity-summary)
+  - [Critical (2)](#critical-2)
+  - [High (6)](#high-6)
+  - [Medium (5)](#medium-5)
+  - [Low (2)](#low-2)
+- [6. Conclusion](#6-conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-R2-BUILDLOOP-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-R2-ORCH-001

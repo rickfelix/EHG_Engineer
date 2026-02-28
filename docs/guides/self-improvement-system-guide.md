@@ -1,4 +1,63 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Protocol Self-Improvement System
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Evolution: Phase 1 - AI Quality Judge (January 2026)](#evolution-phase-1---ai-quality-judge-january-2026)
+  - [Key Change (v2 - January 2026)](#key-change-v2---january-2026)
+- [Key Features](#key-features)
+  - [1. Retrospective Type Classification](#1-retrospective-type-classification)
+  - [2. Protocol Improvement Queue](#2-protocol-improvement-queue)
+  - [3. Automatic Extraction](#3-automatic-extraction)
+  - [4. Helper Views](#4-helper-views)
+  - [5. Helper Functions](#5-helper-functions)
+- [Workflows](#workflows)
+  - [Workflow 1: Creating a Retrospective with Improvements](#workflow-1-creating-a-retrospective-with-improvements)
+  - [Workflow 2: Reviewing Pending Improvements](#workflow-2-reviewing-pending-improvements)
+  - [Workflow 3: Approving an Improvement](#workflow-3-approving-an-improvement)
+  - [Workflow 4: Applying an Improvement (v2 - SD Creation)](#workflow-4-applying-an-improvement-v2---sd-creation)
+  - [Workflow 5: Measuring Effectiveness](#workflow-5-measuring-effectiveness)
+  - [Workflow 6: Pre-Handoff Warnings](#workflow-6-pre-handoff-warnings)
+- [Integration Points](#integration-points)
+  - [1. Retrospective Generation Scripts](#1-retrospective-generation-scripts)
+  - [2. Handoff Scripts](#2-handoff-scripts)
+  - [3. CLAUDE.md Updates](#3-claudemd-updates)
+- [Pre-Handoff Checklist](#pre-handoff-checklist)
+  - [4. Dashboard UI (Future)](#4-dashboard-ui-future)
+- [Maintenance](#maintenance)
+  - [Daily Tasks](#daily-tasks)
+  - [Weekly Tasks](#weekly-tasks)
+  - [Monthly Tasks](#monthly-tasks)
+- [Examples](#examples)
+  - [Example 1: High-Evidence Validation Rule](#example-1-high-evidence-validation-rule)
+  - [Example 2: Checklist Item Addition](#example-2-checklist-item-addition)
+  - [Example 3: Cross-Phase Pattern](#example-3-cross-phase-pattern)
+- [Best Practices](#best-practices)
+  - [1. Evidence Thresholds](#1-evidence-thresholds)
+  - [2. Improvement Types](#2-improvement-types)
+  - [3. Payload Structure](#3-payload-structure)
+  - [4. Status Transitions](#4-status-transitions)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Trigger Not Extracting Improvements](#issue-trigger-not-extracting-improvements)
+  - [Issue: Duplicate Improvements Not Consolidating](#issue-duplicate-improvements-not-consolidating)
+  - [Issue: Pre-Handoff Warnings Not Showing](#issue-pre-handoff-warnings-not-showing)
+- [Future Enhancements](#future-enhancements)
+  - [Phase 2: AI-Powered Suggestions](#phase-2-ai-powered-suggestions)
+  - [Phase 3: Automated Application](#phase-3-automated-application)
+  - [Phase 4: Dashboard Integration](#phase-4-dashboard-integration)
+- [References](#references)
+- [Changelog](#changelog)
+  - [2026-01-23: SD-LEO-PROCESS-IMPROVEMENTS-001 - Post Self-Improvement Loop Fixes](#2026-01-23-sd-leo-process-improvements-001---post-self-improvement-loop-fixes)
 
 ## Metadata
 - **Category**: Guide

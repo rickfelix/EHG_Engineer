@@ -1,3 +1,11 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001A
 
 

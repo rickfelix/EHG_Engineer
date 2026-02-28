@@ -1,5 +1,51 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Enhanced QA Engineering Director v2.0
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Key Improvements Over v1.0](#key-improvements-over-v10)
+- [Architecture](#architecture)
+  - [7 Intelligence Modules](#7-intelligence-modules)
+- [5-Phase Execution Workflow](#5-phase-execution-workflow)
+  - [Phase 1: Pre-flight Checks](#phase-1-pre-flight-checks)
+  - [Phase 2: Smart Test Planning](#phase-2-smart-test-planning)
+  - [Phase 3: Test Execution](#phase-3-test-execution)
+  - [Phase 4: Evidence Collection](#phase-4-evidence-collection)
+  - [Phase 5: Verdict & Handoff](#phase-5-verdict-handoff)
+- [Verdict Calculation](#verdict-calculation)
+- [Usage](#usage)
+  - [Command Line](#command-line)
+  - [Options](#options)
+  - [Programmatic](#programmatic)
+- [Database Integration](#database-integration)
+  - [Table: `sub_agent_execution_results`](#table-sub_agent_execution_results)
+- [Retrospective Source](#retrospective-source)
+  - [Issues Addressed](#issues-addressed)
+  - [Key Learnings Applied](#key-learnings-applied)
+- [Future Enhancements](#future-enhancements)
+  - [Planned for v2.1](#planned-for-v21)
+  - [Planned for v3.0](#planned-for-v30)
+- [Troubleshooting](#troubleshooting)
+  - [Build validation fails with "command not found"](#build-validation-fails-with-command-not-found)
+  - [Migration execution fails with "permission denied"](#migration-execution-fails-with-permission-denied)
+  - [Integration checker reports false positives](#integration-checker-reports-false-positives)
+  - [Test tier selector chooses wrong tier](#test-tier-selector-chooses-wrong-tier)
+- [Contributing](#contributing)
+  - [Adding New Modules](#adding-new-modules)
+  - [Standard Module Interface](#standard-module-interface)
+- [License](#license)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Testing

@@ -1,5 +1,58 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EHG VISION v3.4 ADDENDUM: Operational Infrastructure
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version History](#version-history)
+- [Executive Summary](#executive-summary)
+- [Portfolio Glide Path Strategy](#portfolio-glide-path-strategy)
+  - [The Three-Phase Portfolio Evolution](#the-three-phase-portfolio-evolution)
+  - [Glide Path Progression Triggers](#glide-path-progression-triggers)
+  - [Relationship to Venture Phases](#relationship-to-venture-phases)
+- [Venture Selection Framework](#venture-selection-framework)
+  - [The Scoring Engine](#the-scoring-engine)
+  - [Chairman Settings for Venture Selection](#chairman-settings-for-venture-selection)
+  - [Research Arm Pipeline](#research-arm-pipeline)
+  - [Opportunity Brief Template](#opportunity-brief-template)
+- [Capability Management System](#capability-management-system)
+  - [The Capability Ledger](#the-capability-ledger)
+  - [Build / Buy / Partner / Avoid Framework](#build-buy-partner-avoid-framework)
+  - [Capability-Based Venture Filtering](#capability-based-venture-filtering)
+  - [Minimum Viable Skillset (MVS)](#minimum-viable-skillset-mvs)
+- [Legal Structure Details](#legal-structure-details)
+  - [Delaware Series LLC Architecture](#delaware-series-llc-architecture)
+  - [Legal Template Library](#legal-template-library)
+  - [GDPR Compliance Components](#gdpr-compliance-components)
+- [EVA Technical Specification](#eva-technical-specification)
+  - [EVA Database Schema](#eva-database-schema)
+  - [Decision Routing Classes](#decision-routing-classes)
+  - [Automation Rules Schema](#automation-rules-schema)
+  - [Circuit Breaker Implementation](#circuit-breaker-implementation)
+- [Pattern Library Foundation](#pattern-library-foundation)
+  - [Critical Unlock Patterns](#critical-unlock-patterns)
+  - [Pattern Maturity Assessment](#pattern-maturity-assessment)
+  - [Pattern Integration with Scoring](#pattern-integration-with-scoring)
+  - [Pattern Deprecation Lifecycle](#pattern-deprecation-lifecycle)
+- [Round 4 Amendments (V3.4)](#round-4-amendments-v34)
+  - [Amendment 23: Portfolio Glide Path Strategy](#amendment-23-portfolio-glide-path-strategy)
+  - [Amendment 24: Venture Selection Framework](#amendment-24-venture-selection-framework)
+  - [Amendment 25: Capability Management System](#amendment-25-capability-management-system)
+  - [Amendment 26: Delaware Series LLC Structure](#amendment-26-delaware-series-llc-structure)
+  - [Amendment 27: EVA Technical Specification](#amendment-27-eva-technical-specification)
+  - [Amendment 28: Pattern Library Foundation](#amendment-28-pattern-library-foundation)
+  - [Amendment 29: Research Arm Integration](#amendment-29-research-arm-integration)
+- [Updated Document Governance](#updated-document-governance)
+- [Implementation Status](#implementation-status)
 
 ## Metadata
 - **Category**: Guide

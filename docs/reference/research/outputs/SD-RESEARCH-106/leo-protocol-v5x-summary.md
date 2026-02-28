@@ -1,3 +1,11 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Research Summary: LEO Protocol v5.x — Next-Generation Governance Engine
 
 

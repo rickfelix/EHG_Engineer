@@ -1,3 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Defined Metrics (from stages.yaml)](#defined-metrics-from-stagesyaml)
+  - [Standard Metrics](#standard-metrics)
+  - [Recursion Metrics (Proposed)](#recursion-metrics-proposed)
+- [Metric Definitions & Measurement](#metric-definitions-measurement)
+  - [Metric 1: Risk Coverage](#metric-1-risk-coverage)
+  - [Metric 2: Mitigation Effectiveness](#metric-2-mitigation-effectiveness)
+  - [Metric 3: Risk Score](#metric-3-risk-score)
+  - [Metric 4: Hidden Cost Discovery Rate (Recursion)](#metric-4-hidden-cost-discovery-rate-recursion)
+  - [Metric 5: Recursion Trigger Rate (from Stage 6)](#metric-5-recursion-trigger-rate-from-stage-6)
+  - [Metric 6: Average Hidden Cost %](#metric-6-average-hidden-cost-)
+- [Dashboard Visualizations (Proposed)](#dashboard-visualizations-proposed)
+  - [Dashboard 1: Risk Assessment Health](#dashboard-1-risk-assessment-health)
+  - [Dashboard 2: Hidden Cost Discovery Analysis](#dashboard-2-hidden-cost-discovery-analysis)
+  - [Dashboard 3: Risk Matrix Heatmap](#dashboard-3-risk-matrix-heatmap)
+- [Alerting Rules (Proposed)](#alerting-rules-proposed)
+  - [Alert 1: Low Risk Coverage](#alert-1-low-risk-coverage)
+  - [Alert 2: High Risk Score](#alert-2-high-risk-score)
+  - [Alert 3: High Recursion Trigger Rate](#alert-3-high-recursion-trigger-rate)
+- [Real-Time Monitoring (Proposed)](#real-time-monitoring-proposed)
+  - [Real-Time Metric 1: Hidden Cost Indicator](#real-time-metric-1-hidden-cost-indicator)
+- [Performance Monitoring (Proposed)](#performance-monitoring-proposed)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:52.488Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-06\09_metrics-monitoring.md

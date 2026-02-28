@@ -1,3 +1,58 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Intelligent Dependency-Driven Recursion](#intelligent-dependency-driven-recursion)
+- [Outbound Recursion Triggers](#outbound-recursion-triggers)
+- [PRIMARY TRIGGER: TECH-001 to Stage 8 (Blocking Issues)](#primary-trigger-tech-001-to-stage-8-blocking-issues)
+  - [Full Recursion Logic (SC-004)](#full-recursion-logic-sc-004)
+  - [Why Stage 8?](#why-stage-8)
+  - [Trigger Data Payload (TECH-001 to Stage 8)](#trigger-data-payload-tech-001-to-stage-8)
+  - [Issue Categorization Logic](#issue-categorization-logic)
+- [SECONDARY TRIGGER: TECH-001 to Stage 7 (Timeline Impact)](#secondary-trigger-tech-001-to-stage-7-timeline-impact)
+  - [Timeline Impact Calculation](#timeline-impact-calculation)
+  - [Why Stage 7?](#why-stage-7)
+  - [Timeline Impact Calculation Method](#timeline-impact-calculation-method)
+- [TERTIARY TRIGGER: TECH-001 to Stage 5 (Cost Impact)](#tertiary-trigger-tech-001-to-stage-5-cost-impact)
+  - [Cost Impact Calculation](#cost-impact-calculation)
+  - [Why Stage 5?](#why-stage-5)
+  - [Cost Impact Calculation Method](#cost-impact-calculation-method)
+- [CRITICAL TRIGGER: TECH-001 to Stage 3 (Solution Infeasible)](#critical-trigger-tech-001-to-stage-3-solution-infeasible)
+  - [Solution Feasibility Scoring](#solution-feasibility-scoring)
+  - [Why Stage 3?](#why-stage-3)
+  - [Feasibility Score Calculation](#feasibility-score-calculation)
+- [Recursion Thresholds (Complete Table)](#recursion-thresholds-complete-table)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+  - [From Stage 14 (Development Preparation)](#from-stage-14-development-preparation)
+  - [From Stage 22 (Development Iteration)](#from-stage-22-development-iteration)
+- [Loop Prevention](#loop-prevention)
+  - [Escalation After 3rd TECH-001](#escalation-after-3rd-tech-001)
+- [Chairman Controls](#chairman-controls)
+  - [CRITICAL Severity (Solution Infeasible)](#critical-severity-solution-infeasible)
+  - [HIGH Severity (Blocking Issues, Timeline/Cost Impact)](#high-severity-blocking-issues-timelinecost-impact)
+  - [Override Capability](#override-capability)
+- [Performance Requirements](#performance-requirements)
+- [UI/UX Implications](#uiux-implications)
+  - [Technical Health Dashboard](#technical-health-dashboard)
+  - [Recursion Warning Modal](#recursion-warning-modal)
+  - [Comparison View (Post-Recursion)](#comparison-view-post-recursion)
+- [Integration Points](#integration-points)
+  - [Stage 8 (Problem Decomposition)](#stage-8-problem-decomposition)
+  - [Stage 7 (Comprehensive Planning)](#stage-7-comprehensive-planning)
+  - [Stage 5 (Profitability)](#stage-5-profitability)
+  - [Stage 3 (Validation)](#stage-3-validation)
+  - [validationFramework.ts](#validationframeworkts)
+  - [recursionEngine.ts](#recursionenginets)
+  - [recursion_events Table](#recursion_events-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:48.060Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-10\07_recursion-blueprint.md

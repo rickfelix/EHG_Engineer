@@ -1,5 +1,51 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Team Migration Guide: Template-Based LEO Protocol
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🎯 Overview](#-overview)
+- [📋 What Changed](#-what-changed)
+  - [Before: Script Proliferation Problem](#before-script-proliferation-problem)
+  - [After: Template-Based Solution](#after-template-based-solution)
+- [🔧 New Template System](#-new-template-system)
+  - [Core Templates](#core-templates)
+  - [Convenience Scripts](#convenience-scripts)
+- [🚀 Quick Start Guide](#-quick-start-guide)
+  - [1. Phase Execution](#1-phase-execution)
+  - [2. PRD Generation](#2-prd-generation)
+  - [3. Handoff Creation](#3-handoff-creation)
+- [📊 Migration Reference](#-migration-reference)
+  - [Common Migration Patterns](#common-migration-patterns)
+  - [Script Archive](#script-archive)
+- [🤖 Sub-Agent Integration](#-sub-agent-integration)
+  - [Automatic Sub-Agent Activation](#automatic-sub-agent-activation)
+  - [Sub-Agent Functions](#sub-agent-functions)
+- [🔄 LEO Orchestrator Integration](#-leo-orchestrator-integration)
+- [📝 Configuration](#-configuration)
+  - [Phase Requirements](#phase-requirements)
+  - [Customization](#customization)
+- [✅ Best Practices](#-best-practices)
+  - [1. Use Templates for All New Work](#1-use-templates-for-all-new-work)
+  - [2. Consistent Command Patterns](#2-consistent-command-patterns)
+  - [3. Force Flag Usage](#3-force-flag-usage)
+- [🔍 Troubleshooting](#-troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Getting Help](#getting-help)
+- [🎉 Benefits Summary](#-benefits-summary)
+  - [For Developers](#for-developers)
+  - [For Operations](#for-operations)
+  - [For Teams](#for-teams)
+- [📞 Support](#-support)
 
 ## Metadata
 - **Category**: Guide

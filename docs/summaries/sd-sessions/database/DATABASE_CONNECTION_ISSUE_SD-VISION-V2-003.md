@@ -1,5 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Database Connection Issue - SD-VISION-V2-003 Handoff Completion
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Issue Summary](#issue-summary)
+- [Diagnostic Steps Taken](#diagnostic-steps-taken)
+  - [1. Supabase Status Check](#1-supabase-status-check)
+  - [2. REST API Endpoint Test](#2-rest-api-endpoint-test)
+  - [3. PostgreSQL Pooler Connection](#3-postgresql-pooler-connection)
+  - [4. Direct Database Connection (Non-Pooler)](#4-direct-database-connection-non-pooler)
+  - [5. REST API with Retry Logic](#5-rest-api-with-retry-logic)
+  - [6. LEO Stack Status](#6-leo-stack-status)
+- [Root Cause Analysis](#root-cause-analysis)
+- [Immediate Solution: Manual SQL Execution](#immediate-solution-manual-sql-execution)
+  - [Access Supabase Dashboard](#access-supabase-dashboard)
+  - [Execute Handoff SQL](#execute-handoff-sql)
+- [Long-Term Solutions](#long-term-solutions)
+  - [1. Connection Pool Management](#1-connection-pool-management)
+  - [2. Switch to Transaction Mode](#2-switch-to-transaction-mode)
+  - [3. Implement Connection Retry with Exponential Backoff](#3-implement-connection-retry-with-exponential-backoff)
+  - [4. IPv6 Support in WSL2](#4-ipv6-support-in-wsl2)
+- [Workaround Validation (Per Database Agent Protocol)](#workaround-validation-per-database-agent-protocol)
+- [Next Steps](#next-steps)
+- [References](#references)
+- [Success Criteria](#success-criteria)
 
 ## Metadata
 - **Category**: Database

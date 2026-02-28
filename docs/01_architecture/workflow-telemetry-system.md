@@ -1,4 +1,43 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Workflow Telemetry System Architecture
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [System Components](#system-components)
+  - [1. Collection Infrastructure (001A)](#1-collection-infrastructure-001a)
+  - [2. Auto-Analysis Engine (001B)](#2-auto-analysis-engine-001b)
+  - [3. Session Start Auto-Trigger (001C)](#3-session-start-auto-trigger-001c)
+- [Data Flow](#data-flow)
+- [Configuration](#configuration)
+  - [Thresholds (`telemetry_thresholds` table)](#thresholds-telemetry_thresholds-table)
+  - [Analysis Runs (`telemetry_analysis_runs` table)](#analysis-runs-telemetry_analysis_runs-table)
+- [Integration Points](#integration-points)
+  - [Session Start Hook](#session-start-hook)
+  - [sd:next Display](#sdnext-display)
+- [Performance Characteristics](#performance-characteristics)
+  - [Collection Overhead](#collection-overhead)
+  - [Analysis Cost](#analysis-cost)
+  - [Storage Growth](#storage-growth)
+- [Operational Runbook](#operational-runbook)
+  - [Monitoring](#monitoring)
+  - [Troubleshooting](#troubleshooting)
+  - [Configuration Changes](#configuration-changes)
+- [Future Enhancements](#future-enhancements)
+  - [Phase 1 (Complete - This SD)](#phase-1-complete---this-sd)
+  - [Phase 2 (Future)](#phase-2-future)
+  - [Phase 3 (Future)](#phase-3-future)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Architecture

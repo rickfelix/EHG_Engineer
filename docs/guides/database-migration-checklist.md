@@ -1,5 +1,32 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Database Migration Checklist - CRITICAL
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [⚠️ MANDATORY: Validate Migration Script BEFORE Assuming Connection Issues](#-mandatory-validate-migration-script-before-assuming-connection-issues)
+  - [Problem Observed (SD-RECONNECT-009)](#problem-observed-sd-reconnect-009)
+  - [The Mistake](#the-mistake)
+- [✅ CORRECT Migration Validation Process](#-correct-migration-validation-process)
+  - [Step 1: Analyze Migration Script FIRST (Before Any Connection Attempts)](#step-1-analyze-migration-script-first-before-any-connection-attempts)
+  - [Step 2: Test Migration Locally (If Possible)](#step-2-test-migration-locally-if-possible)
+  - [Step 3: Syntax Validation](#step-3-syntax-validation)
+  - [Step 4: Only After Validation - Attempt Connection](#step-4-only-after-validation---attempt-connection)
+- [📚 Reference: Common Supabase Migration Errors](#-reference-common-supabase-migration-errors)
+- [🎯 Key Lesson for CLAUDE.md](#-key-lesson-for-claudemd)
+  - [Database Migration Script Validation ✅ (CRITICAL)](#database-migration-script-validation-critical)
+- [🔧 Tools for Migration Validation](#-tools-for-migration-validation)
+  - [Quick Validation Script](#quick-validation-script)
+- [📖 Additional Resources](#-additional-resources)
 
 ## Metadata
 - **Category**: Guide

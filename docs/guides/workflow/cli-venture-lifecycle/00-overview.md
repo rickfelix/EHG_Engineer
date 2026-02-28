@@ -1,3 +1,33 @@
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [System Architecture](#system-architecture)
+- [The 25-Stage Lifecycle](#the-25-stage-lifecycle)
+  - [Phase Summary](#phase-summary)
+- [Component Inventory](#component-inventory)
+  - [Core Modules (~6,500 LOC total)](#core-modules-6500-loc-total)
+  - [Stage Templates (25 files, ~80-230 lines each)](#stage-templates-25-files-80-230-lines-each)
+  - [Services](#services)
+- [Key Architectural Patterns](#key-architectural-patterns)
+  - [1. Dependency Injection](#1-dependency-injection)
+  - [2. Pure Functions](#2-pure-functions)
+  - [3. Fail-Closed Gates](#3-fail-closed-gates)
+  - [4. Idempotency](#4-idempotency)
+  - [5. Resolution Cascading](#5-resolution-cascading)
+  - [6. Event-Driven Audit](#6-event-driven-audit)
+- [Gate Architecture](#gate-architecture)
+- [Data Flow](#data-flow)
+  - [Single Stage Execution](#single-stage-execution)
+  - [Lifecycle-to-SD Bridge Flow (Stage 18)](#lifecycle-to-sd-bridge-flow-stage-18)
+- [Database Schema Overview](#database-schema-overview)
+- [Token Budget Profiles](#token-budget-profiles)
+- [Integration Points](#integration-points)
+  - [With LEO Protocol](#with-leo-protocol)
+  - [With LLM Client Factory](#with-llm-client-factory)
+  - [With Chairman Governance](#with-chairman-governance)
+- [For AI Agents: Quick Start](#for-ai-agents-quick-start)
+
 ---
 Category: Architecture
 Status: Approved

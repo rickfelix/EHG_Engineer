@@ -1,5 +1,39 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Stage 04 – Competitive Intelligence with B2C SaaS KPI Tracking (Enhanced v3)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [1. Executive Summary](#1-executive-summary)
+- [2. Technical Architecture](#2-technical-architecture)
+  - [Core Competitive Intelligence System](#core-competitive-intelligence-system)
+  - [Data Collection Engine](#data-collection-engine)
+  - [Strategic Opportunity Analysis](#strategic-opportunity-analysis)
+  - [Real-Time Monitoring](#real-time-monitoring)
+  - [Chairman Dashboard Integration](#chairman-dashboard-integration)
+- [3. Data Architecture](#3-data-architecture)
+  - [Database Schema Extensions](#database-schema-extensions)
+- [4. Success Metrics](#4-success-metrics)
+  - [Data Quality](#data-quality)
+  - [Strategic Impact](#strategic-impact)
+  - [Performance](#performance)
+- [5. Integration Points](#5-integration-points)
+  - [AI CEO Agent](#ai-ceo-agent)
+  - [Chairman Console](#chairman-console)
+  - [Other Stages](#other-stages)
+- [8. Database Schema Integration](#8-database-schema-integration)
+  - [Core Entity Dependencies](#core-entity-dependencies)
+- [9. Integration Hub Connectivity](#9-integration-hub-connectivity)
+  - [Integration Requirements](#integration-requirements)
 
 ## Metadata
 - **Category**: API

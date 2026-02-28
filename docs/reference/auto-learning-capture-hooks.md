@@ -1,4 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Auto-Learning Capture Hooks & Patterns
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Hook Configuration](#hook-configuration)
+  - [PostToolUse Hook Registration](#posttooluse-hook-registration)
+  - [Environment Variables](#environment-variables)
+- [Detection Patterns](#detection-patterns)
+  - [Merge Success Detection](#merge-success-detection)
+  - [PR Number Extraction](#pr-number-extraction)
+  - [SD/QF Work Detection (Database-First)](#sdqf-work-detection-database-first)
+- [Learning Signal Keywords](#learning-signal-keywords)
+  - [Signal Patterns](#signal-patterns)
+  - [Learning Type Categories](#learning-type-categories)
+  - [Corrective Action Detection](#corrective-action-detection)
+- [Work Type Classification](#work-type-classification)
+  - [File Pattern Classifiers](#file-pattern-classifiers)
+  - [Learning-Worthy Paths](#learning-worthy-paths)
+- [Database Queries](#database-queries)
+  - [Retrospective Creation](#retrospective-creation)
+  - [Issue Pattern Creation](#issue-pattern-creation)
+- [Error Patterns](#error-patterns)
+  - [Common Hook Errors](#common-hook-errors)
+  - [Common Engine Errors](#common-engine-errors)
+- [Troubleshooting](#troubleshooting)
+  - [Debug Checklist](#debug-checklist)
+  - [Testing Patterns](#testing-patterns)
+  - [Log Level Configuration](#log-level-configuration)
+  - [Performance Monitoring](#performance-monitoring)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 7: Stage Map & Dependencies
 
 **Position**: Stage 7 of 40 (18% through venture creation workflow)

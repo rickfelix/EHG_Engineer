@@ -1,5 +1,48 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # User Stories: SD-FOUNDATION-V3-007 - Chairman Dashboard E2E Test Suite
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [FR-1: AUTH-FLOW - Chairman Authentication Flow Testing](#fr-1-auth-flow---chairman-authentication-flow-testing)
+  - [US-007-001: Chairman Login Flow E2E Test](#us-007-001-chairman-login-flow-e2e-test)
+  - [US-007-002: Chairman Session Management E2E Test](#us-007-002-chairman-session-management-e2e-test)
+- [FR-2: BRIEFING-DASHBOARD - EVA Briefing and Dashboard Components](#fr-2-briefing-dashboard---eva-briefing-and-dashboard-components)
+  - [US-007-003: EVA Morning Briefing Display E2E Test](#us-007-003-eva-morning-briefing-display-e2e-test)
+  - [US-007-004: Dashboard Metrics and KPIs E2E Test](#us-007-004-dashboard-metrics-and-kpis-e2e-test)
+  - [US-007-005: Dashboard Component Rendering E2E Test](#us-007-005-dashboard-component-rendering-e2e-test)
+- [FR-3: DECISION-WORKFLOW - Decision Stack and Approval Flow](#fr-3-decision-workflow---decision-stack-and-approval-flow)
+  - [US-007-006: View Decision Stack E2E Test](#us-007-006-view-decision-stack-e2e-test)
+  - [US-007-007: Approve Decision Workflow E2E Test](#us-007-007-approve-decision-workflow-e2e-test)
+  - [US-007-008: Reject Decision Workflow E2E Test](#us-007-008-reject-decision-workflow-e2e-test)
+- [FR-4: PORTFOLIO-NAVIGATION - Portfolio Summary and Stage Timeline](#fr-4-portfolio-navigation---portfolio-summary-and-stage-timeline)
+  - [US-007-009: Portfolio Ventures List E2E Test](#us-007-009-portfolio-ventures-list-e2e-test)
+  - [US-007-010: Stage Timeline Navigation E2E Test](#us-007-010-stage-timeline-navigation-e2e-test)
+- [FR-5: CI-CD-INTEGRATION - CI/CD Pipeline Integration](#fr-5-ci-cd-integration---cicd-pipeline-integration)
+  - [US-007-011: CI/CD Pipeline Test Execution E2E Test](#us-007-011-cicd-pipeline-test-execution-e2e-test)
+  - [US-007-012: Parallel Test Execution E2E Test](#us-007-012-parallel-test-execution-e2e-test)
+- [Summary](#summary)
+  - [Story Count by Priority](#story-count-by-priority)
+  - [Story Count by Complexity](#story-count-by-complexity)
+  - [INVEST Criteria Compliance](#invest-criteria-compliance)
+  - [E2E Test Coverage](#e2e-test-coverage)
+  - [Implementation Context Quality Score](#implementation-context-quality-score)
+  - [Estimated Effort](#estimated-effort)
+  - [Success Metrics](#success-metrics)
+- [Appendix: Test Data Requirements](#appendix-test-data-requirements)
+  - [Chairman User](#chairman-user)
+  - [Sample Ventures (for testing)](#sample-ventures-for-testing)
+  - [Sample Decisions (for testing)](#sample-decisions-for-testing)
 
 ## Metadata
 - **Category**: Guide

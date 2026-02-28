@@ -1,4 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # CLAUDE.md Generation Script - Quick Reference
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+  - [Before (V2 - Monolithic)](#before-v2---monolithic)
+  - [After (V3 - Router)](#after-v3---router)
+- [Files Generated](#files-generated)
+- [How It Works](#how-it-works)
+  - [1. Load Mapping](#1-load-mapping)
+  - [2. Query Database](#2-query-database)
+  - [3. Filter & Generate](#3-filter-generate)
+- [Common Tasks](#common-tasks)
+  - [Add New Section](#add-new-section)
+  - [Move Section Between Files](#move-section-between-files)
+  - [Update Existing Section](#update-existing-section)
+- [Troubleshooting](#troubleshooting)
+  - [File Too Large](#file-too-large)
+  - [Section Not Appearing](#section-not-appearing)
+  - [Duplicate Content](#duplicate-content)
+- [Script Internals](#script-internals)
+  - [Class: CLAUDEMDGeneratorV3](#class-claudemdgeneratorv3)
+  - [Data Sources](#data-sources)
+- [Performance Metrics](#performance-metrics)
+- [Related Documentation](#related-documentation)
 
 ## Overview
 

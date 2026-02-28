@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 31: MVP Launch — Canonical Definition
+
+
+## Table of Contents
+
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Core Identity](#core-identity)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 items)](#inputs-3-items)
+  - [Outputs (3 items)](#outputs-3-items)
+  - [Metrics (3 items)](#metrics-3-items)
+  - [Entry Gates (3 conditions)](#entry-gates-3-conditions)
+  - [Exit Gates (3 conditions)](#exit-gates-3-conditions)
+- [Substages Breakdown](#substages-breakdown)
+  - [31.1: Launch Preparation](#311-launch-preparation)
+  - [31.2: Launch Execution](#312-launch-execution)
+  - [31.3: Initial Monitoring](#313-initial-monitoring)
+- [Progression Mode](#progression-mode)
+- [Schema Compliance](#schema-compliance)
+- [Cross-Validation with Critique](#cross-validation-with-critique)
+- [Sources Table](#sources-table)
 
 **Purpose**: Record the authoritative YAML definition from `stages.yaml` as source of truth.
 

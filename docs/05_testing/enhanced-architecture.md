@@ -1,5 +1,40 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Enhanced Testing and Debugging Sub-Agents Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [System Overview](#system-overview)
+- [High-Level Architecture](#high-level-architecture)
+- [Detailed Component Architecture](#detailed-component-architecture)
+  - [TestCollaborationCoordinator](#testcollaborationcoordinator)
+  - [EnhancedTestingSubAgent Flow](#enhancedtestingsubagent-flow)
+  - [EnhancedDebuggingSubAgent Flow](#enhanceddebuggingsubagent-flow)
+- [Self-Healing Selector Architecture](#self-healing-selector-architecture)
+- [Fix Generation Architecture](#fix-generation-architecture)
+- [Real-Time Collaboration Flow](#real-time-collaboration-flow)
+- [Data Flow Architecture](#data-flow-architecture)
+- [Performance Optimization Architecture](#performance-optimization-architecture)
+- [Integration Points](#integration-points)
+- [Security Architecture](#security-architecture)
+- [Scalability Architecture](#scalability-architecture)
+- [Deployment Architecture](#deployment-architecture)
+- [Key Architectural Principles](#key-architectural-principles)
+  - [1. Separation of Concerns](#1-separation-of-concerns)
+  - [2. Event-Driven Architecture](#2-event-driven-architecture)
+  - [3. Self-Healing Design](#3-self-healing-design)
+  - [4. Observability First](#4-observability-first)
+  - [5. Security by Design](#5-security-by-design)
+  - [6. Performance Optimization](#6-performance-optimization)
 
 ## Metadata
 - **Category**: Architecture

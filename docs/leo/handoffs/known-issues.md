@@ -1,5 +1,26 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Handoff System Known Issues
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Issues](#critical-issues)
+  - [1. LEAD-FINAL-APPROVAL Validator Schema Mismatch](#1-lead-final-approval-validator-schema-mismatch)
+- [Medium Priority Issues](#medium-priority-issues)
+  - [2. Gate Score Lookup Inconsistency](#2-gate-score-lookup-inconsistency)
+- [Documentation Gaps](#documentation-gaps)
+  - [3. Missing LEAD-FINAL-APPROVAL Documentation](#3-missing-lead-final-approval-documentation)
+- [Change Log](#change-log)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

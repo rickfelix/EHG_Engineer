@@ -1,4 +1,28 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 10: Acceptance Checklist
+
+
+## Table of Contents
+
+- [Quality Gate Criteria (8 dimensions, 100 points total)](#quality-gate-criteria-8-dimensions-100-points-total)
+  - [1. Completeness (15 points)](#1-completeness-15-points)
+  - [2. Evidence Citations (20 points)](#2-evidence-citations-20-points)
+  - [3. Recursion Detail (25 points - CRITICAL for Stage 10)](#3-recursion-detail-25-points---critical-for-stage-10)
+  - [4. Integration & Consistency (15 points)](#4-integration-consistency-15-points)
+  - [5. Actionability (10 points)](#5-actionability-10-points)
+  - [6. Technical Depth (10 points)](#6-technical-depth-10-points)
+  - [7. SD Cross-References (5 points)](#7-sd-cross-references-5-points)
+  - [8. Footer Comments (0 points - Pass/Fail)](#8-footer-comments-0-points---passfail)
+- [Final Score Calculation](#final-score-calculation)
+- [Acceptance Decision](#acceptance-decision)
+- [Quality Benchmarking](#quality-benchmarking)
 
 **Dossier Version**: 1.0 (Phase 5)
 **Target Score**: ≥85/100 (aiming for 92+ as recursion hub, matching Stage 5)

@@ -1,5 +1,64 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Retrospective Sub-Agent Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Recent Improvements](#recent-improvements)
+  - [SD-LEO-INFRA-ENHANCE-RETRO-SUB-001 (2026-01-24)](#sd-leo-infra-enhance-retro-sub-001-2026-01-24)
+  - [SD-LEO-REFAC-TESTING-INFRA-001 (2026-01-23)](#sd-leo-refac-testing-infra-001-2026-01-23)
+  - [Problem](#problem)
+  - [Solution](#solution)
+  - [Results](#results)
+- [Quick Reference](#quick-reference)
+- [1. Module Boundaries & Mapping](#1-module-boundaries-mapping)
+  - [Architecture Overview](#architecture-overview)
+  - [Trigger Keywords](#trigger-keywords)
+- [2. Backward-Compatible Entrypoint](#2-backward-compatible-entrypoint)
+  - [Canonical Execute Function](#canonical-execute-function)
+  - [Legacy Compatibility](#legacy-compatibility)
+- [3. Semantic Deduplication Utility](#3-semantic-deduplication-utility)
+  - [Finding Deduplication](#finding-deduplication)
+- [4. Database-Backed Templates](#4-database-backed-templates)
+  - [Retrospective Templates Schema](#retrospective-templates-schema)
+  - [Standard Template Structure](#standard-template-structure)
+  - [Loading Templates](#loading-templates)
+- [4.5. Enhancement Implementation Details (SD-LEO-INFRA-ENHANCE-RETRO-SUB-001)](#45-enhancement-implementation-details-sd-leo-infra-enhance-retro-sub-001)
+  - [Boilerplate Pattern Detection](#boilerplate-pattern-detection)
+  - [5-Whys Validation](#5-whys-validation)
+  - [Success Metrics Integration](#success-metrics-integration)
+- [5. Quality Scoring Algorithm](#5-quality-scoring-algorithm)
+  - [Score Calculation](#score-calculation)
+  - [Score Thresholds](#score-thresholds)
+  - [Quality Metrics Before/After SD-LEO-INFRA-ENHANCE-RETRO-SUB-001](#quality-metrics-beforeafter-sd-leo-infra-enhance-retro-sub-001)
+- [6. Pattern Learning Integration](#6-pattern-learning-integration)
+  - [Pattern Extraction](#pattern-extraction)
+  - [Pattern Feedback Loop](#pattern-feedback-loop)
+- [7. Feature Flags & Rollout](#7-feature-flags-rollout)
+  - [Configuration](#configuration)
+  - [Rollout Playbook](#rollout-playbook)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+  - [Quality Improvement Tips (SD-LEO-INFRA-ENHANCE-RETRO-SUB-001)](#quality-improvement-tips-sd-leo-infra-enhance-retro-sub-001)
+- [8. Future Enhancements Capture (QF-20260201-963/371)](#8-future-enhancements-capture-qf-20260201-963371)
+  - [Problem Statement](#problem-statement)
+  - [Solution: Dual-Storage Approach](#solution-dual-storage-approach)
+  - [Implementation Details](#implementation-details)
+  - [Usage Example](#usage-example)
+  - [Workflow Integration](#workflow-integration)
+  - [Benefits](#benefits)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

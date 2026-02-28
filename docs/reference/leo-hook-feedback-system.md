@@ -1,5 +1,51 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # LEO Hook Feedback System Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+  - [Basic Usage](#basic-usage)
+- [Architecture](#architecture)
+  - [Components](#components)
+- [Error Resolution Capabilities](#error-resolution-capabilities)
+  - [Automated Resolutions](#automated-resolutions)
+  - [Manual Resolutions](#manual-resolutions)
+- [Resilience Features](#resilience-features)
+  - [Exponential Backoff](#exponential-backoff)
+  - [Circuit Breaker](#circuit-breaker)
+  - [Timeout Protection](#timeout-protection)
+- [Database Schema](#database-schema)
+  - [Tables](#tables)
+  - [Views](#views)
+- [Maintenance](#maintenance)
+  - [Automated Cleanup](#automated-cleanup)
+  - [What Gets Cleaned](#what-gets-cleaned)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Debug Mode](#debug-mode)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Customization](#customization)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Sub-Agent Registration](#sub-agent-registration)
+  - [Compliance](#compliance)
+- [API Reference](#api-reference)
+  - [Session Manager Sub-Agent](#session-manager-sub-agent)
+  - [Hook Sub-Agent Activator](#hook-sub-agent-activator)
+- [Best Practices](#best-practices)
+- [Future Enhancements](#future-enhancements)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Reference

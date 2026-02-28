@@ -1,5 +1,40 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Quality Lifecycle UI Integration - Triangulation Synthesis
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overall Scores Comparison](#overall-scores-comparison)
+- [Areas of Strong Consensus (All Three Agree)](#areas-of-strong-consensus-all-three-agree)
+  - [1. Backlog Strategy: Status on Feedback Table](#1-backlog-strategy-status-on-feedback-table)
+  - [2. Release Planning: First-Class Entity](#2-release-planning-first-class-entity)
+  - [3. Chairman View: Unified Inbox with Portfolio Summary](#3-chairman-view-unified-inbox-with-portfolio-summary)
+  - [4. UI Location: New `/quality` Section](#4-ui-location-new-quality-section)
+  - [5. Baseline Integration: Separation of Concerns](#5-baseline-integration-separation-of-concerns)
+- [Areas of Divergence](#areas-of-divergence)
+  - [Enhancement → SD Relationship](#enhancement-sd-relationship)
+  - [DirectiveLab Integration](#directivelab-integration)
+  - [Baseline Details](#baseline-details)
+- [Unique Insights](#unique-insights)
+  - [From Gemini Only](#from-gemini-only)
+  - [From OpenAI Only](#from-openai-only)
+  - [From Claude Only](#from-claude-only)
+- [Consolidated Data Model](#consolidated-data-model)
+- [Consolidated UI Structure](#consolidated-ui-structure)
+- [Consolidated Workflow](#consolidated-workflow)
+- [Chairman Dashboard (Consolidated Mockup)](#chairman-dashboard-consolidated-mockup)
+- [Risks & Mitigations (Consolidated)](#risks-mitigations-consolidated)
+- [Action Items for Vision Document](#action-items-for-vision-document)
+- [Final Recommendation](#final-recommendation)
 
 ## Metadata
 - **Category**: Guide

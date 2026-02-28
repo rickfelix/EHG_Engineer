@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Scoring Rubric](#scoring-rubric)
+- [Criterion 1: Entry Gates Satisfied (15 points)](#criterion-1-entry-gates-satisfied-15-points)
+- [Criterion 2: Substage 18.1 Completion (15 points)](#criterion-2-substage-181-completion-15-points)
+- [Criterion 3: Substage 18.2 Completion (15 points)](#criterion-3-substage-182-completion-15-points)
+- [Criterion 4: Substage 18.3 Completion (15 points)](#criterion-4-substage-183-completion-15-points)
+- [Criterion 5: Exit Gates Satisfied (15 points)](#criterion-5-exit-gates-satisfied-15-points)
+- [Criterion 6: Metrics Achieved (15 points)](#criterion-6-metrics-achieved-15-points)
+- [Criterion 7: Handoff Document Created (10 points)](#criterion-7-handoff-document-created-10-points)
+- [Criterion 8: No Critical Issues (10 points)](#criterion-8-no-critical-issues-10-points)
+- [Overall Score Calculation](#overall-score-calculation)
+- [Example Score Calculation](#example-score-calculation)
+- [Common Failure Scenarios](#common-failure-scenarios)
+  - [Scenario 1: Sync Completeness <95% (Criterion 3 fails)](#scenario-1-sync-completeness-95-criterion-3-fails)
+  - [Scenario 2: CI/CD Failing (Criterion 4 fails)](#scenario-2-cicd-failing-criterion-4-fails)
+  - [Scenario 3: Secrets Committed (Criterion 8 fails)](#scenario-3-secrets-committed-criterion-8-fails)
+- [Automation Opportunity](#automation-opportunity)
+- [Conclusion](#conclusion)
+
 <!-- ARCHIVED: 2026-01-26T16:26:55.847Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-18\11_acceptance-checklist.md

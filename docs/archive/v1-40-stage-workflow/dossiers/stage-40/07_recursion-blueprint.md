@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Current Recursion Status](#current-recursion-status)
+- [Proposed Recursion Trigger Family: ACTIVE-VENTURE](#proposed-recursion-trigger-family-active-venture)
+  - [Recursion Philosophy](#recursion-philosophy)
+- [Trigger 1: ACTIVE-VENTURE-001 (Growth Opportunity Detected)](#trigger-1-active-venture-001-growth-opportunity-detected)
+  - [Trigger Condition](#trigger-condition)
+  - [Proposed Action](#proposed-action)
+- [Trigger 2: ACTIVE-VENTURE-002 (Exit Opportunity Evaluation Required)](#trigger-2-active-venture-002-exit-opportunity-evaluation-required)
+  - [Trigger Condition](#trigger-condition)
+  - [Proposed Action](#proposed-action)
+- [Trigger 3: ACTIVE-VENTURE-003 (Valuation Milestone Review)](#trigger-3-active-venture-003-valuation-milestone-review)
+  - [Trigger Condition](#trigger-condition)
+  - [Proposed Action](#proposed-action)
+- [Trigger 4: ACTIVE-VENTURE-004 (Market Conditions Favor Exit Timing)](#trigger-4-active-venture-004-market-conditions-favor-exit-timing)
+  - [Trigger Condition](#trigger-condition)
+  - [Proposed Action](#proposed-action)
+- [Recursion Workflow Integration](#recursion-workflow-integration)
+  - [Stage 40 Event Loop](#stage-40-event-loop)
+  - [Cross-App Boundary](#cross-app-boundary)
+- [Implementation Roadmap](#implementation-roadmap)
+  - [Phase 1: Trigger Detection (EHG App)](#phase-1-trigger-detection-ehg-app)
+  - [Phase 2: Handoff Integration (Cross-App)](#phase-2-handoff-integration-cross-app)
+  - [Phase 3: SD Generation (EHG_Engineer)](#phase-3-sd-generation-ehg_engineer)
+  - [Phase 4: Closed-Loop Execution](#phase-4-closed-loop-execution)
+- [Recursion Metrics](#recursion-metrics)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1794-1839 (no recursion triggers defined)
 

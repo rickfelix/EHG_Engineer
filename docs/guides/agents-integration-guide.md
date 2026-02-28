@@ -1,4 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Agent Observability Integration Guide
+
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Using Observable Agents](#using-observable-agents)
+  - [Option 1: Direct Execution (CLI)](#option-1-direct-execution-cli)
+  - [Option 2: Programmatic Usage](#option-2-programmatic-usage)
+  - [Option 3: Import in Your Code](#option-3-import-in-your-code)
+- [How It Works](#how-it-works)
+  - [Architecture](#architecture)
+  - [What's Tracked](#whats-tracked)
+- [Integration Patterns](#integration-patterns)
+  - [Pattern 1: Wrapper (Already Done) ✅](#pattern-1-wrapper-already-done-)
+  - [Pattern 2: Direct Integration](#pattern-2-direct-integration)
+  - [Pattern 3: Middleware](#pattern-3-middleware)
+- [Viewing Metrics](#viewing-metrics)
+- [Example Workflow](#example-workflow)
+  - [1. Run Agents](#1-run-agents)
+  - [2. View Dashboard](#2-view-dashboard)
+  - [3. Investigate Issues](#3-investigate-issues)
+- [Integration Checklist](#integration-checklist)
+  - [For Each Agent:](#for-each-agent)
+  - [Quick Template:](#quick-template)
+- [All Integrated Agents](#all-integrated-agents)
+- [Best Practices](#best-practices)
+  - [1. Always Initialize](#1-always-initialize)
+  - [2. Handle Errors](#2-handle-errors)
+  - [3. Provide Context](#3-provide-context)
+  - [4. Parse Meaningful Data](#4-parse-meaningful-data)
+  - [5. Use Consistent Agent Codes](#5-use-consistent-agent-codes)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: "Table not found"](#issue-table-not-found)
+  - [Issue: "Cannot find module"](#issue-cannot-find-module)
+  - [Issue: Agent fails but no metrics](#issue-agent-fails-but-no-metrics)
+  - [Issue: Metrics show 0 executions](#issue-metrics-show-0-executions)
+- [Next Steps](#next-steps)
+- [Related Documentation](#related-documentation)
 
 ## Quick Start
 

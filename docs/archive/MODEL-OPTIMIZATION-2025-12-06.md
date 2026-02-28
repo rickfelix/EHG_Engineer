@@ -1,4 +1,50 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Model Optimization - Opus 4.5 → Sonnet 4.5 Migration
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+  - [Changes Made](#changes-made)
+- [Files Modified](#files-modified)
+- [Phase-Based Model Routing (OPTIMIZED)](#phase-based-model-routing-optimized)
+  - [LEAD Phase](#lead-phase)
+  - [PLAN Phase](#plan-phase)
+  - [EXEC Phase](#exec-phase)
+- [Default Model Assignments (When Phase Unknown)](#default-model-assignments-when-phase-unknown)
+- [Opus 4.5 Usage Summary (After Optimization)](#opus-45-usage-summary-after-optimization)
+  - [Still Using Opus (Critical Only)](#still-using-opus-critical-only)
+  - [Total Opus Invocations Per SD (Estimated)](#total-opus-invocations-per-sd-estimated)
+- [Rationale for Changes](#rationale-for-changes)
+  - [Why Move STORIES to Sonnet?](#why-move-stories-to-sonnet)
+  - [Why Move VALIDATION to Sonnet (in LEAD)?](#why-move-validation-to-sonnet-in-lead)
+  - [Why Move TESTING to Sonnet?](#why-move-testing-to-sonnet)
+  - [Why Move DOCMON to Sonnet (in EXEC)?](#why-move-docmon-to-sonnet-in-exec)
+  - [Why KEEP SECURITY on Opus?](#why-keep-security-on-opus)
+  - [Why KEEP VALIDATION on Opus (in PLAN/EXEC)?](#why-keep-validation-on-opus-in-planexec)
+- [Monitoring Plan](#monitoring-plan)
+  - [What to Watch](#what-to-watch)
+  - [Rollback Triggers](#rollback-triggers)
+  - [Success Metrics](#success-metrics)
+- [Code References](#code-references)
+  - [Agent Files](#agent-files)
+  - [Sub-Agent Executor](#sub-agent-executor)
+- [Expected Impact](#expected-impact)
+  - [Rate Limit Savings](#rate-limit-savings)
+  - [Cost Savings (If Applicable)](#cost-savings-if-applicable)
+  - [Quality Impact (To Be Monitored)](#quality-impact-to-be-monitored)
+- [Recommendations](#recommendations)
+  - [Short-term (Next 2 weeks)](#short-term-next-2-weeks)
+  - [Medium-term (Next month)](#medium-term-next-month)
+  - [Long-term (Next quarter)](#long-term-next-quarter)
+- [Summary](#summary)
 
 **Date**: 2025-12-06
 **Reason**: Rate limit optimization - Reserve Opus 4.5 for critical security tasks only

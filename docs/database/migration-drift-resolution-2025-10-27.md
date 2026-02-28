@@ -1,5 +1,41 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Migration Drift Resolution - October 27, 2025
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Summary](#problem-summary)
+- [Resolution Approach](#resolution-approach)
+  - [Why This Approach?](#why-this-approach)
+- [Implementation Steps](#implementation-steps)
+  - [Step 1: Identified Missing Migrations (79 total)](#step-1-identified-missing-migrations-79-total)
+  - [Step 2: Repaired Remote Migrations](#step-2-repaired-remote-migrations)
+  - [Step 3: Repaired Local-Only Migrations (11 total)](#step-3-repaired-local-only-migrations-11-total)
+  - [Step 4: Verification](#step-4-verification)
+- [Final State](#final-state)
+  - [Migration Sync Status](#migration-sync-status)
+  - [Database Tables Status](#database-tables-status)
+- [Lessons Learned](#lessons-learned)
+  - [Root Cause Prevention](#root-cause-prevention)
+  - [Documentation Improvements](#documentation-improvements)
+- [Technical Notes](#technical-notes)
+  - [What "Migration Repair" Does](#what-migration-repair-does)
+  - [Migration History Table](#migration-history-table)
+  - [Docker Warning (Not an Error)](#docker-warning-not-an-error)
+- [Resolution Date](#resolution-date)
+- [Future Maintenance](#future-maintenance)
+  - [Monthly Check](#monthly-check)
+  - [Emergency Repair (If Drift Recurs)](#emergency-repair-if-drift-recurs)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Database

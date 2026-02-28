@@ -1,5 +1,59 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Learning System: How Sub-Agents Query Past Lessons
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [The Search Process (Step-by-Step)](#the-search-process-step-by-step)
+  - [Example: Database Sub-Agent Dealing with RLS Issue](#example-database-sub-agent-dealing-with-rls-issue)
+- [How the Search Algorithm Works](#how-the-search-algorithm-works)
+  - [Location: `lib/learning/issue-knowledge-base.js`](#location-liblearningissue-knowledge-basejs)
+  - [Method: **Jaccard Similarity** (Word Set Matching)](#method-jaccard-similarity-word-set-matching)
+  - [What This Means:](#what-this-means)
+- [What It Searches](#what-it-searches)
+  - [1. **issue_patterns Table** (Primary Knowledge Base)](#1-issue_patterns-table-primary-knowledge-base)
+  - [2. **retrospectives Table** (Secondary Context)](#2-retrospectives-table-secondary-context)
+- [Scoring Algorithm](#scoring-algorithm)
+  - [Weighted Ranking (Line 69-74):](#weighted-ranking-line-69-74)
+- [Example: RLS Issue Lookup](#example-rls-issue-lookup)
+  - [What Happens When DATABASE Sub-Agent Searches:](#what-happens-when-database-sub-agent-searches)
+  - [Step 1: Query Database](#step-1-query-database)
+  - [Step 2: Calculate Similarity for Each Pattern](#step-2-calculate-similarity-for-each-pattern)
+  - [Step 3: Rank and Return Top Results](#step-3-rank-and-return-top-results)
+- [Keyword Matching Intelligence](#keyword-matching-intelligence)
+  - [Does It Handle Variations?](#does-it-handle-variations)
+  - [Why No Stemming/Synonyms?](#why-no-stemmingsynonyms)
+- [When Is It Called?](#when-is-it-called)
+  - [1. **Manually via phase-preflight.js**](#1-manually-via-phase-preflightjs)
+  - [2. **Manually via search-prior-issues.js**](#2-manually-via-search-prior-issuesjs)
+  - [3. **Not Automatically Called** ⚠️](#3-not-automatically-called-)
+- [How Knowledge Gets Populated](#how-knowledge-gets-populated)
+  - [1. **Manual Seeding** (Initial)](#1-manual-seeding-initial)
+  - [2. **Recording Occurrences** (Learning)](#2-recording-occurrences-learning)
+  - [3. **Creating New Patterns**](#3-creating-new-patterns)
+  - [4. **Extracting from Retrospectives**](#4-extracting-from-retrospectives)
+- [Limitations](#limitations)
+  - [1. **No Semantic Understanding** ❌](#1-no-semantic-understanding-)
+  - [2. **No Fuzzy Matching** ❌](#2-no-fuzzy-matching-)
+  - [3. **No Synonym Expansion** ❌](#3-no-synonym-expansion-)
+  - [4. **Not Proactive** ⚠️](#4-not-proactive-)
+- [Potential Improvements (Phase 2+)](#potential-improvements-phase-2)
+  - [Option A: Add Synonym Dictionary](#option-a-add-synonym-dictionary)
+  - [Option B: Add Stemming](#option-b-add-stemming)
+  - [Option C: Full Semantic Search (Expensive)](#option-c-full-semantic-search-expensive)
+- [Summary: The Current System](#summary-the-current-system)
+- [Example Walkthrough: RLS Issue](#example-walkthrough-rls-issue)
+- [Bottom Line](#bottom-line)
 
 ## Metadata
 - **Category**: Guide

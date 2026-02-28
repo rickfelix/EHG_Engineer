@@ -1,5 +1,73 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Campaign Monitoring & Recovery System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Features](#features)
+  - [1. Heartbeat Monitoring ✅](#1-heartbeat-monitoring-)
+  - [2. Crash Handlers ✅](#2-crash-handlers-)
+  - [3. Health Monitor ✅](#3-health-monitor-)
+  - [4. Auto-Restart Wrapper ✅](#4-auto-restart-wrapper-)
+  - [5. Comprehensive Logging ✅](#5-comprehensive-logging-)
+- [Files Created](#files-created)
+  - [Monitoring Files (in /tmp)](#monitoring-files-in-tmp)
+  - [Scripts](#scripts)
+- [Usage](#usage)
+  - [Option 1: Run Campaign with Auto-Restart (RECOMMENDED)](#option-1-run-campaign-with-auto-restart-recommended)
+  - [Option 2: Run Campaign Directly](#option-2-run-campaign-directly)
+  - [Option 3: Monitor Running Campaign](#option-3-monitor-running-campaign)
+- [Monitoring Files Explained](#monitoring-files-explained)
+  - [1. Heartbeat File (`campaign-heartbeat.txt`)](#1-heartbeat-file-campaign-heartbeattxt)
+  - [2. Checkpoint File (`campaign-checkpoint.json`)](#2-checkpoint-file-campaign-checkpointjson)
+  - [3. Status File (`campaign-status.json`)](#3-status-file-campaign-statusjson)
+  - [4. Alert Log (`campaign-alerts.log`)](#4-alert-log-campaign-alertslog)
+- [Health Status Detection](#health-status-detection)
+  - [✅ HEALTHY](#-healthy)
+  - [⚠️ STALE](#-stale)
+  - [💥 CRASHED](#-crashed)
+  - [🛑 TERMINATED](#-terminated)
+  - [🎉 COMPLETE](#-complete)
+  - [❓ UNKNOWN](#-unknown)
+- [Recovery Procedures](#recovery-procedures)
+  - [Scenario 1: Campaign Stalled (STALE)](#scenario-1-campaign-stalled-stale)
+  - [Scenario 2: Campaign Crashed](#scenario-2-campaign-crashed)
+  - [Scenario 3: High Failure Rate](#scenario-3-high-failure-rate)
+- [Auto-Restart Behavior](#auto-restart-behavior)
+  - [Restart Triggers](#restart-triggers)
+  - [Won't Restart On](#wont-restart-on)
+  - [Backoff Strategy](#backoff-strategy)
+  - [Example Auto-Restart Log](#example-auto-restart-log)
+- [Quick Reference](#quick-reference)
+  - [Start Campaign (Auto-Restart)](#start-campaign-auto-restart)
+  - [Monitor Health](#monitor-health)
+  - [View Logs](#view-logs)
+  - [Stop Campaign](#stop-campaign)
+- [Integration with Existing Monitoring](#integration-with-existing-monitoring)
+  - [Monitor Dashboard (`scripts/monitor-real-batch-testing.cjs`)](#monitor-dashboard-scriptsmonitor-real-batch-testingcjs)
+  - [Database Storage (`sd_testing_status`)](#database-storage-sd_testing_status)
+- [Benefits](#benefits)
+  - [Before Enhancement](#before-enhancement)
+  - [After Enhancement](#after-enhancement)
+- [Testing the Monitoring System](#testing-the-monitoring-system)
+  - [Test 1: Normal Operation](#test-1-normal-operation)
+  - [Test 2: Graceful Shutdown](#test-2-graceful-shutdown)
+  - [Test 3: Stale Detection](#test-3-stale-detection)
+- [Troubleshooting](#troubleshooting)
+  - [Health Monitor Shows "UNKNOWN"](#health-monitor-shows-unknown)
+  - [Process Alive but Heartbeat Stale](#process-alive-but-heartbeat-stale)
+  - [Auto-Restart Gives Up (Max Restarts)](#auto-restart-gives-up-max-restarts)
+  - [High Alert Volume](#high-alert-volume)
 
 ## Metadata
 - **Category**: Guide

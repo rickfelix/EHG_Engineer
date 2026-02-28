@@ -1,5 +1,63 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Model Version Upgrade Runbook
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [1. Architecture Overview](#1-architecture-overview)
+  - [Layer 1: Tier-Based Routing (Sub-Agent System)](#layer-1-tier-based-routing-sub-agent-system)
+  - [Layer 2: Specific Model Registry (Database + Clients)](#layer-2-specific-model-registry-database-clients)
+- [2. Upgrade Type A: Change Model Tier Assignment](#2-upgrade-type-a-change-model-tier-assignment)
+  - [Step 1: Edit Config File](#step-1-edit-config-file)
+  - [Step 2: Find and Update the Assignment](#step-2-find-and-update-the-assignment)
+  - [Step 3: Update Simplified Routing (Optional but Recommended)](#step-3-update-simplified-routing-optional-but-recommended)
+  - [Step 4: Validate Config Loads](#step-4-validate-config-loads)
+  - [Step 5: Test Sub-Agent Execution](#step-5-test-sub-agent-execution)
+  - [Step 6: Commit Change](#step-6-commit-change)
+- [3. Upgrade Type B: Add New Model Version to Registry](#3-upgrade-type-b-add-new-model-version-to-registry)
+  - [Step 1: Add to Database](#step-1-add-to-database)
+  - [Step 2: Update Multimodal Client (if using vision features)](#step-2-update-multimodal-client-if-using-vision-features)
+  - [Step 3: Update PRD LLM Service (if used for PRD generation)](#step-3-update-prd-llm-service-if-used-for-prd-generation)
+  - [Step 4: Validate Database Entry](#step-4-validate-database-entry)
+  - [Step 5: Commit Changes](#step-5-commit-changes)
+- [4. Upgrade Type C: Full Model Generation Swap](#4-upgrade-type-c-full-model-generation-swap)
+  - [Pre-Flight Checklist](#pre-flight-checklist)
+  - [Step-by-Step Procedure](#step-by-step-procedure)
+- [5. Rollback Procedures](#5-rollback-procedures)
+  - [Rollback Tier Assignment](#rollback-tier-assignment)
+  - [Rollback Model Registry](#rollback-model-registry)
+  - [Rollback Multimodal Client](#rollback-multimodal-client)
+- [6. Validation Checklist](#6-validation-checklist)
+- [7. Model Naming Conventions](#7-model-naming-conventions)
+  - [Tier Names (Layer 1)](#tier-names-layer-1)
+  - [Model Keys (Layer 2)](#model-keys-layer-2)
+- [8. Files Reference](#8-files-reference)
+- [9. Common Scenarios](#9-common-scenarios)
+  - [Scenario: Anthropic releases Claude 4.5 Sonnet (minor version)](#scenario-anthropic-releases-claude-45-sonnet-minor-version)
+  - [Scenario: Want to try new model for specific sub-agent](#scenario-want-to-try-new-model-for-specific-sub-agent)
+  - [Scenario: Model deprecated by provider](#scenario-model-deprecated-by-provider)
+- [10. Centralized Model Configuration (SD-LLM-CONFIG-CENTRAL-001)](#10-centralized-model-configuration-sd-llm-config-central-001)
+  - [Solution Overview](#solution-overview)
+  - [Cascade Priority (as of 2026-02-23)](#cascade-priority-as-of-2026-02-23)
+  - [Usage](#usage)
+  - [Current Model Defaults](#current-model-defaults)
+  - [Environment Variable Overrides](#environment-variable-overrides)
+  - [Model Upgrade Process (Simplified)](#model-upgrade-process-simplified)
+  - [Audit Command](#audit-command)
+  - [Scripts Refactored](#scripts-refactored)
+  - [Adding New Model Purposes](#adding-new-model-purposes)
+- [11. Automation Scripts (Future Enhancement)](#11-automation-scripts-future-enhancement)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

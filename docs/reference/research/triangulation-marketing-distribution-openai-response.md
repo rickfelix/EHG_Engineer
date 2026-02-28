@@ -1,5 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Marketing Distribution Approach Analysis
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Option Ranking (Best to Worst)](#option-ranking-best-to-worst)
+- [Hidden Costs & Risks](#hidden-costs-risks)
+  - [Option A: Manual Copy/Paste](#option-a-manual-copypaste)
+  - [Option B: Direct Platform APIs](#option-b-direct-platform-apis)
+  - [Option C: Third-Party Tool APIs (Buffer, Hootsuite, etc.)](#option-c-third-party-tool-apis-buffer-hootsuite-etc)
+  - [Option D: Computer Use Automation (Claude AI / Playwright MCP)](#option-d-computer-use-automation-claude-ai-playwright-mcp)
+  - [Option E: Hybrid (AI Generate + Review Queue + Manual Post)](#option-e-hybrid-ai-generate-review-queue-manual-post)
+- [Recommended Approach (Phased Rollout)](#recommended-approach-phased-rollout)
+  - [Phase 1 (Now – Next 2 Weeks): Foundation with Low Complexity](#phase-1-now-next-2-weeks-foundation-with-low-complexity)
+  - [Phase 2 (When Reaching ~5 Ventures): Introduce Scalable Tools](#phase-2-when-reaching-5-ventures-introduce-scalable-tools)
+  - [Phase 3 (20+ Ventures): Optimize and Automate at Scale](#phase-3-20-ventures-optimize-and-automate-at-scale)
+- [Platform Priority](#platform-priority)
+  - [1. LinkedIn – Top Priority](#1-linkedin-top-priority)
+  - [2. X (Twitter) – Second Priority](#2-x-twitter-second-priority)
+  - [3. Facebook – Third Priority](#3-facebook-third-priority)
+  - [4. Instagram – Fourth Priority](#4-instagram-fourth-priority)
+  - [5. Other Platforms (As Needed)](#5-other-platforms-as-needed)
+- [Tool Recommendations (Option C)](#tool-recommendations-option-c)
+  - [Buffer – Best Overall for Solo Operator](#buffer-best-overall-for-solo-operator)
+  - [Later – Great for Visual Planning (Instagram/TikTok)](#later-great-for-visual-planning-instagramtiktok)
+  - [Hootsuite – Powerful but Overkill for One Person](#hootsuite-powerful-but-overkill-for-one-person)
+  - [Sprout Social – Premium Option for Scale](#sprout-social-premium-option-for-scale)
+  - [Others / Honorable Mentions](#others-honorable-mentions)
+  - [Final Recommendation](#final-recommendation)
+- [Sources](#sources)
 
 ## Metadata
 - **Category**: Guide

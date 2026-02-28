@@ -1,5 +1,85 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Progressive Learning Format
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Problem Statement](#problem-statement)
+- [Solution: 3-Tier Progressive Disclosure](#solution-3-tier-progressive-disclosure)
+- [Tier Definitions](#tier-definitions)
+  - [Tier 1: Essential Basics (~5k chars)](#tier-1-essential-basics-5k-chars)
+- [What It Is](#what-it-is)
+- [Critical Rules](#critical-rules)
+- [Common Use Case](#common-use-case)
+- [Quick Reference](#quick-reference)
+- [What You Need to Know](#what-you-need-to-know)
+- [Quick Commands](#quick-commands)
+  - [Tier 2: Detailed Context (~10k chars total)](#tier-2-detailed-context-10k-chars-total)
+- [Core Concepts](#core-concepts)
+- [Complete Requirements](#complete-requirements)
+- [Common Scenarios](#common-scenarios)
+  - [Scenario 1: [Name]](#scenario-1-name)
+  - [Scenario 2: [Name]](#scenario-2-name)
+  - [Scenario 3: [Name]](#scenario-3-name)
+- [Error Handling](#error-handling)
+- [Integration](#integration)
+- [5-Phase Workflow](#5-phase-workflow)
+  - [LEAD Phase](#lead-phase)
+  - [PLAN Phase](#plan-phase)
+  - [EXEC Phase](#exec-phase)
+  - [Verification (PLAN Phase)](#verification-plan-phase)
+  - [Final Approval (LEAD Phase)](#final-approval-lead-phase)
+- [Process Scripts](#process-scripts)
+  - [Creating PRDs](#creating-prds)
+  - [Creating Handoffs](#creating-handoffs)
+  - [Tier 3: Comprehensive Reference (~15k chars total)](#tier-3-comprehensive-reference-15k-chars-total)
+- [Full Specification](#full-specification)
+- [Database Schema](#database-schema)
+- [Complete API Reference](#complete-api-reference)
+- [Error Catalog](#error-catalog)
+- [Performance Tuning](#performance-tuning)
+- [Migration Guide](#migration-guide)
+- [When to Use Each Tier](#when-to-use-each-tier)
+  - [Use Tier 1 When:](#use-tier-1-when)
+  - [Use Tier 2 When:](#use-tier-2-when)
+  - [Use Tier 3 When:](#use-tier-3-when)
+- [Implementation Pattern: Context Router](#implementation-pattern-context-router)
+- [Progressive Prompt Templates](#progressive-prompt-templates)
+  - [Template: Tier 1 → Tier 2 Transition](#template-tier-1-tier-2-transition)
+  - [Template: Tier 2 → Tier 3 Transition](#template-tier-2-tier-3-transition)
+- [Benefits of Progressive Learning](#benefits-of-progressive-learning)
+  - [Context Efficiency](#context-efficiency)
+  - [Cognitive Load Reduction](#cognitive-load-reduction)
+  - [Faster Time-to-Value](#faster-time-to-value)
+  - [Maintenance Benefits](#maintenance-benefits)
+- [Authoring Guidelines](#authoring-guidelines)
+  - [Writing Tier 1 Content](#writing-tier-1-content)
+  - [Writing Tier 2 Content](#writing-tier-2-content)
+  - [Writing Tier 3 Content](#writing-tier-3-content)
+- [Examples in Practice](#examples-in-practice)
+  - [Example 1: Session Start](#example-1-session-start)
+  - [Example 2: Database Error](#example-2-database-error)
+  - [Example 3: Context-Constrained Session](#example-3-context-constrained-session)
+- [Metrics and Success Criteria](#metrics-and-success-criteria)
+  - [Context Efficiency Metrics](#context-efficiency-metrics)
+  - [Knowledge Transfer Metrics](#knowledge-transfer-metrics)
+- [Migration Guide: Converting Existing Docs](#migration-guide-converting-existing-docs)
+  - [Step 1: Analyze Current Doc](#step-1-analyze-current-doc)
+  - [Step 2: Create Tier 1 Extract](#step-2-create-tier-1-extract)
+  - [Step 3: Create Tier 2 Enhancement](#step-3-create-tier-2-enhancement)
+  - [Step 4: Preserve as Tier 3](#step-4-preserve-as-tier-3)
+  - [Step 5: Add Progressive Prompts](#step-5-add-progressive-prompts)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

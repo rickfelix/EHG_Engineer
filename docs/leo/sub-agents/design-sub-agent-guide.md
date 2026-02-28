@@ -1,5 +1,43 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Design Sub-Agent Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [1. Module Map for Design Sub-Agent](#1-module-map-for-design-sub-agent)
+  - [Core Architecture](#core-architecture)
+  - [DESIGN Sub-Agent Triggers](#design-sub-agent-triggers)
+- [2. Config-Driven UI/UX Checklist](#2-config-driven-uiux-checklist)
+  - [Database-Driven Validation](#database-driven-validation)
+  - [Standard Validation Categories](#standard-validation-categories)
+  - [Adding New Rules](#adding-new-rules)
+- [3. Component Sizing Patterns (300-600 LOC)](#3-component-sizing-patterns-300-600-loc)
+  - [Target Ranges](#target-ranges)
+  - [Detection Logic](#detection-logic)
+  - [Split Indicators](#split-indicators)
+- [4. Canonical Entrypoint & Legacy Adapter](#4-canonical-entrypoint-legacy-adapter)
+  - [Entrypoint Pattern](#entrypoint-pattern)
+  - [Legacy Adapter](#legacy-adapter)
+- [5. Validator Result Contract](#5-validator-result-contract)
+  - [Standard Output Format](#standard-output-format)
+  - [Verdict Determination](#verdict-determination)
+- [6. Runbooks: design:lint & LOC Gates](#6-runbooks-designlint-loc-gates)
+  - [design:lint Command](#designlint-command)
+  - [LOC Gate Pre-Commit Hook](#loc-gate-pre-commit-hook)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

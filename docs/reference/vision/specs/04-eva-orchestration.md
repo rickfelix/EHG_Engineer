@@ -1,5 +1,65 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EVA Orchestration Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EVA Overview](#eva-overview)
+  - [What is EVA?](#what-is-eva)
+  - [EVA Operating Model (Production)](#eva-operating-model-production)
+  - [EVA's Boundaries](#evas-boundaries)
+  - [Architecture Position](#architecture-position)
+- [State Machine](#state-machine)
+  - [Venture State Machine](#venture-state-machine)
+  - [Stage State Machine](#stage-state-machine)
+  - [Gate Type Behavior](#gate-type-behavior)
+- [Task Contract System](#task-contract-system)
+  - [Contract Schema](#contract-schema)
+  - [EVA Dispatch Function](#eva-dispatch-function)
+  - [Contract Lifecycle](#contract-lifecycle)
+- [Crew Configurations](#crew-configurations)
+  - [Crew Type Registry](#crew-type-registry)
+  - [Stage-to-Crew Mapping](#stage-to-crew-mapping)
+- [Event Contracts](#event-contracts)
+  - [EVA Event Types](#eva-event-types)
+  - [Event Handler Registry](#event-handler-registry)
+- [Morning Briefing Generation](#morning-briefing-generation)
+  - [Briefing Aggregation Pipeline](#briefing-aggregation-pipeline)
+  - [Briefing Database Function](#briefing-database-function)
+- [Decision Flow](#decision-flow)
+  - [Decision Creation](#decision-creation)
+  - [Decision Processing](#decision-processing)
+- [Token Budget Management](#token-budget-management)
+  - [Budget Profiles](#budget-profiles)
+  - [Budget Enforcement](#budget-enforcement)
+- [Circuit Breaker System](#circuit-breaker-system)
+  - [Circuit Breaker Configuration](#circuit-breaker-configuration)
+  - [Circuit Breaker Check Function](#circuit-breaker-check-function)
+  - [Circuit Breaker Trigger](#circuit-breaker-trigger)
+- [Graceful Degradation](#graceful-degradation)
+  - [Degradation Levels](#degradation-levels)
+  - [Execute with Fallback Pattern](#execute-with-fallback-pattern)
+  - [Dependency Health Monitoring](#dependency-health-monitoring)
+  - [Crew Execution with Degradation](#crew-execution-with-degradation)
+- [Feedback Loop Architecture](#feedback-loop-architecture)
+  - [9.1 The Intelligence Problem](#91-the-intelligence-problem)
+  - [9.2 Stage Dependency Graph](#92-stage-dependency-graph)
+  - [9.3 Pivot Engine](#93-pivot-engine)
+  - [9.4 Assumption Impact Propagation](#94-assumption-impact-propagation)
+  - [9.5 Cross-Venture Learning Repository](#95-cross-venture-learning-repository)
+  - [9.6 Intelligence Triggers](#96-intelligence-triggers)
+  - [9.7 Updated Stage State Machine](#97-updated-stage-state-machine)
+  - [9.8 Summary: The Intelligent Feedback System](#98-summary-the-intelligent-feedback-system)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

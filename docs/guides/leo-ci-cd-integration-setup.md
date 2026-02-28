@@ -1,5 +1,71 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Protocol GitHub CI/CD Integration Setup Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [1. Database Setup](#1-database-setup)
+  - [Run Migration](#run-migration)
+  - [Verify Tables Created](#verify-tables-created)
+- [2. GitHub Webhook Configuration](#2-github-webhook-configuration)
+  - [2.1 Webhook URL Setup](#21-webhook-url-setup)
+  - [2.2 GitHub Repository Settings](#22-github-repository-settings)
+  - [2.3 Webhook Security](#23-webhook-security)
+- [3. LEO Protocol Configuration](#3-leo-protocol-configuration)
+  - [3.1 Enable CI/CD Validation](#31-enable-cicd-validation)
+  - [3.2 Phase Gate Configuration](#32-phase-gate-configuration)
+- [4. Sub-Agent Configuration](#4-sub-agent-configuration)
+  - [4.1 DevOps Platform Architect Enhancement](#41-devops-platform-architect-enhancement)
+  - [4.2 Automatic Triggers](#42-automatic-triggers)
+- [5. API Endpoint Deployment](#5-api-endpoint-deployment)
+  - [5.1 Express.js Route (if using Express)](#51-expressjs-route-if-using-express)
+  - [5.2 Next.js API Route (if using Next.js)](#52-nextjs-api-route-if-using-nextjs)
+  - [5.3 Serverless Function](#53-serverless-function)
+- [6. Dashboard Integration](#6-dashboard-integration)
+  - [6.1 Add CI/CD Status Component](#61-add-cicd-status-component)
+  - [6.2 Real-time Updates](#62-real-time-updates)
+- [7. Testing](#7-testing)
+  - [7.1 Run Integration Tests](#71-run-integration-tests)
+  - [7.2 Test Webhook Processing](#72-test-webhook-processing)
+  - [7.3 Test CI/CD Validation](#73-test-cicd-validation)
+  - [7.4 Test DevOps Agent](#74-test-devops-agent)
+- [8. Monitoring and Troubleshooting](#8-monitoring-and-troubleshooting)
+  - [8.1 Webhook Event Logs](#81-webhook-event-logs)
+  - [8.2 Pipeline Status Monitoring](#82-pipeline-status-monitoring)
+  - [8.3 Failure Resolution Tracking](#83-failure-resolution-tracking)
+- [9. Configuration Options](#9-configuration-options)
+  - [9.1 Repository Monitoring Settings](#91-repository-monitoring-settings)
+  - [9.2 Health Score Thresholds](#92-health-score-thresholds)
+  - [9.3 Notification Channels](#93-notification-channels)
+- [10. Workflow Examples](#10-workflow-examples)
+  - [10.1 Successful Flow](#101-successful-flow)
+  - [10.2 Failure Flow](#102-failure-flow)
+  - [10.3 Manual Override](#103-manual-override)
+- [11. Security Considerations](#11-security-considerations)
+  - [11.1 Webhook Security](#111-webhook-security)
+  - [11.2 Database Security](#112-database-security)
+  - [11.3 Sub-Agent Security](#113-sub-agent-security)
+- [12. Performance Optimization](#12-performance-optimization)
+  - [12.1 Database Indexing](#121-database-indexing)
+  - [12.2 Caching Strategy](#122-caching-strategy)
+  - [12.3 Batch Processing](#123-batch-processing)
+- [Troubleshooting Common Issues](#troubleshooting-common-issues)
+  - [Issue: Webhooks not being received](#issue-webhooks-not-being-received)
+  - [Issue: Signature validation failing](#issue-signature-validation-failing)
+  - [Issue: EXEC phase always blocked](#issue-exec-phase-always-blocked)
+  - [Issue: Sub-agent not triggering](#issue-sub-agent-not-triggering)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

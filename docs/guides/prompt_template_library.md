@@ -1,5 +1,45 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Comprehensive Prompt Template Library
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [1.5. Database Schema Integration](#15-database-schema-integration)
+  - [Core Entity Dependencies](#core-entity-dependencies)
+- [1.6. Integration Hub Connectivity](#16-integration-hub-connectivity)
+  - [Integration Requirements](#integration-requirements)
+- [Template Categories](#template-categories)
+  - [1. Product Reveal Templates](#1-product-reveal-templates)
+  - [2. Tutorial & Demo Templates](#2-tutorial-demo-templates)
+  - [3. Social Media Templates](#3-social-media-templates)
+  - [4. Lifestyle & Brand Story Templates](#4-lifestyle-brand-story-templates)
+  - [5. Comparison & Competitive Templates](#5-comparison-competitive-templates)
+  - [6. Event & Seasonal Templates](#6-event-seasonal-templates)
+  - [7. Testimonial & Social Proof Templates](#7-testimonial-social-proof-templates)
+- [Advanced Prompt Modifiers](#advanced-prompt-modifiers)
+  - [Style Modifiers](#style-modifiers)
+  - [Platform Optimizations](#platform-optimizations)
+  - [Emotional Tone Presets](#emotional-tone-presets)
+- [Quality Control Prompts](#quality-control-prompts)
+  - [Brand Compliance Check](#brand-compliance-check)
+  - [Technical Quality Check](#technical-quality-check)
+- [Usage Guidelines](#usage-guidelines)
+  - [Best Practices](#best-practices)
+  - [Template Selection Logic](#template-selection-logic)
+- [Continuous Improvement](#continuous-improvement)
+  - [Performance Tracking](#performance-tracking)
+  - [Template Evolution](#template-evolution)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

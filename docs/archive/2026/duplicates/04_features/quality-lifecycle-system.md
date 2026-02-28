@@ -1,3 +1,52 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Features](#key-features)
+  - [The Five Stages](#the-five-stages)
+- [Getting Started](#getting-started)
+  - [For Developers (CLI)](#for-developers-cli)
+  - [For Business Users (Web UI)](#for-business-users-web-ui)
+  - [Quick Reference](#quick-reference)
+- [Components](#components)
+  - [1. Database Foundation (SD-QUALITY-DB-001)](#1-database-foundation-sd-quality-db-001)
+  - [2. CLI Interface (SD-QUALITY-CLI-001)](#2-cli-interface-sd-quality-cli-001)
+  - [3. Triage & Prioritization (SD-QUALITY-TRIAGE-001)](#3-triage-prioritization-sd-quality-triage-001)
+  - [4. Web UI (SD-QUALITY-UI-001)](#4-web-ui-sd-quality-ui-001)
+  - [5. System Integrations (SD-QUALITY-INT-001)](#5-system-integrations-sd-quality-int-001)
+  - [6. Triangulation Fixes (SD-QUALITY-FIXES-001)](#6-triangulation-fixes-sd-quality-fixes-001)
+- [Usage Guide](#usage-guide)
+  - [Reporting Feedback](#reporting-feedback)
+  - [Managing Feedback](#managing-feedback)
+  - [Planning Releases](#planning-releases)
+  - [Cross-Venture Workflows](#cross-venture-workflows)
+  - [Error Capture Workflows](#error-capture-workflows)
+- [Architecture](#architecture)
+  - [Data Model](#data-model)
+  - [Component Architecture](#component-architecture)
+  - [Integration Points](#integration-points)
+- [Integration](#integration)
+  - [Integrating with New Ventures](#integrating-with-new-ventures)
+  - [API Reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Database Queries](#database-queries)
+  - [Performance Optimization](#performance-optimization)
+- [Appendix](#appendix)
+  - [Validation History](#validation-history)
+  - [Related Documentation](#related-documentation)
+  - [Strategic Directives](#strategic-directives)
+  - [Final Session Completion (2026-01-18)](#final-session-completion-2026-01-18)
+
 <!-- ARCHIVED: 2026-01-26T16:26:33.246Z
      Reason: Duplicate of canonical file
      Original location: docs\04_features\quality-lifecycle-system.md

@@ -1,4 +1,38 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Multi-Session Pessimistic Locking Migration
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Migration File](#migration-file)
+- [Changes Summary](#changes-summary)
+  - [1. Unique Index for Single Active Claim (FR-1)](#1-unique-index-for-single-active-claim-fr-1)
+  - [2. is_working_on Synchronization Trigger (FR-3)](#2-is_working_on-synchronization-trigger-fr-3)
+  - [3. Enhanced v_active_sessions View (FR-5)](#3-enhanced-v_active_sessions-view-fr-5)
+  - [4. Enhanced claim_sd() Function](#4-enhanced-claim_sd-function)
+  - [5. Enhanced release_sd() Function](#5-enhanced-release_sd-function)
+- [Execution Instructions](#execution-instructions)
+  - [Prerequisites](#prerequisites)
+  - [Execution Method](#execution-method)
+  - [Verification Queries](#verification-queries)
+- [Impact Assessment](#impact-assessment)
+  - [Affected Tables](#affected-tables)
+  - [Affected Views](#affected-views)
+  - [Affected Functions](#affected-functions)
+  - [Breaking Changes](#breaking-changes)
+  - [Compatibility](#compatibility)
+- [Rollback Procedure](#rollback-procedure)
+- [Testing Checklist](#testing-checklist)
+- [Related Documentation](#related-documentation)
+- [References](#references)
 
 **Category**: Database Migration
 **Status**: Pending Execution

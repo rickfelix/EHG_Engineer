@@ -1,4 +1,36 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Baseline Constraint Fixes - January 30, 2026
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Strategic Directive](#strategic-directive)
+- [Issue Summary](#issue-summary)
+- [Migrations Applied](#migrations-applied)
+  - [1. BL-INF-2337A: Sub-Agent Verdict Constraint](#1-bl-inf-2337a-sub-agent-verdict-constraint)
+  - [2. BL-INF-2337B: Risk Assessments Phase Constraint](#2-bl-inf-2337b-risk-assessments-phase-constraint)
+  - [3. BL-INF-2337C: Retrospectives Metadata Column](#3-bl-inf-2337c-retrospectives-metadata-column)
+  - [4. BL-INF-2337D: Classification Model Change](#4-bl-inf-2337d-classification-model-change)
+- [Verification](#verification)
+  - [Migration Verification Script](#migration-verification-script)
+  - [Manual Verification Queries](#manual-verification-queries)
+- [Execution History](#execution-history)
+- [Impact Assessment](#impact-assessment)
+  - [Tables Affected](#tables-affected)
+  - [Backward Compatibility](#backward-compatibility)
+  - [Performance Impact](#performance-impact)
+- [Root Cause Analysis](#root-cause-analysis)
+- [Related Documentation](#related-documentation)
+- [Follow-Up Actions](#follow-up-actions)
 
 ## Metadata
 - **Category**: Database

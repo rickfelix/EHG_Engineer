@@ -1,3 +1,62 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+- [Discovery Summary](#discovery-summary)
+  - [What the Chairman Wants](#what-the-chairman-wants)
+  - [The Gap (All Four Dimensions)](#the-gap-all-four-dimensions)
+  - [Source Material: 92 Curated Videos](#source-material-92-curated-videos)
+  - [Current Architecture (for context)](#current-architecture-for-context)
+- [Analysis](#analysis)
+  - [Arguments For](#arguments-for)
+  - [Arguments Against](#arguments-against)
+- [Four-Plane Evaluation Matrix](#four-plane-evaluation-matrix)
+  - [Plane 1: Capability Graph Impact — 21/25](#plane-1-capability-graph-impact-2125)
+  - [Plane 2: External Vector Alignment — +16/25](#plane-2-external-vector-alignment-1625)
+  - [Plane 3: Control & Constraint Exposure — PASS](#plane-3-control-constraint-exposure-pass)
+  - [Plane 4: Exploration vs Exploitation — Skewed Exploration](#plane-4-exploration-vs-exploitation-skewed-exploration)
+- [Team Perspectives](#team-perspectives)
+  - [Challenger](#challenger)
+  - [Visionary](#visionary)
+  - [Pragmatist](#pragmatist)
+  - [Synthesis](#synthesis)
+- [Design Responses to Key Critiques](#design-responses-to-key-critiques)
+  - [1. Preference Laundering → Include Counterweight Models](#1-preference-laundering-include-counterweight-models)
+  - [2. Framework Conflict → Surface Contradictions as a Feature](#2-framework-conflict-surface-contradictions-as-a-feature)
+  - [3. False Rigor → Honest Labels](#3-false-rigor-honest-labels)
+  - [4. Advisory First → Low Weight, High Visibility](#4-advisory-first-low-weight-high-visibility)
+  - [5. Outcome Tracking → Feedback Loops](#5-outcome-tracking-feedback-loops)
+- [Proposed Model Families (MVP Candidates)](#proposed-model-families-mvp-candidates)
+  - [Family 1: Technology Trajectory Model (RECOMMENDED FIRST)](#family-1-technology-trajectory-model-recommended-first)
+  - [Family 2: Economic Cycle Model](#family-2-economic-cycle-model)
+  - [Family 3: Societal Dynamics Model](#family-3-societal-dynamics-model)
+  - [Family 4: Strategic Positioning Model](#family-4-strategic-positioning-model)
+- [Minimum Viable Implementation](#minimum-viable-implementation)
+  - [What Ships (Tier 3 SD — Full SD, ~200-300 LOC across 4 files)](#what-ships-tier-3-sd-full-sd-200-300-loc-across-4-files)
+  - [What Does NOT Ship Initially](#what-does-not-ship-initially)
+  - [Sequencing](#sequencing)
+- [Full Vision (Future SDs)](#full-vision-future-sds)
+  - [Phase 1: Technology Trajectory MVP (this SD)](#phase-1-technology-trajectory-mvp-this-sd)
+  - [Phase 2: Economic Cycle Model](#phase-2-economic-cycle-model)
+  - [Phase 3: Societal Dynamics Model](#phase-3-societal-dynamics-model)
+  - [Phase 4: Strategic Positioning Enhancement](#phase-4-strategic-positioning-enhancement)
+  - [Phase 5: Counterweight Models](#phase-5-counterweight-models)
+  - [Phase 6: Model Conflict Surfacing](#phase-6-model-conflict-surfacing)
+  - [Phase 7: Outcome Tracking & Calibration](#phase-7-outcome-tracking-calibration)
+  - [Phase 8: Research Department Integration](#phase-8-research-department-integration)
+  - [Phase 9: Model Library as Product](#phase-9-model-library-as-product)
+- [Open Questions](#open-questions)
+- [Suggested Next Steps](#suggested-next-steps)
+
 <!-- Archived from: brainstorm/2026-02-21-model-library-venture-ideation-macro-frameworks.md -->
 <!-- SD Key: SD-LEO-FIX-BRAINSTORM-MODEL-LIBRARY-001 -->
 <!-- Archived at: 2026-02-22T01:37:40.645Z -->

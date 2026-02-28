@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 15 "Resource Planning" -- AntiGravity Response (Google Gemini)
 
 > Independent response to the Stage 15 triangulation prompt.

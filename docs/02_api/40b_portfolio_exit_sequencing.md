@@ -1,5 +1,41 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Stage 40 – Portfolio Exit Sequencing Enhanced PRD (v4)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EHG Management Model Integration](#ehg-management-model-integration)
+  - [Strategic Exit Framework](#strategic-exit-framework)
+  - [Chairman Exit Authority](#chairman-exit-authority)
+- [Executive Summary](#executive-summary)
+- [1. Enhanced Portfolio Exit Orchestration](#1-enhanced-portfolio-exit-orchestration)
+  - [Portfolio Exit Sequencing Engine](#portfolio-exit-sequencing-engine)
+  - [Advanced Portfolio Exit Optimization](#advanced-portfolio-exit-optimization)
+- [2. Cross-Venture Dependency Management](#2-cross-venture-dependency-management)
+  - [Dependency Analysis Engine](#dependency-analysis-engine)
+- [3. Capital Redeployment Optimization](#3-capital-redeployment-optimization)
+  - [Capital Recycling Engine](#capital-recycling-engine)
+- [4. Market Window Coordination](#4-market-window-coordination)
+  - [Multi-Sector Market Timing](#multi-sector-market-timing)
+- [5. Concentration Risk Management](#5-concentration-risk-management)
+  - [Portfolio Rebalancing Engine](#portfolio-rebalancing-engine)
+- [6. UI Components](#6-ui-components)
+  - [Portfolio Exit Management Dashboard](#portfolio-exit-management-dashboard)
+- [7. Testing Specifications](#7-testing-specifications)
+- [8. Database Schema Integration](#8-database-schema-integration)
+  - [Core Entity Dependencies](#core-entity-dependencies)
+- [9. Integration Hub Connectivity](#9-integration-hub-connectivity)
+  - [Integration Requirements](#integration-requirements)
+- [10. Success Metrics](#10-success-metrics)
 
 ## Metadata
 - **Category**: API

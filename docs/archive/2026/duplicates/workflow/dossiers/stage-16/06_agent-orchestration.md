@@ -1,3 +1,48 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [CrewAI Agent Mapping](#crewai-agent-mapping)
+  - [Primary Agent: EVA (Engineering & Venture Architect)](#primary-agent-eva-engineering-venture-architect)
+  - [Supporting Agent: Data Scientist Agent](#supporting-agent-data-scientist-agent)
+  - [Supporting Agent: Integration Engineer Agent](#supporting-agent-integration-engineer-agent)
+  - [Supporting Agent: Security & Compliance Agent](#supporting-agent-security-compliance-agent)
+- [CrewAI Task Definitions](#crewai-task-definitions)
+  - [Task 1: Agent Configuration (Substage 16.1)](#task-1-agent-configuration-substage-161)
+  - [Task 2: Model Training (Substage 16.2)](#task-2-model-training-substage-162)
+  - [Task 3: Integration & Testing (Substage 16.3)](#task-3-integration-testing-substage-163)
+  - [Task 4: Security & Compliance Verification](#task-4-security-compliance-verification)
+- [CrewAI Crew Definition](#crewai-crew-definition)
+  - [Stage 16 Crew: AI CEO Development Crew](#stage-16-crew-ai-ceo-development-crew)
+  - [Execution](#execution)
+- [LEO Protocol Governance Mapping](#leo-protocol-governance-mapping)
+  - [LEAD Phase Governance](#lead-phase-governance)
+  - [PLAN Phase Governance](#plan-phase-governance)
+  - [EXEC Phase Governance](#exec-phase-governance)
+- [Handoff Structure (7 Elements)](#handoff-structure-7-elements)
+  - [1. Context Summary](#1-context-summary)
+  - [2. Completion Evidence](#2-completion-evidence)
+  - [3. Artifacts Produced](#3-artifacts-produced)
+  - [4. Metrics Snapshot](#4-metrics-snapshot)
+  - [5. Known Issues & Risks](#5-known-issues-risks)
+  - [6. Pending Actions](#6-pending-actions)
+  - [7. Sign-off](#7-sign-off)
+- [Agent Communication Protocols](#agent-communication-protocols)
+  - [Inter-Agent Messaging](#inter-agent-messaging)
+  - [Escalation Paths](#escalation-paths)
+- [Automation & Tool Integration](#automation-tool-integration)
+  - [Tools Used by Agents](#tools-used-by-agents)
+  - [Automation Level: 5/5](#automation-level-55)
+
 <!-- ARCHIVED: 2026-01-26T16:26:45.455Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-16\06_agent-orchestration.md

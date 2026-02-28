@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 17: Metrics and Monitoring
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Metric Definitions](#metric-definitions)
+  - [Metric 1: Campaign Effectiveness](#metric-1-campaign-effectiveness)
+  - [Metric 2: Lead Generation](#metric-2-lead-generation)
+  - [Metric 3: Conversion Rates](#metric-3-conversion-rates)
+- [Secondary Metrics (Supporting)](#secondary-metrics-supporting)
+  - [Metric 4: Cost Per Lead (CPL)](#metric-4-cost-per-lead-cpl)
+  - [Metric 5: Return on Ad Spend (ROAS)](#metric-5-return-on-ad-spend-roas)
+  - [Metric 6: Email Open Rate](#metric-6-email-open-rate)
+  - [Metric 7: Email Click-Through Rate (CTR)](#metric-7-email-click-through-rate-ctr)
+- [Monitoring Dashboard Specification](#monitoring-dashboard-specification)
+  - [Dashboard 1: GTM Performance Overview](#dashboard-1-gtm-performance-overview)
+  - [Dashboard 2: Recursion Monitoring](#dashboard-2-recursion-monitoring)
+- [Alerting Rules](#alerting-rules)
+  - [Alert 1: Campaign Effectiveness Below Threshold](#alert-1-campaign-effectiveness-below-threshold)
+  - [Alert 2: Lead Generation Miss](#alert-2-lead-generation-miss)
+  - [Alert 3: Conversion Rate Drop](#alert-3-conversion-rate-drop)
+  - [Alert 4: ROAS Below Target](#alert-4-roas-below-target)
+- [Data Collection Requirements](#data-collection-requirements)
+  - [Database Tables](#database-tables)
+  - [Data Ingestion](#data-ingestion)
 
 ## Overview
 

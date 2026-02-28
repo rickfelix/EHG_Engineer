@@ -1,3 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Gaps (High Priority)](#critical-gaps-high-priority)
+  - [Gap 1: No Customer Validation Touchpoint](#gap-1-no-customer-validation-touchpoint)
+  - [Gap 2: No Recursion Triggers Defined](#gap-2-no-recursion-triggers-defined)
+  - [Gap 3: No Metric Thresholds Defined](#gap-3-no-metric-thresholds-defined)
+- [Moderate Gaps (Medium Priority)](#moderate-gaps-medium-priority)
+  - [Gap 4: Limited Automation (Manual Process)](#gap-4-limited-automation-manual-process)
+  - [Gap 5: No Data Flow Schemas Defined](#gap-5-no-data-flow-schemas-defined)
+  - [Gap 6: No Tool Integrations Specified](#gap-6-no-tool-integrations-specified)
+- [Minor Gaps (Low Priority)](#minor-gaps-low-priority)
+  - [Gap 7: No Error Handling Logic](#gap-7-no-error-handling-logic)
+  - [Gap 8: No Performance Benchmarks](#gap-8-no-performance-benchmarks)
+  - [Gap 9: No Brand Guidelines Template](#gap-9-no-brand-guidelines-template)
+- [SD Cross-Reference Summary](#sd-cross-reference-summary)
+- [Proposed Artifacts (Beyond SDs)](#proposed-artifacts-beyond-sds)
+  - [Artifact 1: Stage 11 Automation Roadmap](#artifact-1-stage-11-automation-roadmap)
+  - [Artifact 2: Trademark Search API Integration Guide](#artifact-2-trademark-search-api-integration-guide)
+  - [Artifact 3: Customer Validation Playbook](#artifact-3-customer-validation-playbook)
+  - [Artifact 4: Brand Strength Scoring Algorithm](#artifact-4-brand-strength-scoring-algorithm)
+  - [Artifact 5: Recursion Decision Tree](#artifact-5-recursion-decision-tree)
+- [Backlog Prioritization](#backlog-prioritization)
+- [Acceptance Criteria for Gap Closure](#acceptance-criteria-for-gap-closure)
+
 <!-- ARCHIVED: 2026-01-26T16:26:54.151Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-11\10_gaps-backlog.md

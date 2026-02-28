@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 32: Customer Success & Retention Engineering — Canonical Definition
+
+
+## Table of Contents
+
+- [Source](#source)
+- [Full YAML Excerpt](#full-yaml-excerpt)
+- [Field Breakdown](#field-breakdown)
+  - [Core Attributes](#core-attributes)
+  - [Data Flow](#data-flow)
+  - [Metrics (3)](#metrics-3)
+  - [Gates](#gates)
+- [Substage Definitions](#substage-definitions)
+  - [Substage 32.1: Success Infrastructure](#substage-321-success-infrastructure)
+  - [Substage 32.2: Health Monitoring](#substage-322-health-monitoring)
+  - [Substage 32.3: Retention Programs](#substage-323-retention-programs)
+- [Progression Mode](#progression-mode)
+- [Schema Compliance](#schema-compliance)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

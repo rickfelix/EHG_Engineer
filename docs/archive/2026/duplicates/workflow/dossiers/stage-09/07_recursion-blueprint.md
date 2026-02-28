@@ -1,3 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Recursion Role in Unified Venture Creation System](#recursion-role-in-unified-venture-creation-system)
+- [Outbound Recursion Triggers](#outbound-recursion-triggers)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+- [Proposed GAP-001 Recursion Logic (Not Implemented)](#proposed-gap-001-recursion-logic-not-implemented)
+  - [Conceptual Implementation](#conceptual-implementation)
+- [Recursion Thresholds (Proposed)](#recursion-thresholds-proposed)
+- [Loop Prevention (Proposed)](#loop-prevention-proposed)
+- [Chairman Controls (Proposed)](#chairman-controls-proposed)
+- [Performance Requirements (Proposed)](#performance-requirements-proposed)
+- [UI/UX Implications (Proposed)](#uiux-implications-proposed)
+- [Integration Points (Proposed)](#integration-points-proposed)
+- [Implementation Gap Summary](#implementation-gap-summary)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:48.147Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-09\07_recursion-blueprint.md

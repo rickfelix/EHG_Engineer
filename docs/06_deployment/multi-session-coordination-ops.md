@@ -1,4 +1,84 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Multi-Session Coordination Operational Runbook
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [System Components](#system-components)
+  - [1. Database Constraints](#1-database-constraints)
+  - [2. Heartbeat Manager](#2-heartbeat-manager)
+  - [3. Enhanced Views](#3-enhanced-views)
+- [Deployment](#deployment)
+  - [Initial Deployment](#initial-deployment)
+  - [Rollback](#rollback)
+- [Monitoring](#monitoring)
+  - [Session Health Dashboard](#session-health-dashboard)
+  - [Stale Session Detection](#stale-session-detection)
+  - [Approaching Stale Sessions](#approaching-stale-sessions)
+- [Troubleshooting](#troubleshooting)
+  - [Manual Claim Release (Single Table — As of v5.0.0)](#manual-claim-release-single-table-as-of-v500)
+  - [Issue: Session Claim Rejected (GATE_MULTI_SESSION_CLAIM_CONFLICT)](#issue-session-claim-rejected-gate_multi_session_claim_conflict)
+  - [Issue: Heartbeat Not Starting](#issue-heartbeat-not-starting)
+  - [Issue: Consecutive Heartbeat Failures](#issue-consecutive-heartbeat-failures)
+  - [Issue: Unique Violation on Claim](#issue-unique-violation-on-claim)
+  - [Issue: is_working_on Not Syncing](#issue-is_working_on-not-syncing)
+- [Performance Impact](#performance-impact)
+  - [Database Overhead](#database-overhead)
+  - [Scaling Considerations](#scaling-considerations)
+- [Maintenance](#maintenance)
+  - [Regular Checks (Daily)](#regular-checks-daily)
+  - [Weekly Checks](#weekly-checks)
+- [Security Considerations](#security-considerations)
+  - [Session ID Protection](#session-id-protection)
+  - [Access Control](#access-control)
+- [Related Documentation](#related-documentation)
+- [Support](#support)
+  - [Log Files](#log-files)
+  - [Escalation](#escalation)
+- [Lifecycle Event Monitoring (SD-LEO-INFRA-INTELLIGENT-SESSION-LIFECYCLE-001)](#lifecycle-event-monitoring-sd-leo-infra-intelligent-session-lifecycle-001)
+  - [Session Lifecycle Events Table](#session-lifecycle-events-table)
+  - [Lifecycle Event Queries](#lifecycle-event-queries)
+  - [Terminal Identity Management](#terminal-identity-management)
+  - [Batch Cleanup Operations](#batch-cleanup-operations)
+  - [Session Metrics View](#session-metrics-view)
+  - [Handoff Resolution Tracking (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-018)](#handoff-resolution-tracking-sd-learn-fix-address-pattern-learn-018)
+- [Git Worktree Automation (SD-LEO-INFRA-GIT-WORKTREE-AUTOMATION-001)](#git-worktree-automation-sd-leo-infra-git-worktree-automation-001)
+  - [Overview](#overview)
+  - [Components](#components)
+  - [Usage](#usage)
+  - [Branch Guard Protection](#branch-guard-protection)
+  - [Operational Patterns](#operational-patterns)
+  - [Troubleshooting](#troubleshooting)
+  - [Integration with Multi-Session Claims](#integration-with-multi-session-claims)
+  - [Cleanup and Maintenance](#cleanup-and-maintenance)
+  - [Related Features](#related-features)
+- [Ship Process Safety (SD-LEO-FIX-MULTI-SESSION-SHIP-001)](#ship-process-safety-sd-leo-fix-multi-session-ship-001)
+  - [Overview](#overview)
+  - [Components](#components)
+  - [Deployment](#deployment)
+  - [Monitoring](#monitoring)
+  - [Troubleshooting](#troubleshooting)
+  - [Performance Impact](#performance-impact)
+  - [Security Considerations](#security-considerations)
+  - [Best Practices](#best-practices)
+  - [Related Documentation](#related-documentation)
+- [Session Creation Heartbeat Guard (Migration: 20260213)](#session-creation-heartbeat-guard-migration-20260213)
+  - [Overview](#overview)
+  - [Components](#components)
+  - [Behavioral Changes](#behavioral-changes)
+  - [Monitoring](#monitoring)
+  - [Troubleshooting](#troubleshooting)
+  - [Deployment](#deployment)
+  - [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
 
 **Category**: Deployment
 **Status**: Approved

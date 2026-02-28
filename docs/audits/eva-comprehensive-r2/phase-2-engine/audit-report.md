@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Phase 2 "The Engine" Quality Audit Report — Round 2
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+  - [R1 Finding Remediation Summary](#r1-finding-remediation-summary)
+- [Files Audited](#files-audited)
+- [R1 Finding Verification](#r1-finding-verification)
+  - [CRITICAL-1: Reality Gate 9→10 Validates Wrong Artifacts — PARTIALLY FIXED](#critical-1-reality-gate-910-validates-wrong-artifacts-partially-fixed)
+  - [CRITICAL-2: Risk Threshold Triple-Inconsistency — PARTIALLY FIXED](#critical-2-risk-threshold-triple-inconsistency-partially-fixed)
+  - [HIGH-1: risk_source Enum — Three Divergent Definitions — NOT FIXED](#high-1-risk_source-enum-three-divergent-definitions-not-fixed)
+  - [HIGH-2: 2-Factor vs 3-Factor Risk Scoring — NOT FIXED](#high-2-2-factor-vs-3-factor-risk-scoring-not-fixed)
+  - [HIGH-3: Four Architecture v2.0 Fields Missing from Stage 7 — PARTIALLY FIXED](#high-3-four-architecture-v20-fields-missing-from-stage-7-partially-fixed)
+  - [HIGH-4: pricing_model Enum Missing from Template + Three Variants — PARTIALLY FIXED](#high-4-pricing_model-enum-missing-from-template-three-variants-partially-fixed)
+  - [HIGH-5: Aggregate Risk Metrics Not in Template Output — FIXED](#high-5-aggregate-risk-metrics-not-in-template-output-fixed)
+  - [MEDIUM-1: BMC Priority — Enum vs Integer Mismatch — NOT FIXED](#medium-1-bmc-priority-enum-vs-integer-mismatch-not-fixed)
+  - [MEDIUM-2: BMC Evidence Field — Optional vs Required — NOT FIXED](#medium-2-bmc-evidence-field-optional-vs-required-not-fixed)
+  - [MEDIUM-3: crossBlockWarnings Missing from BMC Analysis — NOT FIXED](#medium-3-crossblockwarnings-missing-from-bmc-analysis-not-fixed)
+  - [MEDIUM-4: exit_type Field Location — Top-Level vs Nested — NOT FIXED](#medium-4-exit_type-field-location-top-level-vs-nested-not-fixed)
+  - [LOW-1: Tier Count Mismatch — Template vs Analysis — NOT FIXED](#low-1-tier-count-mismatch-template-vs-analysis-not-fixed)
+  - [LOW-2: Two Architecture v2.0 Fields Missing from Stage 9 — NOT FIXED](#low-2-two-architecture-v20-fields-missing-from-stage-9-not-fixed)
+- [New Findings (R2)](#new-findings-r2)
+  - [NEW-001: Template vs Analysis Field Name Mismatch (Stage 6)](#new-001-template-vs-analysis-field-name-mismatch-stage-6)
+  - [NEW-002: Analysis Step Silent Enum Normalization](#new-002-analysis-step-silent-enum-normalization)
+- [Architecture Alignment](#architecture-alignment)
+  - [Stage Templates vs Architecture v2.0](#stage-templates-vs-architecture-v20)
+- [Score Breakdown](#score-breakdown)
+- [Recommendations Summary](#recommendations-summary)
+  - [Remaining from R1 (Still Open)](#remaining-from-r1-still-open)
+  - [New Recommendations (R2)](#new-recommendations-r2)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-R2-ENGINE-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-R2-ORCH-001

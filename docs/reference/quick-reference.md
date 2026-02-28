@@ -1,5 +1,28 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Validation Failure Patterns to Avoid
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [⚠️ Validation Failure Patterns to Avoid](#-validation-failure-patterns-to-avoid)
+  - [Anti-Pattern 1: "We'll Validate Later"](#anti-pattern-1-well-validate-later)
+  - [Anti-Pattern 2: "Assume It Doesn't Exist"](#anti-pattern-2-assume-it-doesnt-exist)
+  - [Anti-Pattern 3: "Approve Without Backlog"](#anti-pattern-3-approve-without-backlog)
+  - [Anti-Pattern 4: "Trust Claims Without Verification"](#anti-pattern-4-trust-claims-without-verification)
+  - [Anti-Pattern 5: "Skip Test Environment Validation"](#anti-pattern-5-skip-test-environment-validation)
+  - [Anti-Pattern 6: "No User Story Validation"](#anti-pattern-6-no-user-story-validation)
+  - [Detection Rules](#detection-rules)
+  - [Success Stories (When Validation Used Properly)](#success-stories-when-validation-used-properly)
+  - [Quick Reference](#quick-reference)
 
 ## Metadata
 - **Category**: Reference

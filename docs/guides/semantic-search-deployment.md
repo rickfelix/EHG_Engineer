@@ -1,5 +1,49 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Phase 4 Semantic Search - Deployment Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🎯 Executive Summary](#-executive-summary)
+- [📦 What Was Built](#-what-was-built)
+  - [1. Sub-Agent Embeddings System](#1-sub-agent-embeddings-system)
+  - [2. SD Embeddings System](#2-sd-embeddings-system)
+  - [3. Hybrid Selection Logic](#3-hybrid-selection-logic)
+  - [4. Orchestrator Integration](#4-orchestrator-integration)
+- [🚀 Deployment Steps](#-deployment-steps)
+  - [Prerequisites](#prerequisites)
+  - [Step 1: Apply Database Migrations](#step-1-apply-database-migrations)
+  - [Step 2: Generate Sub-Agent Embeddings](#step-2-generate-sub-agent-embeddings)
+  - [Step 3: Generate SD Embeddings](#step-3-generate-sd-embeddings)
+  - [Step 4: Test Hybrid Selection](#step-4-test-hybrid-selection)
+- [📊 Expected Results](#-expected-results)
+  - [False Positive Reduction](#false-positive-reduction)
+  - [Improved Accuracy Examples](#improved-accuracy-examples)
+- [🔍 Monitoring & Verification](#-monitoring-verification)
+  - [Daily Monitoring (First 2 Weeks)](#daily-monitoring-first-2-weeks)
+  - [Alert Thresholds](#alert-thresholds)
+- [🐛 Troubleshooting](#-troubleshooting)
+  - [Issue 1: Embeddings Not Generating](#issue-1-embeddings-not-generating)
+  - [Issue 2: Hybrid Selection Falls Back to Keyword-Only](#issue-2-hybrid-selection-falls-back-to-keyword-only)
+  - [Issue 3: High False Positive Rate](#issue-3-high-false-positive-rate)
+- [💡 Best Practices](#-best-practices)
+  - [1. Embedding Regeneration](#1-embedding-regeneration)
+  - [2. SD Embedding Lifecycle](#2-sd-embedding-lifecycle)
+  - [3. Cost Management](#3-cost-management)
+- [🎯 Success Criteria](#-success-criteria)
+  - [Phase 4 Complete When:](#phase-4-complete-when)
+- [📚 Additional Resources](#-additional-resources)
+  - [Files Created/Modified:](#files-createdmodified)
+  - [Total Implementation:](#total-implementation)
 
 ## Metadata
 - **Category**: Deployment

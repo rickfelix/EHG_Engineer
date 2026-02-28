@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 11: Configurability Matrix
+
+
+## Table of Contents
+
+- [Parameter Categories](#parameter-categories)
+  - [1. Name Generation Parameters](#1-name-generation-parameters)
+  - [2. Scoring & Threshold Parameters](#2-scoring-threshold-parameters)
+  - [3. Trademark Search Parameters](#3-trademark-search-parameters)
+  - [4. Legal & Compliance Parameters](#4-legal-compliance-parameters)
+  - [5. Brand Foundation Parameters](#5-brand-foundation-parameters)
+  - [6. Customer Validation Parameters (Proposed Enhancement)](#6-customer-validation-parameters-proposed-enhancement)
+  - [7. Recursion Control Parameters (Proposed)](#7-recursion-control-parameters-proposed)
+- [Configuration Profiles (Preset Templates)](#configuration-profiles-preset-templates)
+  - [Profile: "Strategic Venture" (High stakes, high quality)](#profile-strategic-venture-high-stakes-high-quality)
+  - [Profile: "Experimental Venture" (Fast iteration, lower stakes)](#profile-experimental-venture-fast-iteration-lower-stakes)
+  - [Profile: "B2B Technical" (Clarity over creativity)](#profile-b2b-technical-clarity-over-creativity)
+  - [Profile: "Consumer Brand" (Memorability and emotion)](#profile-consumer-brand-memorability-and-emotion)
+- [Configuration Management](#configuration-management)
+- [Cross-Reference](#cross-reference)
 
 **Tunable Parameters**: Stage 11 behavior can be customized via configuration
 

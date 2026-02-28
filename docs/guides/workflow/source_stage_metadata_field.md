@@ -1,5 +1,55 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Source Stage Metadata Field Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Purpose](#purpose)
+- [Field Specification](#field-specification)
+  - [Data Type](#data-type)
+  - [Field Name](#field-name)
+  - [Valid Values](#valid-values)
+  - [Optional Fields (Related)](#optional-fields-related)
+- [Usage Examples](#usage-examples)
+  - [Setting Source Stage (When SD is Created from Stage Review)](#setting-source-stage-when-sd-is-created-from-stage-review)
+  - [Querying SDs by Source Stage](#querying-sds-by-source-stage)
+  - [Finding Which Stage Spawned an SD](#finding-which-stage-spawned-an-sd)
+  - [Counting SDs by Stage](#counting-sds-by-stage)
+  - [Finding Stages Without SDs](#finding-stages-without-sds)
+- [Integration with Stage Review Framework](#integration-with-stage-review-framework)
+  - [When to Set Source Stage](#when-to-set-source-stage)
+  - [Automatic vs. Manual Setting](#automatic-vs-manual-setting)
+- [Governance Queries](#governance-queries)
+  - [Stage Review Status Dashboard](#stage-review-status-dashboard)
+  - [SD Completion Impact on Stages](#sd-completion-impact-on-stages)
+- [Audit Trail Integration](#audit-trail-integration)
+  - [Stage Review Outcome Log](#stage-review-outcome-log)
+  - [Database Records](#database-records)
+  - [Decision Record Reference](#decision-record-reference)
+  - [Database Link](#database-link)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Migration & Backward Compatibility](#migration-backward-compatibility)
+  - [Existing SDs](#existing-sds)
+  - [Querying Mixed SDs](#querying-mixed-sds)
+- [Future Enhancements](#future-enhancements)
+  - [Potential Additions](#potential-additions)
+- [Schema Impact](#schema-impact)
+  - [No Schema Migration Required](#no-schema-migration-required)
+  - [Performance Considerations](#performance-considerations)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

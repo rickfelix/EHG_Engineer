@@ -1,4 +1,50 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # AUTO-PROCEED Intelligence Orchestrator - Implementation Summary
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Strategic Directive Structure](#strategic-directive-structure)
+  - [Parent Orchestrator](#parent-orchestrator)
+  - [Children (15 Infrastructure SDs)](#children-15-infrastructure-sds)
+- [Architecture](#architecture)
+  - [Hook System](#hook-system)
+  - [Type-Aware Validation](#type-aware-validation)
+  - [Post-Completion Sequences](#post-completion-sequences)
+- [Key Features](#key-features)
+  - [1. Type-Aware Validation (`lib/utils/sd-type-validation.js`)](#1-type-aware-validation-libutilssd-type-validationjs)
+  - [2. Bias Detection](#2-bias-detection)
+  - [3. Phase State Machine](#3-phase-state-machine)
+  - [4. Handoff Enforcement](#4-handoff-enforcement)
+  - [5. Orchestrator Child Completion](#5-orchestrator-child-completion)
+- [Test Coverage](#test-coverage)
+  - [Unit Tests (95+ tests)](#unit-tests-95-tests)
+- [Workflow Impact](#workflow-impact)
+  - [Before Enhancement](#before-enhancement)
+  - [After Enhancement](#after-enhancement)
+  - [Stop Conditions (Explicit)](#stop-conditions-explicit)
+- [Integration Points](#integration-points)
+  - [1. Claude Code Hooks](#1-claude-code-hooks)
+  - [2. LEO Protocol](#2-leo-protocol)
+  - [3. Sub-Agents](#3-sub-agents)
+- [Benefits](#benefits)
+- [Rollout](#rollout)
+  - [Phase 1: Core Infrastructure (Completed)](#phase-1-core-infrastructure-completed)
+  - [Phase 2: Stop Hook Enhancement (Completed)](#phase-2-stop-hook-enhancement-completed)
+  - [Phase 3: Orchestrator Integration (Completed)](#phase-3-orchestrator-integration-completed)
+  - [Phase 4: Documentation (Completed)](#phase-4-documentation-completed)
+- [Related Documentation](#related-documentation)
+- [Lessons Learned](#lessons-learned)
+- [Metrics](#metrics)
 
 ## Metadata
 - **Category**: Feature

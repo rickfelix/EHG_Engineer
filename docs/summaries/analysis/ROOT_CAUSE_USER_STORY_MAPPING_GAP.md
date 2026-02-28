@@ -1,5 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Root Cause Analysis: User Story → E2E Test Mapping Gap
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+  - [Immediate Issue](#immediate-issue)
+- [Root Cause Discovery Process](#root-cause-discovery-process)
+  - [Investigation Steps](#investigation-steps)
+- [Root Cause](#root-cause)
+  - [The Systemic Gap](#the-systemic-gap)
+  - [What Exists](#what-exists)
+  - [What's Missing](#whats-missing)
+- [Impact Analysis](#impact-analysis)
+  - [Why This Matters](#why-this-matters)
+  - [Affected SDs](#affected-sds)
+- [Proposed Solutions](#proposed-solutions)
+  - [Option 1: Automated Mapping Script (RECOMMENDED)](#option-1-automated-mapping-script-recommended)
+  - [Option 2: Enhanced Test Plan Generator](#option-2-enhanced-test-plan-generator)
+  - [Option 3: Enhanced User Story Creation](#option-3-enhanced-user-story-creation)
+- [Recommended Implementation](#recommended-implementation)
+  - [Phase 1: Immediate Fix (SD-VIF-INTEL-001)](#phase-1-immediate-fix-sd-vif-intel-001)
+  - [Phase 2: Permanent Fix (All Future SDs)](#phase-2-permanent-fix-all-future-sds)
+  - [Phase 3: Documentation Update](#phase-3-documentation-update)
+- [Success Criteria](#success-criteria)
+- [Lessons Learned](#lessons-learned)
 
 ## Metadata
 - **Category**: Report

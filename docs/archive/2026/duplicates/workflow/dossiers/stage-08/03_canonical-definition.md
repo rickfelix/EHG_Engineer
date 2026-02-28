@@ -1,3 +1,28 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Full YAML Definition](#full-yaml-definition)
+- [Definition Analysis](#definition-analysis)
+  - [Core Attributes](#core-attributes)
+  - [Inputs (3 defined)](#inputs-3-defined)
+  - [Outputs (3 defined)](#outputs-3-defined)
+  - [Metrics (3 defined)](#metrics-3-defined)
+  - [Quality Gates](#quality-gates)
+  - [Substages (3 defined)](#substages-3-defined)
+  - [Notes Section](#notes-section)
+- [Definition Completeness Assessment](#definition-completeness-assessment)
+- [YAML Evolution Tracking](#yaml-evolution-tracking)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:39.742Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\03_canonical-definition.md

@@ -1,4 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Infrastructure Quality Audit Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Files Audited](#files-audited)
+- [Critical Findings](#critical-findings)
+  - [CRIT-001: Retry Logic Dead Code in event-router.js (Line 215)](#crit-001-retry-logic-dead-code-in-event-routerjs-line-215)
+  - [CRIT-002: CLI Argument Parsing Lacks Validation in eva-run.js (Line 48-52)](#crit-002-cli-argument-parsing-lacks-validation-in-eva-runjs-line-48-52)
+  - [CRIT-003: Wrong Column Reference in decision-submitted.js (Line 22)](#crit-003-wrong-column-reference-in-decision-submittedjs-line-22)
+- [High-Severity Findings](#high-severity-findings)
+  - [HIGH-001: Incorrect Failure Reason Classification in event-router.js (Line 228)](#high-001-incorrect-failure-reason-classification-in-event-routerjs-line-228)
+  - [HIGH-002: Bare Catch Blocks in gate-evaluated.js (Lines 130, 145)](#high-002-bare-catch-blocks-in-gate-evaluatedjs-lines-130-145)
+  - [HIGH-003: Bare Catch Blocks in stage-completed.js (Lines 81, 94)](#high-003-bare-catch-blocks-in-stage-completedjs-lines-81-94)
+  - [HIGH-004: Silent Audit Logging Failure in sd-completed.js (Line 219)](#high-004-silent-audit-logging-failure-in-sd-completedjs-line-219)
+  - [HIGH-005: String-Based Error Matching in sd-completed.js (Line 82)](#high-005-string-based-error-matching-in-sd-completedjs-line-82)
+- [Medium-Severity Findings](#medium-severity-findings)
+  - [MED-001: Silent Failure in isEventBusEnabled() (index.js Line 37)](#med-001-silent-failure-in-iseventbusenabled-indexjs-line-37)
+  - [MED-002: Wrong Column in decision-submitted.js Query (Line 33)](#med-002-wrong-column-in-decision-submittedjs-query-line-33)
+  - [MED-003: Missing ventureId in orchestratorRun() Context (eva-run.js Line 204)](#med-003-missing-ventureid-in-orchestratorrun-context-eva-runjs-line-204)
+  - [MED-004: Race Condition with Duplicate Polling in chairman-decision-watcher.js (Line 129)](#med-004-race-condition-with-duplicate-polling-in-chairman-decision-watcherjs-line-129)
+- [Low-Severity Findings](#low-severity-findings)
+  - [LOW-001: Misleading Docstring on getRegistryCounts() (handler-registry.js)](#low-001-misleading-docstring-on-getregistrycounts-handler-registryjs)
+  - [LOW-002: Constraint Check Without Specificity (chairman-decision-watcher.js Line 210)](#low-002-constraint-check-without-specificity-chairman-decision-watcherjs-line-210)
+- [Architecture Alignment](#architecture-alignment)
+  - [Event Bus Design vs Architecture v1.6](#event-bus-design-vs-architecture-v16)
+  - [Test Coverage Assessment](#test-coverage-assessment)
+- [Recommendations Summary](#recommendations-summary)
+  - [Immediate Actions (CRITICAL)](#immediate-actions-critical)
+  - [Short-Term (HIGH)](#short-term-high)
+  - [Medium-Term (MEDIUM)](#medium-term-medium)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-INFRA-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-ORCH-001

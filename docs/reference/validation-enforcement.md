@@ -1,4 +1,81 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Intelligent Validation Framework
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [4 Validation Gates](#4-validation-gates)
+  - [Hybrid Validation Logic](#hybrid-validation-logic)
+- [SD Type-Aware Thresholds (v1.1.0)](#sd-type-aware-thresholds-v110)
+  - [SD Type Base Thresholds](#sd-type-base-thresholds)
+  - [SD Type-Aware Validator Applicability (v1.2.0)](#sd-type-aware-validator-applicability-v120)
+  - [Orchestrator SD Handling](#orchestrator-sd-handling)
+  - [Priority: SD Type vs Risk-Based](#priority-sd-type-vs-risk-based)
+- [Adaptive Thresholds](#adaptive-thresholds)
+  - [How It Works](#how-it-works)
+  - [1. Base Threshold (from Risk Level)](#1-base-threshold-from-risk-level)
+  - [2. Performance Modifier (±5%)](#2-performance-modifier-5)
+  - [3. Maturity Modifier (+5%)](#3-maturity-modifier-5)
+  - [4. Special Case Minimums](#4-special-case-minimums)
+  - [5. Final Cap](#5-final-cap)
+  - [Example Calculation](#example-calculation)
+- [Phase-Aware Weighting](#phase-aware-weighting)
+  - [Gate 1: Readiness Focus](#gate-1-readiness-focus)
+  - [Gate 2: Correctness Focus](#gate-2-correctness-focus)
+  - [Gate 3: Fidelity Focus](#gate-3-fidelity-focus)
+  - [Gate 4: Strategic Value Focus](#gate-4-strategic-value-focus)
+- [Non-Negotiable Blockers](#non-negotiable-blockers)
+  - [Gate 1 (Phase 1 Blockers)](#gate-1-phase-1-blockers)
+  - [Gate 2 (Phase 1 Blockers)](#gate-2-phase-1-blockers)
+  - [Gate 3 (Phase 1 Blockers)](#gate-3-phase-1-blockers)
+  - [Gate 4 (Phase 1 Blockers)](#gate-4-phase-1-blockers)
+- [Pattern Tracking](#pattern-tracking)
+  - [How Patterns Work](#how-patterns-work)
+  - [What Gets Tracked](#what-gets-tracked)
+  - [Why It Matters](#why-it-matters)
+  - [Performance](#performance)
+- [Gate Result Storage](#gate-result-storage)
+  - [Gate 1 Results](#gate-1-results)
+  - [Gate 2 Results](#gate-2-results)
+  - [Gates 3 & 4 Results](#gates-3-4-results)
+- [Testing the Framework](#testing-the-framework)
+  - [Test Script](#test-script)
+  - [What the Script Shows](#what-the-script-shows)
+- [Debugging Validation Failures](#debugging-validation-failures)
+  - [Common Issues](#common-issues)
+  - [Checking Validation Results](#checking-validation-results)
+- [Module Reference](#module-reference)
+  - [Core Modules](#core-modules)
+  - [Integration Points](#integration-points)
+- [Configuration](#configuration)
+  - [Risk Level (strategic_directives_v2)](#risk-level-strategic_directives_v2)
+  - [Special Case Flags](#special-case-flags)
+  - [Categories](#categories)
+- [Performance](#performance)
+  - [Metrics](#metrics)
+  - [Optimization Tips](#optimization-tips)
+- [Migration Guide](#migration-guide)
+  - [From Fixed 80% Threshold](#from-fixed-80-threshold)
+  - [From No Phase 1/2 Split](#from-no-phase-12-split)
+- [Changelog](#changelog)
+  - [v1.3.0 (2026-01-24)](#v130-2026-01-24)
+  - [v1.2.0 (2026-01-24)](#v120-2026-01-24)
+  - [v1.1.0 (2025-11-15)](#v110-2025-11-15)
+  - [v1.0.0 (2025-10-28)](#v100-2025-10-28)
+- [Support](#support)
+  - [Questions?](#questions)
+  - [Common Pitfalls](#common-pitfalls)
+  - [Best Practices](#best-practices)
 
 ## Metadata
 - **Category**: Reference

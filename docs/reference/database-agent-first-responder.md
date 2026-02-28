@@ -1,5 +1,58 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Database Agent First-Responder Quick Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Core Principle](#core-principle)
+- [When to Invoke Database Agent](#when-to-invoke-database-agent)
+  - [Automatic Triggers (MUST invoke)](#automatic-triggers-must-invoke)
+  - [Error Patterns (Immediate Invocation)](#error-patterns-immediate-invocation)
+- [How to Invoke Database Agent](#how-to-invoke-database-agent)
+  - [With SD Context (Most Common)](#with-sd-context-most-common)
+  - [Advisory Mode (No SD Context)](#advisory-mode-no-sd-context)
+  - [Automatic Migration Detection (NEW - 2026-01-23)](#automatic-migration-detection-new---2026-01-23)
+- [Pre-Database-Work Checklist](#pre-database-work-checklist)
+  - [Before PLANNING Database Work](#before-planning-database-work)
+  - [Before EXECUTING Database Migrations](#before-executing-database-migrations)
+  - [Before WRITING Database Queries](#before-writing-database-queries)
+- [Error Response Protocol](#error-response-protocol)
+  - [What to Do When Database Error Occurs](#what-to-do-when-database-error-occurs)
+  - [What NOT to Do](#what-not-to-do)
+- [Common Scenarios](#common-scenarios)
+  - [Scenario 1: Migration Fails](#scenario-1-migration-fails)
+  - [Scenario 2: Column Not Found](#scenario-2-column-not-found)
+  - [Scenario 3: RLS Policy Blocks Operation](#scenario-3-rls-policy-blocks-operation)
+  - [Scenario 4: Connection Issues](#scenario-4-connection-issues)
+- [Integration with LEO Protocol Phases](#integration-with-leo-protocol-phases)
+  - [LEAD Pre-Approval](#lead-pre-approval)
+  - [PLAN PRD Creation](#plan-prd-creation)
+  - [EXEC Implementation](#exec-implementation)
+  - [PLAN Verification](#plan-verification)
+- [Success Patterns (Proven Examples)](#success-patterns-proven-examples)
+  - [Pattern 1: Proactive Schema Validation](#pattern-1-proactive-schema-validation)
+  - [Pattern 2: Migration Execution](#pattern-2-migration-execution)
+  - [Pattern 3: Trigger Function Validation](#pattern-3-trigger-function-validation)
+- [Quick Decision Matrix](#quick-decision-matrix)
+- [Established Patterns (No Database Agent Needed)](#established-patterns-no-database-agent-needed)
+  - [Connection Helper (Already Validated)](#connection-helper-already-validated)
+  - [Query Patterns (After Schema Validated)](#query-patterns-after-schema-validated)
+- [Performance Metrics](#performance-metrics)
+- [Related Documentation](#related-documentation)
+- [Cheat Sheet](#cheat-sheet)
+  - [One-Line Decision](#one-line-decision)
+  - [Three Rules](#three-rules)
+  - [Remember](#remember)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

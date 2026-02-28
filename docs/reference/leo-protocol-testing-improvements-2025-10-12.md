@@ -1,5 +1,52 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # LEO Protocol Testing & Agent Usage Improvements
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [🚨 Critical Improvements](#-critical-improvements)
+  - [1. Test Execution Timeout Handling ⭐ PRIORITY 1](#1-test-execution-timeout-handling-priority-1)
+  - [2. Checkpoint Pattern for Large SDs ⭐ PRIORITY 2](#2-checkpoint-pattern-for-large-sds-priority-2)
+  - [3. Session Continuation Best Practices ⭐ PRIORITY 3](#3-session-continuation-best-practices-priority-3)
+  - [4. Parallel Execution Opportunities ⭐ PRIORITY 4](#4-parallel-execution-opportunities-priority-4)
+- [📊 Testing Strategy Enhancements](#-testing-strategy-enhancements)
+  - [Progressive Testing Workflow](#progressive-testing-workflow)
+  - [Testing Decision Matrix](#testing-decision-matrix)
+  - [CI/CD-First Testing Strategy (WSL2 Optimization)](#cicd-first-testing-strategy-wsl2-optimization)
+- [🔧 Implementation Roadmap](#-implementation-roadmap)
+  - [Phase 1: Immediate Use (Week 1) ✅](#phase-1-immediate-use-week-1-)
+  - [Phase 2: Protocol Integration (Week 2-3)](#phase-2-protocol-integration-week-2-3)
+  - [Phase 3: Automation (Week 4+)](#phase-3-automation-week-4)
+- [📈 Expected Outcomes](#-expected-outcomes)
+  - [Time Savings](#time-savings)
+  - [Quality Improvements](#quality-improvements)
+  - [Risk Reduction](#risk-reduction)
+- [🎯 Quick Reference Links](#-quick-reference-links)
+  - [For LEAD Agents](#for-lead-agents)
+  - [For PLAN Agents](#for-plan-agents)
+  - [For EXEC Agents](#for-exec-agents)
+  - [For All Agents](#for-all-agents)
+- [📝 Evidence & Validation](#-evidence-validation)
+  - [SD-SETTINGS-2025-10-12 Results](#sd-settings-2025-10-12-results)
+- [🔄 Continuous Improvement](#-continuous-improvement)
+  - [Feedback Loop](#feedback-loop)
+  - [Future Enhancements](#future-enhancements)
+- [📚 Related Documentation](#-related-documentation)
+  - [Testing](#testing)
+  - [Workflow](#workflow)
+  - [Protocol](#protocol)
+- [📖 Version History](#-version-history)
+- [📞 Support & Questions](#-support-questions)
 
 ## Metadata
 - **Category**: Protocol

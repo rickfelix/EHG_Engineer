@@ -1,4 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 9 "Exit Strategy" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. Exit Strategy Generation Recommendation](#2-exit-strategy-generation-recommendation)
+  - [3. Exit Type Enumeration Decision](#3-exit-type-enumeration-decision)
+  - [4. Valuation Methods Decision](#4-valuation-methods-decision)
+  - [5. Exit Readiness Decision](#5-exit-readiness-decision)
+  - [6. Reality Gate vs Exit Grade](#6-reality-gate-vs-exit-grade)
+  - [7. Stage 8 → Stage 9 Consumption](#7-stage-8-stage-9-consumption)
+  - [8. CLI Superiorities (preserve these)](#8-cli-superiorities-preserve-these)
+  - [9. Recommended Stage 9 Schema](#9-recommended-stage-9-schema)
+  - [10. Minimum Viable Change](#10-minimum-viable-change)
+  - [11. Cross-Stage Impact](#11-cross-stage-impact)
+  - [12. Dependency Conflicts (with Stages 1-8 decisions)](#12-dependency-conflicts-with-stages-1-8-decisions)
+  - [13. Contrarian Take](#13-contrarian-take)
 
 > Independent response to the Stage 9 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

@@ -1,3 +1,38 @@
+
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [Common Gate Behavior](#common-gate-behavior)
+- [Promotion Gate 16: Schema Firewall](#promotion-gate-16-schema-firewall)
+  - [Approval Criteria](#approval-criteria)
+  - [Scoring](#scoring)
+  - [Devil's Advocate Review](#devils-advocate-review)
+  - [Decision Flow](#decision-flow)
+  - [On Approval](#on-approval)
+  - [On Hold (Rejection)](#on-hold-rejection)
+  - [Relationship to Reality Gates](#relationship-to-reality-gates)
+  - [Implementation](#implementation)
+- [Promotion Gate 17: Environment Ready](#promotion-gate-17-environment-ready)
+  - [Approval Criteria](#approval-criteria)
+  - [Scoring](#scoring)
+  - [Devil's Advocate Review](#devils-advocate-review)
+  - [Decision Flow](#decision-flow)
+  - [On Approval](#on-approval)
+  - [On Hold (Rejection)](#on-hold-rejection)
+  - [Implementation](#implementation)
+- [Promotion Gate 22: Go-to-Market Ready](#promotion-gate-22-go-to-market-ready)
+  - [Approval Criteria](#approval-criteria)
+  - [Scoring](#scoring)
+  - [Devil's Advocate Review](#devils-advocate-review)
+  - [Decision Flow](#decision-flow)
+  - [On Approval](#on-approval)
+  - [On Hold (Rejection)](#on-hold-rejection)
+  - [Relationship to Reality Gates](#relationship-to-reality-gates)
+  - [Implementation](#implementation)
+- [Promotion Gate Comparison](#promotion-gate-comparison)
+- [Promotion vs Kill Gates](#promotion-vs-kill-gates)
+- [Lifecycle Position Diagram](#lifecycle-position-diagram)
+
 ---
 Category: Reference
 Status: Approved

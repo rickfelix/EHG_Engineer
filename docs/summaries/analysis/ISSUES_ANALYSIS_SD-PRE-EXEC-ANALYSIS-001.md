@@ -1,5 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Issues Analysis: SD-PRE-EXEC-ANALYSIS-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Issue Categories](#issue-categories)
+  - [🔴 CRITICAL: Data Integrity Issues (3 issues)](#-critical-data-integrity-issues-3-issues)
+  - [🟡 MODERATE: Workflow Automation Gaps (3 issues)](#-moderate-workflow-automation-gaps-3-issues)
+  - [🟠 MINOR: Branch/Git Management (1 issue)](#-minor-branchgit-management-1-issue)
+  - [🔵 INFO: Documentation Gaps (1 issue)](#-info-documentation-gaps-1-issue)
+- [Detailed Issue Analysis](#detailed-issue-analysis)
+  - [Issue 1: PRD sd_uuid Field NULL 🔴 CRITICAL](#issue-1-prd-sd_uuid-field-null-critical)
+  - [Issue 2: Deliverables Schema Confusion 🔴 CRITICAL](#issue-2-deliverables-schema-confusion-critical)
+  - [Issue 3: User Story Validation Status Not Auto-Set 🔴 CRITICAL](#issue-3-user-story-validation-status-not-auto-set-critical)
+  - [Issue 4: Git Branch Mismatch 🟠 MINOR](#issue-4-git-branch-mismatch-minor)
+  - [Issue 5: CI/CD Workflow Failures (Unrelated) 🔵 INFO](#issue-5-cicd-workflow-failures-unrelated-info)
+  - [Issue 6: Deliverable Type Constraints 🟡 MODERATE](#issue-6-deliverable-type-constraints-moderate)
+  - [Issue 7: Retrospective Target Application Missing 🟡 MODERATE](#issue-7-retrospective-target-application-missing-moderate)
+  - [Issue 8: Database Handoff Schema Evolution 🟡 MODERATE](#issue-8-database-handoff-schema-evolution-moderate)
+- [Summary of Fixes Required](#summary-of-fixes-required)
+  - [🔴 CRITICAL (Must Fix - Blocks Workflow)](#-critical-must-fix---blocks-workflow)
+  - [🟡 MODERATE (Should Fix - Improves DX)](#-moderate-should-fix---improves-dx)
+  - [🟠 MINOR (Nice to Have)](#-minor-nice-to-have)
+  - [🔵 INFO (Separate SD Required)](#-info-separate-sd-required)
+- [Documentation Gaps to Fill](#documentation-gaps-to-fill)
+  - [1. Database Schema Reference](#1-database-schema-reference)
+  - [2. Deliverable Creation Guide](#2-deliverable-creation-guide)
+  - [3. User Story Lifecycle](#3-user-story-lifecycle)
+  - [4. Git Workflow for SDs](#4-git-workflow-for-sds)
+- [Estimated Total Time Savings](#estimated-total-time-savings)
+- [Recommended Implementation Order](#recommended-implementation-order)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Report

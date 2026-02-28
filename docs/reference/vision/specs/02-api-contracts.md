@@ -1,5 +1,35 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Vision v2 API Contracts Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Production Safety Rules (Single-User, Rick-only)](#production-safety-rules-single-user-rick-only)
+- [1. TypeScript Interfaces](#1-typescript-interfaces)
+  - [1.1 Core Types](#11-core-types)
+- [2. API Endpoints](#2-api-endpoints)
+  - [2.1 Ventures API](#21-ventures-api)
+  - [2.1.1 Opportunity Blueprints API](#211-opportunity-blueprints-api)
+  - [2.2 Chairman API](#22-chairman-api)
+  - [2.3 Directives API (EVA Commands)](#23-directives-api-eva-commands)
+  - [2.4 Artifacts API (Factory Floor)](#24-artifacts-api-factory-floor)
+  - [2.5 Crews API (Manual Trigger)](#25-crews-api-manual-trigger)
+  - [2.6 Assumptions API (Reality Check)](#26-assumptions-api-reality-check)
+- [2.7 Realtime (SSE)](#27-realtime-sse)
+- [3. Zod Validation Schemas](#3-zod-validation-schemas)
+- [4. Error Response Contract](#4-error-response-contract)
+- [5. Authentication Middleware](#5-authentication-middleware)
+- [References](#references)
 
 ## Metadata
 - **Category**: API

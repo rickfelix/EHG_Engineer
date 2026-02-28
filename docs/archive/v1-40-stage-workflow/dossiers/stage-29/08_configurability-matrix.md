@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 29: Configurability Matrix
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Configuration Schema](#configuration-schema)
+- [Parameter Catalog](#parameter-catalog)
+  - [1. UI Refinement Parameters (Substage 29.1)](#1-ui-refinement-parameters-substage-291)
+  - [2. UX Optimization Parameters (Substage 29.2)](#2-ux-optimization-parameters-substage-292)
+  - [3. Asset Preparation Parameters (Substage 29.3)](#3-asset-preparation-parameters-substage-293)
+  - [4. Performance Parameters (Core Web Vitals)](#4-performance-parameters-core-web-vitals)
+  - [5. Recursion Parameters (Trigger Controls)](#5-recursion-parameters-trigger-controls)
+- [Preset Configurations](#preset-configurations)
+  - [Preset 1: Strict (Fintech, Healthcare)](#preset-1-strict-fintech-healthcare)
+  - [Preset 2: Balanced (Default)](#preset-2-balanced-default)
+  - [Preset 3: Fast (MVP, Beta)](#preset-3-fast-mvp-beta)
+- [Configuration Management](#configuration-management)
+  - [Setting Configuration (Venture Creation)](#setting-configuration-venture-creation)
+  - [Updating Configuration (Runtime)](#updating-configuration-runtime)
+  - [Reading Configuration (Agent Execution)](#reading-configuration-agent-execution)
+- [Validation Rules](#validation-rules)
+  - [Pre-Execution Validation](#pre-execution-validation)
+  - [Runtime Overrides](#runtime-overrides)
+- [Impact Analysis](#impact-analysis)
+  - [Parameter Sensitivity](#parameter-sensitivity)
+  - [Performance vs. Quality Trade-offs](#performance-vs-quality-trade-offs)
+- [Cross-References](#cross-references)
+- [Sources Table](#sources-table)
 
 ## Overview
 

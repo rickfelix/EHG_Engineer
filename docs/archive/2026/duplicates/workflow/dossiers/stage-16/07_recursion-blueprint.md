@@ -1,3 +1,55 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Recursion Characteristics for AI/ML Stages](#recursion-characteristics-for-aiml-stages)
+- [Proposed Recursion Triggers](#proposed-recursion-triggers)
+  - [Trigger AI-001: Decision Accuracy Degradation](#trigger-ai-001-decision-accuracy-degradation)
+  - [Trigger AI-002: Automation Rate Decline](#trigger-ai-002-automation-rate-decline)
+  - [Trigger AI-003: Strategic Misalignment Detected](#trigger-ai-003-strategic-misalignment-detected)
+  - [Trigger AI-004: Failsafe Violations](#trigger-ai-004-failsafe-violations)
+  - [Trigger AI-005: New Decision Data Volume Threshold](#trigger-ai-005-new-decision-data-volume-threshold)
+  - [Trigger AI-006: Business Strategy Update](#trigger-ai-006-business-strategy-update)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+  - [From Stage 15 (Venture Scaling & Optimization)](#from-stage-15-venture-scaling-optimization)
+  - [From Stage 17 (Multi-Venture Orchestration)](#from-stage-17-multi-venture-orchestration)
+  - [From Continuous Monitoring Systems](#from-continuous-monitoring-systems)
+- [Outbound Recursion Impacts](#outbound-recursion-impacts)
+  - [Impact on Stage 15 (Upstream)](#impact-on-stage-15-upstream)
+  - [Impact on Stage 17 (Downstream)](#impact-on-stage-17-downstream)
+- [Recursion Execution Patterns](#recursion-execution-patterns)
+  - [Pattern 1: Automated Periodic Retraining (Trigger AI-005)](#pattern-1-automated-periodic-retraining-trigger-ai-005)
+  - [Pattern 2: Performance-Driven Recursion (Triggers AI-001, AI-002, AI-003)](#pattern-2-performance-driven-recursion-triggers-ai-001-ai-002-ai-003)
+  - [Pattern 3: Safety-Driven Emergency Recursion (Trigger AI-004)](#pattern-3-safety-driven-emergency-recursion-trigger-ai-004)
+  - [Pattern 4: Strategy-Driven Recursion (Trigger AI-006)](#pattern-4-strategy-driven-recursion-trigger-ai-006)
+- [Recursion Governance](#recursion-governance)
+  - [Recursion Approval Authority](#recursion-approval-authority)
+  - [Recursion Budget & Limits](#recursion-budget-limits)
+  - [Recursion Metrics & Tracking](#recursion-metrics-tracking)
+- [Recursion vs. Hotfix](#recursion-vs-hotfix)
+  - [When to Recurse (Full Substage Re-execution)](#when-to-recurse-full-substage-re-execution)
+  - [When to Hotfix (Targeted Patch)](#when-to-hotfix-targeted-patch)
+- [Recursion Success Criteria](#recursion-success-criteria)
+  - [Recursion Exit Conditions](#recursion-exit-conditions)
+  - [Recursion Failure Conditions](#recursion-failure-conditions)
+- [Recursion Notification & Communication](#recursion-notification-communication)
+  - [Stakeholder Notifications](#stakeholder-notifications)
+  - [Notification Channels](#notification-channels)
+- [Implementation Roadmap](#implementation-roadmap)
+  - [Phase 1: Monitoring & Detection (Weeks 1-2)](#phase-1-monitoring-detection-weeks-1-2)
+  - [Phase 2: Automated Recursion (Weeks 3-4)](#phase-2-automated-recursion-weeks-3-4)
+  - [Phase 3: Assisted Recursion (Weeks 5-6)](#phase-3-assisted-recursion-weeks-5-6)
+  - [Phase 4: Safety Recursion (Weeks 7-8)](#phase-4-safety-recursion-weeks-7-8)
+
 <!-- ARCHIVED: 2026-01-26T16:26:47.552Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-16\07_recursion-blueprint.md

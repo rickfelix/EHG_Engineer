@@ -1,4 +1,54 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # AUTO-PROCEED and Chaining Global Settings Implementation
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+- [Solution](#solution)
+- [Implementation Details](#implementation-details)
+  - [1. Database Schema](#1-database-schema)
+  - [2. Auto-Proceed Resolver Enhancement](#2-auto-proceed-resolver-enhancement)
+  - [3. Session Manager Integration](#3-session-manager-integration)
+  - [4. /leo settings Command](#4-leo-settings-command)
+  - [5. Documentation Enhancement](#5-documentation-enhancement)
+- [Files Modified](#files-modified)
+- [Default Values](#default-values)
+- [Configuration Hierarchy](#configuration-hierarchy)
+- [Usage Examples](#usage-examples)
+  - [Example 1: New User First Session](#example-1-new-user-first-session)
+  - [Example 2: Power User Enables Chaining](#example-2-power-user-enables-chaining)
+  - [Example 3: Temporary Disable for This Session](#example-3-temporary-disable-for-this-session)
+  - [Example 4: CLI Override](#example-4-cli-override)
+- [Verification Steps](#verification-steps)
+  - [1. Verify Database Migration](#1-verify-database-migration)
+  - [2. Verify New Session Inherits Defaults](#2-verify-new-session-inherits-defaults)
+  - [3. Verify /leo settings Command](#3-verify-leo-settings-command)
+  - [4. Verify Documentation Regeneration](#4-verify-documentation-regeneration)
+- [Architectural Benefits](#architectural-benefits)
+  - [1. User Experience](#1-user-experience)
+  - [2. Operational Intelligence](#2-operational-intelligence)
+  - [3. Consistency](#3-consistency)
+- [Breaking Changes](#breaking-changes)
+- [Future Enhancements](#future-enhancements)
+- [Related Work](#related-work)
+- [Testing Validation](#testing-validation)
+- [Rollout Plan](#rollout-plan)
+  - [Phase 1: Database Setup (COMPLETE)](#phase-1-database-setup-complete)
+  - [Phase 2: Code Integration (COMPLETE)](#phase-2-code-integration-complete)
+  - [Phase 3: Documentation (COMPLETE)](#phase-3-documentation-complete)
+  - [Phase 4: Verification (COMPLETE)](#phase-4-verification-complete)
+- [Success Criteria](#success-criteria)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Implementation

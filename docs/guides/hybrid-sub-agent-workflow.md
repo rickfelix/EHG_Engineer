@@ -1,5 +1,42 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Hybrid Sub-Agent Workflow Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Architecture Overview](#architecture-overview)
+- [Three Proven Patterns](#three-proven-patterns)
+  - [Pattern 1: Advisory Mode ✅](#pattern-1-advisory-mode-)
+  - [Pattern 2: Direct Script Execution ✅](#pattern-2-direct-script-execution-)
+  - [Pattern 3: Hybrid Trigger (Experimental) ⚠️](#pattern-3-hybrid-trigger-experimental-)
+- [Decision Matrix: Which Pattern to Use?](#decision-matrix-which-pattern-to-use)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [5-Phase Workflow](#5-phase-workflow)
+- [Performance Characteristics](#performance-characteristics)
+  - [Pattern 1: Advisory Mode](#pattern-1-advisory-mode)
+  - [Pattern 2: Direct Script Execution](#pattern-2-direct-script-execution)
+  - [Pattern 3: Hybrid (Not Functional)](#pattern-3-hybrid-not-functional)
+- [Best Practices](#best-practices)
+  - [For Advisory Questions (Pattern 1)](#for-advisory-questions-pattern-1)
+  - [For Execution Tasks (Pattern 2)](#for-execution-tasks-pattern-2)
+  - [For Development Iteration](#for-development-iteration)
+- [Troubleshooting](#troubleshooting)
+  - ["Sub-Agent Didn't Execute Script"](#sub-agent-didnt-execute-script)
+  - ["Orchestrator Returned BLOCKED"](#orchestrator-returned-blocked)
+  - ["No Database Records Created"](#no-database-records-created)
+- [Future Enhancements](#future-enhancements)
+  - [Planned Improvements](#planned-improvements)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

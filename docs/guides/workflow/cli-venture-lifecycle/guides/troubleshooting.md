@@ -1,3 +1,38 @@
+
+## Table of Contents
+
+- [Diagnostic Flow](#diagnostic-flow)
+- [Gate Failures](#gate-failures)
+  - [Reality Gate](#reality-gate)
+  - [Kill Gate](#kill-gate)
+  - [Promotion Gate](#promotion-gate)
+- [Template Errors](#template-errors)
+  - [Template Not Found](#template-not-found)
+  - [Invalid Template](#invalid-template)
+- [Database Errors](#database-errors)
+  - [RLS Policy Blocking](#rls-policy-blocking)
+  - [Idempotency Conflict](#idempotency-conflict)
+  - [Connection Failure](#connection-failure)
+- [LLM Errors](#llm-errors)
+  - [JSON Parse Failure](#json-parse-failure)
+  - [Token Budget Exceeded](#token-budget-exceeded)
+  - [API Timeout](#api-timeout)
+- [State Machine Errors](#state-machine-errors)
+  - [State Transition Rejected](#state-transition-rejected)
+  - [Invalid Transition](#invalid-transition)
+- [Devil's Advocate Failures](#devils-advocate-failures)
+  - [OPENAI_API_KEY Not Set](#openai_api_key-not-set)
+  - [GPT-4o API Error](#gpt-4o-api-error)
+- [Bridge Errors](#bridge-errors)
+  - [Duplicate Orchestrator](#duplicate-orchestrator)
+  - [Invalid SD Type Mapping](#invalid-sd-type-mapping)
+- [General Debugging Tools](#general-debugging-tools)
+  - [Event Log Query](#event-log-query)
+  - [Artifact Inspection](#artifact-inspection)
+  - [Transition History](#transition-history)
+- [Escalation Path](#escalation-path)
+- [Related Documentation](#related-documentation)
+
 ---
 Category: Guide
 Status: Approved

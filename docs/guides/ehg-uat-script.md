@@ -1,5 +1,71 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # EHG Application - User Acceptance Testing (UAT) Script
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Document Information](#document-information)
+- [Executive Summary](#executive-summary)
+  - [Purpose](#purpose)
+  - [Scope](#scope)
+  - [Test Objectives](#test-objectives)
+  - [Test Approach](#test-approach)
+- [Pre-UAT Setup Checklist](#pre-uat-setup-checklist)
+  - [Environment Requirements](#environment-requirements)
+  - [Test User Accounts](#test-user-accounts)
+  - [Test Data Requirements](#test-data-requirements)
+- [SECTION 1: Authentication & Security Testing](#section-1-authentication-security-testing)
+  - [1.1 Login Functionality](#11-login-functionality)
+- [SECTION 2: Dashboard & Analytics](#section-2-dashboard-analytics)
+  - [2.1 Dashboard Display](#21-dashboard-display)
+- [SECTION 3: Ventures Management](#section-3-ventures-management)
+  - [3.1 Venture List & Search](#31-venture-list-search)
+  - [3.2 Venture CRUD Operations](#32-venture-crud-operations)
+  - [3.3 Venture Details & Documents](#33-venture-details-documents)
+- [SECTION 4: Portfolio Management](#section-4-portfolio-management)
+- [SECTION 5: AI Agents & EVA Assistant](#section-5-ai-agents-eva-assistant)
+- [SECTION 6: Governance & Compliance](#section-6-governance-compliance)
+- [SECTION 7: Team & Collaboration](#section-7-team-collaboration)
+- [SECTION 8: Reports & Insights](#section-8-reports-insights)
+- [SECTION 9: Settings & Configuration](#section-9-settings-configuration)
+- [SECTION 10: Notifications](#section-10-notifications)
+- [SECTION 11: Performance Testing](#section-11-performance-testing)
+- [SECTION 12: Accessibility Testing](#section-12-accessibility-testing)
+- [SECTION 13: Security Testing](#section-13-security-testing)
+- [SECTION 14: Cross-Browser Testing](#section-14-cross-browser-testing)
+- [Defect Log Template](#defect-log-template)
+  - [Defect #_____](#defect-_____)
+- [Test Execution Summary](#test-execution-summary)
+  - [Overall Statistics](#overall-statistics)
+  - [By Section Summary](#by-section-summary)
+  - [Critical Defects](#critical-defects)
+  - [High Priority Defects](#high-priority-defects)
+  - [Test Coverage Analysis](#test-coverage-analysis)
+- [UAT Sign-Off](#uat-sign-off)
+  - [Go/No-Go Recommendation](#gono-go-recommendation)
+  - [Conditions/Requirements for Launch](#conditionsrequirements-for-launch)
+  - [Risk Assessment](#risk-assessment)
+  - [Stakeholder Sign-Off](#stakeholder-sign-off)
+  - [Post-UAT Action Items](#post-uat-action-items)
+  - [Lessons Learned](#lessons-learned)
+- [Appendix A: Test Environment Details](#appendix-a-test-environment-details)
+  - [Infrastructure](#infrastructure)
+  - [Test Tools Used](#test-tools-used)
+  - [Test Data Sets](#test-data-sets)
+- [Appendix B: Glossary](#appendix-b-glossary)
+- [Appendix C: Contact Information](#appendix-c-contact-information)
+  - [Support Contacts](#support-contacts)
+  - [Escalation Path](#escalation-path)
+- [Document Revision History](#document-revision-history)
 
 ## Metadata
 - **Category**: Guide

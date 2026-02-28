@@ -1,5 +1,47 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Windows Development Setup Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Prerequisites](#prerequisites)
+  - [Required Software](#required-software)
+  - [Verify Installation](#verify-installation)
+- [Repository Setup](#repository-setup)
+  - [1. Clone the Repository](#1-clone-the-repository)
+  - [2. Install Dependencies](#2-install-dependencies)
+  - [3. Environment Configuration](#3-environment-configuration)
+- [Starting Development Servers](#starting-development-servers)
+  - [Using PowerShell Scripts (Recommended)](#using-powershell-scripts-recommended)
+  - [Using npm Scripts](#using-npm-scripts)
+- [Running Tests](#running-tests)
+  - [Unit Tests](#unit-tests)
+  - [Smoke Tests](#smoke-tests)
+  - [E2E Tests (Playwright)](#e2e-tests-playwright)
+  - [UAT Tests](#uat-tests)
+- [Database Operations](#database-operations)
+  - [Connect to Database](#connect-to-database)
+  - [Test Database Connection](#test-database-connection)
+- [Compliance & Auditing](#compliance-auditing)
+  - [Run LEO Compliance Audit](#run-leo-compliance-audit)
+- [Troubleshooting](#troubleshooting)
+  - [PowerShell Execution Policy](#powershell-execution-policy)
+  - [Port Already in Use](#port-already-in-use)
+  - [Node.js Memory Issues](#nodejs-memory-issues)
+  - [Git Line Ending Issues](#git-line-ending-issues)
+  - [Python Virtual Environment (Agent Platform)](#python-virtual-environment-agent-platform)
+- [Directory Structure](#directory-structure)
+- [Cross-Platform Compatibility](#cross-platform-compatibility)
+- [Additional Resources](#additional-resources)
 
 ## Metadata
 - **Category**: Guide

@@ -1,5 +1,65 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Genesis Virtual Bunker Addendum
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Decision Record](#decision-record)
+  - [The Original Spec (Hard Isolation)](#the-original-spec-hard-isolation)
+  - [The Virtual Bunker Decision](#the-virtual-bunker-decision)
+- [Architecture](#architecture)
+  - [1. Pattern Library (Replaces Static Templates)](#1-pattern-library-replaces-static-templates)
+  - [2. Mock Mode Isolation (Replaces Separate Infrastructure)](#2-mock-mode-isolation-replaces-separate-infrastructure)
+  - [3. Ephemeral Deployments (Replaces Dedicated Hosting)](#3-ephemeral-deployments-replaces-dedicated-hosting)
+  - [4. Regeneration Gates (Replaces Elevation/Promotion)](#4-regeneration-gates-replaces-elevationpromotion)
+- [Generation Pipeline](#generation-pipeline)
+  - [Phase 1: Seed → PRD](#phase-1-seed-prd)
+  - [Phase 2: PRD → Schema](#phase-2-prd-schema)
+  - [Phase 3: Schema → Repository](#phase-3-schema-repository)
+  - [Phase 4: Repository → Live URL](#phase-4-repository-live-url)
+- [Generation Contract](#generation-contract)
+  - [Quality Gates (v1)](#quality-gates-v1)
+  - [NOT Required for v1](#not-required-for-v1)
+  - [Pattern Composition Strategy](#pattern-composition-strategy)
+- [Incineration Sequence](#incineration-sequence)
+- [Ratification Contract](#ratification-contract)
+- [Soul Extraction Process](#soul-extraction-process)
+  - [What Gets Extracted (Structured Requirements)](#what-gets-extracted-structured-requirements)
+  - [What Gets Discarded](#what-gets-discarded)
+  - [Extraction Format](#extraction-format)
+- [Stage Integration Mapping](#stage-integration-mapping)
+  - [Stage 1: Genesis Entry](#stage-1-genesis-entry)
+  - [Stage 2: AI Multi-Model Critique](#stage-2-ai-multi-model-critique)
+  - [Stage 3: Kill Gate](#stage-3-kill-gate)
+  - [Stages 4-15: Validation with Simulation Reference](#stages-4-15-validation-with-simulation-reference)
+  - [Stage 16: Schema Regeneration Gate](#stage-16-schema-regeneration-gate)
+  - [Stage 17: Repository Regeneration Gate](#stage-17-repository-regeneration-gate)
+  - [Stages 18-21: Production Build](#stages-18-21-production-build)
+  - [Stage 22-23: Production Deployment](#stage-22-23-production-deployment)
+- [Database Schema Changes](#database-schema-changes)
+  - [New Tables](#new-tables)
+  - [Deferred Tables (v2)](#deferred-tables-v2)
+- [CLI Commands](#cli-commands)
+  - [Genesis Commands](#genesis-commands)
+  - [Regeneration Commands](#regeneration-commands)
+- [Success Criteria](#success-criteria)
+  - [v1 Launch (Sprint 1-3)](#v1-launch-sprint-1-3)
+  - [v2 Enhancements (Post-Launch)](#v2-enhancements-post-launch)
+- [Appendix: Council Verdicts](#appendix-council-verdicts)
+  - [OpenAI Council (2025-12-30)](#openai-council-2025-12-30)
+  - [AntiGravity Council (2025-12-30)](#antigravity-council-2025-12-30)
+  - [Claude Architect (2025-12-30)](#claude-architect-2025-12-30)
+- [Supersession Notice](#supersession-notice)
 
 ## Metadata
 - **Category**: Guide

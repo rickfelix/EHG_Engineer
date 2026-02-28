@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 23 "Launch Execution" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Kill Gate Enhancement](#3-kill-gate-enhancement)
+  - [4. Launch Type](#4-launch-type)
+  - [5. Launch Tasks](#5-launch-tasks)
+  - [6. Success Criteria & Launch Metrics](#6-success-criteria-launch-metrics)
+  - [7. Post-Launch Plan](#7-post-launch-plan)
+  - [8. Stakeholder Approval](#8-stakeholder-approval)
+  - [9. launch_date Fix](#9-launch_date-fix)
+  - [10. CLI Superiorities (preserve these)](#10-cli-superiorities-preserve-these)
+  - [11. Recommended Stage 23 Schema](#11-recommended-stage-23-schema)
+  - [12. Minimum Viable Change (Priority-Ordered)](#12-minimum-viable-change-priority-ordered)
+  - [13. Cross-Stage Impact](#13-cross-stage-impact)
+  - [14. Dependency Conflicts (with Stages 1-22 decisions)](#14-dependency-conflicts-with-stages-1-22-decisions)
+  - [15. Contrarian Take](#15-contrarian-take)
 
 > Independent response to the Stage 23 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

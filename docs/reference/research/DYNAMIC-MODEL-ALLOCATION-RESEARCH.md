@@ -1,5 +1,41 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Dynamic Model Allocation Framework Research Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Key Findings](#key-findings)
+- [PHASE 1: BASELINE INVENTORY & COST STRUCTURE](#phase-1-baseline-inventory-cost-structure)
+  - [STEP 1: Sub-Agent Inventory & Phase Mapping](#step-1-sub-agent-inventory-phase-mapping)
+  - [STEP 2: Anthropic Pricing Structure](#step-2-anthropic-pricing-structure)
+  - [STEP 3: Historical Token Costs & Rework Patterns](#step-3-historical-token-costs-rework-patterns)
+- [PHASE 2: ANALYSIS & CONSTRAINTS](#phase-2-analysis-constraints)
+  - [STEP 4: Data Quality & Gaps Assessment](#step-4-data-quality-gaps-assessment)
+  - [STEP 5: Sub-Agent Model Floors & Safety Policy](#step-5-sub-agent-model-floors-safety-policy)
+  - [STEP 6: Complexity Rubric + Rework Matrix + Cost-Benefit Analysis](#step-6-complexity-rubric-rework-matrix-cost-benefit-analysis)
+- [PHASE 3: INTEGRATION & OPERATIONS](#phase-3-integration-operations)
+  - [STEP 7: Dynamic Allocation Algorithm](#step-7-dynamic-allocation-algorithm)
+  - [STEP 8: Integration Strategy](#step-8-integration-strategy)
+  - [STEP 9: Mission Control Dashboard Specification](#step-9-mission-control-dashboard-specification)
+- [PHASE 4: IMPLEMENTATION READINESS](#phase-4-implementation-readiness)
+  - [STEP 10: Success Metrics & KPIs](#step-10-success-metrics-kpis)
+  - [STEP 11: Phase 0 MVP Definition & Risk Mitigation](#step-11-phase-0-mvp-definition-risk-mitigation)
+- [Appendix A: Model Performance Data (from Recent Commits)](#appendix-a-model-performance-data-from-recent-commits)
+  - [Pass Rates by Sub-Agent and Phase (Historical)](#pass-rates-by-sub-agent-and-phase-historical)
+- [Appendix B: Sources](#appendix-b-sources)
+  - [Anthropic Pricing](#anthropic-pricing)
+  - [Codebase References](#codebase-references)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Guide

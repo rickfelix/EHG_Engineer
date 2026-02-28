@@ -1,5 +1,34 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Parallel Execution Opportunities for Claude Code
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Core Principle](#core-principle)
+- [Missed Opportunities in SD-SETTINGS-2025-10-12](#missed-opportunities-in-sd-settings-2025-10-12)
+  - [1. Component File Reading (Sequential → Should be Parallel)](#1-component-file-reading-sequential-should-be-parallel)
+  - [2. Line Count Verification (Sequential → Should be Parallel)](#2-line-count-verification-sequential-should-be-parallel)
+  - [3. Pre-Implementation Verification (Sequential → Could be Parallel)](#3-pre-implementation-verification-sequential-could-be-parallel)
+- [Safe Parallel Execution Patterns](#safe-parallel-execution-patterns)
+  - [File Reading](#file-reading)
+  - [Git Operations](#git-operations)
+  - [Database Queries](#database-queries)
+  - [Test Execution](#test-execution)
+  - [Sub-Agent Execution](#sub-agent-execution)
+- [Decision Matrix](#decision-matrix)
+- [Implementation Guidelines](#implementation-guidelines)
+  - [When to Use Parallel Execution](#when-to-use-parallel-execution)
+  - [How to Implement](#how-to-implement)
 
 ## Metadata
 - **Category**: Reference

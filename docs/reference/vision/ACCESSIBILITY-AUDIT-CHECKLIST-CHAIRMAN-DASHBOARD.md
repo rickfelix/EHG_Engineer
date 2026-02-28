@@ -1,5 +1,46 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Accessibility Audit Checklist: Chairman Dashboard UI
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [1. Perceivable](#1-perceivable)
+  - [1.1 Text Alternatives (Level A)](#11-text-alternatives-level-a)
+  - [1.2 Time-based Media (Level A/AA)](#12-time-based-media-level-aaa)
+  - [1.3 Adaptable (Level A)](#13-adaptable-level-a)
+  - [1.4 Distinguishable (Level A/AA)](#14-distinguishable-level-aaa)
+- [2. Operable](#2-operable)
+  - [2.1 Keyboard Accessible (Level A)](#21-keyboard-accessible-level-a)
+  - [2.2 Enough Time (Level A)](#22-enough-time-level-a)
+  - [2.3 Seizures (Level A/AA)](#23-seizures-level-aaa)
+  - [2.4 Navigable (Level A/AA)](#24-navigable-level-aaa)
+  - [2.5 Input Modalities (Level A/AA)](#25-input-modalities-level-aaa)
+- [3. Understandable](#3-understandable)
+  - [3.1 Readable (Level A/AA)](#31-readable-level-aaa)
+  - [3.2 Predictable (Level A/AA)](#32-predictable-level-aaa)
+  - [3.3 Input Assistance (Level A/AA)](#33-input-assistance-level-aaa)
+- [4. Robust](#4-robust)
+  - [4.1 Compatible (Level A)](#41-compatible-level-a)
+- [5. Additional Best Practices](#5-additional-best-practices)
+  - [5.1 Screen Reader Testing](#51-screen-reader-testing)
+  - [5.2 Reduced Motion](#52-reduced-motion)
+  - [5.3 High Contrast Mode](#53-high-contrast-mode)
+  - [5.4 Zoom and Magnification](#54-zoom-and-magnification)
+- [6. Automated Testing Strategy](#6-automated-testing-strategy)
+  - [6.1 CI/CD Integration](#61-cicd-integration)
+  - [6.2 Manual Testing Checklist](#62-manual-testing-checklist)
+- [7. Priority Matrix](#7-priority-matrix)
+- [8. Sign-Off Checklist](#8-sign-off-checklist)
 
 ## Metadata
 - **Category**: Guide

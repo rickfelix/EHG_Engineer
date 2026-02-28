@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 15: Pricing Strategy & Revenue Architecture - Operating Dossier
 
 **REGENERATION NOTE**: This dossier is dynamically generated from authoritative sources (`stages.yaml`, `critique/stage-15.md`) and MUST be regenerated after ANY update to those sources. Direct edits to this dossier will be overwritten. To modify Stage 15 specifications, edit the source files and regenerate using the Phase 7 contract protocol.

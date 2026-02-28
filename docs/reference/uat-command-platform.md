@@ -1,4 +1,75 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # /uat Command Platform Reference
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Component Diagram](#component-diagram)
+  - [Core Components](#core-components)
+- [Database Schema](#database-schema)
+  - [Tables](#tables)
+  - [Views](#views)
+- [Quality Gates](#quality-gates)
+  - [GREEN: Ship Ready](#green-ship-ready)
+  - [YELLOW: Review Required](#yellow-review-required)
+  - [RED: Must Fix](#red-must-fix)
+- [Command Workflow](#command-workflow)
+  - [Step 1: SD Type Detection](#step-1-sd-type-detection)
+  - [Step 2: UAT Readiness Check](#step-2-uat-readiness-check)
+  - [Step 3: Scenario Generation](#step-3-scenario-generation)
+  - [Step 4: Mode Selection](#step-4-mode-selection)
+  - [Step 5: Interactive Testing](#step-5-interactive-testing)
+  - [Step 6: Session Completion](#step-6-session-completion)
+  - [Step 7: Defect Routing](#step-7-defect-routing)
+- [Integration with Command Ecosystem](#integration-with-command-ecosystem)
+  - [Position in Workflow](#position-in-workflow)
+  - [Command Relationships](#command-relationships)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Basic Usage (Current SD)](#example-1-basic-usage-current-sd)
+  - [Example 2: Explicit SD](#example-2-explicit-sd)
+  - [Example 3: Full Run Mode](#example-3-full-run-mode)
+  - [Example 4: Exploratory Mode](#example-4-exploratory-mode)
+- [Implementation Details](#implementation-details)
+  - [Scenario Snapshot Storage](#scenario-snapshot-storage)
+  - [Priority Scoring Algorithm](#priority-scoring-algorithm)
+  - [Risk Assessment Algorithm](#risk-assessment-algorithm)
+  - [Pass Criteria Extraction](#pass-criteria-extraction)
+- [Testing Evidence](#testing-evidence)
+- [Error Handling](#error-handling)
+- [Performance Considerations](#performance-considerations)
+  - [Scenario Generation](#scenario-generation)
+  - [Database Writes](#database-writes)
+  - [Memory](#memory)
+- [Related Documentation](#related-documentation)
+- [Strategic Directives](#strategic-directives)
+- [Success Metrics](#success-metrics)
+  - [Implementation Quality](#implementation-quality)
+  - [Code Quality](#code-quality)
+  - [Documentation Quality](#documentation-quality)
+- [Intelligent Feedback System (SD-LEO-FEAT-INTELLIGENT-UAT-FEEDBACK-001)](#intelligent-feedback-system-sd-leo-feat-intelligent-uat-feedback-001)
+  - [Overview](#overview)
+  - [Architecture](#architecture)
+  - [Feedback Modes](#feedback-modes)
+  - [Multi-Model Triangulation](#multi-model-triangulation)
+  - [Follow-up Questions](#follow-up-questions)
+  - [Action Routing Rules](#action-routing-rules)
+  - [Usage](#usage)
+  - [Database Storage](#database-storage)
+- [Version History](#version-history)
+- [Appendix](#appendix)
+  - [High-Risk Pattern Regex](#high-risk-pattern-regex)
+  - [Quality Gate SQL](#quality-gate-sql)
 
 ## Metadata
 - **Category**: Reference

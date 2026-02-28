@@ -1,3 +1,45 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Scoring Rubric](#scoring-rubric)
+- [Criterion 1: Definition Completeness (20 points)](#criterion-1-definition-completeness-20-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 2: Assessment Fidelity (15 points)](#criterion-2-assessment-fidelity-15-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 3: Recursion Blueprint (10 points)](#criterion-3-recursion-blueprint-10-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 4: Agent Orchestration (15 points)](#criterion-4-agent-orchestration-15-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 5: Configurability (10 points)](#criterion-5-configurability-10-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 6: Metrics/Monitoring (10 points)](#criterion-6-metricsmonitoring-10-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 7: SD Cross-Reference (15 points)](#criterion-7-sd-cross-reference-15-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Criterion 8: Regeneration Note (5 points)](#criterion-8-regeneration-note-5-points)
+  - [Evaluation Checklist](#evaluation-checklist)
+- [Final Score Calculation](#final-score-calculation)
+- [Quality Assurance Checks](#quality-assurance-checks)
+  - [Evidence Citation Format Verification](#evidence-citation-format-verification)
+  - [File Completeness Check](#file-completeness-check)
+  - [Evidence Citation Count per File](#evidence-citation-count-per-file)
+  - [Cross-Reference Integrity](#cross-reference-integrity)
+- [Anomalies and Deviations](#anomalies-and-deviations)
+- [Maintenance Notes](#maintenance-notes)
+  - [Next Dossier Generation (Stage 18+)](#next-dossier-generation-stage-18)
+  - [Dossier Update Triggers](#dossier-update-triggers)
+  - [Version History](#version-history)
+
 <!-- ARCHIVED: 2026-01-26T16:26:55.531Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-17\11_acceptance-checklist.md

@@ -1,5 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Preventing Missed Sub-Agents: Comprehensive Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🚨 What Went Wrong](#-what-went-wrong)
+- [✅ Solution: Automated Trigger System](#-solution-automated-trigger-system)
+  - [1. Auto-Trigger Script](#1-auto-trigger-script)
+  - [2. LEAD Approval Checklist](#2-lead-approval-checklist)
+- [📋 Mandatory Checklist for LEAD](#-mandatory-checklist-for-lead)
+- [🎯 Sub-Agent Trigger Reference](#-sub-agent-trigger-reference)
+  - [Continuous Improvement Coach](#continuous-improvement-coach)
+  - [DevOps Platform Architect](#devops-platform-architect)
+  - [Design Sub-Agent](#design-sub-agent)
+  - [QA Engineering Director](#qa-engineering-director)
+  - [Database Architect](#database-architect)
+  - [Systems Analyst](#systems-analyst)
+- [🔄 Integration into Workflow](#-integration-into-workflow)
+  - [PLAN Phase](#plan-phase)
+  - [EXEC Phase](#exec-phase)
+  - [LEAD Approval](#lead-approval)
+- [📊 Database Schema for Tracking](#-database-schema-for-tracking)
+  - [Sub-Agent Executions Table](#sub-agent-executions-table)
+  - [Recording Activations](#recording-activations)
+- [🎓 Lessons Learned](#-lessons-learned)
+  - [From SD-UAT-021](#from-sd-uat-021)
+- [🚀 Next Steps](#-next-steps)
+  - [Immediate](#immediate)
+  - [Short-Term](#short-term)
+  - [Long-Term](#long-term)
+- [📝 Quick Reference](#-quick-reference)
 
 ## Metadata
 - **Category**: Reference

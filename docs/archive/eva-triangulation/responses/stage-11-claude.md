@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 11 "Go-To-Market" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Fixed Counts vs Flexible Decision](#3-fixed-counts-vs-flexible-decision)
+  - [4. Channel Classification Decision](#4-channel-classification-decision)
+  - [5. Segment Depth Decision](#5-segment-depth-decision)
+  - [6. GTM Metrics Decision](#6-gtm-metrics-decision)
+  - [7. Stage 10 → 11 Consumption Mapping](#7-stage-10-11-consumption-mapping)
+  - [8. Budget-Pricing Coherence Check](#8-budget-pricing-coherence-check)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 11 Schema](#10-recommended-stage-11-schema)
+  - [11. Minimum Viable Change (priority-ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-10 decisions)](#13-dependency-conflicts-with-stages-1-10-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 11 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

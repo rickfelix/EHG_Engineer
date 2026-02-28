@@ -1,4 +1,45 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Stage 1: Draft Idea Agent - Enhanced with Market Intelligence Integration
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Enhanced Agent Architecture](#1-enhanced-agent-architecture)
+  - [1.1 Core Components](#11-core-components)
+  - [1.2 Intelligence-Driven Idea Generation](#12-intelligence-driven-idea-generation)
+- [2. User Idea Enhancement](#2-user-idea-enhancement)
+  - [2.1 Intelligence-Powered Enhancement](#21-intelligence-powered-enhancement)
+- [3. Proactive Opportunity Scanning](#3-proactive-opportunity-scanning)
+  - [3.1 Continuous Opportunity Discovery](#31-continuous-opportunity-discovery)
+- [4. Data-Driven Validation](#4-data-driven-validation)
+  - [4.1 Market Evidence Validation](#41-market-evidence-validation)
+- [5. Idea Scoring & Ranking](#5-idea-scoring-ranking)
+  - [5.1 Multi-Factor Scoring Model](#51-multi-factor-scoring-model)
+- [6. Blueprint Pre-Generation](#6-blueprint-pre-generation)
+  - [6.1 Automatic Blueprint Creation](#61-automatic-blueprint-creation)
+- [7. Continuous Learning & Improvement](#7-continuous-learning-improvement)
+  - [7.1 Idea Performance Tracking](#71-idea-performance-tracking)
+- [8. Integration with Other Stages](#8-integration-with-other-stages)
+  - [8.1 Stage Flow Integration](#81-stage-flow-integration)
+- [9. Implementation Requirements](#9-implementation-requirements)
+  - [9.1 Technical Infrastructure](#91-technical-infrastructure)
+  - [9.2 Database Schema](#92-database-schema)
+- [10. Success Metrics](#10-success-metrics)
+  - [10.1 Performance KPIs](#101-performance-kpis)
+- [11. Database Schema Integration](#11-database-schema-integration)
+  - [Core Entity Dependencies](#core-entity-dependencies)
+- [12. Integration Hub Connectivity](#12-integration-hub-connectivity)
+  - [Integration Requirements](#integration-requirements)
+- [13. Conclusion](#13-conclusion)
 
 ## Metadata
 - **Category**: Feature

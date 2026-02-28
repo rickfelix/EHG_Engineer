@@ -1,4 +1,66 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Automated Learning Capture Architecture
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+  - [The Blind Spot](#the-blind-spot)
+  - [Evidence from Real Sessions](#evidence-from-real-sessions)
+  - [Root Cause](#root-cause)
+- [Architecture Overview](#architecture-overview)
+  - [Core Principle](#core-principle)
+  - [Architecture Layers](#architecture-layers)
+- [Components](#components)
+  - [1. PostToolUse Hook (`scripts/hooks/auto-learning-capture.cjs`)](#1-posttooluse-hook-scriptshooksauto-learning-capturecjs)
+  - [2. Learning Capture Engine (`scripts/auto-learning-capture.js`)](#2-learning-capture-engine-scriptsauto-learning-capturejs)
+- [Detection Strategy](#detection-strategy)
+  - [Database-First Detection (Survives Branch Deletion)](#database-first-detection-survives-branch-deletion)
+  - [Detection Sequence](#detection-sequence)
+- [Learning Extraction](#learning-extraction)
+  - [Extraction Pipeline](#extraction-pipeline)
+  - [1. PR Metadata Extraction](#1-pr-metadata-extraction)
+  - [2. Work Type Classification](#2-work-type-classification)
+  - [3. Learning Signal Detection](#3-learning-signal-detection)
+  - [4. Corrective Action Detection](#4-corrective-action-detection)
+- [Database Integration](#database-integration)
+  - [Schema Usage](#schema-usage)
+  - [Integration with /learn Command](#integration-with-learn-command)
+- [Patterns (with Devil's Advocate)](#patterns-with-devils-advocate)
+- [Workflow](#workflow)
+  - [End-to-End Flow](#end-to-end-flow)
+  - [Timing and Performance](#timing-and-performance)
+  - [Error Handling](#error-handling)
+- [Success Criteria](#success-criteria)
+  - [Functional Requirements](#functional-requirements)
+  - [Quality Metrics](#quality-metrics)
+  - [User Experience](#user-experience)
+- [Memory-Pattern Lifecycle Closure](#memory-pattern-lifecycle-closure)
+  - [The Problem (Before)](#the-problem-before)
+  - [The Solution](#the-solution)
+- [Gate Return Schema Must Use passed/maxScore [PAT-AUTO-0042]](#gate-return-schema-must-use-passedmaxscore-pat-auto-0042)
+  - [Full Lifecycle Diagram](#full-lifecycle-diagram)
+  - [Fail-Safe Design](#fail-safe-design)
+  - [Implementation Files](#implementation-files)
+  - [MEMORY.md Rules (Post-Implementation)](#memorymd-rules-post-implementation)
+- [Related Documentation](#related-documentation)
+  - [Architecture](#architecture)
+  - [Reference](#reference)
+  - [Protocols](#protocols)
+  - [Implementation](#implementation)
+- [Quick-Fix Pattern Promotion Integration](#quick-fix-pattern-promotion-integration)
+  - [Architecture Extension](#architecture-extension)
+  - [Quick-Fix Clustering](#quick-fix-clustering)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Architecture

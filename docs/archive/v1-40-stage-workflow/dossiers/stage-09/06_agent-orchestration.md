@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 9: Agent Orchestration & Governance
+
+
+## Table of Contents
+
+- [Agent Ownership](#agent-ownership)
+- [CrewAI Agent Definition](#crewai-agent-definition)
+- [CrewAI Task Definitions](#crewai-task-definitions)
+  - [Task 9.1: Capability Assessment](#task-91-capability-assessment)
+  - [Task 9.2: Gap Identification](#task-92-gap-identification)
+  - [Task 9.3: Opportunity Modeling](#task-93-opportunity-modeling)
+- [CrewAI Crew Configuration](#crewai-crew-configuration)
+- [Governance & Quality Gates](#governance-quality-gates)
+  - [Entry Gate Validation](#entry-gate-validation)
+  - [Exit Gate Validation](#exit-gate-validation)
+- [Metrics Calculation](#metrics-calculation)
+- [Database Integration](#database-integration)
+  - [Stage 9 Schema (Proposed)](#stage-9-schema-proposed)
+- [Human-in-the-Loop (HITL) Points](#human-in-the-loop-hitl-points)
+- [Error Handling](#error-handling)
+- [Sources Table](#sources-table)
 
 **Purpose**: Define how LEO Protocol agents execute Stage 9, with CrewAI implementation patterns.
 

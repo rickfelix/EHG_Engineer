@@ -1,3 +1,11 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 <!-- Archived from: brainstorm/2026-02-22-continuous-autonomous-processing-pipeline.md -->
 <!-- SD Key: SD-LEO-FIX-BRAINSTORM-CONTINUOUS-AUTONOMOUS-001 -->
 <!-- Archived at: 2026-02-23T03:01:50.089Z -->

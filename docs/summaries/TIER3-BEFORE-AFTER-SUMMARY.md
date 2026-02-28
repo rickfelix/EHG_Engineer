@@ -1,5 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # TIER 3 Accessibility Fixes - Before/After Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Files Fixed in This Session](#files-fixed-in-this-session)
+  - [1. LEADApprovalDialog.jsx](#1-leadapprovaldialogjsx)
+  - [2. PRReviews.jsx](#2-prreviewsjsx)
+  - [3. UserStories.jsx](#3-userstoriesjsx)
+- [Key Changes Applied](#key-changes-applied)
+  - [1. Radio Buttons (LEADApprovalDialog.jsx)](#1-radio-buttons-leadapprovaldialogjsx)
+  - [2. Number Inputs in Map (LEADApprovalDialog.jsx)](#2-number-inputs-in-map-leadapprovaldialogjsx)
+  - [3. Textarea (LEADApprovalDialog.jsx)](#3-textarea-leadapprovaldialogjsx)
+  - [4. Select (PRReviews.jsx)](#4-select-prreviewsjsx)
+  - [5. Selects (UserStories.jsx)](#5-selects-userstoriesjsx)
+- [Accessibility Impact](#accessibility-impact)
+  - [Screen Reader Announcements](#screen-reader-announcements)
+  - [User Experience](#user-experience)
+- [Testing Verification](#testing-verification)
+  - [Manual Testing Steps:](#manual-testing-steps)
+  - [Expected Results:](#expected-results)
+- [Compliance Achieved](#compliance-achieved)
 
 ## Metadata
 - **Category**: Report

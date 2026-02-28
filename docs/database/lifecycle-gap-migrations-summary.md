@@ -1,5 +1,58 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Lifecycle Gap Migrations Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Migration Status](#migration-status)
+- [1. Stage 20 Compliance Gate (SD-LIFECYCLE-GAP-002)](#1-stage-20-compliance-gate-sd-lifecycle-gap-002)
+  - [Status: ✅ ALREADY IMPLEMENTED](#status-already-implemented)
+  - [Migration Files:](#migration-files)
+  - [Tables Created:](#tables-created)
+  - [Gate Logic:](#gate-logic)
+  - [UI Integration:](#ui-integration)
+  - [Database Functions:](#database-functions)
+- [2. Capability Router Protocol (SD-LIFECYCLE-GAP-004)](#2-capability-router-protocol-sd-lifecycle-gap-004)
+  - [Status: ✅ ALREADY IMPLEMENTED](#status-already-implemented)
+  - [Migration File:](#migration-file)
+  - [Tables Extended:](#tables-extended)
+  - [Database Functions:](#database-functions)
+  - [Views:](#views)
+  - [Category Weights (Plane 1):](#category-weights-plane-1)
+- [3. Risk Re-calibration Gates (SD-LIFECYCLE-GAP-005)](#3-risk-re-calibration-gates-sd-lifecycle-gap-005)
+  - [Status: ✅ NEWLY CREATED](#status-newly-created)
+  - [Migration File:](#migration-file)
+  - [Tables Created:](#tables-created)
+  - [Database Functions:](#database-functions)
+  - [Triggers:](#triggers)
+  - [Views:](#views)
+  - [RLS Policies:](#rls-policies)
+  - [Gate Mapping:](#gate-mapping)
+  - [Integration with LEO Protocol:](#integration-with-leo-protocol)
+- [Next Steps](#next-steps)
+  - [1. Risk Re-calibration UI (NEW)](#1-risk-re-calibration-ui-new)
+  - [2. Phase Transition Integration (NEW)](#2-phase-transition-integration-new)
+  - [3. Risk Metrics & Reporting (NEW)](#3-risk-metrics-reporting-new)
+  - [4. Testing](#4-testing)
+  - [5. Documentation](#5-documentation)
+- [Verification Queries](#verification-queries)
+  - [Check Stage 20 Compliance Gate:](#check-stage-20-compliance-gate)
+  - [Check Capability Taxonomy:](#check-capability-taxonomy)
+  - [Check Risk Re-calibration Forms:](#check-risk-re-calibration-forms)
+  - [Check Active Risk Escalations:](#check-active-risk-escalations)
+- [File Locations](#file-locations)
+  - [Migrations:](#migrations)
+  - [Documentation:](#documentation)
+  - [Schema Reference:](#schema-reference)
 
 ## Metadata
 - **Category**: Database

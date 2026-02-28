@@ -1,4 +1,60 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Agent Observability System
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Track Agent Execution](#track-agent-execution)
+  - [View Metrics Dashboard](#view-metrics-dashboard)
+- [Architecture](#architecture)
+  - [Components](#components)
+  - [Database Schema](#database-schema)
+  - [Data Flow](#data-flow)
+- [API Reference](#api-reference)
+  - [AgentObservability Class](#agentobservability-class)
+- [CLI Dashboard](#cli-dashboard)
+  - [Commands](#commands)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Basic Tracking](#example-1-basic-tracking)
+  - [Example 2: Tracking with Context](#example-2-tracking-with-context)
+  - [Example 3: Wrapper Function](#example-3-wrapper-function)
+  - [Example 4: Agent Class Integration](#example-4-agent-class-integration)
+  - [Example 5: Parallel Tracking](#example-5-parallel-tracking)
+- [Integration with Existing Systems](#integration-with-existing-systems)
+  - [Integration with Agent Registry (C1.1)](#integration-with-agent-registry-c11)
+  - [Integration with Script CLI (A1.2)](#integration-with-script-cli-a12)
+- [Metrics Explanation](#metrics-explanation)
+  - [Success Rate](#success-rate)
+  - [Average Execution Time](#average-execution-time)
+  - [Max Execution Time](#max-execution-time)
+- [Performance Considerations](#performance-considerations)
+  - [Database Writes](#database-writes)
+  - [Caching](#caching)
+  - [Graceful Degradation](#graceful-degradation)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: "Agent performance metrics table not found"](#issue-agent-performance-metrics-table-not-found)
+  - [Issue: Metrics not appearing in dashboard](#issue-metrics-not-appearing-in-dashboard)
+  - [Issue: Empty metrics for specific agent](#issue-empty-metrics-for-specific-agent)
+  - [Issue: Slow dashboard performance](#issue-slow-dashboard-performance)
+- [Best Practices](#best-practices)
+  - [1. Always Initialize First](#1-always-initialize-first)
+  - [2. Always End Trackers](#2-always-end-trackers)
+  - [3. Provide Meaningful Context](#3-provide-meaningful-context)
+  - [4. Track All Agent Executions](#4-track-all-agent-executions)
+  - [5. Review Metrics Regularly](#5-review-metrics-regularly)
+- [Future Enhancements (Phase 2)](#future-enhancements-phase-2)
+- [Metrics Summary](#metrics-summary)
+- [Related Files](#related-files)
 
 **Version**: 1.0.0
 **Task**: C1.3 - Agent Observability Metrics

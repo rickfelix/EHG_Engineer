@@ -1,5 +1,42 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Quality Lifecycle Enhancements - Triangulation Synthesis
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overall Scores Comparison](#overall-scores-comparison)
+- [Areas of Strong Consensus (All Three Agree)](#areas-of-strong-consensus-all-three-agree)
+  - [1. Unified Table is Mandatory](#1-unified-table-is-mandatory)
+  - [2. Type Discriminator Approach](#2-type-discriminator-approach)
+  - [3. Conversion = Type Change on Same Record](#3-conversion-type-change-on-same-record)
+  - [4. Unified Triage, Divergent Criteria](#4-unified-triage-divergent-criteria)
+  - [5. Enhancements Enter at Detection](#5-enhancements-enter-at-detection)
+- [Areas of Divergence](#areas-of-divergence)
+  - [Naming: Table Name](#naming-table-name)
+  - [Naming: Command Name](#naming-command-name)
+  - [Naming: Lifecycle Name](#naming-lifecycle-name)
+  - [Lifecycle Stage Rename](#lifecycle-stage-rename)
+  - [Third Type: Inquiry](#third-type-inquiry)
+- [Unique Insights](#unique-insights)
+  - [From Gemini Only](#from-gemini-only)
+  - [From OpenAI Only](#from-openai-only)
+  - [From Claude Only](#from-claude-only)
+- [Consolidated Recommendation](#consolidated-recommendation)
+  - [Data Model](#data-model)
+  - [Naming](#naming)
+  - [Updated Lifecycle](#updated-lifecycle)
+  - [Workflow Summary](#workflow-summary)
+- [Action Items for Vision Document](#action-items-for-vision-document)
+- [Final Recommendation](#final-recommendation)
 
 ## Metadata
 - **Category**: Guide

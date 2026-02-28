@@ -1,4 +1,42 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # RCA Skill Rename: `/escalate` → `/rca`
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Rationale](#rationale)
+  - [Why Rename?](#why-rename)
+  - [User Feedback](#user-feedback)
+- [Changes Made](#changes-made)
+  - [1. Database Updates](#1-database-updates)
+  - [2. Skill Definition Files](#2-skill-definition-files)
+  - [3. Active Script Updates](#3-active-script-updates)
+  - [4. Generated Files (Auto-Regenerated)](#4-generated-files-auto-regenerated)
+  - [5. Documentation Updates](#5-documentation-updates)
+  - [6. Unchanged (Intentionally)](#6-unchanged-intentionally)
+- [Migration Guide](#migration-guide)
+  - [For Users](#for-users)
+  - [For Developers](#for-developers)
+- [Backward Compatibility](#backward-compatibility)
+  - [Preserved References](#preserved-references)
+- [Testing Verification](#testing-verification)
+  - [Manual Tests Performed](#manual-tests-performed)
+  - [Validation Queries](#validation-queries)
+- [Rollback Plan](#rollback-plan)
+- [Related Documentation](#related-documentation)
+- [Future Considerations](#future-considerations)
+  - [Potential Follow-ups](#potential-follow-ups)
+- [Version History](#version-history)
+  - [v1.0.0 (2026-01-26)](#v100-2026-01-26)
 
 ## Metadata
 - **Category**: Reference

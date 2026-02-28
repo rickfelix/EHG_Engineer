@@ -1,5 +1,54 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # OpenAI Real-Time Voice Function Calling Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Components](#components)
+- [How It Works](#how-it-works)
+  - [1. Function Registration](#1-function-registration)
+  - [2. Function Execution Flow](#2-function-execution-flow)
+  - [3. Security](#3-security)
+- [Adding New Functions](#adding-new-functions)
+  - [Step 1: Define the Function](#step-1-define-the-function)
+  - [Step 2: Implement the Function](#step-2-implement-the-function)
+  - [Step 3: Deploy](#step-3-deploy)
+- [Available Functions](#available-functions)
+  - [Portfolio Management](#portfolio-management)
+  - [Data Operations](#data-operations)
+- [Best Practices](#best-practices)
+  - [Function Naming](#function-naming)
+  - [Function Descriptions](#function-descriptions)
+  - [Parameter Design](#parameter-design)
+  - [Response Format](#response-format)
+  - [Error Handling](#error-handling)
+- [Testing Functions](#testing-functions)
+  - [Manual Testing via Voice](#manual-testing-via-voice)
+  - [Console Monitoring](#console-monitoring)
+  - [Edge Function Logs](#edge-function-logs)
+- [Troubleshooting](#troubleshooting)
+  - [Function Not Being Called](#function-not-being-called)
+  - [Function Execution Errors](#function-execution-errors)
+  - [No Response After Function](#no-response-after-function)
+- [Future Enhancements](#future-enhancements)
+  - [Planned Features](#planned-features)
+  - [Performance Optimization](#performance-optimization)
+- [Code Examples](#code-examples)
+  - [Simple Query Function](#simple-query-function)
+  - [Complex Query with Filters](#complex-query-with-filters)
+  - [Create Operation](#create-operation)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Feature

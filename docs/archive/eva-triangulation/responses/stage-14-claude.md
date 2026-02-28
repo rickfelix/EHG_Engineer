@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 "Technical Architecture" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Layer Model Decision](#3-layer-model-decision)
+  - [4. Stage 13 → 14 Consumption Mapping](#4-stage-13-14-consumption-mapping)
+  - [5. Data Modeling Depth Decision](#5-data-modeling-depth-decision)
+  - [6. Security/Compliance Architecture Decision](#6-securitycompliance-architecture-decision)
+  - [7. Integration Points Enhancement](#7-integration-points-enhancement)
+  - [8. Constraint Categorization Decision](#8-constraint-categorization-decision)
+  - [9. CLI Superiorities (preserve these)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 14 Schema](#10-recommended-stage-14-schema)
+  - [11. Minimum Viable Change (priority-ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts (with Stages 1-13 decisions)](#13-dependency-conflicts-with-stages-1-13-decisions)
+  - [14. Contrarian Take](#14-contrarian-take)
 
 > Independent response to the Stage 14 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

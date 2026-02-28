@@ -1,3 +1,27 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quality Gate Scoring (8 Criteria, 100 Points Total)](#quality-gate-scoring-8-criteria-100-points-total)
+  - [1. Completeness (15 points)](#1-completeness-15-points)
+  - [2. Evidence Quality (15 points)](#2-evidence-quality-15-points)
+  - [3. Recursion Analysis (15 points)](#3-recursion-analysis-15-points)
+  - [4. SD Cross-References (10 points)](#4-sd-cross-references-10-points)
+  - [5. Operational Readiness (15 points)](#5-operational-readiness-15-points)
+  - [6. Technical Depth (15 points)](#6-technical-depth-15-points)
+  - [7. Configuration Flexibility (10 points)](#7-configuration-flexibility-10-points)
+  - [8. Presentation Quality (5 points)](#8-presentation-quality-5-points)
+- [Final Scoring Summary](#final-scoring-summary)
+- [Acceptance Decision](#acceptance-decision)
+
 <!-- ARCHIVED: 2026-01-26T16:26:55.609Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-13\11_acceptance-checklist.md

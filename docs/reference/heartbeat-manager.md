@@ -1,4 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Heartbeat Manager Reference
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Purpose](#purpose)
+- [API Reference](#api-reference)
+  - [Module Import](#module-import)
+  - [Functions](#functions)
+- [Integration Points](#integration-points)
+  - [Handoff Workflow Integration](#handoff-workflow-integration)
+  - [Display-Layer Claim Analysis](#display-layer-claim-analysis)
+  - [Database RPC Functions](#database-rpc-functions)
+- [Configuration](#configuration)
+  - [Constants (Hardcoded)](#constants-hardcoded)
+  - [Rationale](#rationale)
+- [Monitoring](#monitoring)
+  - [Stale Session Detection](#stale-session-detection)
+  - [Session Health Check](#session-health-check)
+- [Troubleshooting](#troubleshooting)
+  - [Heartbeat Not Starting](#heartbeat-not-starting)
+  - [Consecutive Failures](#consecutive-failures)
+  - [Session Marked as Stale](#session-marked-as-stale)
+  - [Orphaned Session Detection](#orphaned-session-detection)
+  - [Graceful Exit Failures](#graceful-exit-failures)
+- [Performance Impact](#performance-impact)
+- [Security Considerations](#security-considerations)
+- [Session-Specific Status Line Files (US-006)](#session-specific-status-line-files-us-006)
+  - [Problem Solved](#problem-solved)
+  - [Integration](#integration)
+  - [Example](#example)
+  - [Stale File Cleanup](#stale-file-cleanup)
+- [SD Claims via claude_sessions (Updated 2026-02-22)](#sd-claims-via-claude_sessions-updated-2026-02-22)
+  - [Single-Table Claim Model](#single-table-claim-model)
+- [Related Documentation](#related-documentation)
+- [References](#references)
+- [Version History](#version-history)
 
 **Category**: Reference
 **Status**: Approved

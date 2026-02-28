@@ -1,4 +1,33 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol Helper Tools
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Extracted from ehg-replit hooks, reimplemented as explicit tools](#extracted-from-ehg-replit-hooks-reimplemented-as-explicit-tools)
+  - [Overview](#overview)
+- [Available Helper Tools](#available-helper-tools)
+  - [1. CI/CD Monitor (`leo-ci-monitor.js`)](#1-cicd-monitor-leo-ci-monitorjs)
+  - [2. Evidence Capture (`leo-evidence-capture.js`)](#2-evidence-capture-leo-evidence-capturejs)
+  - [3. Strategic Directive Validator (`leo-sd-validator.js`)](#3-strategic-directive-validator-leo-sd-validatorjs)
+  - [4. Product Requirements Document Validator (`leo-prd-validator.js`)](#4-product-requirements-document-validator-leo-prd-validatorjs)
+- [Integration with LEO Protocol Workflow](#integration-with-leo-protocol-workflow)
+  - [LEAD Agent Workflow](#lead-agent-workflow)
+  - [PLAN Agent Workflow](#plan-agent-workflow)
+  - [EXEC Agent Workflow](#exec-agent-workflow)
+- [Key Differences from Hooks](#key-differences-from-hooks)
+- [Best Practices](#best-practices)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Future Enhancements](#future-enhancements)
 
 ## Metadata
 - **Category**: Protocol

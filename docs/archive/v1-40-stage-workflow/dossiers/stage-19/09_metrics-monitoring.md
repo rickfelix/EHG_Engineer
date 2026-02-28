@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 19: Metrics and Monitoring
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Stage 19 Metrics Overview](#stage-19-metrics-overview)
+- [Metric 1: Integration Success Rate](#metric-1-integration-success-rate)
+  - [Definition](#definition)
+  - [Measurement Method](#measurement-method)
+  - [Monitoring Dashboard](#monitoring-dashboard)
+- [Metric 2: API Reliability](#metric-2-api-reliability)
+  - [Definition](#definition)
+  - [Measurement Method](#measurement-method)
+  - [Monitoring Dashboard](#monitoring-dashboard)
+- [Metric 3: Latency Metrics (p50, p95, p99)](#metric-3-latency-metrics-p50-p95-p99)
+  - [Definition](#definition)
+  - [Measurement Method](#measurement-method)
+  - [Monitoring Dashboard](#monitoring-dashboard)
+- [Additional Monitoring Metrics](#additional-monitoring-metrics)
+  - [Metric 4: Test Coverage (Substage 19.1)](#metric-4-test-coverage-substage-191)
+  - [Metric 5: Circuit Breaker Activations (Substage 19.3)](#metric-5-circuit-breaker-activations-substage-193)
+  - [Metric 6: Error Rate by API](#metric-6-error-rate-by-api)
+- [Metrics Dashboard (Grafana)](#metrics-dashboard-grafana)
+  - [Dashboard Structure](#dashboard-structure)
+- [Metrics Export and Storage](#metrics-export-and-storage)
+  - [Database Schema](#database-schema)
+  - [Metrics Export Script](#metrics-export-script)
+- [Success Criteria](#success-criteria)
 
 ## Purpose
 

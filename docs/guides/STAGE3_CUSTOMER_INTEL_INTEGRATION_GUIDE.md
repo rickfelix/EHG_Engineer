@@ -1,5 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage 3 Customer Intelligence Integration Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Created Components](#created-components)
+  - [Core Components (All Complete ✅)](#core-components-all-complete-)
+- [Integration Steps](#integration-steps)
+  - [Step 1: Import CustomerIntelligenceTab into Stage 3](#step-1-import-customerintelligencetab-into-stage-3)
+  - [Step 2: Add Customer Intelligence Tab to Tabs Component](#step-2-add-customer-intelligence-tab-to-tabs-component)
+  - [Step 3: Add TabsContent for Customer Intelligence](#step-3-add-tabscontent-for-customer-intelligence)
+  - [Step 4: Add Missing Icon Import](#step-4-add-missing-icon-import)
+- [Database Schema (Already Created ✅)](#database-schema-already-created-)
+- [API Endpoints (Pending Implementation)](#api-endpoints-pending-implementation)
+  - [Required Endpoints](#required-endpoints)
+  - [Agent Integration](#agent-integration)
+- [Mock Data vs. Real Data](#mock-data-vs-real-data)
+  - [Current State](#current-state)
+  - [Transition to Real Data](#transition-to-real-data)
+- [Testing](#testing)
+  - [Manual Testing Steps](#manual-testing-steps)
+  - [E2E Test Spec (To Be Created)](#e2e-test-spec-to-be-created)
+- [Integration with Downstream Stages](#integration-with-downstream-stages)
+  - [Stage 4 (Competitive Intelligence)](#stage-4-competitive-intelligence)
+  - [Stage 15 (Pricing Strategy)](#stage-15-pricing-strategy)
+  - [Stage 17 (GTM Strategy)](#stage-17-gtm-strategy)
+  - [Stage 32 (Customer Success)](#stage-32-customer-success)
+- [File Structure](#file-structure)
+- [Next Steps (Priority Order)](#next-steps-priority-order)
+- [Success Criteria (From SD-CUSTOMER-INTEL-001)](#success-criteria-from-sd-customer-intel-001)
+- [Technical Notes](#technical-notes)
+  - [Component Dependencies](#component-dependencies)
+  - [Performance Considerations](#performance-considerations)
+  - [Accessibility](#accessibility)
+- [Questions / Blockers](#questions-blockers)
+- [References](#references)
 
 ## Metadata
 - **Category**: Guide

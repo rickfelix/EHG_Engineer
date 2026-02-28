@@ -1,5 +1,53 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Real Testing Campaign Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [What's Different from Previous Campaign?](#whats-different-from-previous-campaign)
+- [Prerequisites](#prerequisites)
+  - [1. Database Schema Enhancement (REQUIRED)](#1-database-schema-enhancement-required)
+  - [2. Test Infrastructure Verification](#2-test-infrastructure-verification)
+- [Launch Campaign](#launch-campaign)
+  - [Option 1: Fully Autonomous (Recommended)](#option-1-fully-autonomous-recommended)
+  - [Option 2: Monitored Execution](#option-2-monitored-execution)
+  - [Option 3: Test Single SD First](#option-3-test-single-sd-first)
+- [Monitoring Progress](#monitoring-progress)
+  - [Real-Time Dashboard](#real-time-dashboard)
+  - [Log Files](#log-files)
+  - [Database Queries](#database-queries)
+- [Expected Runtime](#expected-runtime)
+  - [Timeline Estimates](#timeline-estimates)
+  - [Recommended Schedule](#recommended-schedule)
+- [Error Recovery](#error-recovery)
+  - [Automatic Retry](#automatic-retry)
+  - [Manual Intervention](#manual-intervention)
+  - [Skip Problematic SDs](#skip-problematic-sds)
+- [Post-Campaign Analysis](#post-campaign-analysis)
+  - [Generate Final Report](#generate-final-report)
+  - [Key Metrics to Review](#key-metrics-to-review)
+  - [Compare to Fake Results](#compare-to-fake-results)
+- [Troubleshooting](#troubleshooting)
+  - [Build Failures](#build-failures)
+  - [Test Timeouts](#test-timeouts)
+  - [Database Connection Issues](#database-connection-issues)
+  - [Disk Space](#disk-space)
+- [Files Created](#files-created)
+  - [Scripts](#scripts)
+  - [Database](#database)
+  - [Logs](#logs)
+- [Success Criteria](#success-criteria)
+- [Next Steps After Campaign](#next-steps-after-campaign)
 
 ## Metadata
 - **Category**: Testing

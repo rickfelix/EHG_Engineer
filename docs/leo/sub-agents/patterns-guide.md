@@ -1,5 +1,46 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Sub-Agent Patterns Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [1. BaseSubAgent API & Lifecycle](#1-basesubagent-api-lifecycle)
+  - [Factory Pattern (MANDATORY)](#factory-pattern-mandatory)
+  - [Lifecycle Phases](#lifecycle-phases)
+  - [Key Properties](#key-properties)
+  - [Adding Findings](#adding-findings)
+- [2. Phase-Executor Contract & Errors](#2-phase-executor-contract-errors)
+  - [Model Routing Strategy (HAIKU-FIRST)](#model-routing-strategy-haiku-first)
+  - [Exception Hierarchy](#exception-hierarchy)
+  - [Execution Flow](#execution-flow)
+- [3. Unified Result Schema & Hashing](#3-unified-result-schema-hashing)
+  - [Standard Output Format](#standard-output-format)
+  - [Finding Deduplication](#finding-deduplication)
+  - [Finding ID Generation](#finding-id-generation)
+  - [Verdict Mapping](#verdict-mapping)
+- [4. Supabase Client Pool Usage & Safety](#4-supabase-client-pool-usage-safety)
+  - [Singleton Pattern](#singleton-pattern)
+  - [Service Role Key Requirement](#service-role-key-requirement)
+  - [Budget Check Tables (Priority Order)](#budget-check-tables-priority-order)
+  - [Result Storage Tables](#result-storage-tables)
+- [5. Migration Guide & New Agent Template](#5-migration-guide-new-agent-template)
+  - [Creating a New Sub-Agent](#creating-a-new-sub-agent)
+  - [Migrating from Legacy Patterns](#migrating-from-legacy-patterns)
+  - [Testing New Sub-Agents](#testing-new-sub-agents)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

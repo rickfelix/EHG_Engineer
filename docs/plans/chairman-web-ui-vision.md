@@ -1,4 +1,64 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Chairman Web UI — Vision Document
+
+
+## Table of Contents
+
+- [1. Executive Summary](#1-executive-summary)
+- [2. Problem Statement](#2-problem-statement)
+- [3. Personas](#3-personas)
+  - [3.1 Chairman (Governance Mode)](#31-chairman-governance-mode)
+  - [3.2 Solo Entrepreneur (Builder Mode)](#32-solo-entrepreneur-builder-mode)
+  - [3.3 Persona Switching](#33-persona-switching)
+- [4. Information Architecture](#4-information-architecture)
+  - [4.1 Chairman Views](#41-chairman-views)
+  - [4.2 Builder Views](#42-builder-views)
+  - [4.3 Shared](#43-shared)
+- [5. Chairman Decision Points](#5-chairman-decision-points)
+  - [5.1 Stage 0: Venture Routing Decision](#51-stage-0-venture-routing-decision)
+  - [5.2 Stage 10: Brand Approval Gate](#52-stage-10-brand-approval-gate)
+  - [5.3 Stage 22: Release Readiness Gate](#53-stage-22-release-readiness-gate)
+  - [5.4 Stage 25: Venture Portfolio Review](#54-stage-25-venture-portfolio-review)
+- [6. Claude Code Remote Integration](#6-claude-code-remote-integration)
+  - [6.1 Pattern: Dashboard Reads, Claude Code Writes](#61-pattern-dashboard-reads-claude-code-writes)
+  - [6.2 Handoff Mechanism](#62-handoff-mechanism)
+  - [6.3 Example Flows](#63-example-flows)
+- [7. Phase C → Phase D Evolution](#7-phase-c-phase-d-evolution)
+  - [7.1 Phase C: Hybrid Dashboard (current target)](#71-phase-c-hybrid-dashboard-current-target)
+  - [7.2 Phase D: Progressive Web App (future enhancement)](#72-phase-d-progressive-web-app-future-enhancement)
+- [8. What This UI Is NOT](#8-what-this-ui-is-not)
+- [9. UI/UX Wireframes](#9-uiux-wireframes)
+  - [9.1 Shell Layout (Desktop)](#91-shell-layout-desktop)
+  - [9.2 Shell Layout (Mobile)](#92-shell-layout-mobile)
+  - [9.3 Daily Briefing (`/chairman`)](#93-daily-briefing-chairman)
+  - [9.4 Decision Queue (`/chairman/decisions`)](#94-decision-queue-chairmandecisions)
+  - [9.5 Decision Detail — Reject/Rationale Modal](#95-decision-detail-rejectrationale-modal)
+  - [9.6 Venture Lifecycle (`/chairman/ventures`)](#96-venture-lifecycle-chairmanventures)
+  - [9.7 Vision & Alignment (`/chairman/vision`)](#97-vision-alignment-chairmanvision)
+  - [9.8 Builder Dashboard (`/builder`)](#98-builder-dashboard-builder)
+  - [9.9 Preferences (`/chairman/preferences`)](#99-preferences-chairmanpreferences)
+  - [9.10 User Flow: Chairman Daily Review](#910-user-flow-chairman-daily-review)
+  - [9.11 User Flow: Builder Check-In](#911-user-flow-builder-check-in)
+- [10. Data Freshness Strategy](#10-data-freshness-strategy)
+  - [Freshness Tiers](#freshness-tiers)
+  - [Why Not All Realtime?](#why-not-all-realtime)
+  - [Stale Data Indicator](#stale-data-indicator)
+  - [Background Prefetch (Phase D / PWA)](#background-prefetch-phase-d-pwa)
+- [11. Notification & Alert Delivery](#11-notification-alert-delivery)
+  - [The Problem](#the-problem)
+  - [Delivery Strategy (Phased)](#delivery-strategy-phased)
+  - [Alert Priority Levels](#alert-priority-levels)
+  - [Chairman Preferences Integration](#chairman-preferences-integration)
+  - [No Telegram, No SMS](#no-telegram-no-sms)
+- [12. Success Criteria](#12-success-criteria)
+- [13. Related Documents](#13-related-documents)
 
 **Version**: 1.0.0
 **Date**: 2026-02-25

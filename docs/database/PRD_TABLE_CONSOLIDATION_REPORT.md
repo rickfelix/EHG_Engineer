@@ -1,5 +1,46 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # PRD Table Consolidation Analysis & Migration Plan
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Analysis Results](#analysis-results)
+  - [1. Tables Found](#1-tables-found)
+  - [2. Schema Comparison](#2-schema-comparison)
+  - [3. Data Comparison](#3-data-comparison)
+  - [4. Foreign Key Dependencies](#4-foreign-key-dependencies)
+  - [5. Code Usage Analysis](#5-code-usage-analysis)
+  - [6. Recent Activity](#6-recent-activity)
+- [Decision Matrix](#decision-matrix)
+- [Migration Plan](#migration-plan)
+  - [Phase 1: Data Migration (Automated)](#phase-1-data-migration-automated)
+  - [Phase 2: Code Update (Automated)](#phase-2-code-update-automated)
+  - [Phase 3: Verification (Manual)](#phase-3-verification-manual)
+  - [Phase 4: Rollback Plan (If Needed)](#phase-4-rollback-plan-if-needed)
+  - [Phase 5: Cleanup (30 days later)](#phase-5-cleanup-30-days-later)
+- [Execution Commands](#execution-commands)
+  - [Dry Run (Recommended First)](#dry-run-recommended-first)
+  - [Live Migration](#live-migration)
+  - [Manual SQL Migration (Alternative)](#manual-sql-migration-alternative)
+- [Risk Assessment](#risk-assessment)
+- [Benefits](#benefits)
+- [Timeline](#timeline)
+- [Recommendation](#recommendation)
+- [Approval](#approval)
+- [Post-Migration Checklist](#post-migration-checklist)
+  - [Immediate (Day 1)](#immediate-day-1)
+  - [Short-term (Week 1)](#short-term-week-1)
+  - [Long-term (30 days)](#long-term-30-days)
 
 ## Metadata
 - **Category**: Database

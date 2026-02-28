@@ -1,5 +1,38 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # 🤖 LEO Sub-Agent Commands
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [✅ REAL Claude Code Slash Commands!](#-real-claude-code-slash-commands)
+- [Quick Start](#quick-start)
+- [Available Commands](#available-commands)
+  - [`/leo [prompt]`](#leo-prompt)
+  - [`/leo-quick [prompt]`](#leo-quick-prompt)
+  - [`/leo-debug [prompt]`](#leo-debug-prompt)
+  - [`/leo-design [prompt]`](#leo-design-prompt)
+  - [`/leo-security [prompt]`](#leo-security-prompt)
+  - [`/leo-perf [prompt]`](#leo-perf-prompt)
+  - [`/leo-test [prompt]`](#leo-test-prompt)
+  - [`/leo-verify [prompt]`](#leo-verify-prompt)
+- [Sub-Agent Reference](#sub-agent-reference)
+  - [Available Sub-Agents](#available-sub-agents)
+- [How It Works](#how-it-works)
+- [Confidence Scoring](#confidence-scoring)
+- [Examples](#examples)
+  - [Example 1: Dark Mode Issue](#example-1-dark-mode-issue)
+  - [Example 2: Performance Issue](#example-2-performance-issue)
+- [Tips](#tips)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
 
 ## Metadata
 - **Category**: Guide

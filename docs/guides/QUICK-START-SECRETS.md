@@ -1,5 +1,43 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Quick Start: Fix CI/CD in 15 Minutes ⚡
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Step 1: Add Database Secret (5 minutes)](#step-1-add-database-secret-5-minutes)
+  - [A. Get the Key from Supabase](#a-get-the-key-from-supabase)
+  - [B. Add to GitHub](#b-add-to-github)
+  - [C. Verify](#c-verify)
+- [Step 2: Add GitHub Token (10 minutes)](#step-2-add-github-token-10-minutes)
+  - [A. Create Token on GitHub](#a-create-token-on-github)
+  - [B. Add to GitHub](#b-add-to-github)
+  - [C. Verify](#c-verify)
+- [Step 3: Re-enable UAT Testing (2 minutes)](#step-3-re-enable-uat-testing-2-minutes)
+  - [A. Edit the File](#a-edit-the-file)
+  - [B. Make 2 Changes](#b-make-2-changes)
+  - [C. Save and Push](#c-save-and-push)
+- [Verify Everything Works ✅](#verify-everything-works-)
+- [Troubleshooting](#troubleshooting)
+  - ["gh: command not found"](#gh-command-not-found)
+  - [Workflow fails with "secret not found"](#workflow-fails-with-secret-not-found)
+  - ["Permission denied"](#permission-denied)
+- [What You Fixed](#what-you-fixed)
+  - [Before](#before)
+  - [After](#after)
+- [Next Steps](#next-steps)
+  - [Set Reminder](#set-reminder)
+  - [Monitor Health](#monitor-health)
+- [Full Guide](#full-guide)
 
 ## Metadata
 - **Category**: Guide

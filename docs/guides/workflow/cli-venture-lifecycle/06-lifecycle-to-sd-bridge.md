@@ -1,3 +1,32 @@
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Architectural Position](#architectural-position)
+- [Stage 18 Sprint Plan Structure](#stage-18-sprint-plan-structure)
+  - [Expected Input Shape](#expected-input-shape)
+- [Conversion Flow](#conversion-flow)
+  - [Step-by-Step Process](#step-by-step-process)
+- [SD Key Generation](#sd-key-generation)
+- [Type Mapping](#type-mapping)
+- [Idempotency: Preventing Duplicate Orchestrators](#idempotency-preventing-duplicate-orchestrators)
+  - [Lookup Strategy](#lookup-strategy)
+  - [Why JSONB Metadata Lookup?](#why-jsonb-metadata-lookup)
+- [Orchestrator SD Structure](#orchestrator-sd-structure)
+- [Child SD Structure](#child-sd-structure)
+- [Bridge Artifact Record](#bridge-artifact-record)
+- [Integration Points](#integration-points)
+  - [Upstream: Eva Orchestrator](#upstream-eva-orchestrator)
+  - [Downstream: LEO Protocol](#downstream-leo-protocol)
+  - [SD Key Generator](#sd-key-generator)
+- [Error Handling](#error-handling)
+- [Dependency Injection](#dependency-injection)
+- [Key Design Decisions](#key-design-decisions)
+  - [Why Orchestrator + Children (Not Flat SDs)?](#why-orchestrator-children-not-flat-sds)
+  - [Why Idempotency via Metadata Query?](#why-idempotency-via-metadata-query)
+  - [Why All Children Start in LEAD Phase?](#why-all-children-start-in-lead-phase)
+- [Related Components](#related-components)
+
 ---
 Category: Architecture
 Status: Approved

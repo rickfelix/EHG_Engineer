@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 24 "Metrics & Learning" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Success Criteria Evaluation](#3-success-criteria-evaluation)
+  - [4. Learning Categories](#4-learning-categories)
+  - [5. Funnels](#5-funnels)
+  - [6. Trend Data](#6-trend-data)
+  - [7. Launch Type Context](#7-launch-type-context)
+  - [8. Growth Metrics](#8-growth-metrics)
+  - [9. Experimentation](#9-experimentation)
+  - [10. CLI Superiorities (preserve these)](#10-cli-superiorities-preserve-these)
+  - [11. Recommended Stage 24 Schema](#11-recommended-stage-24-schema)
+  - [12. Minimum Viable Change (Priority-Ordered)](#12-minimum-viable-change-priority-ordered)
+  - [13. Cross-Stage Impact](#13-cross-stage-impact)
+  - [14. Dependency Conflicts (with Stages 1-23 decisions)](#14-dependency-conflicts-with-stages-1-23-decisions)
+  - [15. Contrarian Take](#15-contrarian-take)
 
 > Independent response to the Stage 24 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

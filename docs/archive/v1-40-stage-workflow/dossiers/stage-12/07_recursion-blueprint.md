@@ -1,4 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 12: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Recursion Status in Critique](#recursion-status-in-critique)
+- [Gap Analysis: Missing Recursion Specification](#gap-analysis-missing-recursion-specification)
+- [Proposed Inbound Recursion Triggers](#proposed-inbound-recursion-triggers)
+  - [Trigger In-1: Stage 11 Primary Name Change](#trigger-in-1-stage-11-primary-name-change)
+- [Proposed Outbound Recursion Triggers](#proposed-outbound-recursion-triggers)
+  - [Trigger Out-1: Cultural Fit Failure (Return to Stage 11)](#trigger-out-1-cultural-fit-failure-return-to-stage-11)
+  - [Trigger Out-2: Market Acceptance Failure (Return to Stage 11)](#trigger-out-2-market-acceptance-failure-return-to-stage-11)
+  - [Trigger Out-3: Localization Failure (Notify Stage 13)](#trigger-out-3-localization-failure-notify-stage-13)
+- [Potential Recursion from Stage 11](#potential-recursion-from-stage-11)
+  - [Stage 11 → Stage 12 Recursion Scenario](#stage-11-stage-12-recursion-scenario)
+- [Internal Recursion (Within Stage 12)](#internal-recursion-within-stage-12)
+  - [Internal Loop 1: Substage 12.3 → Substage 12.2](#internal-loop-1-substage-123-substage-122)
+  - [Internal Loop 2: Substage 12.2 → Substage 12.1](#internal-loop-2-substage-122-substage-121)
+- [Recursion Governance](#recursion-governance)
+  - [Decision Authority Matrix](#decision-authority-matrix)
+  - [Escalation Thresholds](#escalation-thresholds)
+- [Recursion Metrics & Monitoring](#recursion-metrics-monitoring)
+  - [KPIs for Recursion Health](#kpis-for-recursion-health)
+  - [Monitoring Strategy](#monitoring-strategy)
+- [Recursion Prevention Strategies](#recursion-prevention-strategies)
+  - [Strategy 1: Strengthen Stage 11 Exit Gates](#strategy-1-strengthen-stage-11-exit-gates)
+  - [Strategy 2: Early Market Consultation](#strategy-2-early-market-consultation)
+  - [Strategy 3: Locked Baseline Version](#strategy-3-locked-baseline-version)
+- [Proposed Strategic Directives (Summary)](#proposed-strategic-directives-summary)
+- [Recursion Decision Tree](#recursion-decision-tree)
+- [Recursion Blueprint Status](#recursion-blueprint-status)
 
 ## Recursion Status in Critique
 

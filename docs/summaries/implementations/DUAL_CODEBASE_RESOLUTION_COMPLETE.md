@@ -1,5 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Dual Codebase Resolution - Complete
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+- [Root Cause Analysis](#root-cause-analysis)
+- [Resolution Implemented](#resolution-implemented)
+  - [Phase 1: Cleanup & Verification ✅](#phase-1-cleanup-verification-)
+  - [Phase 2: Safeguards ✅](#phase-2-safeguards-)
+  - [Phase 3: Workflow Documentation ✅](#phase-3-workflow-documentation-)
+  - [Phase 4: Validation & Future-Proofing ✅](#phase-4-validation-future-proofing-)
+- [Architecture Clarification](#architecture-clarification)
+  - [EHG_Engineer (Orchestration Layer)](#ehg_engineer-orchestration-layer)
+  - [Application Repositories (Separate Git Repos)](#application-repositories-separate-git-repos)
+  - [Relationship](#relationship)
+- [Files Created/Modified](#files-createdmodified)
+  - [Created:](#created)
+  - [Modified:](#modified)
+  - [Deleted:](#deleted)
+- [Validation Results](#validation-results)
+- [Developer Guidance](#developer-guidance)
+  - [For ehg Development:](#for-ehg-development)
+  - [For LEO Protocol Work:](#for-leo-protocol-work)
+  - [Verification:](#verification)
+- [Success Criteria](#success-criteria)
+- [Benefits Achieved](#benefits-achieved)
+- [Next Steps for Future Ventures](#next-steps-for-future-ventures)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Report

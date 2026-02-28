@@ -1,5 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Legal Document Generator Analysis
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Validation](#problem-validation)
+- [Build vs Buy Economics](#build-vs-buy-economics)
+  - [Option A (Skip)](#option-a-skip)
+  - [Option C (Build Template Fill-in)](#option-c-build-template-fill-in)
+  - [Option E (Partner/Buy)](#option-e-partnerbuy)
+- [Liability Reality Check](#liability-reality-check)
+  - [Direct Liability to EHG](#direct-liability-to-ehg)
+  - [DoNotPay Warning](#donotpay-warning)
+  - [Jurisdictional Complexity](#jurisdictional-complexity)
+- [Competitor/Peer Analysis](#competitorpeer-analysis)
+- [Recommendation](#recommendation)
+  - [Verdict: SKIP](#verdict-skip)
+- [If BUILD (Not Recommended)](#if-build-not-recommended)
+- [If BUY (Preferable to Build)](#if-buy-preferable-to-build)
+  - [Recommended Partners](#recommended-partners)
+  - [Implementation](#implementation)
+  - [Benefits](#benefits)
+- [If SKIP (Chosen Recommendation)](#if-skip-chosen-recommendation)
+  - [Implementation](#implementation)
+- [Key Insight](#key-insight)
+- [Sources](#sources)
 
 ## Metadata
 - **Category**: Guide

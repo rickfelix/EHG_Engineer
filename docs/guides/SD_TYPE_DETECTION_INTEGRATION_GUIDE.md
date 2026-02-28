@@ -1,5 +1,36 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # SD Type Detection Integration Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Integration Points](#integration-points)
+  - [1. Progress Calculation (Database Function)](#1-progress-calculation-database-function)
+  - [2. Deliverable Creation Workflow](#2-deliverable-creation-workflow)
+  - [3. Validation Gate Updates](#3-validation-gate-updates)
+- [Testing Plan](#testing-plan)
+  - [Test Case 1: Engineering SD Progress Calculation](#test-case-1-engineering-sd-progress-calculation)
+  - [Test Case 2: Feature SD Progress Calculation](#test-case-2-feature-sd-progress-calculation)
+  - [Test Case 3: Deliverable Creation](#test-case-3-deliverable-creation)
+- [Migration Path](#migration-path)
+  - [Phase 1: Immediate (Non-Breaking)](#phase-1-immediate-non-breaking)
+  - [Phase 2: Progress Calculation (Database)](#phase-2-progress-calculation-database)
+  - [Phase 3: Deliverable Creation (Application)](#phase-3-deliverable-creation-application)
+  - [Phase 4: Validation Gates (Application)](#phase-4-validation-gates-application)
+- [Rollback Plan](#rollback-plan)
+- [Success Metrics](#success-metrics)
+- [Known Limitations](#known-limitations)
+- [References](#references)
 
 ## Metadata
 - **Category**: Guide

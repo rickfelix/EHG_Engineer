@@ -1,5 +1,52 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol Enhancement: Child SD Pattern for Phased Work
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+- [Proposed Solution: Child SD Pattern](#proposed-solution-child-sd-pattern)
+  - [Concept](#concept)
+  - [Example: SD-CREWAI-ARCHITECTURE-001 (Refactored)](#example-sd-crewai-architecture-001-refactored)
+- [Implementation Guidelines](#implementation-guidelines)
+  - [1. When to Use Child SDs](#1-when-to-use-child-sds)
+  - [2. Parent SD Responsibilities](#2-parent-sd-responsibilities)
+  - [3. Child SD Responsibilities](#3-child-sd-responsibilities)
+  - [4. Progress Calculation](#4-progress-calculation)
+- [Database Schema Changes](#database-schema-changes)
+  - [Add `parent_sd_id` Column](#add-parent_sd_id-column)
+  - [Add `sd_children` View](#add-sd_children-view)
+  - [Update Progress Function](#update-progress-function)
+- [CLAUDE.md Integration](#claudemd-integration)
+  - [Add to CLAUDE_PLAN.md (Planning Phase)](#add-to-claude_planmd-planning-phase)
+- [When to Create Child SDs](#when-to-create-child-sds)
+  - [Decision Matrix](#decision-matrix)
+  - [Creating Child SDs](#creating-child-sds)
+  - [AI-Powered Child Creation (Recommended)](#ai-powered-child-creation-recommended)
+  - [Example](#example)
+  - [Add to CLAUDE_EXEC.md (Execution Phase)](#add-to-claude_execmd-execution-phase)
+- [Working with Child SDs](#working-with-child-sds)
+  - [Implementation Flow](#implementation-flow)
+  - [Parent SD Orchestration Checklist](#parent-sd-orchestration-checklist)
+  - [Example Session](#example-session)
+- [Migration Strategy](#migration-strategy)
+  - [For Existing Multi-Phase SDs](#for-existing-multi-phase-sds)
+- [Success Metrics](#success-metrics)
+- [Recommendation](#recommendation)
+- [Learning Source](#learning-source)
+- [Quality Improvements (2026-01-25)](#quality-improvements-2026-01-25)
+  - [AI-Powered Strategic Field Generation](#ai-powered-strategic-field-generation)
+  - [Context Sources](#context-sources)
+  - [Result](#result)
 
 ## Metadata
 - **Category**: Guide

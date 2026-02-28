@@ -1,5 +1,50 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # LEO Protocol Enforcement System Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🛡️ Overview](#-overview)
+- [🚀 Quick Start](#-quick-start)
+  - [Run a Strategic Directive with Full Enforcement](#run-a-strategic-directive-with-full-enforcement)
+- [📋 Key Components](#-key-components)
+  - [1. Master Orchestrator (`leo-protocol-orchestrator.js`)](#1-master-orchestrator-leo-protocol-orchestratorjs)
+  - [2. EXEC Checklist Enforcer (`exec-checklist-enforcer.js`)](#2-exec-checklist-enforcer-exec-checklist-enforcerjs)
+  - [3. Human Approval System](#3-human-approval-system)
+- [🚦 Phase Gates](#-phase-gates)
+  - [LEAD Phase Gate](#lead-phase-gate)
+  - [PLAN Phase Gate](#plan-phase-gate)
+  - [EXEC Phase Gate](#exec-phase-gate)
+  - [VERIFICATION Phase Gate](#verification-phase-gate)
+  - [APPROVAL Phase Gate](#approval-phase-gate)
+- [📊 Compliance Monitoring](#-compliance-monitoring)
+  - [Check Compliance Status](#check-compliance-status)
+  - [Database Tables Created](#database-tables-created)
+- [🔴 Common Violations and Fixes](#-common-violations-and-fixes)
+  - [Violation: "EXEC pre-implementation checklist incomplete"](#violation-exec-pre-implementation-checklist-incomplete)
+  - [Violation: "LEAD gate validation failed"](#violation-lead-gate-validation-failed)
+  - [Violation: "Human approval denied"](#violation-human-approval-denied)
+  - [Violation: "Retrospective not completed"](#violation-retrospective-not-completed)
+- [🎯 Best Practices](#-best-practices)
+- [🚨 Emergency Override](#-emergency-override)
+- [📈 Metrics and Reporting](#-metrics-and-reporting)
+  - [Generate Compliance Dashboard](#generate-compliance-dashboard)
+  - [Key Metrics Tracked](#key-metrics-tracked)
+- [🔧 Troubleshooting](#-troubleshooting)
+  - [Issue: "Cannot find module"](#issue-cannot-find-module)
+  - [Issue: "Database connection failed"](#issue-database-connection-failed)
+  - [Issue: "Phase already complete"](#issue-phase-already-complete)
+- [📝 Creating Database Tables](#-creating-database-tables)
+- [🎯 Summary](#-summary)
 
 ## Metadata
 - **Category**: Protocol

@@ -1,5 +1,48 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Multi-Repository Manager Module
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Architecture Context](#architecture-context)
+  - [Problem Solved](#problem-solved)
+- [Installation & Usage](#installation-usage)
+- [API Reference](#api-reference)
+  - [Repository Discovery](#repository-discovery)
+  - [Git Status Operations](#git-status-operations)
+  - [SD-to-Repo Mapping](#sd-to-repo-mapping)
+  - [Branch Operations](#branch-operations)
+  - [Display Helpers](#display-helpers)
+- [Configuration](#configuration)
+  - [KNOWN_REPOS](#known_repos)
+  - [COMPONENT_REPO_MAP](#component_repo_map)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Pre-Ship Check (Used by `/ship`)](#example-1-pre-ship-check-used-by-ship)
+  - [Example 2: SD Completion Validation](#example-2-sd-completion-validation)
+  - [Example 3: Display SD Queue with Repo Scope](#example-3-display-sd-queue-with-repo-scope)
+  - [Example 4: Find Related Branches](#example-4-find-related-branches)
+- [Integration with Commands](#integration-with-commands)
+  - [Current Integrations](#current-integrations)
+  - [Planned Integrations](#planned-integrations)
+- [Migration Guide](#migration-guide)
+  - [For Existing Scripts Using Duplicated Logic](#for-existing-scripts-using-duplicated-logic)
+  - [Scripts to Migrate](#scripts-to-migrate)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+  - ["No repositories found"](#no-repositories-found)
+  - ["Branch might not have upstream" warnings](#branch-might-not-have-upstream-warnings)
+  - [SD mapped to wrong repos](#sd-mapped-to-wrong-repos)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

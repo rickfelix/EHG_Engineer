@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Dossier Reconciliation Audit Report — Round 2
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+  - [R1 Finding Remediation Summary](#r1-finding-remediation-summary)
+- [Files Audited](#files-audited)
+- [R1 Finding Verification](#r1-finding-verification)
+  - [CRIT-001: 80% Stage Dossiers Missing — PARTIALLY FIXED](#crit-001-80-stage-dossiers-missing-partially-fixed)
+  - [CRIT-002: Stale Stage Names from Old Architecture — PARTIALLY FIXED](#crit-002-stale-stage-names-from-old-architecture-partially-fixed)
+  - [CRIT-003: 9-Phase Model Instead of Canonical 6-Phase — FIXED](#crit-003-9-phase-model-instead-of-canonical-6-phase-fixed)
+  - [HIGH-001: Incomplete File Structure — PARTIALLY FIXED](#high-001-incomplete-file-structure-partially-fixed)
+  - [HIGH-002: Historical Reports Reference 40-Stage Model — FIXED](#high-002-historical-reports-reference-40-stage-model-fixed)
+  - [MED-001: Stage 25 Canonical Definition Mismatch — PARTIALLY FIXED](#med-001-stage-25-canonical-definition-mismatch-partially-fixed)
+  - [MED-002: No Automated Sync Between Vision and Dossiers — NOT FIXED](#med-002-no-automated-sync-between-vision-and-dossiers-not-fixed)
+- [New Findings (R2)](#new-findings-r2)
+  - [NEW-001: Vision v4.7 vs lifecycle_stage_config Fundamental Divergence](#new-001-vision-v47-vs-lifecycle_stage_config-fundamental-divergence)
+  - [NEW-002: Legacy Content Not Refreshed](#new-002-legacy-content-not-refreshed)
+  - [NEW-003: Phase Boundary Inconsistency](#new-003-phase-boundary-inconsistency)
+- [Architecture Alignment](#architecture-alignment)
+  - [Dossier System vs Architecture Spec](#dossier-system-vs-architecture-spec)
+- [Recommendations Summary](#recommendations-summary)
+  - [Remaining from R1 (Still Open)](#remaining-from-r1-still-open)
+  - [New Recommendations (R2)](#new-recommendations-r2)
+- [Score Breakdown](#score-breakdown)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-R2-DOSSIER-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-R2-ORCH-001

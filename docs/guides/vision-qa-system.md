@@ -1,5 +1,60 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Vision-Based QA System Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Core Components](#core-components)
+- [Key Features](#key-features)
+  - [1. Autonomous Navigation](#1-autonomous-navigation)
+  - [2. Visual Bug Detection](#2-visual-bug-detection)
+  - [3. Consensus Testing](#3-consensus-testing)
+  - [4. Cost Management](#4-cost-management)
+  - [5. Automatic Model Selection](#5-automatic-model-selection)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [Test Configuration Options](#test-configuration-options)
+- [Usage Examples](#usage-examples)
+  - [Basic Test (Model Auto-Selected)](#basic-test-model-auto-selected)
+  - [Override Auto-Selection (Optional)](#override-auto-selection-optional)
+  - [Consensus Testing](#consensus-testing)
+  - [Custom Bug Detection](#custom-bug-detection)
+- [Database Schema](#database-schema)
+  - [Tables](#tables)
+  - [Key Views](#key-views)
+- [Test Scenarios](#test-scenarios)
+- [Running Tests](#running-tests)
+  - [Interactive Mode](#interactive-mode)
+  - [Command Line](#command-line)
+  - [Programmatic](#programmatic)
+- [Reports](#reports)
+  - [Report Formats](#report-formats)
+  - [Report Sections](#report-sections)
+- [Best Practices](#best-practices)
+  - [1. Goal Definition](#1-goal-definition)
+  - [2. Cost Optimization](#2-cost-optimization)
+  - [3. Reliability](#3-reliability)
+  - [4. Bug Detection](#4-bug-detection)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+- [Performance Considerations](#performance-considerations)
+  - [Resource Usage](#resource-usage)
+  - [Optimization Tips](#optimization-tips)
+- [Security Considerations](#security-considerations)
+- [Future Enhancements](#future-enhancements)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

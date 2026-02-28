@@ -1,5 +1,73 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EHG VISION v2: THE CHAIRMAN'S OPERATING SYSTEM
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+  - [Deployment Assumption (Production)](#deployment-assumption-production)
+- [1. The Core Philosophy](#1-the-core-philosophy)
+  - [The Chain of Command](#the-chain-of-command)
+  - [The Three Principals](#the-three-principals)
+- [2. The User Experience: "The Glass Cockpit"](#2-the-user-experience-the-glass-cockpit)
+  - [Mode A: The Chairman's Office (`/chairman`)](#mode-a-the-chairmans-office-chairman)
+  - [Mode B: The Factory Floor (`/ventures/:id`)](#mode-b-the-factory-floor-venturesid)
+  - [Progressive Disclosure Pattern](#progressive-disclosure-pattern)
+- [3. Technical Architecture: "The EVA Layer"](#3-technical-architecture-the-eva-layer)
+  - [EVA's Three Functions](#evas-three-functions)
+  - [The Command Loop](#the-command-loop)
+  - [EVA State Management](#eva-state-management)
+- [4. The 25-Stage Venture Lifecycle](#4-the-25-stage-venture-lifecycle)
+  - [Stage 0: INCEPTION (Pre-Lifecycle)](#stage-0-inception-pre-lifecycle)
+  - [Autonomous Opportunity Discovery (Deal Flow) (Pre-Stage 0)](#autonomous-opportunity-discovery-deal-flow-pre-stage-0)
+  - [The Six Phases](#the-six-phases)
+  - [Gate Architecture](#gate-architecture)
+  - [The Gate Flow](#the-gate-flow)
+- [5. TECHNICAL APPENDIX: Implementation Details](#5-technical-appendix-implementation-details)
+  - [A. The "Kill List" (Immediate Purge Targets)](#a-the-kill-list-immediate-purge-targets)
+  - [B. The Schema Plan (Data Backbone)](#b-the-schema-plan-data-backbone)
+  - [C. The "Missing Link" API](#c-the-missing-link-api)
+- [6. Execution Roadmap (Strategic Directives)](#6-execution-roadmap-strategic-directives)
+  - [PHASE 1: THE CLEANSE (Infrastructure)](#phase-1-the-cleanse-infrastructure)
+  - [PHASE 2: THE BRAIN (Backend)](#phase-2-the-brain-backend)
+  - [PHASE 3: THE COCKPIT (Frontend)](#phase-3-the-cockpit-frontend)
+- [7. Design Principles (The Laws)](#7-design-principles-the-laws)
+- [8. Success Metrics](#8-success-metrics)
+- [9. TECHNICAL SPECIFICATIONS (RED TEAM APPROVED)](#9-technical-specifications-red-team-approved)
+  - [9.1. UX/UI Specifications (The Glass Cockpit)](#91-uxui-specifications-the-glass-cockpit)
+  - [9.2. Database Schema Specifications (The Brain)](#92-database-schema-specifications-the-brain)
+  - [9.3. API & Orchestration Specifications (The Nervous System)](#93-api-orchestration-specifications-the-nervous-system)
+  - [9.4. Authentication Specification](#94-authentication-specification)
+- [10. Technical Specification Files](#10-technical-specification-files)
+  - [Specification Index](#specification-index)
+  - [Implementation Priority](#implementation-priority)
+  - [Specification Coverage](#specification-coverage)
+- [11. Future Architecture (Blue Sky)](#11-future-architecture-blue-sky)
+  - [11.1 Observability Framework](#111-observability-framework)
+  - [11.2 Circuit Breaker System](#112-circuit-breaker-system)
+  - [11.3 Graceful Degradation](#113-graceful-degradation)
+  - [11.4 Additional Future Enhancements](#114-additional-future-enhancements)
+- [12. Hierarchical Agent Architecture (Fractal Model)](#12-hierarchical-agent-architecture-fractal-model)
+  - [12.1 The Four Levels](#121-the-four-levels)
+  - [12.2 Key Architectural Components](#122-key-architectural-components)
+  - [12.3 EVA's Evolved Role](#123-evas-evolved-role)
+  - [12.4 Venture Instantiation](#124-venture-instantiation)
+- [13. OpenAI Codex Workflow Assessment (December 2025)](#13-openai-codex-workflow-assessment-december-2025)
+  - [13.1 Identified Gaps & Required Additions](#131-identified-gaps-required-additions)
+  - [13.2 Stage Ordering Improvements](#132-stage-ordering-improvements)
+  - [13.3 Decision Provenance Enhancement](#133-decision-provenance-enhancement)
+  - [13.4 VP Boundary Recommendations](#134-vp-boundary-recommendations)
+  - [13.5 Operational Phase Transition](#135-operational-phase-transition)
+- [14. Agent-Stage Accountability Matrix](#14-agent-stage-accountability-matrix)
+  - [New Crews Required](#new-crews-required)
 
 ## Metadata
 - **Category**: Guide

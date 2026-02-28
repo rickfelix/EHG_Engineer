@@ -1,4 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Playwright E2E Test Selector Guidelines
+
+
+## Table of Contents
+
+- [Why Selector Strategy Matters](#why-selector-strategy-matters)
+- [Quick Reference Table](#quick-reference-table)
+- [The Selector Hierarchy](#the-selector-hierarchy)
+  - [Tier 1: data-testid (ALWAYS PREFERRED)](#tier-1-data-testid-always-preferred)
+  - [Tier 2: ARIA Roles with Accessible Names](#tier-2-aria-roles-with-accessible-names)
+  - [Tier 3: Form Field Selectors](#tier-3-form-field-selectors)
+  - [Tier 4: Text Content (LAST RESORT)](#tier-4-text-content-last-resort)
+- [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+  - [Anti-Pattern 1: Compound Fallback Selectors](#anti-pattern-1-compound-fallback-selectors)
+  - [Anti-Pattern 2: Case-Insensitive Regex](#anti-pattern-2-case-insensitive-regex)
+  - [Anti-Pattern 3: Generic Tag Selectors](#anti-pattern-3-generic-tag-selectors)
+  - [Anti-Pattern 4: CSS Class Selectors](#anti-pattern-4-css-class-selectors)
+  - [Anti-Pattern 5: URL Regex Without Anchors](#anti-pattern-5-url-regex-without-anchors)
+- [data-testid Naming Conventions](#data-testid-naming-conventions)
+- [When `.first()` is Acceptable](#when-first-is-acceptable)
+- [Migration Guide for Existing Tests](#migration-guide-for-existing-tests)
+  - [Step 1: Identify Anti-Patterns](#step-1-identify-anti-patterns)
+  - [Step 2: Add data-testid to Components](#step-2-add-data-testid-to-components)
+  - [Step 3: Update Test Selectors](#step-3-update-test-selectors)
+  - [Step 4: Remove .first() Workarounds](#step-4-remove-first-workarounds)
+- [Verification Checklist](#verification-checklist)
+- [ESLint Rules](#eslint-rules)
+- [Related Documentation](#related-documentation)
 
 **Version**: 1.0.0
 **Last Updated**: 2025-11-26

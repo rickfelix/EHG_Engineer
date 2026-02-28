@@ -1,5 +1,31 @@
 # Vision v2 Technical Specifications
 
+
+## Table of Contents
+
+- [Document Hierarchy](#document-hierarchy)
+- [Specification Files](#specification-files)
+  - [[01-database-schema.md](./01-database-schema.md)](#01-database-schemamd01-database-schemamd)
+  - [[02-api-contracts.md](./02-api-contracts.md)](#02-api-contractsmd02-api-contractsmd)
+  - [[03-ui-components.md](./03-ui-components.md)](#03-ui-componentsmd03-ui-componentsmd)
+  - [[04-eva-orchestration.md](./04-eva-orchestration.md)](#04-eva-orchestrationmd04-eva-orchestrationmd)
+  - [[05-user-stories.md](./05-user-stories.md)](#05-user-storiesmd05-user-storiesmd)
+  - [[06-hierarchical-agent-architecture.md](./06-hierarchical-agent-architecture.md)](#06-hierarchical-agent-architecturemd06-hierarchical-agent-architecturemd)
+  - [[07-operational-handoff.md](./07-operational-handoff.md)](#07-operational-handoffmd07-operational-handoffmd)
+  - [[08-governance-policy-engine.md](./08-governance-policy-engine.md)](#08-governance-policy-enginemd08-governance-policy-enginemd)
+  - [[09-agent-runtime-service.md](./09-agent-runtime-service.md)](#09-agent-runtime-servicemd09-agent-runtime-servicemd)
+  - [[10-knowledge-architecture.md](./10-knowledge-architecture.md)](#10-knowledge-architecturemd10-knowledge-architecturemd)
+  - [[11-eva-scaling.md](./11-eva-scaling.md)](#11-eva-scalingmd11-eva-scalingmd)
+  - [[12-ops-debugging.md](./12-ops-debugging.md)](#12-ops-debuggingmd12-ops-debuggingmd)
+  - [[13-red-team-audit-prompt.md](./13-red-team-audit-prompt.md)](#13-red-team-audit-promptmd13-red-team-audit-promptmd)
+- [Quick Reference](#quick-reference)
+  - [The 25 Stages](#the-25-stages)
+  - [Gate Types](#gate-types)
+  - [Token Budget Profiles](#token-budget-profiles)
+- [Implementation Priority](#implementation-priority)
+- [Contributing](#contributing)
+- [Version History](#version-history)
+
 **Chairman's OS - Specification Index**
 
 This folder contains the detailed technical specifications for Vision v2, the "Venture Factory" architecture that powers EHG's AI-first venture validation pipeline.

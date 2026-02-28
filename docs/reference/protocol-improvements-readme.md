@@ -1,4 +1,35 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Protocol Improvements Module
+
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Modules](#modules)
+  - [1. ImprovementExtractor](#1-improvementextractor)
+  - [2. ImprovementApplicator](#2-improvementapplicator)
+  - [3. EffectivenessTracker](#3-effectivenesstracker)
+- [Standalone Functions](#standalone-functions)
+- [Database Schema](#database-schema)
+  - [protocol_improvement_queue](#protocol_improvement_queue)
+- [Workflow](#workflow)
+  - [1. Extract Phase](#1-extract-phase)
+  - [2. Review Phase (Manual)](#2-review-phase-manual)
+  - [3. Apply Phase](#3-apply-phase)
+  - [4. Track Phase (After 7 days)](#4-track-phase-after-7-days)
+  - [5. Report Phase](#5-report-phase)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+- [Best Practices](#best-practices)
+- [Error Handling](#error-handling)
+- [Testing](#testing)
+- [API Reference](#api-reference)
 
 API layer for extracting, applying, and tracking protocol improvements from retrospectives.
 

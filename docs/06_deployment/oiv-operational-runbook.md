@@ -1,4 +1,47 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # OIV Operational Runbook
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [5-Level Checkpoint System](#5-level-checkpoint-system)
+  - [SD Type-Aware Verification Depths](#sd-type-aware-verification-depths)
+- [Components](#components)
+  - [1. Database Schema](#1-database-schema)
+  - [2. OIVVerifier Class](#2-oivverifier-class)
+  - [3. OIVGate Class](#3-oivgate-class)
+  - [4. CLI Tool](#4-cli-tool)
+- [Operations](#operations)
+  - [Running OIV Manually](#running-oiv-manually)
+  - [OIV in Handoff Flow](#oiv-in-handoff-flow)
+  - [Managing Contracts](#managing-contracts)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: "Contract not found for SD type"](#issue-contract-not-found-for-sd-type)
+  - [Issue: "L2_IMPORT_RESOLVES failed"](#issue-l2_import_resolves-failed)
+  - [Issue: "L3_EXPORT_EXISTS failed"](#issue-l3_export_exists-failed)
+  - [Issue: "Runtime verification disabled"](#issue-runtime-verification-disabled)
+  - [Issue: "OIV gate weight too low"](#issue-oiv-gate-weight-too-low)
+- [Monitoring & Metrics](#monitoring-metrics)
+  - [Verification Results Query](#verification-results-query)
+  - [Performance Metrics](#performance-metrics)
+- [Best Practices](#best-practices)
+  - [Contract Design](#contract-design)
+  - [Verification Levels](#verification-levels)
+  - [Performance](#performance)
+  - [Security](#security)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
+  - [v1.0.0 (2026-01-30)](#v100-2026-01-30)
 
 ## Metadata
 - **Category**: Deployment

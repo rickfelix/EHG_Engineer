@@ -1,4 +1,53 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # DOCMON Analysis Report
+
+## Table of Contents
+
+- [SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001](#sd-leo-infra-memory-pattern-lifecycle-001)
+- [Executive Summary](#executive-summary)
+  - [Documentation Landscape Assessment](#documentation-landscape-assessment)
+- [Detailed Findings](#detailed-findings)
+  - [1. Pattern Resolution Lifecycle (CRITICAL GAP)](#1-pattern-resolution-lifecycle-critical-gap)
+- [Pattern Lifecycle States](#pattern-lifecycle-states)
+  - [2. Vision Event Bus Extension (HIGH GAP)](#2-vision-event-bus-extension-high-gap)
+- [Vision Event Bus](#vision-event-bus)
+  - [Event Types](#event-types)
+  - [Fail-Safety Guarantees](#fail-safety-guarantees)
+  - [3. MEMORY.md Restructuring and Tagging (HIGH GAP)](#3-memorymd-restructuring-and-tagging-high-gap)
+- [MEMORY.md Tagging Convention](#memorymd-tagging-convention)
+  - [Pattern ID Prefix](#pattern-id-prefix)
+  - [Lifecycle State Tags](#lifecycle-state-tags)
+  - [Example Entry](#example-entry)
+  - [Auto-Pruning Schedule](#auto-pruning-schedule)
+  - [4. Learning Capture Architecture (GOOD STATE)](#4-learning-capture-architecture-good-state)
+- [Documentation Checklist](#documentation-checklist)
+  - [To Be Created](#to-be-created)
+  - [To Be Enhanced](#to-be-enhanced)
+  - [Files Modified (Code)](#files-modified-code)
+- [Key Documentation Patterns Identified](#key-documentation-patterns-identified)
+  - [1. **Pattern Lifecycle is Currently Implicit**](#1-pattern-lifecycle-is-currently-implicit)
+  - [2. **Vision Event Bus Lacks Complete API Spec**](#2-vision-event-bus-lacks-complete-api-spec)
+  - [3. **MEMORY.md Has No Formal Schema**](#3-memorymd-has-no-formal-schema)
+  - [4. **Cycle Completeness Concept Missing**](#4-cycle-completeness-concept-missing)
+- [Recommended PRD System Architecture Sections](#recommended-prd-system-architecture-sections)
+- [System Architecture](#system-architecture)
+  - [1. Pattern Lifecycle State Machine](#1-pattern-lifecycle-state-machine)
+  - [2. Memory Auto-Pruning Pipeline](#2-memory-auto-pruning-pipeline)
+  - [3. Vision Event Bus Extension](#3-vision-event-bus-extension)
+  - [4. MEMORY.md Restructuring](#4-memorymd-restructuring)
+- [Implementation Notes](#implementation-notes)
+  - [Risk Areas Requiring Documentation](#risk-areas-requiring-documentation)
+  - [Database Schema Implications](#database-schema-implications)
+- [Deliverables Summary](#deliverables-summary)
+- [DOCMON Recommendation](#docmon-recommendation)
+
 ## SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001
 
 **SD Key**: SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001

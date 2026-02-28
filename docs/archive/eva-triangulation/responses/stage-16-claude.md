@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 16 "Financial Projections" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Phase-Variable Burn Rate Decision](#3-phase-variable-burn-rate-decision)
+  - [4. P&L Structure Decision](#4-pl-structure-decision)
+  - [5. Revenue Model Generation Decision](#5-revenue-model-generation-decision)
+  - [6. Scenario Analysis Decision](#6-scenario-analysis-decision)
+  - [7. Unit Economics Coherence](#7-unit-economics-coherence)
+  - [8. Funding Strategy Enhancement](#8-funding-strategy-enhancement)
+  - [9. Promotion Gate Viability](#9-promotion-gate-viability)
+  - [10. CLI Superiorities (preserve these)](#10-cli-superiorities-preserve-these)
+  - [11. Recommended Stage 16 Schema](#11-recommended-stage-16-schema)
+  - [12. Minimum Viable Change (Priority-Ordered)](#12-minimum-viable-change-priority-ordered)
+  - [13. Cross-Stage Impact](#13-cross-stage-impact)
+  - [14. Dependency Conflicts (with Stages 1-15 decisions)](#14-dependency-conflicts-with-stages-1-15-decisions)
+  - [15. Contrarian Take](#15-contrarian-take)
 
 > Independent response to the Stage 16 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

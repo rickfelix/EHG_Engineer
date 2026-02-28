@@ -1,4 +1,59 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Documentation Navigation Map
+
+
+## Table of Contents
+
+- [I'm New to the Project](#im-new-to-the-project)
+- [I'm Implementing a Feature (LEO Protocol)](#im-implementing-a-feature-leo-protocol)
+  - [LEAD Phase (Approval)](#lead-phase-approval)
+  - [PLAN Phase (Design)](#plan-phase-design)
+  - [EXEC Phase (Implementation)](#exec-phase-implementation)
+  - [Cross-Phase](#cross-phase)
+- [I'm Working with Database](#im-working-with-database)
+  - [Getting Started](#getting-started)
+  - [Common Tasks](#common-tasks)
+  - [Troubleshooting](#troubleshooting)
+- [I'm Testing & QA](#im-testing-qa)
+  - [Testing Guides](#testing-guides)
+  - [QA Tools](#qa-tools)
+  - [Sub-Agent Testing](#sub-agent-testing)
+- [I'm Deploying / Operations](#im-deploying-operations)
+  - [Production Deployment](#production-deployment)
+  - [Monitoring & Troubleshooting](#monitoring-troubleshooting)
+- [I'm Working with Sub-Agents](#im-working-with-sub-agents)
+  - [Sub-Agent System](#sub-agent-system)
+  - [Specific Sub-Agents](#specific-sub-agents)
+  - [Agent Execution](#agent-execution)
+- [I'm Looking for Patterns & Best Practices](#im-looking-for-patterns-best-practices)
+  - [Core Patterns](#core-patterns)
+  - [Best Practices](#best-practices)
+  - [Advanced Topics](#advanced-topics)
+- [I'm Searching for Specific Topics](#im-searching-for-specific-topics)
+  - [By Category](#by-category)
+- [I'm Troubleshooting an Issue](#im-troubleshooting-an-issue)
+  - [Common Issues](#common-issues)
+  - [By Problem Type](#by-problem-type)
+- [Documentation by Audience](#documentation-by-audience)
+  - [For New Developers](#for-new-developers)
+  - [For LEO Protocol Users](#for-leo-protocol-users)
+  - [For Operations/DevOps](#for-operationsdevops)
+  - [For Architects](#for-architects)
+- [Documentation Maintenance](#documentation-maintenance)
+  - [How to Update Documentation](#how-to-update-documentation)
+  - [How to Find Documentation](#how-to-find-documentation)
+  - [Documentation Health](#documentation-health)
+- [Quick Links by File Type](#quick-links-by-file-type)
+- [Can't Find What You Need?](#cant-find-what-you-need)
+  - [Search Strategies](#search-strategies)
+  - [Still Can't Find It?](#still-cant-find-it)
 
 **Purpose**: Quick reference guide to find documentation based on your role or task
 **Last Updated**: 2025-12-29

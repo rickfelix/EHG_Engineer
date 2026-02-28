@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 Acceptance Checklist
+
+
+## Table of Contents
+
+- [Quality Gate Scoring (8 Criteria)](#quality-gate-scoring-8-criteria)
+  - [Criterion 1: Evidence Completeness](#criterion-1-evidence-completeness)
+  - [Criterion 2: Source Material Accuracy](#criterion-2-source-material-accuracy)
+  - [Criterion 3: Structural Completeness](#criterion-3-structural-completeness)
+  - [Criterion 4: Footer Compliance](#criterion-4-footer-compliance)
+  - [Criterion 5: Recursion Blueprint Accuracy](#criterion-5-recursion-blueprint-accuracy)
+  - [Criterion 6: SD Cross-Reference Quality](#criterion-6-sd-cross-reference-quality)
+  - [Criterion 7: Regeneration Note Presence](#criterion-7-regeneration-note-presence)
+- [Regeneration Note](#regeneration-note)
+  - [Criterion 8: Technical Depth & Practicality](#criterion-8-technical-depth-practicality)
+- [Overall Score Calculation](#overall-score-calculation)
+- [Acceptance Decision](#acceptance-decision)
+- [Critical Notes](#critical-notes)
+  - [Strengths](#strengths)
+  - [Areas for Future Enhancement](#areas-for-future-enhancement)
+  - [Compliance Verification](#compliance-verification)
+- [Source Tables](#source-tables)
 
 ## Quality Gate Scoring (8 Criteria)
 

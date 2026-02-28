@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pre-Execution Checklist](#pre-execution-checklist)
+- [Substage 5.1: Revenue Modeling](#substage-51-revenue-modeling)
+  - [Step 1: Identify Revenue Streams](#step-1-identify-revenue-streams)
+  - [Step 2: Build Revenue Model](#step-2-build-revenue-model)
+- [Substage 5.2: Cost Structure](#substage-52-cost-structure)
+  - [Step 3: Estimate COGS (Cost of Goods Sold)](#step-3-estimate-cogs-cost-of-goods-sold)
+  - [Step 4: Project OpEx (Operating Expenses)](#step-4-project-opex-operating-expenses)
+  - [Step 5: Plan CapEx (Capital Expenditures)](#step-5-plan-capex-capital-expenditures)
+- [Substage 5.3: Profitability Analysis](#substage-53-profitability-analysis)
+  - [Step 6: Calculate Break-Even](#step-6-calculate-break-even)
+  - [Step 7: Project Margins](#step-7-project-margins)
+  - [Step 8: Estimate ROI](#step-8-estimate-roi)
+- [Recursion Decision Point](#recursion-decision-point)
+- [Exit Gate Validation](#exit-gate-validation)
+- [Rollback Procedures](#rollback-procedures)
+- [Common Pitfalls](#common-pitfalls)
+- [Success Criteria](#success-criteria)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:44.306Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-05\05_professional-sop.md

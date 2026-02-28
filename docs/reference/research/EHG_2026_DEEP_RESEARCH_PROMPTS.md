@@ -1,5 +1,37 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EHG 2026 Deep Research Prompts
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [How to Use This Document](#how-to-use-this-document)
+- [SD-RESEARCH-101: Cross-Schema Governance Architecture](#sd-research-101-cross-schema-governance-architecture)
+  - [Deep Research: Future-Proof Multi-Schema Architecture for EHG (Governance / Portfolio / Runtime)](#deep-research-future-proof-multi-schema-architecture-for-ehg-governance-portfolio-runtime)
+- [SD-RESEARCH-102: EVA Autonomy Engine (L0–L4, Per-Venture)](#sd-research-102-eva-autonomy-engine-l0l4-per-venture)
+  - [Deep Research: EVA Autonomy Engine (L0–L4) — Safe AI Governance Model](#deep-research-eva-autonomy-engine-l0l4-safe-ai-governance-model)
+- [SD-RESEARCH-103: Stage Data Contracts (JSON Schema + TypeScript)](#sd-research-103-stage-data-contracts-json-schema-typescript)
+  - [Deep Research: 40-Stage Data Contract System (JSON Schema + TypeScript)](#deep-research-40-stage-data-contract-system-json-schema-typescript)
+- [SD-RESEARCH-104: Unified EHG Interface (Governance + Runtime + EVA)](#sd-research-104-unified-ehg-interface-governance-runtime-eva)
+  - [Deep Research: Unified User Interface for Governance, 40-Stage Workflow, and EVA](#deep-research-unified-user-interface-for-governance-40-stage-workflow-and-eva)
+- [SD-RESEARCH-105: Multi-Venture Orchestration Strategy](#sd-research-105-multi-venture-orchestration-strategy)
+  - [Deep Research: Multi-Venture Orchestration for AI-Run Venture Portfolio](#deep-research-multi-venture-orchestration-for-ai-run-venture-portfolio)
+- [SD-RESEARCH-106: LEO Protocol Evolution to v5.x](#sd-research-106-leo-protocol-evolution-to-v5x)
+  - [Deep Research: LEO Protocol v5.x — Next-Generation Governance Engine](#deep-research-leo-protocol-v5x-next-generation-governance-engine)
+- [SD-RESEARCH-107: EVA Intent-vs-Reality Analysis Model](#sd-research-107-eva-intent-vs-reality-analysis-model)
+  - [Deep Research: EVA Intent-vs-Reality Decision Intelligence Model](#deep-research-eva-intent-vs-reality-decision-intelligence-model)
+- [SD-RESEARCH-108: Security, Compliance & AI Auditability](#sd-research-108-security-compliance-ai-auditability)
+  - [Deep Research: Security & Compliance Framework for Autonomous AI Ventures](#deep-research-security-compliance-framework-for-autonomous-ai-ventures)
+- [Research Dependency Order (Recommended)](#research-dependency-order-recommended)
+- [Returning Research Results](#returning-research-results)
 
 ## Metadata
 - **Category**: Guide

@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Defined Metrics (from stages.yaml)](#defined-metrics-from-stagesyaml)
+- [Additional Recursion Metrics](#additional-recursion-metrics)
+- [Proposed Monitoring Queries](#proposed-monitoring-queries)
+  - [1. ROI Calculation (Primary Recursion Trigger)](#1-roi-calculation-primary-recursion-trigger)
+  - [2. Margin Forecasts](#2-margin-forecasts)
+  - [3. Break-Even Timeline](#3-break-even-timeline)
+  - [4. Model Accuracy (Post-Launch)](#4-model-accuracy-post-launch)
+- [Recursion Metrics](#recursion-metrics)
+  - [5. Recursion Count Tracking](#5-recursion-count-tracking)
+  - [6. Recursion Resolution Time](#6-recursion-resolution-time)
+  - [7. ROI Delta After Recursion](#7-roi-delta-after-recursion)
+- [Dashboard Visualizations (Proposed)](#dashboard-visualizations-proposed)
+  - [Stage 5 Financial Health Dashboard](#stage-5-financial-health-dashboard)
+- [Real-Time Alerts](#real-time-alerts)
+- [Performance SLAs](#performance-slas)
+- [Known Gaps (from critique)](#known-gaps-from-critique)
+- [Implementation Priority](#implementation-priority)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:52.571Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-05\09_metrics-monitoring.md

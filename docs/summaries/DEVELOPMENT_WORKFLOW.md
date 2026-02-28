@@ -1,5 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EHG_Engineer Development Workflow Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Architecture Overview](#architecture-overview)
+  - [Directory Responsibilities](#directory-responsibilities)
+  - [Conceptual Model](#conceptual-model)
+- [Development Workflow](#development-workflow)
+  - [For ehg Application Development (APP001)](#for-ehg-application-development-app001)
+  - [For LEO Protocol Development](#for-leo-protocol-development)
+- [Claude Code Session Checklist](#claude-code-session-checklist)
+- [Application Configuration](#application-configuration)
+- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+  - [❌ WRONG: Working in applications/APP001/codebase](#-wrong-working-in-applicationsapp001codebase)
+  - [✅ CORRECT: Working in the actual repository](#-correct-working-in-the-actual-repository)
+- [Adding Future Ventures](#adding-future-ventures)
+- [Validation](#validation)
+- [Quick Reference](#quick-reference)
+- [Architecture Benefits](#architecture-benefits)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Report

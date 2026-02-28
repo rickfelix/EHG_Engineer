@@ -1,5 +1,47 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Agent Patterns Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [1. Agent Modular Structure & Public API](#1-agent-modular-structure-public-api)
+  - [Base Class Hierarchy](#base-class-hierarchy)
+  - [Public API](#public-api)
+- [2. FileScanner Usage & Behavior](#2-filescanner-usage-behavior)
+  - [Purpose](#purpose)
+  - [Default Extensions](#default-extensions)
+  - [Usage in Agents](#usage-in-agents)
+- [3. Circuit Breaker Pattern & Keys](#3-circuit-breaker-pattern-keys)
+  - [Purpose](#purpose)
+  - [Circuit Breaker Keys](#circuit-breaker-keys)
+- [4. CacheManager Namespaces, TTL & Metrics](#4-cachemanager-namespaces-ttl-metrics)
+  - [Cache Configuration](#cache-configuration)
+  - [Usage](#usage)
+  - [Metrics](#metrics)
+- [5. Analyzer Strategy & Registry](#5-analyzer-strategy-registry)
+  - [Analyzer Registry](#analyzer-registry)
+  - [Analyzer Contract](#analyzer-contract)
+  - [Registration Pattern](#registration-pattern)
+- [6. Agent Lifecycle Hooks](#6-agent-lifecycle-hooks)
+  - [Lifecycle Phases](#lifecycle-phases)
+  - [Hook Implementation](#hook-implementation)
+- [7. CI Documentation Checks](#7-ci-documentation-checks)
+  - [Automated Validation](#automated-validation)
+  - [Validation Rules](#validation-rules)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Guide

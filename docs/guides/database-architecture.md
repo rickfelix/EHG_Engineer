@@ -1,5 +1,41 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # EHG_Engineer Database Architecture Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Understanding: Multiple Database Architecture](#critical-understanding-multiple-database-architecture)
+  - [Overview](#overview)
+- [Database Architecture](#database-architecture)
+- [Strategic Directives Table Schema (strategic_directives_v2)](#strategic-directives-table-schema-strategic_directives_v2)
+  - [Required Fields (NOT NULL)](#required-fields-not-null)
+  - [Optional Fields](#optional-fields)
+  - [JSONB Fields (Arrays/Objects)](#jsonb-fields-arraysobjects)
+- [Environment Configuration](#environment-configuration)
+  - [Required Environment Variables](#required-environment-variables)
+  - [Script Template for Database Operations](#script-template-for-database-operations)
+- [Common Issues and Solutions](#common-issues-and-solutions)
+  - [Issue 1: Missing Required Fields](#issue-1-missing-required-fields)
+  - [Issue 2: Wrong Environment Variables](#issue-2-wrong-environment-variables)
+  - [Issue 3: Table Not Found](#issue-3-table-not-found)
+  - [Issue 4: Invalid Enum Values](#issue-4-invalid-enum-values)
+- [SDIP Integration Points](#sdip-integration-points)
+  - [New Tables for SDIP](#new-tables-for-sdip)
+  - [Integration with Existing Tables](#integration-with-existing-tables)
+- [Best Practices](#best-practices)
+- [Migration Scripts](#migration-scripts)
+  - [Run SDIP Database Migration](#run-sdip-database-migration)
+  - [Verify Tables Exist](#verify-tables-exist)
+- [Troubleshooting Checklist](#troubleshooting-checklist)
 
 ## Metadata
 - **Category**: Architecture

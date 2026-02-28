@@ -1,5 +1,63 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Multi-Repository Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Repository Structure](#repository-structure)
+- [Repository Responsibilities](#repository-responsibilities)
+  - [EHG (Frontend)](#ehg-frontend)
+  - [EHG_Engineer (Backend/Tooling)](#ehg_engineer-backendtooling)
+- [Cross-Repo Dependencies](#cross-repo-dependencies)
+  - [API Communication](#api-communication)
+  - [Shared Contracts](#shared-contracts)
+- [Coordination Patterns](#coordination-patterns)
+  - [Pattern 1: Feature Spanning Both Repos](#pattern-1-feature-spanning-both-repos)
+  - [Pattern 2: Backend-Only Work](#pattern-2-backend-only-work)
+  - [Pattern 3: Frontend-Only Work](#pattern-3-frontend-only-work)
+- [Branch Naming Convention](#branch-naming-convention)
+- [Deployment Architecture](#deployment-architecture)
+  - [Local Development](#local-development)
+  - [Production (Future)](#production-future)
+- [SD-to-Repo Mapping](#sd-to-repo-mapping)
+  - [Automatic Detection](#automatic-detection)
+- [Multi-Repo Workflows](#multi-repo-workflows)
+  - [Workflow 1: Starting Work on a Multi-Repo SD](#workflow-1-starting-work-on-a-multi-repo-sd)
+  - [Workflow 2: Checking Uncommitted Changes Before Shipping](#workflow-2-checking-uncommitted-changes-before-shipping)
+  - [Workflow 3: Marking SD Complete](#workflow-3-marking-sd-complete)
+- [Advantages of Multi-Repo Architecture](#advantages-of-multi-repo-architecture)
+  - [Separation of Concerns](#separation-of-concerns)
+  - [Independent Deployment](#independent-deployment)
+  - [Technology Flexibility](#technology-flexibility)
+  - [Scalability](#scalability)
+- [Challenges and Mitigations](#challenges-and-mitigations)
+  - [Challenge 1: Coordination Overhead](#challenge-1-coordination-overhead)
+  - [Challenge 2: Type Synchronization](#challenge-2-type-synchronization)
+  - [Challenge 3: Testing Full Stack Flows](#challenge-3-testing-full-stack-flows)
+  - [Challenge 4: Forgotten Work in Other Repo](#challenge-4-forgotten-work-in-other-repo)
+- [Future Enhancements](#future-enhancements)
+  - [Monorepo Consideration](#monorepo-consideration)
+  - [Shared Types Package](#shared-types-package)
+- [Tools and Scripts](#tools-and-scripts)
+  - [Multi-Repo Manager Module](#multi-repo-manager-module)
+  - [Multi-Repo Status CLI](#multi-repo-status-cli)
+  - [LEO Stack Script](#leo-stack-script)
+  - [Phase 2 Command Enhancements](#phase-2-command-enhancements)
+- [Best Practices](#best-practices)
+  - [When Working Across Repos](#when-working-across-repos)
+  - [When Adding New Features](#when-adding-new-features)
+  - [When Refactoring](#when-refactoring)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Architecture

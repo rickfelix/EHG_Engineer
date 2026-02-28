@@ -1,4 +1,50 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # LEO 5.0 Task System Architecture
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architectural Philosophy](#architectural-philosophy)
+  - [Identity vs. Execution](#identity-vs-execution)
+  - [Core Innovations](#core-innovations)
+- [The Track System](#the-track-system)
+  - [Track Definitions](#track-definitions)
+  - [Track Selection Logic](#track-selection-logic)
+  - [Track Comparison](#track-comparison)
+- [Phase Hydration](#phase-hydration)
+  - [Hydration Flow](#hydration-flow)
+  - [TaskHydrator Implementation](#taskhydrator-implementation)
+  - [Template Structure](#template-structure)
+- [Wall Enforcement](#wall-enforcement)
+  - [Wall Overview](#wall-overview)
+  - [Wall Types](#wall-types)
+  - [Wall Implementation](#wall-implementation)
+  - [Why Walls Are Impenetrable](#why-walls-are-impenetrable)
+  - [SAFETY-WALL (Hotfix Compensating Control)](#safety-wall-hotfix-compensating-control)
+- [Failure Handling](#failure-handling)
+  - [Kickback System](#kickback-system)
+  - [Wall Invalidation](#wall-invalidation)
+  - [Task Status Extensions](#task-status-extensions)
+- [Sub-Agent Orchestration](#sub-agent-orchestration)
+  - [Parallel Execution Pattern](#parallel-execution-pattern)
+  - [Type-Aware Requirements](#type-aware-requirements)
+  - [Phase-Specific Timing](#phase-specific-timing)
+  - [SubAgentOrchestrator](#subagentorchestrator)
+- [Database Schema](#database-schema)
+  - [Core Tables](#core-tables)
+  - [View: `sd_execution_dashboard`](#view-sd_execution_dashboard)
+- [Component Diagram](#component-diagram)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Architecture

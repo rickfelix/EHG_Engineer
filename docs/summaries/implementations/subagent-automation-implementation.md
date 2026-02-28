@@ -1,5 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Sub-Agent Automation Implementation Plan
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🎯 Current vs. Target State](#-current-vs-target-state)
+  - [Current State (Semi-Automated)](#current-state-semi-automated)
+  - [Target State (Fully Automated)](#target-state-fully-automated)
+- [📋 Implementation Steps](#-implementation-steps)
+  - [Phase 1: Database Setup (30 minutes)](#phase-1-database-setup-30-minutes)
+  - [Phase 2: Worker Setup (15 minutes)](#phase-2-worker-setup-15-minutes)
+  - [Phase 3: Dashboard Integration (2 hours)](#phase-3-dashboard-integration-2-hours)
+  - [Phase 4: Production Deployment (1 hour)](#phase-4-production-deployment-1-hour)
+- [🔄 How It Works](#-how-it-works)
+  - [Automatic Triggering](#automatic-triggering)
+  - [Approval Validation](#approval-validation)
+- [🎛️ Configuration](#-configuration)
+  - [Adding New Sub-Agent Triggers](#adding-new-sub-agent-triggers)
+  - [Adjusting Priority](#adjusting-priority)
+- [📊 Monitoring](#-monitoring)
+  - [Check Queue Status](#check-queue-status)
+  - [View Pending Tasks](#view-pending-tasks)
+  - [Check Failed Tasks](#check-failed-tasks)
+  - [Retry Failed Task](#retry-failed-task)
+- [⚠️ Important Considerations](#-important-considerations)
+  - [1. Worker Must Be Running](#1-worker-must-be-running)
+  - [2. Script Availability](#2-script-availability)
+  - [3. Error Handling](#3-error-handling)
+  - [4. Performance](#4-performance)
+- [🚀 Rollout Plan](#-rollout-plan)
+  - [Week 1: Development Environment](#week-1-development-environment)
+  - [Week 2: Integration Testing](#week-2-integration-testing)
+  - [Week 3: Production Deployment](#week-3-production-deployment)
+  - [Week 4: Validation](#week-4-validation)
+- [✅ Success Criteria](#-success-criteria)
+- [📞 Support](#-support)
 
 ## Metadata
 - **Category**: Report

@@ -1,3 +1,36 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Scoring Criteria (8 Categories)](#scoring-criteria-8-categories)
+  - [1. Completeness (15 points)](#1-completeness-15-points)
+  - [2. Evidence Quality (20 points)](#2-evidence-quality-20-points)
+  - [3. Source Fidelity (15 points)](#3-source-fidelity-15-points)
+  - [4. Regeneration Compliance (10 points)](#4-regeneration-compliance-10-points)
+  - [5. Recursion Blueprint Quality (10 points)](#5-recursion-blueprint-quality-10-points)
+  - [6. SD Cross-References (10 points)](#6-sd-cross-references-10-points)
+  - [7. Special Characteristics Handling (10 points)](#7-special-characteristics-handling-10-points)
+  - [8. Professional Quality (10 points)](#8-professional-quality-10-points)
+- [Overall Score Calculation](#overall-score-calculation)
+- [Acceptance Decision](#acceptance-decision)
+- [Critical Notes](#critical-notes)
+  - [Note 1: Stage 16 Unique Characteristics](#note-1-stage-16-unique-characteristics)
+  - [Note 2: Recursion Blueprint Proposal](#note-2-recursion-blueprint-proposal)
+  - [Note 3: Evidence Density](#note-3-evidence-density)
+  - [Note 4: Actionability](#note-4-actionability)
+  - [Note 5: Phase 7 Contract Compliance](#note-5-phase-7-contract-compliance)
+- [Recommendations for Future Dossiers](#recommendations-for-future-dossiers)
+- [Sign-off](#sign-off)
+
 <!-- ARCHIVED: 2026-01-26T16:26:55.925Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-16\11_acceptance-checklist.md

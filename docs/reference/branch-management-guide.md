@@ -1,4 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Branch Management Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Two Repositories](#two-repositories)
+- [Branch Lifecycle](#branch-lifecycle)
+- [Branch Naming Convention](#branch-naming-convention)
+  - [Types](#types)
+  - [Examples](#examples)
+- [Why Not Proactive Branch Creation?](#why-not-proactive-branch-creation)
+- [Intelligent Branch Cleanup](#intelligent-branch-cleanup)
+  - [How It Works](#how-it-works)
+  - [Running Cleanup](#running-cleanup)
+- [Protected Branches](#protected-branches)
+- [Working with Branches](#working-with-branches)
+  - [Creating a Branch (Automatic)](#creating-a-branch-automatic)
+  - [Creating a Branch (Manual)](#creating-a-branch-manual)
+  - [Switching Branches](#switching-branches)
+  - [Deleting a Branch](#deleting-a-branch)
+- [Common Scenarios](#common-scenarios)
+  - [Scenario 1: Start New Feature](#scenario-1-start-new-feature)
+  - [Scenario 2: Continue Existing Work](#scenario-2-continue-existing-work)
+  - [Scenario 3: Clean Up Stale Branches](#scenario-3-clean-up-stale-branches)
+  - [Scenario 4: Branch Has Unique Work](#scenario-4-branch-has-unique-work)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+- [Troubleshooting](#troubleshooting)
+  - ["Branch already exists"](#branch-already-exists)
+  - ["Cannot delete branch - not fully merged"](#cannot-delete-branch---not-fully-merged)
+  - ["192 unmerged branches found"](#192-unmerged-branches-found)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

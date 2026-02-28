@@ -1,4 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 19: Canonical Definition
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Full YAML Specification](#full-yaml-specification)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Core Metadata](#core-metadata)
+  - [Dependencies](#dependencies)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Metrics](#metrics)
+  - [Gates](#gates)
+  - [Substages](#substages)
+  - [Notes](#notes)
+- [Canonical Source Preservation](#canonical-source-preservation)
+- [Schema Compliance](#schema-compliance)
+- [Change History](#change-history)
 
 ## Purpose
 

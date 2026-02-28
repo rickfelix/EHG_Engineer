@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 31: MVP Launch — Gaps & Backlog
+
+
+## Table of Contents
+
+- [Current Implementation Gaps (6 Major Gaps)](#current-implementation-gaps-6-major-gaps)
+  - [Gap 1: No Automation (80% Manual Process) ❌](#gap-1-no-automation-80-manual-process-)
+  - [Gap 2: Missing Rollback Procedures ❌](#gap-2-missing-rollback-procedures-)
+  - [Gap 3: No Metric Thresholds ⚠️](#gap-3-no-metric-thresholds-)
+  - [Gap 4: Unclear Data Flow ⚠️](#gap-4-unclear-data-flow-)
+  - [Gap 5: Missing Tool Integrations ⚠️](#gap-5-missing-tool-integrations-)
+  - [Gap 6: No Explicit Error Handling ❌](#gap-6-no-explicit-error-handling-)
+- [Existing Strategic Directives (Cross-References)](#existing-strategic-directives-cross-references)
+  - [SD-METRICS-FRAMEWORK-001 (P0 CRITICAL, Universal Blocker)](#sd-metrics-framework-001-p0-critical-universal-blocker)
+  - [SD-DEPLOYMENT-AUTOMATION-001 (P0, Stage 30 Prerequisite)](#sd-deployment-automation-001-p0-stage-30-prerequisite)
+- [Proposed Strategic Directives (3 New SDs)](#proposed-strategic-directives-3-new-sds)
+  - [SD-LAUNCH-AUTOMATION-001 (Proposed)](#sd-launch-automation-001-proposed)
+  - [SD-LAUNCH-ROLLBACK-001 (Proposed)](#sd-launch-rollback-001-proposed)
+  - [SD-LAUNCH-INTELLIGENCE-001 (Proposed)](#sd-launch-intelligence-001-proposed)
+- [Gap Prioritization (By Severity)](#gap-prioritization-by-severity)
+- [Backlog Summary (Actionable Work Items)](#backlog-summary-actionable-work-items)
+  - [Sprint 0 (Pre-Work)](#sprint-0-pre-work)
+  - [Sprint 1-2 (Rollback Safety Net)](#sprint-1-2-rollback-safety-net)
+  - [Sprint 3-6 (Launch Automation - Phase 1)](#sprint-3-6-launch-automation---phase-1)
+  - [Sprint 7-10 (Launch Automation - Phase 2)](#sprint-7-10-launch-automation---phase-2)
+  - [Sprint 11-14 (Launch Automation - Phase 3)](#sprint-11-14-launch-automation---phase-3)
+  - [Future Work (Post-Phase 3)](#future-work-post-phase-3)
+- [Cross-Stage Impact](#cross-stage-impact)
+- [Score Improvement Projection](#score-improvement-projection)
+- [Sources Table](#sources-table)
 
 **Purpose**: Identify implementation gaps, reference queued Strategic Directives, and propose new SDs to address Stage 31 deficiencies.
 

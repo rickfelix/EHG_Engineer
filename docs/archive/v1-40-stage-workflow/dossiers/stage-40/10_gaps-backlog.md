@@ -1,4 +1,51 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Gaps & Implementation Backlog
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Gap 1: Limited Automation ⚠️ 🟡](#gap-1-limited-automation-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 2: Unclear Rollback Procedures 🔴](#gap-2-unclear-rollback-procedures-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 3: Missing Tool Integrations 🟡](#gap-3-missing-tool-integrations-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 4: No Explicit Error Handling 🔴](#gap-4-no-explicit-error-handling-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 5: Undefined Data Transformation Rules 🟡](#gap-5-undefined-data-transformation-rules-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 6: Missing Threshold Values & Measurement Frequency 🟡](#gap-6-missing-threshold-values-measurement-frequency-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 7: No Customer Validation Touchpoint 🟢](#gap-7-no-customer-validation-touchpoint-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Gap 8: Recursion Support Pending 🟢](#gap-8-recursion-support-pending-)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+  - [Implementation Plan](#implementation-plan)
+- [Priority Summary](#priority-summary)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-40.md:24-72
 

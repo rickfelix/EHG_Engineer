@@ -1,5 +1,56 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Dynamic Model Allocation Framework - Complete Research & Implementation Plan
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [What We've Accomplished](#what-weve-accomplished)
+  - [✅ Phase 1: Complete Research Package](#-phase-1-complete-research-package)
+- [The Big Insight: Haiku Opportunity](#the-big-insight-haiku-opportunity)
+  - [Before (Current State)](#before-current-state)
+  - [After (Haiku-First Strategy)](#after-haiku-first-strategy)
+- [Model Assignments (Haiku-First)](#model-assignments-haiku-first)
+  - [TIER 1: Haiku Default (5 agents, 40-45% of executions)](#tier-1-haiku-default-5-agents-40-45-of-executions)
+  - [TIER 2: Sonnet Default (10 agents, 50-55% of executions)](#tier-2-sonnet-default-10-agents-50-55-of-executions)
+  - [TIER 3: Opus Only (1 agent, 5-10% of executions, non-negotiable)](#tier-3-opus-only-1-agent-5-10-of-executions-non-negotiable)
+- [Budget Zones & Model Recommendations](#budget-zones-model-recommendations)
+- [Phase 0 MVP: What Gets Built This Week](#phase-0-mvp-what-gets-built-this-week)
+  - [6 Implementation Tasks (Total: ~1.25 hours)](#6-implementation-tasks-total-125-hours)
+- [First SD Validation Run](#first-sd-validation-run)
+  - [Selection Criteria](#selection-criteria)
+  - [Expected Behavior](#expected-behavior)
+  - [Success Criteria](#success-criteria)
+- [Weekly Execution Flow](#weekly-execution-flow)
+  - [Before Each SD](#before-each-sd)
+  - [During Each SD](#during-each-sd)
+  - [After Each SD](#after-each-sd)
+- [Key Safety Guarantees](#key-safety-guarantees)
+  - [Never Violate (CRITICAL)](#never-violate-critical)
+  - [Always Do These](#always-do-these)
+- [Risk Mitigation](#risk-mitigation)
+  - [Top Risks & Mitigations](#top-risks-mitigations)
+  - [Escape Hatches (Always Available)](#escape-hatches-always-available)
+- [Success Metrics (Week 1)](#success-metrics-week-1)
+- [Next Phases (Weeks 2-4)](#next-phases-weeks-2-4)
+  - [Week 2: Refinement](#week-2-refinement)
+  - [Week 3: Sophistication](#week-3-sophistication)
+  - [Week 4+: Intelligence](#week-4-intelligence)
+- [Files Created/Updated](#files-createdupdated)
+  - [New Research Files](#new-research-files)
+  - [Updated Research Files](#updated-research-files)
+  - [To Be Implemented](#to-be-implemented)
+- [Chairman Sign-Off Checklist](#chairman-sign-off-checklist)
+- [Quick Start (After Approval)](#quick-start-after-approval)
+- [Questions?](#questions)
 
 ## Metadata
 - **Category**: Report

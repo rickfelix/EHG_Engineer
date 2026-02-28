@@ -1,5 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Database Migration Application Pattern
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🔔 Automatic Migration Detection (NEW - SD-LEO-HARDEN-VALIDATION-001)](#-automatic-migration-detection-new---sd-leo-harden-validation-001)
+  - [How It Works](#how-it-works)
+  - [Benefits](#benefits)
+  - [Configuration](#configuration)
+  - [Example Output](#example-output)
+- [✅ CORRECT Pattern: Programmatic Migration Application](#-correct-pattern-programmatic-migration-application)
+  - [Working Example (50+ scripts in repository):](#working-example-50-scripts-in-repository)
+  - [Requirements:](#requirements)
+  - [Recent Success Examples:](#recent-success-examples)
+- [❌ INCORRECT Pattern: Manual Dashboard Application](#-incorrect-pattern-manual-dashboard-application)
+- [Database Sub-Agent Checklist](#database-sub-agent-checklist)
+  - [Step 1: Check for Existing Migration Scripts](#step-1-check-for-existing-migration-scripts)
+  - [Step 2: Check Environment Variables](#step-2-check-environment-variables)
+  - [Step 3: Use Programmatic Pattern (Primary)](#step-3-use-programmatic-pattern-primary)
+  - [Step 4: Manual Dashboard (Fallback ONLY)](#step-4-manual-dashboard-fallback-only)
+- [Lessons Learned from SD-VWC-PHASE4-001](#lessons-learned-from-sd-vwc-phase4-001)
+  - [What Went Wrong:](#what-went-wrong)
+  - [What Should Have Happened:](#what-should-have-happened)
+  - [Time Impact:](#time-impact)
+  - [Retrospective Quote (SD-2025-1020-E2E-SELECTORS):](#retrospective-quote-sd-2025-1020-e2e-selectors)
+- [Database Sub-Agent Update Instructions](#database-sub-agent-update-instructions)
+  - [For Future Sub-Agent Invocations:](#for-future-sub-agent-invocations)
+- [Quick Reference: Programmatic vs Manual](#quick-reference-programmatic-vs-manual)
+- [Updated Database Sub-Agent Prompt](#updated-database-sub-agent-prompt)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

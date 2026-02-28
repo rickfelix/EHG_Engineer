@@ -1,3 +1,28 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Gap Categories](#gap-categories)
+- [Gap 1: Limited Automation](#gap-1-limited-automation)
+- [Gap 2: Undefined Metric Thresholds](#gap-2-undefined-metric-thresholds)
+- [Gap 3: Unclear Data Flow](#gap-3-unclear-data-flow)
+- [Gap 4: Missing Rollback Procedures](#gap-4-missing-rollback-procedures)
+- [Gap 5: No Customer Integration](#gap-5-no-customer-integration)
+- [Gap 6: No Recursion Logic](#gap-6-no-recursion-logic)
+- [Gap 7: Missing Tool Integrations](#gap-7-missing-tool-integrations)
+- [Gap 8: No Error Handling](#gap-8-no-error-handling)
+- [Backlog Summary](#backlog-summary)
+- [Cross-Reference: Strategic Directives](#cross-reference-strategic-directives)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:54.312Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-09\10_gaps-backlog.md

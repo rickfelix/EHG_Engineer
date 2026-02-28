@@ -1,4 +1,36 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Audit: Phase 3 — THE IDENTITY (Stages 10-12)
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Files Audited](#files-audited)
+  - [Stage Templates (3 files)](#stage-templates-3-files)
+  - [Analysis Steps (3 files)](#analysis-steps-3-files)
+  - [Supporting Files](#supporting-files)
+- [Stage-by-Stage Gap Analysis](#stage-by-stage-gap-analysis)
+  - [Stage 10: Naming / Brand](#stage-10-naming-brand)
+  - [Stage 11: Go-to-Market](#stage-11-go-to-market)
+  - [Stage 12: Pipeline Viability — REALITY GATE](#stage-12-pipeline-viability-reality-gate)
+- [Cross-Cutting Findings](#cross-cutting-findings)
+  - [Finding 1: Template-Analysis Step Divergence (Systemic — CRITICAL)](#finding-1-template-analysis-step-divergence-systemic-critical)
+  - [Finding 2: Dual Reality Gate Problem (HIGH)](#finding-2-dual-reality-gate-problem-high)
+  - [Finding 3: Field Naming Drift (HIGH)](#finding-3-field-naming-drift-high)
+  - [Finding 4: Existing Validators Underutilized (MEDIUM)](#finding-4-existing-validators-underutilized-medium)
+- [Remediation Priority](#remediation-priority)
+  - [P0 — Must Fix](#p0-must-fix)
+  - [P1 — Should Fix](#p1-should-fix)
+  - [P2 — Nice to Have](#p2-nice-to-have)
+- [Appendix: Data Flow Map](#appendix-data-flow-map)
+- [Appendix: Comparison with Phase 5 Findings](#appendix-comparison-with-phase-5-findings)
 
 **SD**: `SD-EVA-QA-AUDIT-IDENTITY-001`
 **Parent**: `SD-EVA-QA-AUDIT-ORCH-001`

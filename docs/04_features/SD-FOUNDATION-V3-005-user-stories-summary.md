@@ -1,4 +1,52 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # User Stories Summary: SD-FOUNDATION-V3-005
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EVA Directive Execution Engine](#eva-directive-execution-engine)
+- [Overview](#overview)
+- [Functional Requirements Mapping](#functional-requirements-mapping)
+- [User Stories](#user-stories)
+  - [Phase 1: Foundation (18 story points)](#phase-1-foundation-18-story-points)
+  - [Phase 2: Execution (13 story points)](#phase-2-execution-13-story-points)
+  - [Phase 3: Observability (11 story points)](#phase-3-observability-11-story-points)
+- [Implementation Order](#implementation-order)
+  - [Recommended Sequence](#recommended-sequence)
+- [Priority Breakdown](#priority-breakdown)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [E2E Tests](#e2e-tests)
+- [Database Schema Changes](#database-schema-changes)
+  - [New Tables](#new-tables)
+  - [Modified Tables](#modified-tables)
+- [Architecture References](#architecture-references)
+  - [Services to Create](#services-to-create)
+  - [API Endpoints to Create](#api-endpoints-to-create)
+  - [UI Components to Create](#ui-components-to-create)
+- [INVEST Criteria Validation](#invest-criteria-validation)
+  - [Independent](#independent)
+  - [Negotiable](#negotiable)
+  - [Valuable](#valuable)
+  - [Estimable](#estimable)
+  - [Small](#small)
+  - [Testable](#testable)
+- [Key Technical Decisions](#key-technical-decisions)
+- [Success Metrics](#success-metrics)
+  - [Functional Metrics](#functional-metrics)
+  - [Performance Metrics](#performance-metrics)
+  - [User Experience Metrics](#user-experience-metrics)
+- [Risks and Mitigations](#risks-and-mitigations)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Report

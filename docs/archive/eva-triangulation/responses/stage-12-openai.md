@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 12 "Sales Logic" -- OpenAI Response (GPT 5.3)
 
 ### 1) Gap Assessment Table

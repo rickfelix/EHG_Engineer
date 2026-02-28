@@ -1,5 +1,42 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # SD Contract Patterns
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Quick Reference](#quick-reference)
+- [Data Contracts](#data-contracts)
+  - [Schema](#schema)
+  - [Creating a Data Contract](#creating-a-data-contract)
+  - [Validation](#validation)
+- [UX Contracts](#ux-contracts)
+  - [Schema](#schema)
+  - [Creating a UX Contract](#creating-a-ux-contract)
+  - [Cultural Design Styles](#cultural-design-styles)
+  - [Validation](#validation)
+- [Contract Inheritance](#contract-inheritance)
+  - [Manual Inheritance](#manual-inheritance)
+- [Integration Points](#integration-points)
+  - [1. PLAN→EXEC Handoff Gate](#1-planexec-handoff-gate)
+  - [2. DATABASE Sub-Agent](#2-database-sub-agent)
+  - [3. DESIGN Sub-Agent](#3-design-sub-agent)
+- [Completion Gate](#completion-gate)
+- [Override Pattern](#override-pattern)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
+  - [Contract Not Inherited](#contract-not-inherited)
+  - [Validation Function Errors](#validation-function-errors)
+- [Reference](#reference)
 
 ## Metadata
 - **Category**: Reference

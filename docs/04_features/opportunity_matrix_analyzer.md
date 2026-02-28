@@ -1,5 +1,43 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Opportunity Matrix Analyzer - Enhanced PRD
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1.5. Database Schema Integration](#15-database-schema-integration)
+  - [Core Entity Dependencies](#core-entity-dependencies)
+- [1.6. Integration Hub Connectivity](#16-integration-hub-connectivity)
+  - [Integration Requirements](#integration-requirements)
+- [1. Core Business Logic](#1-core-business-logic)
+  - [Opportunity Classification Engine](#opportunity-classification-engine)
+  - [Green Box Analyzer (Quick Wins)](#green-box-analyzer-quick-wins)
+  - [Yellow Box Analyzer (Strategic Investments)](#yellow-box-analyzer-strategic-investments)
+  - [Red Box Analyzer (Defensive Priorities)](#red-box-analyzer-defensive-priorities)
+- [2. Data Architecture](#2-data-architecture)
+  - [Opportunity Matrix Schema](#opportunity-matrix-schema)
+- [3. UI Components](#3-ui-components)
+  - [Opportunity Matrix Visualization](#opportunity-matrix-visualization)
+  - [Opportunity Detail Panel](#opportunity-detail-panel)
+- [4. Integration Services](#4-integration-services)
+  - [Real-time Opportunity Detection](#real-time-opportunity-detection)
+  - [Chairman Strategic Guidance Integration](#chairman-strategic-guidance-integration)
+- [5. Testing Specifications](#5-testing-specifications)
+- [6. Implementation Checklist](#6-implementation-checklist)
+  - [Phase 1: Core Analytics (Week 1)](#phase-1-core-analytics-week-1)
+  - [Phase 2: Data Infrastructure (Week 2)](#phase-2-data-infrastructure-week-2)
+  - [Phase 3: Visualization (Week 3)](#phase-3-visualization-week-3)
+  - [Phase 4: Integration (Week 4)](#phase-4-integration-week-4)
+- [7. Success Metrics](#7-success-metrics)
 
 ## Metadata
 - **Category**: Feature

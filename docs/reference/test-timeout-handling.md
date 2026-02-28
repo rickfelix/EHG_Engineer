@@ -1,5 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Test Execution Timeout Handling Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+- [Timeout Thresholds](#timeout-thresholds)
+  - [Standard Timeouts (Native Linux/Mac)](#standard-timeouts-native-linuxmac)
+  - [WSL2 Adjustments (Add 50%)](#wsl2-adjustments-add-50)
+- [4-Step Fallback Strategy](#4-step-fallback-strategy)
+  - [Step 1: Quick Validation (NO Coverage)](#step-1-quick-validation-no-coverage)
+  - [Step 2: Focused Testing (SD-Specific)](#step-2-focused-testing-sd-specific)
+  - [Step 3: Manual Smoke Test](#step-3-manual-smoke-test)
+- [Manual Smoke Test Results](#manual-smoke-test-results)
+  - [Step 4: CI/CD-Only Validation](#step-4-cicd-only-validation)
+- [Testing Strategy: CI/CD-First](#testing-strategy-cicd-first)
+- [Environment-Specific Considerations](#environment-specific-considerations)
+  - [WSL2 Environments](#wsl2-environments)
+  - [Docker/Container Environments](#dockercontainer-environments)
+- [Decision Matrix](#decision-matrix)
+- [Handoff Requirements](#handoff-requirements)
+  - [Minimum Requirements (BLOCKING)](#minimum-requirements-blocking)
+  - [Evidence Checklist](#evidence-checklist)
+- [Escalation Path](#escalation-path)
+  - [When to Escalate to LEAD](#when-to-escalate-to-lead)
+  - [LEAD Decision Points](#lead-decision-points)
+- [Success Metrics](#success-metrics)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Testing

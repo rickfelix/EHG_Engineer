@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 7: Configurability Matrix
+
+
+## Table of Contents
+
+- [Recursion Thresholds (Inbound)](#recursion-thresholds-inbound)
+- [Loop Prevention](#loop-prevention)
+- [Planning Automation Level](#planning-automation-level)
+- [Metrics Configuration](#metrics-configuration)
+- [Comparison & Benchmarking](#comparison-benchmarking)
+- [Plan Templates](#plan-templates)
+- [Chairman Override Capabilities](#chairman-override-capabilities)
+- [Performance Configuration](#performance-configuration)
+- [Notification & Communication](#notification-communication)
+- [Integration Settings](#integration-settings)
+- [Configuration Profiles](#configuration-profiles)
+  - [Profile 1: Conservative Planning (Low Risk)](#profile-1-conservative-planning-low-risk)
+  - [Profile 2: Balanced Planning (Standard Risk)](#profile-2-balanced-planning-standard-risk)
+  - [Profile 3: Aggressive Planning (High Risk)](#profile-3-aggressive-planning-high-risk)
+  - [Profile 4: AI-First Planning (Automation Focus)](#profile-4-ai-first-planning-automation-focus)
+- [Configuration UI (Proposed)](#configuration-ui-proposed)
+- [Sources Table](#sources-table)
 
 **Purpose**: Define tunable parameters for Stage 7 (Comprehensive Planning Suite) to allow Chairman/Admin customization
 

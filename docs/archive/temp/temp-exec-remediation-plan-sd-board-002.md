@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EXEC Remediation Plan - SD-BOARD-VISUAL-BUILDER-002
+
+## Table of Contents
+
+- [Phase 4 Verification Blockers - Automated Resolution Strategy](#phase-4-verification-blockers---automated-resolution-strategy)
+- [🎯 Remediation Objective](#-remediation-objective)
+- [📋 Remediation Task Breakdown](#-remediation-task-breakdown)
+  - [TASK 1: Fix E2E Test Stability (CRITICAL)](#task-1-fix-e2e-test-stability-critical)
+  - [TASK 2: Resolve CI/CD Pipeline Failures (CRITICAL)](#task-2-resolve-cicd-pipeline-failures-critical)
+  - [TASK 3: Address Accessibility Violations (HIGH)](#task-3-address-accessibility-violations-high)
+- [🤖 Sub-Agent Orchestration Plan](#-sub-agent-orchestration-plan)
+  - [Phase 1: Parallel Remediation (Tasks 1 + 2 + 3 simultaneously)](#phase-1-parallel-remediation-tasks-1-2-3-simultaneously)
+  - [Phase 2: Verification & Handoff](#phase-2-verification-handoff)
+- [📊 Progress Tracking](#-progress-tracking)
+  - [Remediation Checklist](#remediation-checklist)
+- [🚀 Quick Start Commands (Copy-Paste)](#-quick-start-commands-copy-paste)
+- [📈 Expected Outcomes](#-expected-outcomes)
+  - [Before Remediation](#before-remediation)
+  - [After Remediation](#after-remediation)
+- [🎯 Success Metrics](#-success-metrics)
+
 ## Phase 4 Verification Blockers - Automated Resolution Strategy
 
 **Date**: 2025-10-12

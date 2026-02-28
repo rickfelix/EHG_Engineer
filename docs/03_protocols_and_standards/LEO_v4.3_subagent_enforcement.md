@@ -1,5 +1,36 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.3 - Sub-Agent Enforcement Amendment
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Statement](#problem-statement)
+- [Solution: Mandatory Sub-Agent Checkpoints](#solution-mandatory-sub-agent-checkpoints)
+  - [1. Automated Trigger Detection](#1-automated-trigger-detection)
+  - [2. Enforcement in Handoff Validator](#2-enforcement-in-handoff-validator)
+  - [3. Sub-Agent Trigger Matrix](#3-sub-agent-trigger-matrix)
+  - [4. Sub-Agent Usage Tracking](#4-sub-agent-usage-tracking)
+  - [5. Automatic Prompting](#5-automatic-prompting)
+  - [6. Override Mechanism](#6-override-mechanism)
+  - [7. Implementation Example](#7-implementation-example)
+  - [8. Benefits](#8-benefits)
+  - [9. Rollout Plan](#9-rollout-plan)
+  - [10. Success Metrics](#10-success-metrics)
+- [Immediate Implementation](#immediate-implementation)
+- [IMPLEMENTATION STATUS](#implementation-status)
+  - [Implementation Details](#implementation-details)
+- [5. Per-Handoff Sub-Agent Enforcement (v4.4.3)](#5-per-handoff-sub-agent-enforcement-v443)
+  - [Problem](#problem)
+  - [Solution: Advisory Gate at EXEC-TO-PLAN Handoff](#solution-advisory-gate-at-exec-to-plan-handoff)
 
 ## Metadata
 - **Category**: Protocol

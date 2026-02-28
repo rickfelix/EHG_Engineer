@@ -1,3 +1,11 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # How to Add a New Project - Super Simple Guide
 
 

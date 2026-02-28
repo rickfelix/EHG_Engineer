@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 Canonical Definition
+
+
+## Table of Contents
+
+- [Source YAML (stages.yaml:597-642)](#source-yaml-stagesyaml597-642)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Core Identifiers](#core-identifiers)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 items)](#inputs-3-items)
+  - [Outputs (3 items)](#outputs-3-items)
+  - [Metrics (3 items)](#metrics-3-items)
+  - [Quality Gates](#quality-gates)
+  - [Substages (3 items)](#substages-3-items)
+  - [Notes](#notes)
+- [Schema Validation Rules](#schema-validation-rules)
+- [Immutable vs Configurable Fields](#immutable-vs-configurable-fields)
+  - [Immutable (Core Identity)](#immutable-core-identity)
+  - [Configurable (Tunable Parameters)](#configurable-tunable-parameters)
+  - [Advisory (Guidance Only)](#advisory-guidance-only)
+- [Source Tables](#source-tables)
 
 ## Source YAML (stages.yaml:597-642)
 

@@ -1,5 +1,61 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # BMAD Method User Guide for LEO Protocol
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Introduction](#introduction)
+  - [What BMAD Adds to LEO Protocol](#what-bmad-adds-to-leo-protocol)
+  - [Who Should Read This Guide](#who-should-read-this-guide)
+- [Core Principles](#core-principles)
+  - [1. Dev Agents Must Be Lean](#1-dev-agents-must-be-lean)
+  - [2. Natural Language First](#2-natural-language-first)
+  - [3. Context-Engineered Stories](#3-context-engineered-stories)
+  - [4. Risk Assessment](#4-risk-assessment)
+  - [5. Mid-Development Quality Gates](#5-mid-development-quality-gates)
+  - [6. Early Validation](#6-early-validation)
+- [Six BMAD Enhancements](#six-bmad-enhancements)
+  - [Enhancement 1: Risk Assessment Sub-Agent (RISK)](#enhancement-1-risk-assessment-sub-agent-risk)
+  - [Enhancement 2: User Story Context Engineering (STORIES)](#enhancement-2-user-story-context-engineering-stories)
+  - [Enhancement 3: Retrospective Review for LEAD](#enhancement-3-retrospective-review-for-lead)
+  - [Enhancement 4: Checkpoint Pattern Generator](#enhancement-4-checkpoint-pattern-generator)
+  - [Enhancement 5: Test Architecture Phase Enhancement](#enhancement-5-test-architecture-phase-enhancement)
+  - [Enhancement 6: Lean EXEC_CONTEXT.md](#enhancement-6-lean-exec_contextmd)
+- [Validation Gates](#validation-gates)
+  - [PLAN→EXEC Handoff Validation](#planexec-handoff-validation)
+  - [EXEC→PLAN Handoff Validation](#execplan-handoff-validation)
+- [Sub-Agent Usage](#sub-agent-usage)
+  - [When to Use Sub-Agents](#when-to-use-sub-agents)
+  - [Sub-Agent Output Storage](#sub-agent-output-storage)
+- [Integration Points](#integration-points)
+  - [LEAD Phase Integration](#lead-phase-integration)
+  - [PLAN Phase Integration](#plan-phase-integration)
+  - [EXEC Phase Integration](#exec-phase-integration)
+  - [PLAN Verification Phase Integration](#plan-verification-phase-integration)
+- [Troubleshooting](#troubleshooting)
+  - [Issue 1: PLAN→EXEC Validation Fails (User Story Context <80%)](#issue-1-planexec-validation-fails-user-story-context-80)
+  - [Issue 2: EXEC→PLAN Validation Fails (User Story Coverage <100%)](#issue-2-execplan-validation-fails-user-story-coverage-100)
+  - [Issue 3: Checkpoint Plan Not Generated for Large SD](#issue-3-checkpoint-plan-not-generated-for-large-sd)
+  - [Issue 4: Risk Assessment Missing](#issue-4-risk-assessment-missing)
+  - [Issue 5: Sub-Agent Execution Fails](#issue-5-sub-agent-execution-fails)
+- [Metrics & Impact](#metrics-impact)
+  - [Expected Context Savings](#expected-context-savings)
+  - [Expected Time Savings](#expected-time-savings)
+  - [Expected Quality Improvements](#expected-quality-improvements)
+  - [Monitoring BMAD Effectiveness](#monitoring-bmad-effectiveness)
+- [Appendix](#appendix)
+  - [Quick Reference Commands](#quick-reference-commands)
+  - [Database Schema Reference](#database-schema-reference)
+  - [Further Reading](#further-reading)
 
 ## Metadata
 - **Category**: Guide

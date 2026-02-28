@@ -1,5 +1,62 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Database Validation: SD-FOUNDATION-V3-006 User Stories
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Validation Summary](#validation-summary)
+- [Database Query Results](#database-query-results)
+  - [Strategic Directive Record](#strategic-directive-record)
+  - [PRD Record](#prd-record)
+- [User Stories in Database](#user-stories-in-database)
+  - [US-001: Define Crew Types for THE_ENGINE Phase (Stages 7-9)](#us-001-define-crew-types-for-the_engine-phase-stages-7-9)
+  - [US-002: Define Crew Types for THE_IDENTITY Phase (Stages 10-13)](#us-002-define-crew-types-for-the_identity-phase-stages-10-13)
+  - [US-003: Define Crew Types for THE_BLUEPRINT Phase (Stages 14-18)](#us-003-define-crew-types-for-the_blueprint-phase-stages-14-18)
+  - [US-004: Define Crew Types for THE_BUILD_LOOP Phase (Stages 19-23)](#us-004-define-crew-types-for-the_build_loop-phase-stages-19-23)
+  - [US-005: Define Crew Types for LAUNCH_LEARN Phase (Stages 24-25)](#us-005-define-crew-types-for-launch_learn-phase-stages-24-25)
+  - [US-006: Extend STAGE_CREW_MAP for All 25 Stages](#us-006-extend-stage_crew_map-for-all-25-stages)
+  - [US-007: Add Co-Execution Patterns to STAGE_CO_EXECUTION_MAP](#us-007-add-co-execution-patterns-to-stage_co_execution_map)
+  - [US-008: Integration Tests for Stages 7-25 Dispatch](#us-008-integration-tests-for-stages-7-25-dispatch)
+- [Field Population Analysis](#field-population-analysis)
+  - [Required Fields (All Stories)](#required-fields-all-stories)
+  - [Enhanced Fields (BMAD Context Engineering)](#enhanced-fields-bmad-context-engineering)
+  - [E2E Test Fields](#e2e-test-fields)
+  - [Optional Fields (Not Required for All Stories)](#optional-fields-not-required-for-all-stories)
+- [Data Quality Checks](#data-quality-checks)
+  - [Story Key Format Validation](#story-key-format-validation)
+  - [Priority Distribution](#priority-distribution)
+  - [Story Points Distribution](#story-points-distribution)
+  - [Acceptance Criteria Count](#acceptance-criteria-count)
+  - [Given-When-Then Format Compliance](#given-when-then-format-compliance)
+  - [Test Scenarios Count](#test-scenarios-count)
+- [Database Schema Compliance](#database-schema-compliance)
+  - [user_stories Table Fields Used](#user_stories-table-fields-used)
+- [Verification Queries](#verification-queries)
+  - [Query 1: Count Stories](#query-1-count-stories)
+  - [Query 2: Verify Story Keys](#query-2-verify-story-keys)
+  - [Query 3: Check Priority Distribution](#query-3-check-priority-distribution)
+  - [Query 4: Calculate Total Story Points](#query-4-calculate-total-story-points)
+  - [Query 5: Verify JSONB Fields](#query-5-verify-jsonb-fields)
+- [Context Engineering Field Validation](#context-engineering-field-validation)
+  - [implementation_context](#implementation_context)
+  - [architecture_references](#architecture_references)
+  - [example_code_patterns](#example_code_patterns)
+  - [testing_scenarios](#testing_scenarios)
+- [E2E Test Mapping](#e2e-test-mapping)
+  - [Stories with E2E Tests](#stories-with-e2e-tests)
+  - [Stories without E2E Tests](#stories-without-e2e-tests)
+- [Validation Conclusion](#validation-conclusion)
+  - [Next Steps](#next-steps)
+- [Document Metadata](#document-metadata)
 
 ## Metadata
 - **Category**: Database

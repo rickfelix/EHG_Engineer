@@ -1,5 +1,34 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Unified Frontend Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Architecture Overview](#architecture-overview)
+- [Application Responsibilities](#application-responsibilities)
+  - [EHG (Unified Frontend)](#ehg-unified-frontend)
+  - [EHG_Engineer (Backend API)](#ehg_engineer-backend-api)
+- [Database Architecture](#database-architecture)
+  - [Consolidated Database](#consolidated-database)
+  - [Deprecated Database (DO NOT USE)](#deprecated-database-do-not-use)
+  - [Connection](#connection)
+- [Target Application Field](#target-application-field)
+- [Development Workflow](#development-workflow)
+  - [Starting the Stack](#starting-the-stack)
+  - [Adding UI Features](#adding-ui-features)
+  - [Adding API Features](#adding-api-features)
+- [Migration History](#migration-history)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Architecture

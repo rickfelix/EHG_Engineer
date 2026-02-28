@@ -1,3 +1,30 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Source Authority](#source-authority)
+- [Complete YAML Definition](#complete-yaml-definition)
+- [Field-by-Field Evidence Table](#field-by-field-evidence-table)
+- [Substage Breakdown](#substage-breakdown)
+  - [Substage 17.1: Strategy Configuration](#substage-171-strategy-configuration)
+  - [Substage 17.2: Campaign Development](#substage-172-campaign-development)
+  - [Substage 17.3: Automation Setup](#substage-173-automation-setup)
+- [Semantic Interpretation](#semantic-interpretation)
+  - [Stage Purpose](#stage-purpose)
+  - [Success Criteria](#success-criteria)
+  - [Integration Points](#integration-points)
+  - [Criticality Assessment](#criticality-assessment)
+- [Change History](#change-history)
+- [Validation Checklist](#validation-checklist)
+
 <!-- ARCHIVED: 2026-01-26T16:26:38.931Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-17\03_canonical-definition.md

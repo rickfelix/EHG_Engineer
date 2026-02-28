@@ -1,5 +1,55 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Synthesis: Scaffolding Remediation Strategic Directives
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [The Three Perspectives](#the-three-perspectives)
+- [Points of Consensus (All 3 Agree)](#points-of-consensus-all-3-agree)
+  - [1. P0 Foundation Work is Correct](#1-p0-foundation-work-is-correct)
+  - [2. SD-FINANCIAL-ENGINE-001 is the Real Venture Opportunity](#2-sd-financial-engine-001-is-the-real-venture-opportunity)
+  - [3. Legal Generator is High Risk](#3-legal-generator-is-high-risk)
+  - [4. Third-Party APIs Will Dominate Timelines](#4-third-party-apis-will-dominate-timelines)
+  - [5. Effort Estimates are Optimistic](#5-effort-estimates-are-optimistic)
+  - [6. Split Marketing Automation](#6-split-marketing-automation)
+- [Points of Divergence](#points-of-divergence)
+  - [1. Content Forge Priority](#1-content-forge-priority)
+  - [2. Naming Engine Venture Potential](#2-naming-engine-venture-potential)
+  - [3. Marketing Automation Approach](#3-marketing-automation-approach)
+- [Unique Insights (Only One Model Raised)](#unique-insights-only-one-model-raised)
+  - [OpenAI Only](#openai-only)
+  - [Gemini Only](#gemini-only)
+  - [Claude Only](#claude-only)
+- [LEO Protocol v4.4.0 Implementation](#leo-protocol-v440-implementation)
+  - [Problem Identified](#problem-identified)
+  - [Solution Implemented](#solution-implemented)
+  - [SD Type Configuration](#sd-type-configuration)
+- [Final SD Structure (Chairman Approved)](#final-sd-structure-chairman-approved)
+  - [P0 - Immediate (Foundation)](#p0---immediate-foundation)
+  - [P1 - Factory Components](#p1---factory-components)
+  - [Research First](#research-first)
+  - [Not Creating Yet](#not-creating-yet)
+- [Research Topics Queued](#research-topics-queued)
+  - [1. Marketing Automation Approach](#1-marketing-automation-approach)
+  - [2. Naming Engine Trademark Liability](#2-naming-engine-trademark-liability)
+  - [3. Legal Generator Scope](#3-legal-generator-scope)
+- [Triangulation Response Archives](#triangulation-response-archives)
+  - [OpenAI Response Summary](#openai-response-summary)
+  - [Gemini Response Summary](#gemini-response-summary)
+  - [Claude Response Summary](#claude-response-summary)
+- [Chairman Decisions Log](#chairman-decisions-log)
+- [Next Steps](#next-steps)
+- [Appendix: Full AI Responses](#appendix-full-ai-responses)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,44 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Workflow Telemetry System - Operations Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Deployment](#deployment)
+  - [Initial Setup (One-Time)](#initial-setup-one-time)
+  - [Environment Variables](#environment-variables)
+- [Monitoring](#monitoring)
+  - [Health Checks](#health-checks)
+  - [Alerting](#alerting)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Analysis Not Running Automatically](#issue-analysis-not-running-automatically)
+  - [Issue: Analysis Failing with Errors](#issue-analysis-failing-with-errors)
+  - [Issue: No Bottlenecks Detected (But Performance Feels Slow)](#issue-no-bottlenecks-detected-but-performance-feels-slow)
+  - [Issue: Too Many Improvement Items Created (Spam)](#issue-too-many-improvement-items-created-spam)
+- [Maintenance](#maintenance)
+  - [Weekly Tasks](#weekly-tasks)
+  - [Monthly Tasks](#monthly-tasks)
+- [Performance Tuning](#performance-tuning)
+  - [Database Indexes](#database-indexes)
+  - [Query Optimization](#query-optimization)
+- [Security](#security)
+  - [RLS Policies](#rls-policies)
+  - [API Key Rotation](#api-key-rotation)
+- [Disaster Recovery](#disaster-recovery)
+  - [Backup](#backup)
+  - [Restore](#restore)
+  - [Runbook: Complete System Failure](#runbook-complete-system-failure)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Deployment

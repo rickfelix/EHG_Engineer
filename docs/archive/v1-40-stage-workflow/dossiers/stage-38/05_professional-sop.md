@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 38: Timing Optimization - Professional SOP
+
+
+## Table of Contents
+
+- [Standard Operating Procedure](#standard-operating-procedure)
+- [Purpose Statement](#purpose-statement)
+- [Roles & Responsibilities](#roles-responsibilities)
+  - [LEAD (Primary Owner)](#lead-primary-owner)
+  - [Market Condition Monitor (Agent)](#market-condition-monitor-agent)
+  - [Decision Analysis Specialist (Agent)](#decision-analysis-specialist-agent)
+  - [Execution Coordinator (Agent)](#execution-coordinator-agent)
+  - [Strategic Timing Advisor (Agent)](#strategic-timing-advisor-agent)
+- [Entry Criteria Checklist](#entry-criteria-checklist)
+- [Step-by-Step Procedure](#step-by-step-procedure)
+  - [Substage 38.1: Condition Monitoring](#substage-381-condition-monitoring)
+  - [Substage 38.2: Decision Analysis](#substage-382-decision-analysis)
+  - [Substage 38.3: Execution Coordination](#substage-383-execution-coordination)
+- [Exit Criteria Checklist](#exit-criteria-checklist)
+- [Quality Gates Summary](#quality-gates-summary)
+- [Error Handling & Escalation](#error-handling-escalation)
+  - [Common Errors](#common-errors)
+  - [Escalation Path](#escalation-path)
+  - [Rollback Procedures](#rollback-procedures)
+- [Metrics & KPIs](#metrics-kpis)
+  - [Process Metrics](#process-metrics)
+  - [Outcome Metrics](#outcome-metrics)
+  - [Measurement Frequency](#measurement-frequency)
+- [Documentation Requirements](#documentation-requirements)
+  - [Required Documents](#required-documents)
+  - [Document Retention](#document-retention)
+- [Success Criteria](#success-criteria)
 
 ## Standard Operating Procedure
 

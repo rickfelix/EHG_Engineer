@@ -1,4 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 32: Customer Success & Retention Engineering — Gaps & Backlog
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Critical Gaps (Blocking Stage 32 Execution)](#critical-gaps-blocking-stage-32-execution)
+  - [Gap 1: Missing Metric Thresholds 🔴 CRITICAL](#gap-1-missing-metric-thresholds-critical)
+  - [Gap 2: No EVA Infrastructure for Stage 32 🔴 CRITICAL](#gap-2-no-eva-infrastructure-for-stage-32-critical)
+- [Medium Gaps (Operational Risks)](#medium-gaps-operational-risks)
+  - [Gap 3: Unclear Rollback Procedures 🟡 MEDIUM](#gap-3-unclear-rollback-procedures-medium)
+  - [Gap 4: No Specific Tool Integrations 🟡 MEDIUM](#gap-4-no-specific-tool-integrations-medium)
+  - [Gap 5: No Error Handling 🟡 MEDIUM](#gap-5-no-error-handling-medium)
+- [Low Gaps (Nice-to-Have)](#low-gaps-nice-to-have)
+  - [Gap 6: No Data Transformation Documentation 🟢 LOW](#gap-6-no-data-transformation-documentation-low)
+  - [Gap 7: Limited Customer Feedback Mechanisms 🟢 LOW](#gap-7-limited-customer-feedback-mechanisms-low)
+- [Existing Strategic Directives (Referenced, Not Executed)](#existing-strategic-directives-referenced-not-executed)
+  - [SD-METRICS-FRAMEWORK-001 🔴 P0 CRITICAL](#sd-metrics-framework-001-p0-critical)
+  - [SD-MVP-ENGINE-001 🟡 P1](#sd-mvp-engine-001-p1)
+- [Proposed New Strategic Directives](#proposed-new-strategic-directives)
+  - [SD-CUSTOMER-SUCCESS-AUTOMATION-001 🔴 P0 CRITICAL (NEW)](#sd-customer-success-automation-001-p0-critical-new)
+- [Gap Summary Table](#gap-summary-table)
+- [Backlog Priority](#backlog-priority)
+  - [Immediate (Before Stage 32 Execution)](#immediate-before-stage-32-execution)
+  - [Near-Term (During Stage 32 Execution)](#near-term-during-stage-32-execution)
+  - [Long-Term (Continuous Improvement)](#long-term-continuous-improvement)
+- [Cross-Stage Dependencies](#cross-stage-dependencies)
+  - [Upstream (Stage 31)](#upstream-stage-31)
+  - [Downstream (Stage 33)](#downstream-stage-33)
+  - [Parallel (SD-METRICS-FRAMEWORK-001)](#parallel-sd-metrics-framework-001)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

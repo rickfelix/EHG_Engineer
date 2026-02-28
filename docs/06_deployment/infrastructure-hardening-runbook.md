@@ -1,4 +1,48 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Infrastructure Hardening Operations Runbook
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Deployment Checklist](#deployment-checklist)
+  - [Pre-Deployment](#pre-deployment)
+  - [Deployment Steps](#deployment-steps)
+  - [Post-Deployment](#post-deployment)
+- [Database Migration](#database-migration)
+  - [Migration Details](#migration-details)
+  - [Why Manual Execution?](#why-manual-execution)
+  - [Rollback Procedure](#rollback-procedure)
+- [Feature Flags & Rollback](#feature-flags-rollback)
+  - [Atomic Transitions](#atomic-transitions)
+  - [Parallel Sub-Agent Execution](#parallel-sub-agent-execution)
+  - [SD-Type Thresholds](#sd-type-thresholds)
+- [Monitoring & Health Checks](#monitoring-health-checks)
+  - [Key Metrics](#key-metrics)
+  - [Health Check Queries](#health-check-queries)
+  - [Alerting Thresholds](#alerting-thresholds)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Atomic Transition Not Working](#issue-atomic-transition-not-working)
+  - [Issue: Parallel Execution Slower Than Expected](#issue-parallel-execution-slower-than-expected)
+  - [Issue: Idempotency Keys Causing Stale Results](#issue-idempotency-keys-causing-stale-results)
+  - [Issue: Gate Result Validation Warnings](#issue-gate-result-validation-warnings)
+  - [Issue: SD-Type Threshold Blocking Valid Handoffs](#issue-sd-type-threshold-blocking-valid-handoffs)
+- [Performance Tuning](#performance-tuning)
+  - [Atomic Transition Performance](#atomic-transition-performance)
+  - [Parallel Orchestration Performance](#parallel-orchestration-performance)
+  - [Idempotency Cache Hit Rate](#idempotency-cache-hit-rate)
+  - [Gate Validation Performance](#gate-validation-performance)
+- [Emergency Contacts](#emergency-contacts)
+- [Cross-References](#cross-references)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Deployment

@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Current Assessment (Critique Analysis)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-40.md:1-72

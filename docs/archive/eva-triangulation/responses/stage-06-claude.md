@@ -1,4 +1,25 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 6 "Risk Matrix" -- Claude Response
+
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. Risk Generation Recommendation](#2-risk-generation-recommendation)
+  - [3. Scoring Model Decision](#3-scoring-model-decision)
+  - [4. Aggregate Metrics Recommendation](#4-aggregate-metrics-recommendation)
+  - [5. Stage 5 -> Stage 6 Pipeline](#5-stage-5---stage-6-pipeline)
+  - [6. CLI Superiorities (preserve these)](#6-cli-superiorities-preserve-these)
+  - [7. Recommended Stage 6 Schema](#7-recommended-stage-6-schema)
+  - [8. Minimum Viable Change](#8-minimum-viable-change)
+  - [9. Cross-Stage Impact](#9-cross-stage-impact)
 
 > Independent response to the Stage 6 triangulation prompt.
 > Respondent: Claude (Opus 4.6) with codebase access

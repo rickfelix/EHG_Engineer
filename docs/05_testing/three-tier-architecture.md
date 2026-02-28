@@ -1,4 +1,38 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Three-Tier Testing Architecture
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Tier Comparison](#tier-comparison)
+- [Tier 1: Automated Playwright Specs](#tier-1-automated-playwright-specs)
+- [Tier 2: AI-Autonomous Vision QA](#tier-2-ai-autonomous-vision-qa)
+  - [Sequence Position](#sequence-position)
+  - [Components](#components)
+  - [Pipeline Flow](#pipeline-flow)
+  - [Classification Rules](#classification-rules)
+  - [Finding Classification](#finding-classification)
+  - [Deduplication](#deduplication)
+- [Tier 3: Human Manual /uat Command](#tier-3-human-manual-uat-command)
+  - [Phase Sequence](#phase-sequence)
+  - [Debt Registry Integration](#debt-registry-integration)
+  - [Debt Item Lifecycle](#debt-item-lifecycle)
+- [Database: UAT Debt Registry](#database-uat-debt-registry)
+  - [Key Columns](#key-columns)
+  - [Indexes](#indexes)
+- [Configuration](#configuration)
+  - [Post-Completion Requirements](#post-completion-requirements)
+  - [Timeouts and Limits](#timeouts-and-limits)
+- [Implementation Status](#implementation-status)
+  - [Completed Integration (SD-LEO-ENH-VISION-QA-AUTO-PROCEED-001)](#completed-integration-sd-leo-enh-vision-qa-auto-proceed-001)
 
 **SD**: SD-LEO-ENH-VISION-QA-AUTO-PROCEED-001
 **Created**: 2026-02-06

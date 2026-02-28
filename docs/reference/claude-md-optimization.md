@@ -1,4 +1,52 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # CLAUDE.md File Size Optimization
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Background](#background)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [Optimization Strategy](#optimization-strategy)
+  - [1. Identify Space Consumers](#1-identify-space-consumers)
+  - [2. Categorize Sections](#2-categorize-sections)
+  - [3. Preservation Principles](#3-preservation-principles)
+- [Implementation Process](#implementation-process)
+  - [Step 1: Create Update Script](#step-1-create-update-script)
+  - [Step 2: Update Database Sections](#step-2-update-database-sections)
+  - [Step 3: Deprecate Redundant Sections](#step-3-deprecate-redundant-sections)
+  - [Step 4: Regenerate CLAUDE Files](#step-4-regenerate-claude-files)
+  - [Step 5: Verify and Cleanup](#step-5-verify-and-cleanup)
+- [Results Achieved](#results-achieved)
+  - [Size Reduction](#size-reduction)
+  - [Sections Updated](#sections-updated)
+  - [Deprecated Sections](#deprecated-sections)
+- [Techniques Used](#techniques-used)
+  - [1. Table Compression](#1-table-compression)
+  - [2. Reference Documentation Links](#2-reference-documentation-links)
+  - [Scoring Scale Philosophy](#scoring-scale-philosophy)
+  - [Scoring Scale](#scoring-scale)
+  - [3. Workflow Diagram Simplification](#3-workflow-diagram-simplification)
+  - [4. Section Consolidation](#4-section-consolidation)
+- [Best Practices](#best-practices)
+  - [When to Condense](#when-to-condense)
+  - [How to Preserve Value](#how-to-preserve-value)
+  - [Validation Checklist](#validation-checklist)
+- [Maintenance](#maintenance)
+  - [When to Re-optimize](#when-to-re-optimize)
+  - [How to Monitor Size](#how-to-monitor-size)
+  - [Future Opportunities](#future-opportunities)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

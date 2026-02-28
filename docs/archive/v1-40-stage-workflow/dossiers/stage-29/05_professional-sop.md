@@ -1,4 +1,45 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 29: Professional Standard Operating Procedure (SOP)
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Prerequisites (Entry Gate Validation)](#prerequisites-entry-gate-validation)
+  - [Gate 1: Features Complete](#gate-1-features-complete)
+  - [Gate 2: Testing Done](#gate-2-testing-done)
+- [Stage 29 Execution Procedure](#stage-29-execution-procedure)
+  - [Phase 1: Pre-Flight Checklist](#phase-1-pre-flight-checklist)
+  - [Phase 2: Substage 29.1 — UI Refinement](#phase-2-substage-291-ui-refinement)
+  - [Phase 3: Substage 29.2 — UX Optimization](#phase-3-substage-292-ux-optimization)
+  - [Phase 4: Substage 29.3 — Asset Preparation](#phase-4-substage-293-asset-preparation)
+- [Exit Gate Validation](#exit-gate-validation)
+  - [Gate 1: UI Polished](#gate-1-ui-polished)
+  - [Gate 2: UX Optimized](#gate-2-ux-optimized)
+  - [Gate 3: Assets Ready](#gate-3-assets-ready)
+- [Rollback Procedures](#rollback-procedures)
+  - [Rollback Triggers](#rollback-triggers)
+  - [Rollback Procedure](#rollback-procedure)
+- [Quality Metrics](#quality-metrics)
+  - [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+- [Tools & Resources](#tools-resources)
+  - [Required Tools](#required-tools)
+  - [Documentation](#documentation)
+- [Common Issues & Solutions](#common-issues-solutions)
+  - [Issue 1: Design Token Compliance Fails](#issue-1-design-token-compliance-fails)
+  - [Issue 2: Animation Janky on Mobile](#issue-2-animation-janky-on-mobile)
+  - [Issue 3: Bundle Size Exceeds Threshold](#issue-3-bundle-size-exceeds-threshold)
+- [Approval & Sign-off](#approval-sign-off)
+  - [Required Approvals](#required-approvals)
+- [Revision History](#revision-history)
+- [Sources Table](#sources-table)
 
 **Version**: 1.0
 **Effective Date**: 2025-11-06

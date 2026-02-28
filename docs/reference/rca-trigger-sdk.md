@@ -1,4 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # RCA Trigger SDK - API Reference
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Trigger Types](#trigger-types)
+- [Classification Categories](#classification-categories)
+- [Core Functions](#core-functions)
+  - [buildTriggerEvent(params)](#buildtriggereventparams)
+  - [buildHandoffContext(params)](#buildhandoffcontextparams)
+  - [buildGateContext(params)](#buildgatecontextparams)
+  - [buildApiContext(params)](#buildapicontextparams)
+  - [buildMigrationContext(params)](#buildmigrationcontextparams)
+  - [buildStateMismatchContext(params)](#buildstatemismatchcontextparams)
+  - [triggerRCAOnFailure(triggerEvent)](#triggerrcaonfailuretriggerevent)
+- [Utility Functions](#utility-functions)
+  - [redactSecrets(text)](#redactsecretstext)
+  - [truncateContext(text, maxChars = 20000)](#truncatecontexttext-maxchars-20000)
+  - [generateFingerprint(triggerType, errorSignature, module)](#generatefingerprinttriggertype-errorsignature-module)
+  - [checkRateLimit(fingerprint)](#checkratelimitfingerprint)
+- [Auto-Classification](#auto-classification)
+- [Integration Patterns](#integration-patterns)
+  - [Handoff Failure Hook](#handoff-failure-hook)
+  - [Gate Validation Hook](#gate-validation-hook)
+  - [API Adapter Hook](#api-adapter-hook)
+- [Best Practices](#best-practices)
+  - [DO](#do)
+  - [DON'T](#dont)
+- [Testing](#testing)
+- [Database Schema](#database-schema)
+  - [rca_auto_trigger_config](#rca_auto_trigger_config)
+  - [v_rca_auto_trigger_summary](#v_rca_auto_trigger_summary)
+- [Migration](#migration)
+- [Related Documentation](#related-documentation)
 
 **Strategic Directive**: SD-LEO-ENH-ENHANCE-RCA-SUB-001
 **Version**: 1.0

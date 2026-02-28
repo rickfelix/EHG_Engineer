@@ -1,4 +1,63 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Agent Systems Bridge Architecture
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Problem (Before Bridge)](#the-problem-before-bridge)
+  - [The Solution (After Bridge)](#the-solution-after-bridge)
+- [Architecture Components](#architecture-components)
+  - [1. Source/Build Separation](#1-sourcebuild-separation)
+  - [2. Agent Code Mapping](#2-agent-code-mapping)
+  - [3. Knowledge Injection](#3-knowledge-injection)
+- [Institutional Memory (Generated)](#institutional-memory-generated)
+  - [Trigger Context](#trigger-context)
+  - [Recent Issue Patterns](#recent-issue-patterns)
+  - [Registered Capabilities](#registered-capabilities)
+  - [4. Incremental Mode](#4-incremental-mode)
+  - [5. Database-Driven Metadata (Updated 2026-02-11)](#5-database-driven-metadata-updated-2026-02-11)
+- [Reconciliation Audit](#reconciliation-audit)
+  - [Purpose](#purpose)
+  - [Gap Status Definitions](#gap-status-definitions)
+  - [Audit Output](#audit-output)
+- [Summary](#summary)
+- [Workflow](#workflow)
+  - [1. Session Start Hook](#1-session-start-hook)
+  - [2. Manual Compilation](#2-manual-compilation)
+  - [3. Creating New Agents](#3-creating-new-agents)
+- [Database Tables](#database-tables)
+  - [`leo_sub_agents`](#leo_sub_agents)
+  - [`leo_sub_agent_triggers`](#leo_sub_agent_triggers)
+  - [`issue_patterns`](#issue_patterns)
+- [Knowledge Composition](#knowledge-composition)
+  - [Data Sources](#data-sources)
+  - [Filtering Rules](#filtering-rules)
+- [Performance Characteristics](#performance-characteristics)
+  - [Generation Time](#generation-time)
+  - [Runtime Impact](#runtime-impact)
+  - [Token Budget](#token-budget)
+- [Error Handling](#error-handling)
+  - [Generation Failures](#generation-failures)
+  - [Runtime Degradation](#runtime-degradation)
+- [Validation](#validation)
+  - [Config Validation](#config-validation)
+  - [Reconciliation Validation](#reconciliation-validation)
+- [Implemented Enhancements](#implemented-enhancements)
+  - [Phase 4: Team-Capable Agents ✅ COMPLETE (2026-02-11)](#phase-4-team-capable-agents-complete-2026-02-11)
+- [Future Enhancements](#future-enhancements)
+  - [Phase 5: Database Single Source of Truth](#phase-5-database-single-source-of-truth)
+  - [Phase 6: Fully Ephemeral Agents](#phase-6-fully-ephemeral-agents)
+- [Related Documentation](#related-documentation)
+- [Files Reference](#files-reference)
 
 ## Metadata
 - **Category**: Architecture

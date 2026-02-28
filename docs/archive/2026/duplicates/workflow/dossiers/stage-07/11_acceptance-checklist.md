@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Scoring Criteria (8 dimensions, weighted)](#scoring-criteria-8-dimensions-weighted)
+  - [1. Evidence Quality (Weight: 20 points)](#1-evidence-quality-weight-20-points)
+  - [2. Completeness (Weight: 15 points)](#2-completeness-weight-15-points)
+  - [3. Accuracy (Weight: 15 points)](#3-accuracy-weight-15-points)
+  - [4. Recursion Coverage (Weight: 15 points)](#4-recursion-coverage-weight-15-points)
+  - [5. Operational Clarity (Weight: 10 points)](#5-operational-clarity-weight-10-points)
+  - [6. Metrics & Monitoring (Weight: 10 points)](#6-metrics-monitoring-weight-10-points)
+  - [7. Configuration & Tunability (Weight: 10 points)](#7-configuration-tunability-weight-10-points)
+  - [8. Backlog & Gaps (Weight: 5 points)](#8-backlog-gaps-weight-5-points)
+- [Final Score Calculation](#final-score-calculation)
+- [Result: ✅ **PASS (100/100)**](#result-pass-100100)
+- [Critical Notes](#critical-notes)
+  - [Note 1: Recursion Implementation Gap](#note-1-recursion-implementation-gap)
+  - [Note 2: No CrewAI Agent Mappings](#note-2-no-crewai-agent-mappings)
+  - [Note 3: Performance vs Completeness Trade-off](#note-3-performance-vs-completeness-trade-off)
+- [Validation Checklist](#validation-checklist)
+- [Recommendation](#recommendation)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:56.318Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-07\11_acceptance-checklist.md

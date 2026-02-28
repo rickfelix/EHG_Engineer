@@ -1,5 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Manual Completion Instructions for SD-DATA-INTEGRITY-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [⚠️ Why Manual Execution is Required](#-why-manual-execution-is-required)
+- [🚀 Step-by-Step Instructions (5 minutes)](#-step-by-step-instructions-5-minutes)
+  - [Step 1: Open Supabase SQL Editor](#step-1-open-supabase-sql-editor)
+  - [Step 2: Copy-Paste SQL Commands](#step-2-copy-paste-sql-commands)
+  - [Step 3: Execute the SQL](#step-3-execute-the-sql)
+  - [Step 4: Verify Success](#step-4-verify-success)
+- [🔧 Troubleshooting](#-troubleshooting)
+  - [Issue 1: Progress is still < 100% after accepting handoffs](#issue-1-progress-is-still-100-after-accepting-handoffs)
+  - [Issue 2: "LEO Protocol Violation" error when updating status](#issue-2-leo-protocol-violation-error-when-updating-status)
+  - [Issue 3: SQL executes but changes don't persist](#issue-3-sql-executes-but-changes-dont-persist)
+- [📊 Expected Final State](#-expected-final-state)
+  - [SD Record:](#sd-record)
+  - [Handoffs (10 total):](#handoffs-10-total)
+  - [Progress Breakdown:](#progress-breakdown)
+- [✅ After Completion](#-after-completion)
+  - [1. Optional: Apply Migration 1 (Database Triggers)](#1-optional-apply-migration-1-database-triggers)
+  - [2. Optional: Uncomment Table Deprecation](#2-optional-uncomment-table-deprecation)
+  - [3. Recommended: Create SD-DOCMON-CLEANUP-001](#3-recommended-create-sd-docmon-cleanup-001)
+- [📞 Support](#-support)
+- [🎯 Quick Copy-Paste (TL;DR)](#-quick-copy-paste-tldr)
 
 ## Metadata
 - **Category**: Database

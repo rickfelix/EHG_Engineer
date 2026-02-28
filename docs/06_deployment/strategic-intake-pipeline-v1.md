@@ -1,5 +1,66 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Strategic Intake Pipeline v1 — Operator Runbook
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quickstart (10-Step Summary)](#quickstart-10-step-summary)
+- [1. Purpose, Scope & Non-Goals](#1-purpose-scope-non-goals)
+  - [Purpose](#purpose)
+  - [Scope](#scope)
+  - [Non-Goals](#non-goals)
+- [2. Pipeline Architecture](#2-pipeline-architecture)
+- [3. Pipeline Stages (Detailed)](#3-pipeline-stages-detailed)
+  - [Stage 1: Ingestion](#stage-1-ingestion)
+  - [Stage 2: Extraction](#stage-2-extraction)
+  - [Stage 3: Deduplication](#stage-3-deduplication)
+  - [Stage 4: VAG v1.1 Gate](#stage-4-vag-v11-gate)
+  - [Stage 5: SD Alignment](#stage-5-sd-alignment)
+  - [Stage 6: Governance Finalization](#stage-6-governance-finalization)
+- [4. Gate Criteria Summary](#4-gate-criteria-summary)
+- [5. Human Intervention Points](#5-human-intervention-points)
+  - [STOP Points (Require Explicit Chairman Approval)](#stop-points-require-explicit-chairman-approval)
+  - [Advisory Points (Claude Recommendation, Chairman Decision)](#advisory-points-claude-recommendation-chairman-decision)
+  - [5.3 External Strategic Advisor (Optional, High-Cost)](#53-external-strategic-advisor-optional-high-cost)
+- [6. Handling Large Artifacts](#6-handling-large-artifacts)
+  - [Token Limit Issue (Dec-13 Observed)](#token-limit-issue-dec-13-observed)
+  - [Solution: Chunked Reads](#solution-chunked-reads)
+  - [Solution: Summary Extraction](#solution-summary-extraction)
+- [7. Pathing Rules](#7-pathing-rules)
+  - [Single Source of Truth](#single-source-of-truth)
+  - [Path Resolution](#path-resolution)
+  - [Dec-13 Issue: File Path Mismatch](#dec-13-issue-file-path-mismatch)
+- [8. Deterministic Sampling Method](#8-deterministic-sampling-method)
+  - [Purpose](#purpose)
+  - [Method: Every Nth Row](#method-every-nth-row)
+  - [Category Balance Check](#category-balance-check)
+- [9. Failure Modes & Recovery](#9-failure-modes-recovery)
+  - [FM-1: Can't Find Files](#fm-1-cant-find-files)
+  - [FM-2: Token Limit Exceeded](#fm-2-token-limit-exceeded)
+  - [FM-3: Schema Drift](#fm-3-schema-drift)
+  - [FM-4: SD Alignment Routing Error](#fm-4-sd-alignment-routing-error)
+  - [FM-5: VAG Score Variance](#fm-5-vag-score-variance)
+- [10. Quality Gates Checklist](#10-quality-gates-checklist)
+  - [Pre-Flight (Before Stage 1)](#pre-flight-before-stage-1)
+  - [Post-Extraction (After Stage 2)](#post-extraction-after-stage-2)
+  - [Post-VAG (After Stage 4)](#post-vag-after-stage-4)
+  - [Post-Alignment (After Stage 5)](#post-alignment-after-stage-5)
+  - [Pre-Approval (Before Stage 6 STOP)](#pre-approval-before-stage-6-stop)
+- [Appendix A: Dec-13 Frozen Artifacts](#appendix-a-dec-13-frozen-artifacts)
+- [Appendix B: VAG v1.1 Quick Reference](#appendix-b-vag-v11-quick-reference)
+  - [Scoring Scale](#scoring-scale)
+  - [Disposition Thresholds](#disposition-thresholds)
+  - [Hard-Fail Conditions](#hard-fail-conditions)
+- [Appendix C: Revision History](#appendix-c-revision-history)
 
 ## Metadata
 - **Category**: Guide

@@ -1,5 +1,70 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Lessons Learned: Database Agent RLS Policy Chain Resolution
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Problem Statement](#problem-statement)
+  - [Initial Symptom](#initial-symptom)
+  - [Root Cause](#root-cause)
+  - [Impact](#impact)
+- [Investigation Process](#investigation-process)
+  - [Step 1: Diagnostic Testing (PAT-RLS-001 Foundation)](#step-1-diagnostic-testing-pat-rls-001-foundation)
+  - [Step 2: Research Existing Solutions](#step-2-research-existing-solutions)
+  - [Step 3: Pattern Documentation (PAT-RLS-001)](#step-3-pattern-documentation-pat-rls-001)
+- [Solution Implementation](#solution-implementation)
+  - [Migration Files Created](#migration-files-created)
+  - [Application Script Template](#application-script-template)
+- [Critical Syntax Learning](#critical-syntax-learning)
+  - [❌ WRONG: CREATE POLICY IF NOT EXISTS](#-wrong-create-policy-if-not-exists)
+  - [✅ CORRECT: DROP + CREATE Pattern](#-correct-drop-create-pattern)
+- [Security Review](#security-review)
+  - [Security Considerations Validated](#security-considerations-validated)
+  - [Policy Design Decisions](#policy-design-decisions)
+- [Verification Process](#verification-process)
+  - [1. Policy Verification in pg_policies](#1-policy-verification-in-pg_policies)
+  - [2. ANON_KEY Functional Testing](#2-anon_key-functional-testing)
+  - [3. End-to-End Automation Testing](#3-end-to-end-automation-testing)
+- [Results & Metrics](#results-metrics)
+  - [Success Metrics](#success-metrics)
+  - [Tables Fixed](#tables-fixed)
+  - [Automation Scripts Created](#automation-scripts-created)
+- [Key Learnings for Database Agent](#key-learnings-for-database-agent)
+  - [1. ⚠️ Supabase PostgREST Limitations](#1-supabase-postgrest-limitations)
+  - [2. ✅ Proven Method: PostgreSQL Direct Connection (PAT-RLS-001)](#2-proven-method-postgresql-direct-connection-pat-rls-001)
+  - [3. 🔄 RLS Policy Syntax Pattern](#3-rls-policy-syntax-pattern)
+  - [4. 📋 RLS Policy Checklist](#4-rls-policy-checklist)
+  - [5. 🔍 Trigger Dependency Detection](#5-trigger-dependency-detection)
+  - [6. 📊 Verification Best Practices](#6-verification-best-practices)
+  - [7. 🔒 Security Review Framework](#7-security-review-framework)
+  - [8. 📦 Related Tables Requiring Similar Policies](#8-related-tables-requiring-similar-policies)
+  - [9. 🚨 Common Pitfalls & Solutions](#9-common-pitfalls-solutions)
+- [Reusable Artifacts](#reusable-artifacts)
+  - [1. PAT-RLS-001 Application Script Template](#1-pat-rls-001-application-script-template)
+  - [2. Migration File Template](#2-migration-file-template)
+  - [3. Diagnostic Script Template](#3-diagnostic-script-template)
+- [Future Recommendations](#future-recommendations)
+  - [1. Proactive RLS Policy Audit](#1-proactive-rls-policy-audit)
+  - [2. RLS Policy Documentation in Schema Docs](#2-rls-policy-documentation-in-schema-docs)
+- [Table: product_requirements_v2](#table-product_requirements_v2)
+  - [RLS Policies Required](#rls-policies-required)
+  - [3. Pre-Flight RLS Check in Process Scripts](#3-pre-flight-rls-check-in-process-scripts)
+  - [4. RLS Policy Generator Script](#4-rls-policy-generator-script)
+- [Retrospective](#retrospective)
+  - [What Went Well ✅](#what-went-well-)
+  - [What Could Improve ⚠️](#what-could-improve-)
+  - [Action Items for Future 📋](#action-items-for-future-)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Database

@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+  - [1. Readiness Score](#1-readiness-score)
+  - [2. Team Velocity](#2-team-velocity)
+  - [3. Infrastructure Stability](#3-infrastructure-stability)
+- [Supporting Metrics](#supporting-metrics)
+  - [4. Environment Setup Duration](#4-environment-setup-duration)
+  - [5. Team Assembly Time](#5-team-assembly-time)
+  - [6. Sprint Planning Efficiency](#6-sprint-planning-efficiency)
+  - [7. Stage 14 Total Duration](#7-stage-14-total-duration)
+  - [8. Rollback/Recursion Rate](#8-rollbackrecursion-rate)
+- [Dashboard Specifications](#dashboard-specifications)
+  - [Stage 14 Overview Dashboard](#stage-14-overview-dashboard)
+  - [Stage 14 Historical Trends Dashboard](#stage-14-historical-trends-dashboard)
+- [Alerting Rules](#alerting-rules)
+  - [Critical Alerts (Immediate notification)](#critical-alerts-immediate-notification)
+  - [Warning Alerts (Daily summary)](#warning-alerts-daily-summary)
+  - [Informational Alerts (Weekly summary)](#informational-alerts-weekly-summary)
+- [Metrics Collection Implementation](#metrics-collection-implementation)
+  - [Database Schema](#database-schema)
+  - [Metrics Collection Script](#metrics-collection-script)
+- [Source Tables](#source-tables)
 
 ## Key Performance Indicators (KPIs)
 

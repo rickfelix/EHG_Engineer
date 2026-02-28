@@ -1,4 +1,55 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Child SD LLM-Based Strategic Field Generation
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Module Structure](#module-structure)
+  - [Key Functions](#key-functions)
+- [LLM Context Building](#llm-context-building)
+  - [1. Child SD Context (Primary)](#1-child-sd-context-primary)
+  - [2. Parent SD Context (Alignment)](#2-parent-sd-context-alignment)
+  - [3. Sibling SD Context (Sequence Understanding)](#3-sibling-sd-context-sequence-understanding)
+- [SIBLING SDs IN THIS ORCHESTRATOR (9 others)](#sibling-sds-in-this-orchestrator-9-others)
+  - [4. Similar Completed SDs (Pattern Reference)](#4-similar-completed-sds-pattern-reference)
+- [SIMILAR COMPLETED SDs FOR PATTERN REFERENCE](#similar-completed-sds-for-pattern-reference)
+  - [SD-DATABASE-MIGRATE-001: Migrate to RLS-enabled schema](#sd-database-migrate-001-migrate-to-rls-enabled-schema)
+  - [5. Implementation Scope Inference](#5-implementation-scope-inference)
+- [INFERRED IMPLEMENTATION SCOPE](#inferred-implementation-scope)
+  - [6. SD Type-Specific Guidance](#6-sd-type-specific-guidance)
+- [SD Type Detection](#sd-type-detection)
+- [Quality Rubric](#quality-rubric)
+  - [Strategic Objectives (min 2 required)](#strategic-objectives-min-2-required)
+  - [Key Principles (min 2 required)](#key-principles-min-2-required)
+  - [Success Criteria (min 3 required)](#success-criteria-min-3-required)
+  - [Success Metrics (min 3 required)](#success-metrics-min-3-required)
+  - [Smoke Test Steps (min 3 required)](#smoke-test-steps-min-3-required)
+- [Usage](#usage)
+  - [Creating New Child SDs with AI (Recommended)](#creating-new-child-sds-with-ai-recommended)
+  - [Batch Generation](#batch-generation)
+  - [Fixing Existing Incomplete Children](#fixing-existing-incomplete-children)
+- [Validation](#validation)
+- [LLM Configuration](#llm-configuration)
+- [Fallback Behavior](#fallback-behavior)
+- [Metadata Tracking](#metadata-tracking)
+- [Performance Considerations](#performance-considerations)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: LLM returns generic/vague fields](#issue-llm-returns-genericvague-fields)
+  - [Issue: Generated fields don't pass validation](#issue-generated-fields-dont-pass-validation)
+  - [Issue: "LLM service not available"](#issue-llm-service-not-available)
+  - [Issue: Child SD has template-based fields instead of AI](#issue-child-sd-has-template-based-fields-instead-of-ai)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

@@ -1,4 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 32: Customer Success & Retention Engineering — Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Stage 32 Core Metrics](#stage-32-core-metrics)
+  - [Metric 1: Customer Health Score](#metric-1-customer-health-score)
+  - [Metric 2: Retention Rate](#metric-2-retention-rate)
+  - [Metric 3: NPS Score](#metric-3-nps-score)
+- [Supporting Metrics](#supporting-metrics)
+  - [4. Campaign Effectiveness](#4-campaign-effectiveness)
+  - [5. System Health](#5-system-health)
+  - [6. Customer Segmentation](#6-customer-segmentation)
+- [Dashboard Specifications](#dashboard-specifications)
+  - [Dashboard 1: Executive Overview](#dashboard-1-executive-overview)
+  - [Dashboard 2: Campaign Performance](#dashboard-2-campaign-performance)
+  - [Dashboard 3: System Health](#dashboard-3-system-health)
+  - [Dashboard 4: Customer Insights (for Stage 33 handoff)](#dashboard-4-customer-insights-for-stage-33-handoff)
+- [Supabase Integration](#supabase-integration)
+  - [Table Schemas (Proposed)](#table-schemas-proposed)
+  - [Real-Time Alerts (via pg_notify)](#real-time-alerts-via-pg_notify)
+- [Monitoring Best Practices](#monitoring-best-practices)
+  - [1. Proactive Monitoring (Daily)](#1-proactive-monitoring-daily)
+  - [2. Weekly Review (Every Monday)](#2-weekly-review-every-monday)
+  - [3. Monthly Business Review (First Monday of month)](#3-monthly-business-review-first-monday-of-month)
+- [Alert Routing Configuration](#alert-routing-configuration)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

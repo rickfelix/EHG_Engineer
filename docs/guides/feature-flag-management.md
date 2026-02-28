@@ -1,4 +1,33 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Feature Flag Management Guide
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Database Tables](#database-tables)
+- [Available Feature Flags](#available-feature-flags)
+  - [Phase 1 Quality Layer Flags](#phase-1-quality-layer-flags)
+- [Usage](#usage)
+  - [Evaluating a Flag](#evaluating-a-flag)
+  - [Managing Flags](#managing-flags)
+- [Evaluation Order](#evaluation-order)
+- [Kill Switch (CONST-009)](#kill-switch-const-009)
+- [Deterministic Rollout](#deterministic-rollout)
+- [Caching](#caching)
+- [Audit Trail](#audit-trail)
+- [Integration with Feedback Quality Layer](#integration-with-feedback-quality-layer)
+- [Troubleshooting](#troubleshooting)
+  - [Flag Not Working as Expected](#flag-not-working-as-expected)
+  - [Emergency Procedures](#emergency-procedures)
+- [Related Documentation](#related-documentation)
 
 **SD-LEO-SELF-IMPROVE-001D - Phase 1.5: Feature Flag Foundation**
 

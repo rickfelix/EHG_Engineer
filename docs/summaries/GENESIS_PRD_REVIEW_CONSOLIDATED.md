@@ -1,5 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Genesis PRD Review - Consolidated Findings
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Confidence Assessment](#confidence-assessment)
+- [Critical Issues - Must Fix Before EXEC](#critical-issues---must-fix-before-exec)
+  - [1. 🔴 Regeneration Fidelity Risk [MIRROR-ELEV]](#1-regeneration-fidelity-risk-mirror-elev)
+  - [2. 🔴 Mock Firewall Network Interception [MASON-FIREWALL]](#2-mock-firewall-network-interception-mason-firewall)
+  - [3. 🔴 Determinism Contract Undefined [MASON-P2]](#3-determinism-contract-undefined-mason-p2)
+  - [4. 🟠 Key File Paths Are Aspirational [Multiple PRDs]](#4-key-file-paths-are-aspirational-multiple-prds)
+  - [5. 🟠 Schema Inference Validation [DREAM-P2]](#5-schema-inference-validation-dream-p2)
+- [High-Priority Recommendations](#high-priority-recommendations)
+  - [From OpenAI](#from-openai)
+  - [From AntiGravity](#from-antigravity)
+- [PRD-Specific Actions](#prd-specific-actions)
+  - [MASON-P1 (Pattern Library)](#mason-p1-pattern-library)
+  - [MASON-FIREWALL](#mason-firewall)
+  - [MASON-P2 (Generation Pipeline)](#mason-p2-generation-pipeline)
+  - [DREAM-P2 (Schema/Repo Generation)](#dream-p2-schemarepo-generation)
+  - [DREAM-P3 (Ratification)](#dream-p3-ratification)
+  - [MIRROR-ELEV (Regeneration Gates)](#mirror-elev-regeneration-gates)
+  - [RITUAL](#ritual)
+- [User Story Quality Scores](#user-story-quality-scores)
+- [Risk Matrix (Combined)](#risk-matrix-combined)
+- [Questions Requiring Team Answers](#questions-requiring-team-answers)
+  - [From OpenAI](#from-openai)
+  - [From AntiGravity](#from-antigravity)
+- [Recommended Action Plan](#recommended-action-plan)
+  - [Phase 1: Specification Fixes (Before Any EXEC)](#phase-1-specification-fixes-before-any-exec)
+  - [Phase 2: Missing Deliverables](#phase-2-missing-deliverables)
+  - [Phase 3: PRD Updates](#phase-3-prd-updates)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

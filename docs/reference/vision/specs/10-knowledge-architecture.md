@@ -1,5 +1,40 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Knowledge Architecture Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Current Gap](#current-gap)
+  - [Solution](#solution)
+- [Knowledge Base Hierarchy](#knowledge-base-hierarchy)
+  - [2.1 Scope Levels](#21-scope-levels)
+  - [2.2 Default Knowledge Bases](#22-default-knowledge-bases)
+  - [2.3 Document Structure](#23-document-structure)
+- [Data Isolation Model](#data-isolation-model)
+  - [3.1 Strict RLS Policy](#31-strict-rls-policy)
+  - [3.2 Agent-Level Isolation](#32-agent-level-isolation)
+- [Cross-Venture Publishing](#cross-venture-publishing)
+  - [4.1 Publishing Pipeline](#41-publishing-pipeline)
+  - [4.2 Redaction Rules](#42-redaction-rules)
+- [Tool Usage Ledger](#tool-usage-ledger)
+  - [5.1 Mandatory Tool Tracking](#51-mandatory-tool-tracking)
+- [Database Schema](#database-schema)
+  - [6.1 knowledge_bases](#61-knowledge_bases)
+  - [6.2 knowledge_documents](#62-knowledge_documents)
+  - [6.3 knowledge_publications](#63-knowledge_publications)
+  - [6.4 tool_usage_ledger](#64-tool_usage_ledger)
+- [Critical Questions for the Chairman](#critical-questions-for-the-chairman)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Architecture

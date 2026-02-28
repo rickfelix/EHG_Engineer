@@ -1,3 +1,11 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 <!-- Archived from: C:/Users/rickf/.claude/plans/valiant-coalescing-dusk.md -->
 <!-- SD Key: SD-LEO-FIX-REPLACE-MODEL-SELECTION-001 -->
 <!-- Archived at: 2026-02-13T20:10:57.677Z -->

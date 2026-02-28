@@ -1,5 +1,38 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Phase 4 Semantic Search - Deployment Checklist
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pre-Deployment Checklist](#pre-deployment-checklist)
+  - [Environment Setup](#environment-setup)
+  - [Database Access](#database-access)
+- [Deployment Steps](#deployment-steps)
+  - [Step 1: Database Migrations](#step-1-database-migrations)
+  - [Step 2: Generate Embeddings](#step-2-generate-embeddings)
+  - [Step 3: Testing & Validation](#step-3-testing-validation)
+  - [Step 4: Monitoring Setup](#step-4-monitoring-setup)
+- [Post-Deployment Checklist](#post-deployment-checklist)
+  - [Week 1: Active Monitoring](#week-1-active-monitoring)
+  - [Week 2: Optimization](#week-2-optimization)
+  - [Month 1: Continuous Improvement](#month-1-continuous-improvement)
+- [Success Metrics](#success-metrics)
+  - [Required for Sign-Off](#required-for-sign-off)
+  - [Target Metrics (2 Weeks)](#target-metrics-2-weeks)
+- [Rollback Procedure](#rollback-procedure)
+- [Quick Reference](#quick-reference)
+  - [Key Files](#key-files)
+  - [Key Commands](#key-commands)
+  - [Key SQL Queries](#key-sql-queries)
 
 ## Metadata
 - **Category**: Deployment

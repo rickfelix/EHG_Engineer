@@ -1,4 +1,56 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Blind Spots
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [AntiGravity (Gemini) Research Response](#antigravity-gemini-research-response)
+- [Section 1: Multi-Venture Portfolio Management](#section-1-multi-venture-portfolio-management)
+  - [Q1.1: Venture Portfolio Operating System (EVA Architecture)](#q11-venture-portfolio-operating-system-eva-architecture)
+  - [Q1.2: Lessons from Holding Companies (Constellation, Tiny, Berkshire)](#q12-lessons-from-holding-companies-constellation-tiny-berkshire)
+  - [Q1.3: The Management Cliff](#q13-the-management-cliff)
+  - [Q1.4: Venture Lifecycle State Machine](#q14-venture-lifecycle-state-machine)
+  - [Q1.5: Human vs. AI Roles](#q15-human-vs-ai-roles)
+- [Section 2: Pattern Deprecation](#section-2-pattern-deprecation)
+  - [Q2.1: Detection Signals](#q21-detection-signals)
+  - [Q2.2: Pattern Lifecycle](#q22-pattern-lifecycle)
+  - [Q2.3: Handling Ventures with Deprecated Patterns](#q23-handling-ventures-with-deprecated-patterns)
+  - [Q2.4: Maintenance Budget](#q24-maintenance-budget)
+- [Section 3: Failure Learning](#section-3-failure-learning)
+  - [Q3.1: Post-Mortem Template (The "Black Box" Log)](#q31-post-mortem-template-the-black-box-log)
+- [Venture Name & ID:](#venture-name-id)
+- [Lifespan: (Start Date - End Date)](#lifespan-start-date---end-date)
+- [Kill Reason: (The "Why")](#kill-reason-the-why)
+- [Hypothesis vs. Reality:](#hypothesis-vs-reality)
+- [Pattern Autopsy:](#pattern-autopsy)
+- [Action Item:](#action-item)
+  - [Q3.2: The Feedback Loop](#q32-the-feedback-loop)
+  - [Q3.3: Industry Practices](#q33-industry-practices)
+  - [Q3.4: Failure Pattern Library](#q34-failure-pattern-library)
+- [Section 4: Team/Skill Requirements](#section-4-teamskill-requirements)
+  - [Q4.1: Skills Inventory System](#q41-skills-inventory-system)
+  - [Q4.2: Build / Buy / Partner Framework](#q42-build-buy-partner-framework)
+  - [Q4.3: Skill Distance](#q43-skill-distance)
+  - [Q4.4: Minimum Viable Skill Set](#q44-minimum-viable-skill-set)
+- [Section 5: Legal/Compliance Patterns](#section-5-legalcompliance-patterns)
+  - [Q5.1: Compliance Patterns](#q51-compliance-patterns)
+  - [Q5.2: Compliance Triggers](#q52-compliance-triggers)
+  - [Q5.3: Maintenance](#q53-maintenance)
+  - [Q5.4: Legal Structure (32 Ventures)](#q54-legal-structure-32-ventures)
+- [Section 6: Pricing Patterns](#section-6-pricing-patterns)
+  - [Q6.1: Pricing Pattern Library](#q61-pricing-pattern-library)
+  - [Q6.2: Decision Framework](#q62-decision-framework)
+  - [Q6.3: A/B Testing](#q63-ab-testing)
+  - [Q6.4: Changing Prices](#q64-changing-prices)
+- [Prioritization Matrix](#prioritization-matrix)
 
 ## Metadata
 - **Category**: Guide

@@ -1,5 +1,48 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [LEO Protocol Testing Governance Enhancement](#leo-protocol-testing-governance-enhancement)
+- [1. Strategic Intent](#1-strategic-intent)
+- [2. Rationale](#2-rationale)
+  - [Evidence Base](#evidence-base)
+  - [Current State Problems](#current-state-problems)
+  - [Business Impact](#business-impact)
+- [3. Scope](#3-scope)
+  - [Child Strategic Directives](#child-strategic-directives)
+  - [In Scope](#in-scope)
+  - [Out of Scope](#out-of-scope)
+- [4. Strategic Objectives](#4-strategic-objectives)
+- [5. Success Criteria](#5-success-criteria)
+- [6. Implementation Approach](#6-implementation-approach)
+  - [Phase 1: Testing Gates (Child A + B)](#phase-1-testing-gates-child-a-b)
+  - [Phase 2: Schema Context (Child C)](#phase-2-schema-context-child-c)
+  - [Phase 3: Retrospective Metrics (Child D)](#phase-3-retrospective-metrics-child-d)
+- [7. Dependencies](#7-dependencies)
+- [8. Risks & Mitigations](#8-risks-mitigations)
+- [9. Child SD Summaries](#9-child-sd-summaries)
+  - [SD-LEO-TESTING-GOVERNANCE-001A: Mandate TESTING Gate](#sd-leo-testing-governance-001a-mandate-testing-gate)
+  - [SD-LEO-TESTING-GOVERNANCE-001B: Evidence Auto-Capture](#sd-leo-testing-governance-001b-evidence-auto-capture)
+  - [SD-LEO-TESTING-GOVERNANCE-001C: Schema Documentation Loading](#sd-leo-testing-governance-001c-schema-documentation-loading)
+  - [SD-LEO-TESTING-GOVERNANCE-001D: Retrospective Test Metrics](#sd-leo-testing-governance-001d-retrospective-test-metrics)
+- [10. Acceptance Testing Requirements](#10-acceptance-testing-requirements)
+  - [Gate 1: Child A Complete](#gate-1-child-a-complete)
+  - [Gate 2: Child B Complete](#gate-2-child-b-complete)
+  - [Gate 3: Child C Complete](#gate-3-child-c-complete)
+  - [Gate 4: Child D Complete](#gate-4-child-d-complete)
+- [11. Related Documents](#11-related-documents)
+- [12. Approval](#12-approval)
 
 ## Metadata
 - **Category**: Testing

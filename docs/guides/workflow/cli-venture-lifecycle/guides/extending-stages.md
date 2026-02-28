@@ -1,3 +1,40 @@
+
+## Table of Contents
+
+- [Stage Template Architecture](#stage-template-architecture)
+- [Adding a New Stage Template](#adding-a-new-stage-template)
+  - [Step 1: Create the Template File](#step-1-create-the-template-file)
+  - [Step 2: Register in the Template Registry](#step-2-register-in-the-template-registry)
+  - [Step 3: Add Database Configuration](#step-3-add-database-configuration)
+  - [Step 4: Update Dependency Arrays](#step-4-update-dependency-arrays)
+  - [Step 5: Add Required Artifacts](#step-5-add-required-artifacts)
+  - [Step 6: Configure Gates (If Applicable)](#step-6-configure-gates-if-applicable)
+  - [Step 7: Validate the Template](#step-7-validate-the-template)
+  - [Complete Checklist for New Stages](#complete-checklist-for-new-stages)
+- [Modifying Existing Templates](#modifying-existing-templates)
+  - [Updating the Analysis Prompt](#updating-the-analysis-prompt)
+  - [Adjusting Required Inputs](#adjusting-required-inputs)
+  - [Changing the LLM Tier](#changing-the-llm-tier)
+  - [Updating Token Budget](#updating-token-budget)
+- [Adding New Gate Boundaries](#adding-new-gate-boundaries)
+  - [Reality Gate Boundaries](#reality-gate-boundaries)
+  - [Kill Gate Configuration](#kill-gate-configuration)
+  - [Gate Interaction Pattern](#gate-interaction-pattern)
+- [Adding New Filter Triggers](#adding-new-filter-triggers)
+  - [Step 1: Add Trigger Type](#step-1-add-trigger-type)
+  - [Step 2: Implement Evaluation Logic](#step-2-implement-evaluation-logic)
+  - [Step 3: Add Chairman Preference Key](#step-3-add-chairman-preference-key)
+  - [Step 4: Update Documentation](#step-4-update-documentation)
+  - [Filter Evaluation Flow](#filter-evaluation-flow)
+- [Best Practices](#best-practices)
+  - [Template Design](#template-design)
+  - [Dependency Management](#dependency-management)
+  - [Gate Placement](#gate-placement)
+  - [Testing New Templates](#testing-new-templates)
+  - [Version Control](#version-control)
+- [Template Reference Table](#template-reference-table)
+- [Related Documentation](#related-documentation)
+
 ---
 Category: Guide
 Status: Approved

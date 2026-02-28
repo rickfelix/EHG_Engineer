@@ -1,5 +1,40 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Stage 4 Dossier Summary
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [Expected Deliverables](#expected-deliverables)
+  - [1. **Competitive Analysis Report**](#1-competitive-analysis-report)
+  - [2. **Market Positioning Strategy**](#2-market-positioning-strategy)
+  - [3. **Competitive Moat & Defense Strategy**](#3-competitive-moat-defense-strategy)
+  - [4. **Feature Comparison Matrix**](#4-feature-comparison-matrix)
+- [Success Criteria](#success-criteria)
+  - [Entry Gates (Prerequisites)](#entry-gates-prerequisites)
+  - [Exit Gates (Completion Criteria)](#exit-gates-completion-criteria)
+  - [Metrics](#metrics)
+- [Dependencies](#dependencies)
+  - [Depends On (Prerequisites)](#depends-on-prerequisites)
+  - [Blocks (Downstream Dependencies)](#blocks-downstream-dependencies)
+- [Substages (4 Phases)](#substages-4-phases)
+  - [Substage 4.1: Competitor Identification](#substage-41-competitor-identification)
+  - [Substage 4.2: Feature Comparison](#substage-42-feature-comparison)
+  - [Substage 4.3: Market Positioning](#substage-43-market-positioning)
+  - [Substage 4.4: Defense Strategy](#substage-44-defense-strategy)
+- [Original Intent](#original-intent)
+  - [CrewAI Framework Dependency](#crewai-framework-dependency)
+- [Dossier Quality Assessment](#dossier-quality-assessment)
+- [Sources Referenced](#sources-referenced)
 
 ## Metadata
 - **Category**: Report

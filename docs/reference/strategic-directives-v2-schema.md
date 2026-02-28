@@ -1,5 +1,47 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # strategic_directives_v2 Table Schema Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Required vs Optional Fields](#required-vs-optional-fields)
+  - [Core Required Fields (ALL SDs)](#core-required-fields-all-sds)
+  - [Strategic Planning Fields (Recommended)](#strategic-planning-fields-recommended)
+  - [Directive Lab Fields (Only for Lab Submissions)](#directive-lab-fields-only-for-lab-submissions)
+- [Critical Fix for Your Error](#critical-fix-for-your-error)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [Complete Working Example](#complete-working-example)
+- [Field Details](#field-details)
+  - [status Values](#status-values)
+  - [priority Values](#priority-values)
+  - [category Examples](#category-examples)
+  - [metadata Structure (JSONB)](#metadata-structure-jsonb)
+- [Common Patterns from Codebase](#common-patterns-from-codebase)
+  - [Pattern 1: Simple SD (No Directive Lab)](#pattern-1-simple-sd-no-directive-lab)
+  - [Pattern 2: With Strategic Intent](#pattern-2-with-strategic-intent)
+  - [Pattern 3: UUID for id (Less Common)](#pattern-3-uuid-for-id-less-common)
+- [Verification Queries](#verification-queries)
+  - [Check if SD exists](#check-if-sd-exists)
+  - [Get all draft SDs](#get-all-draft-sds)
+  - [Update status](#update-status)
+- [Key Takeaways for Your VIF SDs](#key-takeaways-for-your-vif-sds)
+- [Error Messages and Solutions](#error-messages-and-solutions)
+  - [Error: `null value in column "sd_key" violates not-null constraint`](#error-null-value-in-column-sd_key-violates-not-null-constraint)
+  - [Error: `duplicate key value violates unique constraint`](#error-duplicate-key-value-violates-unique-constraint)
+  - [Error: `invalid input syntax for type json`](#error-invalid-input-syntax-for-type-json)
+  - [Error: `relation "strategic_directives_v2" does not exist`](#error-relation-strategic_directives_v2-does-not-exist)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

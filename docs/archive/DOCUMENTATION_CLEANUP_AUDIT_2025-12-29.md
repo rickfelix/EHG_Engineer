@@ -1,4 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Documentation Cleanup Audit - December 2025
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [CRITICAL ISSUES (Fix Immediately)](#critical-issues-fix-immediately)
+  - [1. VERSION INCONSISTENCY - CRITICAL](#1-version-inconsistency---critical)
+  - [2. OUTDATED PROTOCOL REFERENCES IN ACTIVE DOCS](#2-outdated-protocol-references-in-active-docs)
+  - [3. BROKEN DOCUMENTATION STRUCTURE](#3-broken-documentation-structure)
+- [HIGH PRIORITY ISSUES](#high-priority-issues)
+  - [4. ROOT-LEVEL FILE BLOAT](#4-root-level-file-bloat)
+  - [5. STALE LAST UPDATED DATES](#5-stale-last-updated-dates)
+- [MEDIUM PRIORITY ISSUES](#medium-priority-issues)
+  - [6. DUPLICATE/REDUNDANT DIRECTORIES](#6-duplicateredundant-directories)
+  - [7. UNCLEAR DIRECTORY PURPOSES](#7-unclear-directory-purposes)
+  - [8. DATABASE-FIRST COMPLIANCE VIOLATIONS](#8-database-first-compliance-violations)
+- [LOW PRIORITY ISSUES](#low-priority-issues)
+  - [9. INCONSISTENT NAMING CONVENTIONS](#9-inconsistent-naming-conventions)
+  - [10. MISSING METADATA HEADERS](#10-missing-metadata-headers)
+- [OPPORTUNITIES FOR IMPROVEMENT](#opportunities-for-improvement)
+  - [11. CONSOLIDATION OPPORTUNITIES](#11-consolidation-opportunities)
+  - [12. ARCHIVE OLD WORKFLOW DOCUMENTATION](#12-archive-old-workflow-documentation)
+- [RECOMMENDED ACTION PLAN](#recommended-action-plan)
+  - [Phase 1: CRITICAL FIXES (Week 1)](#phase-1-critical-fixes-week-1)
+  - [Phase 2: HIGH PRIORITY CLEANUP (Week 2)](#phase-2-high-priority-cleanup-week-2)
+  - [Phase 3: MEDIUM PRIORITY (Week 3)](#phase-3-medium-priority-week-3)
+  - [Phase 4: ONGOING (Future)](#phase-4-ongoing-future)
+- [SUCCESS CRITERIA](#success-criteria)
+- [TOOLS & SCRIPTS NEEDED](#tools-scripts-needed)
+  - [Verification Scripts](#verification-scripts)
+  - [Cleanup Scripts (Create if Needed)](#cleanup-scripts-create-if-needed)
+- [RISK ASSESSMENT](#risk-assessment)
+  - [High Risk](#high-risk)
+  - [Medium Risk](#medium-risk)
+  - [Low Risk](#low-risk)
+- [RELATED DOCUMENTATION](#related-documentation)
+- [AUDIT METADATA](#audit-metadata)
 
 **Date**: 2025-12-29
 **Agent**: DOCMON Sub-Agent (Information Architecture Lead)

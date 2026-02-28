@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 12: Gaps & Backlog
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Gap Category 1: Automation & Tooling](#gap-category-1-automation-tooling)
+  - [Gap 1.1: Limited Automation for Manual Processes](#gap-11-limited-automation-for-manual-processes)
+  - [Gap 1.2: Missing Specific Tool Integrations](#gap-12-missing-specific-tool-integrations)
+- [Gap Category 2: Process & Governance](#gap-category-2-process-governance)
+  - [Gap 2.1: Unclear Rollback Procedures](#gap-21-unclear-rollback-procedures)
+  - [Gap 2.2: No Explicit Error Handling](#gap-22-no-explicit-error-handling)
+  - [Gap 2.3: Missing Metric Thresholds](#gap-23-missing-metric-thresholds)
+  - [Gap 2.4: No Data Transformation Rules](#gap-24-no-data-transformation-rules)
+- [Gap Category 3: Customer Integration](#gap-category-3-customer-integration)
+  - [Gap 3.1: No Customer Touchpoint](#gap-31-no-customer-touchpoint)
+- [Gap Category 4: Recursion & Trigger Management](#gap-category-4-recursion-trigger-management)
+  - [Gap 4.1: No Formal Recursion Loops](#gap-41-no-formal-recursion-loops)
+- [Gap Category 5: Localization & Internationalization (i18n)](#gap-category-5-localization-internationalization-i18n)
+  - [Gap 5.1: No i18n Framework Integration](#gap-51-no-i18n-framework-integration)
+  - [Gap 5.2: No Trademark Registration Workflow](#gap-52-no-trademark-registration-workflow)
+- [Gap Category 6: Strategic Directive Cross-References](#gap-category-6-strategic-directive-cross-references)
+  - [Existing SDs That Impact Stage 12](#existing-sds-that-impact-stage-12)
+- [Gap Category 7: Documentation & Training](#gap-category-7-documentation-training)
+  - [Gap 7.1: No Agent Training Materials](#gap-71-no-agent-training-materials)
+- [Gap Priority Summary](#gap-priority-summary)
+- [Proposed SD Naming Convention](#proposed-sd-naming-convention)
 
 ## Overview
 

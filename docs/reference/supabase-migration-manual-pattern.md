@@ -1,5 +1,46 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Lesson Learned: Supabase Migration Manual Application Pattern
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pattern Name](#pattern-name)
+- [Context (When This Applies)](#context-when-this-applies)
+- [Problem (What Fails)](#problem-what-fails)
+  - [Method 1: Direct psql Connection](#method-1-direct-psql-connection)
+  - [Method 2: Supabase CLI (db push)](#method-2-supabase-cli-db-push)
+  - [Method 3: Supabase REST API (RPC)](#method-3-supabase-rest-api-rpc)
+  - [Method 4: PostgREST Admin API](#method-4-postgrest-admin-api)
+  - [Why This Happens](#why-this-happens)
+- [Solution (What Works)](#solution-what-works)
+  - [Recommended Approach: Supabase Dashboard SQL Editor](#recommended-approach-supabase-dashboard-sql-editor)
+  - [Example Verification Script](#example-verification-script)
+- [Prevention (How to Avoid Wasted Time)](#prevention-how-to-avoid-wasted-time)
+  - [DO NOT attempt these automation methods:](#do-not-attempt-these-automation-methods)
+  - [DO follow this workflow:](#do-follow-this-workflow)
+  - [Add to database-agent.md:](#add-to-database-agentmd)
+- [Environment-Specific Patterns](#environment-specific-patterns)
+  - [EHG Repository: Manual Migration Required](#ehg-repository-manual-migration-required)
+- [Related SDs](#related-sds)
+- [Evidence / References](#evidence-references)
+  - [From SD-STAGE-12-001 MIGRATION_APPLICATION_STATUS.md:](#from-sd-stage-12-001-migration_application_statusmd)
+- [Attempted Methods (All Failed)](#attempted-methods-all-failed)
+  - [1. Direct psql Connection](#1-direct-psql-connection)
+  - [2. Supabase CLI (db push)](#2-supabase-cli-db-push)
+  - [3-5. Various REST API approaches](#3-5-various-rest-api-approaches)
+  - [From docs/reference/database-agent-patterns.md:](#from-docsreferencedatabase-agent-patternsmd)
+- [Metrics](#metrics)
+- [Checklist for Future Migrations](#checklist-for-future-migrations)
+- [Quote from Database Agent Patterns](#quote-from-database-agent-patterns)
 
 ## Metadata
 - **Category**: Database

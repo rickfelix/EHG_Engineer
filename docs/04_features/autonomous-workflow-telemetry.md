@@ -1,4 +1,47 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Autonomous Workflow Telemetry
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [User Stories](#user-stories)
+  - [As a LEO Protocol User](#as-a-leo-protocol-user)
+  - [As a System Administrator](#as-a-system-administrator)
+  - [As a Developer](#as-a-developer)
+- [How It Works](#how-it-works)
+  - [1. Automatic Collection (Invisible)](#1-automatic-collection-invisible)
+  - [2. Weekly Analysis (Automatic)](#2-weekly-analysis-automatic)
+  - [3. Improvement Items (Auto-Created)](#3-improvement-items-auto-created)
+  - [4. Display in sd:next (Visible)](#4-display-in-sdnext-visible)
+- [Configuration](#configuration)
+  - [Viewing Current Thresholds](#viewing-current-thresholds)
+  - [Adjusting Sensitivity](#adjusting-sensitivity)
+  - [Adding New Dimensions](#adding-new-dimensions)
+  - [Disabling Monitoring](#disabling-monitoring)
+- [Manual Analysis (On-Demand)](#manual-analysis-on-demand)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: No Analysis Running](#issue-no-analysis-running)
+  - [Issue: No Bottlenecks Detected (But System Feels Slow)](#issue-no-bottlenecks-detected-but-system-feels-slow)
+  - [Issue: Too Many Bottlenecks (Alert Fatigue)](#issue-too-many-bottlenecks-alert-fatigue)
+- [Advanced Usage](#advanced-usage)
+  - [Custom Dimensions](#custom-dimensions)
+  - [Historical Trend Analysis](#historical-trend-analysis)
+  - [Export Data for External Analysis](#export-data-for-external-analysis)
+- [Technical Implementation](#technical-implementation)
+  - [Adding Instrumentation to New Code](#adding-instrumentation-to-new-code)
+  - [Adding New Threshold Configuration](#adding-new-threshold-configuration)
+- [Related Documentation](#related-documentation)
+- [Frequently Asked Questions](#frequently-asked-questions)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Feature

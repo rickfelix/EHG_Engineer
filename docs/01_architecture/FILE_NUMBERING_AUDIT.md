@@ -1,5 +1,41 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # File Numbering Audit Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [02_api/ Directory Numbering](#02_api-directory-numbering)
+  - [Current Numbered Files](#current-numbered-files)
+  - [Gap Analysis: 02_api/](#gap-analysis-02_api)
+- [04_features/ Directory Numbering](#04_features-directory-numbering)
+  - [Current Numbered Files](#current-numbered-files)
+  - [Gap Analysis: 04_features/](#gap-analysis-04_features)
+- [Numbering Pattern Explanation](#numbering-pattern-explanation)
+  - [Stage-Gate Development Model](#stage-gate-development-model)
+  - [Letter Variants (a, b, c)](#letter-variants-a-b-c)
+- [Recommendations](#recommendations)
+  - [Option 1: Keep Current Numbering (Recommended)](#option-1-keep-current-numbering-recommended)
+  - [Option 2: Sequential Renumbering (Not Recommended)](#option-2-sequential-renumbering-not-recommended)
+  - [Option 3: Fill Missing Stages (Conditional)](#option-3-fill-missing-stages-conditional)
+- [Cross-Directory Stage Allocation](#cross-directory-stage-allocation)
+- [Decision Required](#decision-required)
+- [Implementation: Document Gaps in READMEs](#implementation-document-gaps-in-readmes)
+  - [Add to 02_api/README.md](#add-to-02_apireadmemd)
+  - [Stage Numbering](#stage-numbering)
+  - [Add to 04_features/README.md](#add-to-04_featuresreadmemd)
+  - [Stage Numbering](#stage-numbering)
+- [Related Documentation](#related-documentation)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Architecture

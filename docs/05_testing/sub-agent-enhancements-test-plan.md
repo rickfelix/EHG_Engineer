@@ -1,4 +1,47 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Sub-Agent Enhancements Testing Plan
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Test Environment](#test-environment)
+- [Test Suite 1: Mandatory Sub-Agent Enforcement](#test-suite-1-mandatory-sub-agent-enforcement)
+  - [Test 1.1: VALIDATION Always Required at LEAD_PRE_APPROVAL](#test-11-validation-always-required-at-lead_pre_approval)
+  - [Test 1.2: SECURITY Always Required at LEAD_PRE_APPROVAL](#test-12-security-always-required-at-lead_pre_approval)
+  - [Test 1.3: DOCMON Always Required at PLAN_VERIFY](#test-13-docmon-always-required-at-plan_verify)
+  - [Test 1.4: STORIES Always Required at PLAN_VERIFY](#test-14-stories-always-required-at-plan_verify)
+- [Test Suite 2: API Sub-Agent](#test-suite-2-api-sub-agent)
+  - [Test 2.1: API Agent Triggers on API Keywords](#test-21-api-agent-triggers-on-api-keywords)
+  - [Test 2.2: API Agent Execution](#test-22-api-agent-execution)
+- [Test Suite 3: DEPENDENCY Sub-Agent](#test-suite-3-dependency-sub-agent)
+  - [Test 3.1: DEPENDENCY Agent Triggers on Package Keywords](#test-31-dependency-agent-triggers-on-package-keywords)
+  - [Test 3.2: DEPENDENCY Agent npm Audit Integration](#test-32-dependency-agent-npm-audit-integration)
+- [Test Suite 4: Smart COST Agent](#test-suite-4-smart-cost-agent)
+  - [Test 4.1: COST Agent Triggers on Infrastructure Keywords](#test-41-cost-agent-triggers-on-infrastructure-keywords)
+  - [Test 4.2: COST Agent Does NOT Trigger on Non-Infrastructure SD](#test-42-cost-agent-does-not-trigger-on-non-infrastructure-sd)
+- [Test Suite 5: Database Migrations](#test-suite-5-database-migrations)
+  - [Test 5.1: Apply API Sub-Agent Migration](#test-51-apply-api-sub-agent-migration)
+  - [Test 5.2: Apply DEPENDENCY Sub-Agent Migration](#test-52-apply-dependency-sub-agent-migration)
+- [Test Suite 6: End-to-End Orchestration](#test-suite-6-end-to-end-orchestration)
+  - [Test 6.1: Full LEAD_PRE_APPROVAL Orchestration](#test-61-full-lead_pre_approval-orchestration)
+  - [Test 6.2: Full PLAN_VERIFY Orchestration](#test-62-full-plan_verify-orchestration)
+- [Success Criteria](#success-criteria)
+  - [Phase 1: Mandatory Sub-Agents](#phase-1-mandatory-sub-agents)
+  - [Phase 2: New Sub-Agents](#phase-2-new-sub-agents)
+  - [Phase 3: Smart COST Agent](#phase-3-smart-cost-agent)
+  - [Integration](#integration)
+- [Test Execution Log](#test-execution-log)
+- [Issues & Blockers](#issues-blockers)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Testing

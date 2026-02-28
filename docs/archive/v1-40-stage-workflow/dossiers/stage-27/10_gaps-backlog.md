@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Gaps & Backlog
+
+
+## Table of Contents
+
+- [Identified Gaps (from Critique)](#identified-gaps-from-critique)
+  - [Gap 1: Limited Automation](#gap-1-limited-automation)
+  - [Gap 2: Missing Metric Thresholds](#gap-2-missing-metric-thresholds)
+  - [Gap 3: Unclear Rollback Procedures](#gap-3-unclear-rollback-procedures)
+  - [Gap 4: Missing Tool Integrations](#gap-4-missing-tool-integrations)
+  - [Gap 5: No Explicit Error Handling](#gap-5-no-explicit-error-handling)
+  - [Gap 6: No Customer Touchpoint](#gap-6-no-customer-touchpoint)
+  - [Gap 7: Generic Recursion Support](#gap-7-generic-recursion-support)
+- [Universal Blocker Reference](#universal-blocker-reference)
+  - [SD-METRICS-FRAMEWORK-001 (P0 CRITICAL)](#sd-metrics-framework-001-p0-critical)
+- [Proposed Strategic Directives](#proposed-strategic-directives)
+  - [SD-ACTOR-SAGA-AUTOMATION-001](#sd-actor-saga-automation-001)
+  - [SD-SAGA-RECURSION-TRIGGERS-002](#sd-saga-recursion-triggers-002)
+  - [SD-STAGE-27-METRICS-THRESHOLDS-003](#sd-stage-27-metrics-thresholds-003)
+- [Backlog Summary](#backlog-summary)
+- [Priority Justification](#priority-justification)
+- [Sources Table](#sources-table)
 
 **Stage**: Actor Model & Saga Transaction Integration
 **Overall Score**: 2.9/5.0 (58% maturity)

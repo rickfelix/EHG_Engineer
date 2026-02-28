@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 10: Agent Orchestration
+
+
+## Table of Contents
+
+- [CrewAI Agent Mappings](#crewai-agent-mappings)
+  - [Agent 1: Architecture Review Agent](#agent-1-architecture-review-agent)
+  - [Agent 2: Scalability Assessment Agent](#agent-2-scalability-assessment-agent)
+  - [Agent 3: Security Review Agent](#agent-3-security-review-agent)
+  - [Agent 4: Implementation Planning Agent](#agent-4-implementation-planning-agent)
+  - [Agent 5: Recursion Decision Agent](#agent-5-recursion-decision-agent)
+- [CrewAI Crew Configuration](#crewai-crew-configuration)
+- [LEO Protocol Integration](#leo-protocol-integration)
+  - [LEAD Phase Alignment](#lead-phase-alignment)
+  - [PLAN Phase Alignment](#plan-phase-alignment)
+  - [EXEC Phase Alignment](#exec-phase-alignment)
+- [Agent Collaboration Flow](#agent-collaboration-flow)
+- [Performance Requirements](#performance-requirements)
+- [Database Integration](#database-integration)
+- [Error Handling](#error-handling)
 
 **Framework**: Python CrewAI
 **Governance Model**: LEO Protocol v4.2.0

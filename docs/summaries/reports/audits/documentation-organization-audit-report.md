@@ -1,5 +1,68 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Documentation Organization Audit Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Critical Priority Issues](#critical-priority-issues)
+  - [1. Incorrect Project README](#1-incorrect-project-readme)
+  - [2. Duplicate Guide Directories](#2-duplicate-guide-directories)
+  - [3. Session Status Files in Project Root](#3-session-status-files-in-project-root)
+- [High Priority Issues](#high-priority-issues)
+  - [4. Temporary Files in Production Codebase](#4-temporary-files-in-production-codebase)
+  - [5. Backup Files in Repository](#5-backup-files-in-repository)
+  - [6. CLAUDE Context Files Scattered](#6-claude-context-files-scattered)
+- [Medium Priority Issues](#medium-priority-issues)
+  - [7. Inconsistent Directory Naming](#7-inconsistent-directory-naming)
+  - [8. Status/Summary File Fragmentation](#8-statussummary-file-fragmentation)
+  - [9. Missing README Files in Key Directories](#9-missing-readme-files-in-key-directories)
+  - [10. Handoff Documentation Scattered](#10-handoff-documentation-scattered)
+- [Low Priority Issues](#low-priority-issues)
+  - [11. Duplicate Content in docs/EHG vs docs/EHG_Engineering](#11-duplicate-content-in-docsehg-vs-docsehg_engineering)
+  - [12. Archive Directory Needs Organization](#12-archive-directory-needs-organization)
+  - [13. Research Directory Structure](#13-research-directory-structure)
+  - [14. Testing Documentation Split](#14-testing-documentation-split)
+  - [15. Workflow Documentation](#15-workflow-documentation)
+- [Recommended Information Architecture](#recommended-information-architecture)
+  - [Proposed Directory Structure](#proposed-directory-structure)
+- [Action Plan](#action-plan)
+  - [Phase 1: Critical Fixes (Immediate)](#phase-1-critical-fixes-immediate)
+  - [Phase 2: High Priority (Within 1 Week)](#phase-2-high-priority-within-1-week)
+  - [Phase 3: Medium Priority (Within 2 Weeks)](#phase-3-medium-priority-within-2-weeks)
+  - [Phase 4: Low Priority (Within 1 Month)](#phase-4-low-priority-within-1-month)
+- [Naming Convention Standards](#naming-convention-standards)
+  - [Recommended Conventions](#recommended-conventions)
+- [Documentation Completeness Assessment](#documentation-completeness-assessment)
+  - [Well-Documented Areas](#well-documented-areas)
+  - [Under-Documented Areas](#under-documented-areas)
+  - [Missing Documentation](#missing-documentation)
+- [Documentation Quality Issues](#documentation-quality-issues)
+  - [Consistency Issues](#consistency-issues)
+  - [Accessibility Issues](#accessibility-issues)
+  - [Maintenance Issues](#maintenance-issues)
+- [Recommendations for Ongoing Maintenance](#recommendations-for-ongoing-maintenance)
+  - [1. Documentation Review Process](#1-documentation-review-process)
+- [Documentation Standards](#documentation-standards)
+  - [2. Automated Checks](#2-automated-checks)
+  - [3. Quarterly Documentation Audit](#3-quarterly-documentation-audit)
+  - [4. Documentation Generation](#4-documentation-generation)
+- [Priority Summary](#priority-summary)
+  - [Critical (Fix Immediately)](#critical-fix-immediately)
+  - [High (Fix This Week)](#high-fix-this-week)
+  - [Medium (Fix This Month)](#medium-fix-this-month)
+  - [Low (Ongoing)](#low-ongoing)
+- [Success Metrics](#success-metrics)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Report

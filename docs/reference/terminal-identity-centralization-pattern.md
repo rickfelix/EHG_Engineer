@@ -1,4 +1,55 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Terminal Identity Centralization Pattern
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+  - [Original Issue](#original-issue)
+  - [Root Cause (5-Whys Analysis)](#root-cause-5-whys-analysis)
+- [Solution: Centralized Utility](#solution-centralized-utility)
+  - [Implementation](#implementation)
+  - [Migration](#migration)
+- [Benefits](#benefits)
+  - [1. Consistency](#1-consistency)
+  - [2. Maintainability](#2-maintainability)
+  - [3. Testability](#3-testability)
+  - [4. Documentation](#4-documentation)
+- [Platform-Specific Behavior](#platform-specific-behavior)
+  - [Windows](#windows)
+  - [Unix (Linux/macOS)](#unix-linuxmacos)
+  - [Ultimate Fallback](#ultimate-fallback)
+- [Integration Points](#integration-points)
+  - [1. Session Creation (`lib/session-manager.mjs`)](#1-session-creation-libsession-managermjs)
+  - [2. Multi-Session Claim Gate](#2-multi-session-claim-gate)
+  - [3. Handoff Execution Context](#3-handoff-execution-context)
+- [Testing](#testing)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+- [Rollout Impact](#rollout-impact)
+  - [Changes Required](#changes-required)
+  - [Risk Assessment](#risk-assessment)
+  - [Rollback Plan](#rollback-plan)
+- [Related Patterns](#related-patterns)
+  - [1. Handoff Resolution Tracking](#1-handoff-resolution-tracking)
+  - [2. Multi-Session Pessimistic Locking](#2-multi-session-pessimistic-locking)
+  - [3. DRY Violation Detection](#3-dry-violation-detection)
+- [Lessons Learned](#lessons-learned)
+  - [1. DRY Violations Compound Over Time](#1-dry-violations-compound-over-time)
+  - [2. Platform Differences Need Central Documentation](#2-platform-differences-need-central-documentation)
+  - [3. Test Impact of Centralization](#3-test-impact-of-centralization)
+  - [4. Fallback Chains Critical for Reliability](#4-fallback-chains-critical-for-reliability)
+- [Implementation Checklist](#implementation-checklist)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

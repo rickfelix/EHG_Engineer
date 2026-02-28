@@ -1,4 +1,52 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # LEO 5.0 Task System - Operational Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [First-Time Setup](#first-time-setup)
+  - [Basic SD Workflow](#basic-sd-workflow)
+- [Command Reference](#command-reference)
+  - [Standard Handoff Operations](#standard-handoff-operations)
+  - [LEO 5.0 Wall Operations](#leo-50-wall-operations)
+  - [LEO 5.0 Failure Operations](#leo-50-failure-operations)
+  - [LEO 5.0 Correction Operations](#leo-50-correction-operations)
+  - [LEO 5.0 Sub-Agent Operations](#leo-50-sub-agent-operations)
+- [Operational Workflows](#operational-workflows)
+  - [Workflow 1: Standard SD Execution (STANDARD Track)](#workflow-1-standard-sd-execution-standard-track)
+  - [Workflow 2: Infrastructure SD (FULL Track)](#workflow-2-infrastructure-sd-full-track)
+  - [Workflow 3: Hotfix (HOTFIX Track)](#workflow-3-hotfix-hotfix-track)
+  - [Workflow 4: Handling Gate Failures](#workflow-4-handling-gate-failures)
+  - [Workflow 5: Mid-Phase Correction](#workflow-5-mid-phase-correction)
+- [Monitoring](#monitoring)
+  - [Database Queries](#database-queries)
+  - [Dashboard View](#dashboard-view)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Handoff Fails with "Gate Not Found"](#issue-handoff-fails-with-gate-not-found)
+  - [Issue: Wall Stuck in "blocked" Status](#issue-wall-stuck-in-blocked-status)
+  - [Issue: Sub-Agent Stuck in "running" Status](#issue-sub-agent-stuck-in-running-status)
+  - [Issue: Kickback Loop (Infinite Retries)](#issue-kickback-loop-infinite-retries)
+- [Common Scenarios](#common-scenarios)
+  - [Scenario 1: Emergency Hotfix](#scenario-1-emergency-hotfix)
+  - [Scenario 2: Large Feature with Sub-Agents](#scenario-2-large-feature-with-sub-agents)
+  - [Scenario 3: Scope Change Mid-Execution](#scenario-3-scope-change-mid-execution)
+- [Emergency Procedures](#emergency-procedures)
+  - [Procedure 1: Bypass Wall (Emergency Override)](#procedure-1-bypass-wall-emergency-override)
+  - [Procedure 2: Reset SD to Previous Phase](#procedure-2-reset-sd-to-previous-phase)
+  - [Procedure 3: Force Sub-Agent Completion](#procedure-3-force-sub-agent-completion)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Deployment

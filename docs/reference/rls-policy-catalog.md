@@ -1,5 +1,52 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # RLS Policy Catalog
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Security Model Overview](#security-model-overview)
+  - [Roles](#roles)
+  - [Authentication](#authentication)
+- [Policy Patterns](#policy-patterns)
+  - [Pattern 1: Authenticated Read, Service Write](#pattern-1-authenticated-read-service-write)
+  - [Pattern 2: User-Owned Resources](#pattern-2-user-owned-resources)
+  - [Pattern 3: Organization-Scoped](#pattern-3-organization-scoped)
+  - [Pattern 4: Public Read, Authenticated Write](#pattern-4-public-read-authenticated-write)
+  - [Pattern 5: Chairman/Admin Only](#pattern-5-chairmanadmin-only)
+- [Tables by Domain](#tables-by-domain)
+  - [Strategic Directives Domain](#strategic-directives-domain)
+  - [Product Requirements Domain](#product-requirements-domain)
+  - [LEO Protocol Domain](#leo-protocol-domain)
+  - [Agent System Domain](#agent-system-domain)
+  - [Quality Domain](#quality-domain)
+  - [Ventures Domain](#ventures-domain)
+  - [Skills Domain](#skills-domain)
+  - [Compliance Domain](#compliance-domain)
+  - [Submissions Domain](#submissions-domain)
+- [Migration Reference](#migration-reference)
+  - [Enabling RLS on New Tables](#enabling-rls-on-new-tables)
+  - [Key RLS Migrations](#key-rls-migrations)
+- [Verification Queries](#verification-queries)
+  - [Check Tables Without RLS](#check-tables-without-rls)
+  - [List All Policies](#list-all-policies)
+  - [Check Policy Coverage](#check-policy-coverage)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Bypassing RLS (Development Only)](#bypassing-rls-development-only)
+- [Best Practices](#best-practices)
+  - [Do](#do)
+  - [Don't](#dont)
+- [Audit Checklist](#audit-checklist)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

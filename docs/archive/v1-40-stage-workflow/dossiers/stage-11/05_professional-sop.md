@@ -1,4 +1,23 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 11: Professional Standard Operating Procedure
+
+
+## Table of Contents
+
+- [Pre-Execution Checklist](#pre-execution-checklist)
+- [Step-by-Step Execution](#step-by-step-execution)
+  - [Substage 11.1: Name Generation](#substage-111-name-generation)
+  - [Substage 11.2: Trademark Search](#substage-112-trademark-search)
+  - [Substage 11.3: Brand Foundation](#substage-113-brand-foundation)
+- [Final Stage Exit Checklist](#final-stage-exit-checklist)
+- [Handoff to Stage 12](#handoff-to-stage-12)
 
 **Execution Owner**: LEAD Agent
 

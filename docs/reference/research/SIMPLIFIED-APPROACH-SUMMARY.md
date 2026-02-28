@@ -1,5 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Simplified Haiku-First Approach (Final)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Core Principle](#core-principle)
+- [How It Works](#how-it-works)
+  - [1. The Lookup Table (The Entire System)](#1-the-lookup-table-the-entire-system)
+  - [2. Token Logging (Track What Actually Happened)](#2-token-logging-track-what-actually-happened)
+  - [3. Weekly Calibration (The Only "Decision Point")](#3-weekly-calibration-the-only-decision-point)
+- [User Experience (Simplified)](#user-experience-simplified)
+  - [Monday Morning](#monday-morning)
+  - [During SD](#during-sd)
+  - [If Output Quality is Bad](#if-output-quality-is-bad)
+  - [No Manual Escalations](#no-manual-escalations)
+- [The 6 MVP Tasks (1.25 Hours)](#the-6-mvp-tasks-125-hours)
+- [Model Assignments (Static)](#model-assignments-static)
+  - [TIER 1: Haiku Default](#tier-1-haiku-default)
+  - [TIER 2: Sonnet Default](#tier-2-sonnet-default)
+  - [TIER 3: Opus Only](#tier-3-opus-only)
+- [Weekly Budget Zones (Information Only)](#weekly-budget-zones-information-only)
+- [Success Metrics (Week 1)](#success-metrics-week-1)
+- [Future Enhancements (Weeks 2-4)](#future-enhancements-weeks-2-4)
+- [FAQ](#faq)
+- [Commits You'll Make (After Implementation)](#commits-youll-make-after-implementation)
+- [The Philosophy](#the-philosophy)
 
 ## Metadata
 - **Category**: Report

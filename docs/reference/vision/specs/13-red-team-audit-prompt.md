@@ -1,5 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # RED TEAM AUDIT: EHG Vision v2 - The Chairman's Operating System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [ROLE](#role)
+- [NON-NEGOTIABLE RULES](#non-negotiable-rules)
+- [INPUTS YOU ARE AUDITING](#inputs-you-are-auditing)
+- [SCAN 1: CONSISTENCY SCAN (Logic Conflicts)](#scan-1-consistency-scan-logic-conflicts)
+  - [Minimum Coverage Areas](#minimum-coverage-areas)
+  - [Output Per Conflict](#output-per-conflict)
+- [SCAN 2: SCHEMA VOID SCAN (Magic Data)](#scan-2-schema-void-scan-magic-data)
+  - [Required Void Targets](#required-void-targets)
+  - [Detection Heuristic](#detection-heuristic)
+  - [Output Per Void](#output-per-void)
+- [SCAN 3: WORKFLOW GAP SCAN (Process Logic Failures)](#scan-3-workflow-gap-scan-process-logic-failures)
+  - [Required Checks](#required-checks)
+  - [Output Per Gap](#output-per-gap)
+- [OUTPUT: RISK REGISTER](#output-risk-register)
+  - [Severity Rubric](#severity-rubric)
+- [REQUIRED APPENDICES](#required-appendices)
+  - [Appendix A: Conflict Matrix](#appendix-a-conflict-matrix)
+  - [Appendix B: Schema Void Index](#appendix-b-schema-void-index)
+  - [Appendix C: Workflow Trigger Map](#appendix-c-workflow-trigger-map)
+- [FINAL INSTRUCTIONS](#final-instructions)
+- [Usage](#usage)
+  - [Running the Audit](#running-the-audit)
+  - [Expected Output](#expected-output)
+  - [Follow-Up Prompts](#follow-up-prompts)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Supabase Disk IO Optimization Report
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Critical Issues (High Impact)](#critical-issues-high-impact)
+  - [1. Massive Index Overhead on `sub_agent_execution_results`](#1-massive-index-overhead-on-sub_agent_execution_results)
+  - [2. Dead Tuples in `claude_sessions` (26% bloat)](#2-dead-tuples-in-claude_sessions-26-bloat)
+  - [3. Unused Indexes Consuming 14+ MB](#3-unused-indexes-consuming-14-mb)
+- [Medium Priority Issues](#medium-priority-issues)
+  - [4. Sequential Scans on Small Tables](#4-sequential-scans-on-small-tables)
+  - [5. High Disk Reads on INSERT Operations](#5-high-disk-reads-on-insert-operations)
+- [Low Priority Issues](#low-priority-issues)
+  - [6. WAL Replication Query (2056s runtime)](#6-wal-replication-query-2056s-runtime)
+  - [7. Autovacuum Configuration](#7-autovacuum-configuration)
+- [Implementation Roadmap](#implementation-roadmap)
+  - [Phase 1: Immediate (Today)](#phase-1-immediate-today)
+  - [Phase 2: This Week](#phase-2-this-week)
+  - [Phase 3: Ongoing Monitoring](#phase-3-ongoing-monitoring)
+- [SQL Scripts](#sql-scripts)
+  - [Monitoring Script (Run Weekly)](#monitoring-script-run-weekly)
+  - [Maintenance Script (Run Monthly)](#maintenance-script-run-monthly)
+- [Performance Metrics (Before Optimization)](#performance-metrics-before-optimization)
+- [Expected Metrics (After Optimization)](#expected-metrics-after-optimization)
+- [Monitoring Commands](#monitoring-commands)
+- [Questions for Further Investigation](#questions-for-further-investigation)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Report

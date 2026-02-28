@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 24: Canonical Definition
+
+
+## Table of Contents
+
+- [Source Reference](#source-reference)
+- [Full YAML Specification](#full-yaml-specification)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Basic Identification](#basic-identification)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 categories)](#inputs-3-categories)
+  - [Outputs (3 artifacts)](#outputs-3-artifacts)
+  - [Metrics (3 KPIs)](#metrics-3-kpis)
+  - [Entry Gates (2 conditions)](#entry-gates-2-conditions)
+  - [Exit Gates (3 conditions)](#exit-gates-3-conditions)
+  - [Substages (3 sequential phases)](#substages-3-sequential-phases)
+  - [Notes](#notes)
+- [Interpretation Notes](#interpretation-notes)
+  - [Owner Assignment (Not Specified in YAML)](#owner-assignment-not-specified-in-yaml)
+  - [Risk Level (Not Specified in YAML)](#risk-level-not-specified-in-yaml)
+  - [Critical Path Status (Disputed)](#critical-path-status-disputed)
+- [Ambiguities and Open Questions](#ambiguities-and-open-questions)
+  - [Ambiguity 1: Metrics Thresholds](#ambiguity-1-metrics-thresholds)
+  - [Ambiguity 2: Embeddings Provider](#ambiguity-2-embeddings-provider)
+  - [Ambiguity 3: Knowledge Graph Technology](#ambiguity-3-knowledge-graph-technology)
+  - [Ambiguity 4: Rollback Mechanism](#ambiguity-4-rollback-mechanism)
+- [Changelog (If YAML Updated)](#changelog-if-yaml-updated)
 
 ## Source Reference
 

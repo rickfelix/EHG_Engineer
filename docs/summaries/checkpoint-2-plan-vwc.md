@@ -1,5 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # SD-VWC-INTUITIVE-FLOW-001 Checkpoint 2 Planning
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Checkpoint 2 Scope](#checkpoint-2-scope)
+  - [FR-7: Unit Tests (~5 hours)](#fr-7-unit-tests-5-hours)
+  - [FR-4: WCAG 2.1 AA Accessibility (~4 hours)](#fr-4-wcag-21-aa-accessibility-4-hours)
+- [User Stories](#user-stories)
+  - [US-005: Adapter Unit Tests (Priority: HIGH)](#us-005-adapter-unit-tests-priority-high)
+  - [US-006: Dashboard Unit Tests (Priority: HIGH)](#us-006-dashboard-unit-tests-priority-high)
+  - [US-007: Keyboard Navigation (Priority: HIGH)](#us-007-keyboard-navigation-priority-high)
+  - [US-008: ARIA Labels & Screen Reader Support (Priority: HIGH)](#us-008-aria-labels-screen-reader-support-priority-high)
+- [Implementation Plan](#implementation-plan)
+  - [Phase 1: Unit Tests (Day 1-2, 5 hours)](#phase-1-unit-tests-day-1-2-5-hours)
+  - [Phase 2: Accessibility (Day 3, 4 hours)](#phase-2-accessibility-day-3-4-hours)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Tests](#unit-tests)
+  - [Accessibility Testing](#accessibility-testing)
+- [Risk Assessment](#risk-assessment)
+  - [Risks Identified](#risks-identified)
+- [Success Criteria](#success-criteria)
+  - [Checkpoint 2 Complete When:](#checkpoint-2-complete-when)
+- [Dependencies](#dependencies)
+  - [Prerequisites (All Met ✅)](#prerequisites-all-met-)
+  - [External Dependencies](#external-dependencies)
+- [Context Management](#context-management)
+- [Next Steps](#next-steps)
 
 ## Metadata
 - **Category**: Report

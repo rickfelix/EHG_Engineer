@@ -1,3 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pre-Execution Checklist](#pre-execution-checklist)
+  - [Entry Gate #1: Costs Calculated](#entry-gate-1-costs-calculated)
+  - [Entry Gate #2: Market Research Complete](#entry-gate-2-market-research-complete)
+  - [Input Readiness Verification](#input-readiness-verification)
+- [Substage 15.1: Pricing Research](#substage-151-pricing-research)
+  - [Step 1.1: Competitor Price Analysis](#step-11-competitor-price-analysis)
+  - [Step 1.2: Customer Willingness-to-Pay Assessment](#step-12-customer-willingness-to-pay-assessment)
+  - [Step 1.3: Value Metrics Definition](#step-13-value-metrics-definition)
+  - [Substage 15.1 Exit Criteria](#substage-151-exit-criteria)
+- [Substage 15.2: Model Development](#substage-152-model-development)
+  - [Step 2.1: Pricing Model Creation](#step-21-pricing-model-creation)
+  - [Step 2.2: Tier Structure Design](#step-22-tier-structure-design)
+  - [Step 2.3: Discount Policy Planning](#step-23-discount-policy-planning)
+  - [Substage 15.2 Exit Criteria](#substage-152-exit-criteria)
+- [Substage 15.3: Revenue Projection](#substage-153-revenue-projection)
+  - [Step 3.1: Revenue Projections Calculation](#step-31-revenue-projections-calculation)
+  - [Step 3.2: Scenario Modeling](#step-32-scenario-modeling)
+  - [Step 3.3: Financial Targets Setting](#step-33-financial-targets-setting)
+  - [Substage 15.3 Exit Criteria](#substage-153-exit-criteria)
+- [Exit Gate Validation](#exit-gate-validation)
+  - [Exit Gate #1: Pricing Approved](#exit-gate-1-pricing-approved)
+  - [Exit Gate #2: Tiers Defined](#exit-gate-2-tiers-defined)
+  - [Exit Gate #3: Projections Validated](#exit-gate-3-projections-validated)
+- [Stage 15 Completion](#stage-15-completion)
+- [Rollback Procedures](#rollback-procedures)
+- [Post-Completion Activities](#post-completion-activities)
+- [Common Pitfalls & Mitigation](#common-pitfalls-mitigation)
+- [SOP Revision History](#sop-revision-history)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.409Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-15\05_professional-sop.md

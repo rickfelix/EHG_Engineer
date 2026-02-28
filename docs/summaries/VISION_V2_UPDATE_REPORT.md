@@ -1,5 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Vision V2 Strategic Directives - Update Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Summary](#summary)
+- [Updated Strategic Directives](#updated-strategic-directives)
+  - [SD-VISION-V2-000: Chairman's Operating System Foundation](#sd-vision-v2-000-chairmans-operating-system-foundation)
+  - [SD-VISION-V2-001: Database Schema Foundation](#sd-vision-v2-001-database-schema-foundation)
+  - [SD-VISION-V2-002: API Contracts for Chairman Operations](#sd-vision-v2-002-api-contracts-for-chairman-operations)
+  - [SD-VISION-V2-003: EVA Orchestration Layer](#sd-vision-v2-003-eva-orchestration-layer)
+  - [SD-VISION-V2-004: Agent Registry & Hierarchy](#sd-vision-v2-004-agent-registry-hierarchy)
+  - [SD-VISION-V2-005: Venture CEO Runtime & Factory](#sd-vision-v2-005-venture-ceo-runtime-factory)
+  - [SD-VISION-V2-006: Chairman's Dashboard UI](#sd-vision-v2-006-chairmans-dashboard-ui)
+  - [SD-VISION-V2-007: Integration Verification](#sd-vision-v2-007-integration-verification)
+  - [SD-VISION-V2-008: Technical Debt Cleanup](#sd-vision-v2-008-technical-debt-cleanup)
+- [Overall Impact](#overall-impact)
+  - [Quantitative Changes](#quantitative-changes)
+  - [Qualitative Improvements](#qualitative-improvements)
+- [Database Schema](#database-schema)
+- [Verification](#verification)
+  - [Success Criteria Counts](#success-criteria-counts)
+  - [Sample Verifications Performed](#sample-verifications-performed)
+- [Next Steps](#next-steps)
+- [Scripts Created](#scripts-created)
 
 ## Metadata
 - **Category**: Report

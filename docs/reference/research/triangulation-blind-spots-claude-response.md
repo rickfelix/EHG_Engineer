@@ -1,4 +1,77 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Blind Spots
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Claude Code Independent Research Response](#claude-code-independent-research-response)
+- [Section 1: Multi-Venture Portfolio Management](#section-1-multi-venture-portfolio-management)
+  - [Q1.1: Venture Portfolio Operating System (EVA Architecture)](#q11-venture-portfolio-operating-system-eva-architecture)
+  - [Q1.2: Lessons from Holding Companies](#q12-lessons-from-holding-companies)
+  - [Q1.3: The Management Cliff](#q13-the-management-cliff)
+  - [Q1.4: Venture Lifecycle State Machine](#q14-venture-lifecycle-state-machine)
+  - [Q1.5: AI vs Human Roles](#q15-ai-vs-human-roles)
+- [Section 2: Pattern Deprecation](#section-2-pattern-deprecation)
+  - [Q2.1: Detecting Outdated Patterns](#q21-detecting-outdated-patterns)
+  - [Q2.2: Pattern Lifecycle States](#q22-pattern-lifecycle-states)
+  - [Q2.3: Handling Ventures Using Deprecated Patterns](#q23-handling-ventures-using-deprecated-patterns)
+  - [Q2.4: Pattern Maintenance Budget](#q24-pattern-maintenance-budget)
+- [Section 3: Failure Learning](#section-3-failure-learning)
+  - [Q3.1: Venture Post-Mortem Template](#q31-venture-post-mortem-template)
+- [Meta](#meta)
+- [1. Hypothesis](#1-hypothesis)
+  - [Original Thesis](#original-thesis)
+  - [Target Customer](#target-customer)
+  - [Value Proposition](#value-proposition)
+- [2. Failure Signals](#2-failure-signals)
+  - [Timeline to Kill Decision](#timeline-to-kill-decision)
+- [3. Kill Decision](#3-kill-decision)
+  - [Gate Failed](#gate-failed)
+  - [Decision Maker](#decision-maker)
+  - [Alternative Considered](#alternative-considered)
+- [4. Pattern Analysis](#4-pattern-analysis)
+  - [Patterns Used](#patterns-used)
+  - [Patterns Missing](#patterns-missing)
+  - [New Patterns to Create](#new-patterns-to-create)
+- [5. Lessons Learned](#5-lessons-learned)
+  - [What Would We Do Differently?](#what-would-we-do-differently)
+  - [What Worked (Despite Failure)?](#what-worked-despite-failure)
+  - [Systemic Issues Identified](#systemic-issues-identified)
+- [6. Failure Category](#6-failure-category)
+- [7. Artifacts Preserved](#7-artifacts-preserved)
+  - [Q3.2: Failure → Pattern Improvement Feedback Loop](#q32-failure-pattern-improvement-feedback-loop)
+  - [Q3.3: How Successful Companies Capture Failure Lessons](#q33-how-successful-companies-capture-failure-lessons)
+  - [Q3.4: Failure Pattern Library](#q34-failure-pattern-library)
+- [Section 4: Team/Skill Requirements](#section-4-teamskill-requirements)
+  - [Q4.1: Skills Inventory System](#q41-skills-inventory-system)
+- [Current Skills (Build Today)](#current-skills-build-today)
+- [Skills In Development (Learning)](#skills-in-development-learning)
+- [Skills to Acquire (Need)](#skills-to-acquire-need)
+- [Skills to Outsource (Never In-House)](#skills-to-outsource-never-in-house)
+  - [Q4.2: Learn/Hire/Partner/Avoid Decision Framework](#q42-learnhirepartneravoid-decision-framework)
+  - [Q4.3: Skill Distance Metric](#q43-skill-distance-metric)
+  - [Q4.4: Minimum Viable Skill Set for Solo AI-Assisted Operator](#q44-minimum-viable-skill-set-for-solo-ai-assisted-operator)
+- [Section 5: Legal/Compliance Patterns](#section-5-legalcompliance-patterns)
+  - [Q5.1: Legal/Compliance Pattern Library](#q51-legalcompliance-pattern-library)
+  - [Q5.2: Compliance Trigger Points](#q52-compliance-trigger-points)
+  - [Q5.3: Managing Legal Templates Across 10-32 Ventures](#q53-managing-legal-templates-across-10-32-ventures)
+  - [Q5.4: Legal Structure for 32 Software Ventures](#q54-legal-structure-for-32-software-ventures)
+- [Section 6: Pricing Patterns](#section-6-pricing-patterns)
+  - [Q6.1: Pricing Pattern Library](#q61-pricing-pattern-library)
+  - [Q6.2: Pricing Decision Framework](#q62-pricing-decision-framework)
+  - [Q6.3: A/B Testing Pricing](#q63-ab-testing-pricing)
+  - [Q6.4: Handling Pricing Changes at Scale](#q64-handling-pricing-changes-at-scale)
+  - [Q6.5: Pricing Patterns for "Vending Machine" Model](#q65-pricing-patterns-for-vending-machine-model)
+- [Prioritization Matrix](#prioritization-matrix)
+- [Sources](#sources)
 
 ## Metadata
 - **Category**: Guide

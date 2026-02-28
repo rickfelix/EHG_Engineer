@@ -1,5 +1,43 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # SD-ID Foreign Key Integrity Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Critical Findings](#critical-findings)
+- [Detailed Analysis](#detailed-analysis)
+  - [Tables WITH FK Constraints (38)](#tables-with-fk-constraints-38)
+  - [Tables WITHOUT FK Constraints (24 Base Tables)](#tables-without-fk-constraints-24-base-tables)
+  - [Orphaned Records Breakdown](#orphaned-records-breakdown)
+  - [Legacy ID to UUID Migration Needed](#legacy-id-to-uuid-migration-needed)
+  - [Sample Orphaned SD-IDs by Category](#sample-orphaned-sd-ids-by-category)
+- [Migration Strategy](#migration-strategy)
+  - [Phase 1: Preparation (SAFE - No Data Changes)](#phase-1-preparation-safe---no-data-changes)
+  - [Phase 2: Test Data Cleanup (LOW RISK)](#phase-2-test-data-cleanup-low-risk)
+  - [Phase 3: Legacy ID Migration (MEDIUM RISK)](#phase-3-legacy-id-migration-medium-risk)
+  - [Phase 4: Add FK Constraints (HIGH RISK)](#phase-4-add-fk-constraints-high-risk)
+  - [Phase 5: Review Remaining Orphans (MANUAL)](#phase-5-review-remaining-orphans-manual)
+- [Recommendations](#recommendations)
+  - [Immediate Actions](#immediate-actions)
+  - [Code Changes Required](#code-changes-required)
+  - [Monitoring](#monitoring)
+- [Migration Execution Checklist](#migration-execution-checklist)
+- [Scripts and Tools](#scripts-and-tools)
+  - [Analysis Scripts](#analysis-scripts)
+  - [Migration Script](#migration-script)
+  - [Post-Migration View](#post-migration-view)
+- [Risk Assessment](#risk-assessment)
+- [Appendix: Views with sd_id Column](#appendix-views-with-sd_id-column)
 
 ## Metadata
 - **Category**: Report

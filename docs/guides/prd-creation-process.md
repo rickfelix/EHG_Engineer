@@ -1,5 +1,62 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Professional PRD Creation Process
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [REQUIRED: Standard PRD Creation Process](#required-standard-prd-creation-process)
+  - [Use Standard CLI Only](#use-standard-cli-only)
+  - [Features](#features)
+- [Historical Context: SDIP Case Study](#historical-context-sdip-case-study)
+  - [The Problem (Pre-LEO 5.0)](#the-problem-pre-leo-50)
+  - [Root Cause](#root-cause)
+  - [LEO 5.0 Solution](#leo-50-solution)
+- [PRD Creation Workflow (PLAN Phase)](#prd-creation-workflow-plan-phase)
+  - [Step 1: Prepare PRD Content](#step-1-prepare-prd-content)
+  - [Step 2: Execute Standard CLI](#step-2-execute-standard-cli)
+  - [Step 3: Validate PRD Quality](#step-3-validate-prd-quality)
+  - [Step 4: Fix Issues (If Any)](#step-4-fix-issues-if-any)
+  - [Step 5: Document Handoff](#step-5-document-handoff)
+- [PRD Validation Checklist](#prd-validation-checklist)
+  - [Critical Fields (Must Pass)](#critical-fields-must-pass)
+  - [Quality Indicators](#quality-indicators)
+  - [Sub-Agent Activation Triggers](#sub-agent-activation-triggers)
+- [Mandatory Process Steps](#mandatory-process-steps)
+  - [For PLAN Agents](#for-plan-agents)
+  - [For LEAD Agents (Approval Phase)](#for-lead-agents-approval-phase)
+  - [Quality Gates](#quality-gates)
+- [Tools and Scripts](#tools-and-scripts)
+  - [PRD Creation (REQUIRED)](#prd-creation-required)
+  - [PRD Validation](#prd-validation)
+  - [PRD Management](#prd-management)
+  - [DEPRECATED (Do Not Use)](#deprecated-do-not-use)
+- [Success Metrics](#success-metrics)
+  - [PRD Quality Indicators (Post-LEO 5.0)](#prd-quality-indicators-post-leo-50)
+  - [Process Efficiency](#process-efficiency)
+- [Emergency Protocol](#emergency-protocol)
+  - [If Incomplete PRD Detected](#if-incomplete-prd-detected)
+  - [Recovery Commands](#recovery-commands)
+- [Migration from Legacy Scripts](#migration-from-legacy-scripts)
+  - [If You Have a Legacy PRD Script](#if-you-have-a-legacy-prd-script)
+  - [If Legacy Script Has Unique Logic](#if-legacy-script-has-unique-logic)
+- [Implementation Notes](#implementation-notes)
+- [Related Documentation](#related-documentation)
+- [Architecture: Generate-First Pattern (NEW v2.2)](#architecture-generate-first-pattern-new-v22)
+  - [Previous Architecture: Create-Then-Enhance (DEPRECATED)](#previous-architecture-create-then-enhance-deprecated)
+  - [New Architecture: Generate-First-Then-Insert (v2.2+)](#new-architecture-generate-first-then-insert-v22)
+  - [Implementation Details](#implementation-details)
+  - [Migration Path](#migration-path)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

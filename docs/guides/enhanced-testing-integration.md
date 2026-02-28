@@ -1,5 +1,55 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Enhanced Testing and Debugging Sub-Agents Integration Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Prerequisites](#prerequisites)
+  - [System Requirements](#system-requirements)
+  - [Required Dependencies](#required-dependencies)
+- [Environment Setup](#environment-setup)
+  - [1. Install Dependencies](#1-install-dependencies)
+  - [2. Configure Environment Variables](#2-configure-environment-variables)
+  - [3. Initialize Playwright](#3-initialize-playwright)
+  - [4. Create Directory Structure](#4-create-directory-structure)
+- [Basic Integration](#basic-integration)
+  - [1. Copy Core Files](#1-copy-core-files)
+  - [2. Basic Usage Example](#2-basic-usage-example)
+- [Playwright Integration](#playwright-integration)
+  - [1. Enhanced Test Configuration](#1-enhanced-test-configuration)
+  - [2. Enhanced Test Suite](#2-enhanced-test-suite)
+- [Jest Integration](#jest-integration)
+  - [1. Jest Configuration](#1-jest-configuration)
+  - [2. Enhanced Jest Setup](#2-enhanced-jest-setup)
+  - [3. Jest Test Example](#3-jest-test-example)
+- [CI/CD Pipeline Integration](#cicd-pipeline-integration)
+  - [1. GitHub Actions](#1-github-actions)
+  - [2. Jenkins Pipeline](#2-jenkins-pipeline)
+- [Configuration Options](#configuration-options)
+  - [1. Coordinator Configuration](#1-coordinator-configuration)
+  - [2. Environment-Specific Settings](#2-environment-specific-settings)
+- [Migration from Basic Agents](#migration-from-basic-agents)
+  - [1. Assessment Checklist](#1-assessment-checklist)
+  - [2. Migration Steps](#2-migration-steps)
+  - [3. Rollback Strategy](#3-rollback-strategy)
+- [Advanced Patterns](#advanced-patterns)
+  - [1. Custom Fix Generators](#1-custom-fix-generators)
+  - [2. Machine Learning Integration](#2-machine-learning-integration)
+- [Real-World Examples](#real-world-examples)
+  - [1. E-commerce Checkout Flow](#1-e-commerce-checkout-flow)
+  - [2. Form Validation Testing](#2-form-validation-testing)
+- [Performance Optimization](#performance-optimization)
+  - [1. Parallel Test Execution](#1-parallel-test-execution)
+  - [2. Test Result Caching](#2-test-result-caching)
 
 ## Metadata
 - **Category**: Testing

@@ -1,5 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Simulation Chamber: Technical Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version History](#version-history)
+- [Overview](#overview)
+- [Core Concepts](#core-concepts)
+  - [Epistemic Classification](#epistemic-classification)
+  - [The Two Namespaces (Hard Isolation)](#the-two-namespaces-hard-isolation)
+- [Database Schema](#database-schema)
+  - [`simulation_artifacts`](#simulation_artifacts)
+  - [`simulation_sessions`](#simulation_sessions)
+  - [`elevation_log`](#elevation_log)
+- [API Specification](#api-specification)
+  - [Genesis Loop Endpoint](#genesis-loop-endpoint)
+  - [Ratification Endpoint](#ratification-endpoint)
+  - [Elevation Endpoint](#elevation-endpoint)
+- [Infrastructure Components](#infrastructure-components)
+  - [GitHub Integration](#github-integration)
+  - [Deployment Infrastructure](#deployment-infrastructure)
+  - [Database Namespace](#database-namespace)
+- [Lifecycle Management](#lifecycle-management)
+  - [TTL Enforcement](#ttl-enforcement)
+  - [Stage 3 Rejection Cleanup](#stage-3-rejection-cleanup)
+- [Security Considerations](#security-considerations)
+  - [Isolation](#isolation)
+  - [Cost Controls](#cost-controls)
+  - [Audit Trail](#audit-trail)
+- [Monitoring](#monitoring)
+  - [Metrics](#metrics)
+  - [Alerts](#alerts)
+- [Integration Points](#integration-points)
+  - [EVA Orchestration](#eva-orchestration)
+  - [Chairman Console](#chairman-console)
+  - [25-Stage Workflow](#25-stage-workflow)
 
 ## Metadata
 - **Category**: Architecture

@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 29: Canonical Definition
+
+
+## Table of Contents
+
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Breakdown](#field-by-field-breakdown)
+  - [Core Metadata](#core-metadata)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 items)](#inputs-3-items)
+  - [Outputs (3 items)](#outputs-3-items)
+  - [Metrics (3 items)](#metrics-3-items)
+  - [Gates](#gates)
+  - [Substages (3 items)](#substages-3-items)
+  - [Notes](#notes)
+- [Schema Validation](#schema-validation)
+- [Consistency Checks](#consistency-checks)
+  - [Cross-Stage Consistency](#cross-stage-consistency)
+  - [Input/Output Matching](#inputoutput-matching)
+- [Extraction Reproducibility](#extraction-reproducibility)
+- [Sources Table](#sources-table)
 
 **Source**: `docs/workflow/stages.yaml` lines 1287-1332
 **Extracted At**: 2025-11-06

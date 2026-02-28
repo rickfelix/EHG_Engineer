@@ -1,4 +1,47 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # US-001: Database Migration Summary
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Sub-Agent Adaptive Validation System - Validation Modes](#sub-agent-adaptive-validation-system---validation-modes)
+- [Executive Summary](#executive-summary)
+- [Migration Details](#migration-details)
+  - [File Location](#file-location)
+  - [File Size](#file-size)
+  - [Implementation Pattern](#implementation-pattern)
+- [Acceptance Criteria Implementation](#acceptance-criteria-implementation)
+  - [AC-001: validation_mode Column](#ac-001-validation_mode-column)
+  - [AC-002: justification Column](#ac-002-justification-column)
+  - [AC-003: conditions Column](#ac-003-conditions-column)
+  - [AC-004: CONDITIONAL_PASS Verdict Enum](#ac-004-conditional_pass-verdict-enum)
+  - [AC-005: Backward Compatibility](#ac-005-backward-compatibility)
+  - [AC-006: Migration Indexes](#ac-006-migration-indexes)
+- [Idempotency Pattern](#idempotency-pattern)
+- [Constraint Validation Rules](#constraint-validation-rules)
+  - [Rule 1: Validation Mode Values](#rule-1-validation-mode-values)
+  - [Rule 2: Justification Length](#rule-2-justification-length)
+  - [Rule 3: Conditions Array](#rule-3-conditions-array)
+  - [Rule 4: CONDITIONAL_PASS Mode Restriction](#rule-4-conditional_pass-mode-restriction)
+- [Verification](#verification)
+  - [Automated Verification Script](#automated-verification-script)
+  - [Expected Output](#expected-output)
+- [Deployment Checklist](#deployment-checklist)
+- [Application Integration Points](#application-integration-points)
+  - [1. Sub-Agent Execution Results Insertion](#1-sub-agent-execution-results-insertion)
+  - [2. Progress Calculation Query](#2-progress-calculation-query)
+  - [3. Audit Trail for CONDITIONAL_PASS](#3-audit-trail-for-conditional_pass)
+- [Rollback Plan](#rollback-plan)
+- [References](#references)
+- [Success Metrics](#success-metrics)
 
 ## Metadata
 - **Category**: Database

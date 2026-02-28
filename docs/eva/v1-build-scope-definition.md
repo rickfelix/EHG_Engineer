@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # V1-Build Scope Definition
+
+
+## Table of Contents
+
+- [1. Build Loop Overview](#1-build-loop-overview)
+  - [Phase-Stage Mapping (Database Source of Truth)](#phase-stage-mapping-database-source-of-truth)
+- [2. Stage Entry/Exit Criteria Matrix](#2-stage-entryexit-criteria-matrix)
+  - [Stage 17: Environment & Agent Config (ENVCONFIG)](#stage-17-environment-agent-config-envconfig)
+  - [Stage 18: MVP Development Loop (MVP)](#stage-18-mvp-development-loop-mvp)
+  - [Stage 19: Build Execution (Integration & API Layer)](#stage-19-build-execution-integration-api-layer)
+  - [Stage 20: Quality Assurance (Security & Performance)](#stage-20-quality-assurance-security-performance)
+  - [Stage 21: QA & UAT (Build Review)](#stage-21-qa-uat-build-review)
+  - [Stage 22: Deployment & Infrastructure (Release Readiness)](#stage-22-deployment-infrastructure-release-readiness)
+- [3. Artifact Manifest per Stage](#3-artifact-manifest-per-stage)
+  - [Data Flow Chain](#data-flow-chain)
+- [4. Decision Gate Documentation](#4-decision-gate-documentation)
+  - [Gate 1: Build Readiness (Stage 17)](#gate-1-build-readiness-stage-17)
+  - [Gate 2: Quality Assessment (Stage 20)](#gate-2-quality-assessment-stage-20)
+  - [Gate 3: Build Review (Stage 21)](#gate-3-build-review-stage-21)
+  - [Gate 4: Release Decision (Stage 22)](#gate-4-release-decision-stage-22)
+- [5. SD Generation Rules](#5-sd-generation-rules)
+  - [SD Creation Triggers](#sd-creation-triggers)
+  - [SD Dependency Chain](#sd-dependency-chain)
+  - [LLM Integration](#llm-integration)
+- [6. Implementation Files Reference](#6-implementation-files-reference)
 
 **SD**: SD-MAN-INFRA-VISION-HEAL-PLATFORM-001-13
 **Type**: Documentation

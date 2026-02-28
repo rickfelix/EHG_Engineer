@@ -1,3 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Visual Workflow Position](#visual-workflow-position)
+- [Upstream Dependencies](#upstream-dependencies)
+- [Downstream Dependents](#downstream-dependents)
+- [Recursion Flows](#recursion-flows)
+  - [Inbound Recursion (Triggers TO Stage 8)](#inbound-recursion-triggers-to-stage-8)
+  - [Outbound Recursion (Triggers FROM Stage 8)](#outbound-recursion-triggers-from-stage-8)
+- [Workflow Position Characteristics](#workflow-position-characteristics)
+  - [Phase Boundary Role](#phase-boundary-role)
+  - [Critical Path Analysis](#critical-path-analysis)
+  - [Data Flow Characteristics](#data-flow-characteristics)
+- [Inter-Stage Communication](#inter-stage-communication)
+  - [Data Exchange Format](#data-exchange-format)
+  - [Handoff Protocols](#handoff-protocols)
+  - [Synchronization Points](#synchronization-points)
+- [Parallel Execution Opportunities](#parallel-execution-opportunities)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:37.580Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-08\02_stage-map.md

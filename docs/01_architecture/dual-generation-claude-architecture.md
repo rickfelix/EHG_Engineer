@@ -1,4 +1,65 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Dual-Generation CLAUDE File Architecture
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture Overview](#architecture-overview)
+  - [Problem Statement](#problem-statement)
+  - [Solution: Dual-Generation Architecture](#solution-dual-generation-architecture)
+  - [Benefits](#benefits)
+- [Components](#components)
+  - [1. Section-to-File Mappings](#1-section-to-file-mappings)
+  - [2. Digest Generators](#2-digest-generators)
+  - [3. Dual-Output Generator](#3-dual-output-generator)
+  - [4. Protocol Gates (DIGEST Mode)](#4-protocol-gates-digest-mode)
+  - [5. Generation Manifest](#5-generation-manifest)
+- [Generation Pipeline](#generation-pipeline)
+  - [Step-by-Step Process](#step-by-step-process)
+  - [Command](#command)
+  - [Output (Current, 2026-02-16)](#output-current-2026-02-16)
+- [Mode Switching](#mode-switching)
+  - [Environment Variable](#environment-variable)
+  - [On-Demand FULL Loading](#on-demand-full-loading)
+  - [Mode Detection in Gates](#mode-detection-in-gates)
+- [File Mappings](#file-mappings)
+  - [FULL File Sections (Excerpt)](#full-file-sections-excerpt)
+  - [DIGEST File Sections (Minimal)](#digest-file-sections-minimal)
+- [Token Budget Enforcement](#token-budget-enforcement)
+  - [Budget Target](#budget-target)
+  - [Enforcement Mechanism](#enforcement-mechanism)
+  - [Per-File Breakdown (2026-02-16)](#per-file-breakdown-2026-02-16)
+- [Integration Points](#integration-points)
+  - [1. Handoff System](#1-handoff-system)
+  - [2. Protocol Gates](#2-protocol-gates)
+  - [3. Session State](#3-session-state)
+  - [4. Test Suite](#4-test-suite)
+- [Performance Metrics](#performance-metrics)
+  - [Generation Performance](#generation-performance)
+  - [Token Savings (2026-02-16)](#token-savings-2026-02-16)
+  - [Context Budget Impact (2026-02-16)](#context-budget-impact-2026-02-16)
+- [Usage Guide](#usage-guide)
+  - [Regenerate Protocol Files](#regenerate-protocol-files)
+  - [Use FULL Mode (Override)](#use-full-mode-override)
+  - [Check Token Budget](#check-token-budget)
+  - [Verify File Sync](#verify-file-sync)
+- [Related Documentation](#related-documentation)
+- [Phase 2 Optimization: Lean CLAUDE Files (2026-02-16)](#phase-2-optimization-lean-claude-files-2026-02-16)
+  - [Overview](#overview)
+  - [Changes Made](#changes-made)
+  - [Token Impact](#token-impact)
+  - [Related Pull Requests](#related-pull-requests)
+  - [Maintenance Benefits](#maintenance-benefits)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Architecture

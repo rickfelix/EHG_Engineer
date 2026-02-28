@@ -1,4 +1,28 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # EXEC Agent Workflow with Vision QA Integration
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [LEO Protocol v3.1.5.9](#leo-protocol-v3159)
+  - [Step 1: Receive Task with Vision QA Requirements](#step-1-receive-task-with-vision-qa-requirements)
+  - [Step 2: Pre-Implementation Setup](#step-2-pre-implementation-setup)
+  - [Step 3: Implementation with Vision QA in Mind](#step-3-implementation-with-vision-qa-in-mind)
+  - [Step 4: Post-Implementation Vision QA Execution](#step-4-post-implementation-vision-qa-execution)
+  - [Step 5: Handling Vision QA Results](#step-5-handling-vision-qa-results)
+  - [Step 6: Bug Remediation Workflow](#step-6-bug-remediation-workflow)
+  - [Step 7: Completion Report with Vision QA](#step-7-completion-report-with-vision-qa)
+  - [Common Commands Reference](#common-commands-reference)
+  - [Troubleshooting Guide](#troubleshooting-guide)
+  - [Best Practices](#best-practices)
 
 ## Metadata
 - **Category**: Testing

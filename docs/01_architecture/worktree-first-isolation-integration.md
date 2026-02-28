@@ -1,4 +1,39 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Worktree-First Isolation Integration
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Worktree-First Model](#worktree-first-model)
+- [Integration Points](#integration-points)
+  - [1. PLAN-TO-EXEC Handoff: Worktree Creation](#1-plan-to-exec-handoff-worktree-creation)
+  - [2. GATE6: Branch Enforcement Gate](#2-gate6-branch-enforcement-gate)
+  - [3. GitBranchVerifier: Worktree Mode](#3-gitbranchverifier-worktree-mode)
+  - [4. Display Helpers: Worktree Path](#4-display-helpers-worktree-path)
+  - [5. LEAD-FINAL-APPROVAL: Worktree Cleanup](#5-lead-final-approval-worktree-cleanup)
+- [Configuration](#configuration)
+  - [worktreeMode Flag](#worktreemode-flag)
+- [Failure Handling](#failure-handling)
+  - [Non-Blocking Design](#non-blocking-design)
+  - [Common Failure Scenarios](#common-failure-scenarios)
+- [User-Facing Changes](#user-facing-changes)
+  - [PLAN-TO-EXEC Handoff Output](#plan-to-exec-handoff-output)
+  - [LEAD-FINAL-APPROVAL Output](#lead-final-approval-output)
+- [Testing Approach](#testing-approach)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+- [Related Documentation](#related-documentation)
+- [Implementation Commits](#implementation-commits)
+- [Future Enhancements](#future-enhancements)
 
 **SD**: SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001
 **Commit**: f70d27633

@@ -1,4 +1,74 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # Context Preservation System
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Research Foundation](#research-foundation)
+  - [State File Location](#state-file-location)
+  - [State Schema v2.0](#state-schema-v20)
+- [Trigger Mechanisms](#trigger-mechanisms)
+  - [1. Pre-Compaction (Automatic)](#1-pre-compaction-automatic)
+  - [2. Session Start (Automatic)](#2-session-start-automatic)
+  - [3. Manual Checkpoint (User-Initiated)](#3-manual-checkpoint-user-initiated)
+  - [4. Threshold-Based (Automatic)](#4-threshold-based-automatic)
+- [Token Budget Management](#token-budget-management)
+  - [Budget Configuration](#budget-configuration)
+  - [Truncation Logic](#truncation-logic)
+  - [Budget Status](#budget-status)
+- [Usage](#usage)
+  - [CLI Tool](#cli-tool)
+  - [Programmatic Usage](#programmatic-usage)
+- [Structured Sections](#structured-sections)
+  - [Decisions](#decisions)
+  - [Constraints](#constraints)
+  - [Open Questions](#open-questions)
+  - [Evidence Ledger](#evidence-ledger)
+- [Session Restoration](#session-restoration)
+  - [Automatic Restoration](#automatic-restoration)
+  - [Manual Restoration](#manual-restoration)
+- [Crash Recovery](#crash-recovery)
+  - [How It Works](#how-it-works)
+  - [Example Scenario](#example-scenario)
+  - [Recovery Guarantees](#recovery-guarantees)
+- [Integration Points](#integration-points)
+  - [PreCompact Hook](#precompact-hook)
+  - [SessionStart Hook](#sessionstart-hook)
+  - [/context-compact Command](#context-compact-command)
+- [Performance](#performance)
+  - [State File Size](#state-file-size)
+  - [Execution Time](#execution-time)
+  - [Memory Usage](#memory-usage)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: State not restoring automatically](#issue-state-not-restoring-automatically)
+  - [Issue: State file corrupted](#issue-state-file-corrupted)
+  - [Issue: Token budget exceeded](#issue-token-budget-exceeded)
+  - [Issue: Missing git state](#issue-missing-git-state)
+- [Configuration](#configuration)
+  - [Token Budget Tuning](#token-budget-tuning)
+  - [Max Entries Tuning](#max-entries-tuning)
+  - [State Age Threshold](#state-age-threshold)
+- [Migration from v1.0 to v2.0](#migration-from-v10-to-v20)
+  - [Automatic Migration](#automatic-migration)
+  - [Manual Migration](#manual-migration)
+- [Best Practices](#best-practices)
+  - [When to Use Each Section](#when-to-use-each-section)
+  - [Incremental State Building](#incremental-state-building)
+  - [Token Budget Monitoring](#token-budget-monitoring)
+- [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
+  - [v2.0.0 (2026-01-24)](#v200-2026-01-24)
+  - [v1.0.0 (2025-10-15)](#v100-2025-10-15)
 
 ## Metadata
 - **Category**: Deployment

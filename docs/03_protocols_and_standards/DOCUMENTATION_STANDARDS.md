@@ -1,4 +1,63 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # EHG Documentation Standards & Organization Guide
+
+
+## Table of Contents
+
+- [📚 Documentation Sub-Agent Standards](#-documentation-sub-agent-standards)
+  - [Sub-Agent Profile](#sub-agent-profile)
+- [📁 Documentation Structure Standards](#-documentation-structure-standards)
+  - [Primary Documentation Hierarchy](#primary-documentation-hierarchy)
+- [📋 Documentation Rules](#-documentation-rules)
+  - [1. File Naming Conventions](#1-file-naming-conventions)
+  - [2. Document Headers](#2-document-headers)
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [3. Location Rules](#3-location-rules)
+  - [4. Cross-References](#4-cross-references)
+  - [5. Version Control](#5-version-control)
+  - [6. Quality Standards](#6-quality-standards)
+- [🤖 Documentation Sub-Agent Responsibilities](#-documentation-sub-agent-responsibilities)
+  - [1. Organization Duties](#1-organization-duties)
+  - [2. Automatic Actions](#2-automatic-actions)
+  - [3. Documentation Health Metrics](#3-documentation-health-metrics)
+- [🔍 Audit Checklist](#-audit-checklist)
+  - [For Documentation Sub-Agent](#for-documentation-sub-agent)
+- [📊 Migration Plan](#-migration-plan)
+  - [Phase 1: Immediate Actions](#phase-1-immediate-actions)
+  - [Phase 2: Organization (Week 1)](#phase-2-organization-week-1)
+  - [Phase 3: Standardization (Week 2)](#phase-3-standardization-week-2)
+  - [Phase 4: Automation (Week 3)](#phase-4-automation-week-3)
+- [🚨 Prohibited Locations](#-prohibited-locations)
+- [📝 Templates](#-templates)
+  - [New Feature Documentation](#new-feature-documentation)
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [User Stories](#user-stories)
+- [Technical Implementation](#technical-implementation)
+- [API Reference](#api-reference)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [Related Documentation](#related-documentation)
+- [🎯 Success Criteria](#-success-criteria)
+- [🔄 Continuous Improvement](#-continuous-improvement)
+- [7. File Placement Rubric (Decision Tree)](#7-file-placement-rubric-decision-tree)
+  - [Ambiguity Resolution Rules](#ambiguity-resolution-rules)
+- [8. Automated Enforcement](#8-automated-enforcement)
+  - [NPM Script Commands](#npm-script-commands)
+- [9. Documentation Lifecycle & Cleanup](#9-documentation-lifecycle-cleanup)
+  - [Obsolescence Policy](#obsolescence-policy)
+  - [Archive Rules](#archive-rules)
+  - [Duplicate Resolution Process](#duplicate-resolution-process)
+  - [Deletion Policy](#deletion-policy)
 
 ## 📚 Documentation Sub-Agent Standards
 

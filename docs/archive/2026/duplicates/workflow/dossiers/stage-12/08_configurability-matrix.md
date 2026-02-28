@@ -1,3 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Substage 12.1 Parameters (Market Analysis)](#substage-121-parameters-market-analysis)
+  - [Parameter 1.1: Market Priority Thresholds](#parameter-11-market-priority-thresholds)
+  - [Parameter 1.2: Cultural Risk Scoring](#parameter-12-cultural-risk-scoring)
+- [Substage 12.2 Parameters (Name Adaptation)](#substage-122-parameters-name-adaptation)
+  - [Parameter 2.1: Variation Strategy Selection](#parameter-21-variation-strategy-selection)
+  - [Parameter 2.2: Translation API Selection](#parameter-22-translation-api-selection)
+  - [Parameter 2.3: Phonetic Validation Thresholds](#parameter-23-phonetic-validation-thresholds)
+  - [Parameter 2.4: Translation Verification Requirements](#parameter-24-translation-verification-requirements)
+- [Substage 12.3 Parameters (Testing & Validation)](#substage-123-parameters-testing-validation)
+  - [Parameter 3.1: Market Testing Sample Sizes](#parameter-31-market-testing-sample-sizes)
+  - [Parameter 3.2: Market Acceptance Thresholds](#parameter-32-market-acceptance-thresholds)
+  - [Parameter 3.3: Cultural Fit Score Thresholds](#parameter-33-cultural-fit-score-thresholds)
+  - [Parameter 3.4: Feedback Incorporation Rules](#parameter-34-feedback-incorporation-rules)
+- [Exit Gate Parameters](#exit-gate-parameters)
+  - [Parameter EG-1: Variations Approval Quorum](#parameter-eg-1-variations-approval-quorum)
+  - [Parameter EG-2: Localization Completeness Requirements](#parameter-eg-2-localization-completeness-requirements)
+  - [Parameter EG-3: Localization Guide Completeness](#parameter-eg-3-localization-guide-completeness)
+- [Cross-Substage Parameters](#cross-substage-parameters)
+  - [Parameter CS-1: Budget Caps](#parameter-cs-1-budget-caps)
+  - [Parameter CS-2: Timeline Targets](#parameter-cs-2-timeline-targets)
+  - [Parameter CS-3: Automation Level](#parameter-cs-3-automation-level)
+- [Configuration Management](#configuration-management)
+  - [How to Update Parameters](#how-to-update-parameters)
+  - [Parameter Validation](#parameter-validation)
+- [Parameter Impact Analysis](#parameter-impact-analysis)
+  - [High-Impact Parameters (Require LEAD Approval)](#high-impact-parameters-require-lead-approval)
+  - [Medium-Impact Parameters (Require PLAN Approval)](#medium-impact-parameters-require-plan-approval)
+  - [Low-Impact Parameters (Operational Decisions)](#low-impact-parameters-operational-decisions)
+- [Recommended Parameter Tuning (Post-Phase 6)](#recommended-parameter-tuning-post-phase-6)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.039Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-12\08_configurability-matrix.md

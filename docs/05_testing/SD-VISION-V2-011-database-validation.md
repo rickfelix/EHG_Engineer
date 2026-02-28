@@ -1,5 +1,42 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Database Validation Report: SD-VISION-V2-011
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Table Validation Results](#table-validation-results)
+  - [1. ventures ✅ EXISTS](#1-ventures-exists)
+  - [2. agent_messages ✅ EXISTS](#2-agent_messages-exists)
+  - [3. venture_decisions ❌ NOT FOUND](#3-venture_decisions-not-found)
+  - [4. eva_circuit_breaker_alerts ❌ NOT FOUND](#4-eva_circuit_breaker_alerts-not-found)
+- [RLS Policy Summary](#rls-policy-summary)
+  - [ventures](#ventures)
+  - [agent_messages](#agent_messages)
+  - [chairman_decisions](#chairman_decisions)
+  - [eva_circuit_breaker](#eva_circuit_breaker)
+- [Query Efficiency Analysis](#query-efficiency-analysis)
+  - [Indexed Columns (Expected)](#indexed-columns-expected)
+- [Implementation Guidance](#implementation-guidance)
+  - [Schema Mapping](#schema-mapping)
+  - [TypeScript Interface Updates](#typescript-interface-updates)
+- [Conditions for Proceeding](#conditions-for-proceeding)
+- [Recommendations](#recommendations)
+  - [Immediate Actions](#immediate-actions)
+  - [Optional Actions (EXEC Phase)](#optional-actions-exec-phase)
+- [No Migrations Required ✅](#no-migrations-required-)
+- [Database Context](#database-context)
+- [Validation Metadata](#validation-metadata)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Database

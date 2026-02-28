@@ -1,5 +1,60 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # GitHub Sub-Agent Safety Enhancements
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Problem Analysis](#problem-analysis)
+  - [What Likely Caused the Data Loss?](#what-likely-caused-the-data-loss)
+  - [What Was Missing?](#what-was-missing)
+- [Safety Enhancements Detail](#safety-enhancements-detail)
+  - [Phase 0: Pre-Flight Safety Checks (NEW)](#phase-0-pre-flight-safety-checks-new)
+  - [Automatic Safety Backups](#automatic-safety-backups)
+  - [Safe Git Pull](#safe-git-pull)
+  - [Safe Git Push](#safe-git-push)
+- [Risk Assessment System](#risk-assessment-system)
+  - [Risk Levels](#risk-levels)
+  - [Risk Indicators](#risk-indicators)
+- [Comparison: Before vs After](#comparison-before-vs-after)
+  - [Scenario 1: Pull with Uncommitted Changes](#scenario-1-pull-with-uncommitted-changes)
+  - [Scenario 2: Push to Diverged Remote](#scenario-2-push-to-diverged-remote)
+  - [Scenario 3: Force Push (Dangerous)](#scenario-3-force-push-dangerous)
+- [Migration Guide](#migration-guide)
+  - [Step 1: Review Current Usage](#step-1-review-current-usage)
+  - [Step 2: Replace Current Version](#step-2-replace-current-version)
+  - [Step 3: Update Sync Manager](#step-3-update-sync-manager)
+  - [Step 4: Update All Git Operations](#step-4-update-all-git-operations)
+  - [Step 5: Test Migration](#step-5-test-migration)
+- [Configuration Options](#configuration-options)
+  - [Safety Level Override](#safety-level-override)
+  - [Backup Configuration](#backup-configuration)
+- [Recovery Procedures](#recovery-procedures)
+  - [Recovering from Backup Branch](#recovering-from-backup-branch)
+  - [Recovering from Stash](#recovering-from-stash)
+  - [Recovering Overwritten Commits](#recovering-overwritten-commits)
+- [Best Practices](#best-practices)
+  - [For Developers](#for-developers)
+  - [For Operations](#for-operations)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [E2E Tests](#e2e-tests)
+- [Monitoring and Metrics](#monitoring-and-metrics)
+  - [Safety Check Metrics](#safety-check-metrics)
+  - [Useful Queries](#useful-queries)
+- [Appendix A: Safety Check Algorithm](#appendix-a-safety-check-algorithm)
+- [Appendix B: Force Push Decision Tree](#appendix-b-force-push-decision-tree)
+- [Support and Feedback](#support-and-feedback)
 
 ## Metadata
 - **Category**: Reference

@@ -1,4 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 38: Timing Optimization - Recursion Blueprint
+
+
+## Table of Contents
+
+- [Recursion Trigger Family: TIMING-OPT](#recursion-trigger-family-timing-opt)
+- [Design Philosophy](#design-philosophy)
+- [TIMING-OPT-001: Market Window Opportunity Detected](#timing-opt-001-market-window-opportunity-detected)
+  - [Trigger Definition](#trigger-definition)
+  - [Recursive Action](#recursive-action)
+  - [Database Schema](#database-schema)
+  - [Example Scenario](#example-scenario)
+- [TIMING-OPT-002: Timing Decision Effectiveness Review](#timing-opt-002-timing-decision-effectiveness-review)
+  - [Trigger Definition](#trigger-definition)
+  - [Recursive Action](#recursive-action)
+  - [Database Schema](#database-schema)
+  - [Example Scenario](#example-scenario)
+- [TIMING-OPT-003: Competitive Position Shift Requires Re-evaluation](#timing-opt-003-competitive-position-shift-requires-re-evaluation)
+  - [Trigger Definition](#trigger-definition)
+  - [Recursive Action](#recursive-action)
+  - [Database Schema](#database-schema)
+  - [Example Scenario](#example-scenario)
+- [TIMING-OPT-004: Execution Synchronization Failure](#timing-opt-004-execution-synchronization-failure)
+  - [Trigger Definition](#trigger-definition)
+  - [Recursive Action](#recursive-action)
+  - [Database Schema](#database-schema)
+  - [Example Scenario](#example-scenario)
+- [Cross-Trigger Interactions](#cross-trigger-interactions)
+  - [Interaction 1: TIMING-OPT-001 → TIMING-OPT-004](#interaction-1-timing-opt-001-timing-opt-004)
+  - [Interaction 2: TIMING-OPT-003 → TIMING-OPT-001](#interaction-2-timing-opt-003-timing-opt-001)
+  - [Interaction 3: TIMING-OPT-002 → All Triggers](#interaction-3-timing-opt-002-all-triggers)
+- [Recursion Maturity Path](#recursion-maturity-path)
+  - [Phase 1: Manual Detection, Automated Analysis (Current)](#phase-1-manual-detection-automated-analysis-current)
+  - [Phase 2: Automated Detection, Human-in-the-Loop (Target)](#phase-2-automated-detection-human-in-the-loop-target)
+  - [Phase 3: Fully Autonomous with Oversight (Future)](#phase-3-fully-autonomous-with-oversight-future)
+- [Success Metrics](#success-metrics)
 
 ## Recursion Trigger Family: TIMING-OPT
 

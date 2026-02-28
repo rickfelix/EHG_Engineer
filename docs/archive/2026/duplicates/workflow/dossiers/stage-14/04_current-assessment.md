@@ -1,3 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critique Rubric Scores](#critique-rubric-scores)
+- [Strengths](#strengths)
+- [Weaknesses](#weaknesses)
+- [Score Analysis](#score-analysis)
+  - [High Performers (≥4/5)](#high-performers-45)
+  - [Medium Performers (3/5)](#medium-performers-35)
+  - [Low Performers (<3/5)](#low-performers-35)
+- [Specific Improvement Areas](#specific-improvement-areas)
+  - [1. Enhance Automation](#1-enhance-automation)
+  - [2. Define Clear Metrics](#2-define-clear-metrics)
+  - [3. Improve Data Flow](#3-improve-data-flow)
+  - [4. Add Rollback Procedures](#4-add-rollback-procedures)
+  - [5. Customer Integration](#5-customer-integration)
+- [Dependencies Analysis](#dependencies-analysis)
+- [Risk Assessment](#risk-assessment)
+- [Recommendations Priority](#recommendations-priority)
+- [Improvement Tracking](#improvement-tracking)
+- [Source Tables](#source-tables)
+
 <!-- ARCHIVED: 2026-01-26T16:26:41.370Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-14\04_current-assessment.md

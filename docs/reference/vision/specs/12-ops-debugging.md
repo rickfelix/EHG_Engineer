@@ -1,5 +1,46 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Ops Debugging Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+- [End-to-End Traceability](#end-to-end-traceability)
+  - [2.1 Correlation ID Contract](#21-correlation-id-contract)
+  - [2.2 Correlation ID Generation](#22-correlation-id-generation)
+  - [2.3 Trace Entry Points](#23-trace-entry-points)
+  - [2.4 Privileged Action Audit (Service Role)](#24-privileged-action-audit-service-role)
+- [Trace Viewer Workflow](#trace-viewer-workflow)
+  - [3.1 User Journey](#31-user-journey)
+  - [3.2 API Endpoints](#32-api-endpoints)
+  - [3.3 UI Component](#33-ui-component)
+- [Black Box Recorder](#black-box-recorder)
+  - [4.1 Snapshot Storage](#41-snapshot-storage)
+  - [4.2 What Gets Recorded](#42-what-gets-recorded)
+  - [4.3 Recording Wrapper](#43-recording-wrapper)
+- [Safe Replay](#safe-replay)
+  - [5.1 Replay Safety Classification](#51-replay-safety-classification)
+  - [5.2 Replay Workflow](#52-replay-workflow)
+- [Dashboard Integration](#dashboard-integration)
+  - [6.1 Circuit Breaker Widget](#61-circuit-breaker-widget)
+  - [6.2 Quota Status Widget](#62-quota-status-widget)
+  - [6.3 UI Components](#63-ui-components)
+- [Database Schema](#database-schema)
+  - [7.1 execution_snapshots](#71-execution_snapshots)
+  - [7.2 replay_requests](#72-replay_requests)
+- [Critical Questions for the Chairman](#critical-questions-for-the-chairman)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

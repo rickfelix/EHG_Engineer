@@ -1,5 +1,35 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Strategic Directive Proposal: SD-LEO-TESTING-GOVERNANCE-001B
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Test Evidence Auto-Capture Gate](#test-evidence-auto-capture-gate)
+- [1. Strategic Intent](#1-strategic-intent)
+- [2. Rationale](#2-rationale)
+  - [Evidence Base](#evidence-base)
+  - [Current State](#current-state)
+  - [Target State](#target-state)
+- [3. Scope](#3-scope)
+  - [In Scope](#in-scope)
+  - [Out of Scope](#out-of-scope)
+- [4. Key Changes](#4-key-changes)
+  - [File: `scripts/modules/handoff/executors/ExecToPlanExecutor.js`](#file-scriptsmoduleshandoffexecutorsexectoplanexecutorjs)
+- [5. Gate Sequence](#5-gate-sequence)
+- [6. Success Criteria](#6-success-criteria)
+- [7. Report Locations Scanned](#7-report-locations-scanned)
+- [8. Acceptance Testing](#8-acceptance-testing)
+- [9. Environment Variables](#9-environment-variables)
+- [10. Estimated LOC](#10-estimated-loc)
 
 ## Metadata
 - **Category**: Testing

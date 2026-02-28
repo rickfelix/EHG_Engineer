@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 8 Agent Orchestration & Governance
+
+
+## Table of Contents
+
+- [CrewAI Agent Mapping](#crewai-agent-mapping)
+  - [Proposed Agent Architecture](#proposed-agent-architecture)
+  - [Agent Workflow (CrewAI Sequential Process)](#agent-workflow-crewai-sequential-process)
+- [Governance Framework](#governance-framework)
+  - [LEAD Agent Governance (Strategic Oversight)](#lead-agent-governance-strategic-oversight)
+  - [PLAN Agent Governance (Pre-EXEC Validation)](#plan-agent-governance-pre-exec-validation)
+  - [EXEC Agent Governance (Primary Owner)](#exec-agent-governance-primary-owner)
+  - [Chairman Governance (Recursion Approval)](#chairman-governance-recursion-approval)
+- [Human-in-the-Loop (HITL) Requirements](#human-in-the-loop-hitl-requirements)
+  - [Manual Review Points](#manual-review-points)
+  - [Automation vs Human Review](#automation-vs-human-review)
+- [Sub-Agent Coordination Patterns](#sub-agent-coordination-patterns)
+  - [Pattern 1: Sequential Decomposition (Current Manual Process)](#pattern-1-sequential-decomposition-current-manual-process)
+  - [Pattern 2: Parallel AI-Assisted Decomposition (Proposed)](#pattern-2-parallel-ai-assisted-decomposition-proposed)
+  - [Pattern 3: Recursion Re-Decomposition (TECH-001 Handling)](#pattern-3-recursion-re-decomposition-tech-001-handling)
+- [Integration Points with Other Agents](#integration-points-with-other-agents)
+- [Delegation and Escalation Rules](#delegation-and-escalation-rules)
+  - [Delegation (EXEC Agent → AI Agents)](#delegation-exec-agent-ai-agents)
+  - [Escalation (EXEC Agent → Chairman)](#escalation-exec-agent-chairman)
+- [Performance Metrics for Agent Orchestration](#performance-metrics-for-agent-orchestration)
+- [Gap Analysis for Agent Orchestration](#gap-analysis-for-agent-orchestration)
+- [Sources Table](#sources-table)
 
 ## CrewAI Agent Mapping
 

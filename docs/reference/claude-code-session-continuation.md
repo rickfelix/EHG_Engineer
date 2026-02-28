@@ -1,5 +1,64 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Claude Code Session Continuation Best Practices
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Success Pattern: SD-SETTINGS-2025-10-12](#success-pattern-sd-settings-2025-10-12)
+  - [What Worked Well](#what-worked-well)
+- [1. Primary Request and Intent](#1-primary-request-and-intent)
+- [2. Key Technical Concepts](#2-key-technical-concepts)
+- [3. Files and Code Sections](#3-files-and-code-sections)
+  - [File 1: /path/to/file.tsx (XXX LOC)](#file-1-pathtofiletsx-xxx-loc)
+- [4. Errors and Fixes](#4-errors-and-fixes)
+- [5. Problem Solving](#5-problem-solving)
+- [6. All User Messages](#6-all-user-messages)
+- [7. Pending Tasks](#7-pending-tasks)
+- [8. Current Work](#8-current-work)
+- [9. Optional Next Step](#9-optional-next-step)
+- [EXEC Pre-Implementation Checklist](#exec-pre-implementation-checklist)
+- [Session Continuation Checklist](#session-continuation-checklist)
+  - [Ending a Session](#ending-a-session)
+  - [Starting a New Session](#starting-a-new-session)
+- [Context Health Monitoring](#context-health-monitoring)
+  - [Proactive Monitoring](#proactive-monitoring)
+- [Context Health Check](#context-health-check)
+  - [Context Compaction](#context-compaction)
+- [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+  - [❌ Incomplete Summaries](#-incomplete-summaries)
+- [Summary](#summary)
+- [Summary](#summary)
+  - [❌ Batch Todo Updates](#-batch-todo-updates)
+  - [❌ No Verification Steps](#-no-verification-steps)
+- [Templates](#templates)
+  - [Session Summary Template](#session-summary-template)
+- [Session Info](#session-info)
+- [Completed Work](#completed-work)
+- [Current Work (IN PROGRESS)](#current-work-in-progress)
+- [Pending Work](#pending-work)
+- [Technical Context](#technical-context)
+  - [Application](#application)
+  - [Build Status](#build-status)
+  - [Files Modified](#files-modified)
+- [Issues Encountered](#issues-encountered)
+- [Resume Instructions](#resume-instructions)
+- [Context Health](#context-health)
+- [Success Metrics](#success-metrics)
+- [Automated Cross-Session Continuation (v4.3.3.3+)](#automated-cross-session-continuation-v4333)
+  - [Quick Start](#quick-start)
+  - [Safety Mechanisms](#safety-mechanisms)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

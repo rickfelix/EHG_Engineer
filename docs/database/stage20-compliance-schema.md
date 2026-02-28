@@ -1,5 +1,49 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Stage 20 Compliance Gate - Database Schema
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Migration Files](#migration-files)
+- [Tables](#tables)
+  - [1. stage20_compliance_checklists](#1-stage20_compliance_checklists)
+  - [2. stage20_checklist_items](#2-stage20_checklist_items)
+  - [3. stage20_venture_compliance](#3-stage20_venture_compliance)
+  - [4. stage20_compliance_evidence](#4-stage20_compliance_evidence)
+  - [5. stage20_compliance_history](#5-stage20_compliance_history)
+  - [6. stage20_compliance_gate_log](#6-stage20_compliance_gate_log)
+- [Functions](#functions)
+  - [evaluate_stage20_compliance_gate(venture_id, user_id)](#evaluate_stage20_compliance_gateventure_id-user_id)
+  - [record_compliance_gate_passed(venture_id, user_id)](#record_compliance_gate_passedventure_id-user_id)
+  - [fn_advance_venture_stage() - MODIFIED](#fn_advance_venture_stage---modified)
+- [RLS Policies](#rls-policies)
+  - [Pattern](#pattern)
+- [Seed Data](#seed-data)
+  - [B2B_ENTERPRISE (15 items)](#b2b_enterprise-15-items)
+  - [B2B_SMB (12 items)](#b2b_smb-12-items)
+  - [B2C (12 items)](#b2c-12-items)
+- [Queries](#queries)
+  - [Get venture compliance status](#get-venture-compliance-status)
+  - [Get incomplete required items](#get-incomplete-required-items)
+  - [Gate passage metrics](#gate-passage-metrics)
+- [Migration Instructions](#migration-instructions)
+  - [Apply migrations](#apply-migrations)
+  - [Verify migration](#verify-migration)
+- [Rollback](#rollback)
+- [Performance Considerations](#performance-considerations)
+- [Security](#security)
+- [Related Documentation](#related-documentation)
+- [Change History](#change-history)
 
 ## Metadata
 - **Category**: Database

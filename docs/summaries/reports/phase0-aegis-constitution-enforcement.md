@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Phase 0: AEGIS Constitution Enforcement Report
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Constitutions Overview](#constitutions-overview)
+- [Protocol Constitution Rules (9 Rules)](#protocol-constitution-rules-9-rules)
+  - [Rule Details](#rule-details)
+- [Four Oaths (12 Rules)](#four-oaths-12-rules)
+- [Doctrine of Constraint (5 Rules)](#doctrine-of-constraint-5-rules)
+- [Hard Halt Protocol (7 Rules)](#hard-halt-protocol-7-rules)
+- [Manifesto Mode (4 Rules)](#manifesto-mode-4-rules)
+- [Crew Governance (5 Rules)](#crew-governance-5-rules)
+- [Compliance Policies (6 Rules)](#compliance-policies-6-rules)
+- [Enforcement Architecture](#enforcement-architecture)
+  - [Core Components](#core-components)
+  - [API Endpoints](#api-endpoints)
+  - [Enforcement Flow](#enforcement-flow)
+- [Verification Evidence](#verification-evidence)
+  - [Rule Count Verification](#rule-count-verification)
+  - [Enforcement Mode Verification](#enforcement-mode-verification)
+  - [Validator Coverage](#validator-coverage)
+  - [Trigger Statistics](#trigger-statistics)
+- [Gaps Identified](#gaps-identified)
+- [Recommendations](#recommendations)
+- [Conclusion](#conclusion)
 
 **SD**: SD-LEO-SELF-IMPROVE-001A
 **Generated**: 2026-01-31

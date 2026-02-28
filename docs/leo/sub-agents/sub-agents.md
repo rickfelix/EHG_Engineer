@@ -1,5 +1,30 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Native Claude Code Sub-Agent Integration
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🤖 Native Claude Code Sub-Agent Integration](#-native-claude-code-sub-agent-integration)
+  - [Overview](#overview)
+  - [Critical Dependency: ripgrep](#critical-dependency-ripgrep)
+  - [Discovery Mechanism](#discovery-mechanism)
+  - [Five Sub-Agent Invocation Patterns](#five-sub-agent-invocation-patterns)
+  - [Decision Matrix](#decision-matrix)
+  - [Invocation Mechanism (Task Tool)](#invocation-mechanism-task-tool)
+  - [Integration with LEO Protocol 5-Phase Workflow](#integration-with-leo-protocol-5-phase-workflow)
+  - [Active Native Sub-Agents](#active-native-sub-agents)
+  - [Performance Metrics](#performance-metrics)
+  - [Troubleshooting](#troubleshooting)
+  - [Complete Documentation](#complete-documentation)
 
 ## Metadata
 - **Category**: Guide

@@ -1,5 +1,71 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Route Assessment Strategic Directive Structure
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [LEO Protocol Compliance](#leo-protocol-compliance)
+- [Assessment Scope](#assessment-scope)
+- [SD Hierarchy Overview](#sd-hierarchy-overview)
+- [Report Output Specification](#report-output-specification)
+  - [Report Location](#report-location)
+  - [Report Structure](#report-structure)
+- [Executive Summary](#executive-summary)
+- [Section-by-Section Findings](#section-by-section-findings)
+  - [Command Center (4 routes)](#command-center-4-routes)
+  - [Ventures (5 routes)](#ventures-5-routes)
+  - [Analytics & Insights (5 routes)](#analytics-insights-5-routes)
+  - [Go-to-Market (3 routes)](#go-to-market-3-routes)
+  - [AI & Automation (6 routes)](#ai-automation-6-routes)
+  - [Settings & Tools (4 routes)](#settings-tools-4-routes)
+  - [Platform Administration (13+ routes)](#platform-administration-13-routes)
+- [25-Stage Venture Workflow Deep Analysis](#25-stage-venture-workflow-deep-analysis)
+  - [Phase 1: THE TRUTH (Stages 1-5)](#phase-1-the-truth-stages-1-5)
+  - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
+  - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
+  - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
+  - [Phase 5: THE BUILD LOOP (Stages 17-20)](#phase-5-the-build-loop-stages-17-20)
+  - [Phase 6: LAUNCH & LEARN (Stages 21-25)](#phase-6-launch-learn-stages-21-25)
+- [Corrective Actions Required](#corrective-actions-required)
+  - [Critical (P0)](#critical-p0)
+  - [High (P1)](#high-p1)
+  - [Medium (P2)](#medium-p2)
+  - [Low (P3)](#low-p3)
+- [Recommended Corrective SDs](#recommended-corrective-sds)
+- [Appendix: Route Inventory](#appendix-route-inventory)
+- [Level 0: Parent SD (Orchestrator)](#level-0-parent-sd-orchestrator)
+  - [SD-ROUTE-AUDIT-PARENT](#sd-route-audit-parent)
+- [Level 1: Section Assessment SDs (Children of Parent)](#level-1-section-assessment-sds-children-of-parent)
+  - [SD-ROUTE-AUDIT-CMD (Command Center)](#sd-route-audit-cmd-command-center)
+  - [SD-ROUTE-AUDIT-VENTURES (Ventures Section)](#sd-route-audit-ventures-ventures-section)
+  - [SD-ROUTE-AUDIT-ANALYTICS (Analytics & Insights Section)](#sd-route-audit-analytics-analytics-insights-section)
+  - [SD-ROUTE-AUDIT-GTM (Go-to-Market Section)](#sd-route-audit-gtm-go-to-market-section)
+  - [SD-ROUTE-AUDIT-AI (AI & Automation Section)](#sd-route-audit-ai-ai-automation-section)
+  - [SD-ROUTE-AUDIT-SETTINGS (Settings & Tools Section)](#sd-route-audit-settings-settings-tools-section)
+  - [SD-ROUTE-AUDIT-ADMIN (Platform Administration Section)](#sd-route-audit-admin-platform-administration-section)
+- [Level 1: Workflow Assessment SD (Child of Parent - Parent of Stage SDs)](#level-1-workflow-assessment-sd-child-of-parent---parent-of-stage-sds)
+  - [SD-ROUTE-AUDIT-WORKFLOW (25-Stage Workflow Parent)](#sd-route-audit-workflow-25-stage-workflow-parent)
+- [Level 2: Stage Assessment SDs (Children of WORKFLOW - "Grandchildren" of Parent)](#level-2-stage-assessment-sds-children-of-workflow---grandchildren-of-parent)
+  - [Phase 1: THE TRUTH (Stages 1-5)](#phase-1-the-truth-stages-1-5)
+  - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
+  - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
+  - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
+  - [Phase 5: THE BUILD LOOP (Stages 17-20)](#phase-5-the-build-loop-stages-17-20)
+  - [Phase 6: LAUNCH & LEARN (Stages 21-25)](#phase-6-launch-learn-stages-21-25)
+- [Report Generation SD](#report-generation-sd)
+  - [SD-ROUTE-AUDIT-REPORT (Final Report Generation)](#sd-route-audit-report-final-report-generation)
+- [Summary Statistics](#summary-statistics)
+- [Database Insertion](#database-insertion)
 
 ## Metadata
 - **Category**: Guide

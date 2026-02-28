@@ -1,5 +1,50 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Governance Policy Engine Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+  - [Single-User Production Assumption (Rick-only)](#single-user-production-assumption-rick-only)
+- [Authority Matrix](#authority-matrix)
+  - [2.1 Authority Boundaries](#21-authority-boundaries)
+  - [2.2 Authority Thresholds by Level](#22-authority-thresholds-by-level)
+  - [2.3 Never-Autonomous Categories](#23-never-autonomous-categories)
+- [Policy Engine](#policy-engine)
+  - [3.1 Policy Objects](#31-policy-objects)
+  - [3.2 Policy Evaluation](#32-policy-evaluation)
+  - [3.3 Example Policies](#33-example-policies)
+- [Escalation Load-Shedding](#escalation-load-shedding)
+  - [4.1 The Problem](#41-the-problem)
+  - [4.2 Escalation Budget System](#42-escalation-budget-system)
+  - [4.3 Escalation Routing Rules](#43-escalation-routing-rules)
+  - [4.4 Severity Calculation](#44-severity-calculation)
+  - [4.5 Batching and Deduplication](#45-batching-and-deduplication)
+- [Conflict Resolution](#conflict-resolution)
+  - [5.1 Conflict Types](#51-conflict-types)
+  - [5.2 Resolution Protocol](#52-resolution-protocol)
+  - [5.3 Conflict Logging](#53-conflict-logging)
+- [Cross-Venture Coordination](#cross-venture-coordination)
+  - [6.1 Portfolio Programs](#61-portfolio-programs)
+  - [6.2 Cross-CEO Communication](#62-cross-ceo-communication)
+- [Database Schema](#database-schema)
+  - [7.1 governance_policies](#71-governance_policies)
+  - [7.2 escalation_budgets](#72-escalation_budgets)
+  - [7.3 conflict_logs](#73-conflict_logs)
+  - [7.4 portfolio_programs](#74-portfolio_programs)
+- [Critical Questions for the Chairman](#critical-questions-for-the-chairman)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

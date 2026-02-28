@@ -1,4 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Infrastructure Testing Justification
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Component Classification](#component-classification)
+  - [Gate 0 Characteristics](#gate-0-characteristics)
+  - [Infrastructure vs. User-Facing](#infrastructure-vs-user-facing)
+- [Industry Standards for CLI Testing](#industry-standards-for-cli-testing)
+  - [Comparable CLI Tools & Their Testing Approaches](#comparable-cli-tools-their-testing-approaches)
+- [Testing Strategy for Gate 0](#testing-strategy-for-gate-0)
+  - [Recommended Approach (Implemented)](#recommended-approach-implemented)
+  - [Why Not Playwright?](#why-not-playwright)
+- [TESTING Sub-Agent Classification](#testing-sub-agent-classification)
+  - [Classification Decision Tree](#classification-decision-tree)
+- [LEO Protocol References](#leo-protocol-references)
+  - [Relevant Documentation](#relevant-documentation)
+  - [Known Patterns (PAT-INFRA-E2E-001)](#known-patterns-pat-infra-e2e-001)
+- [Test Evidence Provided](#test-evidence-provided)
+  - [Unit Test Evidence](#unit-test-evidence)
+  - [Integration Test Evidence](#integration-test-evidence)
+  - [Live Execution Evidence](#live-execution-evidence)
+  - [Security Testing Evidence](#security-testing-evidence)
+- [Comparison: What E2E Would Test](#comparison-what-e2e-would-test)
+  - [If Gate 0 Had a UI (Hypothetical)](#if-gate-0-had-a-ui-hypothetical)
+  - [Gate 0 Actual Interface (CLI)](#gate-0-actual-interface-cli)
+- [Recommendation](#recommendation)
+- [Future Considerations](#future-considerations)
+  - [If Gate 0 Gets a UI Later](#if-gate-0-gets-a-ui-later)
+- [Conclusion](#conclusion)
+
 # Why Playwright E2E Tests Are Not Applicable for Gate 0
 
 **Strategic Directive**: SD-VERIFY-LADDER-001

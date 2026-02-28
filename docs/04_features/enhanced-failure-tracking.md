@@ -1,5 +1,39 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Enhanced Failure Tracking - Detailed Test Results
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [What Gets Stored](#what-gets-stored)
+  - [In `sd_testing_status` Table](#in-sd_testing_status-table)
+- [Query Examples](#query-examples)
+  - [Find All Failing SDs with Details](#find-all-failing-sds-with-details)
+  - [Get Structured Failure Data](#get-structured-failure-data)
+  - [Group Failures by Type](#group-failures-by-type)
+  - [Find Common Error Patterns](#find-common-error-patterns)
+- [Failure Information Captured](#failure-information-captured)
+  - [For Vitest Unit Tests](#for-vitest-unit-tests)
+  - [For Playwright E2E Tests](#for-playwright-e2e-tests)
+- [Use Cases](#use-cases)
+  - [1. Prioritize Fixes by Frequency](#1-prioritize-fixes-by-frequency)
+  - [2. Identify Flaky E2E Tests](#2-identify-flaky-e2e-tests)
+  - [3. Generate Fix TODO List](#3-generate-fix-todo-list)
+  - [4. Track Fix Progress](#4-track-fix-progress)
+- [Benefits](#benefits)
+  - [Before Enhancement](#before-enhancement)
+  - [After Enhancement](#after-enhancement)
+- [Real-World Example](#real-world-example)
+- [Status](#status)
 
 ## Metadata
 - **Category**: Feature

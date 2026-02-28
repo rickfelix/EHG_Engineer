@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 29: Agent Orchestration
+
+
+## Table of Contents
+
+- [Python CrewAI Agents (EHG App)](#python-crewai-agents-ehg-app)
+  - [Agent Scan Results](#agent-scan-results)
+- [Proposed Agent Architecture: FinalPolishCrew](#proposed-agent-architecture-finalpolishcrew)
+  - [Agent 1: UI Refinement Specialist](#agent-1-ui-refinement-specialist)
+  - [Agent 2: UX Optimization Engineer](#agent-2-ux-optimization-engineer)
+  - [Agent 3: Asset Preparation Engineer](#agent-3-asset-preparation-engineer)
+  - [Agent 4: Production Readiness Coordinator](#agent-4-production-readiness-coordinator)
+- [Execution Flow (Proposed)](#execution-flow-proposed)
+- [Governance Handoffs (Node.js Sub-Agents)](#governance-handoffs-nodejs-sub-agents)
+- [Agent Task Breakdown](#agent-task-breakdown)
+  - [Substage 29.1: UI Refinement (Agent 1)](#substage-291-ui-refinement-agent-1)
+  - [Substage 29.2: UX Optimization (Agent 2)](#substage-292-ux-optimization-agent-2)
+  - [Substage 29.3: Asset Preparation (Agent 3)](#substage-293-asset-preparation-agent-3)
+- [Integration Requirements](#integration-requirements)
+  - [1. EHG App Changes (Python)](#1-ehg-app-changes-python)
+  - [2. Trigger Points](#2-trigger-points)
+  - [3. Configuration (ventures table extension)](#3-configuration-ventures-table-extension)
+- [Monitoring & Observability](#monitoring-observability)
+  - [Agent Execution Metrics](#agent-execution-metrics)
+- [Error Handling](#error-handling)
+  - [Agent Failure Scenarios](#agent-failure-scenarios)
+- [Human-in-the-Loop](#human-in-the-loop)
+- [Cross-References](#cross-references)
+- [Sources Table](#sources-table)
 
 ## Python CrewAI Agents (EHG App)
 

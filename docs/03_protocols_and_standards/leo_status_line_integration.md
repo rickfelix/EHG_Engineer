@@ -1,5 +1,56 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol Status Line Integration
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Performance Characteristics](#performance-characteristics)
+- [Status Line Formats](#status-line-formats)
+  - [Default](#default)
+  - [LEAD Agent](#lead-agent)
+  - [PLAN Agent](#plan-agent)
+  - [EXEC Agent](#exec-agent)
+  - [Handoff (temporary, 10 seconds)](#handoff-temporary-10-seconds)
+  - [Vision QA Active](#vision-qa-active)
+- [Quick Usage](#quick-usage)
+  - [For Agents](#for-agents)
+  - [Auto-Detection](#auto-detection)
+- [Integration Points](#integration-points)
+  - [1. In LEO Protocol Workflows](#1-in-leo-protocol-workflows)
+  - [2. In CI/CD Pipeline](#2-in-cicd-pipeline)
+  - [3. In Vision QA Tests](#3-in-vision-qa-tests)
+  - [4. In Git Hooks (Optional)](#4-in-git-hooks-optional)
+- [Configuration](#configuration)
+  - [Status Cache File](#status-cache-file)
+  - [Claude Config Integration](#claude-config-integration)
+- [Best Practices](#best-practices)
+  - [1. Update Frequency](#1-update-frequency)
+  - [2. Information Density](#2-information-density)
+  - [3. Role-Specific Information](#3-role-specific-information)
+  - [4. Handoff Protocol](#4-handoff-protocol)
+- [Advanced Features](#advanced-features)
+  - [Watch Mode](#watch-mode)
+  - [Programmatic Usage](#programmatic-usage)
+- [Performance Optimization](#performance-optimization)
+  - [Why It's Fast](#why-its-fast)
+  - [Benchmark Results](#benchmark-results)
+  - [Memory Usage](#memory-usage)
+- [Troubleshooting](#troubleshooting)
+  - [Status Not Updating](#status-not-updating)
+  - [Performance Issues](#performance-issues)
+  - [Git Branch Detection Not Working](#git-branch-detection-not-working)
+- [Future Enhancements](#future-enhancements)
+- [Summary](#summary)
 
 ## Metadata
 - **Category**: Protocol

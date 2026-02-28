@@ -1,4 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Git Commit Recovery Guide
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [Scan Mode (Default)](#scan-mode-default)
+  - [Recovery Mode](#recovery-mode)
+- [How It Works](#how-it-works)
+  - [Detection Algorithm](#detection-algorithm)
+  - [Reachability Check](#reachability-check)
+  - [Time Window](#time-window)
+  - [Recovery Process](#recovery-process)
+- [Use Cases](#use-cases)
+  - [Use Case 1: Cross-Session Branch Contamination](#use-case-1-cross-session-branch-contamination)
+  - [Use Case 2: Session Crash During Handoff](#use-case-2-session-crash-during-handoff)
+  - [Use Case 3: Accidental Branch Deletion](#use-case-3-accidental-branch-deletion)
+- [False Positives](#false-positives)
+  - [Merge Commits on Remote](#merge-commits-on-remote)
+  - [Worktree Commits](#worktree-commits)
+- [Limitations](#limitations)
+  - [Reflog Expiration](#reflog-expiration)
+  - [Already Garbage Collected](#already-garbage-collected)
+  - [Remote-Only Branches](#remote-only-branches)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: "No orphaned commits found" but I know one exists](#issue-no-orphaned-commits-found-but-i-know-one-exists)
+  - [Issue: "Commit already exists on a branch" during recovery](#issue-commit-already-exists-on-a-branch-during-recovery)
+  - [Issue: Recovery branch has wrong content](#issue-recovery-branch-has-wrong-content)
+- [Integration with Ship Safety](#integration-with-ship-safety)
+- [Best Practices](#best-practices)
+- [Performance](#performance)
+- [Related Documentation](#related-documentation)
+- [Support](#support)
+  - [Log Files](#log-files)
+  - [Escalation](#escalation)
+  - [Common Issues](#common-issues)
 
 **Category**: Reference
 **Status**: Approved

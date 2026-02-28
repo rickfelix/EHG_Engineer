@@ -1,5 +1,33 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Handoff Field Reference Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical JSONB Field Mappings](#critical-jsonb-field-mappings)
+  - [`metadata` vs `validation_details`](#metadata-vs-validation_details)
+  - [Common Mistake](#common-mistake)
+- [Field Path Quick Reference](#field-path-quick-reference)
+  - [EXEC-TO-PLAN Handoff (Creates)](#exec-to-plan-handoff-creates)
+  - [PLAN-TO-LEAD Handoff (Reads)](#plan-to-lead-handoff-reads)
+- [Gate → Field Mapping Table](#gate-field-mapping-table)
+- [sd_scope_deliverables Column Reference](#sd_scope_deliverables-column-reference)
+  - [Common Mistakes](#common-mistakes)
+- [Handoff Type Enum Values](#handoff-type-enum-values)
+- [Handoff Status Enum Values](#handoff-status-enum-values)
+- [Debugging Tips](#debugging-tips)
+  - [1. Check field existence before update](#1-check-field-existence-before-update)
+  - [2. Update metadata safely (preserve existing)](#2-update-metadata-safely-preserve-existing)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

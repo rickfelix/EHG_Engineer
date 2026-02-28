@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 6: Dossier Acceptance Checklist
+
+
+## Table of Contents
+
+- [Scoring Rubric](#scoring-rubric)
+- [Gate Decision: **APPROVED with Proposed Recursion**](#gate-decision-approved-with-proposed-recursion)
+  - [Strengths](#strengths)
+  - [Key Difference from Stage 5 Dossier](#key-difference-from-stage-5-dossier)
+  - [Implementation Gaps (Non-Blocking for Dossier)](#implementation-gaps-non-blocking-for-dossier)
+  - [Recommendations for Implementation](#recommendations-for-implementation)
+- [Boundary Check Detail](#boundary-check-detail)
+- [Recursion Blueprint Validation](#recursion-blueprint-validation)
+- [Evidence Quality Validation](#evidence-quality-validation)
+- [Comparison with Phase 3 Benchmark (Stage 5)](#comparison-with-phase-3-benchmark-stage-5)
+- [Reviewer Notes](#reviewer-notes)
+- [Critical Notes for Implementation Team](#critical-notes-for-implementation-team)
+  - [Most Important Gap: GAP-S6-002 (Recursion Engine Integration)](#most-important-gap-gap-s6-002-recursion-engine-integration)
+  - [Most Complex Gap: GAP-S6-001 (Risk Identification Agent)](#most-complex-gap-gap-s6-001-risk-identification-agent)
+  - [Most Impactful Gap: GAP-S6-006 (Mitigation Planning Agent)](#most-impactful-gap-gap-s6-006-mitigation-planning-agent)
+- [Sources Table](#sources-table)
 
 **Target Score**: ≥85 / 100
 

@@ -1,4 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 37: Strategic Risk Forecasting - Acceptance Checklist
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Criterion 1: Canonical Definition Coverage (20 points)](#criterion-1-canonical-definition-coverage-20-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 2: Current Assessment Accuracy (15 points)](#criterion-2-current-assessment-accuracy-15-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 3: Recursion Blueprint Quality (10 points)](#criterion-3-recursion-blueprint-quality-10-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 4: Agent Orchestration Completeness (15 points)](#criterion-4-agent-orchestration-completeness-15-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 5: Configurability & Flexibility (10 points)](#criterion-5-configurability-flexibility-10-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 6: Metrics & Monitoring Rigor (10 points)](#criterion-6-metrics-monitoring-rigor-10-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 7: Evidence Trail Quality (10 points)](#criterion-7-evidence-trail-quality-10-points)
+  - [Checklist Items](#checklist-items)
+- [Criterion 8: Boundary & Cross-Reference Discipline (10 points)](#criterion-8-boundary-cross-reference-discipline-10-points)
+  - [Checklist Items](#checklist-items)
+- [Overall Score Calculation](#overall-score-calculation)
+- [Final Assessment](#final-assessment)
+- [Revision History](#revision-history)
+- [Signatures](#signatures)
 
 ## Purpose
 

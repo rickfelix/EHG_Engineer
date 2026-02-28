@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Venture Lifecycle -- Stage 3 "Market Validation & RAT" -- CLI vs GUI Gap Analysis
+
+
+## Table of Contents
+
+- [Context](#context)
+- [Pipeline Context](#pipeline-context)
+- [CLI Stage 3 Implementation (Ground Truth)](#cli-stage-3-implementation-ground-truth)
+- [GUI Stage 3 Implementation (Ground Truth)](#gui-stage-3-implementation-ground-truth)
+- [Key Differences Summary](#key-differences-summary)
+- [Your Task](#your-task)
+- [Gap Importance Rubric](#gap-importance-rubric)
+- [Output Format](#output-format)
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. Metric Structure Recommendation](#2-metric-structure-recommendation)
+  - [3. Score Generation Architecture](#3-score-generation-architecture)
+  - [4. Market Data Acquisition](#4-market-data-acquisition)
+  - [5. Kill Gate Comparison & Recommendation](#5-kill-gate-comparison-recommendation)
+  - [6. Stage 2 -> Stage 3 Pipeline](#6-stage-2---stage-3-pipeline)
+  - [7. CLI Superiorities (preserve these)](#7-cli-superiorities-preserve-these)
+  - [8. Minimum Viable Change](#8-minimum-viable-change)
+  - [9. Cross-Stage Impact](#9-cross-stage-impact)
 
 ## Context
 

@@ -1,4 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Ship Command Reference Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Command Flow](#command-flow)
+- [Intelligent Branch Cleanup](#intelligent-branch-cleanup)
+  - [What Gets Cleaned](#what-gets-cleaned)
+  - [Manual Cleanup](#manual-cleanup)
+  - [Safety Guarantees](#safety-guarantees)
+- [Commit Message Format](#commit-message-format)
+  - [Types](#types)
+  - [Examples](#examples)
+- [Pull Request Format](#pull-request-format)
+  - [Title](#title)
+  - [Body](#body)
+- [Summary](#summary)
+- [Test plan](#test-plan)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [Branch Creation](#branch-creation)
+  - [After Merge](#after-merge)
+- [Troubleshooting](#troubleshooting)
+  - ["Found X unmerged branches"](#found-x-unmerged-branches)
+  - [Branches with unique commits](#branches-with-unique-commits)
+  - [CI/CD failures](#cicd-failures)
+- [Related Commands](#related-commands)
+- [Configuration](#configuration)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

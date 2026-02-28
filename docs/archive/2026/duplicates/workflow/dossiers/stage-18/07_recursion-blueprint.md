@@ -1,3 +1,37 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Current State Analysis](#current-state-analysis)
+  - [Critique Recursion Section: DOES NOT EXIST](#critique-recursion-section-does-not-exist)
+- [Gap Assessment](#gap-assessment)
+- [Proposed Recursion Architecture](#proposed-recursion-architecture)
+  - [Framework Reference](#framework-reference)
+  - [Recursion Trigger Definitions](#recursion-trigger-definitions)
+  - [Forward Recursion (Stage 18 → Stage 19)](#forward-recursion-stage-18-stage-19)
+- [Implementation Requirements](#implementation-requirements)
+  - [Database Schema Extensions](#database-schema-extensions)
+  - [Integration with SD-RECURSION-ENGINE-001](#integration-with-sd-recursion-engine-001)
+  - [Monitoring Dashboard Requirements](#monitoring-dashboard-requirements)
+- [Testing Strategy](#testing-strategy)
+  - [Unit Tests (per trigger)](#unit-tests-per-trigger)
+  - [Integration Tests (with SD-RECURSION-ENGINE-001)](#integration-tests-with-sd-recursion-engine-001)
+  - [End-to-End Tests (full recursion cycle)](#end-to-end-tests-full-recursion-cycle)
+- [Success Metrics for Recursion System](#success-metrics-for-recursion-system)
+- [Rollback and Safety Mechanisms](#rollback-and-safety-mechanisms)
+  - [Recursion Limits](#recursion-limits)
+  - [Manual Override](#manual-override)
+  - [Rollback Triggers](#rollback-triggers)
+- [Future Enhancements](#future-enhancements)
+
 <!-- ARCHIVED: 2026-01-26T16:26:47.375Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-18\07_recursion-blueprint.md

@@ -1,5 +1,41 @@
+---
+category: api
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [api, auto-generated]
+---
 # Stage 03 – Comprehensive Validation Enhanced PRD (v4)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [EHG Management Model Integration](#ehg-management-model-integration)
+  - [Performance Drive Cycle Validation](#performance-drive-cycle-validation)
+  - [Multi-Agent Validation Orchestration](#multi-agent-validation-orchestration)
+  - [Multi-Company Portfolio Context](#multi-company-portfolio-context)
+- [1) Purpose & Scope](#1-purpose-scope)
+- [2) Objectives & KPIs](#2-objectives-kpis)
+- [3) Data Contracts (TypeScript/Zod)](#3-data-contracts-typescriptzod)
+- [4) Deterministic Rules Engine (Business Logic)](#4-deterministic-rules-engine-business-logic)
+- [5) LLM Synthesis (Provider-Agnostic)](#5-llm-synthesis-provider-agnostic)
+- [6) Service Orchestration](#6-service-orchestration)
+- [7) UI – Validation Dashboard](#7-ui-validation-dashboard)
+- [8) API & Orchestration](#8-api-orchestration)
+  - [8.1 Preferred (Supabase)](#81-preferred-supabase)
+  - [8.2 HTTP Routes (fallback)](#82-http-routes-fallback)
+- [9) Provider Switching & Policies](#9-provider-switching-policies)
+- [10) Telemetry, Cost & Auditing](#10-telemetry-cost-auditing)
+- [11) Error Handling & Fallbacks](#11-error-handling-fallbacks)
+- [12) Accessibility](#12-accessibility)
+- [13) Security & Privacy](#13-security-privacy)
+- [14) Test Plan](#14-test-plan)
+- [15) Acceptance Criteria (DoD)](#15-acceptance-criteria-dod)
+- [16) Development Checklist](#16-development-checklist)
+- [17) Changelog](#17-changelog)
 
 ## Metadata
 - **Category**: API

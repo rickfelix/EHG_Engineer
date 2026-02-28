@@ -1,5 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Test Infrastructure - Setup Complete
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Issues Addressed](#issues-addressed)
+  - [1. ✅ Smoke Tests Configuration](#1-smoke-tests-configuration)
+  - [2. ✅ Unit Test Timeout Issues](#2-unit-test-timeout-issues)
+  - [3. ✅ ESM/CJS Module Conflicts](#3-esmcjs-module-conflicts)
+  - [4. ✅ Pre-commit Testing Hooks](#4-pre-commit-testing-hooks)
+- [New NPM Scripts](#new-npm-scripts)
+- [Test Results](#test-results)
+  - [Smoke Tests (15 tests)](#smoke-tests-15-tests)
+  - [Unit Tests (11 tests)](#unit-tests-11-tests)
+- [Files Created/Modified](#files-createdmodified)
+  - [Created:](#created)
+  - [Modified:](#modified)
+  - [Removed:](#removed)
+- [Usage](#usage)
+  - [Run Smoke Tests (Pre-commit)](#run-smoke-tests-pre-commit)
+  - [Run Unit Tests](#run-unit-tests)
+  - [Run Integration Tests](#run-integration-tests)
+  - [Run All Tests](#run-all-tests)
+  - [Run Tests with Coverage](#run-tests-with-coverage)
+  - [Watch Mode (Development)](#watch-mode-development)
+- [Pre-commit Workflow](#pre-commit-workflow)
+- [Test Coverage Targets](#test-coverage-targets)
+- [Known Limitations](#known-limitations)
+- [Next Steps (Optional)](#next-steps-optional)
+- [Impact Summary](#impact-summary)
 
 ## Metadata
 - **Category**: Testing

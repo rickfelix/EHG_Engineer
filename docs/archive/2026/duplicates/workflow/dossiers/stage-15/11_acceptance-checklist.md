@@ -1,3 +1,36 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Acceptance Criteria (8 Criteria, 100 Points Total)](#acceptance-criteria-8-criteria-100-points-total)
+  - [Criterion 1: Evidence Completeness (15 points)](#criterion-1-evidence-completeness-15-points)
+  - [Criterion 2: Source Material Fidelity (15 points)](#criterion-2-source-material-fidelity-15-points)
+  - [Criterion 3: Structural Completeness (10 points)](#criterion-3-structural-completeness-10-points)
+  - [Criterion 4: Actionability (15 points)](#criterion-4-actionability-15-points)
+  - [Criterion 5: Recursion Clarity (10 points)](#criterion-5-recursion-clarity-10-points)
+  - [Criterion 6: SD Cross-Reference Quality (10 points)](#criterion-6-sd-cross-reference-quality-10-points)
+  - [Criterion 7: Metadata & Footers (10 points)](#criterion-7-metadata-footers-10-points)
+  - [Criterion 8: Professional Quality (15 points)](#criterion-8-professional-quality-15-points)
+- [Overall Acceptance Score](#overall-acceptance-score)
+  - [Score Breakdown](#score-breakdown)
+- [Acceptance Status](#acceptance-status)
+- [Critical Notes](#critical-notes)
+  - [Note 1: Recursion Blueprint is PROPOSED (Not Implemented)](#note-1-recursion-blueprint-is-proposed-not-implemented)
+  - [Note 2: Automation Targets are Aspirational (Not Current)](#note-2-automation-targets-are-aspirational-not-current)
+  - [Note 3: Threshold Values are PROPOSED (Not Defined)](#note-3-threshold-values-are-proposed-not-defined)
+  - [Note 4: Customer Validation is OPTIONAL (Not Mandatory)](#note-4-customer-validation-is-optional-not-mandatory)
+  - [Note 5: Strategic Directives are PROPOSED (Not Approved)](#note-5-strategic-directives-are-proposed-not-approved)
+  - [Note 6: Dossier Completeness (11/11 Files)](#note-6-dossier-completeness-1111-files)
+- [Acceptance Approval](#acceptance-approval)
+
 <!-- ARCHIVED: 2026-01-26T16:26:54.972Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-15\11_acceptance-checklist.md

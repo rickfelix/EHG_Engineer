@@ -1,5 +1,61 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EXEC Agent Guide: Using Component Recommendations
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Reading Component Recommendations](#reading-component-recommendations)
+  - [PRD Structure](#prd-structure)
+  - [Understanding Confidence Scores](#understanding-confidence-scores)
+  - [Understanding the Explanation](#understanding-the-explanation)
+- [Installation Workflow](#installation-workflow)
+  - [Step 1: Review Recommendations](#step-1-review-recommendations)
+  - [Step 2: Install Critical Components](#step-2-install-critical-components)
+  - [Step 3: Evaluate Recommended Components](#step-3-evaluate-recommended-components)
+  - [Step 4: Consider Optional Components](#step-4-consider-optional-components)
+- [Handling Warnings](#handling-warnings)
+  - [Bundle Size Warnings](#bundle-size-warnings)
+  - [Dependency Warnings](#dependency-warnings)
+- [Using Alternatives](#using-alternatives)
+- [Installation Script Generation](#installation-script-generation)
+- [Troubleshooting](#troubleshooting)
+  - [No Recommendations Found](#no-recommendations-found)
+  - [Irrelevant Recommendations](#irrelevant-recommendations)
+  - [Missing Components](#missing-components)
+- [Best Practices](#best-practices)
+  - [1. Install Components Early](#1-install-components-early)
+  - [2. Trust the Confidence Scores](#2-trust-the-confidence-scores)
+  - [3. Read the Explanations](#3-read-the-explanations)
+  - [4. Monitor Bundle Size](#4-monitor-bundle-size)
+  - [5. Document Decisions](#5-document-decisions)
+- [Component Decisions](#component-decisions)
+- [Integration with Existing Workflow](#integration-with-existing-workflow)
+  - [PLAN Phase](#plan-phase)
+  - [EXEC Phase (You)](#exec-phase-you)
+  - [Handoff to Testing](#handoff-to-testing)
+- [Example: Complete Workflow](#example-complete-workflow)
+  - [1. Receive PRD](#1-receive-prd)
+  - [2. Install Components](#2-install-components)
+  - [3. Implement Features](#3-implement-features)
+  - [4. Document in Handoff](#4-document-in-handoff)
+- [Component Decisions](#component-decisions)
+- [FAQ](#faq)
+  - [Q: Can I ignore recommendations?](#q-can-i-ignore-recommendations)
+  - [Q: What if a recommended component doesn't fit?](#q-what-if-a-recommended-component-doesnt-fit)
+  - [Q: How do I request better recommendations?](#q-how-do-i-request-better-recommendations)
+  - [Q: What if no recommendations are generated?](#q-what-if-no-recommendations-are-generated)
+- [Reference Links](#reference-links)
+- [Support](#support)
 
 ## Metadata
 - **Category**: Guide

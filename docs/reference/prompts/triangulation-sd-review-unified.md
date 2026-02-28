@@ -1,4 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Strategic Directive Review
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Unified Prompt for OpenAI and AntiGravity (Gemini)](#unified-prompt-for-openai-and-antigravity-gemini)
+- [Context](#context)
+- [Codebases to Explore](#codebases-to-explore)
+- [Strategic Directives to Review](#strategic-directives-to-review)
+  - [SD 1: SD-GENESIS-COMPLETE-001](#sd-1-sd-genesis-complete-001)
+  - [SD 2: SD-VENTURE-SELECTION-001](#sd-2-sd-venture-selection-001)
+  - [SD 3: SD-BLIND-SPOTS-001](#sd-3-sd-blind-spots-001)
+- [Your Review Tasks](#your-review-tasks)
+  - [Task 1: Codebase Ground-Truth Validation](#task-1-codebase-ground-truth-validation)
+  - [Task 2: User Stories for Each Child/Grandchild SD](#task-2-user-stories-for-each-childgrandchild-sd)
+  - [Task 3: PRD Details to Incorporate](#task-3-prd-details-to-incorporate)
+  - [Task 4: Missing Considerations](#task-4-missing-considerations)
+  - [Task 5: Priority and Sequencing Feedback](#task-5-priority-and-sequencing-feedback)
+- [Output Format](#output-format)
+- [Ground-Truth Validation](#ground-truth-validation)
+  - [What Exists](#what-exists)
+  - [Real Completion: X%](#real-completion-x)
+  - [Incorrect Assumptions](#incorrect-assumptions)
+  - [Missing Dependencies](#missing-dependencies)
+  - [Complexity Reality Check](#complexity-reality-check)
+- [User Stories](#user-stories)
+  - [[Child SD-ID]: [Title]](#child-sd-id-title)
+- [PRD Details](#prd-details)
+  - [[Child SD-ID]: [Title]](#child-sd-id-title)
+- [Missing Considerations](#missing-considerations)
+- [Priority/Sequencing Feedback](#prioritysequencing-feedback)
+- [Ground Rules](#ground-rules)
+- [Key Files to Explore](#key-files-to-explore)
 
 ## Metadata
 - **Category**: Guide

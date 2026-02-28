@@ -1,4 +1,42 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # EVA Database Schema Compliance Audit Report — Round 2
+
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+  - [R1 Finding Remediation Summary](#r1-finding-remediation-summary)
+- [R1 Finding Verification](#r1-finding-verification)
+  - [CRIT-001: Missing Per-Stage Data Tables — BY DESIGN](#crit-001-missing-per-stage-data-tables-by-design)
+  - [CRIT-002: Stage-Specific Enum Definitions — RESOLVED](#crit-002-stage-specific-enum-definitions-resolved)
+  - [HIGH-001: RLS Policies Too Permissive — PARTIALLY RESOLVED](#high-001-rls-policies-too-permissive-partially-resolved)
+  - [HIGH-002: Missing Stage-Specific Gate Constraints — RESOLVED](#high-002-missing-stage-specific-gate-constraints-resolved)
+  - [HIGH-003: Missing Cross-Stage Data Contracts — RESOLVED](#high-003-missing-cross-stage-data-contracts-resolved)
+  - [MED-001: Naming Convention Inconsistency — BY DESIGN](#med-001-naming-convention-inconsistency-by-design)
+  - [MED-002: Missing Audit Trail Columns — PARTIALLY RESOLVED](#med-002-missing-audit-trail-columns-partially-resolved)
+  - [MED-003: No Stage Advancement Constraints — RESOLVED](#med-003-no-stage-advancement-constraints-resolved)
+  - [LOW-001: Redundant Event Tables — BY DESIGN](#low-001-redundant-event-tables-by-design)
+  - [LOW-002: Missing Indexes — RESOLVED](#low-002-missing-indexes-resolved)
+  - [LOW-003: NULL Handling — ACCEPTABLE](#low-003-null-handling-acceptable)
+- [New R2 Findings](#new-r2-findings)
+  - [NEW-001: Duplicate Phase CHECK Constraints](#new-001-duplicate-phase-check-constraints)
+  - [NEW-002: Public-Role Write Policies (Security)](#new-002-public-role-write-policies-security)
+  - [NEW-003: Foreign Key Reference Split](#new-003-foreign-key-reference-split)
+  - [NEW-004: venture_id Type Mismatch in Circuit Breaker](#new-004-venture_id-type-mismatch-in-circuit-breaker)
+- [Architecture Alignment Summary](#architecture-alignment-summary)
+- [Recommendations Summary](#recommendations-summary)
+  - [Immediate (P0 — Security)](#immediate-p0-security)
+  - [Short-Term (P1)](#short-term-p1)
+  - [Medium-Term (P2)](#medium-term-p2)
+- [Score Breakdown](#score-breakdown)
+- [Conclusion](#conclusion)
 
 **SD**: SD-EVA-QA-AUDIT-R2-DBSCHEMA-001
 **Parent Orchestrator**: SD-EVA-QA-AUDIT-R2-ORCH-001

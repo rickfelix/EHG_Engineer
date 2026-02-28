@@ -1,4 +1,31 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 31: MVP Launch — Acceptance Checklist
+
+
+## Table of Contents
+
+- [Scoring Rubric (8 Criteria, 100 Points Total)](#scoring-rubric-8-criteria-100-points-total)
+- [Criterion 1: Canonical Accuracy (15 points)](#criterion-1-canonical-accuracy-15-points)
+- [Criterion 2: Evidence Quality (15 points)](#criterion-2-evidence-quality-15-points)
+- [Criterion 3: Actionability (15 points)](#criterion-3-actionability-15-points)
+- [Criterion 4: Cross-Reference Integrity (10 points)](#criterion-4-cross-reference-integrity-10-points)
+- [Criterion 5: Gap Analysis Depth (15 points)](#criterion-5-gap-analysis-depth-15-points)
+- [Criterion 6: Agent/Recursion Design (10 points)](#criterion-6-agentrecursion-design-10-points)
+- [Criterion 7: Metrics/Monitoring Completeness (10 points)](#criterion-7-metricsmonitoring-completeness-10-points)
+- [Criterion 8: Professional Polish (10 points)](#criterion-8-professional-polish-10-points)
+- [Final Score Calculation](#final-score-calculation)
+- [Revision History (If Applicable)](#revision-history-if-applicable)
+- [Evaluator Sign-Off](#evaluator-sign-off)
+- [Self-Assessment (Optional Pre-Check)](#self-assessment-optional-pre-check)
+- [Acceptance Criteria Summary](#acceptance-criteria-summary)
+- [Sources Table](#sources-table)
 
 **Purpose**: Score this Stage 31 Operating Dossier against 8 criteria (target ≥90/100 points) to validate completeness and quality.
 

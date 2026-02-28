@@ -1,3 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Applications](#applications)
+  - [1. EHG_Engineer (Backend API + LEO Protocol Engine)](#1-ehg_engineer-backend-api-leo-protocol-engine)
+  - [2. EHG (Unified Frontend - User + Admin)](#2-ehg-unified-frontend---user-admin)
+- [Critical Context Switching Rules](#critical-context-switching-rules)
+  - [Before Running ANY Tests](#before-running-any-tests)
+  - [Coverage Reporting](#coverage-reporting)
+- [Common Mistakes to Avoid](#common-mistakes-to-avoid)
+- [Sub-Agent Context: QA Engineering Director](#sub-agent-context-qa-engineering-director)
+  - [Example Workflow](#example-workflow)
+- [Real-World Example: SD-QUALITY-001 Learning](#real-world-example-sd-quality-001-learning)
+  - [Original Claim](#original-claim)
+  - [Investigation Revealed](#investigation-revealed)
+  - [Actual Gap](#actual-gap)
+  - [Corrected Scope](#corrected-scope)
+  - [Lesson Learned](#lesson-learned)
+- [Testing Infrastructure by Application](#testing-infrastructure-by-application)
+  - [EHG_Engineer](#ehg_engineer)
+  - [EHG](#ehg)
+- [Quick Reference Commands](#quick-reference-commands)
+- [Database Context](#database-context)
+- [Summary](#summary)
+
 <!-- ARCHIVED: 2026-01-26T16:26:33.526Z
      Reason: Duplicate of canonical file
      Original location: docs\05_testing\architecture.md

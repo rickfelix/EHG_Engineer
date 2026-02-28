@@ -1,5 +1,37 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # Database Validation Report: SD-HARDENING-V1-003
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Chairman_Decisions Table Validation](#1-chairman_decisions-table-validation)
+  - [Schema Structure](#schema-structure)
+- [2. Column Mapping Analysis](#2-column-mapping-analysis)
+  - [Existing Columns (All Match PRD)](#existing-columns-all-match-prd)
+  - [Required Column Aliases (from PRD)](#required-column-aliases-from-prd)
+  - [Missing Columns (Need Placeholders)](#missing-columns-need-placeholders)
+- [3. Proposed View Definition](#3-proposed-view-definition)
+- [4. RLS Policy Validation](#4-rls-policy-validation)
+  - [Current Policies on chairman_decisions](#current-policies-on-chairman_decisions)
+- [5. Foreign Key Relationships](#5-foreign-key-relationships)
+  - [Validated Constraints](#validated-constraints)
+- [6. Migration Checklist](#6-migration-checklist)
+- [7. Known Issues & Risks](#7-known-issues-risks)
+  - [Issue 1: Column Name Assumptions](#issue-1-column-name-assumptions)
+  - [Issue 2: Missing Columns (gate_type, decided_by, decided_at)](#issue-2-missing-columns-gate_type-decided_by-decided_at)
+  - [Issue 3: RLS Policy Inheritance](#issue-3-rls-policy-inheritance)
+- [8. Recommended Next Steps](#8-recommended-next-steps)
+- [9. Database Agent Sign-Off](#9-database-agent-sign-off)
 
 ## Metadata
 - **Category**: Database

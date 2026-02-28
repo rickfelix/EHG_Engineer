@@ -1,5 +1,74 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # User Stories Summary: SD-HARDENING-V1-000
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Child SDs Overview](#child-sds-overview)
+- [SD-HARDENING-V1-001: RLS Hardening - ehg repo (CRITICAL)](#sd-hardening-v1-001-rls-hardening---ehg-repo-critical)
+  - [Story Points: 13](#story-points-13)
+  - [US-001-1: Audit all RLS policies in ehg repo (5 points)](#us-001-1-audit-all-rls-policies-in-ehg-repo-5-points)
+  - [US-001-2: Implement missing RLS policies for critical tables (5 points)](#us-001-2-implement-missing-rls-policies-for-critical-tables-5-points)
+  - [US-001-3: Remove SERVICE_ROLE_KEY bypasses from application code (3 points)](#us-001-3-remove-service_role_key-bypasses-from-application-code-3-points)
+- [SD-HARDENING-V1-002: RLS Hardening - EHG_Engineer repo (CRITICAL)](#sd-hardening-v1-002-rls-hardening---ehg_engineer-repo-critical)
+  - [Story Points: 13](#story-points-13)
+  - [US-002-1: Audit all RLS policies in EHG_Engineer repo (5 points)](#us-002-1-audit-all-rls-policies-in-ehg_engineer-repo-5-points)
+  - [US-002-2: Implement RLS policies for LEO protocol tables (5 points)](#us-002-2-implement-rls-policies-for-leo-protocol-tables-5-points)
+  - [US-002-3: Verify no RLS bypasses in LEO scripts (3 points)](#us-002-3-verify-no-rls-bypasses-in-leo-scripts-3-points)
+- [SD-HARDENING-V1-003: Decision Split-Brain Resolution (HIGH)](#sd-hardening-v1-003-decision-split-brain-resolution-high)
+  - [Story Points: 13](#story-points-13)
+  - [US-003-1: Audit decision data sources and identify inconsistencies (5 points)](#us-003-1-audit-decision-data-sources-and-identify-inconsistencies-5-points)
+  - [US-003-2: Implement single source of truth for decision data (5 points)](#us-003-2-implement-single-source-of-truth-for-decision-data-5-points)
+  - [US-003-3: Add data integrity checks and monitoring (3 points)](#us-003-3-add-data-integrity-checks-and-monitoring-3-points)
+- [SD-HARDENING-V1-004: Function Naming Standardization (MEDIUM)](#sd-hardening-v1-004-function-naming-standardization-medium)
+  - [Story Points: 11](#story-points-11)
+  - [US-004-1: Audit function naming patterns and inconsistencies (3 points)](#us-004-1-audit-function-naming-patterns-and-inconsistencies-3-points)
+  - [US-004-2: Implement naming standards and refactor high-priority functions (5 points)](#us-004-2-implement-naming-standards-and-refactor-high-priority-functions-5-points)
+  - [US-004-3: Add linter rules to enforce naming standards (3 points)](#us-004-3-add-linter-rules-to-enforce-naming-standards-3-points)
+- [SD-HARDENING-V1-005: N+1 Query Elimination (HIGH)](#sd-hardening-v1-005-n1-query-elimination-high)
+  - [Story Points: 13](#story-points-13)
+  - [US-005-1: Identify N+1 query patterns in codebase (5 points)](#us-005-1-identify-n1-query-patterns-in-codebase-5-points)
+  - [US-005-2: Optimize high-priority N+1 queries with JOIN/eager loading (5 points)](#us-005-2-optimize-high-priority-n1-queries-with-joineager-loading-5-points)
+  - [US-005-3: Add query performance monitoring (3 points)](#us-005-3-add-query-performance-monitoring-3-points)
+- [SD-HARDENING-V1-006: Type Safety Improvements (MEDIUM)](#sd-hardening-v1-006-type-safety-improvements-medium)
+  - [Story Points: 10](#story-points-10)
+  - [US-006-1: Audit TypeScript type coverage and identify `any` usages (3 points)](#us-006-1-audit-typescript-type-coverage-and-identify-any-usages-3-points)
+  - [US-006-2: Replace `any` with proper types and add missing type definitions (5 points)](#us-006-2-replace-any-with-proper-types-and-add-missing-type-definitions-5-points)
+  - [US-006-3: Enable strict TypeScript compiler options (2 points)](#us-006-3-enable-strict-typescript-compiler-options-2-points)
+- [INVEST Criteria Validation](#invest-criteria-validation)
+  - [Independent](#independent)
+  - [Negotiable](#negotiable)
+  - [Valuable](#valuable)
+  - [Estimable](#estimable)
+  - [Small](#small)
+  - [Testable](#testable)
+- [Implementation Plan](#implementation-plan)
+  - [Phase 1: Security Hardening (CRITICAL - 26 points)](#phase-1-security-hardening-critical---26-points)
+  - [Phase 2: Data Integrity & Performance (HIGH - 26 points)](#phase-2-data-integrity-performance-high---26-points)
+  - [Phase 3: Code Quality (MEDIUM - 21 points)](#phase-3-code-quality-medium---21-points)
+- [Success Metrics](#success-metrics)
+  - [Security Metrics (Phase 1)](#security-metrics-phase-1)
+  - [Data Quality Metrics (Phase 2)](#data-quality-metrics-phase-2)
+  - [Code Quality Metrics (Phase 3)](#code-quality-metrics-phase-3)
+- [Dependencies](#dependencies)
+  - [Prerequisites](#prerequisites)
+  - [Child SD Dependencies](#child-sd-dependencies)
+- [Risk Mitigation](#risk-mitigation)
+  - [Risk 1: RLS Policies Break Existing Functionality](#risk-1-rls-policies-break-existing-functionality)
+  - [Risk 2: Query Optimization Introduces Bugs](#risk-2-query-optimization-introduces-bugs)
+  - [Risk 3: Type Safety Changes Reveal Hidden Bugs](#risk-3-type-safety-changes-reveal-hidden-bugs)
+- [Next Steps](#next-steps)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Report

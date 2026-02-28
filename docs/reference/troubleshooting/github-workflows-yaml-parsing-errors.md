@@ -1,5 +1,39 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Branch Cleanup Workflow Fix - Analysis & Resolution
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Summary](#problem-summary)
+- [Root Cause Analysis](#root-cause-analysis)
+  - [YAML Parser Error](#yaml-parser-error)
+- [Open PR Age Distribution](#open-pr-age-distribution)
+  - [Why GitHub Actions Failed Silently](#why-github-actions-failed-silently)
+- [Solution Implemented](#solution-implemented)
+  - [Fix Strategy](#fix-strategy)
+- [Open PR Age Distribution](#open-pr-age-distribution)
+  - [Benefits of the Fix](#benefits-of-the-fix)
+- [Verification](#verification)
+  - [YAML Validation](#yaml-validation)
+  - [Workflow Execution Test](#workflow-execution-test)
+- [Key Learnings](#key-learnings)
+  - [YAML Gotchas in GitHub Actions](#yaml-gotchas-in-github-actions)
+  - [Pattern to Follow](#pattern-to-follow)
+  - [References](#references)
+- [Files Modified](#files-modified)
+- [Testing Recommendations](#testing-recommendations)
+  - [Future Workflow Development](#future-workflow-development)
+- [Incident Timeline](#incident-timeline)
+- [Prevention Measures](#prevention-measures)
 
 ## Metadata
 - **Category**: Guide

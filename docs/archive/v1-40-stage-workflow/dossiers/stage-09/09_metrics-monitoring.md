@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 9: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+  - [Primary Metrics (from stages.yaml)](#primary-metrics-from-stagesyaml)
+- [Secondary Metrics (Operational)](#secondary-metrics-operational)
+- [SQL Queries](#sql-queries)
+  - [Query 1: Gap Coverage Calculation](#query-1-gap-coverage-calculation)
+  - [Query 2: Opportunity Size (SOM) Aggregation](#query-2-opportunity-size-som-aggregation)
+  - [Query 3: Capability Score Calculation](#query-3-capability-score-calculation)
+  - [Query 4: Gap Severity Distribution](#query-4-gap-severity-distribution)
+  - [Query 5: Venture-Wide Stage 9 Performance](#query-5-venture-wide-stage-9-performance)
+  - [Query 6: Gap Closure Cost Tracking](#query-6-gap-closure-cost-tracking)
+- [Dashboard Design](#dashboard-design)
+  - [Stage 9 Overview Dashboard](#stage-9-overview-dashboard)
+  - [Venture-Wide Trends Dashboard](#venture-wide-trends-dashboard)
+- [Alerting Rules](#alerting-rules)
+  - [Critical Alerts (Immediate Action Required)](#critical-alerts-immediate-action-required)
+  - [Warning Alerts (Review Recommended)](#warning-alerts-review-recommended)
+  - [Info Alerts (FYI)](#info-alerts-fyi)
+- [Alerting Implementation](#alerting-implementation)
+  - [SQL Function: Check Alert Conditions](#sql-function-check-alert-conditions)
+- [Monitoring Automation](#monitoring-automation)
+  - [Trigger: Auto-Alert on Stage 9 Completion](#trigger-auto-alert-on-stage-9-completion)
+- [Report Generation](#report-generation)
+  - [Weekly Stage 9 Performance Report](#weekly-stage-9-performance-report)
+- [Sources Table](#sources-table)
 
 **Purpose**: Define KPIs, SQL queries, dashboard designs, and alerting rules for Stage 9.
 

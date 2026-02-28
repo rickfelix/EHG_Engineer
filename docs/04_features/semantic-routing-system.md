@@ -1,4 +1,59 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # Semantic Routing System
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Core Components](#core-components)
+  - [Scoring Formula](#scoring-formula)
+- [Keyword Weight Hierarchy](#keyword-weight-hierarchy)
+  - [Primary Keywords (4 points each)](#primary-keywords-4-points-each)
+  - [Secondary Keywords (2 points each)](#secondary-keywords-2-points-each)
+  - [Tertiary Keywords (1 point each)](#tertiary-keywords-1-point-each)
+- [Supported Sub-Agents](#supported-sub-agents)
+- [Usage](#usage)
+  - [Command-Line Interface](#command-line-interface)
+  - [JSON Output Mode](#json-output-mode)
+  - [Integration with CLAUDE.md](#integration-with-claudemd)
+- [Sub-Agent Trigger Keywords (Quick Reference)](#sub-agent-trigger-keywords-quick-reference)
+- [Routing Logic](#routing-logic)
+  - [Action Types](#action-types)
+- [Examples](#examples)
+  - [Example 1: High Confidence - Single Agent](#example-1-high-confidence---single-agent)
+  - [Example 2: High Confidence - Multiple Agents](#example-2-high-confidence---multiple-agents)
+  - [Example 3: Medium Confidence - Multiple Matches](#example-3-medium-confidence---multiple-matches)
+  - [Example 4: Phrase Matching](#example-4-phrase-matching)
+- [Configuration](#configuration)
+  - [Adding New Sub-Agents](#adding-new-sub-agents)
+  - [Tuning Thresholds](#tuning-thresholds)
+- [Testing](#testing)
+  - [Built-In Test Suite](#built-in-test-suite)
+  - [Manual Testing](#manual-testing)
+- [Performance](#performance)
+  - [Scoring Performance](#scoring-performance)
+  - [Optimization](#optimization)
+- [Integration Points](#integration-points)
+  - [CLAUDE.md Router](#claudemd-router)
+  - [Task Tool Integration](#task-tool-integration)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Sub-agent not triggering](#issue-sub-agent-not-triggering)
+  - [Issue: Too many false positives](#issue-too-many-false-positives)
+  - [Issue: Multi-agent conflicts](#issue-multi-agent-conflicts)
+- [Future Enhancements](#future-enhancements)
+  - [Planned Improvements](#planned-improvements)
+- [Related Documentation](#related-documentation)
+- [Changelog](#changelog)
+  - [v1.0.0 (2026-01-24)](#v100-2026-01-24)
 
 ## Metadata
 - **Category**: Feature

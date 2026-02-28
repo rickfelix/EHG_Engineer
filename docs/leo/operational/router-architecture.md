@@ -1,5 +1,45 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # CLAUDE.md Router Architecture
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Solved](#problem-solved)
+- [File Structure](#file-structure)
+  - [1. CLAUDE.md (Router) - 9,116 chars (4.6%)](#1-claudemd-router---9116-chars-46)
+  - [2. CLAUDE_CORE.md - 12,244 chars (6.1%)](#2-claude_coremd---12244-chars-61)
+  - [3. CLAUDE_LEAD.md - 13,434 chars (6.7%)](#3-claude_leadmd---13434-chars-67)
+  - [4. CLAUDE_PLAN.md - 49,262 chars (24.6%)](#4-claude_planmd---49262-chars-246)
+  - [5. CLAUDE_EXEC.md - 10,794 chars (5.4%)](#5-claude_execmd---10794-chars-54)
+- [Loading Strategy](#loading-strategy)
+  - [Step 1: Always Load Core](#step-1-always-load-core)
+  - [Step 2: Detect Phase and Load](#step-2-detect-phase-and-load)
+  - [Step 3: Load Reference Docs (If Needed)](#step-3-load-reference-docs-if-needed)
+- [Context Budget Impact](#context-budget-impact)
+- [Generation Process](#generation-process)
+  - [Files Involved](#files-involved)
+  - [How to Regenerate](#how-to-regenerate)
+  - [Generation Logic](#generation-logic)
+  - [Section-to-File Mapping](#section-to-file-mapping)
+- [Maintenance](#maintenance)
+  - [Adding New Sections](#adding-new-sections)
+  - [Modifying Existing Sections](#modifying-existing-sections)
+  - [Moving Sections Between Files](#moving-sections-between-files)
+  - [Debugging](#debugging)
+- [Benefits](#benefits)
+- [Future Enhancements](#future-enhancements)
+  - [Potential Improvements](#potential-improvements)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Architecture

@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 28: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Current Recursion Support](#current-recursion-support)
+- [Proposed Recursion Triggers (4 Triggers)](#proposed-recursion-triggers-4-triggers)
+  - [Trigger PERF-001: Response Time Threshold Exceeded](#trigger-perf-001-response-time-threshold-exceeded)
+  - [Trigger PERF-002: Cache Hit Rate Below Target](#trigger-perf-002-cache-hit-rate-below-target)
+  - [Trigger PERF-003: Resource Utilization Critical](#trigger-perf-003-resource-utilization-critical)
+  - [Trigger PERF-004: Optimization Targets Met (Exit Trigger)](#trigger-perf-004-optimization-targets-met-exit-trigger)
+- [Recursion Flow Diagram](#recursion-flow-diagram)
+- [Integration with Governance](#integration-with-governance)
+  - [When Recursion Triggers Strategic Directive](#when-recursion-triggers-strategic-directive)
+- [Recursion Metrics (Proposed)](#recursion-metrics-proposed)
+- [Comparison to Other Stages](#comparison-to-other-stages)
+  - [Stage 1 (Draft Idea)](#stage-1-draft-idea)
+  - [Stage 28 (Development Excellence)](#stage-28-development-excellence)
+  - [Stage 40 (Launch)](#stage-40-launch)
+- [Implementation Roadmap](#implementation-roadmap)
+- [Gap Analysis](#gap-analysis)
+- [Sources Table](#sources-table)
 
 ## Current Recursion Support
 

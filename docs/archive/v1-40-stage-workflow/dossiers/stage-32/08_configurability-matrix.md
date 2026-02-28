@@ -1,4 +1,47 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 32: Customer Success & Retention Engineering — Configurability Matrix
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Configuration Architecture](#configuration-architecture)
+- [Category 1: Health Score Parameters](#category-1-health-score-parameters)
+  - [1.1 Score Calculation Weights](#11-score-calculation-weights)
+  - [1.2 Engagement Scoring](#12-engagement-scoring)
+  - [1.3 Support Scoring](#13-support-scoring)
+  - [1.4 Value Scoring](#14-value-scoring)
+  - [1.5 Health Score Thresholds](#15-health-score-thresholds)
+- [Category 2: Retention Campaign Parameters](#category-2-retention-campaign-parameters)
+  - [2.1 Campaign Triggers](#21-campaign-triggers)
+  - [2.2 Campaign Timing](#22-campaign-timing)
+  - [2.3 Campaign Frequency](#23-campaign-frequency)
+- [Category 3: Alert & Notification Parameters](#category-3-alert-notification-parameters)
+  - [3.1 Alert Routing](#31-alert-routing)
+  - [3.2 Alert Thresholds](#32-alert-thresholds)
+- [Category 4: NPS Survey Parameters](#category-4-nps-survey-parameters)
+  - [4.1 Survey Deployment](#41-survey-deployment)
+  - [4.2 NPS Thresholds](#42-nps-thresholds)
+- [Category 5: CRM Integration Parameters](#category-5-crm-integration-parameters)
+  - [5.1 Platform Settings](#51-platform-settings)
+  - [5.2 Data Mapping](#52-data-mapping)
+- [Category 6: System Health Parameters](#category-6-system-health-parameters)
+  - [6.1 Monitoring Thresholds](#61-monitoring-thresholds)
+- [Configuration Management](#configuration-management)
+  - [Storage Schema (Proposed)](#storage-schema-proposed)
+  - [Update Procedures](#update-procedures)
+- [Usage Examples](#usage-examples)
+  - [Example 1: Tuning for Enterprise B2B](#example-1-tuning-for-enterprise-b2b)
+  - [Example 2: Tuning for Consumer SaaS](#example-2-tuning-for-consumer-saas)
+  - [Example 3: Tuning for High-Growth Startup](#example-3-tuning-for-high-growth-startup)
+- [Sources Table](#sources-table)
 
 **Generated**: 2025-11-06
 **Version**: 1.0

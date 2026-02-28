@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 2: Metrics & Monitoring
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:57-59

@@ -1,5 +1,49 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Database Agent Workaround Anti-Patterns Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Why Workarounds Are Dangerous](#why-workarounds-are-dangerous)
+  - [The Workaround Cycle](#the-workaround-cycle)
+  - [The Database-First Pattern](#the-database-first-pattern)
+- [Anti-Pattern Catalog](#anti-pattern-catalog)
+  - [❌ Anti-Pattern 1: Table Rename Workarounds](#-anti-pattern-1-table-rename-workarounds)
+  - [❌ Anti-Pattern 2: Column Existence Guards](#-anti-pattern-2-column-existence-guards)
+  - [❌ Anti-Pattern 3: RLS Policy Bypassing](#-anti-pattern-3-rls-policy-bypassing)
+  - [❌ Anti-Pattern 4: Manual SQL Trial-and-Error](#-anti-pattern-4-manual-sql-trial-and-error)
+  - [❌ Anti-Pattern 5: Skipping Migration Validation](#-anti-pattern-5-skipping-migration-validation)
+  - [❌ Anti-Pattern 6: Connection String Trial-and-Error](#-anti-pattern-6-connection-string-trial-and-error)
+  - [❌ Anti-Pattern 7: Ignoring Schema Conflicts](#-anti-pattern-7-ignoring-schema-conflicts)
+- [Detection Rules](#detection-rules)
+  - [BLOCKED PATTERNS (Database Agent Required)](#blocked-patterns-database-agent-required)
+  - [Auto-Trigger Keywords](#auto-trigger-keywords)
+- [Success Stories (When Database Agent Used Properly)](#success-stories-when-database-agent-used-properly)
+  - [Success 1: Table Conflict Resolution (SD-041C)](#success-1-table-conflict-resolution-sd-041c)
+  - [Success 2: Migration Pattern (SD-BACKEND-002C)](#success-2-migration-pattern-sd-backend-002c)
+  - [Success 3: Schema Validation (SD-AGENT-ADMIN-003)](#success-3-schema-validation-sd-agent-admin-003)
+- [Failure Stories (When Workarounds Attempted)](#failure-stories-when-workarounds-attempted)
+  - [Failure 1: Schema Mismatch (SD-1A)](#failure-1-schema-mismatch-sd-1a)
+  - [Failure 2: Missing Tables (SD-1A)](#failure-2-missing-tables-sd-1a)
+- [When to Invoke Database Agent](#when-to-invoke-database-agent)
+  - [Immediate Invocation Required](#immediate-invocation-required)
+  - [Database Agent is a FIRST RESPONDER, not a LAST RESORT](#database-agent-is-a-first-responder-not-a-last-resort)
+- [How to Invoke Database Agent](#how-to-invoke-database-agent)
+  - [Command Line](#command-line)
+  - [Advisory Mode (No SD Context)](#advisory-mode-no-sd-context)
+- [Quick Reference](#quick-reference)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

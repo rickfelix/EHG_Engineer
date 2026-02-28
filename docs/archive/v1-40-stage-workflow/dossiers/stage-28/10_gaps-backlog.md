@@ -1,4 +1,43 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 28: Gaps & Backlog
+
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Critical Gaps (Blocking Execution)](#critical-gaps-blocking-execution)
+  - [Gap 1: No Performance Metrics Infrastructure](#gap-1-no-performance-metrics-infrastructure)
+  - [Gap 2: No Configuration Management](#gap-2-no-configuration-management)
+  - [Gap 3: No Agent Automation](#gap-3-no-agent-automation)
+  - [Gap 4: No Cache Infrastructure](#gap-4-no-cache-infrastructure)
+- [High-Priority Gaps (Degraded Functionality)](#high-priority-gaps-degraded-functionality)
+  - [Gap 5: No Rollback Procedures](#gap-5-no-rollback-procedures)
+  - [Gap 6: No Recursion Trigger Implementation](#gap-6-no-recursion-trigger-implementation)
+  - [Gap 7: No APM Tool Integration](#gap-7-no-apm-tool-integration)
+  - [Gap 8: No Error Handling Documentation](#gap-8-no-error-handling-documentation)
+- [Medium-Priority Gaps (Quality Improvements)](#medium-priority-gaps-quality-improvements)
+  - [Gap 9: No Customer Feedback Loop](#gap-9-no-customer-feedback-loop)
+  - [Gap 10: No Data Transformation Documentation](#gap-10-no-data-transformation-documentation)
+- [Universal Blockers (Cross-Stage Impact)](#universal-blockers-cross-stage-impact)
+  - [SD-METRICS-FRAMEWORK-001](#sd-metrics-framework-001)
+  - [SD-STAGE-RECURSION-FRAMEWORK-001](#sd-stage-recursion-framework-001)
+- [Proposed Strategic Directives Summary](#proposed-strategic-directives-summary)
+- [Dependency Graph](#dependency-graph)
+- [Gap Impact on Stage 28 Execution](#gap-impact-on-stage-28-execution)
+- [Recommendations](#recommendations)
+  - [Immediate Actions (Week 1)](#immediate-actions-week-1)
+  - [Phase 2 Actions (Weeks 2-4)](#phase-2-actions-weeks-2-4)
+  - [Phase 3 Actions (Weeks 5-8)](#phase-3-actions-weeks-5-8)
+  - [Phase 4 Actions (Weeks 9-12)](#phase-4-actions-weeks-9-12)
+- [Cross-References](#cross-references)
+- [Sources Table](#sources-table)
 
 ## Overview
 

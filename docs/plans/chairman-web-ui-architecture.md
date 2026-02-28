@@ -1,4 +1,63 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Chairman Web UI — Architecture Plan
+
+
+## Table of Contents
+
+- [1. Overview](#1-overview)
+- [2. Repository & Stack](#2-repository-stack)
+  - [2.1 Repo: `rickfelix/ehg`](#21-repo-rickfelixehg)
+  - [2.2 Tech Stack (inherited)](#22-tech-stack-inherited)
+  - [2.3 New Dependencies](#23-new-dependencies)
+  - [2.4 Toast System Decision](#24-toast-system-decision)
+  - [2.5 Theme System Decision](#25-theme-system-decision)
+  - [2.6 React Query v5 Conventions](#26-react-query-v5-conventions)
+- [3. Legacy Deprecation Plan](#3-legacy-deprecation-plan)
+  - [3.1 Existing Chairman Pages (to be superseded)](#31-existing-chairman-pages-to-be-superseded)
+  - [3.2 Layout Wrapping Inconsistency](#32-layout-wrapping-inconsistency)
+  - [3.3 Deprecation Strategy](#33-deprecation-strategy)
+  - [3.4 Existing Components to Reuse](#34-existing-components-to-reuse)
+  - [3.5 Existing Hooks to Evaluate](#35-existing-hooks-to-evaluate)
+- [4. Route Structure](#4-route-structure)
+  - [4.1 New Route Groups](#41-new-route-groups)
+  - [4.2 Route File](#42-route-file)
+  - [4.3 Layout](#43-layout)
+- [5. Component Architecture](#5-component-architecture)
+  - [5.1 Directory Structure](#51-directory-structure)
+  - [5.2 Key Shared Components](#52-key-shared-components)
+  - [5.3 Error Boundary Strategy](#53-error-boundary-strategy)
+  - [5.4 Client State (Zustand)](#54-client-state-zustand)
+  - [5.5 View Transitions (Framer Motion)](#55-view-transitions-framer-motion)
+  - [5.6 RPC Response Validation (Zod)](#56-rpc-response-validation-zod)
+- [6. Data Layer](#6-data-layer)
+  - [6.1 Supabase Queries by View](#61-supabase-queries-by-view)
+  - [6.2 React Query Hooks](#62-react-query-hooks)
+  - [6.3 Mutations](#63-mutations)
+  - [6.4 Real-Time (Phase 2+)](#64-real-time-phase-2)
+- [7. Governance API Surface](#7-governance-api-surface)
+  - [7.1 New RPC Functions Needed](#71-new-rpc-functions-needed)
+  - [7.2 RLS Policy Requirements](#72-rls-policy-requirements)
+- [8. Claude Code Remote Context Protocol](#8-claude-code-remote-context-protocol)
+  - [8.1 Context Assembly](#81-context-assembly)
+  - [8.2 Handoff Options](#82-handoff-options)
+- [9. Mobile Considerations (Phase C responsive, Phase D PWA)](#9-mobile-considerations-phase-c-responsive-phase-d-pwa)
+  - [9.1 Phase C: Responsive Layout](#91-phase-c-responsive-layout)
+  - [9.2 Phase D: PWA Additions](#92-phase-d-pwa-additions)
+- [10. Implementation Phases](#10-implementation-phases)
+  - [Phase 1: Read-Only Dashboard (8-12h)](#phase-1-read-only-dashboard-8-12h)
+  - [Phase 2: Decision Gates (6-10h)](#phase-2-decision-gates-6-10h)
+  - [Phase 3: PWA Shell (4-6h)](#phase-3-pwa-shell-4-6h)
+  - [Phase 4: Claude Code Remote (2-4h)](#phase-4-claude-code-remote-2-4h)
+  - [Phase 5: Legacy Cleanup (2-4h)](#phase-5-legacy-cleanup-2-4h)
+- [11. Testing Strategy](#11-testing-strategy)
+- [12. Risk Mitigation](#12-risk-mitigation)
 
 **Version**: 1.0.0
 **Date**: 2026-02-25

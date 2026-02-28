@@ -1,5 +1,87 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # EHG Quality Lifecycle System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+  - [Why Unified Feedback?](#why-unified-feedback)
+- [The Problem with "UAT" Naming](#the-problem-with-uat-naming)
+- [Quality Lifecycle System Overview](#quality-lifecycle-system-overview)
+  - [Stage 1: Prevention (PLAN Phase)](#stage-1-prevention-plan-phase)
+  - [Stage 2: Capture (POST-EXEC)](#stage-2-capture-post-exec)
+  - [Stage 3: Triage (NEW - from Triangulation)](#stage-3-triage-new---from-triangulation)
+  - [Stage 4: Resolution](#stage-4-resolution)
+  - [Stage 5: Learning](#stage-5-learning)
+- [Multi-Venture Architecture](#multi-venture-architecture)
+  - [Why Multi-Venture?](#why-multi-venture)
+  - [Venture Integration Blueprint](#venture-integration-blueprint)
+  - [Implementation Note: EHG vs Ventures](#implementation-note-ehg-vs-ventures)
+- [Dual Interface Architecture](#dual-interface-architecture)
+  - [CLI Interface (`/inbox` command)](#cli-interface-inbox-command)
+  - [Web UI Interface (Feedback Widget)](#web-ui-interface-feedback-widget)
+- [Noise Control Strategy (from Triangulation)](#noise-control-strategy-from-triangulation)
+  - [The Problem](#the-problem)
+  - [Noise Control Mechanisms](#noise-control-mechanisms)
+  - [Global Severity Standard](#global-severity-standard)
+- [EHG Application UI Integration (from UI Triangulation)](#ehg-application-ui-integration-from-ui-triangulation)
+  - [New `/quality` Section](#new-quality-section)
+  - [Cross-Links with Existing UI](#cross-links-with-existing-ui)
+  - [Chairman Dashboard Mockup](#chairman-dashboard-mockup)
+  - [Release Planning Concept](#release-planning-concept)
+  - [Recommended Cadence (from Gemini)](#recommended-cadence-from-gemini)
+  - [Safeguards (from UI Triangulation)](#safeguards-from-ui-triangulation)
+- [What Was Built (Phase 1) - COMPLETE](#what-was-built-phase-1---complete)
+- [What to Build (Phase 2) - Requirements](#what-to-build-phase-2---requirements)
+  - [Requirement 1: Chairman/User Feedback Form](#requirement-1-chairmanuser-feedback-form)
+  - [Requirement 2: Automatic Error Capture](#requirement-2-automatic-error-capture)
+  - [Requirement 3: Integration with /uat](#requirement-3-integration-with-uat)
+- [Database Schema](#database-schema)
+  - [Unified `feedback` Table](#unified-feedback-table)
+  - [Releases Table (NEW - from UI Integration Triangulation)](#releases-table-new---from-ui-integration-triangulation)
+  - [Feedback-SD Map (Junction Table - NEW)](#feedback-sd-map-junction-table---new)
+  - [SD Table Enhancement](#sd-table-enhancement)
+  - [Conversion Handling](#conversion-handling)
+  - [Keep Existing UAT Tables (Testing-Specific)](#keep-existing-uat-tables-testing-specific)
+- [Command Structure](#command-structure)
+- [Integration with Existing Systems](#integration-with-existing-systems)
+  - [Connection to issue_patterns (for /learn)](#connection-to-issue_patterns-for-learn)
+  - [Connection to /quick-fix and SD creation](#connection-to-quick-fix-and-sd-creation)
+- [Implementation Phases](#implementation-phases)
+  - [Phase 2a: Foundation (Database)](#phase-2a-foundation-database)
+  - [Phase 2b: CLI Interface (`/inbox` command)](#phase-2b-cli-interface-inbox-command)
+  - [Phase 2c: Triage & Prioritization (from Triangulation)](#phase-2c-triage-prioritization-from-triangulation)
+  - [Phase 2d: Automatic Error Capture](#phase-2d-automatic-error-capture)
+  - [Phase 2e: Web UI Interface (EHG)](#phase-2e-web-ui-interface-ehg)
+  - [Phase 2f: AI Triage (Future)](#phase-2f-ai-triage-future)
+  - [Phase 2g: Venture Template](#phase-2g-venture-template)
+- [Strategic Directive Hierarchy (from SD Triangulation)](#strategic-directive-hierarchy-from-sd-triangulation)
+  - [Recommended Structure](#recommended-structure)
+  - [Sequencing](#sequencing)
+  - [Child SD Details](#child-sd-details)
+  - [Key Design Decisions](#key-design-decisions)
+  - [Risks & Mitigations](#risks-mitigations)
+  - [Future Work (Separate Orchestrator)](#future-work-separate-orchestrator)
+- [Open Questions](#open-questions)
+  - [Resolved by Triangulation (Round 1: Vision)](#resolved-by-triangulation-round-1-vision)
+  - [Resolved by Triangulation (Round 2: Enhancements)](#resolved-by-triangulation-round-2-enhancements)
+  - [Still Open](#still-open)
+- [Summary](#summary)
+- [Triangulation Validation](#triangulation-validation)
+  - [Round 1: Vision Review](#round-1-vision-review)
+  - [Round 2: Enhancement Request Integration](#round-2-enhancement-request-integration)
+  - [Full Triangulation Documents](#full-triangulation-documents)
+  - [Round 3: UI Integration](#round-3-ui-integration)
+  - [Round 4: SD Hierarchy Planning](#round-4-sd-hierarchy-planning)
 
 ## Metadata
 - **Category**: Guide

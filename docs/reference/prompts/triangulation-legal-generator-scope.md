@@ -1,5 +1,44 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Legal Document Generator Scope
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Unified Prompt for OpenAI and AntiGravity (Gemini)](#unified-prompt-for-openai-and-antigravity-gemini)
+- [Context](#context)
+- [The Core Question](#the-core-question)
+- [Options to Evaluate](#options-to-evaluate)
+  - [Option A: Skip Entirely](#option-a-skip-entirely)
+  - [Option B: Curated Template Library](#option-b-curated-template-library)
+  - [Option C: Template Fill-In (No Generation)](#option-c-template-fill-in-no-generation)
+  - [Option D: LLM-Assisted Generation](#option-d-llm-assisted-generation)
+  - [Option E: Partner/Integrate with Legal Service](#option-e-partnerintegrate-with-legal-service)
+  - [Option F: Attorney Network + Templated Packages](#option-f-attorney-network-templated-packages)
+- [Evaluation Criteria](#evaluation-criteria)
+- [Specific Questions](#specific-questions)
+- [Your Analysis Tasks](#your-analysis-tasks)
+  - [Task 1: Problem Validation](#task-1-problem-validation)
+  - [Task 2: Build vs Buy Analysis](#task-2-build-vs-buy-analysis)
+  - [Task 3: Liability Reality Check](#task-3-liability-reality-check)
+  - [Task 4: Competitor/Peer Analysis](#task-4-competitorpeer-analysis)
+  - [Task 5: Recommendation](#task-5-recommendation)
+- [Output Format](#output-format)
+- [Problem Validation](#problem-validation)
+- [Build vs Buy Economics](#build-vs-buy-economics)
+- [Liability Reality Check](#liability-reality-check)
+- [Competitor/Peer Analysis](#competitorpeer-analysis)
+- [Recommendation](#recommendation)
+- [Key Insight](#key-insight)
+- [Ground Rules](#ground-rules)
 
 ## Metadata
 - **Category**: Guide

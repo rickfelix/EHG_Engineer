@@ -1,5 +1,70 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Claude Code Context Management Research Findings for LEO Protocol
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Claude Code Context Architecture](#1-claude-code-context-architecture)
+  - [Token Limits](#token-limits)
+  - [LEO Protocol Implications](#leo-protocol-implications)
+- [2. CLAUDE.md File System](#2-claudemd-file-system)
+  - [File Hierarchy (Priority Order)](#file-hierarchy-priority-order)
+  - [LEO Protocol CLAUDE.md Templates](#leo-protocol-claudemd-templates)
+- [Protocol Rules](#protocol-rules)
+- [Active Configuration](#active-configuration)
+- [Context Management](#context-management)
+- [Commands](#commands)
+- [Role](#role)
+- [Boundaries](#boundaries)
+- [Required Outputs](#required-outputs)
+- [Handoff Checklist](#handoff-checklist)
+- [Role](#role)
+- [Boundaries](#boundaries)
+- [Required Outputs](#required-outputs)
+- [Handoff Checklist](#handoff-checklist)
+- [Role](#role)
+- [Boundaries](#boundaries)
+- [Required Outputs](#required-outputs)
+- [Handoff Checklist](#handoff-checklist)
+- [3. Context Management Commands](#3-context-management-commands)
+  - [Essential Commands for LEO Protocol](#essential-commands-for-leo-protocol)
+  - [Custom Commands for LEO](#custom-commands-for-leo)
+- [4. Context Optimization Strategies](#4-context-optimization-strategies)
+  - [Token Conservation Techniques](#token-conservation-techniques)
+- [5. LEO Protocol Optimizations for Claude Code](#5-leo-protocol-optimizations-for-claude-code)
+  - [Handoff Protocol with Context Management](#handoff-protocol-with-context-management)
+- [Pre-Handoff Cleanup (5 min)](#pre-handoff-cleanup-5-min)
+- [Handoff Package](#handoff-package)
+- [Post-Handoff Initialization](#post-handoff-initialization)
+  - [Emergency Context Recovery](#emergency-context-recovery)
+- [If Context Overflow Occurs:](#if-context-overflow-occurs)
+- [6. Comparison with Other Tools](#6-comparison-with-other-tools)
+  - [LEO Advantage with Claude Code](#leo-advantage-with-claude-code)
+- [7. Limitations and Mitigations](#7-limitations-and-mitigations)
+  - [Identified Limitations](#identified-limitations)
+- [8. Implementation Recommendations](#8-implementation-recommendations)
+  - [Immediate Actions](#immediate-actions)
+  - [Phase 2 Enhancements](#phase-2-enhancements)
+  - [Phase 3 Optimizations](#phase-3-optimizations)
+- [9. Best Practices Summary](#9-best-practices-summary)
+  - [DO's](#dos)
+  - [DON'Ts](#donts)
+- [10. LEO Protocol Integration Plan](#10-leo-protocol-integration-plan)
+  - [Step 1: Setup (30 min)](#step-1-setup-30-min)
+  - [Step 2: Pilot (2 hours)](#step-2-pilot-2-hours)
+  - [Step 3: Rollout (1 day)](#step-3-rollout-1-day)
+  - [Step 4: Optimize (Ongoing)](#step-4-optimize-ongoing)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

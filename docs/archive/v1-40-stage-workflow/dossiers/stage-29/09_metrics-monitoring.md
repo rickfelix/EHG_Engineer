@@ -1,4 +1,41 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 29: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Metrics Overview](#metrics-overview)
+- [Proposed Metrics Schema](#proposed-metrics-schema)
+  - [Table: `stage_29_metrics`](#table-stage_29_metrics)
+- [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+  - [1. UI Consistency (Substage 29.1)](#1-ui-consistency-substage-291)
+  - [2. Animation Smoothness (Substage 29.1)](#2-animation-smoothness-substage-291)
+  - [3. Responsive Design Coverage (Substage 29.1)](#3-responsive-design-coverage-substage-291)
+  - [4. Accessibility Score (Substage 29.2)](#4-accessibility-score-substage-292)
+  - [5. Flow Completion Rate (Substage 29.2)](#5-flow-completion-rate-substage-292)
+  - [6. UX Score (Substage 29.2)](#6-ux-score-substage-292)
+  - [7. Bundle Size (Substage 29.3)](#7-bundle-size-substage-293)
+  - [8. CDN Performance (Substage 29.3)](#8-cdn-performance-substage-293)
+  - [9. Core Web Vitals (All Substages)](#9-core-web-vitals-all-substages)
+- [Dashboard Design](#dashboard-design)
+  - [Grafana Dashboard: Stage 29 Monitoring](#grafana-dashboard-stage-29-monitoring)
+- [Alerting Rules](#alerting-rules)
+  - [Critical Alerts (PagerDuty)](#critical-alerts-pagerduty)
+  - [Warning Alerts (Slack Only)](#warning-alerts-slack-only)
+- [Agent Integration](#agent-integration)
+  - [Metrics Collection (Agent Responsibility)](#metrics-collection-agent-responsibility)
+- [Historical Analysis](#historical-analysis)
+  - [Venture Comparison](#venture-comparison)
+  - [Time to Polish (Duration Tracking)](#time-to-polish-duration-tracking)
+- [Cross-References](#cross-references)
+- [Sources Table](#sources-table)
 
 ## Metrics Overview
 

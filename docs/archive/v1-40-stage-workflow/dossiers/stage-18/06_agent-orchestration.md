@@ -1,4 +1,55 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 18: Agent Orchestration
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Agent Crew Overview](#agent-crew-overview)
+  - [Crew Composition](#crew-composition)
+- [Agent 1: RepositoryManager](#agent-1-repositorymanager)
+  - [Role Definition](#role-definition)
+  - [Responsibilities](#responsibilities)
+  - [Tools](#tools)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Decision Logic](#decision-logic)
+  - [Error Handling](#error-handling)
+- [Agent 2: ContentMigrator](#agent-2-contentmigrator)
+  - [Role Definition](#role-definition)
+  - [Responsibilities](#responsibilities)
+  - [Tools](#tools)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Decision Logic](#decision-logic)
+  - [Error Handling](#error-handling)
+- [Agent 3: CICDConfigurator](#agent-3-cicdconfigurator)
+  - [Role Definition](#role-definition)
+  - [Responsibilities](#responsibilities)
+  - [Tools](#tools)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Decision Logic](#decision-logic)
+  - [Error Handling](#error-handling)
+- [Agent 4: SyncValidator](#agent-4-syncvalidator)
+  - [Role Definition](#role-definition)
+  - [Responsibilities](#responsibilities)
+  - [Tools](#tools)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Decision Logic](#decision-logic)
+  - [Error Handling](#error-handling)
+- [Crew Process Flow](#crew-process-flow)
+- [Integration with SD-CREWAI-ARCHITECTURE-001](#integration-with-sd-crewai-architecture-001)
+- [Monitoring and Alerting](#monitoring-and-alerting)
+- [Future Enhancements](#future-enhancements)
 
 ## Purpose
 

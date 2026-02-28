@@ -1,5 +1,47 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # Multi-Database Architecture for EHG_Engineer
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Critical Table Relationships for SD/Backlog Operations](#critical-table-relationships-for-sdbacklog-operations)
+  - [⚠️ IMPORTANT: Understanding Views vs Tables](#-important-understanding-views-vs-tables)
+  - [Correct Data Flow](#correct-data-flow)
+  - [Table Structure Details](#table-structure-details)
+- [Architecture Overview](#architecture-overview)
+  - [Core Components](#core-components)
+- [Technical Implementation](#technical-implementation)
+  - [Connection Configuration](#connection-configuration)
+  - [Key Capabilities](#key-capabilities)
+- [Credential Management](#credential-management)
+  - [Required Credentials](#required-credentials)
+  - [Security Best Practices](#security-best-practices)
+- [Migration Strategy](#migration-strategy)
+  - [File Structure](#file-structure)
+  - [Migration Example](#migration-example)
+- [Usage Examples](#usage-examples)
+  - [Initial Setup](#initial-setup)
+  - [Application Code](#application-code)
+- [Cross-Database Operations](#cross-database-operations)
+  - [Application-Level Joins](#application-level-joins)
+- [Benefits](#benefits)
+- [Security Considerations](#security-considerations)
+  - [Role-Based Access Control (RBAC)](#role-based-access-control-rbac)
+  - [Audit Logging](#audit-logging)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+- [Next Steps](#next-steps)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Architecture

@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 40: Metrics & Monitoring
+
+
+## Table of Contents
+
+- [Primary Metrics (From stages.yaml)](#primary-metrics-from-stagesyaml)
+  - [Metric 1: Growth Rate](#metric-1-growth-rate)
+  - [Metric 2: Valuation](#metric-2-valuation)
+  - [Metric 3: Exit Readiness Score](#metric-3-exit-readiness-score)
+- [Secondary Metrics (Derived/Supporting)](#secondary-metrics-derivedsupporting)
+  - [Supporting Metric: Cash Runway](#supporting-metric-cash-runway)
+  - [Supporting Metric: Customer Concentration](#supporting-metric-customer-concentration)
+  - [Supporting Metric: Team Retention Rate](#supporting-metric-team-retention-rate)
+- [Monitoring Infrastructure](#monitoring-infrastructure)
+  - [Real-Time Dashboard (Proposed)](#real-time-dashboard-proposed)
+  - [Alert Configuration](#alert-configuration)
+- [Historical Tracking](#historical-tracking)
+- [Reporting Cadence](#reporting-cadence)
+  - [Daily (Automated)](#daily-automated)
+  - [Weekly (Automated)](#weekly-automated)
+  - [Monthly (Semi-Automated + Manual)](#monthly-semi-automated-manual)
+  - [Quarterly (Manual)](#quarterly-manual)
+- [Metric Quality Assessment](#metric-quality-assessment)
+- [Improvement Roadmap](#improvement-roadmap)
+  - [Phase 1: Basic Tracking (Month 1-2)](#phase-1-basic-tracking-month-1-2)
+  - [Phase 2: Alerting (Month 3-4)](#phase-2-alerting-month-3-4)
+  - [Phase 3: Advanced Analytics (Month 5-6)](#phase-3-advanced-analytics-month-5-6)
+  - [Phase 4: Automation (Month 7-12)](#phase-4-automation-month-7-12)
+- [Sources Table](#sources-table)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1808-1811
 

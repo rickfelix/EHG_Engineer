@@ -1,5 +1,46 @@
+---
+category: testing
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [testing, auto-generated]
+---
 # E2E Coverage Visual Breakdown - 90% Target
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Current vs Target Coverage](#current-vs-target-coverage)
+- [Coverage by Category](#coverage-by-category)
+  - [1. API Endpoints (73 total)](#1-api-endpoints-73-total)
+  - [2. Database Functions (20 total)](#2-database-functions-20-total)
+  - [3. Database Triggers (10 total)](#3-database-triggers-10-total)
+  - [4. WebSocket Features (6 total)](#4-websocket-features-6-total)
+  - [5. Background Jobs (4 total)](#5-background-jobs-4-total)
+  - [6. Error Handling (15 total)](#6-error-handling-15-total)
+  - [7. RBAC Scenarios (8 total)](#7-rbac-scenarios-8-total)
+  - [8. Edge Cases (20 total)](#8-edge-cases-20-total)
+  - [9. Performance Testing (10 total)](#9-performance-testing-10-total)
+  - [10. Security Testing (12 total)](#10-security-testing-12-total)
+  - [11. Integration Testing (8 total)](#11-integration-testing-8-total)
+- [Sprint Progress Visualization](#sprint-progress-visualization)
+- [Priority Distribution](#priority-distribution)
+  - [By Priority Level](#by-priority-level)
+  - [By Coverage Category](#by-coverage-category)
+- [Effort Distribution](#effort-distribution)
+  - [By Sprint](#by-sprint)
+  - [By Category](#by-category)
+- [ROI Analysis](#roi-analysis)
+  - [Cost-Benefit Breakdown](#cost-benefit-breakdown)
+- [Test Pyramid Distribution (Target State)](#test-pyramid-distribution-target-state)
+- [Timeline Gantt Chart](#timeline-gantt-chart)
+- [Key Insights](#key-insights)
+  - [1. Zero-Coverage Areas (Highest Risk)](#1-zero-coverage-areas-highest-risk)
+  - [2. Quick Wins (High ROI)](#2-quick-wins-high-roi)
+  - [3. Long-Tail Items (Low Priority)](#3-long-tail-items-low-priority)
 
 ## Metadata
 - **Category**: Testing

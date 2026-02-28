@@ -1,5 +1,32 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Deep Research Prompt: Multi-Database Architecture for EHG_Engineer
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Context & Problem Statement](#context-problem-statement)
+- [Research Objectives](#research-objectives)
+  - [1. Database Connection Architecture](#1-database-connection-architecture)
+  - [2. Supabase API Capabilities Investigation](#2-supabase-api-capabilities-investigation)
+  - [3. Required Information to Provide](#3-required-information-to-provide)
+  - [4. Specific Technical Questions](#4-specific-technical-questions)
+  - [5. Implementation Requirements](#5-implementation-requirements)
+  - [6. Use Cases to Support](#6-use-cases-to-support)
+  - [7. Research Deliverables Needed](#7-research-deliverables-needed)
+  - [8. Current Blockers](#8-current-blockers)
+  - [9. Success Criteria](#9-success-criteria)
+  - [10. Additional Context](#10-additional-context)
+- [Research Starting Points](#research-starting-points)
+- [Expected Output](#expected-output)
 
 ## Metadata
 - **Category**: Architecture

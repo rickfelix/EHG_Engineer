@@ -1,4 +1,58 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Synthesis: Blind Spots Research
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Cross-AI Analysis and Unified Recommendations](#cross-ai-analysis-and-unified-recommendations)
+- [Executive Summary](#executive-summary)
+- [1. Consensus Analysis (All 3 AIs Agree)](#1-consensus-analysis-all-3-ais-agree)
+  - [1.1 EVA Architecture Core Components](#11-eva-architecture-core-components)
+  - [1.2 Holding Company Lessons](#12-holding-company-lessons)
+  - [1.3 Management Cliff Definition](#13-management-cliff-definition)
+  - [1.4 Venture Lifecycle States](#14-venture-lifecycle-states)
+  - [1.5 AI vs Human Roles](#15-ai-vs-human-roles)
+  - [1.6 Pattern Deprecation Approach](#16-pattern-deprecation-approach)
+  - [1.7 Legal Structure](#17-legal-structure)
+  - [1.8 Pricing for Vending Machine Model](#18-pricing-for-vending-machine-model)
+- [2. Disagreements and Resolution](#2-disagreements-and-resolution)
+  - [2.1 Pattern Maintenance Budget Ratio](#21-pattern-maintenance-budget-ratio)
+  - [2.2 Prioritization Order](#22-prioritization-order)
+  - [2.3 SOC 2 Trigger Point](#23-soc-2-trigger-point)
+  - [2.4 A/B Testing Pricing](#24-ab-testing-pricing)
+- [3. Unique Insights (Single AI Only)](#3-unique-insights-single-ai-only)
+  - [3.1 OpenAI Unique Insights](#31-openai-unique-insights)
+  - [3.2 Gemini Unique Insights](#32-gemini-unique-insights)
+  - [3.3 Claude Code Unique Insights](#33-claude-code-unique-insights)
+- [4. Remaining Gaps (None Addressed Adequately)](#4-remaining-gaps-none-addressed-adequately)
+  - [4.1 Cross-Venture Pattern Sharing](#41-cross-venture-pattern-sharing)
+  - [4.2 International Expansion Compliance](#42-international-expansion-compliance)
+  - [4.3 Acquisition Due Diligence](#43-acquisition-due-diligence)
+  - [4.4 AI Agent Trust Boundaries](#44-ai-agent-trust-boundaries)
+- [5. Unified Recommendations](#5-unified-recommendations)
+  - [5.1 EVA Architecture (Synthesized)](#51-eva-architecture-synthesized)
+  - [5.2 Venture Lifecycle State Machine (Unified)](#52-venture-lifecycle-state-machine-unified)
+  - [5.3 Pattern Deprecation Lifecycle (Unified)](#53-pattern-deprecation-lifecycle-unified)
+  - [5.4 Failure Learning System](#54-failure-learning-system)
+  - [5.5 Legal Structure (Unified)](#55-legal-structure-unified)
+  - [5.6 Pricing Framework (Unified)](#56-pricing-framework-unified)
+- [6. Strategic Directive Proposals](#6-strategic-directive-proposals)
+  - [SD-BLIND-SPOT-001: EVA Operating System (PRIORITY 1)](#sd-blind-spot-001-eva-operating-system-priority-1)
+  - [SD-BLIND-SPOT-002: Legal/Compliance Foundation (PRIORITY 2)](#sd-blind-spot-002-legalcompliance-foundation-priority-2)
+  - [SD-BLIND-SPOT-003: Pricing Pattern Library (PRIORITY 3)](#sd-blind-spot-003-pricing-pattern-library-priority-3)
+  - [SD-BLIND-SPOT-004: Failure Learning System (PRIORITY 4)](#sd-blind-spot-004-failure-learning-system-priority-4)
+  - [SD-BLIND-SPOT-005: Skills Inventory (PRIORITY 5)](#sd-blind-spot-005-skills-inventory-priority-5)
+  - [SD-BLIND-SPOT-006: Pattern Deprecation (PRIORITY 6)](#sd-blind-spot-006-pattern-deprecation-priority-6)
+- [7. Final Prioritization Matrix](#7-final-prioritization-matrix)
+- [8. Immediate Next Steps](#8-immediate-next-steps)
 
 ## Metadata
 - **Category**: Guide

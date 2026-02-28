@@ -1,5 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Issue Pattern Lifecycle Management
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Pattern Flow](#pattern-flow)
+- [Thresholds for Auto-SD Creation](#thresholds-for-auto-sd-creation)
+- [Database Tables](#database-tables)
+  - [`issue_patterns`](#issue_patterns)
+  - [`pattern_trigger_mapping`](#pattern_trigger_mapping)
+  - [`pattern_subagent_mapping`](#pattern_subagent_mapping)
+- [NPM Commands](#npm-commands)
+  - [Pattern Management](#pattern-management)
+  - [Pattern Maintenance](#pattern-maintenance)
+  - [Pattern Ingestion](#pattern-ingestion)
+- [Automation](#automation)
+  - [Triggered by Retrospectives](#triggered-by-retrospectives)
+  - [Weekly Maintenance](#weekly-maintenance)
+- [Pattern Sources](#pattern-sources)
+- [Pattern Categories](#pattern-categories)
+- [Auto-Created SDs](#auto-created-sds)
+  - [SD Content Includes:](#sd-content-includes)
+- [Resolving Patterns](#resolving-patterns)
+- [Pattern Lifecycle States](#pattern-lifecycle-states)
+- [Memory-Pattern Closure (SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001)](#memory-pattern-closure-sd-leo-infra-memory-pattern-lifecycle-001)
+  - [MEMORY.md Tagging Convention](#memorymd-tagging-convention)
+- [Gate Return Schema Must Use passed/maxScore [PAT-AUTO-0042]](#gate-return-schema-must-use-passedmaxscore-pat-auto-0042)
+  - [How Auto-Pruning Works](#how-auto-pruning-works)
+  - [PATTERN_RESOLVED Event](#pattern_resolved-event)
+  - [MEMORY.md Rules](#memorymd-rules)
+- [Best Practices](#best-practices)
 
 ## Metadata
 - **Category**: Reference

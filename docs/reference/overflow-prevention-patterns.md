@@ -1,5 +1,59 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Overflow Prevention Patterns
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Components](#components)
+  - [Token Budget](#token-budget)
+- [Thresholds](#thresholds)
+- [Compression Strategies](#compression-strategies)
+  - [Strategy 1: Full Context (HEALTHY)](#strategy-1-full-context-healthy)
+  - [Strategy 2: Selective Compression (WARNING)](#strategy-2-selective-compression-warning)
+  - [Strategy 3: Memory-First (CRITICAL/EMERGENCY)](#strategy-3-memory-first-criticalemergency)
+- [Sub-Agent Report Summarization](#sub-agent-report-summarization)
+  - [Full Reports (HEALTHY)](#full-reports-healthy)
+  - [Summarized Reports (WARNING/CRITICAL)](#summarized-reports-warningcritical)
+- [Usage Patterns](#usage-patterns)
+  - [Pattern 1: Pre-Handoff Check](#pattern-1-pre-handoff-check)
+  - [Pattern 2: Manual Compaction](#pattern-2-manual-compaction)
+  - [Pattern 3: Focus Area Compaction](#pattern-3-focus-area-compaction)
+  - [Pattern 4: Sub-Agent Processing](#pattern-4-sub-agent-processing)
+- [What Gets Compressed](#what-gets-compressed)
+  - [High Priority (Compress First)](#high-priority-compress-first)
+  - [Medium Priority](#medium-priority)
+  - [Never Compress](#never-compress)
+- [Memory Recovery](#memory-recovery)
+- [Automatic Triggers](#automatic-triggers)
+- [Testing](#testing)
+- [CLI Commands](#cli-commands)
+  - [Check Context Status](#check-context-status)
+  - [Run Overflow Tests](#run-overflow-tests)
+  - [Manual Context Compaction](#manual-context-compaction)
+- [Integration with LEO Protocol](#integration-with-leo-protocol)
+  - [LEAD Agent](#lead-agent)
+  - [PLAN Agent](#plan-agent)
+  - [EXEC Agent](#exec-agent)
+- [Best Practices](#best-practices)
+- [Performance Impact](#performance-impact)
+- [Future Enhancements](#future-enhancements)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: Context still overflowing](#issue-context-still-overflowing)
+  - [Issue: Compressed content too aggressive](#issue-compressed-content-too-aggressive)
+  - [Issue: Memory writes failing](#issue-memory-writes-failing)
+  - [Issue: Test failures](#issue-test-failures)
+- [References](#references)
 
 ## Metadata
 - **Category**: Reference

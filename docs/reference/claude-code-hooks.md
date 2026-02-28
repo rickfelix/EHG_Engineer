@@ -1,5 +1,80 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Claude Code Hooks Reference
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Hook Types](#hook-types)
+- [Configuration](#configuration)
+- [Hook Structure](#hook-structure)
+  - [Basic Hook](#basic-hook)
+  - [Matcher-Based Hook (PreToolUse, PostToolUse)](#matcher-based-hook-pretooluse-posttooluse)
+- [Exit Code Behavior](#exit-code-behavior)
+  - [Blocking with Exit Code 2](#blocking-with-exit-code-2)
+- [Environment Variables Available to Hooks](#environment-variables-available-to-hooks)
+- [Hook Output](#hook-output)
+  - [Standard Output (stdout)](#standard-output-stdout)
+  - [Standard Error (stderr)](#standard-error-stderr)
+  - [JSON Output (Stop Hook)](#json-output-stop-hook)
+- [Implementation Patterns](#implementation-patterns)
+  - [Pattern 1: Simple Validation](#pattern-1-simple-validation)
+  - [Pattern 2: Blocking with Remediation](#pattern-2-blocking-with-remediation)
+  - [Pattern 3: Bypass Mechanism](#pattern-3-bypass-mechanism)
+  - [Pattern 4: Async Operations](#pattern-4-async-operations)
+  - [Pattern 5: Caching](#pattern-5-caching)
+- [Implemented Hooks in EHG_Engineer](#implemented-hooks-in-ehg_engineer)
+  - [Stop Hook: Sub-Agent Enforcement](#stop-hook-sub-agent-enforcement)
+  - [PreToolUse Hook: Activity State Tracking](#pretooluse-hook-activity-state-tracking)
+  - [PreToolUse Hook: Quality Reminders](#pretooluse-hook-quality-reminders)
+  - [PostToolUse Hook: Handoff Reminders](#posttooluse-hook-handoff-reminders)
+  - [UserPromptSubmit Hook: Semantic Router](#userpromptsubmit-hook-semantic-router)
+  - [UserPromptSubmit Hook: Session Cleanup](#userpromptsubmit-hook-session-cleanup)
+  - [UserPromptSubmit Hook: Autonomous Checkpoint](#userpromptsubmit-hook-autonomous-checkpoint)
+  - [UserPromptSubmit Hook: Activity State Tracking](#userpromptsubmit-hook-activity-state-tracking)
+  - [PreCompact Hook: Context Preservation Snapshot](#precompact-hook-context-preservation-snapshot)
+- [Git Status](#git-status)
+- [Recent Changes (diff stat)](#recent-changes-diff-stat)
+- [Current Branch](#current-branch)
+  - [SessionStart Hook: Context Restoration Loader](#sessionstart-hook-context-restoration-loader)
+  - [Context Preservation System (Unified State - SD-LEO-INFRA-UNIFY-CONTEXT-PRESERVATION-001)](#context-preservation-system-unified-state---sd-leo-infra-unify-context-preservation-001)
+- [Best Practices](#best-practices)
+  - [1. Fail Open on Internal Errors](#1-fail-open-on-internal-errors)
+  - [2. Set Appropriate Timeouts](#2-set-appropriate-timeouts)
+  - [3. Provide Clear Output](#3-provide-clear-output)
+  - [4. Use Bypass Mechanisms](#4-use-bypass-mechanisms)
+  - [5. Cache Expensive Operations](#5-cache-expensive-operations)
+  - [6. Use Structured Output for Automation](#6-use-structured-output-for-automation)
+  - [7. Test Hooks in Isolation](#7-test-hooks-in-isolation)
+  - [8. Sanitize Unicode in Script Output](#8-sanitize-unicode-in-script-output)
+- [Troubleshooting](#troubleshooting)
+  - [Hook Not Executing](#hook-not-executing)
+  - [Hook Times Out](#hook-times-out)
+  - [Exit Code 2 Not Blocking](#exit-code-2-not-blocking)
+  - [Hook Output Not Visible](#hook-output-not-visible)
+  - [Stale Background Task Notifications](#stale-background-task-notifications)
+- [Security Considerations](#security-considerations)
+  - [1. Validate Bypass Inputs](#1-validate-bypass-inputs)
+  - [2. Log All Bypass Events](#2-log-all-bypass-events)
+  - [3. Rate Limit Hook Execution](#3-rate-limit-hook-execution)
+  - [4. Sanitize Environment Variables](#4-sanitize-environment-variables)
+  - [5. Limit Hook Permissions](#5-limit-hook-permissions)
+- [Performance Optimization](#performance-optimization)
+  - [1. Parallel Operations](#1-parallel-operations)
+  - [2. Early Exit](#2-early-exit)
+  - [3. Connection Pooling](#3-connection-pooling)
+  - [4. Incremental Validation](#4-incremental-validation)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

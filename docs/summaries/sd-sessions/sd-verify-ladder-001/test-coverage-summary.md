@@ -1,4 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Test Coverage Summary: SD-VERIFY-LADDER-001
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Test Results Overview](#test-results-overview)
+- [PRD Test Scenario Coverage (TS-1 through TS-10)](#prd-test-scenario-coverage-ts-1-through-ts-10)
+  - [Unit Test Coverage](#unit-test-coverage)
+  - [Integration Test Coverage](#integration-test-coverage)
+- [Additional Test Coverage](#additional-test-coverage)
+  - [Security Features (3 tests)](#security-features-3-tests)
+  - [Weighted Scoring (6 tests)](#weighted-scoring-6-tests)
+  - [Error Handling (3 tests)](#error-handling-3-tests)
+- [Test Execution Evidence](#test-execution-evidence)
+  - [Unit Test Results](#unit-test-results)
+  - [Live Execution Results](#live-execution-results)
+- [Infrastructure Testing Justification](#infrastructure-testing-justification)
+  - [Why No Playwright E2E Tests?](#why-no-playwright-e2e-tests)
+  - [Industry Standards for CLI Testing](#industry-standards-for-cli-testing)
+- [Weighted Scoring Verification](#weighted-scoring-verification)
+- [Security Testing Results](#security-testing-results)
+  - [1. Command Injection Prevention](#1-command-injection-prevention)
+  - [2. Hardcoded Commands](#2-hardcoded-commands)
+  - [3. Timeout Enforcement](#3-timeout-enforcement)
+- [Test Files Reference](#test-files-reference)
+- [Conclusion](#conclusion)
+- [Evidence Files](#evidence-files)
+
 # Gate 0: Static Analysis Verification
 
 **Strategic Directive**: SD-VERIFY-LADDER-001

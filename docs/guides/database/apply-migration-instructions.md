@@ -1,3 +1,11 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # Apply SD Testing Status Migration
 
 **Quick Start**: Copy the entire SQL file and run it in Supabase SQL Editor.

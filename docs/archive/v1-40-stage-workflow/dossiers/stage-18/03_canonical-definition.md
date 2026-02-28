@@ -1,4 +1,32 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 18: Canonical Definition
+
+
+## Table of Contents
+
+- [Source of Truth](#source-of-truth)
+- [Full YAML Definition](#full-yaml-definition)
+- [Parsed Components](#parsed-components)
+  - [Basic Metadata](#basic-metadata)
+  - [Dependencies](#dependencies)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Metrics](#metrics)
+  - [Gates](#gates)
+  - [Substages](#substages)
+  - [Notes](#notes)
+- [Interpretation and Implementation Guidance](#interpretation-and-implementation-guidance)
+  - [Key Design Decisions](#key-design-decisions)
+  - [Common Pitfalls](#common-pitfalls)
+  - [Success Patterns](#success-patterns)
+- [Change History](#change-history)
 
 ## Source of Truth
 

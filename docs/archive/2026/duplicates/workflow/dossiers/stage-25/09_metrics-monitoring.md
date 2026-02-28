@@ -1,3 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Stage 25 KPIs](#stage-25-kpis)
+  - [KPI 1: Test Coverage Percentage](#kpi-1-test-coverage-percentage)
+  - [KPI 2: Defect Density](#kpi-2-defect-density)
+  - [KPI 3: Quality Score](#kpi-3-quality-score)
+  - [KPI 4: Test Pass Rate](#kpi-4-test-pass-rate)
+  - [KPI 5: Bug Resolution Rate](#kpi-5-bug-resolution-rate)
+  - [KPI 6: Test Execution Duration](#kpi-6-test-execution-duration)
+  - [KPI 7: Regression Count](#kpi-7-regression-count)
+- [Dashboard Queries](#dashboard-queries)
+  - [Dashboard 1: Stage 25 Overview (Single Venture)](#dashboard-1-stage-25-overview-single-venture)
+  - [Dashboard 2: Stage 25 Cross-Venture Comparison](#dashboard-2-stage-25-cross-venture-comparison)
+  - [Dashboard 3: Stage 25 Trends (Time Series)](#dashboard-3-stage-25-trends-time-series)
+- [Real-Time Monitoring](#real-time-monitoring)
+  - [Table: `stage_25_execution_status`](#table-stage_25_execution_status)
+  - [Real-Time Query (WebSocket or Polling)](#real-time-query-websocket-or-polling)
+- [Alerting Rules](#alerting-rules)
+  - [Alert 1: Test Failure (Critical)](#alert-1-test-failure-critical)
+  - [Alert 2: P0 Bug Detected (Critical)](#alert-2-p0-bug-detected-critical)
+  - [Alert 3: Quality Score Below Threshold (Warning)](#alert-3-quality-score-below-threshold-warning)
+  - [Alert 4: Test Execution Timeout (Warning)](#alert-4-test-execution-timeout-warning)
+- [Sources Table](#sources-table)
+
 <!-- ARCHIVED: 2026-01-26T16:26:50.970Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-25\09_metrics-monitoring.md

@@ -1,4 +1,43 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Pattern: PAT-AUTOPROCEED-EMPTY-ARRAY
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+  - [Symptom](#symptom)
+  - [Root Cause Analysis (5-Whys)](#root-cause-analysis-5-whys)
+  - [JavaScript Truthy Behavior](#javascript-truthy-behavior)
+- [Detection](#detection)
+  - [Validation Gate Error](#validation-gate-error)
+  - [Database Query](#database-query)
+- [Fix Implementation](#fix-implementation)
+  - [1. SD Creation Script Fix](#1-sd-creation-script-fix)
+  - [2. Child SD Template Fix](#2-child-sd-template-fix)
+  - [3. Database Constraint (Prevention)](#3-database-constraint-prevention)
+  - [4. Data Healing Script](#4-data-healing-script)
+- [Prevention Strategy](#prevention-strategy)
+  - [Code Review Checklist](#code-review-checklist)
+  - [Validation Pattern](#validation-pattern)
+  - [Database Constraint Pattern](#database-constraint-pattern)
+- [Related Patterns](#related-patterns)
+- [Testing](#testing)
+  - [Validation Test](#validation-test)
+  - [Database Constraint Test](#database-constraint-test)
+- [Impact](#impact)
+  - [Before Fix](#before-fix)
+  - [After Fix](#after-fix)
+- [References](#references)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Pattern

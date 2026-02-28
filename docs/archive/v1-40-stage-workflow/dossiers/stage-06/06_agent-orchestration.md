@@ -1,4 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 6: Agent Orchestration & Governance Mapping
+
+
+## Table of Contents
+
+- [Current State: No Agents Mapped](#current-state-no-agents-mapped)
+- [Proposed Agent Architecture](#proposed-agent-architecture)
+  - [Agent 1: Risk Identification Agent (Proposed)](#agent-1-risk-identification-agent-proposed)
+  - [Agent 2: Risk Scoring Agent (Proposed)](#agent-2-risk-scoring-agent-proposed)
+  - [Agent 3: Mitigation Planning Agent (Proposed)](#agent-3-mitigation-planning-agent-proposed)
+- [Recursion Engine Integration (Proposed)](#recursion-engine-integration-proposed)
+- [Governance Sub-Agent Mapping (Node.js)](#governance-sub-agent-mapping-nodejs)
+  - [Potential Sub-Agent: Risk Quality Reviewer (Proposed)](#potential-sub-agent-risk-quality-reviewer-proposed)
+- [Chairman Approval Workflow (Proposed)](#chairman-approval-workflow-proposed)
+- [Automation Boundaries](#automation-boundaries)
+- [Integration Requirements](#integration-requirements)
+  - [Integration 1: Recursion Engine (Proposed)](#integration-1-recursion-engine-proposed)
+  - [Integration 2: Risk Database (Proposed)](#integration-2-risk-database-proposed)
+  - [Integration 3: Compliance Frameworks API (Proposed)](#integration-3-compliance-frameworks-api-proposed)
+- [Performance Requirements](#performance-requirements)
+- [Testing Strategy](#testing-strategy)
+- [Sources Table](#sources-table)
 
 **Purpose**: Document Python CrewAI agent mappings, governance sub-agent invocations, and automation boundaries for Stage 6.
 

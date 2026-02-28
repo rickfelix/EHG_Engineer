@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 27: Professional Standard Operating Procedure (SOP)
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Scope](#scope)
+- [Prerequisites](#prerequisites)
+  - [Entry Gates (from stages.yaml)](#entry-gates-from-stagesyaml)
+  - [Required Inputs (from stages.yaml)](#required-inputs-from-stagesyaml)
+- [Substage 27.1: Actor Implementation](#substage-271-actor-implementation)
+  - [Step 1.1: Define Actors](#step-11-define-actors)
+  - [Step 1.2: Design Messages](#step-12-design-messages)
+  - [Step 1.3: Configure Supervision](#step-13-configure-supervision)
+- [Substage 27.2: Saga Orchestration](#substage-272-saga-orchestration)
+  - [Step 2.1: Design Sagas](#step-21-design-sagas)
+  - [Step 2.2: Define Compensations](#step-22-define-compensations)
+  - [Step 2.3: Build Orchestrator](#step-23-build-orchestrator)
+- [Substage 27.3: Testing & Validation](#substage-273-testing-validation)
+  - [Step 3.1: Test Failure Scenarios](#step-31-test-failure-scenarios)
+  - [Step 3.2: Verify Recovery](#step-32-verify-recovery)
+  - [Step 3.3: Validate Performance](#step-33-validate-performance)
+- [Exit Gates](#exit-gates)
+- [Outputs](#outputs)
+- [Rollback Procedures](#rollback-procedures)
+- [Metrics & Monitoring](#metrics-monitoring)
+- [Sources Table](#sources-table)
 
 **Stage**: Actor Model & Saga Transaction Integration
 **Phase**: Execution (EXEC)

@@ -1,4 +1,45 @@
+---
+category: database
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [database, auto-generated]
+---
 # US-001 Deliverables Checklist
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Database Migration for Validation Modes](#database-migration-for-validation-modes)
+- [Core Deliverables](#core-deliverables)
+  - [1. Migration File](#1-migration-file)
+  - [2. Verification Script](#2-verification-script)
+  - [3. Migration Summary Document](#3-migration-summary-document)
+  - [4. Developer Guide](#4-developer-guide)
+  - [5. This Deliverables Checklist](#5-this-deliverables-checklist)
+- [Quality Assurance](#quality-assurance)
+  - [Migration Quality Checks](#migration-quality-checks)
+- [Acceptance Criteria Fulfillment](#acceptance-criteria-fulfillment)
+  - [AC-001: validation_mode Column](#ac-001-validation_mode-column)
+  - [AC-002: justification Column](#ac-002-justification-column)
+  - [AC-003: conditions Column](#ac-003-conditions-column)
+  - [AC-004: CONDITIONAL_PASS Verdict Enum](#ac-004-conditional_pass-verdict-enum)
+  - [AC-005: Backward Compatibility](#ac-005-backward-compatibility)
+  - [AC-006: Indexes](#ac-006-indexes)
+- [File Structure Summary](#file-structure-summary)
+- [Integration Points](#integration-points)
+  - [Immediate Next Steps](#immediate-next-steps)
+- [Deployment Checklist](#deployment-checklist)
+  - [Pre-Deployment](#pre-deployment)
+  - [Staging Deployment](#staging-deployment)
+  - [Production Deployment](#production-deployment)
+  - [Post-Deployment](#post-deployment)
+- [Success Criteria Met](#success-criteria-met)
+- [References](#references)
+- [Timeline](#timeline)
+- [Contact & Questions](#contact-questions)
 
 ## Metadata
 - **Category**: Database

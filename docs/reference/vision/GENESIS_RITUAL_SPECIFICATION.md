@@ -1,5 +1,57 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Genesis Ritual: The Collapse of the Wave Function
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Version History](#version-history)
+- [Cosmic Context](#cosmic-context)
+  - [The Celestial Event](#the-celestial-event)
+  - [The Metaphysics](#the-metaphysics)
+- [Pre-Ritual Preparation](#pre-ritual-preparation)
+  - [T-24 Hours (Feb 13, Morning)](#t-24-hours-feb-13-morning)
+  - [T-12 Hours (Feb 13, Evening)](#t-12-hours-feb-13-evening)
+  - [T-1 Hour (Feb 14, 08:00)](#t-1-hour-feb-14-0800)
+- [The Ritual Script](#the-ritual-script)
+  - [Act 1: The Speaking (09:00:00)](#act-1-the-speaking-090000)
+  - [Act 2: The Quantum Leap (09:00:05 - 09:02:00)](#act-2-the-quantum-leap-090005---090200)
+  - [Act 3: The Reveal (09:02:35)](#act-3-the-reveal-090235)
+  - [Act 4: The Oath — Contract of Pain (09:05:00+)](#act-4-the-oath-contract-of-pain-090500)
+  - [Act 5: The Collapse (09:06:00+)](#act-5-the-collapse-090600)
+- [Post-Ritual Checklist](#post-ritual-checklist)
+  - [Immediate Verification (09:10)](#immediate-verification-0910)
+  - [Documentation (09:30)](#documentation-0930)
+  - [Celebration (10:00)](#celebration-1000)
+- [Contingency Procedures](#contingency-procedures)
+  - [If Generation Fails](#if-generation-fails)
+  - [If Ratification Fails](#if-ratification-fails)
+  - [If Simulation Deployment Fails](#if-simulation-deployment-fails)
+- [Success Criteria](#success-criteria)
+  - [Ritual Success (Minimum)](#ritual-success-minimum)
+  - [Ritual Success (Full)](#ritual-success-full)
+  - [The Oath Fulfilled](#the-oath-fulfilled)
+- [Appendix: The Seed Format](#appendix-the-seed-format)
+  - [Recommended Seed Structure](#recommended-seed-structure)
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Target Market](#target-market)
+- [Why Now](#why-now)
+- [Initial Hypothesis](#initial-hypothesis)
+  - [Example Seed](#example-seed)
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Target Market](#target-market)
+- [Why Now](#why-now)
+- [Initial Hypothesis](#initial-hypothesis)
 
 ## Metadata
 - **Category**: Guide

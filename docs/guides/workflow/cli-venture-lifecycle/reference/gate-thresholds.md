@@ -1,3 +1,32 @@
+
+## Table of Contents
+
+- [Threshold Categories](#threshold-categories)
+- [Kill Gate Thresholds](#kill-gate-thresholds)
+  - [Stage 3: Market Validation](#stage-3-market-validation)
+  - [Stage 5: Profitability](#stage-5-profitability)
+  - [Stage 13: Tech Stack Feasibility](#stage-13-tech-stack-feasibility)
+  - [Stage 23: Production Launch](#stage-23-production-launch)
+- [Promotion Gate Thresholds](#promotion-gate-thresholds)
+  - [Stage 16: Schema Firewall](#stage-16-schema-firewall)
+  - [Stage 17: Environment Ready](#stage-17-environment-ready)
+  - [Stage 22: Go-to-Market Ready](#stage-22-go-to-market-ready)
+- [Reality Gate Thresholds](#reality-gate-thresholds)
+  - [Phase Boundaries](#phase-boundaries)
+  - [Artifact Quality Thresholds](#artifact-quality-thresholds)
+  - [Artifact Existence Validation](#artifact-existence-validation)
+  - [URL Reachability (Build Phases)](#url-reachability-build-phases)
+  - [Implementation](#implementation)
+- [Decision Filter Thresholds](#decision-filter-thresholds)
+  - [Trigger Threshold Summary](#trigger-threshold-summary)
+  - [Evaluation Order](#evaluation-order)
+  - [Detailed Trigger Thresholds](#detailed-trigger-thresholds)
+- [Chairman Preference Overrides](#chairman-preference-overrides)
+  - [Which Thresholds Can Chairman Customize](#which-thresholds-can-chairman-customize)
+  - [Preference Resolution Order](#preference-resolution-order)
+  - [Default Values When No Preference Set](#default-values-when-no-preference-set)
+  - [Implementation](#implementation)
+
 ---
 Category: Reference
 Status: Approved

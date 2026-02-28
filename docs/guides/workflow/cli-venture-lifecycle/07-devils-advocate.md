@@ -1,3 +1,38 @@
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Architectural Position](#architectural-position)
+- [Why GPT-4o? The Model Isolation Principle](#why-gpt-4o-the-model-isolation-principle)
+  - [Adapter Integration](#adapter-integration)
+- [Gate Types](#gate-types)
+  - [Kill Gates](#kill-gates)
+  - [Promotion Gates](#promotion-gates)
+  - [Gate Detection](#gate-detection)
+- [Review Process](#review-process)
+  - [Step-by-Step Flow](#step-by-step-flow)
+- [Output Structure](#output-structure)
+  - [Assessment Levels](#assessment-levels)
+  - [Risk Structure](#risk-structure)
+- [Prompt Engineering](#prompt-engineering)
+  - [System Prompt Design](#system-prompt-design)
+  - [User Prompt Construction](#user-prompt-construction)
+- [Fallback Behavior](#fallback-behavior)
+  - [Fallback Result Structure](#fallback-result-structure)
+  - [Quality Score Impact](#quality-score-impact)
+- [Artifact Storage](#artifact-storage)
+  - [Quality Score Estimation](#quality-score-estimation)
+- [Response Parsing](#response-parsing)
+- [Non-Blocking Design](#non-blocking-design)
+- [Integration with Eva Orchestrator](#integration-with-eva-orchestrator)
+- [Key Design Decisions](#key-design-decisions)
+  - [Why Non-Blocking?](#why-non-blocking)
+  - [Why Minimum 2 Counter-Arguments?](#why-minimum-2-counter-arguments)
+  - [Why 8000 Character Limit on Analysis Data?](#why-8000-character-limit-on-analysis-data)
+  - [Why Structured JSON Output?](#why-structured-json-output)
+- [Testing Considerations](#testing-considerations)
+- [Related Components](#related-components)
+
 ---
 Category: Architecture
 Status: Approved

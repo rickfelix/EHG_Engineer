@@ -1,5 +1,60 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage Architecture Remediation Plan
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Critical Simplification: No Legacy Support Needed](#critical-simplification-no-legacy-support-needed)
+  - [The Context](#the-context)
+  - [The Decision: **Clean Slate**](#the-decision-clean-slate)
+- [Refinements Incorporated](#refinements-incorporated)
+  - [From OpenAI](#from-openai)
+  - [From Antigravity](#from-antigravity)
+- [Architecture Decision Records (ADRs)](#architecture-decision-records-adrs)
+  - [ADR-001: Clean Slate Approach](#adr-001-clean-slate-approach)
+  - [ADR-002: Single Workflow Path](#adr-002-single-workflow-path)
+  - [ADR-003: Stage Number Contract](#adr-003-stage-number-contract)
+- [Salvage vs Rebuild Rubric](#salvage-vs-rebuild-rubric)
+  - [Salvageable If:](#salvageable-if)
+  - [Rebuild If:](#rebuild-if)
+  - [Application to Current Stages:](#application-to-current-stages)
+- [Simplified Implementation Phases](#simplified-implementation-phases)
+  - [Phase 0: Audit & Clean Database (Days 1-2)](#phase-0-audit-clean-database-days-1-2)
+  - [Phase 1: SSOT Foundation + Delete Legacy (Days 3-5)](#phase-1-ssot-foundation-delete-legacy-days-3-5)
+  - [Phase 2: Create V2 Stage Shells + Router (Days 6-8)](#phase-2-create-v2-stage-shells-router-days-6-8)
+  - [Phase 3: Implement Safe Stages (Days 9-13)](#phase-3-implement-safe-stages-days-9-13)
+  - [Phase 4: Rebuild Crisis Zone (Days 14-23)](#phase-4-rebuild-crisis-zone-days-14-23)
+  - [Phase 5: Governance & Polish (Days 24-26)](#phase-5-governance-polish-days-24-26)
+- [SSOT Architecture (Corrected)](#ssot-architecture-corrected)
+  - [File: `/src/config/venture-workflow.ts`](#file-srcconfigventure-workflowts)
+  - [File: `/src/config/vision-v2-stages.json`](#file-srcconfigvision-v2-stagesjson)
+- [Database Schema Changes](#database-schema-changes)
+- [Timeline Summary](#timeline-summary)
+- [Risk Register (Simplified)](#risk-register-simplified)
+- [Success Criteria](#success-criteria)
+  - [Must Have (Definition of Done)](#must-have-definition-of-done)
+  - [Nice to Have](#nice-to-have)
+- [First Week Execution Checklist](#first-week-execution-checklist)
+  - [Day 1](#day-1)
+  - [Day 2](#day-2)
+  - [Day 3](#day-3)
+  - [Day 4](#day-4)
+  - [Day 5](#day-5)
+- [Appendix: Files to Delete](#appendix-files-to-delete)
+  - [Types to Delete (Phase 1)](#types-to-delete-phase-1)
+  - [Duplicate Stage Files to Delete (Phase 1)](#duplicate-stage-files-to-delete-phase-1)
+  - [Files to Keep (Salvageable)](#files-to-keep-salvageable)
+- [Sign-Off](#sign-off)
 
 ## Metadata
 - **Category**: Architecture

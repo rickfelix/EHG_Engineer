@@ -1,5 +1,45 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol Vision QA Integration (Extension v3.1.5.9)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [1. Vision QA System Overview](#1-vision-qa-system-overview)
+  - [1.1. Core Capabilities](#11-core-capabilities)
+- [2. Integration Triggers for LEO Agents](#2-integration-triggers-for-leo-agents)
+  - [2.1. LEAD Agent Vision QA Triggers](#21-lead-agent-vision-qa-triggers)
+  - [2.2. PLAN Agent Vision QA Orchestration](#22-plan-agent-vision-qa-orchestration)
+  - [2.3. EXEC Agent Vision QA Execution](#23-exec-agent-vision-qa-execution)
+- [3. Vision QA Decision Tree](#3-vision-qa-decision-tree)
+- [4. Cost Management Guidelines](#4-cost-management-guidelines)
+  - [4.1. Model Selection by Agent Role](#41-model-selection-by-agent-role)
+  - [4.2. Automatic Model Selection Rules](#42-automatic-model-selection-rules)
+- [5. Integration with Existing LEO Components](#5-integration-with-existing-leo-components)
+  - [5.1. Database Integration](#51-database-integration)
+  - [5.2. Evidence Package Integration](#52-evidence-package-integration)
+  - [5.3. Quality Gate Integration](#53-quality-gate-integration)
+- [6. Vision QA Communication Templates](#6-vision-qa-communication-templates)
+  - [6.1. LEAD → PLAN with Vision QA Requirement](#61-lead-plan-with-vision-qa-requirement)
+  - [6.2. PLAN → EXEC with Vision QA Task](#62-plan-exec-with-vision-qa-task)
+  - [6.3. EXEC → PLAN with Vision QA Results](#63-exec-plan-with-vision-qa-results)
+- [7. Troubleshooting and Edge Cases](#7-troubleshooting-and-edge-cases)
+  - [7.1. When Vision QA is Blocked](#71-when-vision-qa-is-blocked)
+  - [7.2. Interpreting Vision QA Failures](#72-interpreting-vision-qa-failures)
+- [8. Migration Path for Existing Tests](#8-migration-path-for-existing-tests)
+  - [8.1. Gradual Adoption Strategy](#81-gradual-adoption-strategy)
+- [9. Appendix: Quick Reference](#9-appendix-quick-reference)
+  - [9.1. Vision QA Commands](#91-vision-qa-commands)
+  - [9.2. Cost Quick Reference](#92-cost-quick-reference)
+- [10. Version History](#10-version-history)
 
 ## Metadata
 - **Category**: Protocol

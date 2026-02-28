@@ -1,4 +1,27 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 11: Canonical Definition (from stages.yaml)
+
+
+## Table of Contents
+
+- [Field-by-Field Interpretation](#field-by-field-interpretation)
+  - [Basic Attributes](#basic-attributes)
+  - [Dependencies](#dependencies)
+  - [Inputs (3 defined)](#inputs-3-defined)
+  - [Outputs (3 defined)](#outputs-3-defined)
+  - [Metrics (3 defined)](#metrics-3-defined)
+  - [Entry Gates (2 defined)](#entry-gates-2-defined)
+  - [Exit Gates (3 defined)](#exit-gates-3-defined)
+  - [Substages (3 defined)](#substages-3-defined)
+  - [Notes](#notes)
+- [Gaps Identified in Canonical Definition](#gaps-identified-in-canonical-definition)
 
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:461-505
 

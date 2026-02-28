@@ -1,5 +1,52 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.1.2 - GitHub Deployment Workflow Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Core Workflow Integration](#core-workflow-integration)
+  - [LEO Protocol v4.1.2 Verification Cycle](#leo-protocol-v412-verification-cycle)
+- [Git Operations by Phase](#git-operations-by-phase)
+  - [Phase 1-2: LEAD/PLAN (Database-First)](#phase-1-2-leadplan-database-first)
+  - [Phase 3: EXEC Implementation (30%)](#phase-3-exec-implementation-30)
+  - [Phase 4: PLAN Verification (15%)](#phase-4-plan-verification-15)
+  - [Phase 5: LEAD Approval (15%)](#phase-5-lead-approval-15)
+- [GitHub Deployment Sub-Agent](#github-deployment-sub-agent)
+  - [Activation Criteria](#activation-criteria)
+  - [Sub-Agent Responsibilities](#sub-agent-responsibilities)
+  - [Sub-Agent Handoff Requirements](#sub-agent-handoff-requirements)
+- [Deployment Validation Checklist](#deployment-validation-checklist)
+  - [Database Validation (MANDATORY)](#database-validation-mandatory)
+  - [Implementation Validation](#implementation-validation)
+  - [Authorization Validation](#authorization-validation)
+- [Prohibited Operations](#prohibited-operations)
+  - [During Implementation Phase (EXEC)](#during-implementation-phase-exec)
+  - [Before LEAD Approval](#before-lead-approval)
+- [GitHub Sub-Agent Integration](#github-sub-agent-integration)
+  - [Mandatory Activation Criteria](#mandatory-activation-criteria)
+  - [Sub-Agent Decision Tree Integration](#sub-agent-decision-tree-integration)
+- [Error Prevention](#error-prevention)
+  - [Common Anti-Patterns (DON'T)](#common-anti-patterns-dont)
+  - [Correct Patterns (DO)](#correct-patterns-do)
+- [Migration from Previous Versions](#migration-from-previous-versions)
+  - [Breaking Changes from v3.1.5](#breaking-changes-from-v315)
+  - [Updated Git Operation Timing](#updated-git-operation-timing)
+- [Implementation Scripts](#implementation-scripts)
+  - [Required Scripts for v4.1.2 Compliance](#required-scripts-for-v412-compliance)
+- [Best Practices](#best-practices)
+  - [DO's](#dos)
+  - [DON'Ts](#donts)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Protocol

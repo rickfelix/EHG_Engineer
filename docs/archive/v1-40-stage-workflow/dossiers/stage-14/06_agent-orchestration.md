@@ -1,4 +1,35 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 14 Agent Orchestration & Governance
+
+
+## Table of Contents
+
+- [Python CrewAI Mapping](#python-crewai-mapping)
+  - [Agent Definition](#agent-definition)
+  - [Task Definitions](#task-definitions)
+  - [Crew Configuration](#crew-configuration)
+- [Governance Mappings](#governance-mappings)
+  - [Owner: EXEC (Implementation Authority)](#owner-exec-implementation-authority)
+  - [Decision Authority Matrix](#decision-authority-matrix)
+  - [Quality Gates with Governance](#quality-gates-with-governance)
+- [Metrics Collection & Reporting](#metrics-collection-reporting)
+  - [Metrics Agent Integration](#metrics-agent-integration)
+  - [Escalation Procedures](#escalation-procedures)
+- [Agent Interaction Patterns](#agent-interaction-patterns)
+  - [Sequential Execution](#sequential-execution)
+  - [Coordination Points](#coordination-points)
+- [Human-in-the-Loop Checkpoints](#human-in-the-loop-checkpoints)
+- [Automation Roadmap](#automation-roadmap)
+  - [Phase 1: Assisted (50% automated)](#phase-1-assisted-50-automated)
+  - [Phase 2: Auto (80% automated)](#phase-2-auto-80-automated)
+- [Source Tables](#source-tables)
 
 ## Python CrewAI Mapping
 

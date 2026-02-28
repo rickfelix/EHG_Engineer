@@ -1,5 +1,52 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # LEO Protocol v4.4.2/v4.4.3 - Testing Governance Enhancement
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [v4.4.3 Changes (SD-LEO-TESTING-ENFORCEMENT-001)](#v443-changes-sd-leo-testing-enforcement-001)
+  - [Problem Identified](#problem-identified)
+  - [Solution: Dynamic Type-Aware Validation](#solution-dynamic-type-aware-validation)
+  - [Benefits](#benefits)
+- [Problem Statement](#problem-statement)
+- [Solution Architecture](#solution-architecture)
+  - [1. MANDATORY_TESTING_VALIDATION Gate](#1-mandatory_testing_validation-gate)
+  - [2. TEST_EVIDENCE_AUTO_CAPTURE Gate](#2-test_evidence_auto_capture-gate)
+  - [3. Schema Context Loader](#3-schema-context-loader)
+- [retrospectives Table](#retrospectives-table)
+  - [4. Test Coverage Metrics in Retrospectives](#4-test-coverage-metrics-in-retrospectives)
+- [Gate Execution Order](#gate-execution-order)
+- [Usage Examples](#usage-examples)
+  - [Running EXEC→PLAN Handoff](#running-execplan-handoff)
+  - [Configuration for Strict Testing](#configuration-for-strict-testing)
+  - [Documentation SD (Exempt)](#documentation-sd-exempt)
+  - [Handling Stale Evidence](#handling-stale-evidence)
+- [Schema Documentation Updates](#schema-documentation-updates)
+  - [retrospectives Table](#retrospectives-table)
+  - [handoff_verification_gates Table](#handoff_verification_gates-table)
+- [Impact Analysis](#impact-analysis)
+  - [Time Savings](#time-savings)
+  - [Quality Metrics](#quality-metrics)
+- [Migration Path](#migration-path)
+  - [Upgrading from v4.3.x](#upgrading-from-v43x)
+  - [Backward Compatibility](#backward-compatibility)
+- [Troubleshooting](#troubleshooting)
+  - [Issue: "No TESTING sub-agent execution found"](#issue-no-testing-sub-agent-execution-found)
+  - [Issue: "Test evidence stale (36h old)"](#issue-test-evidence-stale-36h-old)
+  - [Issue: "No test reports found in standard locations"](#issue-no-test-reports-found-in-standard-locations)
+  - [Issue: Schema context not loading](#issue-schema-context-not-loading)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Protocol

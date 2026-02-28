@@ -1,5 +1,29 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # BLOCKING ISSUE: SD-VIDEO-VARIANT-001 LEAD→PLAN Handoff
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Problem Summary](#problem-summary)
+- [Root Cause](#root-cause)
+  - [Issue 1: Database Trigger Error](#issue-1-database-trigger-error)
+  - [Issue 2: Empty Arrays Fail Validation](#issue-2-empty-arrays-fail-validation)
+- [Required Manual Fix](#required-manual-fix)
+  - [Option A: Add Missing Column (Recommended)](#option-a-add-missing-column-recommended)
+  - [Option B: Disable Trigger Temporarily](#option-b-disable-trigger-temporarily)
+  - [Option C: Manual Field Population](#option-c-manual-field-population)
+- [Verification After Fix](#verification-after-fix)
+- [Context](#context)
+- [Next Steps After Fix](#next-steps-after-fix)
 
 ## Metadata
 - **Category**: Report

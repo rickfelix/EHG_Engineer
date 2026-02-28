@@ -1,5 +1,55 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Audit File Format Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [File Location & Naming](#file-location-naming)
+  - [Directory](#directory)
+  - [Filename Format](#filename-format)
+- [Required Structure](#required-structure)
+  - [Minimum Required Sections](#minimum-required-sections)
+  - [Optional Sections](#optional-sections)
+- [Issues Table Format](#issues-table-format)
+  - [Required Columns](#required-columns)
+  - [Example Table](#example-table)
+- [ID Format Rules](#id-format-rules)
+  - [Structure](#structure)
+  - [PREFIX Requirements](#prefix-requirements)
+  - [NUMBER Requirements](#number-requirements)
+  - [Valid Examples](#valid-examples)
+  - [Invalid Examples](#invalid-examples)
+- [Type Values (Enum)](#type-values-enum)
+- [Severity Values (Enum)](#severity-values-enum)
+- [Description Field Rules](#description-field-rules)
+  - [CRITICAL: Verbatim Preservation](#critical-verbatim-preservation)
+  - [Example - Correct](#example---correct)
+  - [Example - INCORRECT (Do Not Do)](#example---incorrect-do-not-do)
+- [Multiple Tables](#multiple-tables)
+- [Critical Issues](#critical-issues)
+- [UX Observations](#ux-observations)
+- [Brainstorm Ideas](#brainstorm-ideas)
+- [Validation Rules](#validation-rules)
+  - [File-Level](#file-level)
+  - [Table-Level](#table-level)
+  - [Row-Level](#row-level)
+- [Validation Script Usage](#validation-script-usage)
+  - [Expected Output (Valid)](#expected-output-valid)
+  - [Expected Output (Invalid)](#expected-output-invalid)
+- [Migration Notes](#migration-notes)
+  - [Existing Audits](#existing-audits)
+  - [December 26 Navigation Audit](#december-26-navigation-audit)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Reference

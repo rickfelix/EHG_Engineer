@@ -1,5 +1,56 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # SD-HARDENING-V1-001: INVEST Criteria Validation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [INVEST Criteria Reference](#invest-criteria-reference)
+- [US-001: Create fn_is_chairman() function](#us-001-create-fn_is_chairman-function)
+  - [INVEST Analysis](#invest-analysis)
+  - [Dependencies](#dependencies)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+- [US-002: Harden chairman_decisions RLS](#us-002-harden-chairman_decisions-rls)
+  - [INVEST Analysis](#invest-analysis)
+  - [Dependencies](#dependencies)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+- [US-003: Harden venture_decisions RLS](#us-003-harden-venture_decisions-rls)
+  - [INVEST Analysis](#invest-analysis)
+  - [Dependencies](#dependencies)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+- [US-004: Scope venture_artifacts RLS](#us-004-scope-venture_artifacts-rls)
+  - [INVEST Analysis](#invest-analysis)
+  - [Dependencies](#dependencies)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+- [US-005: Scope venture_stage_work RLS](#us-005-scope-venture_stage_work-rls)
+  - [INVEST Analysis](#invest-analysis)
+  - [Dependencies](#dependencies)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+- [US-006: Create RLS regression test suite](#us-006-create-rls-regression-test-suite)
+  - [INVEST Analysis](#invest-analysis)
+  - [Dependencies](#dependencies)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+  - [Splitting Recommendation](#splitting-recommendation)
+- [Overall INVEST Summary](#overall-invest-summary)
+- [Key Findings](#key-findings)
+  - [Strengths](#strengths)
+  - [Areas of Concern](#areas-of-concern)
+  - [Recommendations](#recommendations)
+- [Dependency Graph](#dependency-graph)
+- [Testability Matrix](#testability-matrix)
+- [Value Proposition Analysis](#value-proposition-analysis)
+  - [Chairman Value](#chairman-value)
+  - [User Value](#user-value)
+  - [System Value](#system-value)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Guide

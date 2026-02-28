@@ -1,3 +1,33 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Workflow Position](#workflow-position)
+- [Direct Dependencies](#direct-dependencies)
+  - [Upstream: Stage 19 (Tri-Party Integration Verification)](#upstream-stage-19-tri-party-integration-verification)
+  - [Downstream: Stage 23 (Continuous Feedback Loops)](#downstream-stage-23-continuous-feedback-loops)
+- [Parallel Execution Opportunities](#parallel-execution-opportunities)
+- [Recursion Relationships](#recursion-relationships)
+  - [Backward Recursion (Stage 23 → Stage 19)](#backward-recursion-stage-23-stage-19)
+  - [Backward Recursion (Stage 23 → Stage 16)](#backward-recursion-stage-23-stage-16)
+  - [Self-Recursion (Stage 23 → Stage 23)](#self-recursion-stage-23-stage-23)
+- [Critical Path Analysis](#critical-path-analysis)
+- [Stage Timing](#stage-timing)
+- [Cross-Venture Dependencies](#cross-venture-dependencies)
+- [Stage 23 Success Gates](#stage-23-success-gates)
+  - [Entry Gates](#entry-gates)
+  - [Exit Gates](#exit-gates)
+- [Visualization: Stage 23 Position](#visualization-stage-23-position)
+- [Dependency Diagram](#dependency-diagram)
+
 <!-- ARCHIVED: 2026-01-26T16:26:36.182Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-23\02_stage-map.md

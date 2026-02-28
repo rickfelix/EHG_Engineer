@@ -1,4 +1,27 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 10: Canonical Definition
+
+
+## Table of Contents
+
+- [Full YAML Definition](#full-yaml-definition)
+- [Field-by-Field Analysis](#field-by-field-analysis)
+  - [Basic Attributes](#basic-attributes)
+  - [Dependencies](#dependencies)
+  - [Inputs (3)](#inputs-3)
+  - [Outputs (3)](#outputs-3)
+  - [Metrics (3)](#metrics-3)
+  - [Gates](#gates)
+  - [Substages (4)](#substages-4)
+  - [Notes](#notes)
+- [Consistency Check](#consistency-check)
 
 **Source**: stages.yaml (single source of truth)
 **Lines**: 410-460

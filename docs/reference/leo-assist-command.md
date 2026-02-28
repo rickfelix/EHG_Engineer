@@ -1,4 +1,45 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # LEO Assist Command Reference Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [⚠️ CRITICAL: Issue Resolution Protocol](#-critical-issue-resolution-protocol)
+- [Quick Start](#quick-start)
+- [When to Use /leo assist](#when-to-use-leo-assist)
+- [Command Flow](#command-flow)
+- [Phase 1: Autonomous Issue Processing](#phase-1-autonomous-issue-processing)
+  - [Prioritization](#prioritization)
+  - [Classification by Scope](#classification-by-scope)
+  - [Intelligent Retry Loop](#intelligent-retry-loop)
+  - [Safety Gates](#safety-gates)
+- [Phase 2: Interactive Enhancement Scheduling](#phase-2-interactive-enhancement-scheduling)
+  - [Scheduling Options](#scheduling-options)
+- [Summary Report](#summary-report)
+- [Dry-Run Mode](#dry-run-mode)
+- [Context-Aware Prioritization](#context-aware-prioritization)
+- [Known Limitations](#known-limitations)
+  - [Feedback Resolution Tracking (v1.0)](#feedback-resolution-tracking-v10)
+  - [Junction Table Not Used](#junction-table-not-used)
+- [Related Commands](#related-commands)
+- [Technical Details](#technical-details)
+  - [Engine Components](#engine-components)
+  - [Database Tables](#database-tables)
+  - [Key Methods](#key-methods)
+- [Troubleshooting](#troubleshooting)
+  - ["No items to process"](#no-items-to-process)
+  - ["Context load failed"](#context-load-failed)
+  - ["Quick-fix exceeded LOC threshold"](#quick-fix-exceeded-loc-threshold)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

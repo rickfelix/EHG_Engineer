@@ -1,4 +1,48 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 19: Acceptance Checklist
+
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Scoring Rubric](#scoring-rubric)
+- [Criterion 1: Evidence Quality (15 points)](#criterion-1-evidence-quality-15-points)
+  - [Requirements](#requirements)
+  - [Validation Checklist](#validation-checklist)
+- [Criterion 2: Completeness (15 points)](#criterion-2-completeness-15-points)
+  - [Requirements](#requirements)
+- [Criterion 3: Accuracy (15 points)](#criterion-3-accuracy-15-points)
+  - [Requirements](#requirements)
+- [Criterion 4: Actionability (10 points)](#criterion-4-actionability-10-points)
+  - [Requirements](#requirements)
+- [Criterion 5: Recursion Design (10 points)](#criterion-5-recursion-design-10-points)
+  - [Requirements](#requirements)
+- [Criterion 6: Metrics Rigor (10 points)](#criterion-6-metrics-rigor-10-points)
+  - [Requirements](#requirements)
+- [Criterion 7: Gap Mapping (10 points)](#criterion-7-gap-mapping-10-points)
+  - [Requirements](#requirements)
+- [Criterion 8: Consistency (15 points)](#criterion-8-consistency-15-points)
+  - [Requirements](#requirements)
+- [Overall Assessment](#overall-assessment)
+  - [Score Summary](#score-summary)
+  - [Quality Grade](#quality-grade)
+  - [Readiness Assessment](#readiness-assessment)
+- [Post-Generation Validation](#post-generation-validation)
+  - [File Existence Check](#file-existence-check)
+  - [Line Count Verification](#line-count-verification)
+  - [Evidence Citation Count](#evidence-citation-count)
+  - [Footer Verification](#footer-verification)
+- [Maintenance Instructions](#maintenance-instructions)
+  - [Regeneration Trigger](#regeneration-trigger)
+  - [Regeneration Command](#regeneration-command)
+  - [Version Control](#version-control)
 
 ## Purpose
 

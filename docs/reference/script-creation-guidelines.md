@@ -1,5 +1,64 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Script Creation Guidelines
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical Policy: No One-Off Scripts](#critical-policy-no-one-off-scripts)
+- [Background: LEO 5.0 Cleanup (January 2026)](#background-leo-50-cleanup-january-2026)
+  - [The Problem](#the-problem)
+  - [The Impact](#the-impact)
+- [Standard SD Creation Process](#standard-sd-creation-process)
+  - [Use Standard CLI Only](#use-standard-cli-only)
+  - [Features](#features)
+  - [Example Usage](#example-usage)
+- [Standard PRD Creation Process](#standard-prd-creation-process)
+  - [Use Standard CLI Only](#use-standard-cli-only)
+  - [Features](#features)
+  - [Example Usage](#example-usage)
+- [Why One-Off Scripts Are Prohibited](#why-one-off-scripts-are-prohibited)
+  - [1. Bypass Validation](#1-bypass-validation)
+  - [2. Inconsistent Data](#2-inconsistent-data)
+  - [3. Maintenance Burden](#3-maintenance-burden)
+  - [4. Poor Discoverability](#4-poor-discoverability)
+  - [5. Technical Debt](#5-technical-debt)
+- [Migration Path: Existing One-Off Scripts](#migration-path-existing-one-off-scripts)
+  - [Current State (Post-LEO 5.0 Cleanup)](#current-state-post-leo-50-cleanup)
+  - [If You Have a One-Off Script](#if-you-have-a-one-off-script)
+  - [Example Migration](#example-migration)
+- [When Scripts Are Allowed](#when-scripts-are-allowed)
+  - [Approved Script Categories](#approved-script-categories)
+  - [Approval Process](#approval-process)
+- [Standard CLI Enhancement Process](#standard-cli-enhancement-process)
+  - [If Standard CLI Lacks Features](#if-standard-cli-lacks-features)
+  - [Example: Special Field Requirements](#example-special-field-requirements)
+- [Enforcement](#enforcement)
+  - [Pre-Commit Hooks](#pre-commit-hooks)
+  - [Code Review Requirements](#code-review-requirements)
+  - [CI/CD Validation](#cicd-validation)
+- [Migration Commands Reference](#migration-commands-reference)
+  - [For Developers with Local One-Off Scripts](#for-developers-with-local-one-off-scripts)
+- [Success Metrics](#success-metrics)
+  - [Post-LEO 5.0 Cleanup](#post-leo-50-cleanup)
+  - [Ongoing Targets](#ongoing-targets)
+- [FAQ](#faq)
+  - [Q: What if I need a custom field?](#q-what-if-i-need-a-custom-field)
+  - [Q: What if this is just a one-time data migration?](#q-what-if-this-is-just-a-one-time-data-migration)
+  - [Q: What if I'm prototyping?](#q-what-if-im-prototyping)
+  - [Q: What about the 200+ archived scripts?](#q-what-about-the-200-archived-scripts)
+  - [Q: Can I modify an archived script and use it?](#q-can-i-modify-an-archived-script-and-use-it)
+  - [Q: Who approves script creation?](#q-who-approves-script-creation)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

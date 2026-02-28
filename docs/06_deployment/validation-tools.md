@@ -1,5 +1,47 @@
+---
+category: deployment
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [deployment, auto-generated]
+---
 # LEO Protocol Validation Tools
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Bypass Detection Validator](#bypass-detection-validator)
+  - [How It Works](#how-it-works)
+  - [Running Bypass Detection](#running-bypass-detection)
+  - [Output](#output)
+  - [CI Integration](#ci-integration)
+- [SD Type Sync Verification](#sd-type-sync-verification)
+  - [How It Works](#how-it-works)
+  - [Running Sync Verification](#running-sync-verification)
+  - [Output](#output)
+  - [CI Integration](#ci-integration)
+- [Test Coverage Metrics (Retrospectives)](#test-coverage-metrics-retrospectives)
+  - [New Columns](#new-columns)
+  - [Validation](#validation)
+  - [Usage](#usage)
+- [Validation Audit Log](#validation-audit-log)
+  - [Table Structure](#table-structure)
+  - [Functions](#functions)
+  - [Metrics View](#metrics-view)
+- [QA SD Type Support](#qa-sd-type-support)
+  - [QA Validation Profile](#qa-validation-profile)
+  - [Required Handoffs](#required-handoffs)
+  - [Coverage Requirement](#coverage-requirement)
+- [Database Constraint Synchronization](#database-constraint-synchronization)
+- [Troubleshooting](#troubleshooting)
+  - [Bypass Detection False Positives](#bypass-detection-false-positives)
+  - [Coverage Metrics Not Required](#coverage-metrics-not-required)
+  - [SD Type Not Accepted](#sd-type-not-accepted)
+- [Related Documentation](#related-documentation)
 
 ## Metadata
 - **Category**: Deployment

@@ -1,5 +1,44 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Recommendations: What to Bring from EHG Platform to EHG_Engineer
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [1. Essential Additions (High Priority)](#1-essential-additions-high-priority)
+  - [1.1 CLAUDE.md Equivalent](#11-claudemd-equivalent)
+  - [1.2 Enhanced Communication Header Format](#12-enhanced-communication-header-format)
+  - [1.3 Compliance Audit Enhancement](#13-compliance-audit-enhancement)
+- [2. Valuable Additions (Medium Priority)](#2-valuable-additions-medium-priority)
+  - [2.1 Task Execution Options Documentation](#21-task-execution-options-documentation)
+  - [2.2 .cursor/rules Directory Structure](#22-cursorrules-directory-structure)
+  - [2.3 Git Operations Guidelines](#23-git-operations-guidelines)
+- [3. Optional Enhancements (Low Priority)](#3-optional-enhancements-low-priority)
+  - [3.1 Service Management Scripts](#31-service-management-scripts)
+  - [3.2 Testing Infrastructure](#32-testing-infrastructure)
+  - [3.3 Extended Database Tables](#33-extended-database-tables)
+- [4. What NOT to Bring Over](#4-what-not-to-bring-over)
+  - [4.1 Complexity to Avoid](#41-complexity-to-avoid)
+  - [4.2 Over-Engineering to Avoid](#42-over-engineering-to-avoid)
+- [5. Immediate Action Items](#5-immediate-action-items)
+  - [5.1 Create AI_GUIDE.md](#51-create-ai_guidemd)
+  - [5.2 Update Templates with Full Headers](#52-update-templates-with-full-headers)
+  - [5.3 Create Minimal Cursor Rules](#53-create-minimal-cursor-rules)
+  - [5.4 Add Version Management](#54-add-version-management)
+- [6. Long-term Considerations](#6-long-term-considerations)
+  - [6.1 Protocol Evolution](#61-protocol-evolution)
+  - [6.2 Extensibility](#62-extensibility)
+  - [6.3 Community Support](#63-community-support)
+- [Conclusion](#conclusion)
 
 ## Metadata
 - **Category**: Report

@@ -1,5 +1,67 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Quality Lifecycle System Documentation
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Documentation Structure](#documentation-structure)
+  - [Core Documentation](#core-documentation)
+  - [Component Documentation](#component-documentation)
+- [Quick Start](#quick-start)
+  - [For Developers (CLI)](#for-developers-cli)
+  - [For Business Users (Web UI)](#for-business-users-web-ui)
+- [Key Features](#key-features)
+  - [Unified Feedback Management](#unified-feedback-management)
+  - [Multi-Venture Architecture](#multi-venture-architecture)
+  - [Intelligent Triage](#intelligent-triage)
+  - [Automatic Error Capture](#automatic-error-capture)
+  - [Release Planning](#release-planning)
+- [Architecture](#architecture)
+  - [Data Model](#data-model)
+  - [Component Architecture](#component-architecture)
+- [Integration Points](#integration-points)
+  - [With LEO Protocol](#with-leo-protocol)
+  - [With Governance](#with-governance)
+  - [With Ventures](#with-ventures)
+- [Validation](#validation)
+  - [Round 1: Vision Review](#round-1-vision-review)
+  - [Round 2: Enhancement Integration](#round-2-enhancement-integration)
+  - [Round 3: UI Integration](#round-3-ui-integration)
+  - [Round 4: SD Hierarchy Planning](#round-4-sd-hierarchy-planning)
+- [Strategic Directives](#strategic-directives)
+  - [Orchestrator](#orchestrator)
+  - [Children](#children)
+- [Triangulation Research](#triangulation-research)
+  - [Round 1 (Vision)](#round-1-vision)
+  - [Round 2 (Enhancements)](#round-2-enhancements)
+  - [Round 3 (UI Integration)](#round-3-ui-integration)
+  - [Round 4 (SD Hierarchy)](#round-4-sd-hierarchy)
+  - [Recently Committed Research](#recently-committed-research)
+- [Key Design Decisions](#key-design-decisions)
+  - [Unified vs Separate Tables](#unified-vs-separate-tables)
+  - [Stage 2 Name: "Capture" vs "Detection"](#stage-2-name-capture-vs-detection)
+  - [Primary Command: /inbox](#primary-command-inbox)
+  - [Junction Table vs Simple Field](#junction-table-vs-simple-field)
+  - [UI Sequence: CLI First, UI Last](#ui-sequence-cli-first-ui-last)
+- [Future Work](#future-work)
+  - [SD-QUALITY-AI-001 (Future)](#sd-quality-ai-001-future)
+  - [SD-QUALITY-VENTURE-001 (Future)](#sd-quality-venture-001-future)
+- [Getting Help](#getting-help)
+  - [Documentation](#documentation)
+  - [Commands](#commands)
+  - [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
+  - [Version 1.0.0 (2026-01-18)](#version-100-2026-01-18)
 
 ## Metadata
 - **Category**: Reference

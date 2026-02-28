@@ -1,3 +1,11 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 9: Canonical Definition (from stages.yaml)
 
 **Purpose**: Full YAML definition from authoritative source (stages.yaml).

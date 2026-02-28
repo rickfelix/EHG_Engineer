@@ -1,3 +1,48 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Current Recursion Status](#current-recursion-status)
+- [Risk Context](#risk-context)
+- [Proposed Recursion Mechanisms](#proposed-recursion-mechanisms)
+  - [Trigger EXIT-001: Valuation Insufficient](#trigger-exit-001-valuation-insufficient)
+  - [Trigger EXIT-002: No Viable Exit Path](#trigger-exit-002-no-viable-exit-path)
+  - [Trigger EXIT-003: Strategic Fit Too Low](#trigger-exit-003-strategic-fit-too-low)
+  - [Trigger EXIT-004: Timeline Infeasible](#trigger-exit-004-timeline-infeasible)
+- [Inbound Triggers (from prior stages to Stage 13)](#inbound-triggers-from-prior-stages-to-stage-13)
+  - [Trigger IN-001: Early Exit Opportunity](#trigger-in-001-early-exit-opportunity)
+  - [Trigger IN-002: Forced Exit Planning](#trigger-in-002-forced-exit-planning)
+- [Outbound Triggers (from Stage 13 to subsequent stages)](#outbound-triggers-from-stage-13-to-subsequent-stages)
+  - [Trigger OUT-001: Exit Strategy Approved](#trigger-out-001-exit-strategy-approved)
+  - [Trigger OUT-002: Exit Execution Initiated](#trigger-out-002-exit-execution-initiated)
+- [Recursion Loop Prevention](#recursion-loop-prevention)
+  - [Maximum Iteration Limits](#maximum-iteration-limits)
+  - [Loop Detection](#loop-detection)
+- [Recursion Cost-Benefit Analysis](#recursion-cost-benefit-analysis)
+  - [EXIT-001: Stage 13 → Stage 5 (Profitability)](#exit-001-stage-13-stage-5-profitability)
+  - [EXIT-002: Stage 13 → Stage 12 (Business Model)](#exit-002-stage-13-stage-12-business-model)
+  - [EXIT-003: Stage 13 → Stage 6-7 (Market Validation)](#exit-003-stage-13-stage-6-7-market-validation)
+  - [EXIT-004: Stage 13 → Stage 8-9 (Growth)](#exit-004-stage-13-stage-8-9-growth)
+- [Recursion Governance](#recursion-governance)
+  - [Chairman Approval Required For:](#chairman-approval-required-for)
+  - [Automatic Triggers (no approval needed):](#automatic-triggers-no-approval-needed)
+  - [Monitoring Requirements:](#monitoring-requirements)
+- [Integration with Rollback Procedures](#integration-with-rollback-procedures)
+- [Recursion Gap Analysis](#recursion-gap-analysis)
+  - [Current State: NO RECURSION DEFINED](#current-state-no-recursion-defined)
+  - [Proposed State: 4 RECURSION TRIGGERS + 2 INBOUND/OUTBOUND](#proposed-state-4-recursion-triggers-2-inboundoutbound)
+- [Recursion Documentation Requirements](#recursion-documentation-requirements)
+  - [For Each Recursion Instance:](#for-each-recursion-instance)
+  - [Database Schema Addition (proposed):](#database-schema-addition-proposed)
+
 <!-- ARCHIVED: 2026-01-26T16:26:47.802Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-13\07_recursion-blueprint.md

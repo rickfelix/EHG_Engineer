@@ -1,5 +1,40 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Response: Anthropic (Claude)
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [The competitive reality check](#the-competitive-reality-check)
+  - [What existing tools actually do](#what-existing-tools-actually-do)
+  - [What this tells us](#what-this-tells-us)
+- [Legal liability: What actually matters](#legal-liability-what-actually-matters)
+  - [The UPL line is about interpretation, not data](#the-upl-line-is-about-interpretation-not-data)
+  - [The negligent misrepresentation trap](#the-negligent-misrepresentation-trap)
+- [Option-by-option analysis](#option-by-option-analysis)
+  - [Option A: No trademark feature](#option-a-no-trademark-feature)
+  - [Option B: Basic USPTO search integration](#option-b-basic-uspto-search-integration)
+  - [Option C: Third-party trademark API integration](#option-c-third-party-trademark-api-integration)
+  - [Option D: Attorney referral network](#option-d-attorney-referral-network)
+  - [Option E: Educational content only](#option-e-educational-content-only)
+- [Recommended approach: Conservative hybrid](#recommended-approach-conservative-hybrid)
+  - [MVP (now)](#mvp-now)
+  - [V1 (if user demand warrants)](#v1-if-user-demand-warrants)
+  - [What NOT to build](#what-not-to-build)
+- [Specific implementation recommendations](#specific-implementation-recommendations)
+  - [Disclaimer language that actually protects](#disclaimer-language-that-actually-protects)
+  - [UI patterns that reduce liability](#ui-patterns-that-reduce-liability)
+  - [Affiliate partnership options](#affiliate-partnership-options)
+- [Risk assessment matrix](#risk-assessment-matrix)
+- [The bottom line](#the-bottom-line)
 
 ## Metadata
 - **Category**: Guide

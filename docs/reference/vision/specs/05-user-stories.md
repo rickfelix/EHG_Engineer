@@ -1,5 +1,38 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # User Stories & Personas Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [The Two Hats Problem](#the-two-hats-problem)
+- [Persona 1: The Chairman (Strategic Mode)](#persona-1-the-chairman-strategic-mode)
+  - [Profile](#profile)
+  - [Focus Areas](#focus-areas)
+  - [User Stories](#user-stories)
+- [Persona 2: The Solo Entrepreneur (Builder Mode)](#persona-2-the-solo-entrepreneur-builder-mode)
+  - [Profile](#profile)
+  - [Focus Areas](#focus-areas)
+  - [User Stories](#user-stories)
+- [Persona 3: EVA (Chief of Staff)](#persona-3-eva-chief-of-staff)
+  - [Profile](#profile)
+  - [Focus Areas](#focus-areas)
+  - [User Stories](#user-stories)
+- [Persona Switching](#persona-switching)
+  - [When to Switch Modes](#when-to-switch-modes)
+  - [UI Affordances for Mode Switching](#ui-affordances-for-mode-switching)
+  - [Mode-Specific UI Differences](#mode-specific-ui-differences)
+- [Story Cross-Reference Matrix](#story-cross-reference-matrix)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

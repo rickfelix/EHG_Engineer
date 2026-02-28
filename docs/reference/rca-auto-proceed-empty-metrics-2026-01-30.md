@@ -1,4 +1,48 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # RCA: AUTO-PROCEED Stopped by Empty success_metrics
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Timeline](#timeline)
+- [Symptoms](#symptoms)
+  - [Primary Symptom](#primary-symptom)
+  - [Secondary Symptoms](#secondary-symptoms)
+- [Root Cause Analysis](#root-cause-analysis)
+  - [5-Whys Investigation](#5-whys-investigation)
+- [Impact Assessment](#impact-assessment)
+  - [Immediate Impact](#immediate-impact)
+  - [Systemic Risk](#systemic-risk)
+- [Fix Implementation](#fix-implementation)
+  - [Fix 1: JavaScript Array Validation](#fix-1-javascript-array-validation)
+  - [Fix 2: Child SD Metric Generation](#fix-2-child-sd-metric-generation)
+  - [Fix 3: Protocol File Loading](#fix-3-protocol-file-loading)
+  - [Fix 4: Database Constraint](#fix-4-database-constraint)
+  - [Fix 5: Data Healing](#fix-5-data-healing)
+- [Verification](#verification)
+  - [Before Fix](#before-fix)
+  - [After Data Healing](#after-data-healing)
+  - [Constraint Application](#constraint-application)
+  - [Test New SD Creation](#test-new-sd-creation)
+- [Lessons Learned](#lessons-learned)
+  - [Technical Lessons](#technical-lessons)
+  - [Process Lessons](#process-lessons)
+- [Prevention Measures](#prevention-measures)
+  - [Code Review Checklist](#code-review-checklist)
+  - [Gate Enhancement](#gate-enhancement)
+  - [Monitoring](#monitoring)
+- [Related Documentation](#related-documentation)
+- [Contributors](#contributors)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Reference

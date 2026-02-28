@@ -1,5 +1,62 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # LEO Protocol v4.3.0 Enhancements
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [What Changed](#what-changed)
+  - [1. E2E Test → User Story Mapping (EXEC→PLAN Handoff)](#1-e2e-test-user-story-mapping-execplan-handoff)
+  - [2. Deliverables Auto-Population (PLAN→EXEC Handoff)](#2-deliverables-auto-population-planexec-handoff)
+  - [3. Retrospective Status Default (PUBLISHED)](#3-retrospective-status-default-published)
+- [Implementation Details](#implementation-details)
+  - [File Structure](#file-structure)
+  - [Imports Added](#imports-added)
+  - [Integration Points](#integration-points)
+- [Validation Gates](#validation-gates)
+  - [E2E Mapping Validation](#e2e-mapping-validation)
+  - [Deliverables Extraction](#deliverables-extraction)
+- [Backwards Compatibility](#backwards-compatibility)
+  - [✅ Fully Backwards Compatible](#-fully-backwards-compatible)
+  - [Manual Scripts Available](#manual-scripts-available)
+- [Testing](#testing)
+  - [Validation Steps](#validation-steps)
+  - [Expected Outcomes](#expected-outcomes)
+- [Performance Impact](#performance-impact)
+  - [E2E Mapping](#e2e-mapping)
+  - [Deliverables Extraction](#deliverables-extraction)
+  - [Total Overhead](#total-overhead)
+- [Success Metrics](#success-metrics)
+  - [SD-VIF-INTEL-001 (Test Case)](#sd-vif-intel-001-test-case)
+  - [Expected Impact (Future SDs)](#expected-impact-future-sds)
+- [Rollout Plan](#rollout-plan)
+  - [Phase 1: Immediate (v4.3.0)](#phase-1-immediate-v430)
+  - [Phase 2: Validation (Next 3 SDs)](#phase-2-validation-next-3-sds)
+  - [Phase 3: Optimization (Next sprint)](#phase-3-optimization-next-sprint)
+- [Related Documentation](#related-documentation)
+  - [Root Cause Analysis](#root-cause-analysis)
+  - [Implementation Files](#implementation-files)
+  - [Utility Scripts](#utility-scripts)
+- [Breaking Changes](#breaking-changes)
+- [Deprecations](#deprecations)
+- [Future Enhancements](#future-enhancements)
+  - [Planned for v4.4.0](#planned-for-v440)
+  - [Planned for v4.5.0](#planned-for-v450)
+- [Migration Guide](#migration-guide)
+  - [For Existing SDs (v4.2.0 → v4.3.0)](#for-existing-sds-v420-v430)
+- [Support](#support)
+  - [Common Issues](#common-issues)
+- [Changelog](#changelog)
+  - [v4.3.0 (2025-10-18)](#v430-2025-10-18)
 
 ## Metadata
 - **Category**: Protocol

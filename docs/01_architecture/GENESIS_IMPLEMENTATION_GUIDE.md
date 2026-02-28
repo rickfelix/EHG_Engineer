@@ -1,5 +1,43 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Genesis Implementation Guide
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Critical: Genesis Spans Two Codebases](#critical-genesis-spans-two-codebases)
+- [File Location Map](#file-location-map)
+  - [EHG_Engineer: `/lib/genesis/` (Infrastructure)](#ehg_engineer-libgenesis-infrastructure)
+  - [EHG App: `/lib/genesis/` (Orchestrators)](#ehg-app-libgenesis-orchestrators)
+  - [EHG App: `/scripts/genesis/` (Pipeline)](#ehg-app-scriptsgenesis-pipeline)
+- [Which Codebase for What?](#which-codebase-for-what)
+  - [Add to EHG_Engineer when:](#add-to-ehg_engineer-when)
+  - [Add to EHG App when:](#add-to-ehg-app-when)
+  - [Decision Tree](#decision-tree)
+- [Known Duplications](#known-duplications)
+  - [vercel-deploy.js (EXISTS IN BOTH)](#vercel-deployjs-exists-in-both)
+  - [mock-mode (COMPLEMENTARY)](#mock-mode-complementary)
+- [Integration Points](#integration-points)
+  - [API Endpoint](#api-endpoint)
+  - [Database Tables](#database-tables)
+  - [Entry Points](#entry-points)
+- [Current Gaps (As of 2026-01-01)](#current-gaps-as-of-2026-01-01)
+  - [Missing in EHG App](#missing-in-ehg-app)
+  - [Missing in EHG_Engineer](#missing-in-ehg_engineer)
+  - [Missing Overall](#missing-overall)
+- [Import Patterns](#import-patterns)
+  - [From EHG_Engineer lib](#from-ehg_engineer-lib)
+  - [From EHG App scripts](#from-ehg-app-scripts)
+  - [From EHG App lib](#from-ehg-app-lib)
+- [Validation Checklist](#validation-checklist)
 
 ## Metadata
 - **Category**: Architecture

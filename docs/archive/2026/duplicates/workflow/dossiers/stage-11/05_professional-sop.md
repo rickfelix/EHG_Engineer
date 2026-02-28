@@ -1,3 +1,23 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Pre-Execution Checklist](#pre-execution-checklist)
+- [Step-by-Step Execution](#step-by-step-execution)
+  - [Substage 11.1: Name Generation](#substage-111-name-generation)
+  - [Substage 11.2: Trademark Search](#substage-112-trademark-search)
+  - [Substage 11.3: Brand Foundation](#substage-113-brand-foundation)
+- [Final Stage Exit Checklist](#final-stage-exit-checklist)
+- [Handoff to Stage 12](#handoff-to-stage-12)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.781Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-11\05_professional-sop.md

@@ -1,4 +1,27 @@
+---
+category: feature
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [feature, auto-generated]
+---
 # PLAN Agent Workflow with Vision QA Integration
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [LEO Protocol v3.1.5.9](#leo-protocol-v3159)
+  - [Step 1: Receive Strategic Directive with Vision QA Status](#step-1-receive-strategic-directive-with-vision-qa-status)
+  - [Step 2: Task Decomposition with Vision QA](#step-2-task-decomposition-with-vision-qa)
+  - [Step 3: Vision QA Task Planning](#step-3-vision-qa-task-planning)
+  - [Step 4: Verification Enhancement with Vision QA](#step-4-verification-enhancement-with-vision-qa)
+  - [Step 5: Vision QA Result Assessment](#step-5-vision-qa-result-assessment)
+  - [Step 6: Quality Score Calculation with Vision QA](#step-6-quality-score-calculation-with-vision-qa)
+  - [Decision Helper Usage](#decision-helper-usage)
+  - [Common Vision QA Configurations](#common-vision-qa-configurations)
+  - [Troubleshooting Vision QA Issues](#troubleshooting-vision-qa-issues)
 
 ## Metadata
 - **Category**: Feature

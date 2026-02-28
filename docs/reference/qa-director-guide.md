@@ -1,5 +1,47 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Enhanced QA Engineering Director v2.2.0 - MCP-First Edition
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [🤖 MCP Browser Automation (PREFERRED METHOD)](#-mcp-browser-automation-preferred-method)
+  - [Why MCP is Preferred](#why-mcp-is-preferred)
+  - [Playwright MCP (PRIMARY CHOICE - ALWAYS PREFER THIS)](#playwright-mcp-primary-choice---always-prefer-this)
+  - [Puppeteer MCP (FALLBACK - Use only when Playwright unavailable)](#puppeteer-mcp-fallback---use-only-when-playwright-unavailable)
+  - [When to Use MCP vs Manual Playwright](#when-to-use-mcp-vs-manual-playwright)
+- [Core Capabilities](#core-capabilities)
+- [5-Phase Execution Workflow (UPDATED with MCP)](#5-phase-execution-workflow-updated-with-mcp)
+  - [Phase 1: Pre-flight Checks](#phase-1-pre-flight-checks)
+  - [Phase 2: Professional Test Case Generation (MANDATORY)](#phase-2-professional-test-case-generation-mandatory)
+  - [Phase 3: E2E Test Execution (MANDATORY, NOT CONDITIONAL)](#phase-3-e2e-test-execution-mandatory-not-conditional)
+  - [Phase 4: Evidence Collection](#phase-4-evidence-collection)
+  - [Phase 5: Verdict & Testing Learnings](#phase-5-verdict-testing-learnings)
+- [Activation](#activation)
+- [Success Criteria (UPDATED)](#success-criteria-updated)
+- [Database Integration (UPDATED)](#database-integration-updated)
+- [Continuous Improvement Framework (UPDATED)](#continuous-improvement-framework-updated)
+- [Integration with Product Requirements Expert](#integration-with-product-requirements-expert)
+- [Key Principles](#key-principles)
+- [Common Playwright Pitfalls & Solutions (v2.3 Learnings)](#common-playwright-pitfalls-solutions-v23-learnings)
+  - [Lesson 1: Dialog/Modal Blocking All Tests](#lesson-1-dialogmodal-blocking-all-tests)
+  - [Lesson 2: Slider/Input Testing - Keyboard > Mouse](#lesson-2-sliderinput-testing---keyboard-mouse)
+  - [Lesson 3: Selector Specificity & Strict Mode Violations](#lesson-3-selector-specificity-strict-mode-violations)
+  - [Lesson 4: Test Structure Anti-Patterns](#lesson-4-test-structure-anti-patterns)
+  - [Lesson 5: Component Design Validation Tests](#lesson-5-component-design-validation-tests)
+  - [Lesson 6: Global Setup Patterns for Test Environment](#lesson-6-global-setup-patterns-for-test-environment)
+  - [Lesson 7: Test Helper Patterns](#lesson-7-test-helper-patterns)
+  - [Quick Reference: Test Debugging Checklist](#quick-reference-test-debugging-checklist)
+- [Version History](#version-history)
 
 ## Metadata
 - **Category**: Guide

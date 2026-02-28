@@ -1,5 +1,54 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [protocol, auto-generated]
+---
 # Strategic Intake Contract v1 — Governance Agreement
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [1. Purpose](#1-purpose)
+- [2. Roles & Responsibilities](#2-roles-responsibilities)
+  - [2.1 Codex (Deterministic Agent)](#21-codex-deterministic-agent)
+  - [2.2 Claude (Judgment Agent)](#22-claude-judgment-agent)
+  - [2.3 Chairman (Human Authority)](#23-chairman-human-authority)
+  - [2.4 External Strategic Advisor (Optional, Non-Binding)](#24-external-strategic-advisor-optional-non-binding)
+- [3. Decision Rights Matrix](#3-decision-rights-matrix)
+- [4. Rules of Evidence](#4-rules-of-evidence)
+  - [4.1 Frozen Artifacts Are Authoritative](#41-frozen-artifacts-are-authoritative)
+  - [4.2 No Silent Changes](#42-no-silent-changes)
+  - [4.3 Audit Trail Requirements](#43-audit-trail-requirements)
+- [5. Audit Requirements](#5-audit-requirements)
+  - [5.1 Mandatory Audits](#51-mandatory-audits)
+  - [5.2 Reproducibility Standard](#52-reproducibility-standard)
+  - [5.3 Audit Log Retention](#53-audit-log-retention)
+- [6. STOP Points (Human Gates)](#6-stop-points-human-gates)
+  - [Definition](#definition)
+  - [Current STOP Points](#current-stop-points)
+  - [Approval Format](#approval-format)
+- [7. Versioning Rules](#7-versioning-rules)
+  - [7.1 Version Numbering](#71-version-numbering)
+  - [7.2 Change Process](#72-change-process)
+  - [7.3 Backwards Compatibility](#73-backwards-compatibility)
+- [8. Codex–Claude–Chairman Boundary Contract](#8-codexclaudechairman-boundary-contract)
+  - [The Single-Sentence Decision Rule](#the-single-sentence-decision-rule)
+  - [Boundary Definitions](#boundary-definitions)
+  - [Failure Modes by Boundary Violation](#failure-modes-by-boundary-violation)
+- [9. Dispute Resolution](#9-dispute-resolution)
+  - [Priority Order](#priority-order)
+  - [Escalation Path](#escalation-path)
+- [10. Signatures](#10-signatures)
+  - [Chairman Approval](#chairman-approval)
+  - [Operator Acknowledgment](#operator-acknowledgment)
+- [Appendix A: Referenced Contracts](#appendix-a-referenced-contracts)
+- [Appendix B: Dec-13 Known Issues (Historical Record)](#appendix-b-dec-13-known-issues-historical-record)
+- [Appendix C: Revision History](#appendix-c-revision-history)
 
 ## Metadata
 - **Category**: Guide

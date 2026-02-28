@@ -1,5 +1,34 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # PRD Schema Audit Report
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Actual Database Schema](#actual-database-schema)
+  - [Confirmed Fields in `product_requirements_v2` Table](#confirmed-fields-in-product_requirements_v2-table)
+  - [Fields That DO NOT Exist (But Scripts Try to Use)](#fields-that-do-not-exist-but-scripts-try-to-use)
+- [Critical Issues by Script](#critical-issues-by-script)
+  - [1. **add-prd-to-database.js** (Main Template) ❌ CRITICAL](#1-add-prd-to-databasejs-main-template-critical)
+  - [2. **create-prd-sd-knowledge-001.js** ❌ HIGH SEVERITY](#2-create-prd-sd-knowledge-001js-high-severity)
+  - [3. **create-prd-retro-enhance-001.js** ❌ HIGH SEVERITY](#3-create-prd-retro-enhance-001js-high-severity)
+  - [4. **create-prd-vif-tier-001.js** ⚠️ MEDIUM SEVERITY](#4-create-prd-vif-tier-001js-medium-severity)
+- [Required Actions](#required-actions)
+  - [Immediate (Critical Priority)](#immediate-critical-priority)
+  - [High Priority](#high-priority)
+  - [Medium Priority](#medium-priority)
+- [Recommended Schema Mapping](#recommended-schema-mapping)
+- [Next Steps](#next-steps)
+- [Summary Statistics](#summary-statistics)
 
 ## Metadata
 - **Category**: Database

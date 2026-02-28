@@ -1,4 +1,56 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Implementation Summary: Intelligent Retrospective Triggers with Keyword Signal Detection
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Problem Statement](#problem-statement)
+- [Architecture](#architecture)
+  - [Two-Phase System](#two-phase-system)
+- [Implementation Details](#implementation-details)
+  - [Module Structure](#module-structure)
+  - [Integration Point](#integration-point)
+- [Signal Categories in Detail](#signal-categories-in-detail)
+  - [1. Discovery (weight: 1.0)](#1-discovery-weight-10)
+  - [2. Resolution (weight: 0.9)](#2-resolution-weight-09)
+  - [3. Causal (weight: 0.8)](#3-causal-weight-08)
+  - [4. Hindsight (weight: 0.85)](#4-hindsight-weight-085)
+  - [5. Recurrence (weight: 0.95)](#5-recurrence-weight-095)
+- [Impact](#impact)
+  - [Retrospective Quality](#retrospective-quality)
+  - [Example Enhancement](#example-enhancement)
+- [Technical Decisions](#technical-decisions)
+  - [ESM vs CommonJS](#esm-vs-commonjs)
+  - [Non-Blocking Storage](#non-blocking-storage)
+  - [Storage Backend Abstraction](#storage-backend-abstraction)
+- [Performance Characteristics](#performance-characteristics)
+  - [Detection (detector.js)](#detection-detectorjs)
+  - [Storage (storage.js)](#storage-storagejs)
+  - [Aggregation (aggregator.js)](#aggregation-aggregatorjs)
+- [Testing & Validation](#testing-validation)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+- [Lessons Learned](#lessons-learned)
+  - [What Went Well](#what-went-well)
+  - [What Needs Improvement](#what-needs-improvement)
+  - [Root Cause (5-Whys)](#root-cause-5-whys)
+- [Future Enhancements](#future-enhancements)
+  - [Potential Additions](#potential-additions)
+  - [Related Work](#related-work)
+- [Integration Points](#integration-points)
+  - [Current](#current)
+  - [Future](#future)
+- [Related Documentation](#related-documentation)
+- [References](#references)
 
 ## Metadata
 - **Category**: Feature

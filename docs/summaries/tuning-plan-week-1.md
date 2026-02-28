@@ -1,5 +1,49 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # One-Week Tuning Plan for Agentic Review System
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Goal](#goal)
+- [Timeline: Week 1 Post-Deployment](#timeline-week-1-post-deployment)
+  - [Day 1-2: Baseline Establishment](#day-1-2-baseline-establishment)
+  - [Day 3-4: Initial Tuning](#day-3-4-initial-tuning)
+  - [Day 5-6: Sub-Agent Calibration](#day-5-6-sub-agent-calibration)
+  - [Day 7: Report & Finalize](#day-7-report-finalize)
+- [Success Metrics](#success-metrics)
+  - [Primary Goals](#primary-goals)
+  - [Tracking Dashboard](#tracking-dashboard)
+- [Daily Checklist](#daily-checklist)
+  - [Morning (9 AM)](#morning-9-am)
+  - [Midday (12 PM)](#midday-12-pm)
+  - [End of Day (5 PM)](#end-of-day-5-pm)
+- [Tuning Decisions Tree](#tuning-decisions-tree)
+- [Configuration Adjustments](#configuration-adjustments)
+  - [Quick Fixes (Immediate)](#quick-fixes-immediate)
+  - [Medium Adjustments (Day 3-4)](#medium-adjustments-day-3-4)
+  - [Major Changes (Day 5-6)](#major-changes-day-5-6)
+- [Rollback Plan](#rollback-plan)
+- [Team Communication Template](#team-communication-template)
+  - [Daily Update (Slack/Email)](#daily-update-slackemail)
+  - [End of Week Report](#end-of-week-report)
+- [Executive Summary](#executive-summary)
+- [Configuration Changes](#configuration-changes)
+- [Recommendations](#recommendations)
+- [Tools & Scripts](#tools-scripts)
+  - [Metrics Collection](#metrics-collection)
+  - [False Positive Analysis](#false-positive-analysis)
+  - [Quick Config Update](#quick-config-update)
+- [Success Criteria Checklist](#success-criteria-checklist)
+- [Escalation Path](#escalation-path)
 
 ## Metadata
 - **Category**: Report

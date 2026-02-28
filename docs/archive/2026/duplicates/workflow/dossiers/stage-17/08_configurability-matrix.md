@@ -1,3 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Configuration Levels](#configuration-levels)
+  - [Level 1: Venture-Global Configuration](#level-1-venture-global-configuration)
+  - [Level 2: Campaign-Specific Configuration](#level-2-campaign-specific-configuration)
+  - [Level 3: Channel-Specific Configuration](#level-3-channel-specific-configuration)
+  - [Level 4: Workflow-Specific Configuration](#level-4-workflow-specific-configuration)
+- [Tunable Parameters Catalog](#tunable-parameters-catalog)
+  - [Category 1: Strategy Parameters (Substage 17.1)](#category-1-strategy-parameters-substage-171)
+  - [Category 2: Campaign Parameters (Substage 17.2)](#category-2-campaign-parameters-substage-172)
+  - [Category 3: Channel Parameters (Substage 17.1)](#category-3-channel-parameters-substage-171)
+  - [Category 4: Workflow Parameters (Substage 17.3)](#category-4-workflow-parameters-substage-173)
+  - [Category 5: Metrics and Thresholds (Cross-Cutting)](#category-5-metrics-and-thresholds-cross-cutting)
+- [Configuration Presets](#configuration-presets)
+  - [Preset 1: B2B SaaS (Enterprise)](#preset-1-b2b-saas-enterprise)
+  - [Preset 2: B2C E-Commerce](#preset-2-b2c-e-commerce)
+  - [Preset 3: B2B SMB (Freemium)](#preset-3-b2b-smb-freemium)
+- [Configuration Validation Rules](#configuration-validation-rules)
+  - [Rule 1: Budget Allocation Sum](#rule-1-budget-allocation-sum)
+  - [Rule 2: Channel-Segment Compatibility](#rule-2-channel-segment-compatibility)
+  - [Rule 3: Campaign Type-Channel Compatibility](#rule-3-campaign-type-channel-compatibility)
+  - [Rule 4: Threshold Logical Consistency](#rule-4-threshold-logical-consistency)
+- [Configuration Storage Schema](#configuration-storage-schema)
+- [Configuration UI Requirements](#configuration-ui-requirements)
+
 <!-- ARCHIVED: 2026-01-26T16:26:49.707Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-17\08_configurability-matrix.md

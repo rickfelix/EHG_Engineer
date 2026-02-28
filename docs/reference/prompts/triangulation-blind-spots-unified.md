@@ -1,4 +1,37 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Triangulation Research: Venture Selection Blind Spots
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Unified Prompt for All Three AIs (OpenAI, Gemini, Claude Code)](#unified-prompt-for-all-three-ais-openai-gemini-claude-code)
+- [Context (Provide to All AIs)](#context-provide-to-all-ais)
+  - [The Oracle's Warning (Critical Context)](#the-oracles-warning-critical-context)
+  - [Current Gap](#current-gap)
+- [The 6 Blind Spots](#the-6-blind-spots)
+- [Research Questions (All AIs Answer All Questions)](#research-questions-all-ais-answer-all-questions)
+  - [Section 1: Multi-Venture Portfolio Management](#section-1-multi-venture-portfolio-management)
+  - [Section 2: Pattern Deprecation](#section-2-pattern-deprecation)
+  - [Section 3: Failure Learning](#section-3-failure-learning)
+  - [Section 4: Team/Skill Requirements](#section-4-teamskill-requirements)
+  - [Section 5: Legal/Compliance Patterns](#section-5-legalcompliance-patterns)
+  - [Section 6: Pricing Patterns](#section-6-pricing-patterns)
+- [Output Format](#output-format)
+- [Prioritization Question](#prioritization-question)
+- [Triangulation Instructions (For Claude Code After Receiving All Responses)](#triangulation-instructions-for-claude-code-after-receiving-all-responses)
+- [How to Use This Prompt](#how-to-use-this-prompt)
+  - [For OpenAI (ChatGPT/GPT-4):](#for-openai-chatgptgpt-4)
+  - [For Gemini (Google):](#for-gemini-google)
+  - [For Claude Code:](#for-claude-code)
+  - [After All Three Respond:](#after-all-three-respond)
 
 ## Metadata
 - **Category**: Guide

@@ -1,4 +1,40 @@
+---
+category: guide
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [guide, auto-generated]
+---
 # PRD Integration & Operationalization Section Guide
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Purpose](#purpose)
+- [Section Structure](#section-structure)
+  - [1. Consumers & User Journeys](#1-consumers-user-journeys)
+  - [2. Upstream/Downstream Dependencies](#2-upstreamdownstream-dependencies)
+  - [3. Data Contracts & Schema](#3-data-contracts-schema)
+  - [4. Runtime Configuration & Environments](#4-runtime-configuration-environments)
+  - [5. Observability, Rollout & Rollback](#5-observability-rollout-rollback)
+- [Validation Gate](#validation-gate)
+  - [Validation Rules](#validation-rules)
+  - [SD Type Enforcement](#sd-type-enforcement)
+  - [Error Codes](#error-codes)
+- [How to Use This Section](#how-to-use-this-section)
+  - [During PLAN Phase (PRD Creation)](#during-plan-phase-prd-creation)
+  - [During EXEC Phase (Implementation)](#during-exec-phase-implementation)
+- [Examples](#examples)
+  - [Example 1: Feature SD - User Analytics Dashboard](#example-1-feature-sd---user-analytics-dashboard)
+  - [Example 2: Infrastructure SD - Database Migration](#example-2-infrastructure-sd---database-migration)
+- [Related Documentation](#related-documentation)
+- [Troubleshooting](#troubleshooting)
+  - ["Integration section missing" error](#integration-section-missing-error)
+  - ["No consumer justification required" warning (infrastructure SDs)](#no-consumer-justification-required-warning-infrastructure-sds)
+  - ["Subsection X missing" error](#subsection-x-missing-error)
 
 ## Metadata
 - **Category**: Guide

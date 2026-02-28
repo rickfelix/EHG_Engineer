@@ -1,5 +1,40 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Operational Handoff Specification
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+  - [Key Correction from OpenAI Codex Assessment](#key-correction-from-openai-codex-assessment)
+- [The Dual-Phase Lifecycle](#the-dual-phase-lifecycle)
+  - [Phase 1: Incubation (Stages 1-25)](#phase-1-incubation-stages-1-25)
+  - [Phase 2: Operations (Post-Stage 25)](#phase-2-operations-post-stage-25)
+- [CEO Operational Modes](#ceo-operational-modes)
+  - [Incubation Mode (Default: Stages 1-24)](#incubation-mode-default-stages-1-24)
+  - [Operational Mode (Post-Stage 25)](#operational-mode-post-stage-25)
+- [Mode Transition Protocol](#mode-transition-protocol)
+  - [Transition Trigger: Two-Factor](#transition-trigger-two-factor)
+  - [Transition Sequence](#transition-sequence)
+- [Operational Handoff Packet Schema](#operational-handoff-packet-schema)
+- [Venture Constitution](#venture-constitution)
+  - [Constitution Structure](#constitution-structure)
+- [Post-Launch Organizational Structure](#post-launch-organizational-structure)
+  - [Operational Crews](#operational-crews)
+  - [Standing Cadences](#standing-cadences)
+- [Database Schema](#database-schema)
+  - [operational_handoff_packets](#operational_handoff_packets)
+  - [venture_constitutions](#venture_constitutions)
+  - [ceo_mode_transitions](#ceo_mode_transitions)
+- [Related Specifications](#related-specifications)
 
 ## Metadata
 - **Category**: Guide

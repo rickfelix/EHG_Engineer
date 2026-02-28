@@ -1,4 +1,40 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # API Access Verification & Clarifications
+
+## Table of Contents
+
+- [SD-VIDEO-VARIANT-001](#sd-video-variant-001)
+- [1. Sora 2 API Access Verification](#1-sora-2-api-access-verification)
+  - [Finding: OpenAI API Key EXISTS](#finding-openai-api-key-exists)
+  - [Critical Questions for Phase 0:](#critical-questions-for-phase-0)
+  - [RECOMMENDATION](#recommendation)
+- [2. Round 2 Iteration Model - CLARIFICATION](#2-round-2-iteration-model---clarification)
+  - [SD States:](#sd-states)
+  - [Interpretation:](#interpretation)
+  - [Mutation Strategies](#mutation-strategies)
+  - [Database Schema Impact](#database-schema-impact)
+  - [User Workflow](#user-workflow)
+  - [Component Impact](#component-impact)
+  - [Scope Impact](#scope-impact)
+  - [CLARIFICATION DECISION](#clarification-decision)
+- [3. Manual Workflow Cost Breakdown - $1,004/Test](#3-manual-workflow-cost-breakdown---1004test)
+  - [SD States:](#sd-states)
+  - [Cost Breakdown Analysis](#cost-breakdown-analysis)
+  - [Total Manual Workflow Cost](#total-manual-workflow-cost)
+  - [Cost Comparison: Manual vs Automated](#cost-comparison-manual-vs-automated)
+  - [CLARIFICATION DECISION](#clarification-decision)
+- [Summary of Clarifications](#summary-of-clarifications)
+  - [1. Sora 2 API Access](#1-sora-2-api-access)
+  - [2. Round 2 Iteration Model](#2-round-2-iteration-model)
+  - [3. Manual Workflow Cost](#3-manual-workflow-cost)
+
 ## SD-VIDEO-VARIANT-001
 
 **Date**: 2025-10-10

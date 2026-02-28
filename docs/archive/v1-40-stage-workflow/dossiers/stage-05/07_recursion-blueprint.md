@@ -1,4 +1,46 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 5: Recursion Blueprint
+
+
+## Table of Contents
+
+- [Intelligent Dependency-Driven Recursion](#intelligent-dependency-driven-recursion)
+- [Outbound Recursion Triggers](#outbound-recursion-triggers)
+- [PRIMARY TRIGGER: FIN-001 to Stage 3](#primary-trigger-fin-001-to-stage-3)
+  - [Full Recursion Logic (SC-003)](#full-recursion-logic-sc-003)
+  - [Why Stage 3?](#why-stage-3)
+  - [Trigger Data Payload](#trigger-data-payload)
+- [Recursion Thresholds](#recursion-thresholds)
+  - [ROI Threshold Rationale](#roi-threshold-rationale)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+  - [When Stage 6 Returns to Stage 5](#when-stage-6-returns-to-stage-5)
+  - [When Stage 10 Returns to Stage 5](#when-stage-10-returns-to-stage-5)
+- [Loop Prevention](#loop-prevention)
+  - [Recursion History Tracking](#recursion-history-tracking)
+- [Chairman Controls](#chairman-controls)
+  - [CRITICAL Severity (ROI < 15%)](#critical-severity-roi-15)
+  - [HIGH Severity (ROI 15-20% or Margin < 20%)](#high-severity-roi-15-20-or-margin-20)
+  - [Chairman Override Capabilities](#chairman-override-capabilities)
+- [Performance Requirements](#performance-requirements)
+- [UI/UX Implications](#uiux-implications)
+  - [Pre-emptive Warning System](#pre-emptive-warning-system)
+  - [Recursion Explanation Modal](#recursion-explanation-modal)
+  - [Financial Comparison View](#financial-comparison-view)
+- [Integration Points](#integration-points)
+  - [1. validationFramework.ts](#1-validationframeworkts)
+  - [2. evaValidation.ts](#2-evavalidationts)
+  - [3. recursionEngine.ts](#3-recursionenginets)
+  - [4. recursion_events Table](#4-recursion_events-table)
+- [Recursion Flow Diagram](#recursion-flow-diagram)
+- [Testing Strategy](#testing-strategy)
+- [Sources Table](#sources-table)
 
 **Status**: ✅ **DETAILED RECURSION SUPPORT**
 

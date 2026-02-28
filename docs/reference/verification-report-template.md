@@ -1,5 +1,48 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [reference, auto-generated]
+---
 # Verification Report Template
 
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Purpose](#purpose)
+- [When to Use](#when-to-use)
+- [Template Structure](#template-structure)
+  - [1. Evidence Summary](#1-evidence-summary)
+- [Evidence Summary](#evidence-summary)
+  - [2. Test Results](#2-test-results)
+- [Test Results](#test-results)
+  - [Unit Tests](#unit-tests)
+  - [E2E Tests (MANDATORY)](#e2e-tests-mandatory)
+  - [E2E Test → User Story Mapping](#e2e-test-user-story-mapping)
+  - [3. Coverage Analysis](#3-coverage-analysis)
+- [Coverage Analysis](#coverage-analysis)
+  - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
+  - [Functional Requirements Coverage](#functional-requirements-coverage)
+  - [User Story Coverage](#user-story-coverage)
+  - [4. Known Limitations](#4-known-limitations)
+- [Known Limitations](#known-limitations)
+  - [Technical Debt Created](#technical-debt-created)
+  - [Deferred Work](#deferred-work)
+  - [Out of Scope](#out-of-scope)
+  - [5. Sign-Off](#5-sign-off)
+- [Sign-Off](#sign-off)
+- [Integration with Unified Handoff System](#integration-with-unified-handoff-system)
+  - [Auto-Population Fields](#auto-population-fields)
+  - [Validation Gates](#validation-gates)
+  - [Rejection Criteria](#rejection-criteria)
+- [Example: Complete Verification Report](#example-complete-verification-report)
+- [Database Schema Reference](#database-schema-reference)
+  - [Relevant Tables](#relevant-tables)
+  - [Useful Queries](#useful-queries)
 
 ## Metadata
 - **Category**: Reference

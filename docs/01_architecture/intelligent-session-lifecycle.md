@@ -1,4 +1,42 @@
+---
+category: architecture
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [architecture, auto-generated]
+---
 # Intelligent Session Lifecycle Management
+
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Problem Statement](#problem-statement)
+- [System Architecture](#system-architecture)
+  - [Component Diagram](#component-diagram)
+- [Key Features](#key-features)
+  - [1. Terminal Identity Auto-Release (US-001)](#1-terminal-identity-auto-release-us-001)
+  - [2. Graceful Exit with Retry (US-002)](#2-graceful-exit-with-retry-us-002)
+  - [3. PID Validation (US-003)](#3-pid-validation-us-003)
+  - [4. Stale Session Cleanup (US-004)](#4-stale-session-cleanup-us-004)
+  - [5. Observability (US-005)](#5-observability-us-005)
+  - [6. Session-Specific Status Line Files (US-006)](#6-session-specific-status-line-files-us-006)
+- [Database Schema](#database-schema)
+  - [New Columns in `claude_sessions`](#new-columns-in-claude_sessions)
+  - [Indexes](#indexes)
+- [Performance Impact](#performance-impact)
+- [Integration Tests](#integration-tests)
+- [Migration Path](#migration-path)
+- [Operational Guidelines](#operational-guidelines)
+  - [Daily Monitoring](#daily-monitoring)
+  - [Cleanup Worker Schedule](#cleanup-worker-schedule)
+  - [Troubleshooting](#troubleshooting)
+- [Security Considerations](#security-considerations)
+- [Future Enhancements](#future-enhancements)
+- [Related Documentation](#related-documentation)
+- [References](#references)
 
 ## Metadata
 - **Category**: Architecture

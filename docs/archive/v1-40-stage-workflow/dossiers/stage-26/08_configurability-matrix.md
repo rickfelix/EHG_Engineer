@@ -1,4 +1,38 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
 # Stage 26: Configurability Matrix
+
+
+## Table of Contents
+
+- [Configuration Categories](#configuration-categories)
+  - [1. Security Testing Parameters](#1-security-testing-parameters)
+  - [2. Compliance Validation Parameters](#2-compliance-validation-parameters)
+  - [3. Certification Process Parameters](#3-certification-process-parameters)
+  - [4. Metrics & Thresholds](#4-metrics-thresholds)
+  - [5. Automation Levels](#5-automation-levels)
+  - [6. Recursion Triggers](#6-recursion-triggers)
+- [Configuration Storage](#configuration-storage)
+  - [Proposed Database Schema](#proposed-database-schema)
+- [Configuration Profiles](#configuration-profiles)
+  - [Profile 1: Development Environment](#profile-1-development-environment)
+  - [Profile 2: Production Environment](#profile-2-production-environment)
+  - [Profile 3: High-Security Environment](#profile-3-high-security-environment)
+- [Configuration API (Proposed)](#configuration-api-proposed)
+  - [Get Configuration](#get-configuration)
+  - [Update Configuration](#update-configuration)
+  - [Apply Profile](#apply-profile)
+- [Configuration Validation](#configuration-validation)
+  - [Validation Rules](#validation-rules)
+- [Configuration Impact Analysis](#configuration-impact-analysis)
+- [Gaps Identified](#gaps-identified)
+- [Sources Table](#sources-table)
 
 **Purpose**: Define tunable parameters for security and compliance certification processes.
 

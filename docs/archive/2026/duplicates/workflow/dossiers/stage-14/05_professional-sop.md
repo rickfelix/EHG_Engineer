@@ -1,3 +1,39 @@
+---
+category: general
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-02-28
+tags: [general, auto-generated]
+---
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Pre-Execution Checklist](#pre-execution-checklist)
+  - [Entry Gate Validation](#entry-gate-validation)
+  - [Required Inputs](#required-inputs)
+- [Execution Steps](#execution-steps)
+  - [Substage 14.1: Environment Setup](#substage-141-environment-setup)
+  - [Substage 14.2: Team Formation](#substage-142-team-formation)
+  - [Substage 14.3: Sprint Planning](#substage-143-sprint-planning)
+- [Metrics Collection](#metrics-collection)
+  - [Readiness Score](#readiness-score)
+  - [Team Velocity](#team-velocity)
+  - [Infrastructure Stability](#infrastructure-stability)
+- [Exit Gate Validation](#exit-gate-validation)
+  - [Exit Criteria](#exit-criteria)
+  - [Exit Gate Validation Logic](#exit-gate-validation-logic)
+- [Outputs Verification](#outputs-verification)
+- [Rollback Procedures](#rollback-procedures)
+  - [Rollback Triggers](#rollback-triggers)
+  - [Rollback Steps](#rollback-steps)
+- [Error Handling](#error-handling)
+  - [Common Failure Modes](#common-failure-modes)
+- [Success Criteria Summary](#success-criteria-summary)
+- [Source Tables](#source-tables)
+
 <!-- ARCHIVED: 2026-01-26T16:26:43.502Z
      Reason: Duplicate of canonical file
      Original location: docs\workflow\dossiers\stage-14\05_professional-sop.md
