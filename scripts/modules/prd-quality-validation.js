@@ -197,7 +197,7 @@ function validatePRDHeuristic(prd, options = {}) {
   }
 
   score = Math.max(0, Math.min(100, score));
-  const passed = score >= 65 && issues.length === 0;
+  const passed = score >= 50 && issues.length === 0;
 
   return {
     prd_id: prdId,

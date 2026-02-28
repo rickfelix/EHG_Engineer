@@ -15,11 +15,13 @@ import { getStoryMinimumScoreByCategory } from '../../../verifiers/plan-to-exec/
  */
 export function registerGate1Validators(registry) {
   registry.register('prdQualityValidation', async (context) => {
-    const { prd, options = {} } = context;
+    const { prd, sd, options = {} } = context;
     if (!prd) {
       return { passed: false, score: 0, max_score: 100, issues: ['No PRD provided'] };
     }
-    const result = await validatePRDQuality(prd, options);
+    // Pass SD type so refactor/infrastructure SDs use heuristic validation
+    const mergedOptions = { ...options, sdType: sd?.sd_type, sdCategory: sd?.category };
+    const result = await validatePRDQuality(prd, mergedOptions);
     return registry.normalizeResult(result);
   }, 'PRD quality validation using AI-powered Russian Judge rubric');
 
