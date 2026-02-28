@@ -35,8 +35,9 @@ export async function autoGeneratePRDScript(sdId, sd) {
     const scriptPath = path.join(process.cwd(), 'scripts', 'add-prd-to-database.js');
     const title = sd.title || 'Technical Implementation';
 
-    // Determine the correct ID to pass (prefer UUID if available)
-    const idToUse = sd.id || sdId;
+    // Root Cause 1 fix: Always pass sd_key (not UUID) for directive_id consistency
+    // Gates query product_requirements_v2.directive_id by sd_key format
+    const idToUse = sd.sd_key || sdId;
     console.log(`   Running: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
     console.log('');
 

@@ -98,7 +98,14 @@ export async function addPRDToDatabase(sdId, prdTitle) {
     }
 
     const sdIdValue = sdData.id;
+    // Root Cause 1 fix: Normalize sdId to sd_key for directive_id consistency
+    // Gate validators query directive_id by sd_key format, not UUID
+    if (sdData.sd_key && sdId !== sdData.sd_key) {
+      console.log(`   Normalizing directive_id: ${sdId.substring(0, 12)}... → ${sdData.sd_key}`);
+      sdId = sdData.sd_key;
+    }
     console.log(`   SD ID: ${sdIdValue}`);
+    console.log(`   SD Key: ${sdData.sd_key || sdId}`);
     console.log(`   SD UUID: ${sdData.uuid_id}`);
 
     // SD type detection and validation
@@ -239,7 +246,7 @@ async function fetchSDData(supabase, sdId) {
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, uuid_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata, exploration_summary')
+    .select('id, uuid_id, sd_key, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata, exploration_summary')
     .eq(queryField, sdId)
     .single();
 

@@ -69,19 +69,32 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     }
 
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-035: Determine if EXEC-TO-PLAN (gate2) is required for this SD type
-    // Infrastructure, documentation, and fix SD types use modified workflows that skip EXEC-TO-PLAN
+    // Infrastructure, documentation, fix, and corrective SD types use modified workflows that skip EXEC-TO-PLAN
     const sdType = sdLookup?.sd_type || 'feature';
-    const gate2Required = !['infrastructure', 'documentation', 'fix'].includes(sdType);
+    const gate2Required = !['infrastructure', 'documentation', 'fix', 'corrective'].includes(sdType);
     if (!gate2Required) {
       console.log(`   ℹ️  SD type '${sdType}' uses modified workflow - gate2 (EXEC-TO-PLAN) not required`);
     }
 
     // Fetch PRD metadata with DESIGN and DATABASE analyses
-    const { data: prdData, error: prdError } = await supabase
+    let prdData, prdError;
+    ({ data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title, created_at')
       .eq('directive_id', prdLookupId)
-      .single();
+      .single());
+
+    // Root Cause 1 fix: Fallback to UUID if sd_key lookup failed
+    if (prdError && handoffLookupId && handoffLookupId !== prdLookupId) {
+      ({ data: prdData, error: prdError } = await supabase
+        .from('product_requirements_v2')
+        .select('metadata, directive_id, title, created_at')
+        .eq('directive_id', handoffLookupId)
+        .single());
+      if (prdData) {
+        console.log('   ℹ️  PRD found via UUID fallback (directive_id format mismatch)');
+      }
+    }
 
     if (prdError) {
       validation.issues.push(`Failed to fetch PRD: ${prdError.message}`);
