@@ -16,6 +16,8 @@
  */
 
 import { getValidationRequirements } from '../../../../../../lib/utils/sd-type-validation.js';
+// SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-044: Import centralized policy for advisory mode override
+import { getValidatorRequirement } from '../../../validation/sd-type-applicability-policy.js';
 import { execSync } from 'child_process';
 
 /**
@@ -107,10 +109,15 @@ export function createMandatoryTestingValidationGate(supabase) {
       }
 
       // 4. Determine enforcement tier based on type + code evidence
+      // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-044: Check centralized policy for TESTING requirement
+      // Types where policy says OPTIONAL (e.g., corrective) use advisory mode even if
+      // sd-type-validation.js says requiresTesting=true (reconciles dual-system mismatch)
+      const policyTestingReq = getValidatorRequirement(sdType, 'TESTING');
+      const policyAllowsAdvisory = policyTestingReq === 'OPTIONAL' || policyTestingReq === 'NON_APPLICABLE';
       // REQUIRED: Type requires testing (feature, bugfix, security, etc.)
-      // ADVISORY: Type doesn't require testing BUT code changes detected
-      const requiresTesting = validationReqs.requiresTesting || codeEvidence.hasCodeFiles;
-      const isAdvisoryMode = !validationReqs.requiresTesting && codeEvidence.hasCodeFiles;
+      // ADVISORY: Type doesn't require testing OR policy says OPTIONAL, BUT code changes detected
+      const requiresTesting = (validationReqs.requiresTesting && !policyAllowsAdvisory) || codeEvidence.hasCodeFiles;
+      const isAdvisoryMode = (!validationReqs.requiresTesting || policyAllowsAdvisory) && codeEvidence.hasCodeFiles;
 
       if (isAdvisoryMode) {
         console.log(`   ⚠️  ${sdType} SD type doesn't require TESTING but code changes detected`);
