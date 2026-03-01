@@ -32,7 +32,7 @@ Step-by-step instructions for performing migrations:
 
 ### Migration Summaries
 ```
-{SYSTEM}_MIGRATION_SUMMARY.md
+{SYSTEM}_migration-summary.md
 ```
 
 Post-migration documentation:
@@ -145,11 +145,11 @@ Upcoming migration planning:
 - [Loader Consolidation](loader-consolidation.md)
 - [Migration Drift Resolution 2025 10 27](migration-drift-resolution-2025-10-27.md)
 - [Prd Duplicates Audit 2026 02 06](prd-duplicates-audit-2026-02-06.md)
-- [PRD TABLE CONSOLIDATION REPORT](PRD_TABLE_CONSOLIDATION_REPORT.md)
+- [PRD TABLE CONSOLIDATION REPORT](prd-table-consolidation-report.md)
 - [Sub Agent Verification Report](sub-agent-verification-report.md)
 - [Supabase Connection Fixed](supabase-connection-fixed.md)
-- [SUPABASE CLI README](SUPABASE_CLI_README.md)
-- [US 001 DELIVERABLES](US-001-DELIVERABLES.md)
-- [US 001 Developer Guide](US-001-developer-guide.md)
-- [US 001 Migration Summary](US-001-migration-summary.md)
+- [SUPABASE CLI README](supabase-cli-readme.md)
+- [US 001 DELIVERABLES](us-001-deliverables.md)
+- [US 001 Developer Guide](us-001-developer-guide.md)
+- [US 001 Migration Summary](us-001-migration-summary.md)
 - [Vision V2 Reset And Seed Report](vision-v2-reset-and-seed-report.md)

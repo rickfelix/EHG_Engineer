@@ -14,18 +14,18 @@ Centralized documentation for the EHG_Engineer application (LEO Protocol backend
 ## Quick Start by Role
 
 ### New Developer?
-1. [Project Setup](guides/SIMPLE_PROJECT_SETUP.md) - Get started
+1. [Project Setup](guides/simple-project-setup.md) - Get started
 2. [LEO Protocol Quick Reference](guides/leo-protocol-quick-reference.md) - Understand the protocol
-3. [Sub-Agent System](guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md) - How sub-agents work
+3. [Sub-Agent System](guides/invisible-subagent-system-guide.md) - How sub-agents work
 
 ### Working on SDs/PRDs?
 1. **[Script Creation Guidelines](reference/script-creation-guidelines.md)** - **CRITICAL**: Standard CLI policy
 2. [PRD Creation Process](guides/prd-creation-process.md) - PRD workflow
-3. [LEAD Checklist](guides/LEAD_MANDATORY_CHECKLIST.md) - LEAD phase requirements
+3. [LEAD Checklist](guides/lead-mandatory-checklist.md) - LEAD phase requirements
 4. [SD Schema Reference](reference/strategic-directives-v2-schema.md) - Database schema
 
 ### Database Work?
-1. [Database Migration Guide](guides/DATABASE_MIGRATION_GUIDE.md) - Migration procedures
+1. [Database Migration Guide](guides/database-migration-guide.md) - Migration procedures
 2. [Database Patterns](reference/database-agent-patterns.md) - Best practices
 3. [Supabase Operations](reference/supabase-operations.md) - Supabase specifics
 
@@ -133,9 +133,9 @@ Deprecated or superseded documentation retained for reference.
 ## Quick Links
 
 - **LEO Protocol**: See `../CLAUDE.md` (auto-generated from database)
-- **Getting Started**: See [guides/SIMPLE_PROJECT_SETUP.md](guides/SIMPLE_PROJECT_SETUP.md)
+- **Getting Started**: See [guides/simple-project-setup.md](guides/simple-project-setup.md)
 - **Database Architecture**: See [database/README.md](database/README.md)
-- **Sub-Agents**: See [guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md](guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md)
+- **Sub-Agents**: See [guides/invisible-subagent-system-guide.md](guides/invisible-subagent-system-guide.md)
 - **Script Creation Policy**: See [reference/script-creation-guidelines.md](reference/script-creation-guidelines.md)
 
 ---
@@ -147,5 +147,5 @@ Deprecated or superseded documentation retained for reference.
 ## Files
 
 - [Database Migration Status 20260125](database-migration-status-20260125.md)
-- [DOCMON ANALYSIS SD LEO INFRA MEMORY PATTERN LIFECYCLE 001](DOCMON-ANALYSIS-SD-LEO-INFRA-MEMORY-PATTERN-LIFECYCLE-001.md)
-- [INDEX](INDEX.md)
+- [DOCMON ANALYSIS SD LEO INFRA MEMORY PATTERN LIFECYCLE 001](docmon-analysis-sd-leo-infra-memory-pattern-lifecycle-001.md)
+- [INDEX](index.md)

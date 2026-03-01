@@ -112,7 +112,7 @@ tags: [general, auto-generated]
 ## Reference Files Required
 - `docs/wbs_artefacts/strategic_directives/[SD-ID].md` (Parent Strategic Directive)
 - `docs/product-requirements/[PRD-ID].md` (Product Requirements)
-- `docs/03_protocols_and_standards/leo_protocol_v3.1.5.md` (LEO Protocol)
+- `docs/03_protocols_and_standards/leo-protocol-v3.1.5.md` (LEO Protocol)
 - `docs/wbs_artefacts/execution_sequences/[EES-ID].md` (This EES)
 
 ## Notes

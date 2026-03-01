@@ -67,7 +67,7 @@ Tier 3: Human Manual /uat Command     (Subjective quality, edge cases)
 
 - Location: `tests/e2e/`
 - Runner: Playwright via `npm run test:e2e`
-- Coverage: See `docs/testing/COVERAGE-SUMMARY.md`
+- Coverage: See `docs/testing/coverage-summary.md`
 - Purpose: Deterministic regression tests for known behaviors
 
 ## Tier 2: AI-Autonomous Vision QA

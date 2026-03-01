@@ -17,9 +17,9 @@ Analysis documents capture:
 ```
 
 **Examples**:
-- `AGENT_DATA_INVESTIGATION_REPORT.md` - Agent data system investigation
-- `ISSUES_ANALYSIS_SD-PRE-EXEC-ANALYSIS-001.md` - SD-specific issue analysis
-- `ROOT_CAUSE_USER_STORY_MAPPING_GAP.md` - Root cause analysis
+- `agent-data-investigation-report.md` - Agent data system investigation
+- `issues-analysis-sd-pre-exec-analysis-001.md` - SD-specific issue analysis
+- `root-cause-user-story-mapping-gap.md` - Root cause analysis
 
 ## Document Types
 
@@ -90,14 +90,14 @@ Analysis documents capture:
 
 ## Files
 
-- [AGENT DATA INVESTIGATION REPORT](AGENT_DATA_INVESTIGATION_REPORT.md)
-- [BLOCKING ISSUE SD VIDEO VARIANT](BLOCKING_ISSUE_SD_VIDEO_VARIANT.md)
-- [DATABASE SUBAGENT REVIEW SD CUSTOMER INTEL 001](DATABASE_SUBAGENT_REVIEW_SD-CUSTOMER-INTEL-001.md)
+- [AGENT DATA INVESTIGATION REPORT](agent-data-investigation-report.md)
+- [BLOCKING ISSUE SD VIDEO VARIANT](blocking-issue-sd-video-variant.md)
+- [DATABASE SUBAGENT REVIEW SD CUSTOMER INTEL 001](database-subagent-review-sd-customer-intel-001.md)
 - [Deliverables Tracking Deep Dive](deliverables-tracking-deep-dive.md)
-- [DOCUMENTATION STRUCTURE ASSESSMENT](DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
-- [ISSUES ANALYSIS SD PRE EXEC ANALYSIS 001](ISSUES_ANALYSIS_SD-PRE-EXEC-ANALYSIS-001.md)
+- [DOCUMENTATION STRUCTURE ASSESSMENT](documentation-structure-assessment.md)
+- [ISSUES ANALYSIS SD PRE EXEC ANALYSIS 001](issues-analysis-sd-pre-exec-analysis-001.md)
 - [Legacy Sd Markdown Audit Report](legacy-sd-markdown-audit-report.md)
-- [QA DIRECTOR IMPROVEMENT PROPOSAL](QA_DIRECTOR_IMPROVEMENT_PROPOSAL.md)
+- [QA DIRECTOR IMPROVEMENT PROPOSAL](qa-director-improvement-proposal.md)
 - [Resilience Analysis Sd Tech Debt Docs 001](resilience-analysis-sd-tech-debt-docs-001.md)
-- [ROOT CAUSE USER STORY MAPPING GAP](ROOT_CAUSE_USER_STORY_MAPPING_GAP.md)
+- [ROOT CAUSE USER STORY MAPPING GAP](root-cause-user-story-mapping-gap.md)
 - [Sd Field Validation Analysis 2025 10 16](sd-field-validation-analysis-2025-10-16.md)

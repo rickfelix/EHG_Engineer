@@ -32,15 +32,15 @@ Completed comprehensive documentation reorganization addressing all critical and
 #### 1. Fixed Wrong Project README
 - **Issue**: Root README.md contained Supabase CLI documentation
 - **Action**:
-  - Moved Supabase docs to `SUPABASE_CLI_README.md`
-  - Installed proper EHG_Engineer README from `../../guides/EHG_ENGINEER_README.md`
+  - Moved Supabase docs to `supabase-cli-readme.md`
+  - Installed proper EHG_Engineer README from `../../guides/ehg-engineer-readme.md`
 - **Impact**: New developers now see correct project information
 
 #### 2. Resolved Duplicate Guide Directories
 - **Issue**: Two guide directories with conflicting content
 - **Action**:
   - Merged `/docs/03_guides/` into `/docs/guides/`
-  - Kept newer AI_GUIDE.md (LEO v4.1.2 vs v3.1.5)
+  - Kept newer ai-guide.md (LEO v4.1.2 vs v3.1.5)
   - Consolidated 6 unique files
 - **Impact**: Single authoritative guide directory
 
@@ -102,7 +102,7 @@ Completed comprehensive documentation reorganization addressing all critical and
 #### 8. Standardized Directory Naming
 - **Issue**: Inconsistent numbered vs non-numbered directories
 - **Action**:
-  - Documented naming convention in `docs/DIRECTORY_STRUCTURE.md`
+  - Documented naming convention in `docs/directory-structure.md`
   - Confirmed numbered (01-06) for primary categories
   - Non-numbered for supporting/utility directories
   - Created clear rationale and guidelines
@@ -158,7 +158,7 @@ Completed comprehensive documentation reorganization addressing all critical and
 Key new/modified files:
 - `README.md` - Corrected project README
 - `.gitignore` - Added backup file patterns
-- `docs/DIRECTORY_STRUCTURE.md` - Directory organization guide
+- `docs/directory-structure.md` - Directory organization guide
 - `docs/DOCUMENTATION_ORGANIZATION_AUDIT_REPORT.md` - Original audit
 - 13 new README.md files across key directories
 

@@ -2,5 +2,5 @@
 
 ## Documents
 
-- [LINTING FINAL STATUS](./LINTING_FINAL_STATUS.md)
-- [SD LEO INFRA LEARNING ARCHITECTURE 001 session summary](./SD-LEO-INFRA-LEARNING-ARCHITECTURE-001-session-summary.md)
+- [LINTING FINAL STATUS](./linting-final-status.md)
+- [SD LEO INFRA LEARNING ARCHITECTURE 001 session summary](./sd-leo-infra-learning-architecture-001-session-summary.md)

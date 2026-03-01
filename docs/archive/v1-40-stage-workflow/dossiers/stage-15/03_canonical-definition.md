@@ -391,7 +391,7 @@ This YAML block (lines 643-688) is the **SINGLE SOURCE OF TRUTH** for Stage 15. 
 1. Edit `docs/workflow/stages.yaml` lines 643-688
 2. Run validation: `npm run validate:stages` (if available)
 3. Regenerate all Stage 15 dossier files
-4. Update `DELTA_LOG_PHASE7.md` with change record
+4. Update `delta-log-phase7.md` with change record
 5. Commit with message: `docs(stage-15): Update canonical YAML definition`
 
 **Evidence Authority**: `EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:643-688` "Full YAML block (46 lines)"

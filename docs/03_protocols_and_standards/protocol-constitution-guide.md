@@ -1353,10 +1353,10 @@ VALUES (
 
 ### Related Governance
 
-- **[EVA Manifesto](../../docs/doctrine/EVA_MANIFESTO_v1.md)** - Four Oaths and agent governance
+- **[EVA Manifesto](../../docs/doctrine/eva-manifesto-v1.md)** - Four Oaths and agent governance
 - **[Four Oaths Enforcement](../../lib/governance/four-oaths-enforcement.js)** - Oath validation implementation
 - **[Doctrine of Constraint](../../database/migrations/20251226_law1_doctrine_of_constraint_enforcement.sql)** - EXEC role limits
-- **[Genesis Oath](../../docs/vision/GENESIS_OATH_V3.md)** - Venture creation governance
+- **[Genesis Oath](../../docs/vision/genesis-oath-v3.md)** - Venture creation governance
 
 ### Schema Documentation
 

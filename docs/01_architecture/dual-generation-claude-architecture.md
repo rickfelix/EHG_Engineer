@@ -593,7 +593,7 @@ grep generated_at claude-generation-manifest.json
 
 ## Related Documentation
 
-- **[LEO Protocol Overview](../03_protocols_and_standards/LEO_v4.2_HYBRID_SUB_AGENTS.md)** - LEO Protocol v4.2 specification
+- **[LEO Protocol Overview](../03_protocols_and_standards/leo-v4.2-hybrid-sub-agents.md)** - LEO Protocol v4.2 specification
 - **[Database Schema](./database_schema.md)** - Database table definitions
 - **[Session Lifecycle](./intelligent-session-lifecycle.md)** - Session state management
 - **[Handoff System](../leo/handoffs/)** - Handoff validation gates

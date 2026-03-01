@@ -35,20 +35,20 @@ v1-40-stage-workflow/
     │   ├── 09_metrics-monitoring.md
     │   ├── 10_gaps-backlog.md
     │   └── 11_acceptance-checklist.md
-    ├── DELTA_LOG.md
-    ├── DELTA_LOG_PHASE4.md
-    ├── DELTA_LOG_PHASE5.md
-    ├── DELTA_LOG_PHASE6.md
-    ├── DELTA_LOG_PHASE7.md
-    ├── DELTA_LOG_PHASE8.md
-    ├── DELTA_LOG_PHASE9.md
-    ├── DELTA_LOG_PHASE10.md
-    ├── DELTA_LOG_PHASE11.md
-    ├── DELTA_LOG_PHASE12.md
-    ├── DELTA_LOG_PHASE13.md
-    ├── FINAL_SUMMARY_REPORT.md
-    ├── MIDPOINT_REVIEW.md
-    ├── PHASE-09-BATCH-SUMMARY.md
+    ├── delta-log.md
+    ├── delta-log-phase4.md
+    ├── delta-log-phase5.md
+    ├── delta-log-phase6.md
+    ├── delta-log-phase7.md
+    ├── delta-log-phase8.md
+    ├── delta-log-phase9.md
+    ├── delta-log-phase10.md
+    ├── delta-log-phase11.md
+    ├── delta-log-phase12.md
+    ├── delta-log-phase13.md
+    ├── final-summary-report.md
+    ├── midpoint-review.md
+    ├── phase-09-batch-summary.md
     └── README.md
 ```
 
@@ -109,7 +109,7 @@ The 40-stage workflow was designed for team-based enterprise ventures. For the S
 - **Parent SD**: SD-VISION-TRANSITION-001
 - **This Archive SD**: SD-VISION-TRANSITION-001A
 - **New Configuration**: See `docs/workflow/stages_v2.yaml` (to be created)
-- **ADR Reference**: ADR-002-VENTURE-FACTORY-ARCHITECTURE.md
+- **ADR Reference**: adr-002-venture-factory-architecture.md
 
 ### Restoration Instructions
 

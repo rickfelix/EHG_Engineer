@@ -54,8 +54,8 @@ Large-scale completions:
 |------|--------|---------|
 | SD Completion | `SD-{ID}_COMPLETION_SUMMARY.md` | `SD-VIF-INTEL-001_COMPLETION_SUMMARY.md` |
 | SD Status | `SD-{ID}-IMPLEMENTATION-STATUS.md` | `SD-DATA-INTEGRITY-001-IMPLEMENTATION-STATUS.md` |
-| Feature | `{FEATURE}_COMPLETE.md` | `CONTEXT_MANAGEMENT_IMPLEMENTATION_COMPLETE.md` |
-| System | `{SYSTEM}_COMPLETE.md` | `DATABASE_MIGRATION_COMPLETE.md` |
+| Feature | `{FEATURE}_COMPLETE.md` | `context-management-implementation-complete.md` |
+| System | `{SYSTEM}_COMPLETE.md` | `database-migration-complete.md` |
 
 ## Document Structure
 
@@ -113,22 +113,22 @@ Large-scale completions:
 - [Auto Proceed Intelligence Orchestrator](auto-proceed-intelligence-orchestrator.md)
 - [Automation Complete](automation-complete.md)
 - [Automation Overview](automation-overview.md)
-- [CATEGORY FIELD DEPRECATION COMPLETE](CATEGORY_FIELD_DEPRECATION_COMPLETE.md)
-- [CHECKPOINT2 STATUS](CHECKPOINT2_STATUS.md)
-- [COLLISION FIXES COMPLETE](COLLISION_FIXES_COMPLETE.md)
-- [CONSOLIDATION COMPLETE](CONSOLIDATION_COMPLETE.md)
-- [CONTEXT MANAGEMENT IMPLEMENTATION COMPLETE](CONTEXT_MANAGEMENT_IMPLEMENTATION_COMPLETE.md)
-- [CONTEXT MANAGEMENT TESTING READY](CONTEXT_MANAGEMENT_TESTING_READY.md)
-- [CONTEXT OPTIMIZATION COMPLETE](CONTEXT_OPTIMIZATION_COMPLETE.md)
-- [DATABASE MIGRATION COMPLETE](DATABASE_MIGRATION_COMPLETE.md)
+- [CATEGORY FIELD DEPRECATION COMPLETE](category-field-deprecation-complete.md)
+- [CHECKPOINT2 STATUS](checkpoint2-status.md)
+- [COLLISION FIXES COMPLETE](collision-fixes-complete.md)
+- [CONSOLIDATION COMPLETE](consolidation-complete.md)
+- [CONTEXT MANAGEMENT IMPLEMENTATION COMPLETE](context-management-implementation-complete.md)
+- [CONTEXT MANAGEMENT TESTING READY](context-management-testing-ready.md)
+- [CONTEXT OPTIMIZATION COMPLETE](context-optimization-complete.md)
+- [DATABASE MIGRATION COMPLETE](database-migration-complete.md)
 - [Documentation Reorganization Complete](documentation-reorganization-complete.md)
-- [DUAL CODEBASE RESOLUTION COMPLETE](DUAL_CODEBASE_RESOLUTION_COMPLETE.md)
-- [EMBEDDING FIX SUMMARY](EMBEDDING_FIX_SUMMARY.md)
-- [EXEC PHASE COMPLETE SD VENTURE IDEATION MVP 001](EXEC_PHASE_COMPLETE_SD-VENTURE-IDEATION-MVP-001.md)
-- [IMPLEMENTATION COMPLETE FINAL](IMPLEMENTATION-COMPLETE-FINAL.md)
-- [LEO PROTOCOL ENHANCEMENTS APPLIED](LEO_PROTOCOL_ENHANCEMENTS_APPLIED.md)
-- [LEO PROTOCOL V4.3.0 ENHANCEMENTS](LEO_PROTOCOL_V4.3.0_ENHANCEMENTS.md)
-- [MIGRATION SUMMARY](MIGRATION_SUMMARY.md)
+- [DUAL CODEBASE RESOLUTION COMPLETE](dual-codebase-resolution-complete.md)
+- [EMBEDDING FIX SUMMARY](embedding-fix-summary.md)
+- [EXEC PHASE COMPLETE SD VENTURE IDEATION MVP 001](exec-phase-complete-sd-venture-ideation-mvp-001.md)
+- [IMPLEMENTATION COMPLETE FINAL](implementation-complete-final.md)
+- [LEO PROTOCOL ENHANCEMENTS APPLIED](leo-protocol-enhancements-applied.md)
+- [LEO PROTOCOL V4.3.0 ENHANCEMENTS](leo-protocol-v4.3.0-enhancements.md)
+- [MIGRATION SUMMARY](migration-summary.md)
 - [Monitoring System Summary](monitoring-system-summary.md)
 - [Navigation Fixes Complete](navigation-fixes-complete.md)
 - [Orchestrator Bug Fix Summary](orchestrator-bug-fix-summary.md)
@@ -136,8 +136,8 @@ Large-scale completions:
 - [Prd Fix Complete Report](prd-fix-complete-report.md)
 - [Remediation Complete](remediation-complete.md)
 - [Sd Knowledge 001 Implementation Summary](sd-knowledge-001-implementation-summary.md)
-- [SD LEO INFRA INTELLIGENT LOCAL LLM 001 Orchestrator Complete](SD-LEO-INFRA-INTELLIGENT-LOCAL-LLM-001-orchestrator-complete.md)
-- [SD LEO INFRA PROACTIVE BRANCH ENFORCEMENT 001 Implementation](SD-LEO-INFRA-PROACTIVE-BRANCH-ENFORCEMENT-001-implementation.md)
+- [SD LEO INFRA INTELLIGENT LOCAL LLM 001 Orchestrator Complete](sd-leo-infra-intelligent-local-llm-001-orchestrator-complete.md)
+- [SD LEO INFRA PROACTIVE BRANCH ENFORCEMENT 001 Implementation](sd-leo-infra-proactive-branch-enforcement-001-implementation.md)
 - [Sd Script Fix Final Report](sd-script-fix-final-report.md)
 - [Sd Script Fix Progress](sd-script-fix-progress.md)
 - [Sd Script Fix Summary](sd-script-fix-summary.md)
@@ -146,5 +146,5 @@ Large-scale completions:
 - [Sub Agent Enhancements Summary](sub-agent-enhancements-summary.md)
 - [Sub Agent Improvements Summary](sub-agent-improvements-summary.md)
 - [Subagent Automation Implementation](subagent-automation-implementation.md)
-- [TEST INFRASTRUCTURE SUMMARY](TEST_INFRASTRUCTURE_SUMMARY.md)
-- [UNIFIED STATE MANAGER V2 COMPLETE](UNIFIED_STATE_MANAGER_V2_COMPLETE.md)
+- [TEST INFRASTRUCTURE SUMMARY](test-infrastructure-summary.md)
+- [UNIFIED STATE MANAGER V2 COMPLETE](unified-state-manager-v2-complete.md)

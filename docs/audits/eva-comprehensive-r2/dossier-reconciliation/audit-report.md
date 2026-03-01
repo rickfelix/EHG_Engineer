@@ -190,7 +190,7 @@ Round 2 audit of EVA dossier reconciliation verifying remediation of 7 R1 findin
 
 ### HIGH-002: Historical Reports Reference 40-Stage Model — FIXED
 
-**R1 Finding**: Legacy reports (FINAL_SUMMARY_REPORT.md, DELTA_LOG files, MIDPOINT_REVIEW.md) referenced the obsolete 40-stage workflow model, creating confusion.
+**R1 Finding**: Legacy reports (final-summary-report.md, DELTA_LOG files, midpoint-review.md) referenced the obsolete 40-stage workflow model, creating confusion.
 
 **R2 Status**: All legacy 40-stage era files have been archived to `docs/archive/v1-40-stage-workflow/dossiers/`. The README (line 124) documents this: "Legacy 40-stage era files...have been archived to `docs/archive/2026/legacy-dossier-reports/` with a migration note explaining the 40-to-25-stage consolidation."
 

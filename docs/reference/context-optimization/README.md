@@ -2,6 +2,6 @@
 
 ## Documents
 
-- [PHASE1 SUMMARY](./PHASE1-SUMMARY.md)
-- [PHASE2 COMPLETE](./PHASE2-COMPLETE.md)
-- [PHASE2 SUMMARY](./PHASE2-SUMMARY.md)
+- [PHASE1 SUMMARY](./phase1-summary.md)
+- [PHASE2 COMPLETE](./phase2-complete.md)
+- [PHASE2 SUMMARY](./phase2-summary.md)

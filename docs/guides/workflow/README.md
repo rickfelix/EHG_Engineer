@@ -7,7 +7,7 @@ Complete documentation for the EHG 40-stage venture workflow, from ideation to e
 
 ### Core Documentation
 - `stages.yaml` - Canonical definition of all 40 stages (single source of truth)
-- `SOP_INDEX.md` - Index of all Standard Operating Procedures
+- `sop-index.md` - Index of all Standard Operating Procedures
 - `sop/` - Detailed SOPs for each stage
 
 ### Analysis & Optimization
@@ -44,7 +44,7 @@ Complete documentation for the EHG 40-stage venture workflow, from ideation to e
 ### Essential Reading
 1. [Stages Definition](stages.yaml) - The canonical source
 2. [Workflow Critique](critique/overview.md) - Analysis and recommendations
-4. [SOP Index](SOP_INDEX.md) - All operating procedures
+4. [SOP Index](sop-index.md) - All operating procedures
 
 ### Implementation Guides
 1. [PRD Crosswalk](prd_crosswalk.md) - What's built vs. what's needed
@@ -99,5 +99,5 @@ Owner Mix: LEAD, PLAN, Chairman
 
 ## Files
 
-- [GENERATION SUMMARY](GENERATION_SUMMARY.md)
+- [GENERATION SUMMARY](generation-summary.md)
 - [Quality Lifecycle Workflow](quality-lifecycle-workflow.md)

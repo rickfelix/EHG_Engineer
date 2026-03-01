@@ -103,10 +103,10 @@ The EHG_Engineer codebase contains **557 markdown files** across multiple direct
 **Recommended Action**:
 ```bash
 # Rename wrong README
-mv README.md SUPABASE_CLI_README.md
+mv README.md supabase-cli-readme.md
 
 # Use existing project README from docs
-cp ../../guides/EHG_ENGINEER_README.md README.md
+cp ../../guides/ehg-engineer-readme.md README.md
 # OR create new comprehensive README
 ```
 
@@ -117,8 +117,8 @@ cp ../../guides/EHG_ENGINEER_README.md README.md
 
 **Issue**: Two separate directories for guides with different content
 **Duplicate Files**:
-- `AI_GUIDE.md` exists in both but with different content (124 vs 229 lines)
-- `PROJECT_REGISTRATION_GUIDE.md` exists in both
+- `ai-guide.md` exists in both but with different content (124 vs 229 lines)
+- `project-registration-guide.md` exists in both
 
 **Impact**:
 - Confusion about which is authoritative
@@ -129,7 +129,7 @@ cp ../../guides/EHG_ENGINEER_README.md README.md
 ```bash
 # Consolidate into /docs/guides/ (more discoverable)
 # 1. Merge unique content from /docs/03_guides/ into /docs/guides/
-# 2. Resolve AI_GUIDE.md conflict (keep longer/newer version)
+# 2. Resolve ai-guide.md conflict (keep longer/newer version)
 # 3. Remove /docs/03_guides/ directory
 # 4. Update all references
 ```
@@ -139,12 +139,12 @@ cp ../../guides/EHG_ENGINEER_README.md README.md
 **Issue**: Status files, summaries, and temporary session notes polluting project root
 
 **Examples**:
-- `CHECKPOINT2_STATUS.md`
+- `checkpoint2-status.md`
 - `SD-DATA-INTEGRITY-001-IMPLEMENTATION-STATUS.md`
 - `SD-EVA-MEETING-002_SESSION_STATUS.md`
 - `SD-NAV-REFACTOR-001_SESSION_STATUS.md`
-- `CONTEXT_MANAGEMENT_IMPLEMENTATION_COMPLETE.md`
-- `DATABASE_MIGRATION_COMPLETE.md`
+- `context-management-implementation-complete.md`
+- `database-migration-complete.md`
 
 **Impact**:
 - Project root cluttered and unprofessional
@@ -178,7 +178,7 @@ cp ../../guides/EHG_ENGINEER_README.md README.md
 /temp-sub-agent-design-assessment.md
 /temp-sub-agent-systems-analyst-assessment.md
 /temp-subagent-issues-to-fix.md
-/TEST_INFRASTRUCTURE_SUMMARY.md
+/test-infrastructure-summary.md
 ```
 
 **Issue**: 11+ temporary files in root with "temp-" prefix

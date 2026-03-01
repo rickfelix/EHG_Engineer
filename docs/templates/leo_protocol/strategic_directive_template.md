@@ -124,7 +124,7 @@ tags: [general, auto-generated]
 
 ## Reference Files Required
 - `docs/wbs_artefacts/strategic_directives/[SD-ID].md` (This Strategic Directive)
-- `docs/03_protocols_and_standards/leo_protocol_v3.1.5.md` (LEO Protocol)
+- `docs/03_protocols_and_standards/leo-protocol-v3.1.5.md` (LEO Protocol)
 - `docs/product-requirements/[SD-ID]-PRD.md` (Product Requirements)
 
 ---

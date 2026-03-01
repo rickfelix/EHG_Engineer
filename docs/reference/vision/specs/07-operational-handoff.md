@@ -749,7 +749,7 @@ CREATE INDEX idx_ceo_transitions_pending ON ceo_mode_transitions(venture_id)
 
 ## Related Specifications
 
-- [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md) - Parent document, Section 13
+- [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md) - Parent document, Section 13
 - [01-database-schema.md](./01-database-schema.md) - Database foundations
 - [04-eva-orchestration.md](./04-eva-orchestration.md) - EVA state machines
 - [06-hierarchical-agent-architecture.md](./06-hierarchical-agent-architecture.md) - Agent hierarchy

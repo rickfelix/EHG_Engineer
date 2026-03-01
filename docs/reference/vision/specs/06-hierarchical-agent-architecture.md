@@ -2181,7 +2181,7 @@ async function routeDirective(
 - [01-database-schema.md](./01-database-schema.md) - Core tables (to be extended)
 - [04-eva-orchestration.md](./04-eva-orchestration.md) - EVA's current role (to be updated)
 - [05-user-stories.md](./05-user-stories.md) - User stories for hierarchical view
-- [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md) - Master vision document
+- [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md) - Master vision document
 
 ---
 

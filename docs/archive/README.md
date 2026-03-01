@@ -37,13 +37,13 @@ This directory contains archived documentation that is no longer active but pres
 **Reason**: Superseded by LEO Protocol v4.3.3
 
 **Files Archived**:
-- leo_protocol_v3.1.5.md (83KB)
-- leo_protocol_v3.1.6_improvements.md
-- leo_protocol_v3.3.0_boundary_context_skills.md
-- leo_protocol_v4.0.md
-- leo_protocol_v4.1.md
-- leo_protocol_v4.1.1_update.md
-- leo_protocol_v4.1.2_database_first.md
+- leo-protocol-v3.1.5.md (83KB)
+- leo-protocol-v3.1.6-improvements.md
+- leo-protocol-v3.3.0-boundary-context-skills.md
+- leo-protocol-v4.0.md
+- leo-protocol-v4.1.md
+- leo-protocol-v4.1.1-update.md
+- leo-protocol-v4.1.2-database-first.md
 
 ---
 
@@ -80,7 +80,7 @@ grep -r "search term" /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/
 ls -lah /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/
 
 # Read archived file
-cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo_protocol_v3.1.5.md
+cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo-protocol-v3.1.5.md
 ```
 
 ---
@@ -96,8 +96,8 @@ cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo_protocol_v3.1.5.md
 
 ## Files
 
-- [COMPANIES TABLE UPDATE 2025 11 02](COMPANIES-TABLE-UPDATE-2025-11-02.md)
-- [DOCUMENTATION CLEANUP QUICK ACTIONS](DOCUMENTATION_CLEANUP_QUICK_ACTIONS.md)
+- [COMPANIES TABLE UPDATE 2025 11 02](companies-table-update-2025-11-02.md)
+- [DOCUMENTATION CLEANUP QUICK ACTIONS](documentation-cleanup-quick-actions.md)
 - [Linting Fixes Summary](linting-fixes-summary.md)
-- [MODEL OPTIMIZATION 2025 12 06](MODEL-OPTIMIZATION-2025-12-06.md)
+- [MODEL OPTIMIZATION 2025 12 06](model-optimization-2025-12-06.md)
 - [Temp Implementation Roadmap](temp-implementation-roadmap.md)

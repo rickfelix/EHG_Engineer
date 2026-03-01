@@ -121,7 +121,7 @@ When the Vision document is updated, dossier stage names and phase assignments s
 
 ## Archived Content
 
-Legacy 40-stage era files (FINAL_SUMMARY_REPORT.md, DELTA_LOG files, MIDPOINT_REVIEW.md) have been archived to `docs/archive/2026/legacy-dossier-reports/` with a migration note explaining the 40-to-25-stage consolidation.
+Legacy 40-stage era files (final-summary-report.md, DELTA_LOG files, midpoint-review.md) have been archived to `docs/archive/2026/legacy-dossier-reports/` with a migration note explaining the 40-to-25-stage consolidation.
 
 ---
 

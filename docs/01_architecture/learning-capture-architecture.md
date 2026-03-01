@@ -690,8 +690,8 @@ MEMORY.md self-healed. No stale warnings.
 - [Database Agent Patterns](../reference/database-agent-patterns.md) - Database integration patterns
 
 ### Protocols
-- [LEO Protocol v4.3.3](../03_protocols_and_standards/LEO_v4.3_subagent_enforcement.md) - Current protocol version
-- [Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Doc organization
+- [LEO Protocol v4.3.3](../03_protocols_and_standards/leo-v4.3-subagent-enforcement.md) - Current protocol version
+- [Documentation Standards](../03_protocols_and_standards/documentation-standards.md) - Doc organization
 
 ### Implementation
 - Hook: `scripts/hooks/auto-learning-capture.cjs`

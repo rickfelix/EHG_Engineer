@@ -16,8 +16,8 @@ This directory contains **infrastructure components**. The **pipeline orchestrat
 | EHG App (ehg/lib/genesis) | ScaffoldEngine, mock-mode verifier, repo creator |
 | EHG App (ehg/scripts/genesis) | Pipeline scripts, stage-specific logic |
 
-See: `/docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md` for full details.
-See: `/docs/genesis/TROUBLESHOOTING.md` for common issues and fixes.
+See: `/docs/architecture/genesis-implementation-guide.md` for full details.
+See: `/docs/genesis/troubleshooting.md` for common issues and fixes.
 
 ---
 

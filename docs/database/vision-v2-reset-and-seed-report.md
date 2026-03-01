@@ -118,8 +118,8 @@ All Vision V2 SDs include metadata references to:
 - `docs/vision/specs/03-ui-components.md`
 - `docs/vision/specs/04-eva-orchestration.md`
 - `docs/vision/specs/06-hierarchical-agent-architecture.md`
-- `VISION_V2_GLASS_COCKPIT.md`
-- `docs/vision/00_VISION_V2_CHAIRMAN_OS.md`
+- `vision-v2-glass-cockpit.md`
+- `docs/vision/00-vision-v2-chairman-os.md`
 
 ### CLAUDE Protocol Sections Added
 
@@ -336,8 +336,8 @@ WHERE id LIKE 'SD-VISION-V2-%' AND id != 'SD-VISION-V2-000';
       {"spec": "06-hierarchical-agent-architecture.md", "path": "docs/vision/specs/06-hierarchical-agent-architecture.md", "sections": ["all"]}
     ],
     "philosophy": [
-      {"spec": "VISION_V2_GLASS_COCKPIT.md", "path": "VISION_V2_GLASS_COCKPIT.md"},
-      {"spec": "00_VISION_V2_CHAIRMAN_OS.md", "path": "docs/vision/00_VISION_V2_CHAIRMAN_OS.md"}
+      {"spec": "vision-v2-glass-cockpit.md", "path": "vision-v2-glass-cockpit.md"},
+      {"spec": "00-vision-v2-chairman-os.md", "path": "docs/vision/00-vision-v2-chairman-os.md"}
     ]
   },
   "implementation_guidance": {

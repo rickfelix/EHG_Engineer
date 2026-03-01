@@ -103,11 +103,11 @@ These files document completed SDs and should be archived (content is historical
 | discovery/compliance_recommendations.md | 18KB | Compliance | ARCHIVE |
 | plan_phase_progress_summary.md | 18KB | Progress notes | ARCHIVE |
 | discovery/gap_analysis.md | 17KB | Gap analysis | ARCHIVE |
-| BACKEND_INTEGRATION_COMPLETE.md | 16KB | Completion | ARCHIVE |
+| BACKEND_integration-complete.md | 16KB | Completion | ARCHIVE |
 | PHASE5_COMPLETE_SUMMARY.md | 16KB | Summary | ARCHIVE |
 | plan_phase_entry_log.md | 15KB | Entry log | ARCHIVE |
 | prd_creation_complete.md | 15KB | PRD notes | ARCHIVE |
-| PHASE5_IMPLEMENTATION_SUMMARY.md | 14KB | Implementation | ARCHIVE |
+| PHASE5_implementation-summary.md | 14KB | Implementation | ARCHIVE |
 | DATABASE_SCHEMA_FIX_GUIDE.md | 8KB | Fix guide | ARCHIVE |
 | discovery/EXECUTIVE_SUMMARY.md | 7KB | Summary | ARCHIVE |
 | 00_overview.md | 5KB | Overview | ARCHIVE |
@@ -118,10 +118,10 @@ These files document completed SDs and should be archived (content is historical
 
 | File | Size | Content Type | Action |
 |------|------|--------------|--------|
-| US-003-TEST-EXECUTION-REPORT.md | 23KB | Test report | ARCHIVE |
-| US-003-TESTING-SUMMARY.md | 16KB | Test summary | ARCHIVE |
+| us-003-test-execution-report.md | 23KB | Test report | ARCHIVE |
+| us-003-testing-summary.md | 16KB | Test summary | ARCHIVE |
 | testing-strategy.md | 13KB | Test strategy | ARCHIVE |
-| US-003-QUICK-TEST-GUIDE.md | 9KB | Quick guide | ARCHIVE |
+| us-003-quick-test-guide.md | 9KB | Quick guide | ARCHIVE |
 
 ---
 
@@ -131,8 +131,8 @@ These are analysis documents that may still be referenced.
 
 | File | Size | Content Type | Action |
 |------|------|--------------|--------|
-| docs/analysis/DATABASE_SUBAGENT_REVIEW_SD-CUSTOMER-INTEL-001.md | 12KB | Subagent review | REVIEW |
-| docs/analysis/ISSUES_ANALYSIS_SD-PRE-EXEC-ANALYSIS-001.md | 17KB | Issues analysis | REVIEW |
+| docs/analysis/database-subagent-review-sd-customer-intel-001.md | 12KB | Subagent review | REVIEW |
+| docs/analysis/issues-analysis-sd-pre-exec-analysis-001.md | 17KB | Issues analysis | REVIEW |
 | docs/analysis/sd-field-validation-analysis-2025-10-16.md | ~5KB | Field analysis | REVIEW |
 
 ---
@@ -144,7 +144,7 @@ These should be migrated to the `retrospectives` or `issue_knowledge_base` table
 | File | Size | Content Type | Action |
 |------|------|--------------|--------|
 | docs/lessons-learned-database-agent-rls-policy-chain.md | 31KB | Lessons learned | MIGRATE |
-| docs/lessons-learned/QF-20251120-702-python-none-strip-error.md | 8KB | Quick fix lesson | MIGRATE |
+| docs/lessons-learned/qf-20251120-702-python-none-strip-error.md | 8KB | Quick fix lesson | MIGRATE |
 | docs/lessons-learned/always-check-existing-patterns-first.md | 3KB | Pattern lesson | MIGRATE |
 | docs/lessons-learned/user-story-validation-gap.md | 4KB | Validation lesson | MIGRATE |
 | docs/lessons-learned/user-story-validation-monitoring.md | 8KB | Monitoring lesson | MIGRATE |
@@ -178,7 +178,7 @@ These are in `scripts/archive/` and are appropriately archived.
 
 | File | Size | Content Type | Action |
 |------|------|--------------|--------|
-| docs/summaries/implementations/EXEC_PHASE_COMPLETE_SD-VENTURE-IDEATION-MVP-001.md | 17KB | Completion summary | ARCHIVE |
+| docs/summaries/implementations/exec-phase-complete-sd-venture-ideation-mvp-001.md | 17KB | Completion summary | ARCHIVE |
 
 ---
 
