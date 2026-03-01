@@ -6,14 +6,17 @@
  */
 
 import ResultBuilder from '../ResultBuilder.js';
-import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
+import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
-import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
+import { shouldSkipAndContinue, executeSkipAndContinue, DEFAULT_MAX_RETRIES } from '../skip-and-continue.js';
 import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
 import { applyGatePolicies } from '../gate-policy-resolver.js';
 import { validateMultiSessionClaim } from '../gates/multi-session-claim-gate.js';
+
+// SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V04): Global DFE escalation gate injection
+import { createDFEEscalationGate } from '../gates/dfe-escalation-gate.js';
 
 // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Workflow telemetry
 import { createTraceContext, startSpan, endSpan, persist } from '../../../../lib/telemetry/workflow-timer.js';
@@ -159,6 +162,14 @@ export class BaseExecutor {
       try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
+      // SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V04): Inject DFE escalation gate globally
+      // All handoff types get DFE enforcement. Deduplicate by name to avoid double execution
+      // when individual executors also add it via getRequiredGates().
+      const hasDFE = hardcodedGates.some(g => g.name === 'DFE_ESCALATION_GATE');
+      if (!hasDFE) {
+        hardcodedGates.push(createDFEEscalationGate(this.supabase, `${this.handoffType}-gate`));
+      }
+
       // SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001: Apply database-driven gate policies
       // Filters gates based on validation_gate_registry policies (DISABLED gates removed)
       const { filteredGates: policyFilteredGates, fallbackUsed } = await applyGatePolicies(
@@ -205,7 +216,35 @@ export class BaseExecutor {
       validationContext._traceCtx = traceCtx;
       validationContext._parentSpan = step3Span;
 
-      const gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
+      // SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Gate retry loop — auto-retry transient failures
+      let gateResults;
+      let currentRetryCount = options._retryCount || 0;
+      const maxGateRetries = DEFAULT_MAX_RETRIES;
+
+      for (let attempt = 0; attempt <= maxGateRetries; attempt++) {
+        gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
+
+        if (gateResults.passed) break; // Gates passed — exit retry loop
+
+        // Check if we should retry
+        if (attempt < maxGateRetries) {
+          const skipCheck = shouldSkipAndContinue({
+            sd,
+            gateResults,
+            retryCount: currentRetryCount,
+            autoProceed: options.autoProceed
+          });
+
+          if (!skipCheck.shouldSkip && skipCheck.reason.includes('etry')) {
+            // Retry eligible — increment and loop
+            currentRetryCount++;
+            console.log(`\n   🔄 Gate retry ${currentRetryCount}/${maxGateRetries}: ${skipCheck.reason}`);
+            continue;
+          }
+        }
+        break; // Not retry-eligible or max retries reached
+      }
+
       try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch { /* non-fatal */ }
 
       // SD-LEARN-010:US-005: Handle bypass validation
@@ -219,11 +258,11 @@ export class BaseExecutor {
           console.log('');
           // Continue execution despite gate failure
         } else {
-          // SD-LEO-ENH-AUTO-PROCEED-001-07: Check for skip-and-continue conditions
+          // SD-LEO-ENH-AUTO-PROCEED-001-07: Check for skip-and-continue conditions (post-retry)
           const skipCheck = shouldSkipAndContinue({
             sd,
             gateResults,
-            retryCount: options._retryCount || 0,
+            retryCount: currentRetryCount,
             autoProceed: options.autoProceed
           });
 
@@ -261,8 +300,6 @@ export class BaseExecutor {
 
           // RCA Auto-Trigger on gate failure (SD-LEO-ENH-ENHANCE-RCA-SUB-001)
           // SD-LEARN-FIX-ADDRESS-PAT-AUTO-003: Use individual gate score, not overall aggregate.
-          // Previously passed gateResults.totalScore/totalMaxScore which is the SUM across ALL gates,
-          // creating misleading patterns like "score 900/1000" for a single gate with max_score 100.
           try {
             const { triggerRCAOnFailure, buildGateContext } = await import('../../../../lib/rca/index.js');
             const failedGateResult = gateResults.gateResults?.[gateResults.failedGate];
