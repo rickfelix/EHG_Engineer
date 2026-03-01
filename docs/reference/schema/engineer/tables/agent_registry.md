@@ -1,18 +1,10 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-02-28
-tags: [reference, auto-generated]
----
 # agent_registry Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-28T03:49:53.877Z
+**Generated**: 2026-03-01T00:41:31.291Z
 **Rows**: 8
 **RLS**: Enabled (2 policies)
 
