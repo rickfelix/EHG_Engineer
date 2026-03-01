@@ -97,12 +97,11 @@ const contextUsed = inputTokens + outputTokens + cacheCreation + cacheRead;
 const usableContext = Math.max(1, Math.floor(contextSize * AUTOCOMPACT_PCT / 100));
 const percentUsed = Math.min(100, Math.floor(contextUsed * 100 / usableContext));
 
-// Status level
+// Status level (shifted: old-red→yellow, old-yellow→hidden)
 let status = 'HEALTHY';
 let icon = '';
 if (percentUsed >= EMERGENCY_THRESHOLD) { status = 'EMERGENCY'; icon = ' !'; }
-else if (percentUsed >= CRITICAL_THRESHOLD) { status = 'CRITICAL'; icon = ' !'; }
-else if (percentUsed >= WARNING_THRESHOLD) { status = 'WARNING'; icon = ' *'; }
+else if (percentUsed >= CRITICAL_THRESHOLD) { status = 'CRITICAL'; icon = ' *'; }
 
 // Progress bar
 const BAR_WIDTH = 20;
@@ -110,9 +109,8 @@ const filled = Math.floor(percentUsed * BAR_WIDTH / 100);
 const empty = BAR_WIDTH - filled;
 const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
 let barColor = GREEN;
-if (percentUsed >= EMERGENCY_THRESHOLD) barColor = BOLD_RED;
-else if (percentUsed >= CRITICAL_THRESHOLD) barColor = RED;
-else if (percentUsed >= WARNING_THRESHOLD) barColor = YELLOW;
+if (percentUsed >= EMERGENCY_THRESHOLD) barColor = RED;
+else if (percentUsed >= CRITICAL_THRESHOLD) barColor = YELLOW;
 
 // Git info
 let gitBranch = '';
