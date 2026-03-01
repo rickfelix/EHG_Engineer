@@ -673,9 +673,9 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
   // Idempotency: check if already scored today
   const today = new Date().toISOString().slice(0, 10);
   const { data: existing } = await supabase
-    .from('sd_heal_scores')
+    .from('eva_vision_scores')
     .select('id')
-    .eq('sd_key', sdKey)
+    .eq('sd_id', sdKey)
     .gte('scored_at', today + 'T00:00:00Z')
     .limit(1);
 

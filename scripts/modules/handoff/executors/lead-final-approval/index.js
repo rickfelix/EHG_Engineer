@@ -37,23 +37,26 @@ import { cleanupWorktree, validateSdKey } from '../../../../../lib/worktree-mana
  * @param {Object} supabase - Supabase client
  */
 async function rescoreOriginalSD(sd, supabase) {
-  if (!sd.vision_origin_score_id) return; // Not a corrective SD
+  // Check both top-level and metadata for origin score ID (metadata fallback
+  // handles SDs created outside generateCorrectiveSD() path)
+  const originScoreId = sd.vision_origin_score_id || sd.metadata?.vision_origin_score_id;
+  if (!originScoreId) return; // Not a corrective SD
 
   console.log('\n🔄 AUTO-RESCORE: Corrective SD completion detected');
   console.log('-'.repeat(50));
   console.log(`   Corrective SD: ${sd.sd_key || sd.id}`);
-  console.log(`   Origin score ID: ${sd.vision_origin_score_id}`);
+  console.log(`   Origin score ID: ${originScoreId}`);
 
   try {
     // Fetch the original score record to find which SD was scored
     const { data: originScore, error: originErr } = await supabase
       .from('eva_vision_scores')
       .select('sd_id, total_score, dimension_scores, scored_at')
-      .eq('id', sd.vision_origin_score_id)
+      .eq('id', originScoreId)
       .single();
 
     if (originErr || !originScore) {
-      console.log(`   ⚠️  Origin score record not found (${sd.vision_origin_score_id}) — skipping rescore`);
+      console.log(`   ⚠️  Origin score record not found (${originScoreId}) — skipping rescore`);
       return;
     }
 
