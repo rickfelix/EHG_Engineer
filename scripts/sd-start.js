@@ -24,6 +24,7 @@ import { isProcessRunning } from '../lib/heartbeat-manager.mjs';
 import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 import { getNextReadyChild } from './modules/handoff/child-sd-selector.js';
+import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modules/governance/timeline-violation-handler.js';
 
 dotenv.config();
 
@@ -131,7 +132,7 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type')
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
@@ -314,6 +315,49 @@ async function main() {
       Object.assign(sd, childSd);
       effectiveId = childId;
       console.log(`   ${colors.dim}(Orchestrator ${sdId} not claimed — only child ${childId} will be claimed)${colors.reset}`);
+    }
+  }
+
+  // 1.7. Day-28 blocking age gate (FR-001: SD-MAN-GEN-CORRECTIVE-VISION-GAP-007-03)
+  // Block SDs older than threshold (default 28 days). Chairman override via --force.
+  const forceOverride = process.argv.includes('--force');
+  const ageCheck = await checkSDAge({
+    supabase,
+    sdKey: effectiveId,
+    sdUuid: sd.id,
+    createdAt: sd.created_at,
+  });
+
+  if (ageCheck.blocked) {
+    const { escalationEventId, priorityBumped } = await handleTimelineViolation({
+      supabase,
+      sdKey: effectiveId,
+      sdUuid: sd.id,
+      ageDays: ageCheck.ageDays,
+      threshold: ageCheck.threshold,
+      currentPriority: sd.priority,
+      isOverride: forceOverride,
+    });
+
+    if (!forceOverride) {
+      console.log(formatBlockMessage({
+        sdKey: effectiveId,
+        ageDays: ageCheck.ageDays,
+        threshold: ageCheck.threshold,
+      }));
+      if (escalationEventId) {
+        console.log(`  ${colors.dim}Escalation event: ${escalationEventId}${colors.reset}`);
+      }
+      if (priorityBumped) {
+        console.log(`  ${colors.yellow}Priority bumped to CRITICAL${colors.reset}`);
+      }
+      process.exit(1);
+    } else {
+      console.log(`\n  ${colors.yellow}⚠️  CHAIRMAN OVERRIDE: SD age ${ageCheck.ageDays}d > ${ageCheck.threshold}d threshold${colors.reset}`);
+      console.log(`  ${colors.dim}Override logged to eva_orchestration_events${colors.reset}`);
+      if (escalationEventId) {
+        console.log(`  ${colors.dim}Event: ${escalationEventId}${colors.reset}`);
+      }
     }
   }
 
