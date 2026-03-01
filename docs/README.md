@@ -52,14 +52,11 @@ See [reference/README.md](reference/README.md) for comprehensive index.
 ### 📋 [Summaries](./summaries/)
 Implementation summaries and completion reports.
 
-### 🔧 [Troubleshooting](./troubleshooting/)
+### 🔧 [Troubleshooting](./reference/troubleshooting/)
 Common issues and their resolutions.
 
-### 📊 [Reports](./reports/)
-Analysis reports, retrospectives, and system verification.
-
-### 🚀 [Operations](./operations/)
-Production deployment guides and operational documentation.
+### 📋 [Summaries](./summaries/)
+Implementation summaries, analysis reports, and completion reports.
 
 ### 📦 [Archive](./archive/)
 Deprecated or superseded documentation retained for reference.
@@ -137,7 +134,7 @@ Deprecated or superseded documentation retained for reference.
 
 - **LEO Protocol**: See `../CLAUDE.md` (auto-generated from database)
 - **Getting Started**: See [guides/SIMPLE_PROJECT_SETUP.md](guides/SIMPLE_PROJECT_SETUP.md)
-- **Database Architecture**: See [operations/IMPORTANT_DATABASE_DISTINCTION.md](operations/IMPORTANT_DATABASE_DISTINCTION.md)
+- **Database Architecture**: See [database/README.md](database/README.md)
 - **Sub-Agents**: See [guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md](guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md)
 - **Script Creation Policy**: See [reference/script-creation-guidelines.md](reference/script-creation-guidelines.md)
 
