@@ -303,7 +303,7 @@ export class PlanToExecVerifier {
       // 5. Check PLAN phase completion
       const validStatuses = isParentOrchestrator
         ? ['approved', 'ready_for_exec', 'planning', 'draft']
-        : ['approved', 'ready_for_exec'];
+        : ['approved', 'ready_for_exec', 'in_progress'];
 
       if (!validStatuses.includes(prd.status)) {
         return rejectHandoff(this.supabase,sdId, 'PLAN_INCOMPLETE', `PRD status is '${prd.status}', expected one of: ${validStatuses.join(', ')}`);
