@@ -518,7 +518,7 @@ describe('EvaMasterScheduler', () => {
       expect(processStage).toHaveBeenCalledTimes(3);
     });
 
-    test('should use default max (5) when venture entry lacks max_stages_per_cycle', async () => {
+    test('should use default max (50) when venture entry lacks max_stages_per_cycle', async () => {
       scheduler = new EvaMasterScheduler({
         supabase: mockSupabase,
         logger: mockLogger,
@@ -533,8 +533,8 @@ describe('EvaMasterScheduler', () => {
 
       await scheduler.poll();
 
-      // Default is 5 (DEFAULT_MAX_STAGES_PER_CYCLE)
-      expect(processStage).toHaveBeenCalledTimes(5);
+      // Default is 50 (DEFAULT_MAX_STAGES_PER_CYCLE — updated from 5 in SD-MAN-GEN-CORRECTIVE-VISION-GAP-009)
+      expect(processStage).toHaveBeenCalledTimes(50);
     });
 
     test('should emit scheduler_cadence_limited metric when limit is reached', async () => {

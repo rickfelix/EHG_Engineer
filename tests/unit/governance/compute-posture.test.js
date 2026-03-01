@@ -1,9 +1,10 @@
 /**
  * Tests for Compute Posture Configuration (V07: unlimited_compute_posture)
  * SD-MAN-FEAT-CORRECTIVE-VISION-GAP-069
+ * Updated: SD-MAN-GEN-CORRECTIVE-VISION-GAP-009 — default changed to AWARENESS
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   getComputePosture,
   evaluateCost,
@@ -12,22 +13,48 @@ import {
 } from '../../../lib/governance/compute-posture.js';
 
 describe('Compute Posture - getComputePosture()', () => {
-  it('returns enforcement by default (V07: compute cost governance)', () => {
+  const originalEnv = process.env.COMPUTE_POSTURE_MODE;
+
+  afterEach(() => {
+    // Restore original env var
+    if (originalEnv === undefined) {
+      delete process.env.COMPUTE_POSTURE_MODE;
+    } else {
+      process.env.COMPUTE_POSTURE_MODE = originalEnv;
+    }
+  });
+
+  it('returns awareness mode by default (SD-MAN-GEN-CORRECTIVE-VISION-GAP-009)', () => {
+    delete process.env.COMPUTE_POSTURE_MODE;
+    const posture = getComputePosture();
+    expect(posture.policy).toBe('awareness-not-enforcement');
+    expect(posture.blockOnExceed).toBe(false);
+  });
+
+  it('returns enforcement mode when COMPUTE_POSTURE_MODE=enforcement env var is set', () => {
+    process.env.COMPUTE_POSTURE_MODE = 'enforcement';
     const posture = getComputePosture();
     expect(posture.policy).toBe('enforcement');
     expect(posture.blockOnExceed).toBe(true);
   });
 
-  it('returns awareness mode when explicitly overridden', () => {
+  it('returns awareness mode when explicitly overridden via parameter', () => {
     const posture = getComputePosture({ policy: POSTURE_MODES.AWARENESS });
     expect(posture.policy).toBe('awareness-not-enforcement');
     expect(posture.blockOnExceed).toBe(false);
   });
 
-  it('returns enforcement mode when overridden', () => {
+  it('returns enforcement mode when explicitly overridden via parameter', () => {
     const posture = getComputePosture({ policy: POSTURE_MODES.ENFORCEMENT });
     expect(posture.policy).toBe('enforcement');
     expect(posture.blockOnExceed).toBe(true);
+  });
+
+  it('parameter override takes precedence over env var', () => {
+    process.env.COMPUTE_POSTURE_MODE = 'enforcement';
+    const posture = getComputePosture({ policy: POSTURE_MODES.AWARENESS });
+    expect(posture.policy).toBe('awareness-not-enforcement');
+    expect(posture.blockOnExceed).toBe(false);
   });
 
   it('includes default cost thresholds', () => {
@@ -59,10 +86,11 @@ describe('Compute Posture - evaluateCost()', () => {
     expect(result.blocked).toBe(false);
   });
 
-  it('returns escalate level and blocks at escalate threshold (enforcement default)', () => {
+  it('returns escalate level but does NOT block at default awareness posture', () => {
+    // SD-MAN-GEN-CORRECTIVE-VISION-GAP-009: default is now awareness, not enforcement
     const result = evaluateCost(200, 'LEAD');
     expect(result.level).toBe('escalate');
-    expect(result.blocked).toBe(true); // V07: enforcement is default
+    expect(result.blocked).toBe(false); // awareness mode: never blocks
   });
 
   it('does not block under awareness policy', () => {

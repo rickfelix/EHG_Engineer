@@ -45,6 +45,7 @@ import {
 } from './modules/plan-archiver.js';
 import { runTriageGate, formatTriageSummary } from './modules/triage-gate.js';
 import { scoreSD } from './eva/vision-scorer.js';
+import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 
 dotenv.config();
 
@@ -1267,6 +1268,17 @@ async function createSD(options) {
     if (typeof globalThis.__LEO_CLI_MODE !== 'undefined') process.exit(1);
     throw new Error(msg);
   }
+
+  // SD-MAN-GEN-CORRECTIVE-VISION-GAP-009: Track CLI authority for SD creation
+  try {
+    await trackWriteSource(supabase, {
+      table: 'strategic_directives_v2',
+      operation: 'insert',
+      source: 'cli',
+      command: 'create',
+      sdKey: data.sd_key,
+    });
+  } catch { /* CLI tracking is fire-and-forget */ }
 
   // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
   await scoreSDAtConception(data.sd_key, title, description, supabase, {
