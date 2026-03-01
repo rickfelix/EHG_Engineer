@@ -18,6 +18,9 @@ import { validateMultiSessionClaim } from '../gates/multi-session-claim-gate.js'
 // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Workflow telemetry
 import { createTraceContext, startSpan, endSpan, persist } from '../../../../lib/telemetry/workflow-timer.js';
 
+// SD-MAN-GEN-CORRECTIVE-VISION-GAP-009: CLI authority tracking
+import { trackWriteSource } from '../../../../lib/eva/cli-write-gate.js';
+
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -296,6 +299,17 @@ export class BaseExecutor {
 
       // Step 4.5: Handle Plan Mode transition (SD-PLAN-MODE-001)
       await this._handlePlanModeTransition(sdId, sd, options);
+
+      // Step 4.6: SD-MAN-GEN-CORRECTIVE-VISION-GAP-009 - Track CLI authority for phase transition
+      try {
+        await trackWriteSource(this.supabase, {
+          table: 'sd_phase_handoffs',
+          operation: 'insert',
+          source: 'cli',
+          command: 'handoff',
+          sdKey: sd?.sd_key || sdId,
+        });
+      } catch { /* CLI tracking is fire-and-forget */ }
 
       // Step 5: Build success result
       console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
