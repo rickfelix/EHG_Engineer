@@ -218,8 +218,8 @@ description: Multi-agent AI system reviews and critiques the idea from multiple 
 **SD-CREWAI-ARCHITECTURE-001 Created** (external architectural decision)
 
 **Evidence**:
-- `/docs/workflow/dossiers/DELTA_LOG_PHASE4.md` (line 245): "SD-CREWAI-ARCHITECTURE-001 (already created in Phase 0)"
-- `/docs/workflow/dossiers/DELTA_LOG_PHASE5.md` (line 347): "SD-CREWAI-ARCHITECTURE-001 (created in Phase 0)"
+- `/docs/workflow/dossiers/delta-log-phase4.md` (line 245): "SD-CREWAI-ARCHITECTURE-001 (already created in Phase 0)"
+- `/docs/workflow/dossiers/delta-log-phase5.md` (line 347): "SD-CREWAI-ARCHITECTURE-001 (created in Phase 0)"
 
 **Date**: Unknown (predates dossier generation system)
 
@@ -240,9 +240,9 @@ description: Multi-agent AI system reviews and critiques the idea from multiple 
 **CrewAI Integration Documented Retroactively**
 
 **Evidence**:
-- DELTA_LOG_PHASE4.md: References SD-CREWAI-ARCHITECTURE-001 as blocker for agent mappings
-- DELTA_LOG_PHASE5.md (line 338): "SD-CREWAI-ARCHITECTURE-001 Blocks All Agent Mappings"
-- MIDPOINT_REVIEW.md (lines 18, 168): 28 CrewAI crews defined (112 agent roles total)
+- delta-log-phase4.md: References SD-CREWAI-ARCHITECTURE-001 as blocker for agent mappings
+- delta-log-phase5.md (line 338): "SD-CREWAI-ARCHITECTURE-001 Blocks All Agent Mappings"
+- midpoint-review.md (lines 18, 168): 28 CrewAI crews defined (112 agent roles total)
 - Stages 7+ dossiers: Explicit CrewAI agent definitions in 06_agent-orchestration.md files
 
 **Git Commits**:

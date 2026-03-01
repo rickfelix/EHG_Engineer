@@ -30,7 +30,7 @@ tags: [general, auto-generated]
   - [4.1 Complexity to Avoid](#41-complexity-to-avoid)
   - [4.2 Over-Engineering to Avoid](#42-over-engineering-to-avoid)
 - [5. Immediate Action Items](#5-immediate-action-items)
-  - [5.1 Create AI_GUIDE.md](#51-create-ai_guidemd)
+  - [5.1 Create ai-guide.md](#51-create-ai_guidemd)
   - [5.2 Update Templates with Full Headers](#52-update-templates-with-full-headers)
   - [5.3 Create Minimal Cursor Rules](#53-create-minimal-cursor-rules)
   - [5.4 Add Version Management](#54-add-version-management)
@@ -59,7 +59,7 @@ After analyzing the CLAUDE.md, cursor rules, and LEO Protocol documentation from
 ## 1. Essential Additions (High Priority)
 
 ### 1.1 CLAUDE.md Equivalent
-**Recommendation**: Create an `AI_GUIDE.md` or `CLAUDE.md` for EHG_Engineer
+**Recommendation**: Create an `ai-guide.md` or `CLAUDE.md` for EHG_Engineer
 
 **What to Include**:
 - LEO Protocol communication standards (already partially in templates)
@@ -90,7 +90,7 @@ The current templates have basic headers, but the full EHG platform uses a more 
 **Reference Files Required**:
 - `[path-to-SD]` (Strategic Directive)
 - `[path-to-PRD]` (Product Requirements Document)
-- `docs/leo_protocol_v3.1.5.md` (LEO Protocol)
+- `docs/leo-protocol-v3.1.5.md` (LEO Protocol)
 - `[additional-files]` (Context-specific)
 ```
 
@@ -103,9 +103,9 @@ Add version detection and compatibility checking to the existing compliance audi
 
 ```bash
 # Version detection commands
-head -n 20 docs/leo_protocol_v3.1.5.md | grep -i "version"
+head -n 20 docs/leo-protocol-v3.1.5.md | grep -i "version"
 leo version  # If CLI is implemented
-git log --oneline -10 docs/leo_protocol_v3.1.5.md
+git log --oneline -10 docs/leo-protocol-v3.1.5.md
 ```
 
 ## 2. Valuable Additions (Medium Priority)
@@ -179,10 +179,10 @@ These should only be added if specific features require them.
 
 ## 5. Immediate Action Items
 
-### 5.1 Create AI_GUIDE.md
+### 5.1 Create ai-guide.md
 ```bash
 # Create the guide
-touch AI_GUIDE.md
+touch ai-guide.md
 
 # Include:
 - LEO Protocol quick reference
@@ -231,7 +231,7 @@ Create a VERSION file or enhance package.json with:
 
 The EHG_Engineer platform is well-positioned as a minimal, clean implementation of the LEO Protocol. The recommendations above would enhance its usability without compromising its simplicity. Priority should be given to:
 
-1. **Creating an AI_GUIDE.md** for AI assistant context
+1. **Creating an ai-guide.md** for AI assistant context
 2. **Enhancing communication templates** with full headers
 3. **Adding basic cursor rules** for consistency
 4. **Documenting execution options** for flexibility

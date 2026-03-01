@@ -95,7 +95,7 @@ The dossier standard specifies 11 files per stage (01-11). No existing dossier i
 ### HIGH-2: Historical Generation Reports Reference 40-Stage Model
 
 **Severity**: High
-**Files**: `FINAL_SUMMARY_REPORT.md`, `DELTA_LOG_PHASE*.md` files
+**Files**: `final-summary-report.md`, `DELTA_LOG_PHASE*.md` files
 
 The generation summary from 2025-11-06 claims "All 40 stages (100% complete)" with 440 files. Phases 10-13 reference "Stages 26-40" which are archived. These reports are artifacts of the old architecture and may mislead users into thinking dossiers are complete.
 
@@ -151,5 +151,5 @@ When Vision v4.7 was updated (2026-02-12), there was no mechanism to detect or a
 1. **No retroactive regeneration needed for this audit** — This audit documents the gap; a separate SD should handle dossier regeneration
 2. **Forward-looking**: Update dossier generation script to pull from Vision v4.7 as canonical source
 3. **Rename existing dossiers**: Correct stage names in the 5 existing dossiers to match Vision v4.7
-4. **Archive historical reports**: Mark FINAL_SUMMARY_REPORT.md and DELTA_LOG files as "Legacy 40-Stage Model"
+4. **Archive historical reports**: Mark final-summary-report.md and DELTA_LOG files as "Legacy 40-Stage Model"
 5. **Create sync mechanism**: Automated check when vision document changes to flag stale dossier content

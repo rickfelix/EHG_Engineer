@@ -8,62 +8,62 @@ This directory contains summaries of completed implementations and major initiat
 - `SD-RD-DEPT-001-COMPLETION-SUMMARY.md` - R&D Department SD completion
 
 ### Infrastructure & Architecture
-- `CODEX_REMOVAL_SUMMARY.md` - Codex system removal summary
-- `ID-SCHEMA-MIGRATION-SUMMARY.md` - ID schema migration details
-- `LEO_CLI_ENHANCEMENT_SUMMARY.md` - LEO CLI improvements
+- `codex-removal-summary.md` - Codex system removal summary
+- `id-schema-migration-summary.md` - ID schema migration details
+- `leo-cli-enhancement-summary.md` - LEO CLI improvements
 
 ### Initiative Summaries
-- `COMPLETE_INITIATIVE_WITH_INFRASTRUCTURE.md` - Complete initiative with infrastructure
-- `COMPLETE_RECONNECTION_INITIATIVE.md` - Reconnection initiative
-- `FINAL_COMPLETE_INITIATIVE.md` - Final initiative completion
-- `RECONNECTION_INITIATIVE_SUMMARY.md` - Reconnection summary
+- `complete-initiative-with-infrastructure.md` - Complete initiative with infrastructure
+- `complete-reconnection-initiative.md` - Reconnection initiative
+- `final-complete-initiative.md` - Final initiative completion
+- `reconnection-initiative-summary.md` - Reconnection summary
 
 ### Feature Implementations
-- `IMPLEMENTATION_SUMMARY.md` - General implementation summary
-- `STORY_AGENT_STAGING_COMPLETE.md` - Story agent staging
-- `UAT_IMPLEMENTATION_SUMMARY.md` - UAT implementation
-- `USER_STORIES_IMPLEMENTATION_SUMMARY.md` - User stories implementation
+- `implementation-summary.md` - General implementation summary
+- `story-agent-staging-complete.md` - Story agent staging
+- `UAT_implementation-summary.md` - UAT implementation
+- `USER_STORIES_implementation-summary.md` - User stories implementation
 
 ---
 *Auto-organized by DOCMON Sub-Agent*
-- [ACCESSIBILITY FIX SUMMARY](ACCESSIBILITY-FIX-SUMMARY.md)
-- [ACCESSIBILITY TIER3 PROGRESS](ACCESSIBILITY-TIER3-PROGRESS.md)
+- [ACCESSIBILITY FIX SUMMARY](accessibility-fix-summary.md)
+- [ACCESSIBILITY TIER3 PROGRESS](accessibility-tier3-progress.md)
 - [Checkpoint 2 Plan Vwc](checkpoint-2-plan-vwc.md)
 - [Checkpoint 3 Clean Branch Strategy](checkpoint-3-clean-branch-strategy.md)
 - [Child Sd Pattern For Phased Work](child-sd-pattern-for-phased-work.md)
 - [Child Sd Pattern Implementation Summary](child-sd-pattern-implementation-summary.md)
-- [CODEX REMOVAL SUMMARY](CODEX_REMOVAL_SUMMARY.md)
-- [COMPLETE INITIATIVE WITH INFRASTRUCTURE](COMPLETE_INITIATIVE_WITH_INFRASTRUCTURE.md)
-- [COMPLETE RECONNECTION INITIATIVE](COMPLETE_RECONNECTION_INITIATIVE.md)
-- [DIRECTIVELAB COMPONENT TREE](DIRECTIVELAB_COMPONENT_TREE.md)
-- [DIRECTIVELAB REFACTORING REPORT](DIRECTIVELAB_REFACTORING_REPORT.md)
-- [DISK IO OPTIMIZATION REPORT](DISK_IO_OPTIMIZATION_REPORT.md)
-- [FINAL COMPLETE INITIATIVE](FINAL_COMPLETE_INITIATIVE.md)
-- [GENESIS PRD REVIEW CONSOLIDATED](GENESIS_PRD_REVIEW_CONSOLIDATED.md)
-- [GENESIS PRD REVIEW REPORT](GENESIS_PRD_REVIEW_REPORT.md)
-- [GENESIS REVIEW ROUND 2 REPORT](GENESIS_REVIEW_ROUND_2_REPORT.md)
-- [ID SCHEMA MIGRATION SUMMARY](ID-SCHEMA-MIGRATION-SUMMARY.md)
+- [CODEX REMOVAL SUMMARY](codex-removal-summary.md)
+- [COMPLETE INITIATIVE WITH INFRASTRUCTURE](complete-initiative-with-infrastructure.md)
+- [COMPLETE RECONNECTION INITIATIVE](complete-reconnection-initiative.md)
+- [DIRECTIVELAB COMPONENT TREE](directivelab-component-tree.md)
+- [DIRECTIVELAB REFACTORING REPORT](directivelab-refactoring-report.md)
+- [DISK IO OPTIMIZATION REPORT](disk-io-optimization-report.md)
+- [FINAL COMPLETE INITIATIVE](final-complete-initiative.md)
+- [GENESIS PRD REVIEW CONSOLIDATED](genesis-prd-review-consolidated.md)
+- [GENESIS PRD REVIEW REPORT](genesis-prd-review-report.md)
+- [GENESIS REVIEW ROUND 2 REPORT](genesis-review-round-2-report.md)
+- [ID SCHEMA MIGRATION SUMMARY](id-schema-migration-summary.md)
 - [Implementation Summary Router Architecture](implementation-summary-router-architecture.md)
-- [IMPLEMENTATION SUMMARY RUSSIAN JUDGE SD TYPE AWARENESS](IMPLEMENTATION-SUMMARY-RUSSIAN-JUDGE-SD-TYPE-AWARENESS.md)
-- [IMPLEMENTATION SUMMARY](IMPLEMENTATION_SUMMARY.md)
-- [LEO CLI ENHANCEMENT SUMMARY](LEO_CLI_ENHANCEMENT_SUMMARY.md)
-- [LINTING SUMMARY](LINTING_SUMMARY.md)
-- [PARENT CHILD SD IMPLEMENTATION COMPLETE](PARENT-CHILD-SD-IMPLEMENTATION-COMPLETE.md)
+- [IMPLEMENTATION SUMMARY RUSSIAN JUDGE SD TYPE AWARENESS](implementation-summary-russian-judge-sd-type-awareness.md)
+- [IMPLEMENTATION SUMMARY](implementation-summary.md)
+- [LEO CLI ENHANCEMENT SUMMARY](leo-cli-enhancement-summary.md)
+- [LINTING SUMMARY](linting-summary.md)
+- [PARENT CHILD SD IMPLEMENTATION COMPLETE](parent-child-sd-implementation-complete.md)
 - [Protocol Improvements Test Summary](protocol-improvements-test-summary.md)
-- [PR AUTH PAGES SUMMARY](PR_AUTH_PAGES_SUMMARY.md)
-- [RCA REFACTOR SD WORKFLOW 001](RCA-REFACTOR-SD-WORKFLOW-001.md)
-- [RECONNECTION INITIATIVE SUMMARY](RECONNECTION_INITIATIVE_SUMMARY.md)
-- [REFACTORING SUMMARY UATDASHBOARD](REFACTORING-SUMMARY-UATDASHBOARD.md)
-- [RISK ASSESSMENT SD STAGE 09 001](RISK-ASSESSMENT-SD-STAGE-09-001.md)
-- [STAGE15 REFACTOR SUMMARY](STAGE15-REFACTOR-SUMMARY.md)
-- [STAGE4 COMPLETION SUMMARY](STAGE4-COMPLETION-SUMMARY.md)
-- [STORY AGENT STAGING COMPLETE](STORY_AGENT_STAGING_COMPLETE.md)
-- [TIER3 BEFORE AFTER SUMMARY](TIER3-BEFORE-AFTER-SUMMARY.md)
+- [PR AUTH PAGES SUMMARY](pr-auth-pages-summary.md)
+- [RCA REFACTOR SD WORKFLOW 001](rca-refactor-sd-workflow-001.md)
+- [RECONNECTION INITIATIVE SUMMARY](reconnection-initiative-summary.md)
+- [REFACTORING SUMMARY UATDASHBOARD](refactoring-summary-uatdashboard.md)
+- [RISK ASSESSMENT SD STAGE 09 001](risk-assessment-sd-stage-09-001.md)
+- [STAGE15 REFACTOR SUMMARY](stage15-refactor-summary.md)
+- [STAGE4 COMPLETION SUMMARY](stage4-completion-summary.md)
+- [STORY AGENT STAGING COMPLETE](story-agent-staging-complete.md)
+- [TIER3 BEFORE AFTER SUMMARY](tier3-before-after-summary.md)
 - [Tuning Plan Week 1](tuning-plan-week-1.md)
-- [UAT IMPLEMENTATION SUMMARY](UAT_IMPLEMENTATION_SUMMARY.md)
-- [USER STORIES IMPLEMENTATION SUMMARY](USER_STORIES_IMPLEMENTATION_SUMMARY.md)
+- [UAT IMPLEMENTATION SUMMARY](UAT_implementation-summary.md)
+- [USER STORIES IMPLEMENTATION SUMMARY](USER_STORIES_implementation-summary.md)
 - [Vision Discovery Visualization](vision-discovery-visualization.md)
-- [VISION V2 CURSOR ASSESSMENT](VISION_V2_CURSOR_ASSESSMENT.md)
-- [VISION V2 GLASS COCKPIT](VISION_V2_GLASS_COCKPIT.md)
-- [VISION V2 UPDATE REPORT](VISION_V2_UPDATE_REPORT.md)
-- [VISION V2 UX AMENDMENTS](VISION_V2_UX_AMENDMENTS.md)
+- [VISION V2 CURSOR ASSESSMENT](vision-v2-cursor-assessment.md)
+- [VISION V2 GLASS COCKPIT](vision-v2-glass-cockpit.md)
+- [VISION V2 UPDATE REPORT](vision-v2-update-report.md)
+- [VISION V2 UX AMENDMENTS](vision-v2-ux-amendments.md)

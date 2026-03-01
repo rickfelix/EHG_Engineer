@@ -381,7 +381,7 @@ If database rejects an SD type:
 
 - [LEO Protocol Documentation](../../CLAUDE.md)
 - [Handoff System](../leo/handoffs/handoff-system-guide.md)
-- [Database Migrations](../database/migrations/MIGRATION_SUCCESS_REPORT.md)
+- [Database Migrations](../database/migrations/migration-success-report.md)
 - [CI/CD Workflows](../../.github/workflows/)
 
 ---

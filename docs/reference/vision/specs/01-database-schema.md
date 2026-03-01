@@ -79,7 +79,7 @@ tags: [reference, auto-generated]
 **Version:** 1.0
 **Status:** APPROVED
 **Last Updated:** December 2025
-**Parent Document:** [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md)
+**Parent Document:** [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md)
 
 ---
 
@@ -995,7 +995,7 @@ CREATE TABLE IF NOT EXISTS lifecycle_stage_config (
 );
 
 -- Seed data (December 2025)
--- Gate stages MUST match: docs/vision/00_VISION_V2_CHAIRMAN_OS.md and docs/vision/specs/06-hierarchical-agent-architecture.md
+-- Gate stages MUST match: docs/vision/00-vision-v2-chairman-os.md and docs/vision/specs/06-hierarchical-agent-architecture.md
 INSERT INTO lifecycle_stage_config (stage_number, stage_name, phase_name, gate_type) VALUES
   (1,  'Draft Idea & Chairman Review',         'THE_TRUTH',      'auto_advance'),
   (2,  'AI Multi-Model Critique',              'THE_TRUTH',      'auto_advance'),
@@ -1525,7 +1525,7 @@ Save as: `database/migrations/YYYYMMDD_vision_v2_chairman_os_schema.sql`
 ```sql
 -- Vision v2 Chairman's OS Schema Migration
 -- Generated: December 2025
--- Reference: docs/vision/00_VISION_V2_CHAIRMAN_OS.md
+-- Reference: docs/vision/00-vision-v2-chairman-os.md
 
 BEGIN;
 
@@ -2547,9 +2547,9 @@ FROM ventures;
 
 ## References
 
-- Parent: [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md) Section 9.2
-- Related: [ADR-002-VENTURE-FACTORY-ARCHITECTURE.md](../../architecture/ADR-002-VENTURE-FACTORY-ARCHITECTURE.md)
-- Golden Nuggets: [VENTURE_ENGINE_GOLDEN_NUGGETS_PLAN.md](../VENTURE_ENGINE_GOLDEN_NUGGETS_PLAN.md)
+- Parent: [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md) Section 9.2
+- Related: [adr-002-venture-factory-architecture.md](../../architecture/adr-002-venture-factory-architecture.md)
+- Golden Nuggets: [venture-engine-golden-nuggets-plan.md](../venture-engine-golden-nuggets-plan.md)
 - Operational Handoff: [07-operational-handoff.md](./07-operational-handoff.md)
 - Blue Sky Assessment: [Architect's Addendum](../../plans/resilient-stargazing-pancake.md)
 - Hierarchical Architecture: [06-hierarchical-agent-architecture.md](./06-hierarchical-agent-architecture.md)

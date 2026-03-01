@@ -63,7 +63,7 @@ Include Vision QA requirements in handoff:
 **Reference Files Required:**
 - `docs/strategic_directives/[SD-ID].md` (Strategic Directive)
 - `docs/product-requirements/[PRD-ID].md` (PRD)
-- `docs/03_protocols_and_standards/leo_protocol_v3.1.5.md` (Protocol)
+- `docs/03_protocols_and_standards/leo-protocol-v3.1.5.md` (Protocol)
 - `docs/03_protocols_and_standards/leo_vision_qa_integration.md` (Vision QA Guidelines)
 ```
 

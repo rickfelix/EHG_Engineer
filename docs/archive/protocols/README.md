@@ -28,9 +28,9 @@ These protocol versions have been superseded by **LEO Protocol v4.3.3**. They ar
 
 | File | Version | Size | Date | Notes |
 |------|---------|------|------|-------|
-| `leo_protocol_v3.1.5.md` | v3.1.5 | 83KB | 2024 | Large file, early protocol |
-| `leo_protocol_v3.1.6_improvements.md` | v3.1.6 | - | 2024 | Improvements over v3.1.5 |
-| `leo_protocol_v3.3.0_boundary_context_skills.md` | v3.3.0 | - | 2024 | Introduced boundary context and skills |
+| `leo-protocol-v3.1.5.md` | v3.1.5 | 83KB | 2024 | Large file, early protocol |
+| `leo-protocol-v3.1.6-improvements.md` | v3.1.6 | - | 2024 | Improvements over v3.1.5 |
+| `leo-protocol-v3.3.0-boundary-context-skills.md` | v3.3.0 | - | 2024 | Introduced boundary context and skills |
 
 **Migration Path**: v3.x → v4.0 → v4.1 → v4.2
 
@@ -38,7 +38,7 @@ These protocol versions have been superseded by **LEO Protocol v4.3.3**. They ar
 
 | File | Version | Size | Date | Notes |
 |------|---------|------|------|-------|
-| `leo_protocol_v4.0.md` | v4.0 | - | 2024 | First v4.x release |
+| `leo-protocol-v4.0.md` | v4.0 | - | 2024 | First v4.x release |
 
 **Migration Path**: v4.0 → v4.1 → v4.2
 
@@ -46,9 +46,9 @@ These protocol versions have been superseded by **LEO Protocol v4.3.3**. They ar
 
 | File | Version | Size | Date | Notes |
 |------|---------|------|------|-------|
-| `leo_protocol_v4.1.md` | v4.1 | 25KB | 2024-2025 | Major v4.1 release |
-| `leo_protocol_v4.1.1_update.md` | v4.1.1 | - | 2025 | Minor updates to v4.1 |
-| `leo_protocol_v4.1.2_database_first.md` | v4.1.2 | - | 2025 | Database-first patterns |
+| `leo-protocol-v4.1.md` | v4.1 | 25KB | 2024-2025 | Major v4.1 release |
+| `leo-protocol-v4.1.1-update.md` | v4.1.1 | - | 2025 | Minor updates to v4.1 |
+| `leo-protocol-v4.1.2-database-first.md` | v4.1.2 | - | 2025 | Database-first patterns |
 
 **Migration Path**: v4.1.x → v4.2
 
@@ -86,7 +86,7 @@ These protocol versions have been superseded by **LEO Protocol v4.3.3**. They ar
 **From command line**:
 ```bash
 # View archived protocol
-cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo_protocol_v3.1.5.md
+cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo-protocol-v3.1.5.md
 
 # Search within archived protocols
 grep -r "keyword" /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/
@@ -115,9 +115,9 @@ Navigate to `/docs/archive/protocols/` directory
 **Location**: `/docs/03_protocols_and_standards/`
 
 **Key Files**:
-- `LEO_v4.2_HYBRID_SUB_AGENTS.md` - Hybrid sub-agent architecture
-- `LEO_v4.2_PLAYWRIGHT_TESTING_INTEGRATION.md` - Playwright integration
-- `leo_git_commit_guidelines_v4.2.0.md` - Git commit standards
+- `leo-v4.2-hybrid-sub-agents.md` - Hybrid sub-agent architecture
+- `leo-v4.2-playwright-testing-integration.md` - Playwright integration
+- `leo-git-commit-guidelines-v4.2.0.md` - Git commit standards
 
 **Context Router**: `/CLAUDE.md` - Smart context loading system
 
@@ -153,13 +153,13 @@ Navigate to `/docs/archive/protocols/` directory
 docs/archive/
 └── protocols/
     ├── README.md (this file)
-    ├── leo_protocol_v3.1.5.md
-    ├── leo_protocol_v3.1.6_improvements.md
-    ├── leo_protocol_v3.3.0_boundary_context_skills.md
-    ├── leo_protocol_v4.0.md
-    ├── leo_protocol_v4.1.md
-    ├── leo_protocol_v4.1.1_update.md
-    └── leo_protocol_v4.1.2_database_first.md
+    ├── leo-protocol-v3.1.5.md
+    ├── leo-protocol-v3.1.6-improvements.md
+    ├── leo-protocol-v3.3.0-boundary-context-skills.md
+    ├── leo-protocol-v4.0.md
+    ├── leo-protocol-v4.1.md
+    ├── leo-protocol-v4.1.1-update.md
+    └── leo-protocol-v4.1.2-database-first.md
 ```
 
 ---
@@ -189,10 +189,10 @@ docs/archive/
 
 ## Files
 
-- [Leo Protocol V3.1.5](leo_protocol_v3.1.5.md)
-- [Leo Protocol V3.1.6 Improvements](leo_protocol_v3.1.6_improvements.md)
-- [Leo Protocol V3.3.0 Boundary Context Skills](leo_protocol_v3.3.0_boundary_context_skills.md)
-- [Leo Protocol V4.0](leo_protocol_v4.0.md)
-- [Leo Protocol V4.1.1 Update](leo_protocol_v4.1.1_update.md)
-- [Leo Protocol V4.1.2 Database First](leo_protocol_v4.1.2_database_first.md)
-- [Leo Protocol V4.1](leo_protocol_v4.1.md)
+- [Leo Protocol V3.1.5](leo-protocol-v3.1.5.md)
+- [Leo Protocol V3.1.6 Improvements](leo-protocol-v3.1.6-improvements.md)
+- [Leo Protocol V3.3.0 Boundary Context Skills](leo-protocol-v3.3.0-boundary-context-skills.md)
+- [Leo Protocol V4.0](leo-protocol-v4.0.md)
+- [Leo Protocol V4.1.1 Update](leo-protocol-v4.1.1-update.md)
+- [Leo Protocol V4.1.2 Database First](leo-protocol-v4.1.2-database-first.md)
+- [Leo Protocol V4.1](leo-protocol-v4.1.md)

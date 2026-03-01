@@ -254,8 +254,8 @@ Every document MUST include a "Related Documentation" section at the end:
 - [LEO Protocol Overview](../03_protocols_and_standards/LEO_v4.3.3.md) - Core protocol understanding
 
 ### Related Guides
-- [Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Writing guidelines
-- [Directory Structure](../01_architecture/DIRECTORY_STRUCTURE.md) - Folder organization
+- [Documentation Standards](../03_protocols_and_standards/documentation-standards.md) - Writing guidelines
+- [Directory Structure](../01_architecture/directory-structure.md) - Folder organization
 
 ### Reference Materials
 - [Database Patterns](../reference/database-agent-patterns.md) - Database best practices
@@ -546,8 +546,8 @@ grep -L "^## Metadata" docs/**/*.md
 - [LEO Protocol v4.3.3](../03_protocols_and_standards/LEO_v4.3.3.md) - Core protocol context
 
 ### Related Standards
-- [Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Writing quality guidelines
-- [Directory Structure](../01_architecture/DIRECTORY_STRUCTURE.md) - Current folder organization
+- [Documentation Standards](../03_protocols_and_standards/documentation-standards.md) - Writing quality guidelines
+- [Directory Structure](../01_architecture/directory-structure.md) - Current folder organization
 
 ### Implementation Guides
 - [DOCMON Sub-Agent Guide](../agents/DOCMON-guide.md) - Documentation automation

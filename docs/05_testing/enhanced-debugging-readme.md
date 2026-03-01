@@ -215,7 +215,7 @@ docs/
 ├── ENHANCED_TESTING_DEBUGGING_README.md    # This file
 ├── ENHANCED_TESTING_API_REFERENCE.md       # API documentation
 ├── ENHANCED_TESTING_INTEGRATION_GUIDE.md   # Integration examples
-├── ENHANCED_TESTING_TROUBLESHOOTING.md     # FAQ and issues
+├── ENHANCED_TESTING_troubleshooting.md     # FAQ and issues
 └── TESTING_DEBUGGING_COLLABORATION_PLAYBOOK.md  # Detailed playbook
 scripts/fixes/
 └── [auto-generated fix scripts]            # Generated remediation

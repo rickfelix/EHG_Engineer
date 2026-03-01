@@ -381,4 +381,4 @@ See: `CLAUDE.md` section "Database Migration Validation"
 ---
 
 **Last Updated**: 2025-10-10
-**Related**: AGENT_DATA_INVESTIGATION_REPORT.md, SD-AGENT-PLATFORM-001
+**Related**: agent-data-investigation-report.md, SD-AGENT-PLATFORM-001

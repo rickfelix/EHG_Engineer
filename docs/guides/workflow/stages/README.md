@@ -7,7 +7,7 @@
 - **Author**: Documentation Sub-Agent (DOCMON)
 - **Last Updated**: 2026-01-19
 - **Tags**: venture-workflow, stages, vision-v2, index, documentation-standards-compliant
-- **Compliance**: DOCUMENTATION_STANDARDS.md v1.1.0
+- **Compliance**: documentation-standards.md v1.1.0
 
 ## Overview
 
@@ -138,7 +138,7 @@ This directory contains comprehensive documentation for each of the 25 stages in
 - [stages_v2.yaml](../stages_v2.yaml) - Canonical stage configuration
 - [25-Stage Overview](../25-stage-venture-lifecycle-overview.md) - High-level lifecycle overview
 - [Workflow README](../README.md) - Workflow documentation home
-- [Golden Nuggets Plan](../../vision/VENTURE_ENGINE_GOLDEN_NUGGETS_PLAN.md) - Feature specifications
+- [Golden Nuggets Plan](../../vision/venture-engine-golden-nuggets-plan.md) - Feature specifications
 
 ---
 
@@ -151,7 +151,7 @@ All 25 stages are **✅ Implemented in EHG** with:
 - E2E test coverage (stages 1-25)
 - Phase-based navigation accordion
 
-**Verified**: EHG codebase audit completed 2026-01-19. See [Implementation Audit Report](../../reports/EHG_STAGE_IMPLEMENTATION_AUDIT_2026-01-19.md) for details.
+**Verified**: EHG codebase audit completed 2026-01-19. See [Implementation Audit Report](../../reports/ehg-stage-implementation-audit-2026-01-19.md) for details.
 
 ## Generation Information
 
@@ -160,7 +160,7 @@ These stage documents were generated from `stages_v2.yaml` using:
 node scripts/generate-stage-docs.cjs
 ```
 
-**Compliance**: Generator updated 2026-01-19 to meet `DOCUMENTATION_STANDARDS.md` v1.1.0:
+**Compliance**: Generator updated 2026-01-19 to meet `documentation-standards.md` v1.1.0:
 - ✅ Complete metadata headers (Category, Status, Version, Author, Tags)
 - ✅ Implementation status verified against EHG codebase
 - ✅ Accurate UI component references
@@ -177,4 +177,4 @@ node scripts/generate-stage-docs.cjs
 
 ---
 *Part of Vision V2 (25-Stage Venture Lifecycle)*
-*Last Generated: 2026-01-19 (DOCUMENTATION_STANDARDS.md v1.1.0 compliant)*
+*Last Generated: 2026-01-19 (documentation-standards.md v1.1.0 compliant)*

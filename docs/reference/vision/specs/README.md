@@ -36,7 +36,7 @@ This folder contains the detailed technical specifications for Vision v2, the "V
 
 ```
 docs/vision/
-├── 00_VISION_V2_CHAIRMAN_OS.md    <- The "Constitution" (philosophy, UX, roadmap)
+├── 00-vision-v2-chairman-os.md    <- The "Constitution" (philosophy, UX, roadmap)
 └── specs/                          <- Technical implementation details
     ├── README.md                   <- This file (index)
     ├── 01-database-schema.md       <- Data model + Strict RLS
@@ -454,7 +454,7 @@ When modifying these specifications:
 1. **Update the spec file** with new definitions
 2. **Cross-reference** related specs (e.g., new table → update API contract)
 3. **Update this README** if adding new files
-4. **Update the main Vision document** (`00_VISION_V2_CHAIRMAN_OS.md`) if the change affects philosophy or roadmap
+4. **Update the main Vision document** (`00-vision-v2-chairman-os.md`) if the change affects philosophy or roadmap
 
 ---
 
@@ -472,4 +472,4 @@ When modifying these specifications:
 
 ---
 
-*These specifications are the technical implementation of the Vision v2 philosophy defined in [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md).*
+*These specifications are the technical implementation of the Vision v2 philosophy defined in [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md).*

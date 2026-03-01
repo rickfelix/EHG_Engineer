@@ -634,7 +634,7 @@ supabase.from('sd_phase_handoffs')
 
 ## Related Documentation
 
-- [LEO Protocol Git Commit Guidelines](./leo_git_commit_guidelines_v4.2.0.md)
+- [LEO Protocol Git Commit Guidelines](./leo-git-commit-guidelines-v4.2.0.md)
 - [LEO Protocol v4.3.3 Overview](./LEO_v4.3.3_overview.md)
 - [Strategic Directive Workflow](../workflow/strategic-directive-workflow.md)
 - [Handoff System Documentation](../leo/handoffs/handoff-system-guide.md)

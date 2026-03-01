@@ -28,7 +28,7 @@ This directory contains system architecture documentation for EHG_Engineer, incl
 | `system-overview.md` | High-level system architecture |
 | `database_schema.md` | Database schema documentation |
 | `multi-repo-architecture.md` | Multi-repository architecture |
-| `UNIFIED-FRONTEND-ARCHITECTURE.md` | Frontend architecture patterns |
+| `unified-frontend-architecture.md` | Frontend architecture patterns |
 
 ## Related Documentation
 
@@ -39,18 +39,18 @@ This directory contains system architecture documentation for EHG_Engineer, incl
 ## Files
 
 - [13b Exit Readiness Tracking](13b_exit_readiness_tracking.md)
-- [ADR 002 VENTURE FACTORY ARCHITECTURE](ADR-002-VENTURE-FACTORY-ARCHITECTURE.md)
-- [DEEP RESEARCH PROMPT DATABASE ARCHITECTURE](DEEP_RESEARCH_PROMPT_DATABASE_ARCHITECTURE.md)
-- [DESIGN ACCESSIBILITY SUMMARY](DESIGN-ACCESSIBILITY-SUMMARY.md)
+- [ADR 002 VENTURE FACTORY ARCHITECTURE](adr-002-venture-factory-architecture.md)
+- [DEEP RESEARCH PROMPT DATABASE ARCHITECTURE](deep-research-prompt-database-architecture.md)
+- [DESIGN ACCESSIBILITY SUMMARY](design-accessibility-summary.md)
 - [Design Fixes](design-fixes.md)
 - [Dual Generation Claude Architecture](dual-generation-claude-architecture.md)
-- [EHG COSMIC INTELLIGENCE REPORT 2026 2028](EHG_COSMIC_INTELLIGENCE_REPORT_2026-2028.md)
-- [GENESIS IMPLEMENTATION GUIDE](GENESIS_IMPLEMENTATION_GUIDE.md)
+- [EHG COSMIC INTELLIGENCE REPORT 2026 2028](ehg-cosmic-intelligence-report-2026-2028.md)
+- [GENESIS IMPLEMENTATION GUIDE](genesis-implementation-guide.md)
 - [Sd Artifact Integration 001 Decision Log](sd-artifact-integration-001-decision-log.md)
 - [Sd Artifact Integration 001 File Tree](sd-artifact-integration-001-file-tree.md)
-- [SD GENESIS COMPLETION BLUEPRINT](SD-GENESIS-COMPLETION-BLUEPRINT.md)
-- [SD STAGE ARCH 001 P3](SD-STAGE-ARCH-001-P3.md)
+- [SD GENESIS COMPLETION BLUEPRINT](sd-genesis-completion-blueprint.md)
+- [SD STAGE ARCH 001 P3](sd-stage-arch-001-p3.md)
 - [Strategic Review](strategic-review.md)
-- [UATDASHBOARD ARCHITECTURE](UATDASHBOARD-ARCHITECTURE.md)
-- [UNIFIED FRONTEND ARCHITECTURE](UNIFIED-FRONTEND-ARCHITECTURE.md)
+- [UATDASHBOARD ARCHITECTURE](uatdashboard-architecture.md)
+- [UNIFIED FRONTEND ARCHITECTURE](unified-frontend-architecture.md)
 - [Worktree First Isolation Integration](worktree-first-isolation-integration.md)

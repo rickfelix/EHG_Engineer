@@ -42,7 +42,7 @@ tags: [reference, auto-generated]
 **Version:** 1.0
 **Status:** APPROVED
 **Last Updated:** December 2025
-**Parent Document:** [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md)
+**Parent Document:** [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md)
 
 ---
 
@@ -1478,6 +1478,6 @@ export async function requireChairmanAccess(
 
 ## References
 
-- Parent: [00_VISION_V2_CHAIRMAN_OS.md](../00_VISION_V2_CHAIRMAN_OS.md) Section 9.3
+- Parent: [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md) Section 9.3
 - Database Schema: [01-database-schema.md](./01-database-schema.md)
 - UI Components: [03-ui-components.md](./03-ui-components.md)

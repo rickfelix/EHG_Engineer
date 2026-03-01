@@ -43,9 +43,9 @@ Total records in strategic_directives_v2: 0
 
 | SD ID | Database Status | Dossier Source | Claimed Priority | Claimed Dependency |
 |-------|-----------------|----------------|------------------|-------------------|
-| SD-METRICS-FRAMEWORK-001 | ❌ NOT FOUND | DELTA_LOG_PHASE11.md:136 | P0 CRITICAL | "100% of stages require" |
-| SD-RECURSION-ENGINE-001 | ❌ NOT FOUND | DELTA_LOG_PHASE11.md:137 | P0 CRITICAL | "105 triggers require" |
-| SD-CREWAI-ARCHITECTURE-001 | ❌ NOT FOUND | FINAL_SUMMARY_REPORT.md:456 | P0 (assumed) | "40 crews require" |
+| SD-METRICS-FRAMEWORK-001 | ❌ NOT FOUND | delta-log-phase11.md:136 | P0 CRITICAL | "100% of stages require" |
+| SD-RECURSION-ENGINE-001 | ❌ NOT FOUND | delta-log-phase11.md:137 | P0 CRITICAL | "105 triggers require" |
+| SD-CREWAI-ARCHITECTURE-001 | ❌ NOT FOUND | final-summary-report.md:456 | P0 (assumed) | "40 crews require" |
 
 ---
 
@@ -53,12 +53,12 @@ Total records in strategic_directives_v2: 0
 
 ### What the Dossiers Claimed
 
-From `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/DELTA_LOG_PHASE11.md:136-137`:
+From `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/delta-log-phase11.md:136-137`:
 > **3 SDs Queued for Phase 15 Execution**:
 > 1. SD-METRICS-FRAMEWORK-001 (P0 CRITICAL, 6-8 weeks, universal blocker, 100% of stages require)
 > 2. SD-RECURSION-ENGINE-001 (P0 CRITICAL, 8-10 weeks, 73 triggers across 32 stages depend)
 
-From `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/FINAL_SUMMARY_REPORT.md:278-280`:
+From `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/final-summary-report.md:278-280`:
 > **Wave 1 Strategic Directives (Queued for Phase 15)**:
 > 1. SD-METRICS-FRAMEWORK-001 (P0 CRITICAL)
 > 2. SD-RECURSION-ENGINE-001 (P0 CRITICAL)

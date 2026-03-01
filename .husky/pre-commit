@@ -182,8 +182,8 @@ SECRET_PATTERNS=(
   'sk-[A-Za-z0-9]{20,}'
   # Anthropic API keys
   'sk-ant-[A-Za-z0-9_-]{20,}'
-  # Resend API keys
-  're_[A-Za-z0-9_]{20,}'
+  # Resend API keys (word boundary prevents false positives on filenames like VENTURE_STAGE...)
+  '\bre_[A-Za-z0-9_]{20,}'
   # Generic API key patterns
   'api[_-]?key["\s:=]+["\047][A-Za-z0-9_-]{20,}["\047]'
   # AWS Access Keys

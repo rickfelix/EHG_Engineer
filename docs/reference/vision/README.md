@@ -27,11 +27,11 @@ The Genesis Oath is EHG's autonomous venture creation ceremony — the moment wh
 
 | Document | Version | Purpose |
 |----------|---------|---------|
-| [GENESIS_OATH_V3.md](./GENESIS_OATH_V3.md) | 3.1 | Master vision — philosophy, architecture, integration |
-| [GENESIS_SPRINT_ROADMAP.md](./GENESIS_SPRINT_ROADMAP.md) | 3.1 | Implementation plan — sprints, SDs, timeline |
-| [SIMULATION_CHAMBER_ARCHITECTURE.md](./SIMULATION_CHAMBER_ARCHITECTURE.md) | 3.1 | Technical spec — database, APIs, infrastructure |
-| [GENESIS_RITUAL_SPECIFICATION.md](./GENESIS_RITUAL_SPECIFICATION.md) | 3.1 | Ceremony script — Feb 14 step-by-step |
-| [GENESIS_SD_STRUCTURE.md](./GENESIS_SD_STRUCTURE.md) | 3.1 | SD hierarchy — parent/child/grandchild breakdown |
+| [genesis-oath-v3.md](./genesis-oath-v3.md) | 3.1 | Master vision — philosophy, architecture, integration |
+| [genesis-sprint-roadmap.md](./genesis-sprint-roadmap.md) | 3.1 | Implementation plan — sprints, SDs, timeline |
+| [simulation-chamber-architecture.md](./simulation-chamber-architecture.md) | 3.1 | Technical spec — database, APIs, infrastructure |
+| [genesis-ritual-specification.md](./genesis-ritual-specification.md) | 3.1 | Ceremony script — Feb 14 step-by-step |
+| [genesis-sd-structure.md](./genesis-sd-structure.md) | 3.1 | SD hierarchy — parent/child/grandchild breakdown |
 
 ### Key Concepts
 
@@ -87,11 +87,11 @@ The Genesis Oath is EHG's autonomous venture creation ceremony — the moment wh
 
 ## Files
 
-- [00 VISION V3.4 ADDENDUM](00_VISION_V3.4_ADDENDUM.md)
-- [00 VISION V3 THE ASSET FACTORY](00_VISION_V3_THE_ASSET_FACTORY.md)
-- [ACCESSIBILITY AUDIT CHECKLIST CHAIRMAN DASHBOARD](ACCESSIBILITY-AUDIT-CHECKLIST-CHAIRMAN-DASHBOARD.md)
-- [GENESIS VIRTUAL BUNKER ADDENDUM](GENESIS_VIRTUAL_BUNKER_ADDENDUM.md)
+- [00 VISION V3.4 ADDENDUM](00-vision-v3.4-addendum.md)
+- [00 VISION V3 THE ASSET FACTORY](00-vision-v3-the-asset-factory.md)
+- [ACCESSIBILITY AUDIT CHECKLIST CHAIRMAN DASHBOARD](accessibility-audit-checklist-chairman-dashboard.md)
+- [GENESIS VIRTUAL BUNKER ADDENDUM](genesis-virtual-bunker-addendum.md)
 - [Prd Addendum Integration Analysis](prd-addendum-integration-analysis.md)
 - [Quality Lifecycle System](quality-lifecycle-system.md)
-- [ROUTE AUDIT SD STRUCTURE](ROUTE_AUDIT_SD_STRUCTURE.md)
-- [SD VISION V2 006 DESIGN REVIEW](SD-VISION-V2-006-DESIGN-REVIEW.md)
+- [ROUTE AUDIT SD STRUCTURE](route-audit-sd-structure.md)
+- [SD VISION V2 006 DESIGN REVIEW](sd-vision-v2-006-design-review.md)

@@ -117,8 +117,8 @@ Answer with file:line evidence:
 
 These files describe plans, NOT working code:
 - `/docs/*` - Documentation
-- `GENESIS_OATH_V3.md` - Vision document
-- `GENESIS_VIRTUAL_BUNKER_ADDENDUM.md` - Architecture doc
+- `genesis-oath-v3.md` - Vision document
+- `genesis-virtual-bunker-addendum.md` - Architecture doc
 - `create-*.js`, `setup-*.js` - SD creation scripts (these CREATE planning, not implementation)
 - `*.test.ts` - Tests don't prove production code works
 - `database/migrations/*.sql` - Schema doesn't mean business logic exists

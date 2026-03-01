@@ -186,7 +186,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ### Other
 
-- [_migration_metadata](tables/_migration_metadata.md)
+- [_migration_metadata](tables/migration-metadata.md)
 - [activity_logs](tables/activity_logs.md)
 - [advisory_checkpoints](tables/advisory_checkpoints.md)
 - [aegis_constitutions](tables/aegis_constitutions.md)
