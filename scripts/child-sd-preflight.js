@@ -21,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getAncestorChain, MAX_HIERARCHY_DEPTH } from './lib/sd-hierarchy-mapper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -247,6 +248,43 @@ class ChildSDPreflightValidator {
 
     const parentDisplayId = this.parent.sd_key || this.parent.id;
     console.log(`${colors.bold}   Parent:${colors.reset} ${parentDisplayId} (${this.parent.title?.substring(0, 40)}...)`);
+
+    // 3b. Ancestor chain validation (V09 deep hierarchy support)
+    let ancestorChain = [];
+    try {
+      ancestorChain = await getAncestorChain(this.sd.sd_key || this.sd.id, MAX_HIERARCHY_DEPTH);
+    } catch (e) {
+      // Non-fatal — fall back to parent-only validation
+      console.log(`${colors.dim}   (ancestor chain lookup unavailable: ${e.message})${colors.reset}`);
+    }
+
+    if (ancestorChain.length > 0) {
+      console.log(`${colors.dim}   Hierarchy depth: ${ancestorChain.length + 1} levels (child → ${ancestorChain.map(a => a.sd_key).join(' → ')})${colors.reset}`);
+
+      // Check for blocked/cancelled ancestors at any level
+      const blockedAncestors = ancestorChain.filter(a =>
+        a.status === 'cancelled' || a.status === 'blocked'
+      );
+
+      if (blockedAncestors.length > 0) {
+        console.log(`\n${colors.bgRed}${colors.bold} ❌ RESULT: BLOCKED (ANCESTOR) ${colors.reset}`);
+        console.log(`${colors.red}   Cannot start ${displayId} — ancestor SD is ${blockedAncestors[0].status}.${colors.reset}\n`);
+        for (const blocked of blockedAncestors) {
+          console.log(`   ${colors.red}🚫 ${blocked.sd_key}: ${blocked.title}${colors.reset}`);
+          console.log(`      ${colors.dim}- Status: ${blocked.status} | Phase: ${blocked.current_phase} | Depth: ${blocked.depth}${colors.reset}`);
+        }
+        console.log(`\n   ${colors.yellow}${colors.bold}ACTION:${colors.reset} Resolve ancestor ${blockedAncestors[0].sd_key} before working on this child.`);
+        console.log(`\n${colors.cyan}${'═'.repeat(59)}${colors.reset}\n`);
+
+        return {
+          status: 'BLOCKED',
+          reason: 'Ancestor blocked',
+          blockedAncestors,
+          parent: this.parent,
+          sd: this.sd
+        };
+      }
+    }
 
     // 4. Load all siblings
     this.siblings = await this.loadSiblings(this.sd.parent_sd_id);

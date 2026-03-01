@@ -15,6 +15,7 @@
  */
 
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
+import { checkGovernancePolicies } from '../../lib/governance-policy-checker.js';
 
 /*
  * @module blocker-resolution
@@ -25,7 +26,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // Configuration constants (exported for use in other modules)
 export const DEFAULT_MAX_RETRIES = 3;
-export const DEFAULT_MAX_CHAIN_DEPTH = 2;
+export const DEFAULT_MAX_CHAIN_DEPTH = 6; // Raised from 2 to support 6-level deep hierarchies (V09)
 export const DETECTION_TIMEOUT_MS = 2000;
 
 // Blocker detection patterns from error messages
@@ -119,6 +120,25 @@ export async function detectBlockers(sd, supabase) {
         console.log(`   [blocker-detection] Found ${blockers.length} blocker(s) from error patterns`);
         return { blockers, method, confidence, detectionTime: Date.now() - startTime };
       }
+    }
+
+    // Signal 4: Governance policy violations (V09 deep hierarchy support)
+    try {
+      const policyResult = await checkGovernancePolicies(supabase, sd.sd_key || sd.id, { sd });
+      if (policyResult.blockers.length > 0) {
+        const policyBlockers = policyResult.blockers.map(v => v.policy_key);
+        blockers.push(...policyBlockers);
+        method = 'governance_policy';
+        confidence = 95;
+        console.log(`   [blocker-detection] Found ${policyResult.blockers.length} governance policy violation(s): ${policyBlockers.join(', ')}`);
+        return { blockers, method, confidence, governanceViolations: policyResult.blockers, detectionTime: Date.now() - startTime };
+      }
+      if (policyResult.warnings.length > 0) {
+        console.log(`   [blocker-detection] Governance warnings: ${policyResult.warnings.map(w => w.policy_key).join(', ')}`);
+      }
+    } catch (e) {
+      // Non-fatal — governance checks are additive, not required
+      console.log(`   [blocker-detection] Governance check skipped: ${e.message}`);
     }
 
     // Check detection timeout
