@@ -1,5 +1,23 @@
 # Stage Operating Dossiers — Index
 
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Dossier Status](#dossier-status)
+- [Pilot Dossier: Stage 1](#pilot-dossier-stage-1)
+- [Generation Process](#generation-process)
+  - [Phase 0: Discovery](#phase-0-discovery)
+  - [Phase 1: Output Contract](#phase-1-output-contract)
+  - [Phase 2: Pilot Generation (Stage 1)](#phase-2-pilot-generation-stage-1)
+  - [Completed Phases:](#completed-phases)
+  - [Completed Phases (Continued):](#completed-phases-continued)
+  - [Next Phases:](#next-phases)
+  - [Mid-Point Retrospective:](#mid-point-retrospective)
+- [Sources](#sources)
+- [Usage](#usage)
+- [Files](#files)
+
 **Generated**: 2025-11-05
 **Protocol**: Stage Operating Dossier System v1.0
 **Purpose**: Comprehensive operational documentation for all 40 venture workflow stages
