@@ -1,3 +1,21 @@
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. AnalysisStep Design](#2-analysisstep-design)
+  - [3. Brand Genome Structure Decision](#3-brand-genome-structure-decision)
+  - [4. Name Candidate Generation Design](#4-name-candidate-generation-design)
+  - [5. Domain & Trademark: Include or Defer?](#5-domain-trademark-include-or-defer)
+  - [6. Visual Identity: Include or Defer?](#6-visual-identity-include-or-defer)
+  - [7. Scoring Criteria Design](#7-scoring-criteria-design)
+  - [8. Stage 9 → 10 Consumption Mapping](#8-stage-9-10-consumption-mapping)
+  - [9. CLI Superiorities (Preserve These)](#9-cli-superiorities-preserve-these)
+  - [10. Recommended Stage 10 Schema](#10-recommended-stage-10-schema)
+  - [11. Minimum Viable Change (Priority Ordered)](#11-minimum-viable-change-priority-ordered)
+  - [12. Cross-Stage Impact](#12-cross-stage-impact)
+  - [13. Dependency Conflicts](#13-dependency-conflicts)
+  - [14. Contrarian Take](#14-contrarian-take)
+
 ---
 category: general
 status: draft

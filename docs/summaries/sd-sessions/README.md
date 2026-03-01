@@ -78,3 +78,18 @@ Create a session status file when:
 
 *Part of LEO Protocol v4.3.3 - Progress Tracking*
 *Updated: 2025-12-29*
+
+## Files
+
+- [A1.2 Completion Summary](a1.2-completion-summary.md)
+- [B1.4 Completion Summary](b1.4-completion-summary.md)
+- [C1.3 Completion Summary](c1.3-completion-summary.md)
+- [Code Review Sd 2025 001](code-review-sd-2025-001.md)
+- [Exec Agent Clarification](exec-agent-clarification.md)
+- [Lead Approval Decision](lead-approval-decision.md)
+- [Lead Final Approval Sd 2025 001](lead-final-approval-sd-2025-001.md)
+- [Plan Sd 2025 001 Technical Specs](plan-sd-2025-001-technical-specs.md)
+- [Plan Verification Complete Sd 2025 001](plan-verification-complete-sd-2025-001.md)
+- [Test Execution Summary Sd Leo Refac Complete Llm Client 001](test-execution-summary-sd-leo-refac-complete-llm-client-001.md)
+- [Test Results Sd Man Gen Title Target Application 001](test-results-sd-man-gen-title-target-application-001.md)
+- [Test Results Summary](test-results-summary.md)

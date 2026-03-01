@@ -1,3 +1,21 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Intelligent Dependency-Driven Recursion](#intelligent-dependency-driven-recursion)
+- [Inbound Recursion Triggers](#inbound-recursion-triggers)
+- [Recursion Behavior When Triggered](#recursion-behavior-when-triggered)
+  - [1. Preserve Context](#1-preserve-context)
+  - [2. Re-validate with New Constraints](#2-re-validate-with-new-constraints)
+  - [3. Kill/Revise/Proceed Gate May Change](#3-killreviseproceed-gate-may-change)
+  - [4. Comparison Analysis](#4-comparison-analysis)
+- [Outbound Recursion Triggers](#outbound-recursion-triggers)
+- [Loop Prevention](#loop-prevention)
+- [Chairman Controls](#chairman-controls)
+- [Performance Requirements](#performance-requirements)
+- [UI/UX Implications](#uiux-implications)
+- [Sources Table](#sources-table)
+
 ---
 category: general
 status: draft

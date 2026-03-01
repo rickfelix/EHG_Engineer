@@ -84,3 +84,14 @@ The Genesis Oath is EHG's autonomous venture creation ceremony — the moment wh
 ---
 
 *Vision documents maintained by the EHG Architect*
+
+## Files
+
+- [00 VISION V3.4 ADDENDUM](00_VISION_V3.4_ADDENDUM.md)
+- [00 VISION V3 THE ASSET FACTORY](00_VISION_V3_THE_ASSET_FACTORY.md)
+- [ACCESSIBILITY AUDIT CHECKLIST CHAIRMAN DASHBOARD](ACCESSIBILITY-AUDIT-CHECKLIST-CHAIRMAN-DASHBOARD.md)
+- [GENESIS VIRTUAL BUNKER ADDENDUM](GENESIS_VIRTUAL_BUNKER_ADDENDUM.md)
+- [Prd Addendum Integration Analysis](prd-addendum-integration-analysis.md)
+- [Quality Lifecycle System](quality-lifecycle-system.md)
+- [ROUTE AUDIT SD STRUCTURE](ROUTE_AUDIT_SD_STRUCTURE.md)
+- [SD VISION V2 006 DESIGN REVIEW](SD-VISION-V2-006-DESIGN-REVIEW.md)

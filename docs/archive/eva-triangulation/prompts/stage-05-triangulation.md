@@ -1,3 +1,25 @@
+
+## Table of Contents
+
+- [Context](#context)
+- [Pipeline Context](#pipeline-context)
+- [CLI Stage 5 Implementation (Ground Truth)](#cli-stage-5-implementation-ground-truth)
+- [GUI Stage 5 Implementation (Ground Truth)](#gui-stage-5-implementation-ground-truth)
+- [Key Differences Summary](#key-differences-summary)
+- [Your Task](#your-task)
+- [Gap Importance Rubric](#gap-importance-rubric)
+- [Output Format](#output-format)
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. ROI Threshold Recommendation](#2-roi-threshold-recommendation)
+  - [3. Unit Economics Decision](#3-unit-economics-decision)
+  - [4. Financial Model Generation](#4-financial-model-generation)
+  - [5. Kill Behavior Recommendation](#5-kill-behavior-recommendation)
+  - [6. Stage 4 -> Stage 5 Pipeline](#6-stage-4---stage-5-pipeline)
+  - [7. CLI Superiorities (preserve these)](#7-cli-superiorities-preserve-these)
+  - [8. Recommended Stage 5 Schema](#8-recommended-stage-5-schema)
+  - [9. Minimum Viable Change](#9-minimum-viable-change)
+  - [10. Cross-Stage Impact](#10-cross-stage-impact)
+
 ---
 category: general
 status: draft

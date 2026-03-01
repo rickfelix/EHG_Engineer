@@ -1,3 +1,35 @@
+
+## Table of Contents
+
+- [PLAN Phase Negative Constraints](#plan-phase-negative-constraints)
+- [🚫 PLAN Phase Negative Constraints](#-plan-phase-negative-constraints)
+  - [NC-PLAN-001: No Implementation in PLAN Phase](#nc-plan-001-no-implementation-in-plan-phase)
+  - [NC-PLAN-002: No PRD Without Exploration](#nc-plan-002-no-prd-without-exploration)
+  - [NC-PLAN-003: No Boilerplate Acceptance Criteria](#nc-plan-003-no-boilerplate-acceptance-criteria)
+  - [NC-PLAN-004: No Skipping Sub-Agents](#nc-plan-004-no-skipping-sub-agents)
+  - [NC-PLAN-005: No Placeholder Requirements](#nc-plan-005-no-placeholder-requirements)
+- [PLAN Pre-EXEC Checklist](#plan-pre-exec-checklist)
+- [PLAN Agent Pre-EXEC Checklist (MANDATORY)](#plan-agent-pre-exec-checklist-mandatory)
+  - [Database Dependencies ✅](#database-dependencies-)
+  - [Architecture Planning ✅](#architecture-planning-)
+  - [Testing Strategy ✅](#testing-strategy-)
+  - [Quality Validation ✅](#quality-validation-)
+- [PRD Creation Anti-Pattern (PROHIBITED)](#prd-creation-anti-pattern-prohibited)
+  - [Why This Matters](#why-this-matters)
+  - [Archived Scripts Location](#archived-scripts-location)
+  - [Correct Workflow](#correct-workflow)
+- [Quality Assessment Integration in Handoffs](#quality-assessment-integration-in-handoffs)
+  - [When Quality Assessment Runs](#when-quality-assessment-runs)
+  - [Hierarchical Context in Handoff Validation](#hierarchical-context-in-handoff-validation)
+  - [Handoff Failure Handling](#handoff-failure-handling)
+  - [Integration with PRD Schema](#integration-with-prd-schema)
+  - [Common Quality Issues and AI Feedback](#common-quality-issues-and-ai-feedback)
+  - [Best Practices for PLAN Phase](#best-practices-for-plan-phase)
+  - [Quality Assessment vs Traditional Validation](#quality-assessment-vs-traditional-validation)
+  - [Performance and Cost in Handoffs](#performance-and-cost-in-handoffs)
+  - [Example: Successful PLAN → EXEC Handoff](#example-successful-plan-exec-handoff)
+  - [Files Reference](#files-reference)
+
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
 <!-- generated_at: 2026-02-20T21:53:28.254Z -->
 <!-- git_commit: 58a9f184 -->

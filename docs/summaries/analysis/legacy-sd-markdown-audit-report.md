@@ -1,3 +1,27 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Audit Statistics](#audit-statistics)
+- [Category 1: SD Implementation Documentation (MIGRATE TO ARCHIVE)](#category-1-sd-implementation-documentation-migrate-to-archive)
+  - [SD-CREWAI-ARCHITECTURE-001 (25 files, ~1.5MB)](#sd-crewai-architecture-001-25-files-15mb)
+  - [SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 (4 files, ~70KB)](#sd-crewai-competitive-intelligence-001-4-files-70kb)
+- [Category 2: Analysis Reports (KEEP - Active Reference)](#category-2-analysis-reports-keep---active-reference)
+- [Category 3: Lessons Learned (MIGRATE TO DATABASE)](#category-3-lessons-learned-migrate-to-database)
+- [Category 4: Schema Documentation (KEEP - Auto-generated)](#category-4-schema-documentation-keep---auto-generated)
+- [Category 5: Archived Scripts Retrospectives (ALREADY ARCHIVED)](#category-5-archived-scripts-retrospectives-already-archived)
+- [Category 6: Implementation Summaries (ARCHIVE)](#category-6-implementation-summaries-archive)
+- [Category 7: Temp/Archive Files (ALREADY HANDLED)](#category-7-temparchive-files-already-handled)
+- [Recommended Actions](#recommended-actions)
+  - [Priority 1: Archive SD-CREWAI-ARCHITECTURE-001 (25 files, 1.5MB)](#priority-1-archive-sd-crewai-architecture-001-25-files-15mb)
+  - [Priority 2: Archive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 (4 files, 70KB)](#priority-2-archive-sd-crewai-competitive-intelligence-001-4-files-70kb)
+  - [Priority 3: Migrate Lessons Learned to Database (5 files, 55KB)](#priority-3-migrate-lessons-learned-to-database-5-files-55kb)
+  - [Priority 4: Review Analysis Reports (3 files)](#priority-4-review-analysis-reports-3-files)
+  - [Priority 5: Verify Schema Docs (10 files)](#priority-5-verify-schema-docs-10-files)
+- [Files Already Properly Archived](#files-already-properly-archived)
+- [Audit Acceptance Criteria Status](#audit-acceptance-criteria-status)
+
 ---
 category: general
 status: draft

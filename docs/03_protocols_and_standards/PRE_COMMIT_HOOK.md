@@ -1,3 +1,23 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [What It Does](#what-it-does)
+  - [1. 🔍 ESLint Auto-Fix (NEW)](#1-eslint-auto-fix-new)
+  - [2. ✅ Smoke Tests](#2-smoke-tests)
+  - [3. 📋 PRD Schema Validation](#3-prd-schema-validation)
+- [Bypassing the Hook](#bypassing-the-hook)
+- [Hook Execution Order](#hook-execution-order)
+- [Performance](#performance)
+- [Troubleshooting](#troubleshooting)
+  - [Hook doesn't run at all](#hook-doesnt-run-at-all)
+  - [Hook runs but fails immediately](#hook-runs-but-fails-immediately)
+  - [ESLint errors prevent commit](#eslint-errors-prevent-commit)
+  - [Smoke tests always fail](#smoke-tests-always-fail)
+- [Customization](#customization)
+- [Integration with CI/CD](#integration-with-cicd)
+- [Related Documentation](#related-documentation)
+
 ---
 category: protocol
 status: draft

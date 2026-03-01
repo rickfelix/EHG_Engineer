@@ -1,3 +1,25 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [IMPORTANT: Correction Notice](#important-correction-notice)
+- [Executive Summary](#executive-summary)
+- [Multi-Repository Architecture](#multi-repository-architecture)
+  - [Component Distribution](#component-distribution)
+- [Triangulation Results](#triangulation-results)
+  - [Child SD Completion Status](#child-sd-completion-status)
+  - [Component-Level Status](#component-level-status)
+- [Critical Gaps Identified](#critical-gaps-identified)
+  - [1. Missing CLI Entry Point (SD-QUALITY-CLI-001)](#1-missing-cli-entry-point-sd-quality-cli-001)
+  - [2. Disconnected Triage Logic (SD-QUALITY-TRIAGE-001)](#2-disconnected-triage-logic-sd-quality-triage-001)
+  - [3. Incomplete Integrations (SD-QUALITY-INT-001)](#3-incomplete-integrations-sd-quality-int-001)
+- [Overall Completion](#overall-completion)
+- [Priority Recommendations (Unanimous)](#priority-recommendations-unanimous)
+- [Lessons Learned](#lessons-learned)
+  - [Multi-Repository Blindness](#multi-repository-blindness)
+- [Source Documents](#source-documents)
+- [Correction History](#correction-history)
+
 ---
 category: reference
 status: draft

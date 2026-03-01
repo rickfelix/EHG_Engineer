@@ -1,3 +1,18 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [User Story E2E Test Mapping (MANDATORY)](#user-story-e2e-test-mapping-mandatory)
+  - [Problem Statement](#problem-statement)
+  - [Test Naming Convention](#test-naming-convention)
+  - [Coverage Calculation](#coverage-calculation)
+  - [QA Director Verification](#qa-director-verification)
+  - [File Organization](#file-organization)
+  - [Example Test File](#example-test-file)
+  - [Success Criteria](#success-criteria)
+  - [ROI from Retrospectives](#roi-from-retrospectives)
+  - [Anti-Patterns](#anti-patterns)
+
 ---
 category: reference
 status: draft

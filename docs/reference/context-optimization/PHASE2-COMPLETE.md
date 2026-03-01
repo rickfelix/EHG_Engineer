@@ -1,3 +1,25 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Executive Summary](#executive-summary)
+- [Completed Optimizations](#completed-optimizations)
+  - [✅ 1. Custom Agent Archival](#-1-custom-agent-archival)
+  - [✅ 2. MCP Server Optimization](#-2-mcp-server-optimization)
+- [Total Phase 2 Impact](#total-phase-2-impact)
+- [Files Created](#files-created)
+- [Verification Checklist](#verification-checklist)
+- [Rollback Procedures (If Needed)](#rollback-procedures-if-needed)
+  - [Restore Archived Agents](#restore-archived-agents)
+  - [Re-enable Puppeteer MCP](#re-enable-puppeteer-mcp)
+- [Next Phase: Database Optimization](#next-phase-database-optimization)
+- [Success Metrics](#success-metrics)
+  - [Phase 2 Goals](#phase-2-goals)
+  - [Progress Toward Overall Goal](#progress-toward-overall-goal)
+- [Lessons Learned](#lessons-learned)
+- [Ready for Phase 3?](#ready-for-phase-3)
+- [Questions for User](#questions-for-user)
+
 ---
 category: reference
 status: draft

@@ -140,3 +140,29 @@ Before completing handoff:
 
 *Part of LEO Protocol v4.3.3 - Unified Handoff System*
 *Updated: 2025-12-29 - Added database-first notice*
+
+## Files
+
+- [Advisory Invocation Log](advisory-invocation-log.md)
+- [Child Sd Governance Sections](child-sd-governance-sections.md)
+- [Compliance Report Sdip](compliance-report-sdip.md)
+- [Exec To Plan Week1 Verification](exec-to-plan-week1-verification.md)
+- [Lead Final Production Approval](lead-final-production-approval.md)
+- [Leo Prd Automation](leo-prd-automation.md)
+- [Leo Helper Tools](leo_helper_tools.md)
+- [LEO PROTOCOL CHECKLIST ENFORCEMENT](LEO_PROTOCOL_CHECKLIST_ENFORCEMENT.md)
+- [Leo Protocol Repository Guidelines](leo_protocol_repository_guidelines.md)
+- [Leo Status Line Integration](leo_status_line_integration.md)
+- [Leo Status Reference](leo_status_reference.md)
+- [LEO V4.1 SUMMARY](LEO_v4.1_SUMMARY.md)
+- [LEO V4.2 Dynamic Checklists](LEO_v4.2_dynamic_checklists.md)
+- [LEO V4.2 PLAYWRIGHT TESTING INTEGRATION](LEO_v4.2_PLAYWRIGHT_TESTING_INTEGRATION.md)
+- [LEO V4.4.2 CHANGELOG](LEO_v4.4.2_CHANGELOG.md)
+- [Leo Vision Qa Integration](leo_vision_qa_integration.md)
+- [Observations 2025 09 03](observations-2025-09-03.md)
+- [PRE COMMIT HOOK](PRE_COMMIT_HOOK.md)
+- [Protocol Constitution Guide](protocol-constitution-guide.md)
+- [Russian Judge Quality System](russian-judge-quality-system.md)
+- [Sd Anchor Ownership Rule](sd-anchor-ownership-rule.md)
+- [Strategic Intake Contract V1](strategic-intake-contract-v1.md)
+- [Terminology Rules](terminology-rules.md)

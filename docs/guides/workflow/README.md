@@ -98,3 +98,8 @@ Owner Mix: LEAD, PLAN, Chairman
 - [Feature Documentation](../04_features/) - Feature specifications
 - [Research Packs](../research/) - Analysis templates
 - [Visual Diagrams](../stages/) - Mermaid flowcharts
+
+## Files
+
+- [GENERATION SUMMARY](GENERATION_SUMMARY.md)
+- [Quality Lifecycle Workflow](quality-lifecycle-workflow.md)

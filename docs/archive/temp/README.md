@@ -38,6 +38,16 @@ Temporary files typically include:
 - Planning artifacts superseded by PRDs
 - API access clarifications resolved
 - Scope update notes integrated into SDs
+- [Temp Api Access And Clarifications](temp-api-access-and-clarifications.md)
+- [Temp Backlog Exception Sd Video Variant 001](temp-backlog-exception-sd-video-variant-001.md)
+- [Temp Exec Remediation Plan Sd Board 002](temp-exec-remediation-plan-sd-board-002.md)
+- [Temp Plan Verification Verdict Sd Board 002](temp-plan-verification-verdict-sd-board-002.md)
+- [Temp Sd Scope Update Manual](temp-sd-scope-update-manual.md)
+- [Temp Sub Agent Aggregated Summary](temp-sub-agent-aggregated-summary.md)
+- [Temp Sub Agent Database Architect Assessment](temp-sub-agent-database-architect-assessment.md)
+- [Temp Sub Agent Design Assessment](temp-sub-agent-design-assessment.md)
+- [Temp Sub Agent Systems Analyst Assessment](temp-sub-agent-systems-analyst-assessment.md)
+- [Temp Subagent Issues To Fix](temp-subagent-issues-to-fix.md)
 
 ## Cleanup Commands
 

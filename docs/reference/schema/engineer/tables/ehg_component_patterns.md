@@ -1,3 +1,11 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-03-01
+tags: [reference, auto-generated]
+---
 # ehg_component_patterns Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB

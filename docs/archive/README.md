@@ -93,3 +93,11 @@ cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo_protocol_v3.1.5.md
 ---
 
 *Managed by DOCMON Sub-Agent*
+
+## Files
+
+- [COMPANIES TABLE UPDATE 2025 11 02](COMPANIES-TABLE-UPDATE-2025-11-02.md)
+- [DOCUMENTATION CLEANUP QUICK ACTIONS](DOCUMENTATION_CLEANUP_QUICK_ACTIONS.md)
+- [Linting Fixes Summary](linting-fixes-summary.md)
+- [MODEL OPTIMIZATION 2025 12 06](MODEL-OPTIMIZATION-2025-12-06.md)
+- [Temp Implementation Roadmap](temp-implementation-roadmap.md)

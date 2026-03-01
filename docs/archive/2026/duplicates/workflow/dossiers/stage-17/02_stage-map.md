@@ -1,3 +1,31 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Visual Dependency Map](#visual-dependency-map)
+- [Upstream Dependencies](#upstream-dependencies)
+  - [Stage 16: Pricing Agent Development](#stage-16-pricing-agent-development)
+- [Downstream Dependents](#downstream-dependents)
+  - [Stage 18: Sales Agent Development](#stage-18-sales-agent-development)
+- [Workflow Position Analysis](#workflow-position-analysis)
+  - [Critical Path Status](#critical-path-status)
+  - [Parallel Execution Opportunities](#parallel-execution-opportunities)
+  - [Workflow Optimization](#workflow-optimization)
+- [Cross-Stage Data Flow](#cross-stage-data-flow)
+  - [Input Sources](#input-sources)
+  - [Output Consumers](#output-consumers)
+- [Recursion Patterns](#recursion-patterns)
+  - [Backward Recursion Triggers](#backward-recursion-triggers)
+  - [Forward Recursion Triggers](#forward-recursion-triggers)
+- [Critical Path Analysis](#critical-path-analysis)
+  - [Stage 17 Duration Estimate](#stage-17-duration-estimate)
+  - [Bottleneck Risks](#bottleneck-risks)
+  - [Mitigation Strategies](#mitigation-strategies)
+- [Dependency Health Monitoring](#dependency-health-monitoring)
+  - [Upstream Health Checks](#upstream-health-checks)
+  - [Downstream Impact Assessment](#downstream-impact-assessment)
+  - [Data Availability Validation](#data-availability-validation)
+
 ---
 category: general
 status: draft

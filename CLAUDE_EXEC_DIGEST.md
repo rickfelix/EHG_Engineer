@@ -1,3 +1,40 @@
+
+## Table of Contents
+
+- [🚨 EXEC Agent Implementation Requirements](#-exec-agent-implementation-requirements)
+  - [MANDATORY Pre-Implementation Verification](#mandatory-pre-implementation-verification)
+  - [Implementation Checklist Template](#implementation-checklist-template)
+- [EXEC Pre-Implementation Checklist](#exec-pre-implementation-checklist)
+  - [Common Mistakes to AVOID](#common-mistakes-to-avoid)
+  - [Gate 0 Enforcement 🚨](#gate-0-enforcement-)
+- [❌ Anti-Patterns from Retrospectives (EXEC Phase)](#-anti-patterns-from-retrospectives-exec-phase)
+  - [1. Manual Test Creation (2-3 hours waste per SD)](#1-manual-test-creation-2-3-hours-waste-per-sd)
+  - [2. Skipping Knowledge Retrieval (4-6 hours rework)](#2-skipping-knowledge-retrieval-4-6-hours-rework)
+  - [3. Workarounds Before Root Cause (2-3x time multiplier)](#3-workarounds-before-root-cause-2-3x-time-multiplier)
+  - [4. Accepting Environmental Blockers Without Debug](#4-accepting-environmental-blockers-without-debug)
+  - [5. Manual Sub-Agent Simulation (15% quality delta)](#5-manual-sub-agent-simulation-15-quality-delta)
+  - [Quick Reference](#quick-reference)
+- [EXEC Phase Negative Constraints](#exec-phase-negative-constraints)
+- [🚫 EXEC Phase Negative Constraints](#-exec-phase-negative-constraints)
+  - [NC-EXEC-001: No Scope Creep](#nc-exec-001-no-scope-creep)
+  - [NC-EXEC-002: No Wrong Application Directory](#nc-exec-002-no-wrong-application-directory)
+  - [NC-EXEC-003: No Tests Without Execution](#nc-exec-003-no-tests-without-execution)
+  - [NC-EXEC-004: No Manual Sub-Agent Simulation](#nc-exec-004-no-manual-sub-agent-simulation)
+  - [NC-EXEC-005: No UI Without Visibility](#nc-exec-005-no-ui-without-visibility)
+- [EXEC Dual Test Requirement](#exec-dual-test-requirement)
+  - [⚠️ MANDATORY: Dual Test Execution](#-mandatory-dual-test-execution)
+  - [Why This Matters](#why-this-matters)
+- [🌿 Branch Hygiene Gate (MANDATORY)](#-branch-hygiene-gate-mandatory)
+- [Branch Hygiene Gate (MANDATORY)](#branch-hygiene-gate-mandatory)
+  - [MANDATORY Before PLAN-TO-EXEC Handoff](#mandatory-before-plan-to-exec-handoff)
+  - [1. Branch Freshness (≤7 Days Stale)](#1-branch-freshness-7-days-stale)
+  - [2. Single-SD Branch Rule (No Mixing)](#2-single-sd-branch-rule-no-mixing)
+  - [3. Merge Main at Phase Transitions](#3-merge-main-at-phase-transitions)
+  - [4. Maximum Branch Lifetime (14 Days)](#4-maximum-branch-lifetime-14-days)
+  - [Branch Health Check Script](#branch-health-check-script)
+  - [Why This Matters](#why-this-matters)
+  - [EXEC Agent Action](#exec-agent-action)
+
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
 <!-- generated_at: 2026-02-20T21:53:28.254Z -->
 <!-- git_commit: 58a9f184 -->

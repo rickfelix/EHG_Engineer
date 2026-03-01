@@ -1,3 +1,35 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Quick Reference](#quick-reference)
+- [US-001: Exception Hierarchy](#us-001-exception-hierarchy)
+  - [Current State](#current-state)
+  - [Target Architecture](#target-architecture)
+  - [Migration Pattern](#migration-pattern)
+- [US-002: GovernanceModule Base Class](#us-002-governancemodule-base-class)
+  - [Purpose](#purpose)
+  - [Interface](#interface)
+  - [Usage](#usage)
+- [US-003: GovernanceConfig](#us-003-governanceconfig)
+  - [Purpose](#purpose)
+  - [Configuration Sources](#configuration-sources)
+  - [Key Configuration](#key-configuration)
+- [US-004: GovernanceRepository](#us-004-governancerepository)
+  - [Purpose](#purpose)
+  - [Methods](#methods)
+  - [Usage Pattern](#usage-pattern)
+- [US-005: Structured Logging](#us-005-structured-logging)
+  - [Logger Factory](#logger-factory)
+  - [Log Levels](#log-levels)
+- [US-006: Backward Compatibility](#us-006-backward-compatibility)
+  - [Adapter Pattern](#adapter-pattern)
+  - [Migration Strategy](#migration-strategy)
+- [Consolidation Opportunities](#consolidation-opportunities)
+  - [Priority 1: Exception Deduplication](#priority-1-exception-deduplication)
+  - [Priority 2: Configuration Centralization](#priority-2-configuration-centralization)
+  - [Priority 3: Repository Pattern](#priority-3-repository-pattern)
+
 ---
 category: reference
 status: draft

@@ -1,5 +1,36 @@
 # Changelog
 
+
+## Table of Contents
+
+- [2026-01-29](#2026-01-29)
+  - [Bugfix](#bugfix)
+- [2026-01-26](#2026-01-26)
+  - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix)
+- [2026-01-23](#2026-01-23)
+  - [Infrastructure](#infrastructure)
+  - [Features](#features)
+- [2026-01-20](#2026-01-20)
+  - [Documentation](#documentation)
+  - [Infrastructure](#infrastructure)
+  - [Bugfixes](#bugfixes)
+  - [Known Issues](#known-issues)
+- [2026-01-18](#2026-01-18)
+  - [Multi-Repository Architecture](#multi-repository-architecture)
+  - [Quality Lifecycle System - 100% Completion](#quality-lifecycle-system---100-completion)
+  - [Documentation](#documentation)
+- [2026-01-02](#2026-01-02)
+  - [Portfolio Glide Path Dashboard](#portfolio-glide-path-dashboard)
+  - [Research Arm Pipeline](#research-arm-pipeline)
+  - [Venture Scoring Engine](#venture-scoring-engine)
+  - [Scaffold Patterns](#scaffold-patterns)
+- [2025-09-22](#2025-09-22)
+  - [Refactoring](#refactoring)
+  - [Housekeeping & CI](#housekeeping-ci)
+  - [EHG_Engineering](#ehg_engineering)
+  - [EHG (Venture App)](#ehg-venture-app)
+
 ## 2026-01-29
 
 ### Bugfix

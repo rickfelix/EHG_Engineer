@@ -1,3 +1,26 @@
+
+## Table of Contents
+
+- [Full YAML Specification](#full-yaml-specification)
+- [Field Analysis](#field-analysis)
+  - [Core Identifiers](#core-identifiers)
+  - [Dependencies](#dependencies)
+  - [Inputs (3)](#inputs-3)
+  - [Outputs (3)](#outputs-3)
+  - [Metrics (3)](#metrics-3)
+  - [Entry Gates (2)](#entry-gates-2)
+  - [Exit Gates (3)](#exit-gates-3)
+- [Substages Breakdown](#substages-breakdown)
+  - [Substage 30.1: Pre-Deployment Validation](#substage-301-pre-deployment-validation)
+  - [Substage 30.2: Blue-Green Deployment](#substage-302-blue-green-deployment)
+  - [Substage 30.3: Post-Deployment Verification](#substage-303-post-deployment-verification)
+- [Progression Mode](#progression-mode)
+- [Comparison to Other Stages](#comparison-to-other-stages)
+  - [Risk Exposure (Unique)](#risk-exposure-unique)
+  - [Chairman Gate (Rare)](#chairman-gate-rare)
+  - [Substage Complexity (Moderate)](#substage-complexity-moderate)
+- [Sources Table](#sources-table)
+
 ---
 category: general
 status: draft

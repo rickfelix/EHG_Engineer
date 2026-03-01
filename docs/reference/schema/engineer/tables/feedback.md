@@ -1,4 +1,33 @@
+---
+category: reference
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-03-01
+tags: [reference, auto-generated]
+---
 # feedback Table
+
+
+## Table of Contents
+
+- [Columns (52 total)](#columns-52-total)
+- [Constraints](#constraints)
+  - [Primary Key](#primary-key)
+  - [Foreign Keys](#foreign-keys)
+  - [Check Constraints](#check-constraints)
+- [Indexes](#indexes)
+- [RLS Policies](#rls-policies)
+  - [1. delete_feedback_policy (DELETE)](#1-delete_feedback_policy-delete)
+  - [2. insert_feedback_policy (INSERT)](#2-insert_feedback_policy-insert)
+  - [3. select_feedback_policy (SELECT)](#3-select_feedback_policy-select)
+  - [4. telegram_bot_insert_feedback (INSERT)](#4-telegram_bot_insert_feedback-insert)
+  - [5. telegram_bot_select_feedback (SELECT)](#5-telegram_bot_select_feedback-select)
+  - [6. update_feedback_policy (UPDATE)](#6-update_feedback_policy-update)
+- [Triggers](#triggers)
+  - [trg_log_feedback_resolution_violation](#trg_log_feedback_resolution_violation)
+  - [trg_log_feedback_resolution_violation](#trg_log_feedback_resolution_violation)
+  - [trigger_update_feedback_updated_at](#trigger_update_feedback_updated_at)
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
