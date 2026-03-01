@@ -2,8 +2,11 @@
  * Continuation State Management
  *
  * Part of SD-LEO-INFRA-STOP-HOOK-ENHANCEMENT-001
+ * DB-first pattern: SD-MAN-GEN-CORRECTIVE-VISION-GAP-010 (A02: database_single_source_of_truth)
  *
  * Manages the continuation state for cross-session AUTO-PROCEED:
+ * - DB-first read (claude_sessions.metadata.continuation_state) with file fallback
+ * - Dual-write (DB + file) following PAT-STATE-SYNC-001
  * - Schema-validated state read/write
  * - Incomplete detection logic
  * - Exit code 3 signaling support
@@ -14,12 +17,52 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
+import os from 'os';
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// State file location (relative to project root)
+// State file location (relative to project root) - used as local cache
 const STATE_FILE = path.join(__dirname, '../../../.claude/continuation-state.json');
+
+// Database client (lazy init)
+let _supabase = null;
+function getSupabase() {
+  if (!_supabase && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    _supabase = createClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return _supabase;
+}
+
+/**
+ * Get current session ID from local session file (sync)
+ * @returns {string|null} Session ID or null
+ */
+function getCurrentSessionIdSync() {
+  try {
+    const sessionDir = path.join(os.homedir(), '.claude-sessions');
+    if (!fs.existsSync(sessionDir)) return null;
+
+    const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+    const pid = process.ppid || process.pid;
+
+    for (const file of files) {
+      const data = JSON.parse(fs.readFileSync(path.join(sessionDir, file), 'utf8'));
+      if (data.pid === pid) {
+        return data.session_id;
+      }
+    }
+  } catch {
+    // Fallback - no session found
+  }
+  return null;
+}
 
 /**
  * State schema version
@@ -112,7 +155,7 @@ export function validateState(state) {
 }
 
 /**
- * Read continuation state from file
+ * Read continuation state from file (sync, local cache)
  * @returns {object} State object (with defaults for missing fields)
  */
 export function readState() {
@@ -137,7 +180,124 @@ export function readState() {
 }
 
 /**
- * Write continuation state to file
+ * Read continuation state from database (authoritative) with file fallback.
+ * PAT-STATE-SYNC-001: DB is single source of truth.
+ * @returns {Promise<object>} State object from database or file fallback
+ */
+export async function readStateFromDb() {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return readState(); // Fallback to file
+  }
+
+  try {
+    const sessionId = getCurrentSessionIdSync();
+    if (!sessionId) {
+      return readState(); // Fallback to file
+    }
+
+    const { data, error } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .single();
+
+    if (error || !data) {
+      return readState(); // Fallback to file
+    }
+
+    const contState = data.metadata?.continuation_state;
+    if (!contState) {
+      return readState(); // No DB state yet, fallback to file
+    }
+
+    const dbState = {
+      ...DEFAULT_STATE,
+      ...contState,
+      sd: { ...DEFAULT_STATE.sd, ...(contState.sd || {}) }
+    };
+
+    // Update local cache to match database
+    writeStateToFile(dbState);
+
+    return dbState;
+  } catch (err) {
+    console.warn(`[continuation-state] DB read error: ${err.message}`);
+    return readState(); // Fallback to file
+  }
+}
+
+/**
+ * Write continuation state to file only (internal helper)
+ * @param {object} state - State to write
+ * @returns {boolean} Success status
+ */
+function writeStateToFile(state) {
+  try {
+    const dir = path.dirname(STATE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    return true;
+  } catch (err) {
+    console.warn(`[continuation-state] File write error: ${err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Sync continuation state to database (async, best-effort)
+ * PAT-STATE-SYNC-001: Dual-write to DB + file.
+ * @param {object} state - State to sync
+ */
+async function syncStateToDb(state) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  try {
+    const sessionId = getCurrentSessionIdSync();
+    if (!sessionId) return;
+
+    // Read existing metadata to merge
+    const { data: existing } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .single();
+
+    const existingMetadata = existing?.metadata || {};
+
+    const updatedMetadata = {
+      ...existingMetadata,
+      continuation_state: {
+        version: state.version,
+        status: state.status,
+        reason: state.reason,
+        sd: state.sd,
+        pendingCommands: state.pendingCommands,
+        lastAction: state.lastAction,
+        retryCount: state.retryCount,
+        maxRetries: state.maxRetries,
+        consecutiveErrors: state.consecutiveErrors,
+        errorDetails: state.errorDetails,
+        updatedAt: state.updatedAt
+      }
+    };
+
+    await supabase
+      .from('claude_sessions')
+      .update({ metadata: updatedMetadata })
+      .eq('session_id', sessionId);
+  } catch (err) {
+    // Best-effort — DB write failure does not block file write
+    console.warn(`[continuation-state] DB sync error: ${err.message}`);
+  }
+}
+
+/**
+ * Write continuation state (dual-write: file + DB)
+ * PAT-STATE-SYNC-001: File write is synchronous, DB sync is fire-and-forget.
  * @param {object} state - State to write
  * @returns {{ success: boolean, errors?: string[] }}
  */
@@ -162,17 +322,18 @@ export function writeState(state) {
     return { success: false, errors: validation.errors };
   }
 
-  try {
-    const dir = path.dirname(STATE_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(STATE_FILE, JSON.stringify(mergedState, null, 2));
-    return { success: true };
-  } catch (err) {
-    console.warn(`[continuation-state] Write error: ${err.message}`);
-    return { success: false, errors: [err.message] };
+  // Write to file (synchronous, primary)
+  const fileSuccess = writeStateToFile(mergedState);
+  if (!fileSuccess) {
+    return { success: false, errors: ['File write failed'] };
   }
+
+  // Sync to database (async, best-effort, fire-and-forget)
+  syncStateToDb(mergedState).catch(err => {
+    console.warn(`[continuation-state] DB sync failed: ${err.message}`);
+  });
+
+  return { success: true };
 }
 
 /**
@@ -417,6 +578,7 @@ export { DEFAULT_STATE, VALID_STATUSES, VALID_REASONS, SCHEMA_VERSION };
 
 export default {
   readState,
+  readStateFromDb,
   writeState,
   validateState,
   checkContinuationNeeded,

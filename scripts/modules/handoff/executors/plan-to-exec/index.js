@@ -213,6 +213,12 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log('   ⚠️  No PRD found - cannot extract deliverables');
     }
 
+    // V03: AnalysisStep — Synthesize prior LEAD phase evaluation data (SD-MAN-GEN-CORRECTIVE-VISION-GAP-010)
+    const analysisStep = await this._synthesizeLeadAnalysis(sdId, sd, prd);
+    if (analysisStep) {
+      options._analysisStep = analysisStep;
+    }
+
     // AI Quality Assessment (Russian Judge) - PRD & User Stories
     await this._runRussianJudgeAssessment(prd, sd);
 
@@ -310,6 +316,88 @@ export class PlanToExecExecutor extends BaseExecutor {
       } : null,
       repository: options._appPath
     };
+  }
+
+  /**
+   * V03: Synthesize prior LEAD phase evaluation data into an analysisStep.
+   * Produces compounding intelligence for the EXEC phase by reading the
+   * LEAD-TO-PLAN handoff artifact and PRD context.
+   * (SD-MAN-GEN-CORRECTIVE-VISION-GAP-010)
+   */
+  async _synthesizeLeadAnalysis(sdId, sd, prd) {
+    try {
+      console.log('\n📊 Step 1.75: AnalysisStep — LEAD Phase Intelligence Synthesis');
+      console.log('-'.repeat(50));
+
+      // Fetch LEAD-TO-PLAN handoff for this SD
+      const { data: leadHandoff } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('score, validation_details, output_artifact, created_at')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-TO-PLAN')
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!leadHandoff) {
+        console.log('   ℹ️  No LEAD-TO-PLAN handoff found — skipping analysisStep');
+        return null;
+      }
+
+      // Extract key evaluation data from LEAD phase
+      const leadScore = leadHandoff.score;
+      const validationDetails = leadHandoff.validation_details || {};
+      const outputArtifact = leadHandoff.output_artifact || {};
+
+      // Build compounding intelligence from prior phase
+      const analysisStep = {
+        phase: 'PLAN-TO-EXEC',
+        synthesizedFrom: 'LEAD-TO-PLAN',
+        leadEvaluationScore: leadScore,
+        leadTimestamp: leadHandoff.created_at,
+        keyFindings: [],
+        riskFactors: [],
+        recommendations: []
+      };
+
+      // Extract gate results from LEAD phase
+      if (validationDetails.gateResults) {
+        const gateNames = Object.keys(validationDetails.gateResults);
+        const failedGates = gateNames.filter(g => {
+          const r = validationDetails.gateResults[g];
+          return r && r.score !== undefined && r.score < 70;
+        });
+        if (failedGates.length > 0) {
+          analysisStep.keyFindings.push(`LEAD phase had ${failedGates.length} low-scoring gate(s): ${failedGates.join(', ')}`);
+          analysisStep.riskFactors.push('Prior phase gate weaknesses may compound during EXEC');
+        }
+      }
+
+      // Extract PRD quality signals
+      if (prd) {
+        if (prd.risks && prd.risks.length > 0) {
+          analysisStep.riskFactors.push(...prd.risks.map(r => r.risk || r.description || String(r)).slice(0, 3));
+        }
+        if (prd.functional_requirements) {
+          const criticalFRs = prd.functional_requirements.filter(fr => fr.priority === 'critical');
+          if (criticalFRs.length > 0) {
+            analysisStep.recommendations.push(`Focus on ${criticalFRs.length} critical FR(s) first`);
+          }
+        }
+      }
+
+      // Summary
+      analysisStep.summary = `LEAD phase passed at ${leadScore}%. ${analysisStep.keyFindings.length} finding(s), ${analysisStep.riskFactors.length} risk(s) carried forward.`;
+
+      console.log(`   ✅ AnalysisStep synthesized from LEAD evaluation (score: ${leadScore}%)`);
+      console.log(`   📋 Findings: ${analysisStep.keyFindings.length}, Risks: ${analysisStep.riskFactors.length}, Recommendations: ${analysisStep.recommendations.length}`);
+
+      return analysisStep;
+    } catch (error) {
+      console.log(`   ⚠️  AnalysisStep synthesis failed (non-blocking): ${error.message}`);
+      return null;
+    }
   }
 
   /**

@@ -272,14 +272,14 @@ describe('Guardrail Registry - GR-ORCHESTRATOR-ARCH-PLAN', () => {
 });
 
 describe('Guardrail Registry - GR-BRAINSTORM-INTENT', () => {
-  it('warns brainstorm-sourced SD without session ID', () => {
+  it('blocks brainstorm-sourced SD without session ID', () => {
     const result = check({
       metadata: { source: 'brainstorm' },
       strategic_objectives: ['OKR-1'],
     });
-    expect(result.passed).toBe(true); // advisory, not blocking
-    const warning = result.warnings.find((w) => w.guardrail === 'GR-BRAINSTORM-INTENT');
-    expect(warning).toBeDefined();
+    expect(result.passed).toBe(false); // blocking (upgraded from advisory)
+    const violation = result.violations.find((v) => v.guardrail === 'GR-BRAINSTORM-INTENT');
+    expect(violation).toBeDefined();
   });
 
   it('passes brainstorm SD with session ID', () => {
@@ -305,8 +305,8 @@ describe('Guardrail Registry - GR-BRAINSTORM-INTENT', () => {
       metadata: { brainstorm_origin: true },
       strategic_objectives: ['OKR-1'],
     });
-    const warning = result.warnings.find((w) => w.guardrail === 'GR-BRAINSTORM-INTENT');
-    expect(warning).toBeDefined();
+    const violation = result.violations.find((v) => v.guardrail === 'GR-BRAINSTORM-INTENT');
+    expect(violation).toBeDefined();
   });
 });
 

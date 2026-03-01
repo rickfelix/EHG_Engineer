@@ -175,6 +175,12 @@ export class ExecToPlanExecutor extends BaseExecutor {
       console.warn('⚠️  No PRD found for SD');
     }
 
+    // V03: AnalysisStep — Synthesize EXEC phase data for PLAN verification (SD-MAN-GEN-CORRECTIVE-VISION-GAP-010)
+    const analysisStep = await this._synthesizeExecAnalysis(sdId, sd, prd, gateResults);
+    if (analysisStep) {
+      options._analysisStep = analysisStep;
+    }
+
     // LEO v4.3.4: Unified Test Evidence Validation
     console.log('\n🧪 Step 2: Unified Test Evidence Validation (LEO v4.3.4)');
     console.log('-'.repeat(50));
@@ -264,6 +270,93 @@ export class ExecToPlanExecutor extends BaseExecutor {
       } : null,
       qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100)
     };
+  }
+
+  /**
+   * V03: Synthesize EXEC phase evaluation data into an analysisStep.
+   * Produces compounding intelligence for PLAN verification by reading
+   * the PLAN-TO-EXEC handoff artifact and current gate results.
+   * (SD-MAN-GEN-CORRECTIVE-VISION-GAP-010)
+   */
+  async _synthesizeExecAnalysis(sdId, sd, prd, gateResults) {
+    try {
+      console.log('\n📊 Step 1.5: AnalysisStep — EXEC Phase Intelligence Synthesis');
+      console.log('-'.repeat(50));
+
+      // Fetch PLAN-TO-EXEC handoff for this SD
+      const { data: planHandoff } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('score, validation_details, output_artifact, created_at')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'PLAN-TO-EXEC')
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!planHandoff) {
+        console.log('   ℹ️  No PLAN-TO-EXEC handoff found — skipping analysisStep');
+        return null;
+      }
+
+      const planScore = planHandoff.score;
+      const validationDetails = planHandoff.validation_details || {};
+
+      const analysisStep = {
+        phase: 'EXEC-TO-PLAN',
+        synthesizedFrom: 'PLAN-TO-EXEC',
+        planEvaluationScore: planScore,
+        planTimestamp: planHandoff.created_at,
+        keyFindings: [],
+        riskFactors: [],
+        recommendations: [],
+      };
+
+      // Extract gate weaknesses from PLAN-TO-EXEC phase
+      if (validationDetails.gateResults) {
+        const gateNames = Object.keys(validationDetails.gateResults);
+        const lowScoring = gateNames.filter((g) => {
+          const r = validationDetails.gateResults[g];
+          return r && r.score !== undefined && r.score < 70;
+        });
+        if (lowScoring.length > 0) {
+          analysisStep.keyFindings.push(
+            `PLAN-TO-EXEC had ${lowScoring.length} low-scoring gate(s): ${lowScoring.join(', ')}`
+          );
+        }
+      }
+
+      // Summarize current EXEC gate performance
+      if (gateResults && gateResults.gateResults) {
+        const currentGates = Object.keys(gateResults.gateResults);
+        const failedCurrent = currentGates.filter((g) => {
+          const r = gateResults.gateResults[g];
+          return r && r.passed === false;
+        });
+        if (failedCurrent.length > 0) {
+          analysisStep.riskFactors.push(
+            `${failedCurrent.length} EXEC gate(s) failed: ${failedCurrent.join(', ')}`
+          );
+        }
+      }
+
+      // PRD risk carry-forward
+      if (prd && prd.risks && prd.risks.length > 0) {
+        analysisStep.riskFactors.push(
+          ...prd.risks.map((r) => r.risk || r.description || String(r)).slice(0, 3)
+        );
+      }
+
+      analysisStep.summary = `PLAN phase passed at ${planScore}%. ${analysisStep.keyFindings.length} finding(s), ${analysisStep.riskFactors.length} risk(s) carried forward into verification.`;
+
+      console.log(`   ✅ AnalysisStep synthesized from PLAN evaluation (score: ${planScore}%)`);
+      console.log(`   📋 Findings: ${analysisStep.keyFindings.length}, Risks: ${analysisStep.riskFactors.length}`);
+
+      return analysisStep;
+    } catch (error) {
+      console.log(`   ⚠️  AnalysisStep synthesis failed (non-blocking): ${error.message}`);
+      return null;
+    }
   }
 
   getRemediation(gateName) {
