@@ -12,8 +12,14 @@ import {
 } from '../../../lib/governance/compute-posture.js';
 
 describe('Compute Posture - getComputePosture()', () => {
-  it('returns awareness-not-enforcement by default', () => {
+  it('returns enforcement by default (V07: compute cost governance)', () => {
     const posture = getComputePosture();
+    expect(posture.policy).toBe('enforcement');
+    expect(posture.blockOnExceed).toBe(true);
+  });
+
+  it('returns awareness mode when explicitly overridden', () => {
+    const posture = getComputePosture({ policy: POSTURE_MODES.AWARENESS });
     expect(posture.policy).toBe('awareness-not-enforcement');
     expect(posture.blockOnExceed).toBe(false);
   });
@@ -53,14 +59,14 @@ describe('Compute Posture - evaluateCost()', () => {
     expect(result.blocked).toBe(false);
   });
 
-  it('returns escalate level at escalate threshold', () => {
+  it('returns escalate level and blocks at escalate threshold (enforcement default)', () => {
     const result = evaluateCost(200, 'LEAD');
     expect(result.level).toBe('escalate');
-    expect(result.blocked).toBe(false);
+    expect(result.blocked).toBe(true); // V07: enforcement is default
   });
 
   it('does not block under awareness policy', () => {
-    const posture = getComputePosture();
+    const posture = getComputePosture({ policy: POSTURE_MODES.AWARENESS });
     const result = evaluateCost(9999, 'EXEC', posture);
     expect(result.level).toBe('escalate');
     expect(result.blocked).toBe(false);

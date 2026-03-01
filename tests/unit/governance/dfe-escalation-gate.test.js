@@ -50,44 +50,98 @@ describe('DFE Escalation Gate', () => {
     expect(mockSupabase.from).not.toHaveBeenCalled();
   });
 
-  it('returns passed=true with warning when DFE decides ESCALATE (medium confidence)', async () => {
-    const gate = createDFEEscalationGate(mockSupabase);
+  it('returns passed=false when DFE decides ESCALATE and no chairman ack (V04: blocking)', async () => {
+    // Mock supabase to return no ack rows for the chairman check
+    const blockingSupabase = {
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'chairman_decisions') {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: 'esc-123', decision_type: 'dfe_escalation', status: 'pending', blocking: false },
+                  error: null,
+                }),
+              }),
+            }),
+            select: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }),
+    };
+
+    const gate = createDFEEscalationGate(blockingSupabase);
     const ctx = {
       sdId: 'SD-TEST-002',
       sdKey: 'SD-TEST-002',
       sdUuid: 'uuid-test-002',
-      qualityScore: 60, // 0.60 confidence → between escalate (0.4) and go (0.80) for PHASE_GATE
+      qualityScore: 60,
     };
 
     const result = await gate.validator(ctx);
 
-    expect(result.passed).toBe(true); // Advisory — never blocks
-    expect(result.score).toBe(80);
+    expect(result.passed).toBe(false); // V04: blocking mode
     expect(result.dfe_decision).toBe('ESCALATE');
-    expect(result.gate_status).toBe('ADVISORY_ESCALATION');
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('DFE escalated to chairman');
-    expect(result.escalation_id).toBe('esc-123');
-    // Supabase should have been called to insert escalation
-    expect(mockSupabase.from).toHaveBeenCalledWith('chairman_decisions');
+    expect(result.gate_status).toBe('BLOCKED_ESCALATION');
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toContain('DFE escalation blocks handoff');
   });
 
-  it('returns passed=true with warning when DFE decides BLOCK (low confidence, non-critical)', async () => {
-    const gate = createDFEEscalationGate(mockSupabase);
+  it('returns passed=false when DFE decides ESCALATE (low confidence, non-critical)', async () => {
+    const blockingSupabase = {
+      from: vi.fn().mockImplementation((table) => {
+        if (table === 'chairman_decisions') {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: 'esc-456', decision_type: 'dfe_escalation', status: 'pending', blocking: false },
+                  error: null,
+                }),
+              }),
+            }),
+            select: vi.fn().mockReturnValue({
+              or: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  in: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return { insert: vi.fn().mockResolvedValue({ error: null }) };
+      }),
+    };
+
+    const gate = createDFEEscalationGate(blockingSupabase);
     const ctx = {
       sdId: 'SD-TEST-003',
       sdKey: 'SD-TEST-003',
-      qualityScore: 30, // 0.30 confidence → below escalate (0.4) for PHASE_GATE, but non-critical → ESCALATE
+      qualityScore: 30,
     };
 
     const result = await gate.validator(ctx);
 
-    expect(result.passed).toBe(true); // Advisory — never blocks
-    expect(result.dfe_decision).toBe('ESCALATE'); // Non-critical context → ESCALATE not BLOCK
-    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.passed).toBe(false); // V04: blocking mode
+    expect(result.dfe_decision).toBe('ESCALATE');
   });
 
-  it('returns passed=true when supabase insert fails (graceful degradation)', async () => {
+  it('returns passed=false when supabase fails (fail-closed, V04)', async () => {
     const failingSupabase = {
       from: vi.fn().mockReturnValue({
         insert: vi.fn().mockReturnValue({
@@ -104,15 +158,14 @@ describe('DFE Escalation Gate', () => {
     const gate = createDFEEscalationGate(failingSupabase);
     const ctx = {
       sdId: 'SD-TEST-004',
-      qualityScore: 60, // Would trigger ESCALATE
+      qualityScore: 60,
     };
 
     const result = await gate.validator(ctx);
 
-    expect(result.passed).toBe(true); // Advisory — errors don't block
-    expect(result.gate_status).toBe('SKIPPED');
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('DFE escalation gate skipped');
+    expect(result.passed).toBe(false); // V04: fail-closed
+    expect(result.gate_status).toBe('ERROR');
+    expect(result.issues).toHaveLength(1);
   });
 
   it('uses gateResults.normalizedScore when available', async () => {
@@ -138,9 +191,9 @@ describe('DFE Escalation Gate', () => {
     expect(result.dfe_decision).toBe('GO'); // 0.85 >= 0.80 goThreshold for PHASE_GATE
   });
 
-  it('gate is marked as not required (advisory)', () => {
+  it('gate is marked as required (V04: blocking mode)', () => {
     const gate = createDFEEscalationGate(mockSupabase);
-    expect(gate.required).toBe(false);
+    expect(gate.required).toBe(true);
     expect(gate.name).toBe('DFE_ESCALATION_GATE');
   });
 

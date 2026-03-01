@@ -139,7 +139,7 @@ describe('Guardrail Intelligence Analyzer - analyzeGuardrailResults', () => {
     expect(result.patternAnalysis).toBeDefined();
     expect(result.recommendations).toBeDefined();
     expect(result.cost.totalCost).toBe(0);
-    expect(result.cost.posture).toBe('awareness-not-enforcement');
+    expect(result.cost.posture).toBe('enforcement');
     expect(result.meta.errors).toContain('No LLM client provided — using deterministic fallback');
   });
 
@@ -173,7 +173,7 @@ describe('Guardrail Intelligence Analyzer - analyzeGuardrailResults', () => {
     expect(result.cost.totalCost).toBe(15); // 5 per dimension * 3
     expect(result.cost.evaluation).toBeDefined();
     expect(result.cost.evaluation.level).toBe('normal'); // 15 < EXEC warn threshold (200)
-    expect(result.cost.posture).toBe('awareness-not-enforcement');
+    expect(result.cost.posture).toBe('enforcement');
   });
 
   it('handles partial LLM failures gracefully', async () => {
@@ -342,7 +342,7 @@ describe('Guardrail Intelligence Analyzer - buildDeterministicFallback', () => {
     const result = buildDeterministicFallback(SAMPLE_SD, PASSING_GUARDRAILS);
 
     expect(result.cost.totalCost).toBe(0);
-    expect(result.cost.posture).toBe('awareness-not-enforcement');
+    expect(result.cost.posture).toBe('enforcement');
   });
 
   it('returns complete structure with all required fields', () => {

@@ -91,17 +91,54 @@ export function createDFEEscalationGate(supabase, source = 'handoff-gate') {
         const sdId = ctx.sdUuid || ctx.sdId;
         const forceOverride = ctx.force === true || ctx.options?.force === true;
 
+        // Build DFE context — include cost data if available for V07 enforcement
+        const dfeContext = { source };
+        if (ctx.cost != null) {
+          dfeContext.cost = ctx.cost;
+          dfeContext.stageType = ctx.stageType || ctx.phase || 'DEFAULT';
+        }
+
         const { dfeResult, escalation } = await evaluateAndEscalate(
           {
             confidence,
             gateType: 'PHASE_GATE',
             sdId,
             sdKey,
-            context: { source },
+            context: dfeContext,
           },
           evaluate,
           supabase
         );
+
+        // V07: Cost-blocked decisions get separate handling
+        if (dfeResult.decision === 'BLOCK' && dfeResult.costEvaluation?.blocked) {
+          console.log(`   🚫 COST BLOCK: Compute budget exceeded (${dfeResult.costEvaluation.cost} >= ${dfeResult.costEvaluation.threshold.escalate})`);
+
+          if (forceOverride) {
+            console.log(`   ⚡ Force override applied — bypassing cost block`);
+            await logForceOverride(supabase, { sdKey, escalationId: 'cost-block', confidence, source });
+            return {
+              passed: true,
+              score: 60,
+              max_score: 100,
+              issues: [],
+              warnings: [`Cost block FORCE-OVERRIDDEN (cost: ${dfeResult.costEvaluation.cost})`],
+              gate_status: 'COST_FORCE_OVERRIDE',
+              dfe_decision: dfeResult.decision,
+            };
+          }
+
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`Compute budget exceeded: ${dfeResult.reasoning}`],
+            warnings: [],
+            gate_status: 'COST_BLOCKED',
+            dfe_decision: dfeResult.decision,
+            cost_evaluation: dfeResult.costEvaluation,
+          };
+        }
 
         if (requiresEscalation(dfeResult)) {
           const escId = escalation?.id || 'pending';
