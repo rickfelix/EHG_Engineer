@@ -14,6 +14,7 @@
  */
 
 const DEFAULT_HEAL_THRESHOLD = 80;
+const AUTO_HEAL_TIMEOUT_MS = 60_000; // 60 seconds
 
 /**
  * Load the heal gate threshold from leo_config.
@@ -99,7 +100,7 @@ export function createHealBeforeCompleteGate(supabase) {
       }
 
       // Query most recent SD heal score from eva_vision_scores
-      const { data: healScores, error: healError } = await supabase
+      let { data: healScores, error: healError } = await supabase
         .from('eva_vision_scores')
         .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)
@@ -118,24 +119,59 @@ export function createHealBeforeCompleteGate(supabase) {
         };
       }
 
-      // No heal score found — require running /heal sd first
+      // No heal score found — auto-trigger heal scoring (SD-LEARN-FIX-ADDRESS-PAT-AUTO-046)
       if (!healScores || healScores.length === 0) {
-        console.log(`   ❌ No heal score found for ${sdKey}`);
-        console.log('');
-        console.log('   The heal-before-complete gate requires an SD heal score');
-        console.log('   before final approval. This catches gaps while context is fresh.');
-        console.log('');
-        console.log(`   Run: /heal sd --sd-id ${sdKey}`);
-        console.log('   Then retry PLAN-TO-LEAD.');
+        console.log(`   ⚠️  No heal score found for ${sdKey} — auto-triggering heal...`);
 
-        return {
-          passed: false,
-          score: 0,
-          max_score: 100,
-          issues: [`No heal score found for ${sdKey} — run /heal sd --sd-id ${sdKey} before PLAN-TO-LEAD`],
-          warnings: [],
-          remediation: `/heal sd --sd-id ${sdKey}`
-        };
+        let autoHealScore = null;
+        try {
+          const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
+          const healPromise = scoreSD({ sdKey, supabase });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Auto-heal timed out')), AUTO_HEAL_TIMEOUT_MS)
+          );
+          await Promise.race([healPromise, timeoutPromise]);
+
+          // Re-query for the newly created score
+          const { data: newScores } = await supabase
+            .from('eva_vision_scores')
+            .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
+            .eq('sd_id', sdKey)
+            .order('scored_at', { ascending: false })
+            .limit(1);
+
+          if (newScores && newScores.length > 0) {
+            autoHealScore = newScores[0];
+            console.log(`   ✅ Auto-heal complete: score ${autoHealScore.total_score}/100`);
+          } else {
+            console.log('   ⚠️  Auto-heal ran but no score was persisted');
+          }
+        } catch (err) {
+          console.log(`   ❌ Auto-heal failed: ${err.message}`);
+        }
+
+        // If auto-heal didn't produce a score, fall back to manual remediation
+        if (!autoHealScore) {
+          console.log('');
+          console.log('   The heal-before-complete gate requires an SD heal score');
+          console.log('   before final approval. Auto-heal was attempted but failed.');
+          console.log('');
+          console.log(`   Run manually: /heal sd --sd-id ${sdKey}`);
+          console.log('   Then retry PLAN-TO-LEAD.');
+
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`Auto-heal failed for ${sdKey} — run /heal sd --sd-id ${sdKey} manually`],
+            warnings: ['Auto-heal was attempted but did not produce a score'],
+            remediation: `/heal sd --sd-id ${sdKey}`
+          };
+        }
+
+        // Auto-heal produced a score — evaluate it against threshold below
+        // (falls through to the same threshold comparison logic as existing scores)
+        healScores = [autoHealScore];
       }
 
       const latestScore = healScores[0];
