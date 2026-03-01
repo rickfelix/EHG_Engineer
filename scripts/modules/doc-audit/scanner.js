@@ -258,52 +258,73 @@ function checkNamingConvention(filename) {
 }
 
 /**
- * Bulk-fetch git last-modified dates for all files using a single git command.
+ * Bulk-fetch git last-modified dates for all files using batched git commands.
+ * Batches directory arguments to stay under OS command-line limits (~8000 chars
+ * per invocation to be safe on both Windows 32K limit and Unix).
  */
 function enrichWithGitDates(rootDir, files) {
-  // Build list of paths, then use git log with --name-only to get dates in bulk
   const paths = files.map(f => f.relPath.replace(/\\/g, '/'));
   if (paths.length === 0) return;
 
-  // Collect unique top-level directories instead of listing every file path
-  // to avoid command-line-too-long errors on large repos (2000+ files)
+  // Collect unique top-level directories
   const topDirs = new Set();
   for (const p of paths) {
     const parts = p.split('/');
     topDirs.add(parts[0]);
   }
-  const dirArgs = [...topDirs].map(d => `"${d}/"`).join(' ');
+  const allDirs = [...topDirs];
 
-  try {
-    // Single git command: get author date + filename for all tracked files
-    const result = execSync(
-      'git log --all --format="GIT_DATE:%aI" --name-only --diff-filter=ACMR -- ' + dirArgs,
-      { cwd: rootDir, encoding: 'utf-8', timeout: 60000, maxBuffer: 50 * 1024 * 1024 }
-    );
+  // Batch directories so each git command stays under MAX_CMD_LEN chars
+  const MAX_CMD_LEN = 8000;
+  const baseCmd = 'git log --all --format="GIT_DATE:%aI" --name-only --diff-filter=ACMR -- ';
+  const batches = [];
+  let currentBatch = [];
+  let currentLen = baseCmd.length;
 
-    // Parse: find most recent date for each file
-    const dateMap = new Map();
-    let currentDate = null;
-    for (const line of result.split('\n')) {
-      if (line.startsWith('GIT_DATE:')) {
-        currentDate = line.slice(9).trim();
-      } else if (line.trim() && currentDate) {
-        const normalized = line.trim().replace(/\\/g, '/');
-        // Only keep the most recent date (first occurrence)
-        if (!dateMap.has(normalized)) {
-          dateMap.set(normalized, currentDate);
+  for (const dir of allDirs) {
+    const arg = `"${dir}/" `;
+    if (currentLen + arg.length > MAX_CMD_LEN && currentBatch.length > 0) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentLen = baseCmd.length;
+    }
+    currentBatch.push(dir);
+    currentLen += arg.length;
+  }
+  if (currentBatch.length > 0) batches.push(currentBatch);
+
+  // Parse git log output into a date map
+  const dateMap = new Map();
+
+  for (let i = 0; i < batches.length; i++) {
+    const dirArgs = batches[i].map(d => `"${d}/"`).join(' ');
+    try {
+      const result = execSync(
+        baseCmd + dirArgs,
+        { cwd: rootDir, encoding: 'utf-8', timeout: 60000, maxBuffer: 50 * 1024 * 1024 }
+      );
+
+      let currentDate = null;
+      for (const line of result.split('\n')) {
+        if (line.startsWith('GIT_DATE:')) {
+          currentDate = line.slice(9).trim();
+        } else if (line.trim() && currentDate) {
+          const normalized = line.trim().replace(/\\/g, '/');
+          if (!dateMap.has(normalized)) {
+            dateMap.set(normalized, currentDate);
+          }
         }
       }
+    } catch (err) {
+      console.warn(`[doc-audit] git date enrichment batch ${i + 1}/${batches.length} failed: ${err.message}`);
     }
+  }
 
-    for (const file of files) {
-      const normalizedPath = file.relPath.replace(/\\/g, '/');
-      const dateStr = dateMap.get(normalizedPath);
-      if (dateStr) {
-        file.gitLastModified = new Date(dateStr);
-      }
+  for (const file of files) {
+    const normalizedPath = file.relPath.replace(/\\/g, '/');
+    const dateStr = dateMap.get(normalizedPath);
+    if (dateStr) {
+      file.gitLastModified = new Date(dateStr);
     }
-  } catch {
-    // git dates unavailable - leave all null
   }
 }
