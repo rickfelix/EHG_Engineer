@@ -1,50 +1,11 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-02-28
-tags: [reference, auto-generated]
----
 # product_requirements_v2 Table
-
-
-## Table of Contents
-
-- [Columns (59 total)](#columns-59-total)
-- [Constraints](#constraints)
-  - [Primary Key](#primary-key)
-  - [Foreign Keys](#foreign-keys)
-  - [Check Constraints](#check-constraints)
-- [Indexes](#indexes)
-- [RLS Policies](#rls-policies)
-  - [1. authenticated_read_product_requirements_v2 (SELECT)](#1-authenticated_read_product_requirements_v2-select)
-  - [2. product_requirements_v2_service_role_access (ALL)](#2-product_requirements_v2_service_role_access-all)
-  - [3. service_role_all_product_requirements_v2 (ALL)](#3-service_role_all_product_requirements_v2-all)
-  - [4. venture_insert_product_requirements_v2 (INSERT)](#4-venture_insert_product_requirements_v2-insert)
-  - [5. venture_select_product_requirements_v2 (SELECT)](#5-venture_select_product_requirements_v2-select)
-  - [6. venture_update_product_requirements_v2 (UPDATE)](#6-venture_update_product_requirements_v2-update)
-- [Triggers](#triggers)
-  - [audit_product_requirements](#audit_product_requirements)
-  - [audit_product_requirements](#audit_product_requirements)
-  - [audit_product_requirements](#audit_product_requirements)
-  - [planning_section_auto_update_trigger](#planning_section_auto_update_trigger)
-  - [planning_section_auto_update_trigger](#planning_section_auto_update_trigger)
-  - [trg_doctrine_constraint_prd](#trg_doctrine_constraint_prd)
-  - [trg_doctrine_constraint_prd](#trg_doctrine_constraint_prd)
-  - [trg_validate_integration_section_keys](#trg_validate_integration_section_keys)
-  - [trg_validate_integration_section_keys](#trg_validate_integration_section_keys)
-  - [trigger_sync_prd_sd_linking](#trigger_sync_prd_sd_linking)
-  - [trigger_sync_prd_sd_linking](#trigger_sync_prd_sd_linking)
-  - [update_prd_timestamp](#update_prd_timestamp)
-- [Usage Examples](#usage-examples)
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-28T03:49:53.877Z
-**Rows**: 1,189
+**Generated**: 2026-03-01T00:41:31.291Z
+**Rows**: 1,249
 **RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation

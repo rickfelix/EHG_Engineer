@@ -1,93 +1,11 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-02-28
-tags: [reference, auto-generated]
----
 # strategic_directives_v2 Table
-
-
-## Table of Contents
-
-- [Columns (86 total)](#columns-86-total)
-- [Constraints](#constraints)
-  - [Primary Key](#primary-key)
-  - [Foreign Keys](#foreign-keys)
-  - [Unique Constraints](#unique-constraints)
-  - [Check Constraints](#check-constraints)
-- [Indexes](#indexes)
-- [RLS Policies](#rls-policies)
-  - [1. anon_read_strategic_directives_v2 (SELECT)](#1-anon_read_strategic_directives_v2-select)
-  - [2. authenticated_read_strategic_directives_v2 (SELECT)](#2-authenticated_read_strategic_directives_v2-select)
-  - [3. service_role_all_strategic_directives_v2 (ALL)](#3-service_role_all_strategic_directives_v2-all)
-  - [4. strategic_directives_v2_service_role_access (ALL)](#4-strategic_directives_v2_service_role_access-all)
-  - [5. venture_insert_strategic_directives_v2 (INSERT)](#5-venture_insert_strategic_directives_v2-insert)
-  - [6. venture_select_strategic_directives_v2 (SELECT)](#6-venture_select_strategic_directives_v2-select)
-  - [7. venture_update_strategic_directives_v2 (UPDATE)](#7-venture_update_strategic_directives_v2-update)
-- [Triggers](#triggers)
-  - [audit_strategic_directives](#audit_strategic_directives)
-  - [audit_strategic_directives](#audit_strategic_directives)
-  - [audit_strategic_directives](#audit_strategic_directives)
-  - [auto_assign_sequence_rank](#auto_assign_sequence_rank)
-  - [auto_calculate_progress_trigger](#auto_calculate_progress_trigger)
-  - [check_sd_hierarchy](#check_sd_hierarchy)
-  - [check_sd_hierarchy](#check_sd_hierarchy)
-  - [enforce_handoff_trigger](#enforce_handoff_trigger)
-  - [enforce_progress_trigger](#enforce_progress_trigger)
-  - [status_auto_transition](#status_auto_transition)
-  - [tr_check_intensity_required](#tr_check_intensity_required)
-  - [tr_enforce_business_value_gate](#tr_enforce_business_value_gate)
-  - [tr_notify_working_sd](#tr_notify_working_sd)
-  - [tr_retro_notification](#tr_retro_notification)
-  - [tr_sd_baseline_sync](#tr_sd_baseline_sync)
-  - [tr_sd_baseline_sync](#tr_sd_baseline_sync)
-  - [tr_sd_completed_event](#tr_sd_completed_event)
-  - [trg_aaa_sync_type_change_reason](#trg_aaa_sync_type_change_reason)
-  - [trg_auto_close_deliverables_on_sd_completion](#trg_auto_close_deliverables_on_sd_completion)
-  - [trg_auto_close_feedback_on_sd_completion](#trg_auto_close_feedback_on_sd_completion)
-  - [trg_auto_complete_parent_orchestrator](#trg_auto_complete_parent_orchestrator)
-  - [trg_auto_set_is_parent](#trg_auto_set_is_parent)
-  - [trg_auto_set_is_parent](#trg_auto_set_is_parent)
-  - [trg_capability_lifecycle](#trg_capability_lifecycle)
-  - [trg_check_contract_requirements](#trg_check_contract_requirements)
-  - [trg_check_contract_requirements](#trg_check_contract_requirements)
-  - [trg_doctrine_constraint_sd](#trg_doctrine_constraint_sd)
-  - [trg_doctrine_constraint_sd](#trg_doctrine_constraint_sd)
-  - [trg_enforce_child_creation_timing](#trg_enforce_child_creation_timing)
-  - [trg_enforce_metadata_object](#trg_enforce_metadata_object)
-  - [trg_enforce_metadata_object](#trg_enforce_metadata_object)
-  - [trg_enforce_orphan_protection](#trg_enforce_orphan_protection)
-  - [trg_enforce_parent_orchestrator_type](#trg_enforce_parent_orchestrator_type)
-  - [trg_enforce_parent_orchestrator_type](#trg_enforce_parent_orchestrator_type)
-  - [trg_enforce_sd_type_change_explanation](#trg_enforce_sd_type_change_explanation)
-  - [trg_enforce_sd_type_change_governance](#trg_enforce_sd_type_change_governance)
-  - [trg_enforce_sd_type_change_risk](#trg_enforce_sd_type_change_risk)
-  - [trg_enforce_type_change_timing](#trg_enforce_type_change_timing)
-  - [trg_inherit_contracts_on_insert](#trg_inherit_contracts_on_insert)
-  - [trg_inherit_contracts_on_update](#trg_inherit_contracts_on_update)
-  - [trg_inherit_parent_metadata](#trg_inherit_parent_metadata)
-  - [trg_inherit_parent_metadata_update](#trg_inherit_parent_metadata_update)
-  - [trg_prevent_child_exec_before_parent_approval](#trg_prevent_child_exec_before_parent_approval)
-  - [trg_record_mttr_on_sd_completion](#trg_record_mttr_on_sd_completion)
-  - [trg_record_sd_completion_signal](#trg_record_sd_completion_signal)
-  - [trg_sync_sd_code_user_facing](#trg_sync_sd_code_user_facing)
-  - [trg_sync_sd_code_user_facing](#trg_sync_sd_code_user_facing)
-  - [trg_sync_uuid_internal_pk](#trg_sync_uuid_internal_pk)
-  - [trg_sync_uuid_internal_pk](#trg_sync_uuid_internal_pk)
-  - [trigger_warn_sd_kr_alignment](#trigger_warn_sd_kr_alignment)
-  - [update_sd_timestamp](#update_sd_timestamp)
-  - [update_strategic_directives_v2_updated_at](#update_strategic_directives_v2_updated_at)
-  - [validate_child_sd_sequence](#validate_child_sd_sequence)
-- [Usage Examples](#usage-examples)
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-28T03:49:53.877Z
-**Rows**: 1,402
+**Generated**: 2026-03-01T00:41:31.291Z
+**Rows**: 1,474
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation

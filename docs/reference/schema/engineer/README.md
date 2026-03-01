@@ -1,25 +1,10 @@
 # Database Schema Documentation
 
-
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [All Tables (503)](#all-tables-503)
-  - [LEO Protocol](#leo-protocol)
-  - [Strategic Directives](#strategic-directives)
-  - [Retrospectives](#retrospectives)
-  - [Handoffs & Phases](#handoffs-phases)
-  - [Sub-Agents](#sub-agents)
-  - [Validation & Quality](#validation-quality)
-  - [Knowledge & Learning](#knowledge-learning)
-  - [Other](#other)
-- [Regenerating Documentation](#regenerating-documentation)
-
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-02-28T03:49:53.877Z
+**Generated**: 2026-03-01T00:41:31.291Z
 **Tables**: 503
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
