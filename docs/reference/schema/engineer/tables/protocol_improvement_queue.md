@@ -1,43 +1,10 @@
-
-## Table of Contents
-
-- [Columns (37 total)](#columns-37-total)
-- [Constraints](#constraints)
-  - [Primary Key](#primary-key)
-  - [Foreign Keys](#foreign-keys)
-  - [Check Constraints](#check-constraints)
-- [Indexes](#indexes)
-- [RLS Policies](#rls-policies)
-  - [1. authenticated_read_protocol_queue (SELECT)](#1-authenticated_read_protocol_queue-select)
-  - [2. protocol_improvement_queue_anon_denied (ALL)](#2-protocol_improvement_queue_anon_denied-all)
-  - [3. protocol_improvement_queue_authenticated_select (SELECT)](#3-protocol_improvement_queue_authenticated_select-select)
-  - [4. protocol_improvement_queue_service_role_all (ALL)](#4-protocol_improvement_queue_service_role_all-all)
-  - [5. service_role_all_protocol_queue (ALL)](#5-service_role_all_protocol_queue-all)
-- [Triggers](#triggers)
-  - [trg_enforce_auto_apply_boundaries](#trg_enforce_auto_apply_boundaries)
-  - [trg_enforce_auto_apply_boundaries](#trg_enforce_auto_apply_boundaries)
-  - [trg_enforce_change_workflow](#trg_enforce_change_workflow)
-  - [trg_enforce_improvement_lineage](#trg_enforce_improvement_lineage)
-  - [trg_protocol_improvement_audit](#trg_protocol_improvement_audit)
-  - [trg_protocol_improvement_audit](#trg_protocol_improvement_audit)
-  - [trg_set_rollback_expiry](#trg_set_rollback_expiry)
-  - [trg_set_rollback_expiry](#trg_set_rollback_expiry)
-
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-03-01
-tags: [reference, auto-generated]
----
 # protocol_improvement_queue Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T00:41:31.291Z
+**Generated**: 2026-03-01T14:20:42.746Z
 **Rows**: 82
 **RLS**: Enabled (5 policies)
 

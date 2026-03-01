@@ -1,54 +1,11 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-03-01
-tags: [reference, auto-generated]
----
 # sd_phase_handoffs Table
-
-
-## Table of Contents
-
-- [Columns (27 total)](#columns-27-total)
-- [Constraints](#constraints)
-  - [Primary Key](#primary-key)
-  - [Foreign Keys](#foreign-keys)
-  - [Unique Constraints](#unique-constraints)
-  - [Check Constraints](#check-constraints)
-- [Indexes](#indexes)
-- [RLS Policies](#rls-policies)
-  - [1. Allow anon insert sd_phase_handoffs (INSERT)](#1-allow-anon-insert-sd_phase_handoffs-insert)
-  - [2. Allow anon read sd_phase_handoffs (SELECT)](#2-allow-anon-read-sd_phase_handoffs-select)
-  - [3. Allow anon update sd_phase_handoffs (UPDATE)](#3-allow-anon-update-sd_phase_handoffs-update)
-  - [4. Allow authenticated delete sd_phase_handoffs (DELETE)](#4-allow-authenticated-delete-sd_phase_handoffs-delete)
-  - [5. Allow authenticated insert sd_phase_handoffs (INSERT)](#5-allow-authenticated-insert-sd_phase_handoffs-insert)
-  - [6. Allow authenticated read sd_phase_handoffs (SELECT)](#6-allow-authenticated-read-sd_phase_handoffs-select)
-  - [7. Allow authenticated update sd_phase_handoffs (UPDATE)](#7-allow-authenticated-update-sd_phase_handoffs-update)
-  - [8. Allow service role all sd_phase_handoffs (ALL)](#8-allow-service-role-all-sd_phase_handoffs-all)
-  - [9. venture_insert_sd_phase_handoffs (INSERT)](#9-venture_insert_sd_phase_handoffs-insert)
-  - [10. venture_select_sd_phase_handoffs (SELECT)](#10-venture_select_sd_phase_handoffs-select)
-  - [11. venture_update_sd_phase_handoffs (UPDATE)](#11-venture_update_sd_phase_handoffs-update)
-- [Triggers](#triggers)
-  - [enforce_handoff_creation](#enforce_handoff_creation)
-  - [trg_enforce_is_working_on_handoffs](#trg_enforce_is_working_on_handoffs)
-  - [trigger_handoff_accepted_at](#trigger_handoff_accepted_at)
-  - [trigger_handoff_rejected_at](#trigger_handoff_rejected_at)
-  - [trigger_protect_migrated](#trigger_protect_migrated)
-  - [trigger_sd_progress_recalc](#trigger_sd_progress_recalc)
-  - [trigger_verify_deliverables_before_handoff](#trigger_verify_deliverables_before_handoff)
-  - [trigger_verify_deliverables_before_handoff_insert](#trigger_verify_deliverables_before_handoff_insert)
-  - [validate_handoff_trigger](#validate_handoff_trigger)
-  - [validate_handoff_trigger](#validate_handoff_trigger)
-- [Usage Examples](#usage-examples)
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T00:41:31.291Z
-**Rows**: 9,910
+**Generated**: 2026-03-01T14:20:42.746Z
+**Rows**: 10,091
 **RLS**: Enabled (11 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
