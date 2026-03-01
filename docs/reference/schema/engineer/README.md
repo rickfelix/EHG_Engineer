@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T14:20:42.746Z
-**Tables**: 504
+**Generated**: 2026-03-01T17:59:03.922Z
+**Tables**: 505
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (504)
+## All Tables (505)
 
 ### LEO Protocol
 
@@ -297,6 +297,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_decisions](tables/eva_decisions.md)
 - [eva_event_ledger](tables/eva_event_ledger.md)
 - [eva_event_log](tables/eva_event_log.md)
+- [eva_event_schemas](tables/eva_event_schemas.md)
 - [eva_events](tables/eva_events.md)
 - [eva_events_dlq](tables/eva_events_dlq.md)
 - [eva_idea_categories](tables/eva_idea_categories.md)
