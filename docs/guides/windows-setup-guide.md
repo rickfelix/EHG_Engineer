@@ -336,7 +336,7 @@ EHG_Engineer uses a cross-platform script runner (`scripts/cross-platform-run.js
 
 ## Additional Resources
 
-- [LEO Protocol Documentation](../reference/leo-protocol-guide.md)
+- LEO Protocol Documentation
 - [Database Schema Reference](../reference/schema/)
 - [Contributing Guide](../../CONTRIBUTING.md)
 

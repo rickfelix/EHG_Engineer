@@ -439,7 +439,7 @@ checkLOC();
 
 - [Sub-Agent Patterns Guide](../../reference/agent-patterns-guide.md) - Base sub-agent patterns
 - [Governance Library Guide](../../reference/governance-library-guide.md) - Exception handling
-- [Utility Library Guide](./utility-library-guide.md) - Shared utilities
+- Utility Library Guide - Shared utilities
 
 ---
 

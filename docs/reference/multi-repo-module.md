@@ -686,5 +686,5 @@ C:/_EHG/
 
 **See Also:**
 - [Multi-Repo Architecture](../01_architecture/multi-repo-architecture.md)
-- [Ship Command Documentation](../.claude/commands/ship.md)
+- Ship Command Documentation
 - [LEO Protocol Documentation](schema/engineer/tables/leo_protocols.md)

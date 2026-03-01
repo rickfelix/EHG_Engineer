@@ -220,10 +220,10 @@ CREATE TABLE learning_inbox (...16 columns);
 - [ ] Add automated tests for multi-expert protocol
 
 ## Related Documentation
-- [RCA Multi-Expert Collaboration Protocol](../../reference/rca-multi-expert-collaboration.md)
-- [Documentation Standards](../../03_protocols_and_standards/documentation-standards.md)
-- [Database Agent Patterns](../../reference/database-agent-patterns.md)
-- [Issue Patterns Table](../../database/schema/issue_patterns.md)
+- [RCA Multi-Expert Collaboration Protocol](../../../reference/rca-multi-expert-collaboration.md)
+- [Documentation Standards](../../../03_protocols_and_standards/documentation-standards.md)
+- [Database Agent Patterns](../../../reference/database-agent-patterns.md)
+- Issue Patterns Table
 
 ## Retrospective Readiness
 

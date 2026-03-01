@@ -454,8 +454,8 @@ it('captures and aggregates signals for retrospective', async () => {
 
 ## Related Documentation
 - [Retrospectives Guide](../../reference/schema/engineer/tables/retrospectives.md)
-- [LEO Protocol v4.3.3](../../03_protocols_and_standards/LEO_v4.3.3.md)
-- [Sub-Agent: RETRO](../../leo/sub-agents/RETRO.md)
+- LEO Protocol v4.3.3
+- Sub-Agent: RETRO
 
 ## References
 - **PR**: #521

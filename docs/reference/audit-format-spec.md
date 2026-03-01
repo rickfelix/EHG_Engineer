@@ -356,7 +356,7 @@ Audits created before this spec should be validated and fixed if needed before i
 
 - [Audit-to-SD Pipeline](./audit-to-sd-pipeline.md) - How ingested audits become SDs
 - [Researcher Agent Workflow](./researcher-agent-workflow.md) - For discovery_spike and architectural_review SDs
-- [Runtime Audit Protocol](../protocols/runtime-audit-protocol.md) - Full 7-phase audit process
+- Runtime Audit Protocol - Full 7-phase audit process
 
 ---
 

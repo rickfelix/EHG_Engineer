@@ -382,12 +382,12 @@ docs/
 ## Documentation References
 
 **Created During Cleanup**:
-- [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) - Numbering system explanation
-- [ROOT_FILES_CATEGORIZATION.md](../01_architecture/ROOT_FILES_CATEGORIZATION.md) - File move planning
+- [FILE_NUMBERING_AUDIT.md](../01_architecture/file-numbering-audit.md) - Numbering system explanation
+- [ROOT_FILES_CATEGORIZATION.md](../01_architecture/root-files-categorization.md) - File move planning
 - [archive/protocols/README.md](protocols/README.md) - Protocol archive guide
 
 **Updated**:
-- [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Standards v1.1.0
+- [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/documentation-standards.md) - Standards v1.1.0
 - [reference/database-agent-patterns.md](../reference/database-agent-patterns.md) - Database patterns
 
 **Key Directories**:

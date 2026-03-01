@@ -452,7 +452,7 @@ SELECT AVG(heartbeat_age_seconds) FROM v_active_sessions WHERE computed_status =
 ## Related Documentation
 
 - **Migration**: [Multi-Session Pessimistic Locking](../database/migrations/multi-session-pessimistic-locking.md)
-- **Migration**: [SD Claims Lifecycle-Aware Constraint](../database/migrations/20260213_fix_sd_claims_lifecycle_aware_unique.sql)
+- **Migration**: SD Claims Lifecycle-Aware Constraint
 - **API Reference**: [Heartbeat Manager](../reference/heartbeat-manager.md)
 - **Database**: [Database README - Enhanced Views](../database/README.md#enhanced-views)
 - **Session Management**: `lib/session-manager.mjs`
@@ -1149,7 +1149,7 @@ git checkout -b recovery/<short-sha> <full-sha>
 
 ### Related Documentation
 
-- **Migration**: [Ship Safety Branch Tracking](../database/migrations/20260211_ship_safety_branch_tracking_v2.sql)
+- **Migration**: Ship Safety Branch Tracking
 - **Recovery Tool**: [Git Commit Recovery Guide](../reference/git-commit-recovery-guide.md)
 - **Shipping Executor**: `scripts/modules/shipping/ShippingExecutor.js`
 - **Session Manager**: `lib/session-manager.mjs`

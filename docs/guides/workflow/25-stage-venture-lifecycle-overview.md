@@ -363,9 +363,9 @@ Stage 1 ─► Stage 2 ─► Stage 3 ─► Stage 4 ─► Stage 5
 The 25-stage lifecycle integrates with the LEO Protocol governance system:
 
 1. **SDs for Implementation**: Stages marked `sd_required: true` require Strategic Directives
-2. **Phase Boundary Gates**: Risk re-calibration at phase transitions (see [Risk Re-calibration Protocol](../04_features/risk-recalibration-protocol.md))
-3. **Capability Sharing**: Secondary outputs feed the Capability Library (see [Capability Router Protocol](../04_features/capability-router-protocol.md))
-4. **Compliance Gate**: Stage 20 includes security/compliance certification (see [Stage 20 Compliance Gate](../04_features/stage20-compliance-gate.md))
+2. **Phase Boundary Gates**: Risk re-calibration at phase transitions (see [Risk Re-calibration Protocol](../../04_features/risk-recalibration-protocol.md))
+3. **Capability Sharing**: Secondary outputs feed the Capability Library (see [Capability Router Protocol](../../04_features/capability-router-protocol.md))
+4. **Compliance Gate**: Stage 20 includes security/compliance certification (see [Stage 20 Compliance Gate](../../04_features/stage20-compliance-gate.md))
 
 ---
 
@@ -381,7 +381,7 @@ The 25-stage model consolidates the original 40-stage workflow:
 | Security Certification | Stage 20 Compliance Gate + SD-LIFECYCLE-GAP-002 |
 | Active Operations | Phase 7: The Orbit + SD-LIFECYCLE-GAP-003 |
 
-See: [Venture Lifecycle Gap Remediation Overview](../04_features/venture-lifecycle-gap-remediation-overview.md)
+See: [Venture Lifecycle Gap Remediation Overview](../../04_features/venture-lifecycle-gap-remediation-overview.md)
 
 ---
 
@@ -414,10 +414,10 @@ See: [Venture Lifecycle Gap Remediation Overview](../04_features/venture-lifecyc
 
 - **Technical Configuration**: [`stages_v2.yaml`](./stages_v2.yaml) - Complete stage definitions
 - **Phase 7**: [`phase7-orbit-verification.md`](./phase7-orbit-verification.md) - Post-Stage 25 operations
-- **Lifecycle Gap Remediation**: [`venture-lifecycle-gap-remediation-overview.md`](../04_features/venture-lifecycle-gap-remediation-overview.md)
-- **Risk Re-calibration**: [`risk-recalibration-protocol.md`](../04_features/risk-recalibration-protocol.md)
-- **Capability Router**: [`capability-router-protocol.md`](../04_features/capability-router-protocol.md)
-- **Stage 20 Compliance**: [`stage20-compliance-gate.md`](../04_features/stage20-compliance-gate.md)
+- **Lifecycle Gap Remediation**: [`venture-lifecycle-gap-remediation-overview.md`](../../04_features/venture-lifecycle-gap-remediation-overview.md)
+- **Risk Re-calibration**: [`risk-recalibration-protocol.md`](../../04_features/risk-recalibration-protocol.md)
+- **Capability Router**: [`capability-router-protocol.md`](../../04_features/capability-router-protocol.md)
+- **Stage 20 Compliance**: [`stage20-compliance-gate.md`](../../04_features/stage20-compliance-gate.md)
 
 ---
 

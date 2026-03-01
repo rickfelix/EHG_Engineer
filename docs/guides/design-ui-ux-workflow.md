@@ -400,12 +400,12 @@ Checklist:
 - [Sub-Agent Collaboration](#-sub-agent-collaboration)
 
 ### Tools
-- [Audit Script](../scripts/design-ui-ux-audit.js)
-- [Design Command](../.claude/commands/leo-design.md)
-- [Database Migration](../database/migrations/expand-design-subagent-triggers.sql)
+- Audit Script
+- Design Command
+- Database Migration
 
 ### Personas
-- [Design Agent Persona](../lib/agents/personas/sub-agents/design-agent.json)
+- Design Agent Persona
 
 ---
 

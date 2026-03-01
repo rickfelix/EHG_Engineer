@@ -595,7 +595,7 @@ bash scripts/leo-stack.sh stop      # Stop both servers
 - [Multi-Repo Module API Reference](../reference/multi-repo-module.md)
 - [Ship Command Documentation](../../.claude/commands/ship.md)
 - [LEO Protocol Overview](../reference/schema/engineer/tables/leo_protocols.md)
-- [Deployment Guide](../06_deployment/deployment-guide.md)
+- Deployment Guide
 
 ---
 

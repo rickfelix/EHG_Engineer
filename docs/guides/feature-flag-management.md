@@ -267,6 +267,6 @@ deactivateKillSwitch('CONST-009', 'resolution').then(() => console.log('Kill swi
 
 ## Related Documentation
 
-- [Feedback Quality Layer](../architecture/feedback-quality-layer.md)
-- [SD-LEO-SELF-IMPROVE-001C PRD](../prd/)
-- [SD-LEO-SELF-IMPROVE-001D PRD](../prd/)
+- Feedback Quality Layer
+- SD-LEO-SELF-IMPROVE-001C PRD
+- SD-LEO-SELF-IMPROVE-001D PRD

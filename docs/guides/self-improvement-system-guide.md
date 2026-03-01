@@ -92,7 +92,7 @@ The Self-Improvement System enables LEO Protocol to learn from retrospectives an
 
 The AI Quality Judge automates the evaluation of protocol improvement proposals using:
 - **Constitution Validation**: 9 immutable rules (CONST-001 to CONST-009) that auto-reject critical violations
-  - See [Protocol Constitution Guide](../governance/protocol-constitution-guide.md) for complete rule documentation
+  - See [Protocol Constitution Guide](../03_protocols_and_standards/protocol-constitution-guide.md) for complete rule documentation
 - **Russian Judge Scoring**: Multi-criterion weighted scoring (safety, specificity, necessity, evidence, atomicity)
 - **Model Diversity**: Triangulation protocol ensures different model families for proposer vs evaluator
 - **GOVERNED Pipeline**: All improvements require human approval in Phase 1

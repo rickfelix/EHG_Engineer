@@ -809,8 +809,8 @@ The calibration test suite validates disposition accuracy using 13 real-world sa
 ## Related Documentation
 
 - [EVA Assistant & Orchestration](./eva_assistant_orchestration.md) - High-level orchestration architecture
-- [Triage Engine](../reference/triage-engine.md) - Core triage engine patterns
-- [Capability Taxonomy](../reference/capability-taxonomy.md) - Capability classification system
+- Triage Engine - Core triage engine patterns
+- Capability Taxonomy - Capability classification system
 - [Database Schema](../database/schema/) - Complete schema documentation
 
 ## Version History

@@ -810,7 +810,7 @@ All 10 unit tests pass:
 ## References
 
 - [Claude Code Hooks Reference](claude-code-hooks.md) - Complete hook documentation including PreCompact/SessionStart
-- [Token Accounting Research (Dec 2025)](../../research/token-accounting-research.md)
+- Token Accounting Research (Dec 2025)
 - [Claude Code Hooks Documentation](https://docs.anthropic.com/en/docs/claude-code/hooks)
 - [Context Engineering Best Practices](agentic-context-engineering-v3.md)
 - [CLAUDE_CORE.md Compaction Instructions](../../CLAUDE_CORE.md#compaction-instructions-critical) - What Claude preserves during compaction

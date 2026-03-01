@@ -432,9 +432,9 @@ For orchestrators with 10+ children, budget 30-60 seconds for AI generation.
 
 ## Related Documentation
 
-- [Child SD Pattern for Phased Work](../recommendations/child-sd-pattern-for-phased-work.md) - When and why to use child SDs
+- [Child SD Pattern for Phased Work](../summaries/child-sd-pattern-for-phased-work.md) - When and why to use child SDs
 - [SD Creation Validator](../../scripts/modules/sd-creation-validator.js) - Validation rules
-- [LEAD-TO-PLAN Handoff Verification](../leo/handoffs/lead-to-plan.md) - Required fields for LEAD-TO-PLAN
+- LEAD-TO-PLAN Handoff Verification - Required fields for LEAD-TO-PLAN
 
 ## Version History
 

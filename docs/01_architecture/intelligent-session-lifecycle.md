@@ -620,7 +620,7 @@ See [Heartbeat Manager Reference](../reference/heartbeat-manager.md#troubleshoot
 - [Multi-Session Coordination Ops](../06_deployment/multi-session-coordination-ops.md)
 - [Session Manager](../../lib/session-manager.mjs)
 - [Status Line Manager](../../scripts/leo-status-line.js)
-- [Database Migration](../database/migrations/20260201_intelligent_session_lifecycle.sql)
+- Database Migration
 
 ## References
 

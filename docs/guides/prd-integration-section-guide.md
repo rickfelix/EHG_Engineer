@@ -374,7 +374,7 @@ Extract and document:
 - [PRD Creation Process](./prd-creation-process.md) - Overall PRD workflow
 - [PRD Developer Guide](./prd-developer-guide.md) - Technical implementation details
 - [Validation Enforcement](../reference/validation-enforcement.md) - All validation gates
-- [PLAN-TO-EXEC Handoff](../reference/sd_phase_handoffs.md) - Phase transition requirements
+- PLAN-TO-EXEC Handoff - Phase transition requirements
 
 ## Troubleshooting
 

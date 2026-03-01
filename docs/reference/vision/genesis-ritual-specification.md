@@ -71,7 +71,7 @@ tags: [reference, auto-generated]
 | **Ritual Date** | February 14, 2026 |
 | **Ritual Time** | 09:00 AM EST |
 | **Location** | Chairman's Terminal |
-| **Parent Document** | [GENESIS_OATH_V3.md](./GENESIS_OATH_V3.md) |
+| **Parent Document** | [GENESIS_OATH_V3.md](genesis-oath-v3.md) |
 | **Cosmic Event** | Saturn enters Aries |
 
 ---

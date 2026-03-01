@@ -1347,16 +1347,16 @@ VALUES (
 ### Primary References
 
 - **[Self-Improvement System Guide](../guides/self-improvement-system-guide.md)** - Overview of the self-improvement system
-- **[Protocol Improvements CLI Guide](../cli/protocol-improvements-cli-guide.md)** - CLI commands for managing improvements
+- **[Protocol Improvements CLI Guide](../02_api/protocol-improvements-cli-guide.md)** - CLI commands for managing improvements
 - **[AI Quality Judge Implementation](../../scripts/modules/ai-quality-judge/)** - Technical implementation details
 - **[Constitution Validator](../../scripts/modules/ai-quality-judge/constitution-validator.js)** - Enforcement logic
 
 ### Related Governance
 
-- **[EVA Manifesto](../../docs/doctrine/eva-manifesto-v1.md)** - Four Oaths and agent governance
+- **[EVA Manifesto](../reference/eva-manifesto-v1.md)** - Four Oaths and agent governance
 - **[Four Oaths Enforcement](../../lib/governance/four-oaths-enforcement.js)** - Oath validation implementation
 - **[Doctrine of Constraint](../../database/migrations/20251226_law1_doctrine_of_constraint_enforcement.sql)** - EXEC role limits
-- **[Genesis Oath](../../docs/vision/genesis-oath-v3.md)** - Venture creation governance
+- **[Genesis Oath](../reference/vision/genesis-oath-v3.md)** - Venture creation governance
 
 ### Schema Documentation
 

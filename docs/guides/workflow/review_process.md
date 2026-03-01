@@ -1131,12 +1131,12 @@ Read file_path: "/mnt/c/_EHG/EHG/src/components/ventures/VentureCard.tsx"
 - [Source Stage Metadata Field](source_stage_metadata_field.md) - Database metadata specification
 
 **Policies & Best Practices:**
-- [CrewAI Compliance Policy](crewai_compliance_policy.md) - Formal policy on mandatory CrewAI implementation
+- CrewAI Compliance Policy - Formal policy on mandatory CrewAI implementation
 - [Stage Review Lessons](stage_review_lessons.md) - Living log of lessons learned
 - [Best Practices Index](best_practices.md) - Central index for all best practices
 
 **Governance:**
-- [Exception Documentation](../governance/exceptions) - Directory for Chairman-approved exceptions
+- Exception Documentation - Directory for Chairman-approved exceptions
 - Strategic Directives: Query `strategic_directives_v2` table with `metadata->>'spawned_from_review' = 'true'`
 
 ---

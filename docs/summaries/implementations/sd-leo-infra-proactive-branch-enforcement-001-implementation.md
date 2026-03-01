@@ -181,8 +181,8 @@ When cross-SD branch detected:
 
 ## Related Documentation
 - [Handoff System Guide](../../leo/handoffs/handoff-system-guide.md)
-- [LEO Protocol v4.3.3](../../03_protocols_and_standards/LEO_v4.3.3.md)
-- [Git Branch Verification](../../reference/git-branch-verification.md)
+- LEO Protocol v4.3.3
+- Git Branch Verification
 
 ## References
 - **PR**: #519

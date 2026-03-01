@@ -1732,7 +1732,7 @@ bootstrap_process:
 - [Hierarchical Swarm Architecture](./hierarchical-swarm-architecture.md)
 - [Swarm Mode Readiness Rubric](./swarm-mode-readiness-rubric.md)
 - [Issue Patterns Table](../../database/schema/)
-- [Retrospectives System](../../lib/sub-agents/retro/)
+- Retrospectives System
 
 ---
 

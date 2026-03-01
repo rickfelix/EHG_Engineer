@@ -60,7 +60,7 @@ tags: [reference, auto-generated]
 |-----------|-------|
 | **Timeline** | December 29, 2025 – February 14, 2026 |
 | **Total Capacity** | ~330 Strategic Directives |
-| **Parent Document** | [GENESIS_OATH_V3.md](./GENESIS_OATH_V3.md) |
+| **Parent Document** | [GENESIS_OATH_V3.md](genesis-oath-v3.md) |
 
 ---
 

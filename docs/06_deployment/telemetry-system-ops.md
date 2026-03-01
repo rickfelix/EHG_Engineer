@@ -645,8 +645,8 @@ psql $DATABASE_URL < telemetry_backup_20260209.sql
 ## Related Documentation
 
 - [Workflow Telemetry System Architecture](../01_architecture/workflow-telemetry-system.md)
-- [Telemetry API Reference](../reference/telemetry-api.md)
-- [LEO Protocol Hooks](../reference/hooks-system.md)
+- Telemetry API Reference
+- LEO Protocol Hooks
 
 ## Version History
 

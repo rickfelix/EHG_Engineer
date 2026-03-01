@@ -31,7 +31,7 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
    - Performance metrics and improvements
    - Basic usage examples
 
-2. **[API Reference](./ENHANCED_TESTING_API_REFERENCE.md)**
+2. **API Reference**
    - Complete API documentation for all classes and methods
    - Interface definitions and type information
    - Error classification and fix generation details
@@ -49,7 +49,7 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
    - Debug utilities and health checks
    - FAQ and best practices
 
-5. **[Architecture Documentation](./ENHANCED_TESTING_ARCHITECTURE.md)**
+5. **Architecture Documentation**
    - Detailed system architecture diagrams
    - Component interactions and data flow
    - Security and scalability considerations
@@ -70,10 +70,10 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 - [First Test Example](../guides/enhanced-testing-integration.md)
 
 ### API Documentation
-- [TestCollaborationCoordinator](./ENHANCED_TESTING_API_REFERENCE.md#testcollaborationcoordinator)
-- [EnhancedTestingSubAgent](./ENHANCED_TESTING_API_REFERENCE.md#enhancedtestingsubagent)
-- [EnhancedDebuggingSubAgent](./ENHANCED_TESTING_API_REFERENCE.md#enhanceddebuggingsubagent)
-- [TestHandoff Interface](./ENHANCED_TESTING_API_REFERENCE.md#testhandoff)
+- TestCollaborationCoordinator
+- EnhancedTestingSubAgent
+- EnhancedDebuggingSubAgent
+- TestHandoff Interface
 
 ### Integration Examples
 - [Playwright Integration](../guides/enhanced-testing-integration.md)
@@ -86,9 +86,9 @@ This is the comprehensive documentation suite for the Enhanced Testing and Debug
 - [Performance Problems](../guides/enhanced-testing-troubleshooting.md)
 
 ### Architecture Deep Dive
-- [System Overview](./ENHANCED_TESTING_ARCHITECTURE.md#system-overview)
-- [Component Architecture](./ENHANCED_TESTING_ARCHITECTURE.md#detailed-component-architecture)
-- [Self-Healing Selectors](./ENHANCED_TESTING_ARCHITECTURE.md#self-healing-selector-architecture)
+- System Overview
+- Component Architecture
+- Self-Healing Selectors
 
 ## Key Features Covered
 
@@ -142,10 +142,10 @@ The system delivers measurable improvements:
 
 ### Documentation Navigation
 1. **New users**: Start with the [README](enhanced-debugging-readme.md)
-2. **Developers**: Review the [API Reference](./ENHANCED_TESTING_API_REFERENCE.md)
+2. **Developers**: Review the API Reference
 3. **Integration teams**: Follow the [Integration Guide](../guides/enhanced-testing-integration.md)
 4. **Issues**: Check the [Troubleshooting Guide](../guides/enhanced-testing-troubleshooting.md)
-5. **Architecture**: Study the [Architecture Documentation](./ENHANCED_TESTING_ARCHITECTURE.md)
+5. **Architecture**: Study the Architecture Documentation
 
 ### Support Resources
 - Health Check: Run `node scripts/health-check.js`

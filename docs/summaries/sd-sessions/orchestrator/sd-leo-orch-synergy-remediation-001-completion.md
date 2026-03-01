@@ -250,10 +250,10 @@ supabase.from('strategic_directives_v2')
 Expected: `{ status: 'completed', progress: 100 }`
 
 ## Related Documentation
-- [OIV Operational Runbook](../../06_deployment/oiv-operational-runbook.md)
-- [Performance Agent Documentation](../../../.claude/agents/performance-agent.md)
-- [Phase 0 Integration Guide](../../reference/phase-0-integration.md) *(if exists)*
-- [Design Tokens Configuration](../../../config/ehg-design-tokens.json)
+- [OIV Operational Runbook](../../../06_deployment/oiv-operational-runbook.md)
+- Performance Agent Documentation
+- Phase 0 Integration Guide *(if exists)*
+- Design Tokens Configuration
 
 ## Success Metrics
 

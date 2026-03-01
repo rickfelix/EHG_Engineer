@@ -39,7 +39,7 @@ tags: [general, auto-generated]
 - [Key Takeaways](#key-takeaways)
 
 **Date**: 2025-12-29
-**Assessment**: [Full Report](../analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
+**Assessment**: [Full Report](../summaries/analysis/documentation-structure-assessment.md)
 **Status**: Ready for implementation
 
 ---
@@ -278,5 +278,5 @@ Follow complete 4-week roadmap from assessment report
 ---
 
 **Assessment by**: DOCMON Sub-Agent (Information Architecture Lead)
-**Full Report**: [docs/analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md](../analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
+**Full Report**: [docs/analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md](../summaries/analysis/documentation-structure-assessment.md)
 **Ready for**: Immediate implementation
