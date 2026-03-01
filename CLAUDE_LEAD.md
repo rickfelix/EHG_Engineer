@@ -1432,7 +1432,7 @@ Before LEAD approval, you MUST:
 | UI Components | `docs/vision/specs/03-ui-components.md` | React components, layouts |
 | EVA Orchestration | `docs/vision/specs/04-eva-orchestration.md` | EVA modes, token budgets |
 | Agent Hierarchy | `docs/vision/specs/06-hierarchical-agent-architecture.md` | LTREE, CEOs, VPs |
-| Glass Cockpit | `VISION_V2_GLASS_COCKPIT.md` | Design philosophy |
+| Glass Cockpit | `vision-v2-glass-cockpit.md` | Design philosophy |
 
 ### LEAD Approval Gate for Vision V2 SDs
 

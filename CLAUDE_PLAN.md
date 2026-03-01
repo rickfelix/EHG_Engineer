@@ -1778,7 +1778,7 @@ Add this to PRD's `technical_context`:
 
 This PRD implements requirements from:
 - **Primary Spec**: [spec-name.md](path/to/spec) - Sections X, Y, Z
-- **Design Philosophy**: [VISION_V2_GLASS_COCKPIT.md](VISION_V2_GLASS_COCKPIT.md)
+- **Design Philosophy**: [vision-v2-glass-cockpit.md](vision-v2-glass-cockpit.md)
 
 Key spec requirements addressed:
 1. [Requirement from spec Section X]
