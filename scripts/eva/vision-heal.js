@@ -26,6 +26,7 @@ import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { ensureFresh, getGitMeta, warnIfWorktree } from './git-freshness.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -54,6 +55,18 @@ function getSupabase() {
 // ─── SCORE: Output context for Claude Code inline evaluation ─────────────────
 
 async function cmdScore(visionKey = DEFAULT_VISION_KEY, archKey = DEFAULT_ARCH_KEY) {
+  // ─── Git Freshness Check (prevents stale-codebase scoring) ───
+  const gitMeta = getGitMeta();
+  warnIfWorktree(gitMeta);
+  const freshness = ensureFresh();
+  if (freshness.pulled) {
+    console.log('   📝 Git state refreshed before scoring.');
+  }
+  if (!freshness.fresh && !freshness.pulled) {
+    console.warn('   ⚠️  STALE WARNING: Scores may not reflect latest merged work.');
+  }
+  console.log(`   🔍 Scoring codebase at: ${gitMeta.shortSha} (${gitMeta.branch})\n`);
+
   const supabase = getSupabase();
 
   // Load vision dimensions
@@ -119,6 +132,7 @@ async function cmdScore(visionKey = DEFAULT_VISION_KEY, archKey = DEFAULT_ARCH_K
 
 async function cmdPersist(scoreJson, visionKey = DEFAULT_VISION_KEY, archKey = DEFAULT_ARCH_KEY) {
   const supabase = getSupabase();
+  const gitMeta = getGitMeta();
 
   const parsed = JSON.parse(scoreJson);
 
@@ -175,6 +189,10 @@ async function cmdPersist(scoreJson, visionKey = DEFAULT_VISION_KEY, archKey = D
         criteria_count: allDims.length,
         summary: parsed.summary,
         scored_by: 'claude-code-inline',
+        git_sha: gitMeta.sha,
+        git_branch: gitMeta.branch,
+        git_short_sha: gitMeta.shortSha,
+        is_worktree: gitMeta.isWorktree,
       },
     })
     .select('id')
@@ -260,6 +278,9 @@ async function cmdStatus() {
   console.log(`   Latest Score: ${latest.total_score}/100 (${latest.threshold_action})`);
   console.log(`   Scored At: ${latest.scored_at}`);
   console.log(`   Scored By: ${latest.rubric_snapshot?.scored_by || 'unknown'}`);
+  if (latest.rubric_snapshot?.git_short_sha) {
+    console.log(`   Git SHA:   ${latest.rubric_snapshot.git_short_sha} (${latest.rubric_snapshot.git_branch || 'unknown'})`);
+  }
 
   // Per-dimension
   if (latest.dimension_scores) {

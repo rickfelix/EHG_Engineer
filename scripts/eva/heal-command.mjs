@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execFileSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
+import { ensureFresh, getGitMeta, warnIfWorktree } from './git-freshness.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -100,6 +101,18 @@ function parseSDArgs(args) {
 }
 
 async function cmdSDQuery(opts) {
+  // ─── Git Freshness Check (prevents stale-codebase scoring) ───
+  const gitMeta = getGitMeta();
+  warnIfWorktree(gitMeta);
+  const freshness = ensureFresh();
+  if (freshness.pulled) {
+    console.log(`   📝 Git state refreshed before SD heal scoring.`);
+  }
+  if (!freshness.fresh && !freshness.pulled) {
+    console.warn(`   ⚠️  STALE WARNING: SD heal scores may not reflect latest merged work.`);
+  }
+  console.log(`   🔍 Scoring codebase at: ${gitMeta.shortSha} (${gitMeta.branch})\n`);
+
   const supabase = getSupabase();
 
   let query = supabase
@@ -224,6 +237,7 @@ async function cmdSDQuery(opts) {
 
 async function cmdSDPersist(scoreJson, filePath) {
   const supabase = getSupabase();
+  const gitMeta = getGitMeta();
   let rawJson = scoreJson;
   if (filePath) {
     if (!existsSync(filePath)) {
@@ -360,6 +374,10 @@ async function cmdSDPersist(scoreJson, filePath) {
           gaps: sdScore.gaps || [],
           summary: sdScore.summary,
           scored_by: 'claude-code-inline',
+          git_sha: gitMeta.sha,
+          git_branch: gitMeta.branch,
+          git_short_sha: gitMeta.shortSha,
+          is_worktree: gitMeta.isWorktree,
         },
       })
       .select('id')
@@ -582,6 +600,9 @@ async function cmdStatus() {
   if (latestVision) {
     console.log(`    Score: ${latestVision.total_score}/100 (${latestVision.threshold_action})`);
     console.log(`    Date:  ${latestVision.scored_at}`);
+    if (latestVision.rubric_snapshot?.git_short_sha) {
+      console.log(`    Git:   ${latestVision.rubric_snapshot.git_short_sha} (${latestVision.rubric_snapshot.git_branch || '?'})`);
+    }
   } else {
     console.log('    No vision scores. Run: /heal vision');
   }
