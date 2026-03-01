@@ -369,9 +369,29 @@ export async function updatePRDWithAnalyses(supabase, prdId, sdId, existingMetad
   const now = new Date().toISOString();
   const sdContext = { id: sdId, title: sdData.title, scope: sdData.scope };
 
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-044: Query execution result IDs for GATE1_DESIGN_DATABASE metadata check
+  let designResultId = null;
+  let databaseResultId = null;
+  try {
+    const { data: execResults } = await supabase
+      .from('sub_agent_execution_results')
+      .select('id, sub_agent_code')
+      .eq('sd_id', sdId)
+      .in('sub_agent_code', ['DESIGN', 'DATABASE'])
+      .order('created_at', { ascending: false });
+    if (execResults) {
+      for (const r of execResults) {
+        if (r.sub_agent_code === 'DESIGN' && !designResultId) designResultId = r.id;
+        if (r.sub_agent_code === 'DATABASE' && !databaseResultId) databaseResultId = r.id;
+      }
+    }
+  } catch (e) {
+    console.warn('   Warning: Could not query sub-agent execution result IDs:', e.message);
+  }
+
   // Always set design_analysis: full object if output exists, stub if DESIGN ran but had no output
   const design_analysis = designAnalysis
-    ? { generated_at: now, sd_context: sdContext, raw_analysis: designAnalysis.substring(0, 5000) }
+    ? { generated_at: now, sd_context: sdContext, raw_analysis: designAnalysis.substring(0, 5000), ...(designResultId ? { execution_id: designResultId } : {}) }
     : { generated_at: now, sd_context: sdContext, skipped: true, reason: 'no_design_output' };
 
   const database_analysis = databaseAnalysis
@@ -379,7 +399,8 @@ export async function updatePRDWithAnalyses(supabase, prdId, sdId, existingMetad
       generated_at: now,
       sd_context: sdContext,
       raw_analysis: databaseAnalysis.substring(0, 5000),
-      design_informed: true // DESIGN sub-agent was executed (always runs before DATABASE)
+      design_informed: true,
+      ...(databaseResultId ? { execution_id: databaseResultId } : {})
     }
     : null;
 
