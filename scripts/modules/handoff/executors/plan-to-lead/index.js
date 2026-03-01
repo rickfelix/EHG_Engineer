@@ -29,7 +29,8 @@ import {
   createTraceabilityGate,
   createWorkflowROIGate,
   createUserStoryExistenceGate,
-  createDocumentationLinkValidationGate
+  createDocumentationLinkValidationGate,
+  createHealBeforeCompleteGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -117,6 +118,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));
+
+    // Heal-before-complete gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-007-03 FR-004)
+    // SD heal score must meet threshold before final approval
+    gates.push(createHealBeforeCompleteGate(this.supabase));
 
     // Sub-agent orchestration
     gates.push(createSubAgentOrchestrationGate(this.supabase));
