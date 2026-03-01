@@ -3,8 +3,9 @@
  * SD: SD-MAN-GEN-CORRECTIVE-VISION-GAP-008 (V09 Enhancement)
  *
  * Validates that child SDs remain aligned with parent objectives
- * at handoff boundaries. Non-blocking — issues generate warnings
- * that are logged to eva_event_log for audit trail.
+ * at handoff boundaries. Blocking when alignment score < 70% —
+ * low-scoring handoffs are rejected. Issues above threshold generate
+ * warnings that are logged to eva_event_log for audit trail.
  *
  * @module scripts/modules/handoff/executors/exec-to-plan/gates/cascade-alignment-gate
  */
@@ -71,11 +72,19 @@ export function createCascadeAlignmentGate(supabase) {
           warnings.forEach(w => console.log(`   ⚠️  ${w}`));
         }
 
+        const ALIGNMENT_THRESHOLD = 70;
+        const isBlocking = score < ALIGNMENT_THRESHOLD;
+
+        if (isBlocking) {
+          console.log(`   ❌ BLOCKED: Alignment score ${score}% is below ${ALIGNMENT_THRESHOLD}% threshold`);
+          issues.push(`Cascade alignment score ${score}% is below the ${ALIGNMENT_THRESHOLD}% blocking threshold`);
+        }
+
         return {
-          passed: true, // Non-blocking — alignment drift is a warning, not a blocker
+          passed: !isBlocking,
           score,
           max_score: 100,
-          issues: [],
+          issues,
           warnings,
         };
       } catch (err) {
