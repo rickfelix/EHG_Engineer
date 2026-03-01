@@ -267,3 +267,8 @@ For questions about this test evidence:
 **Test Evidence Type**: Infrastructure Testing (CLI Tool)
 **Playwright E2E**: Not Applicable
 **Status**: ✅ READY FOR VERIFICATION
+
+## Files
+
+- [Infrastructure Testing Justification](infrastructure-testing-justification.md)
+- [Test Coverage Summary](test-coverage-summary.md)

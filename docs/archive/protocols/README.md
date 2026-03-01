@@ -186,3 +186,13 @@ docs/archive/
 **Files Archived**: 7 protocol versions (v3.1.5 through v4.1.2)
 **Reason**: Documentation audit cleanup - superseded by v4.3.3
 **Current Protocol**: v4.3.3 (auto-generated from database)
+
+## Files
+
+- [Leo Protocol V3.1.5](leo_protocol_v3.1.5.md)
+- [Leo Protocol V3.1.6 Improvements](leo_protocol_v3.1.6_improvements.md)
+- [Leo Protocol V3.3.0 Boundary Context Skills](leo_protocol_v3.3.0_boundary_context_skills.md)
+- [Leo Protocol V4.0](leo_protocol_v4.0.md)
+- [Leo Protocol V4.1.1 Update](leo_protocol_v4.1.1_update.md)
+- [Leo Protocol V4.1.2 Database First](leo_protocol_v4.1.2_database_first.md)
+- [Leo Protocol V4.1](leo_protocol_v4.1.md)

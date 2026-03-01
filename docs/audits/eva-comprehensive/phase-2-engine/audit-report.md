@@ -1,3 +1,27 @@
+
+## Table of Contents
+
+- [Executive Summary](#executive-summary)
+- [Findings](#findings)
+  - [CRITICAL-1: Reality Gate 9→10 Validates Wrong Artifacts](#critical-1-reality-gate-910-validates-wrong-artifacts)
+  - [CRITICAL-2: Risk Threshold Triple-Inconsistency](#critical-2-risk-threshold-triple-inconsistency)
+  - [HIGH-1: risk_source Enum — Three Divergent Definitions](#high-1-risk_source-enum-three-divergent-definitions)
+  - [HIGH-2: 2-Factor vs 3-Factor Risk Scoring](#high-2-2-factor-vs-3-factor-risk-scoring)
+  - [HIGH-3: Four Architecture v2.0 Fields Missing from Stage 7](#high-3-four-architecture-v20-fields-missing-from-stage-7)
+  - [HIGH-4: pricing_model Enum Missing from Template + Three Variants](#high-4-pricing_model-enum-missing-from-template-three-variants)
+  - [HIGH-5: Aggregate Risk Metrics Not in Template Output](#high-5-aggregate-risk-metrics-not-in-template-output)
+  - [MEDIUM-1: BMC Priority — Enum vs Integer Mismatch](#medium-1-bmc-priority-enum-vs-integer-mismatch)
+  - [MEDIUM-2: BMC Evidence Field — Optional vs Required](#medium-2-bmc-evidence-field-optional-vs-required)
+  - [MEDIUM-3: crossBlockWarnings Missing from BMC Analysis](#medium-3-crossblockwarnings-missing-from-bmc-analysis)
+  - [MEDIUM-4: exit_type Field Location — Top-Level vs Nested](#medium-4-exit_type-field-location-top-level-vs-nested)
+  - [LOW-1: Tier Count Mismatch — Template vs Analysis](#low-1-tier-count-mismatch-template-vs-analysis)
+  - [LOW-2: Two Architecture v2.0 Fields Missing from Stage 9](#low-2-two-architecture-v20-fields-missing-from-stage-9)
+- [Cross-Cutting Observations](#cross-cutting-observations)
+  - [Code Quality Patterns](#code-quality-patterns)
+  - [Vision v4.7 Compliance Matrix](#vision-v47-compliance-matrix)
+  - [Overall Phase 2 Score Breakdown](#overall-phase-2-score-breakdown)
+- [Recommendations](#recommendations)
+
 ---
 category: general
 status: draft

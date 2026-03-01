@@ -10,3 +10,7 @@ This directory contains troubleshooting guides and fix documentation.
 
 ---
 *Auto-organized by DOCMON Sub-Agent*
+- [FIX HOOK ERRORS](FIX_HOOK_ERRORS.md)
+- [FIX TRUNCATION](FIX_TRUNCATION.md)
+- [Github Workflows Yaml Parsing Errors](github-workflows-yaml-parsing-errors.md)
+- [MANUAL MIGRATION REQUIRED](MANUAL_MIGRATION_REQUIRED.md)

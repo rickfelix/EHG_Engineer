@@ -1,3 +1,36 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [🚨 Critical Bug Identified & Resolved](#-critical-bug-identified-resolved)
+- [Root Cause Analysis](#root-cause-analysis)
+  - [Original Problems](#original-problems)
+  - [Files Affected](#files-affected)
+- [Fixes Implemented](#fixes-implemented)
+  - [1. ✅ **EXEC Phase Blocking**](#1-exec-phase-blocking)
+  - [2. ✅ **Real Validation System**](#2-real-validation-system)
+  - [3. ✅ **Completion Prevention**](#3-completion-prevention)
+  - [4. ✅ **Evidence-Based Completion Script**](#4-evidence-based-completion-script)
+  - [5. ✅ **Time-Based Red Flags**](#5-time-based-red-flags)
+- [Remediation Actions Taken](#remediation-actions-taken)
+  - [Immediate Response](#immediate-response)
+  - [System Hardening](#system-hardening)
+- [New Workflow (Fixed)](#new-workflow-fixed)
+  - [Before (Broken)](#before-broken)
+  - [After (Fixed)](#after-fixed)
+- [Usage Instructions](#usage-instructions)
+  - [For EXEC Phase Implementation](#for-exec-phase-implementation)
+  - [Validation Requirements (New)](#validation-requirements-new)
+- [Prevention Measures](#prevention-measures)
+  - [Automatic Safeguards Added](#automatic-safeguards-added)
+  - [Human Verification Required](#human-verification-required)
+- [Testing Results](#testing-results)
+  - [SD-004 Test (Post-Fix)](#sd-004-test-post-fix)
+- [Impact Assessment](#impact-assessment)
+  - [Before Fix](#before-fix)
+  - [After Fix](#after-fix)
+- [Recommendations](#recommendations)
+
 ---
 category: general
 status: draft

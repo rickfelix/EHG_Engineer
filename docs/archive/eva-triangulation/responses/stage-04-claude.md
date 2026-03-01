@@ -1,3 +1,16 @@
+
+## Table of Contents
+
+  - [1. Gap Assessment Table](#1-gap-assessment-table)
+  - [2. Competitor Discovery Recommendation](#2-competitor-discovery-recommendation)
+  - [3. Feature Comparison Decision](#3-feature-comparison-decision)
+  - [4. Scoring Recommendation](#4-scoring-recommendation)
+  - [5. Stage 3 -> Stage 4 Pipeline](#5-stage-3---stage-4-pipeline)
+  - [6. CLI Superiorities (preserve these)](#6-cli-superiorities-preserve-these)
+  - [7. Recommended Stage 4 Schema](#7-recommended-stage-4-schema)
+  - [8. Minimum Viable Change](#8-minimum-viable-change)
+  - [9. Cross-Stage Impact](#9-cross-stage-impact)
+
 ---
 category: general
 status: draft

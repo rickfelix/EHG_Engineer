@@ -180,3 +180,18 @@ This directory contains user guides, setup instructions, and operational procedu
 *Part of LEO Protocol v4.3.3 - Guides Index*
 *Updated: 2025-12-29*
 *Comprehensive index of 54 guide documents*
+
+## Files
+
+- [Agents Integration Guide](agents-integration-guide.md)
+- [BEGINNER GUIDE CI CD SETUP](BEGINNER-GUIDE-CI-CD-SETUP.md)
+- [Database Troubleshooting](database-troubleshooting.md)
+- [Feature Flag Management](feature-flag-management.md)
+- [Learning System Explained](learning-system-explained.md)
+- [Leo Self Improvement Operations](leo-self-improvement-operations.md)
+- [Manual Completion Instructions](manual-completion-instructions.md)
+- [QUICK START SECRETS](QUICK-START-SECRETS.md)
+- [QUICK WINS WEEK1 PROGRESS](QUICK-WINS-WEEK1-PROGRESS.md)
+- [Uat Campaign Guide](uat-campaign-guide.md)
+- [Uat Migration Guide](uat-migration-guide.md)
+- [Working With Worktrees](working-with-worktrees.md)

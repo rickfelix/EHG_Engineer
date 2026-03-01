@@ -1,3 +1,14 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Getting started](#getting-started)
+  - [Install the CLI](#install-the-cli)
+  - [Run the CLI](#run-the-cli)
+- [Docs](#docs)
+- [Breaking changes](#breaking-changes)
+- [Developing](#developing)
+
 ---
 category: feature
 status: draft

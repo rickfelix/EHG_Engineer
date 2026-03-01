@@ -63,3 +63,8 @@ Already identified from sampling 20+ files:
 
 ### Medium
 - DI parameter naming: `db` vs `supabase` with translation at call site
+
+## Files
+
+- [Dossier Reconciliation Report](dossier-reconciliation-report.md)
+- [Phase 4 Blueprint](phase-4-blueprint.md)

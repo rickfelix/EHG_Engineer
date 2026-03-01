@@ -135,3 +135,21 @@ Upcoming migration planning:
 
 *Part of LEO Protocol v4.3.3 - Migration Management*
 *Updated: 2025-12-29*
+
+## Files
+
+- [20251015 Progress Fix Report](20251015_progress_fix_report.md)
+- [Column Rename Migration Notes](column-rename-migration-notes.md)
+- [Feedback Quality Config Migration Report](feedback-quality-config-migration-report.md)
+- [Lifecycle Gap Migrations Summary](lifecycle-gap-migrations-summary.md)
+- [Loader Consolidation](loader-consolidation.md)
+- [Migration Drift Resolution 2025 10 27](migration-drift-resolution-2025-10-27.md)
+- [Prd Duplicates Audit 2026 02 06](prd-duplicates-audit-2026-02-06.md)
+- [PRD TABLE CONSOLIDATION REPORT](PRD_TABLE_CONSOLIDATION_REPORT.md)
+- [Sub Agent Verification Report](sub-agent-verification-report.md)
+- [Supabase Connection Fixed](supabase-connection-fixed.md)
+- [SUPABASE CLI README](SUPABASE_CLI_README.md)
+- [US 001 DELIVERABLES](US-001-DELIVERABLES.md)
+- [US 001 Developer Guide](US-001-developer-guide.md)
+- [US 001 Migration Summary](US-001-migration-summary.md)
+- [Vision V2 Reset And Seed Report](vision-v2-reset-and-seed-report.md)

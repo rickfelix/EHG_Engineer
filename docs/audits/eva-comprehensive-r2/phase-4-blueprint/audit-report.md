@@ -1,3 +1,28 @@
+
+## Table of Contents
+
+- [Section 1: Score Comparison](#section-1-score-comparison)
+- [Section 2: Remediation Verification Matrix](#section-2-remediation-verification-matrix)
+  - [Stage 13: Product Roadmap (Kill Gate)](#stage-13-product-roadmap-kill-gate)
+  - [Stage 14: Technical Architecture](#stage-14-technical-architecture)
+  - [Stage 15: Risk Register (CRITICAL SCOPE FIX)](#stage-15-risk-register-critical-scope-fix)
+  - [Stage 16: Financial Projections (Promotion Gate)](#stage-16-financial-projections-promotion-gate)
+  - [Promotion Gate Logic (Updated)](#promotion-gate-logic-updated)
+- [Section 3: New R2 Findings](#section-3-new-r2-findings)
+  - [Stage 13](#stage-13)
+  - [Stage 14](#stage-14)
+  - [Stage 15](#stage-15)
+  - [Stage 16](#stage-16)
+- [Section 4: Net Delta Analysis](#section-4-net-delta-analysis)
+  - [Improvements (+23 points)](#improvements-23-points)
+  - [Remaining Gaps (12 findings)](#remaining-gaps-12-findings)
+  - [Systemic Pattern Evolution](#systemic-pattern-evolution)
+- [Section 5: Remediation Priority (R2)](#section-5-remediation-priority-r2)
+  - [P1 — HIGH (Recommended for next remediation cycle)](#p1-high-recommended-for-next-remediation-cycle)
+  - [P2 — MEDIUM (Future improvement)](#p2-medium-future-improvement)
+  - [P3 — LOW (Cosmetic)](#p3-low-cosmetic)
+- [Section 6: Files Audited](#section-6-files-audited)
+
 ---
 category: general
 status: draft

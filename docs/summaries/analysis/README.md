@@ -87,3 +87,17 @@ Analysis documents capture:
 
 *Part of LEO Protocol v4.3.3 - Knowledge Management*
 *Updated: 2025-12-29*
+
+## Files
+
+- [AGENT DATA INVESTIGATION REPORT](AGENT_DATA_INVESTIGATION_REPORT.md)
+- [BLOCKING ISSUE SD VIDEO VARIANT](BLOCKING_ISSUE_SD_VIDEO_VARIANT.md)
+- [DATABASE SUBAGENT REVIEW SD CUSTOMER INTEL 001](DATABASE_SUBAGENT_REVIEW_SD-CUSTOMER-INTEL-001.md)
+- [Deliverables Tracking Deep Dive](deliverables-tracking-deep-dive.md)
+- [DOCUMENTATION STRUCTURE ASSESSMENT](DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
+- [ISSUES ANALYSIS SD PRE EXEC ANALYSIS 001](ISSUES_ANALYSIS_SD-PRE-EXEC-ANALYSIS-001.md)
+- [Legacy Sd Markdown Audit Report](legacy-sd-markdown-audit-report.md)
+- [QA DIRECTOR IMPROVEMENT PROPOSAL](QA_DIRECTOR_IMPROVEMENT_PROPOSAL.md)
+- [Resilience Analysis Sd Tech Debt Docs 001](resilience-analysis-sd-tech-debt-docs-001.md)
+- [ROOT CAUSE USER STORY MAPPING GAP](ROOT_CAUSE_USER_STORY_MAPPING_GAP.md)
+- [Sd Field Validation Analysis 2025 10 16](sd-field-validation-analysis-2025-10-16.md)

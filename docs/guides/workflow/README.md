@@ -34,7 +34,7 @@ Complete documentation for the EHG 40-stage venture workflow, from ideation to e
 4. Reference individual stage critiques for specific improvements
 
 ### For Executives
-1. View [workflow diagrams](../stages/overview.mmd) for visual overview
+1. View workflow diagrams in the stages documentation for visual overview
 2. Review critique for strategic recommendations
 3. Check metrics and KPIs in stages.yaml
 4. Monitor backlog for major initiatives
@@ -43,14 +43,13 @@ Complete documentation for the EHG 40-stage venture workflow, from ideation to e
 
 ### Essential Reading
 1. [Stages Definition](stages.yaml) - The canonical source
-2. [Visual Overview](../stages/overview.mmd) - Complete workflow diagram
-3. [Workflow Critique](critique/overview.md) - Analysis and recommendations
+2. [Workflow Critique](critique/overview.md) - Analysis and recommendations
 4. [SOP Index](SOP_INDEX.md) - All operating procedures
 
 ### Implementation Guides
 1. [PRD Crosswalk](prd_crosswalk.md) - What's built vs. what's needed
 2. [Backlog](backlog/backlog.yaml) - Prioritized work items
-3. [Research Briefs](../research/) - Deep-dive analysis templates
+3. [Reference Research](../../reference/research/) - Deep-dive analysis templates
 
 ## Workflow Phases
 
@@ -94,7 +93,11 @@ Owner Mix: LEAD, PLAN, Chairman
 5. Update diagrams if dependencies change
 
 ## Related Documentation
-- [API Documentation](../02_api/) - Technical PRDs
-- [Feature Documentation](../04_features/) - Feature specifications
-- [Research Packs](../research/) - Analysis templates
-- [Visual Diagrams](../stages/) - Mermaid flowcharts
+- [API Documentation](../../02_api/) - Technical PRDs
+- [Feature Documentation](../../04_features/) - Feature specifications
+- [Reference Research](../../reference/research/) - Analysis templates
+
+## Files
+
+- [GENERATION SUMMARY](GENERATION_SUMMARY.md)
+- [Quality Lifecycle Workflow](quality-lifecycle-workflow.md)

@@ -1,3 +1,26 @@
+
+## Table of Contents
+
+- [Metadata](#metadata)
+- [Overview](#overview)
+- [Secondary Output Requirement](#secondary-output-requirement)
+  - [Stage Secondary Outputs by Phase](#stage-secondary-outputs-by-phase)
+- [Capability Library Structure](#capability-library-structure)
+- [Capability Sharing Protocol](#capability-sharing-protocol)
+  - [1. Capability Registration](#1-capability-registration)
+  - [2. Capability Discovery](#2-capability-discovery)
+  - [3. Capability Adoption](#3-capability-adoption)
+  - [4. Capability Evolution](#4-capability-evolution)
+- [Portfolio Coordination Touchpoints](#portfolio-coordination-touchpoints)
+- [Capability Taxonomy](#capability-taxonomy)
+  - [Categories](#categories)
+  - [Reuse Metrics](#reuse-metrics)
+- [Integration with Existing Systems](#integration-with-existing-systems)
+  - [sd_capabilities Table](#sd_capabilities-table)
+  - [Multi-Repo Awareness](#multi-repo-awareness)
+- [Success Metrics](#success-metrics)
+- [Implementation References](#implementation-references)
+
 ---
 category: feature
 status: draft

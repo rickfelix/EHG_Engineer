@@ -265,12 +265,20 @@ function enrichWithGitDates(rootDir, files) {
   const paths = files.map(f => f.relPath.replace(/\\/g, '/'));
   if (paths.length === 0) return;
 
+  // Collect unique top-level directories instead of listing every file path
+  // to avoid command-line-too-long errors on large repos (2000+ files)
+  const topDirs = new Set();
+  for (const p of paths) {
+    const parts = p.split('/');
+    topDirs.add(parts[0]);
+  }
+  const dirArgs = [...topDirs].map(d => `"${d}/"`).join(' ');
+
   try {
     // Single git command: get author date + filename for all tracked files
     const result = execSync(
-      'git log --all --format="GIT_DATE:%aI" --name-only --diff-filter=ACMR -- ' +
-        paths.map(p => `"${p}"`).join(' '),
-      { cwd: rootDir, encoding: 'utf-8', timeout: 30000, maxBuffer: 10 * 1024 * 1024 }
+      'git log --all --format="GIT_DATE:%aI" --name-only --diff-filter=ACMR -- ' + dirArgs,
+      { cwd: rootDir, encoding: 'utf-8', timeout: 60000, maxBuffer: 50 * 1024 * 1024 }
     );
 
     // Parse: find most recent date for each file
