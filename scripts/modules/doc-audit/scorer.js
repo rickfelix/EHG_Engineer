@@ -1,8 +1,9 @@
 /**
- * Doc-Audit Scorer — 13-dimension automated scoring engine
+ * Doc-Audit Scorer — 14-dimension automated scoring engine
  *
  * D01-D10: Structural dimensions (sync, no DB required).
- * D11-D13: Coverage dimensions (async, requires Supabase).
+ * D11-D14: Coverage dimensions (async).
+ *          D11-D13 require Supabase; D14 is filesystem-only.
  *
  * Each scoreD0N function returns { id, name, score, weight, findings, gaps }.
  *
@@ -14,7 +15,7 @@ import { existsSync } from 'fs';
 import { join, dirname, normalize, relative } from 'path';
 import { getDimensions, classifyScore } from './rubric.js';
 import { PROHIBITED_DIRS } from './scanner.js';
-import { scoreD11, scoreD12, scoreD13 } from './coverage-scorer.js';
+import { scoreD11, scoreD12, scoreD13, scoreD14 } from './coverage-scorer.js';
 
 /**
  * Score structural dimensions (D01-D10) only.
@@ -57,8 +58,8 @@ export function scoreAllDimensions(scanResult, rootDir) {
 }
 
 /**
- * Score all 13 dimensions (structural + coverage).
- * Async — D11-D13 query the database.
+ * Score all 14 dimensions (structural + coverage).
+ * Async — D11-D13 query the database, D14 uses filesystem.
  * @param {{ files: FileInfo[], directories: DirInfo[] }} scanResult
  * @param {string} rootDir
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
@@ -109,6 +110,21 @@ export async function scoreAllDimensionsAsync(scanResult, rootDir, supabase) {
       weight: dim.weight,
       findings: result.findings,
       gaps: result.gaps,
+      category: 'coverage',
+    });
+  }
+
+  // D14: Content Accuracy (filesystem-only, different signature from D11-D13)
+  const d14Dim = allDims.find(d => d.id === 'D14');
+  if (d14Dim) {
+    const d14Result = await scoreD14(scanResult, rootDir);
+    dimensions.push({
+      id: 'D14',
+      name: d14Dim.name,
+      score: Math.round(Math.max(0, Math.min(100, d14Result.score))),
+      weight: d14Dim.weight,
+      findings: d14Result.findings,
+      gaps: d14Result.gaps,
       category: 'coverage',
     });
   }

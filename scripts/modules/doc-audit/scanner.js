@@ -157,6 +157,7 @@ function parseFile(fullPath, rootDir) {
       relPath, name, dir, lineCount: 0, hasMetadata: false,
       metadata: {}, links: [], hasTitle: false, hasToc: false,
       isProhibitedLocation: false, isNamingCompliant: true,
+      headings: [], contentSnippet: '',
     };
   }
 
@@ -175,6 +176,16 @@ function parseFile(fullPath, rootDir) {
   // Check for TOC (look for markdown links to anchors)
   const hasToc = lines.some(l => /^\s*[-*]\s+\[.*\]\(#/.test(l));
 
+  // Extract headings (h1-h3) for keyword matching in coverage scoring
+  const headings = lines
+    .filter(l => /^#{1,3}\s+\S/.test(l))
+    .map(l => l.replace(/^#+\s+/, '').trim());
+
+  // Content snippet (first 500 chars after front-matter) for keyword matching
+  const fmEnd = hasMetadata ? content.indexOf('---', 3) : -1;
+  const snippetStart = fmEnd >= 0 ? fmEnd + 3 : 0;
+  const contentSnippet = content.slice(snippetStart, snippetStart + 500).trim();
+
   // Check prohibited location
   const topDir = relPath.split(/[/\\]/)[0];
   const isProhibitedLocation = PROHIBITED_DIRS.includes(topDir) && name !== 'README.md';
@@ -185,6 +196,7 @@ function parseFile(fullPath, rootDir) {
   return {
     relPath, name, dir, lineCount, hasMetadata, metadata,
     links, hasTitle, hasToc, isProhibitedLocation, isNamingCompliant,
+    headings, contentSnippet,
     gitLastModified: null, // filled by enrichWithGitDates
   };
 }
