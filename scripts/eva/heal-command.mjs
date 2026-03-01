@@ -249,6 +249,108 @@ async function cmdSDQuery(opts) {
   console.log('===END_CONTEXT===');
 }
 
+// ─── Learning Capture (SD-LEARN-FIX-LEARNING-IMPROVEMENT-004) ────────────────
+
+/**
+ * Auto-capture learnings when heal scores fall below ACCEPT_THRESHOLD.
+ * Fire-and-forget: errors are logged but never block HEAL_STATUS output.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Array} failingScores - Array of {sdKey, scoreId, score, action}
+ * @param {Object} parsed - Full parsed score JSON with sd_scores array
+ */
+async function captureHealLearnings(supabase, failingScores, parsed) {
+  try {
+    for (const failing of failingScores) {
+      const sdScore = parsed.sd_scores.find(s => s.sd_key === failing.sdKey);
+      if (!sdScore) continue;
+
+      // 1. Query previous scores for delta computation
+      const { data: prevScores } = await supabase
+        .from('eva_vision_scores')
+        .select('total_score, scored_at')
+        .eq('sd_id', failing.sdKey)
+        .order('scored_at', { ascending: false })
+        .limit(2);
+
+      let delta = null;
+      if (prevScores && prevScores.length >= 2) {
+        delta = prevScores[0].total_score - prevScores[1].total_score;
+        const sign = delta >= 0 ? '+' : '';
+        console.log(`\n  📊 Score delta: ${sign}${delta} from previous (${prevScores[1].total_score} → ${prevScores[0].total_score})`);
+      } else {
+        console.log(`\n  📊 First score for ${failing.sdKey} (no delta)`);
+      }
+
+      // 2. Extract dimension gaps (dimensions below threshold)
+      const dims = sdScore.dimensions || [];
+      const gapDims = dims.filter(d => d.score < ACCEPT_THRESHOLD);
+      const keyLearnings = gapDims.map(d => (
+        `[${d.id}] scored ${d.score}/100 (gap: ${ACCEPT_THRESHOLD - d.score}pts) — ${(d.reasoning || '').slice(0, 200)}`
+      ));
+
+      if (sdScore.gaps && sdScore.gaps.length > 0) {
+        keyLearnings.push(...sdScore.gaps.map(g => `[gap] ${g}`));
+      }
+
+      // 3. Create retrospective record
+      const { error: retroError } = await supabase
+        .from('retrospectives')
+        .insert({
+          sd_id: failing.sdKey,
+          title: `Heal loop learning: ${failing.sdKey} scored ${failing.score}/100`,
+          retro_type: 'INCIDENT',
+          generated_by: 'TRIGGER',
+          trigger_event: 'SUB_THRESHOLD_SCORE',
+          status: 'PUBLISHED',
+          target_application: 'EHG_Engineer',
+          learning_category: 'PROCESS_IMPROVEMENT',
+          applies_to_all_apps: true,
+          conducted_date: new Date().toISOString(),
+          key_learnings: keyLearnings,
+          what_went_well: [`Score: ${failing.score}/100`, `Dimensions passing: ${dims.length - gapDims.length}/${dims.length}`],
+          what_needs_improvement: gapDims.map(d => `${d.id}: ${d.score}/100 — needs ${ACCEPT_THRESHOLD - d.score}pt improvement`),
+          quality_score: failing.score,
+          auto_generated: true,
+          metadata: {
+            heal_score: failing.score,
+            threshold: ACCEPT_THRESHOLD,
+            delta,
+            score_id: failing.scoreId,
+            threshold_action: failing.action,
+            dimension_scores: Object.fromEntries(dims.map(d => [d.id, d.score])),
+            gap_count: gapDims.length,
+          },
+        });
+
+      if (retroError) {
+        console.warn(`  ⚠️  Learning capture failed for ${failing.sdKey}: ${retroError.message}`);
+        continue;
+      }
+
+      console.log(`  📚 Learning captured: ${keyLearnings.length} finding(s) for ${failing.sdKey}`);
+
+      // 4. Log to eva_event_log (non-blocking)
+      try {
+        await supabase.from('eva_event_log').insert({
+          event_type: 'heal_learning_captured',
+          event_data: {
+            sd_key: failing.sdKey,
+            total_score: failing.score,
+            delta,
+            gap_dimensions: gapDims.map(d => d.id),
+            threshold: ACCEPT_THRESHOLD,
+          },
+        });
+      } catch (_) {
+        // Silently ignore eva_event_log errors
+      }
+    }
+  } catch (err) {
+    console.warn(`  ⚠️  Learning capture error: ${err.message}`);
+  }
+}
+
 async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
   const supabase = getSupabase();
   const gitMeta = getGitMeta();
@@ -426,6 +528,9 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
     for (const s of needsCorrection) {
       console.log(`    ${s.sdKey}: ${s.score}/100 — run: node scripts/eva/heal-command.mjs sd generate ${s.scoreId}`);
     }
+
+    // SD-LEARN-FIX-LEARNING-IMPROVEMENT-004: Auto-capture learnings for sub-threshold scores
+    await captureHealLearnings(supabase, needsCorrection, parsed);
 
     // SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-5): suppress corrective generation for in-progress SDs
     if (inProgress) {
