@@ -1,8 +1,11 @@
 /**
- * Doc-Audit Rubric — Dimension definitions and weights
+ * Doc-Audit Rubric — 14-dimension definitions and weights
  *
- * Pure data module. No logic, no side-effects.
- * Mirrors the HEAL scoring pattern for documentation health.
+ * D01-D10: Structural dimensions (sync, no DB required).
+ * D11-D14: Coverage dimensions (async, requires Supabase or filesystem).
+ *
+ * Weights are stored for 'full' mode (all 14 sum to 1.0).
+ * getDimensions('structural') rescales D01-D10 to sum to 1.0.
  *
  * Used by:
  *   scripts/modules/doc-audit/scorer.js    (dimension scoring)
@@ -12,70 +15,131 @@
 
 import { GRADE } from '../../../lib/standards/grade-scale.js';
 
-// ─── Dimension Definitions ──────────────────────────────────────────────────
+// ─── Dimension Definitions (full-mode weights, sum = 1.0) ───────────────────
 
 export const DIMENSIONS = [
+  // ── Structural (D01-D10) ──
   {
     id: 'D01',
     name: 'Location Compliance',
-    weight: 0.15,
+    weight: 0.0930,
+    category: 'structural',
     description: 'No .md files in prohibited dirs (src/, lib/, scripts/, tests/, public/). Docs in correct category dirs.',
   },
   {
     id: 'D02',
     name: 'Metadata Completeness',
-    weight: 0.12,
+    weight: 0.0744,
+    category: 'structural',
     description: 'Required YAML front-matter: Category, Status, Version, Author, Last Updated, Tags.',
   },
   {
     id: 'D03',
     name: 'Naming Convention',
-    weight: 0.08,
+    weight: 0.0496,
+    category: 'structural',
     description: 'kebab-case filenames. Allowed exceptions: README, CLAUDE*, API_REFERENCE, CHANGELOG.',
   },
   {
     id: 'D04',
     name: 'Cross-Reference Integrity',
-    weight: 0.12,
+    weight: 0.0744,
+    category: 'structural',
     description: 'Internal links resolve. Relative paths used. No broken links.',
   },
   {
     id: 'D05',
     name: 'Content Freshness',
-    weight: 0.10,
+    weight: 0.0620,
+    category: 'structural',
     description: 'Docs with Last Updated within 90 days. Penalty for stale docs (>180 days).',
   },
   {
     id: 'D06',
     name: 'Index Coverage',
-    weight: 0.10,
+    weight: 0.0620,
+    category: 'structural',
     description: 'Every docs/ subdirectory has a README.md. New docs listed in parent index.',
   },
   {
     id: 'D07',
     name: 'Structural Completeness',
-    weight: 0.10,
+    weight: 0.0620,
+    category: 'structural',
     description: 'Docs >200 lines have TOC. All docs have clear title (# heading). Guides have examples.',
   },
   {
     id: 'D08',
     name: 'Database-First Compliance',
-    weight: 0.08,
+    weight: 0.0496,
+    category: 'structural',
     description: 'LEO protocol docs sourced from leo_protocol_sections. No rogue protocol .md outside generated CLAUDE*.md.',
   },
   {
     id: 'D09',
     name: 'Orphan Detection',
-    weight: 0.08,
+    weight: 0.0496,
+    category: 'structural',
     description: 'Docs linked from at least one index or cross-reference. Dead docs penalized.',
   },
   {
     id: 'D10',
     name: 'Duplicate Detection',
-    weight: 0.07,
+    weight: 0.0434,
+    category: 'structural',
     description: 'No two docs covering the same topic in different locations. Flagged by filename similarity.',
   },
+  // ── Coverage (D11-D14) ──
+  {
+    id: 'D11',
+    name: 'Vision Coverage',
+    weight: 0.1000,
+    category: 'coverage',
+    description: 'Vision capability dimensions have corresponding documentation.',
+  },
+  {
+    id: 'D12',
+    name: 'Architecture Coverage',
+    weight: 0.0800,
+    category: 'coverage',
+    description: 'Architecture plan components have corresponding documentation.',
+  },
+  {
+    id: 'D13',
+    name: 'SD Documentation Coverage',
+    weight: 0.1200,
+    category: 'coverage',
+    description: 'Completed SDs (feature/api/infrastructure, last 180 days) have corresponding documentation.',
+  },
+  {
+    id: 'D14',
+    name: 'Content Accuracy',
+    weight: 0.0800,
+    category: 'coverage',
+    description: 'Documentation content matches codebase reality. Classifies docs as ACCURATE/DRIFTED/ASPIRATIONAL/STALE/UNVERIFIABLE.',
+  },
 ];
+
+// ─── Dimension Accessor ─────────────────────────────────────────────────────
+
+/**
+ * Get dimensions for a scoring mode.
+ * @param {'full'|'structural'} mode
+ *   - 'full': All 14 dimensions (D01-D14), weights sum to 1.0
+ *   - 'structural': D01-D10 only, weights rescaled to sum to 1.0
+ * @returns {Array<{id: string, name: string, weight: number, category: string, description: string}>}
+ */
+export function getDimensions(mode = 'full') {
+  if (mode === 'structural') {
+    const structural = DIMENSIONS.filter(d => d.category === 'structural');
+    const totalWeight = structural.reduce((sum, d) => sum + d.weight, 0);
+    return structural.map(d => ({
+      ...d,
+      weight: +(d.weight / totalWeight).toFixed(4),
+    }));
+  }
+  return DIMENSIONS;
+}
 
 // ─── Grade Thresholds (reuses standard grade scale) ─────────────────────────
 
