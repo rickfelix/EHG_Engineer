@@ -81,14 +81,21 @@ export async function detectAllBlockedState(orchestratorId, supabase = null) {
   const runnableChildren = [];
   const terminalChildren = [];
 
+  // Batch-load handoff and gate data for all non-terminal children
+  const nonTerminalIds = children
+    .filter(c => !TERMINAL_STATES.includes(c.status?.toLowerCase() || 'draft'))
+    .map(c => c.id);
+
+  const batchData = await batchLoadBlockerData(supabase, nonTerminalIds);
+
   for (const child of children) {
     const status = child.status?.toLowerCase() || 'draft';
 
     if (TERMINAL_STATES.includes(status)) {
       terminalChildren.push(child);
     } else {
-      // Check if child is blocked (has unresolved dependencies or explicit blocked flag)
-      const isBlocked = await checkIfChildBlocked(child, children, supabase);
+      // Check if child is blocked using pre-loaded batch data
+      const isBlocked = checkIfChildBlockedFromBatch(child, children, batchData);
       if (isBlocked.blocked) {
         blockedChildren.push({ child, blockerInfo: isBlocked });
       } else {
@@ -116,13 +123,66 @@ export async function detectAllBlockedState(orchestratorId, supabase = null) {
 }
 
 /**
- * Check if a child SD is blocked
+ * Batch-load handoff and gate failure data for multiple child SDs.
+ * Replaces per-child queries with two bulk queries.
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string[]} childIds - Array of child SD UUIDs
+ * @returns {Promise<{handoffsByChild: Map, gateFailuresByChild: Map}>}
+ */
+async function batchLoadBlockerData(supabase, childIds) {
+  const handoffsByChild = new Map();
+  const gateFailuresByChild = new Map();
+
+  if (childIds.length === 0) return { handoffsByChild, gateFailuresByChild };
+
+  // Batch query: all blocked handoffs for these children
+  const { data: handoffs } = await supabase
+    .from('sd_phase_handoffs')
+    .select('sd_id, handoff_type, status, context')
+    .in('sd_id', childIds)
+    .eq('status', 'blocked')
+    .order('created_at', { ascending: false });
+
+  if (handoffs) {
+    for (const h of handoffs) {
+      if (!handoffsByChild.has(h.sd_id)) {
+        handoffsByChild.set(h.sd_id, h); // Keep only the most recent per child
+      }
+    }
+  }
+
+  // Batch query: all failed gates for these children
+  const { data: failures } = await supabase
+    .from('sd_gate_results')
+    .select('sd_id, gate_name, result, details')
+    .in('sd_id', childIds)
+    .eq('result', 'failed')
+    .order('created_at', { ascending: false });
+
+  if (failures) {
+    for (const f of failures) {
+      if (!gateFailuresByChild.has(f.sd_id)) {
+        gateFailuresByChild.set(f.sd_id, []);
+      }
+      const arr = gateFailuresByChild.get(f.sd_id);
+      if (arr.length < 3) arr.push(f); // Keep up to 3 most recent per child
+    }
+  }
+
+  return { handoffsByChild, gateFailuresByChild };
+}
+
+/**
+ * Check if a child SD is blocked using pre-loaded batch data.
+ * Synchronous — all data already fetched.
+ *
  * @param {object} child - Child SD record
  * @param {array} allChildren - All children for dependency resolution
- * @param {object} supabase - Supabase client
- * @returns {Promise<object>} Blocked status and reason
+ * @param {object} batchData - Pre-loaded handoff/gate data from batchLoadBlockerData
+ * @returns {object} Blocked status and reason
  */
-async function checkIfChildBlocked(child, allChildren, supabase) {
+function checkIfChildBlockedFromBatch(child, allChildren, batchData) {
   const blockerReasons = [];
 
   // Check explicit blocked status in metadata
@@ -137,11 +197,9 @@ async function checkIfChildBlocked(child, allChildren, supabase) {
   // Check dependencies
   if (child.dependencies && Array.isArray(child.dependencies)) {
     for (const depId of child.dependencies) {
-      // Find the dependency in children
       const dep = allChildren.find(c => c.id === depId);
       if (dep) {
         if (!TERMINAL_STATES.includes(dep.status?.toLowerCase()) || dep.status === 'completed') {
-          // Dependency not complete
           if (dep.status !== 'completed') {
             blockerReasons.push({
               type: 'dependency_incomplete',
@@ -156,17 +214,9 @@ async function checkIfChildBlocked(child, allChildren, supabase) {
     }
   }
 
-  // Check for handoff blockers
-  const { data: handoffs } = await supabase
-    .from('sd_phase_handoffs')
-    .select('handoff_type, status, context')
-    .eq('sd_id', child.id)
-    .eq('status', 'blocked')
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (handoffs && handoffs.length > 0) {
-    const handoff = handoffs[0];
+  // Check for handoff blockers (from batch data)
+  const handoff = batchData.handoffsByChild.get(child.id);
+  if (handoff) {
     blockerReasons.push({
       type: 'handoff_blocked',
       reason: `Handoff ${handoff.handoff_type} is blocked`,
@@ -175,15 +225,8 @@ async function checkIfChildBlocked(child, allChildren, supabase) {
     });
   }
 
-  // Check for validation gate failures
-  const { data: failures } = await supabase
-    .from('sd_gate_results')
-    .select('gate_name, result, details')
-    .eq('sd_id', child.id)
-    .eq('result', 'failed')
-    .order('created_at', { ascending: false })
-    .limit(3);
-
+  // Check for validation gate failures (from batch data)
+  const failures = batchData.gateFailuresByChild.get(child.id);
   if (failures && failures.length > 0) {
     for (const failure of failures) {
       blockerReasons.push({

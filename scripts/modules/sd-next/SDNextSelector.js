@@ -17,6 +17,9 @@ import { normalizeVenturePrefix } from '../sd-key-generator.js';
 
 import { scoreToBand, bandToNumeric } from '../auto-proceed/urgency-scorer.js';
 import { colors } from './colors.js';
+
+/** Maximum time (ms) allowed for the displayTracks loop before preemption */
+const MAX_DISPLAY_DURATION_MS = 30000;
 import { checkDependenciesResolved, scanMetadataForMisplacedDependencies } from './dependency-resolver.js';
 import { detectLocalSignals } from './local-signals.js';
 import {
@@ -463,7 +466,15 @@ export class SDNextSelector {
     const misplacedDeps = [];
 
     // Process each SD (uses filtered list when venture context is active)
+    const displayStartTime = Date.now();
+    let preempted = false;
     for (const sd of filteredSDs) {
+      // Preemption check: abort if display loop exceeds timeout
+      if (Date.now() - displayStartTime > MAX_DISPLAY_DURATION_MS) {
+        console.log(`${colors.yellow}⚠️  Display preempted after ${MAX_DISPLAY_DURATION_MS / 1000}s — showing ${Object.values(tracks).flat().length} of ${filteredSDs.length} SDs${colors.reset}`);
+        preempted = true;
+        break;
+      }
       if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
       // QA: Check for dependency info in metadata with empty dependencies column
@@ -569,8 +580,8 @@ export class SDNextSelector {
       await displayTrackSection('STANDALONE', 'Standalone', tracks.STANDALONE, sessionContext);
     }
 
-    // Display misplaced dependency warnings
-    if (misplacedDeps.length > 0) {
+    // Display misplaced dependency warnings (skip if preempted)
+    if (!preempted && misplacedDeps.length > 0) {
       console.log(`\n${colors.yellow}${colors.bold}DEPENDENCY QA WARNING:${colors.reset} ${misplacedDeps.length} SD(s) have dependency info in metadata but empty dependencies column`);
       // Show up to 5 examples
       for (const item of misplacedDeps.slice(0, 5)) {

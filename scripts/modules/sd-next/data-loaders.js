@@ -6,6 +6,25 @@
 import { execSync } from 'child_process';
 
 /**
+ * Log a query failure with structured context for diagnostics.
+ * Writes to stderr to avoid polluting display output.
+ *
+ * @param {string} source - Function/query name that failed
+ * @param {Object} error - Supabase error object
+ * @param {Object} [context] - Additional context (table, filters)
+ */
+function logQueryFailure(source, error, context = {}) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    source,
+    error: error?.message || String(error),
+    code: error?.code || null,
+    ...context
+  };
+  process.stderr.write(`[sd-next:query-failure] ${JSON.stringify(entry)}\n`);
+}
+
+/**
  * Load active baseline and its items
  *
  * @param {Object} supabase - Supabase client
@@ -167,7 +186,8 @@ export async function loadSDHierarchy(supabase) {
       .from('strategic_directives_v2')
       .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
       .eq('is_active', true)
-      .order('created_at');
+      .order('created_at')
+      .limit(1000);
 
     if (!sds) return { allSDs, sdHierarchy };
 
@@ -252,9 +272,14 @@ export async function loadVisionScores(supabase) {
     const { data, error } = await supabase
       .from('eva_vision_scores')
       .select('sd_id, total_score, scored_at')
-      .order('scored_at', { ascending: false });
+      .order('scored_at', { ascending: false })
+      .limit(5000);
 
-    if (error || !data || data.length === 0) return result;
+    if (error) {
+      logQueryFailure('loadVisionScores', error, { table: 'eva_vision_scores' });
+      return result;
+    }
+    if (!data || data.length === 0) return result;
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -301,15 +326,27 @@ export async function loadVisionScores(supabase) {
 export async function countActionableBaselineItems(supabase, baselineItems) {
   if (!baselineItems || !baselineItems.length) return 0;
 
-  let actionableCount = 0;
-  for (const item of baselineItems) {
-    // Use sd_key with fallback to id (for UUID lookups)
-    const { data: sd } = await supabase
-      .from('strategic_directives_v2')
-      .select('status, is_active')
-      .or(`sd_key.eq.${item.sd_id},id.eq.${item.sd_id}`)
-      .single();
+  const sdIds = baselineItems.map(item => item.sd_id);
 
+  // Batch query: fetch all baseline SDs in one call
+  const { data: sds } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, id, status, is_active')
+    .or(`sd_key.in.(${sdIds.join(',')}),id.in.(${sdIds.join(',')})`)
+    .limit(sdIds.length * 2);
+
+  if (!sds) return 0;
+
+  // Build lookup by both sd_key and id
+  const sdMap = new Map();
+  for (const sd of sds) {
+    sdMap.set(sd.sd_key, sd);
+    sdMap.set(sd.id, sd);
+  }
+
+  let actionableCount = 0;
+  for (const sdId of sdIds) {
+    const sd = sdMap.get(sdId);
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
       actionableCount++;
     }
