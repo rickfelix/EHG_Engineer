@@ -445,7 +445,7 @@ All commands and sub-agents must run inline/foreground to maintain workflow cont
 
 **Available since**: Claude Code v2.1.4
 
-**Pattern Reference**: See `docs/patterns/PAT-AUTO-PROCEED-001.md` for full analysis of the background task enforcement gap.
+**Pattern Reference**: See `docs/patterns/pat-auto-proceed-001.md` for full analysis of the background task enforcement gap.
 
 ### Pause Points (When ON)
 

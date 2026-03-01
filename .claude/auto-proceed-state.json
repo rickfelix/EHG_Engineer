@@ -1,13 +1,13 @@
 {
   "isActive": true,
   "wasInterrupted": false,
-  "currentSd": "SD-MAN-INFRA-VISION-HEAL-PLATFORM-001-15",
+  "currentSd": "SD-MAN-ORCH-VISION-HEAL-SCORE-93-002-04-B",
   "currentPhase": "EXEC",
-  "currentTask": "Implementing V1-Growth: Venture Growth Automation Enhancement",
+  "currentTask": "Implementing Data Contracts, CLI Authority & Compute Posture Enhancement",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 0,
   "version": "1.0.0",
-  "clearedAt": "2026-02-22T16:30:58.391Z",
-  "lastUpdatedAt": "2026-02-27T20:34:31.562Z"
+  "clearedAt": "2026-03-01T03:36:25.685Z",
+  "lastUpdatedAt": "2026-03-01T06:52:01.977Z"
 }

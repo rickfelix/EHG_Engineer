@@ -111,9 +111,9 @@ EHG_Engineer/
 ## Important Files
 
 - [Windows Setup Guide](docs/guides/windows-setup-guide.md) - Windows development without WSL
-- [IMPORTANT_DATABASE_DISTINCTION.md](docs/operations/IMPORTANT_DATABASE_DISTINCTION.md) - Critical info about database separation
-- [PROJECT_REGISTRATION_GUIDE.md](docs/guides/PROJECT_REGISTRATION_GUIDE.md) - How to add new projects
-- [SIMPLE_PROJECT_SETUP.md](docs/guides/SIMPLE_PROJECT_SETUP.md) - Simplified setup instructions
+- [important-database-distinction.md](docs/operations/important-database-distinction.md) - Critical info about database separation
+- [project-registration-guide.md](docs/guides/project-registration-guide.md) - How to add new projects
+- [simple-project-setup.md](docs/guides/simple-project-setup.md) - Simplified setup instructions
 - `.env.project-template` - Template for new projects
 
 ## Support

@@ -686,7 +686,7 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Branch Strategy**: `eng/` prefix for EHG_Engineer, standard prefixes for EHG app features
 **Size**: <100 lines ideal, <200 max
 
-**Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
+**Full Guidelines**: See `docs/03_protocols_and_standards/leo-git-commit-guidelines-v4.2.0.md`
 
 ## PR Size Guidelines
 
@@ -813,7 +813,7 @@ const solution = await kb.getSolution('PAT-003');
 | Production gen (Stage 17) | `ehg/scripts/genesis/production-generator.js` |
 
 ### Full Documentation
-- Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
+- Implementation guide: `docs/architecture/genesis-implementation-guide.md`
 - Quick reference: `docs/reference/genesis-codebase-guide.md`
 
 ## Parent-Child SD Hierarchy
