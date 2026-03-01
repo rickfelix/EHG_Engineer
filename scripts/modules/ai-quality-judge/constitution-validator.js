@@ -6,7 +6,7 @@
  *
  * AEGIS Integration (Phase 2):
  * This validator now supports routing through the AEGIS unified governance system.
- * Set USE_AEGIS=true in environment or call setAegisMode(true) to enable.
+ * AEGIS enforcement is now active by default. Set USE_AEGIS=false to disable.
  */
 
 import { TABLES, VIOLATION_SEVERITY } from './config.js';
@@ -37,8 +37,9 @@ export class ConstitutionValidator {
   constructor(supabase) {
     this.supabase = supabase;
     this.constitutionRules = null;
-    // AEGIS feature flag - defaults to env var or false
-    this.useAegis = process.env.USE_AEGIS === 'true' || false;
+    // AEGIS enforcement active by default (GOV-008)
+    // Set USE_AEGIS=false to explicitly disable
+    this.useAegis = process.env.USE_AEGIS !== 'false';
   }
 
   /**

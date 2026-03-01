@@ -34,7 +34,7 @@ describe('Shared DFE Escalation Gate', () => {
   it('creates gate with custom source parameter', () => {
     const gate = createDFEEscalationGate(mockSupabase, 'lead-to-plan-gate');
     expect(gate.name).toBe('DFE_ESCALATION_GATE');
-    expect(gate.required).toBe(false);
+    expect(gate.required).toBe(true); // V04: blocking mode
     expect(typeof gate.validator).toBe('function');
   });
 
@@ -43,7 +43,7 @@ describe('Shared DFE Escalation Gate', () => {
     expect(gate.name).toBe('DFE_ESCALATION_GATE');
   });
 
-  it('passes as advisory gate even on error', async () => {
+  it('fails closed on error (V04: blocking mode)', async () => {
     const brokenSupabase = {
       from: vi.fn().mockImplementation(() => { throw new Error('DB down'); }),
     };
@@ -56,9 +56,9 @@ describe('Shared DFE Escalation Gate', () => {
       qualityScore: 60,
     });
 
-    expect(result.passed).toBe(true);
-    expect(result.gate_status).toBe('SKIPPED');
-    expect(result.warnings).toHaveLength(1);
+    expect(result.passed).toBe(false); // V04: fail-closed
+    expect(result.gate_status).toBe('ERROR');
+    expect(result.issues).toHaveLength(1);
   });
 
   it('returns PASS when confidence is high', async () => {

@@ -1,10 +1,11 @@
 /**
- * Shared DFE Escalation Advisory Gate
- * Part of SD-MAN-GEN-CORRECTIVE-VISION-GAP-003
+ * Shared DFE Escalation Blocking Gate
+ * Part of SD-MAN-ORCH-VISION-GOVERNANCE-ENFORCEMENT-001-B
  *
  * Wires evaluateAndEscalate() into any handoff gate pipeline.
- * Advisory (required: false) — never blocks handoffs, but routes
- * ESCALATE decisions to chairman_decisions table for governance.
+ * Blocking (required: true) — blocks handoffs when DFE returns
+ * ESCALATE until chairman acknowledges via chairman_decisions table.
+ * Supports --force override with audit logging.
  *
  * Replaces per-executor copies with a single shared gate creator.
  */
@@ -13,7 +14,61 @@ import { evaluate } from '../../../../lib/governance/decision-filter-engine.js';
 import {
   evaluateAndEscalate,
   requiresEscalation,
+  ESCALATION_STATUS,
 } from '../../../../lib/governance/chairman-escalation.js';
+
+/**
+ * Check if the chairman has acknowledged a pending escalation for this SD.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdId - SD UUID or key
+ * @returns {Promise<{acknowledged: boolean, decision: Object|null}>}
+ */
+async function checkChairmanAcknowledgment(supabase, sdId) {
+  if (!supabase || !sdId) return { acknowledged: false, decision: null };
+
+  const { data, error } = await supabase
+    .from('chairman_decisions')
+    .select('id, status, updated_at')
+    .or(`context->>sd_id.eq.${sdId},context->>sd_key.eq.${sdId}`)
+    .eq('decision_type', 'dfe_escalation')
+    .in('status', [ESCALATION_STATUS.APPROVED, ESCALATION_STATUS.REVIEWED])
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    return { acknowledged: false, decision: null };
+  }
+
+  return { acknowledged: true, decision: data[0] };
+}
+
+/**
+ * Log a force override to the governance audit log.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} context - Override context
+ */
+async function logForceOverride(supabase, context) {
+  if (!supabase) return;
+
+  try {
+    await supabase.from('governance_audit_log').insert({
+      event_type: 'escalation_force_override',
+      severity: 'high',
+      gate_name: 'DFE_ESCALATION_GATE',
+      sd_key: context.sdKey || null,
+      details: {
+        escalation_id: context.escalationId,
+        confidence: context.confidence,
+        source: context.source,
+        overridden_at: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.log(`   ⚠️  Audit log write failed: ${err.message}`);
+  }
+}
 
 /**
  * Create the DFE_ESCALATION_GATE validator
@@ -26,39 +81,118 @@ export function createDFEEscalationGate(supabase, source = 'handoff-gate') {
   return {
     name: 'DFE_ESCALATION_GATE',
     validator: async (ctx) => {
-      console.log('\n🔍 DFE Escalation Gate (Advisory)');
+      console.log('\n🔍 DFE Escalation Gate (Blocking)');
       console.log('-'.repeat(50));
 
       try {
         const gateScore = ctx.gateResults?.normalizedScore ?? ctx.qualityScore ?? 85;
         const confidence = gateScore / 100;
+        const sdKey = ctx.sdKey || ctx.sdId;
+        const sdId = ctx.sdUuid || ctx.sdId;
+        const forceOverride = ctx.force === true || ctx.options?.force === true;
+
+        // Build DFE context — include cost data if available for V07 enforcement
+        const dfeContext = { source };
+        if (ctx.cost != null) {
+          dfeContext.cost = ctx.cost;
+          dfeContext.stageType = ctx.stageType || ctx.phase || 'DEFAULT';
+        }
 
         const { dfeResult, escalation } = await evaluateAndEscalate(
           {
             confidence,
             gateType: 'PHASE_GATE',
-            sdId: ctx.sdUuid || ctx.sdId,
-            sdKey: ctx.sdKey || ctx.sdId,
-            context: { source },
+            sdId,
+            sdKey,
+            context: dfeContext,
           },
           evaluate,
           supabase
         );
+
+        // V07: Cost-blocked decisions get separate handling
+        if (dfeResult.decision === 'BLOCK' && dfeResult.costEvaluation?.blocked) {
+          console.log(`   🚫 COST BLOCK: Compute budget exceeded (${dfeResult.costEvaluation.cost} >= ${dfeResult.costEvaluation.threshold.escalate})`);
+
+          if (forceOverride) {
+            console.log(`   ⚡ Force override applied — bypassing cost block`);
+            await logForceOverride(supabase, { sdKey, escalationId: 'cost-block', confidence, source });
+            return {
+              passed: true,
+              score: 60,
+              max_score: 100,
+              issues: [],
+              warnings: [`Cost block FORCE-OVERRIDDEN (cost: ${dfeResult.costEvaluation.cost})`],
+              gate_status: 'COST_FORCE_OVERRIDE',
+              dfe_decision: dfeResult.decision,
+            };
+          }
+
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`Compute budget exceeded: ${dfeResult.reasoning}`],
+            warnings: [],
+            gate_status: 'COST_BLOCKED',
+            dfe_decision: dfeResult.decision,
+            cost_evaluation: dfeResult.costEvaluation,
+          };
+        }
 
         if (requiresEscalation(dfeResult)) {
           const escId = escalation?.id || 'pending';
           console.log(`   ⚠️  DFE decision: ESCALATE (confidence ${confidence.toFixed(2)})`);
           console.log(`   📋 Chairman escalation created: ${escId}`);
 
+          // Check if chairman has already acknowledged this escalation
+          const { acknowledged, decision: ackDecision } = await checkChairmanAcknowledgment(supabase, sdId);
+
+          if (acknowledged) {
+            console.log(`   ✅ Chairman acknowledged escalation (${ackDecision.status} at ${ackDecision.updated_at})`);
+            return {
+              passed: true,
+              score: 90,
+              max_score: 100,
+              issues: [],
+              warnings: [
+                `DFE escalated but chairman acknowledged (${ackDecision.status}, id: ${escId})`,
+              ],
+              gate_status: 'ESCALATION_ACKNOWLEDGED',
+              dfe_decision: dfeResult.decision,
+              escalation_id: escId,
+            };
+          }
+
+          // Check for --force override
+          if (forceOverride) {
+            console.log(`   ⚡ Force override applied — bypassing escalation block`);
+            await logForceOverride(supabase, { sdKey, escalationId: escId, confidence, source });
+            return {
+              passed: true,
+              score: 70,
+              max_score: 100,
+              issues: [],
+              warnings: [
+                `DFE escalation FORCE-OVERRIDDEN (confidence ${confidence.toFixed(2)}, id: ${escId})`,
+              ],
+              gate_status: 'FORCE_OVERRIDE',
+              dfe_decision: dfeResult.decision,
+              escalation_id: escId,
+            };
+          }
+
+          // Block: escalation pending, no ack, no force
+          console.log(`   🚫 BLOCKED: Escalation pending chairman acknowledgment`);
           return {
-            passed: true,
-            score: 80,
+            passed: false,
+            score: 0,
             max_score: 100,
-            issues: [],
-            warnings: [
-              `DFE escalated to chairman (confidence ${confidence.toFixed(2)}, id: ${escId})`,
+            issues: [
+              `DFE escalation blocks handoff (confidence ${confidence.toFixed(2)}, id: ${escId}). Chairman acknowledgment required.`,
             ],
-            gate_status: 'ADVISORY_ESCALATION',
+            warnings: [],
+            gate_status: 'BLOCKED_ESCALATION',
             dfe_decision: dfeResult.decision,
             escalation_id: escId,
           };
@@ -75,17 +209,17 @@ export function createDFEEscalationGate(supabase, source = 'handoff-gate') {
           dfe_decision: dfeResult.decision,
         };
       } catch (error) {
-        console.log(`   ℹ️  DFE escalation check skipped: ${error.message}`);
+        console.log(`   ⚠️  DFE escalation gate error: ${error.message}`);
         return {
-          passed: true,
-          score: 100,
+          passed: false,
+          score: 0,
           max_score: 100,
-          issues: [],
-          warnings: [`DFE escalation gate skipped: ${error.message}`],
-          gate_status: 'SKIPPED',
+          issues: [`DFE escalation gate failed: ${error.message}`],
+          warnings: [],
+          gate_status: 'ERROR',
         };
       }
     },
-    required: false,
+    required: true,
   };
 }
