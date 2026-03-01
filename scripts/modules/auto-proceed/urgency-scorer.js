@@ -173,6 +173,17 @@ export function calculateUrgencyScore({
     }
   }
 
+  // Factor 9: Escalation Status (weight: 0.20)
+  // SDs with active DFE escalations get a priority boost to ensure
+  // escalated items are addressed before non-escalated work.
+  // Checks sd.metadata.has_active_escalation (set by DFE gate) or escalationActive param.
+  const hasEscalation = sd?.metadata?.has_active_escalation === true
+    || sd?.metadata?.escalation_status === 'pending';
+  if (hasEscalation) {
+    score += 0.20;
+    reason_codes.push('escalated_by_dfe');
+  }
+
   // Clamp final score to valid range
   score = Math.max(0, Math.min(1, score));
 
@@ -180,7 +191,7 @@ export function calculateUrgencyScore({
     score: Math.round(score * 100) / 100,
     band: scoreToBand(score),
     reason_codes: reason_codes.length > 0 ? reason_codes : ['baseline'],
-    model_version: 'v1.2.0'
+    model_version: 'v1.3.0'
   };
 }
 

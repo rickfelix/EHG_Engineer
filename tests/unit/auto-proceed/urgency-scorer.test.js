@@ -70,7 +70,7 @@ describe('Urgency Scorer', () => {
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
       expect(result.band).toBeDefined();
-      expect(result.model_version).toBe('v1.1.0');
+      expect(result.model_version).toBe('v1.3.0');
     });
 
     it('should boost score for critical priority', () => {
