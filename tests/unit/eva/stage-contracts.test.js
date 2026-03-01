@@ -71,9 +71,12 @@ describe('stage-contracts', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('warns when upstream stage data is unavailable', () => {
+    it('errors when upstream stage data with required fields is unavailable', () => {
+      // SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V05): Missing required upstream is now an error
       const result = validatePreStage(2, new Map(), { logger: silentLogger });
-      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toMatch(/data missing.*required fields/i);
     });
 
     it('handles flat object as upstream data', () => {

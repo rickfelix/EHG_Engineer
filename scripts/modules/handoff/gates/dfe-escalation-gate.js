@@ -44,6 +44,19 @@ async function checkChairmanAcknowledgment(supabase, sdId) {
 }
 
 /**
+ * Validate that the requesting context has chairman-level authorization.
+ * SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V02: chairman_governance_model)
+ *
+ * @param {Object} ctx - Gate validation context
+ * @returns {{ authorized: boolean, role: string|null }}
+ */
+function validateChairmanRole(ctx) {
+  const role = ctx.role || ctx.options?.role || ctx.userRole || null;
+  const isChairman = role === 'chairman' || role === 'admin' || role === 'owner';
+  return { authorized: isChairman, role };
+}
+
+/**
  * Log a force override to the governance audit log.
  *
  * @param {Object} supabase - Supabase client
@@ -62,6 +75,8 @@ async function logForceOverride(supabase, context) {
         escalation_id: context.escalationId,
         confidence: context.confidence,
         source: context.source,
+        role_verified: context.roleVerified ?? null,
+        role: context.role ?? null,
         overridden_at: new Date().toISOString(),
       },
     });
@@ -115,14 +130,28 @@ export function createDFEEscalationGate(supabase, source = 'handoff-gate') {
           console.log(`   🚫 COST BLOCK: Compute budget exceeded (${dfeResult.costEvaluation.cost} >= ${dfeResult.costEvaluation.threshold.escalate})`);
 
           if (forceOverride) {
-            console.log(`   ⚡ Force override applied — bypassing cost block`);
-            await logForceOverride(supabase, { sdKey, escalationId: 'cost-block', confidence, source });
+            const { authorized, role } = validateChairmanRole(ctx);
+            if (!authorized) {
+              console.log(`   🚫 UNAUTHORIZED: Force override requires chairman role (got: ${role || 'none'})`);
+              await logForceOverride(supabase, { sdKey, escalationId: 'cost-block', confidence, source, roleVerified: false, role });
+              return {
+                passed: false,
+                score: 0,
+                max_score: 100,
+                issues: [`UNAUTHORIZED_OVERRIDE: Force override on cost block requires chairman role (got: ${role || 'none'})`],
+                warnings: [],
+                gate_status: 'UNAUTHORIZED_OVERRIDE',
+                dfe_decision: dfeResult.decision,
+              };
+            }
+            console.log(`   ⚡ Force override applied — bypassing cost block (role: ${role})`);
+            await logForceOverride(supabase, { sdKey, escalationId: 'cost-block', confidence, source, roleVerified: true, role });
             return {
               passed: true,
               score: 60,
               max_score: 100,
               issues: [],
-              warnings: [`Cost block FORCE-OVERRIDDEN (cost: ${dfeResult.costEvaluation.cost})`],
+              warnings: [`Cost block FORCE-OVERRIDDEN by ${role} (cost: ${dfeResult.costEvaluation.cost})`],
               gate_status: 'COST_FORCE_OVERRIDE',
               dfe_decision: dfeResult.decision,
             };
@@ -164,17 +193,32 @@ export function createDFEEscalationGate(supabase, source = 'handoff-gate') {
             };
           }
 
-          // Check for --force override
+          // Check for --force override (requires chairman role — V02)
           if (forceOverride) {
-            console.log(`   ⚡ Force override applied — bypassing escalation block`);
-            await logForceOverride(supabase, { sdKey, escalationId: escId, confidence, source });
+            const { authorized, role } = validateChairmanRole(ctx);
+            if (!authorized) {
+              console.log(`   🚫 UNAUTHORIZED: Force override requires chairman role (got: ${role || 'none'})`);
+              await logForceOverride(supabase, { sdKey, escalationId: escId, confidence, source, roleVerified: false, role });
+              return {
+                passed: false,
+                score: 0,
+                max_score: 100,
+                issues: [`UNAUTHORIZED_OVERRIDE: Force override on escalation requires chairman role (got: ${role || 'none'})`],
+                warnings: [],
+                gate_status: 'UNAUTHORIZED_OVERRIDE',
+                dfe_decision: dfeResult.decision,
+                escalation_id: escId,
+              };
+            }
+            console.log(`   ⚡ Force override applied — bypassing escalation block (role: ${role})`);
+            await logForceOverride(supabase, { sdKey, escalationId: escId, confidence, source, roleVerified: true, role });
             return {
               passed: true,
               score: 70,
               max_score: 100,
               issues: [],
               warnings: [
-                `DFE escalation FORCE-OVERRIDDEN (confidence ${confidence.toFixed(2)}, id: ${escId})`,
+                `DFE escalation FORCE-OVERRIDDEN by ${role} (confidence ${confidence.toFixed(2)}, id: ${escId})`,
               ],
               gate_status: 'FORCE_OVERRIDE',
               dfe_decision: dfeResult.decision,
@@ -183,7 +227,7 @@ export function createDFEEscalationGate(supabase, source = 'handoff-gate') {
           }
 
           // Block: escalation pending, no ack, no force
-          console.log(`   🚫 BLOCKED: Escalation pending chairman acknowledgment`);
+          console.log('   🚫 BLOCKED: Escalation pending chairman acknowledgment');
           return {
             passed: false,
             score: 0,
