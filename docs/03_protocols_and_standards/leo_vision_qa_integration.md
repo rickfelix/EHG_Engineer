@@ -360,7 +360,7 @@ docs/verification-packages/[SD-ID]/
 **Reference Files Required**:
 - `docs/strategic_directives/SD-2025-01-30-A.md` (Strategic Directive)
 - `docs/product-requirements/SD-2025-01-30-A-PRD-portal.md` (PRD)
-- `docs/03_protocols_and_standards/leo_protocol_v3.1.5.md` (Protocol)
+- `docs/03_protocols_and_standards/leo-protocol-v3.1.5.md` (Protocol)
 - `docs/03_protocols_and_standards/leo_vision_qa_integration.md` (Vision QA Guidelines)
 ```
 

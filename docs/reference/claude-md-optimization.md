@@ -375,7 +375,7 @@ Areas for potential future optimization:
 
 - [Database Schema](../01_architecture/database_schema.md) - leo_protocol_sections table
 - [CLAUDE File Generator](../reference/claude-md-generation.md) - Generation process
-- [Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - File organization
+- [Documentation Standards](../03_protocols_and_standards/documentation-standards.md) - File organization
 
 ## Version History
 

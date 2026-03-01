@@ -188,7 +188,7 @@ The stage aims to create a **living competitive intelligence system** that evolv
    - Stage 2: Generic "multi-agent AI system" concept only (not framework-specific)
    - Stage 3: References PLAN agent (LEO Protocol), NOT CrewAI
 2. **SD-CREWAI-ARCHITECTURE-001 (Phase 0, pre-dossier)**: External architectural decision
-   - Evidence: DELTA_LOG_PHASE4.md:245, DELTA_LOG_PHASE5.md:347
+   - Evidence: delta-log-phase4.md:245, delta-log-phase5.md:347
    - Context: CrewAI framework adoption mandated externally, NOT derived from Stages 1-3 requirements
 3. **Phase 4-13 (Nov 5-6, 2025)**: CrewAI integration documented retroactively
    - 28 CrewAI crews proliferate (112 agent roles total)
@@ -200,8 +200,8 @@ The stage aims to create a **living competitive intelligence system** that evolv
 - `/../../dossiers/stage-25/03_canonical-definition.md` (line 10)
 - `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-17)
 - `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-15)
-- `/docs/workflow/dossiers/DELTA_LOG_PHASE4.md` (line 245)
-- `/docs/workflow/dossiers/DELTA_LOG_PHASE5.md` (line 347)
+- `/docs/workflow/dossiers/delta-log-phase4.md` (line 245)
+- `/docs/workflow/dossiers/delta-log-phase5.md` (line 347)
 
 ---
 

@@ -433,7 +433,7 @@ try {
 - `OBSERVABILITY-README.md` - Full observability system docs
 - `C1.3-COMPLETION-SUMMARY.md` - Implementation details
 - `observability-example.cjs` - Usage examples
-- `MIGRATION-AGENT-METRICS.md` - Database migration guide
+- `migration-agent-metrics.md` - Database migration guide
 
 ---
 

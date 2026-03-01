@@ -167,12 +167,12 @@ This directory contains detailed operating dossiers for each of the 40 stages in
 - **Phase 13**: ✅ Generated Stages 37, 38, 39, 40 (final batch of 4) — 2025-11-06 — Avg: 99/100 ⭐ EXCELLENT — **100% MILESTONE 🎉**
 
 ### Next Phases:
-- **Phase 14**: FINAL_SUMMARY_REPORT.md — Comprehensive retrospective & aggregate analysis (replaces Phase 14 separate kickoff)
+- **Phase 14**: final-summary-report.md — Comprehensive retrospective & aggregate analysis (replaces Phase 14 separate kickoff)
 - **Phase 15**: Execute SD-RECURSION-ENGINE-001, SD-METRICS-FRAMEWORK-001, SD-CRITIQUE-TEMPLATE-UPDATE-001 (Wave 1)
 
 ### Mid-Point Retrospective:
 - **Triggered**: 70% milestone (28/40 stages complete)
-- **Document**: `MIDPOINT_REVIEW.md` (auto-generated in Phase 10)
+- **Document**: `midpoint-review.md` (auto-generated in Phase 10)
 - **Scope**: Quality trends, recursion taxonomy, agent/crew growth, SD backlog prioritization
 - **Wave 1 Preparation**: 3 SDs queued for LEAD phase (see Phase 11 summary)
 
@@ -213,17 +213,17 @@ cat docs/workflow/critique/stage-01.md
 
 ## Files
 
-- [DELTA LOG](DELTA_LOG.md)
-- [DELTA LOG PHASE10](DELTA_LOG_PHASE10.md)
-- [DELTA LOG PHASE11](DELTA_LOG_PHASE11.md)
-- [DELTA LOG PHASE12](DELTA_LOG_PHASE12.md)
-- [DELTA LOG PHASE13](DELTA_LOG_PHASE13.md)
-- [DELTA LOG PHASE4](DELTA_LOG_PHASE4.md)
-- [DELTA LOG PHASE5](DELTA_LOG_PHASE5.md)
-- [DELTA LOG PHASE6](DELTA_LOG_PHASE6.md)
-- [DELTA LOG PHASE7](DELTA_LOG_PHASE7.md)
-- [DELTA LOG PHASE8](DELTA_LOG_PHASE8.md)
-- [DELTA LOG PHASE9](DELTA_LOG_PHASE9.md)
-- [FINAL SUMMARY REPORT](FINAL_SUMMARY_REPORT.md)
-- [MIDPOINT REVIEW](MIDPOINT_REVIEW.md)
-- [PHASE 09 BATCH SUMMARY](PHASE-09-BATCH-SUMMARY.md)
+- [DELTA LOG](delta-log.md)
+- [DELTA LOG PHASE10](delta-log-phase10.md)
+- [DELTA LOG PHASE11](delta-log-phase11.md)
+- [DELTA LOG PHASE12](delta-log-phase12.md)
+- [DELTA LOG PHASE13](delta-log-phase13.md)
+- [DELTA LOG PHASE4](delta-log-phase4.md)
+- [DELTA LOG PHASE5](delta-log-phase5.md)
+- [DELTA LOG PHASE6](delta-log-phase6.md)
+- [DELTA LOG PHASE7](delta-log-phase7.md)
+- [DELTA LOG PHASE8](delta-log-phase8.md)
+- [DELTA LOG PHASE9](delta-log-phase9.md)
+- [FINAL SUMMARY REPORT](final-summary-report.md)
+- [MIDPOINT REVIEW](midpoint-review.md)
+- [PHASE 09 BATCH SUMMARY](phase-09-batch-summary.md)

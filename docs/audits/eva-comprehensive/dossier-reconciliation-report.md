@@ -134,22 +134,22 @@ The README uses **legacy stage names** that differ significantly from Vision v4.
 
 | File | Era | Content | Recommendation |
 |------|:---:|---------|:--------------:|
-| `DELTA_LOG.md` | 40-stage | Original delta log | ARCHIVE |
-| `DELTA_LOG_PHASE4.md` | 40-stage | Phase 4 changes | ARCHIVE |
-| `DELTA_LOG_PHASE5.md` | 40-stage | Phase 5 changes | ARCHIVE |
-| `DELTA_LOG_PHASE6.md` | 40-stage | Phase 6 changes | ARCHIVE |
-| `DELTA_LOG_PHASE7.md` | 40-stage | Phase 7 changes | ARCHIVE |
-| `DELTA_LOG_PHASE8.md` | 40-stage | Phase 8 changes | ARCHIVE |
-| `DELTA_LOG_PHASE9.md` | 40-stage | Phase 9 changes | ARCHIVE |
-| `DELTA_LOG_PHASE10.md` | 40-stage | Phase 10 changes | ARCHIVE |
-| `DELTA_LOG_PHASE11.md` | 40-stage | Phase 11 changes | ARCHIVE |
-| `DELTA_LOG_PHASE12.md` | 40-stage | Phase 12 changes | ARCHIVE |
-| `DELTA_LOG_PHASE13.md` | 40-stage | Phase 13 changes (refs stages 37-40) | ARCHIVE |
-| `FINAL_SUMMARY_REPORT.md` | 40-stage | 40-stage completion report | ARCHIVE |
-| `MIDPOINT_REVIEW.md` | 40-stage | 40-stage midpoint (20/40) | ARCHIVE |
-| `PHASE-09-BATCH-SUMMARY.md` | 40-stage | Phase 9 batch summary | ARCHIVE |
+| `delta-log.md` | 40-stage | Original delta log | ARCHIVE |
+| `delta-log-phase4.md` | 40-stage | Phase 4 changes | ARCHIVE |
+| `delta-log-phase5.md` | 40-stage | Phase 5 changes | ARCHIVE |
+| `delta-log-phase6.md` | 40-stage | Phase 6 changes | ARCHIVE |
+| `delta-log-phase7.md` | 40-stage | Phase 7 changes | ARCHIVE |
+| `delta-log-phase8.md` | 40-stage | Phase 8 changes | ARCHIVE |
+| `delta-log-phase9.md` | 40-stage | Phase 9 changes | ARCHIVE |
+| `delta-log-phase10.md` | 40-stage | Phase 10 changes | ARCHIVE |
+| `delta-log-phase11.md` | 40-stage | Phase 11 changes | ARCHIVE |
+| `delta-log-phase12.md` | 40-stage | Phase 12 changes | ARCHIVE |
+| `delta-log-phase13.md` | 40-stage | Phase 13 changes (refs stages 37-40) | ARCHIVE |
+| `final-summary-report.md` | 40-stage | 40-stage completion report | ARCHIVE |
+| `midpoint-review.md` | 40-stage | 40-stage midpoint (20/40) | ARCHIVE |
+| `phase-09-batch-summary.md` | 40-stage | Phase 9 batch summary | ARCHIVE |
 
-**All 14 files** reference the 40-stage model explicitly. `DELTA_LOG_PHASE13.md` contains extensive references to stages 37-40 (risk forecasting, timing optimization, multi-venture coordination, venture active).
+**All 14 files** reference the 40-stage model explicitly. `delta-log-phase13.md` contains extensive references to stages 37-40 (risk forecasting, timing optimization, multi-venture coordination, venture active).
 
 ### Stale Content in Existing Stage Directories
 

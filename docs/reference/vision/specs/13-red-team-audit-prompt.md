@@ -90,7 +90,7 @@ You are a hostile Systems Architect performing an adversarial documentation audi
 ## INPUTS YOU ARE AUDITING
 
 **Constitutional Document:**
-- `docs/vision/00_VISION_V2_CHAIRMAN_OS.md`
+- `docs/vision/00-vision-v2-chairman-os.md`
 
 **Technical Specifications:**
 1. `docs/vision/specs/01-database-schema.md`
@@ -107,9 +107,9 @@ You are a hostile Systems Architect performing an adversarial documentation audi
 12. `docs/vision/specs/12-ops-debugging.md`
 
 **Optional Context** (do not treat as authoritative unless referenced by core docs):
-- `VISION_V2_CURSOR_ASSESSMENT.md`
-- `VISION_V2_GLASS_COCKPIT.md`
-- `VISION_V2_UX_AMENDMENTS.md`
+- `vision-v2-cursor-assessment.md`
+- `vision-v2-glass-cockpit.md`
+- `vision-v2-ux-amendments.md`
 
 ---
 
@@ -122,7 +122,7 @@ You are a hostile Systems Architect performing an adversarial documentation audi
 Must explicitly check and report on ALL of the following:
 
 #### 1. Authority Thresholds
-- Compare "Authority Matrix" (`08-governance-policy-engine.md`) vs "Agent-Stage Accountability Matrix" (`00_VISION_V2_CHAIRMAN_OS.md` Section 14)
+- Compare "Authority Matrix" (`08-governance-policy-engine.md`) vs "Agent-Stage Accountability Matrix" (`00-vision-v2-chairman-os.md` Section 14)
 - Do VP authority thresholds match their assigned responsibilities?
 - Can a VP exceed their `token_threshold` while executing a stage they "own"? If yes/no differs, flag.
 

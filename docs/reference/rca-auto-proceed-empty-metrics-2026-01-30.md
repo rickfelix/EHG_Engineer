@@ -358,7 +358,7 @@ Watch for these indicators:
 
 ## Related Documentation
 
-- **Pattern**: [PAT-AUTOPROCEED-EMPTY-ARRAY](../patterns/PAT-AUTOPROCEED-EMPTY-ARRAY.md)
+- **Pattern**: [PAT-AUTOPROCEED-EMPTY-ARRAY](../patterns/pat-autoproceed-empty-array.md)
 - **Session Gate**: [session-start-gate-implementation.md](./session-start-gate-implementation.md)
 - **Migration**: database/migrations/20260130_add_success_metrics_constraint.sql
 - **Data Healing Script**: scripts/heal-empty-success-metrics.js

@@ -2,7 +2,7 @@
 
 ## Documents
 
-- [ migration metadata](./_migration_metadata.md)
+- [ migration metadata](./migration-metadata.md)
 - [activity logs](./activity_logs.md)
 - [advisory checkpoints](./advisory_checkpoints.md)
 - [aegis constitutions](./aegis_constitutions.md)

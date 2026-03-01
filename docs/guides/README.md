@@ -31,11 +31,11 @@ This directory contains user guides, setup instructions, and operational procedu
 | Guide | Description |
 |-------|-------------|
 | [leo-protocol-quick-reference.md](leo-protocol-quick-reference.md) | Quick reference for LEO Protocol v4.3.3 |
-| [AI_GUIDE.md](AI_GUIDE.md) | AI integration guide (v4.1.2 patterns) |
+| [ai-guide.md](ai-guide.md) | AI integration guide (v4.1.2 patterns) |
 | [LEO_COMMANDS.md](../leo/commands/leo-commands.md) | LEO command reference |
-| [LEAD_MANDATORY_CHECKLIST.md](LEAD_MANDATORY_CHECKLIST.md) | LEAD agent mandatory checklist |
+| [lead-mandatory-checklist.md](lead-mandatory-checklist.md) | LEAD agent mandatory checklist |
 | [leo-protocol-enforcement-guide.md](leo-protocol-enforcement-guide.md) | Protocol enforcement patterns |
-| [INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md](INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md) | Sub-agent activation and patterns |
+| [invisible-subagent-system-guide.md](invisible-subagent-system-guide.md) | Sub-agent activation and patterns |
 | [sub-agent-activation.md](sub-agent-activation.md) | Sub-agent triggering guide |
 | [hybrid-sub-agent-workflow.md](hybrid-sub-agent-workflow.md) | Hybrid sub-agent workflow |
 | [leo-ci-cd-integration-setup.md](leo-ci-cd-integration-setup.md) | CI/CD integration with LEO |
@@ -46,7 +46,7 @@ This directory contains user guides, setup instructions, and operational procedu
 
 | Guide | Description |
 |-------|-------------|
-| [DATABASE_MIGRATION_GUIDE.md](DATABASE_MIGRATION_GUIDE.md) | Database migration procedures |
+| [database-migration-guide.md](database-migration-guide.md) | Database migration procedures |
 | [database-migration-checklist.md](database-migration-checklist.md) | Migration pre-flight checklist |
 | [database-migration-validation.md](database-migration-validation.md) | Migration validation patterns |
 | [database-architecture.md](database-architecture.md) | Database architecture overview |
@@ -73,9 +73,9 @@ This directory contains user guides, setup instructions, and operational procedu
 
 | Guide | Description |
 |-------|-------------|
-| [SIMPLE_PROJECT_SETUP.md](SIMPLE_PROJECT_SETUP.md) | **START HERE** - Quick project setup |
-| [EHG_ENGINEER_README.md](EHG_ENGINEER_README.md) | EHG Engineer application overview |
-| [PROJECT_REGISTRATION_GUIDE.md](PROJECT_REGISTRATION_GUIDE.md) | Project registration process |
+| [simple-project-setup.md](simple-project-setup.md) | **START HERE** - Quick project setup |
+| [ehg-engineer-readme.md](ehg-engineer-readme.md) | EHG Engineer application overview |
+| [project-registration-guide.md](project-registration-guide.md) | Project registration process |
 | [team-migration-guide.md](team-migration-guide.md) | Team migration procedures |
 | [leo-stack-management.md](leo-stack-management.md) | **LEO Stack** - Server management (cross-platform) |
 | [windows-setup-guide.md](windows-setup-guide.md) | Windows native environment setup |
@@ -90,9 +90,9 @@ This directory contains user guides, setup instructions, and operational procedu
 | [prd-developer-guide.md](prd-developer-guide.md) | PRD developer reference |
 | [61_venture_prd_generation.md](61_venture_prd_generation.md) | Venture PRD generation |
 | [sd-key-fix.md](sd-key-fix.md) | SD key troubleshooting |
-| [SD_TYPE_DETECTION_INTEGRATION_GUIDE.md](SD_TYPE_DETECTION_INTEGRATION_GUIDE.md) | SD type detection |
+| [sd-type-detection-integration-guide.md](sd-type-detection-integration-guide.md) | SD type detection |
 | [lead-intent-clarification-guide.md](lead-intent-clarification-guide.md) | LEAD intent clarification |
-| [ENHANCEMENT_AUTO_DELIVERABLES_POPULATION.md](ENHANCEMENT_AUTO_DELIVERABLES_POPULATION.md) | Auto deliverables population |
+| [enhancement-auto-deliverables-population.md](enhancement-auto-deliverables-population.md) | Auto deliverables population |
 
 ---
 
@@ -101,8 +101,8 @@ This directory contains user guides, setup instructions, and operational procedu
 | Guide | Description |
 |-------|-------------|
 | [design-ui-ux-workflow.md](design-ui-ux-workflow.md) | Design sub-agent workflow |
-| [UI_VALIDATION_SETUP_INSTRUCTIONS.md](UI_VALIDATION_SETUP_INSTRUCTIONS.md) | UI validation setup |
-| [SEMANTIC_COMPONENT_SELECTOR_IMPLEMENTATION.md](SEMANTIC_COMPONENT_SELECTOR_IMPLEMENTATION.md) | Semantic component selection |
+| [ui-validation-setup-instructions.md](ui-validation-setup-instructions.md) | UI validation setup |
+| [semantic-component-selector-implementation.md](semantic-component-selector-implementation.md) | Semantic component selection |
 
 ---
 
@@ -127,7 +127,7 @@ This directory contains user guides, setup instructions, and operational procedu
 | [campaign-monitoring.md](campaign-monitoring.md) | Campaign monitoring |
 | [cost-optimization-guide.md](cost-optimization-guide.md) | Cost optimization |
 | [bmad-user-guide.md](bmad-user-guide.md) | BMAD user guide |
-| [STAGE3_CUSTOMER_INTEL_INTEGRATION_GUIDE.md](STAGE3_CUSTOMER_INTEL_INTEGRATION_GUIDE.md) | Customer intelligence integration |
+| [stage3-customer-intel-integration-guide.md](stage3-customer-intel-integration-guide.md) | Customer intelligence integration |
 
 ---
 
@@ -138,7 +138,7 @@ This directory contains user guides, setup instructions, and operational procedu
 | [multi-app-protocol.md](multi-app-protocol.md) | Multi-app protocol |
 | [supabase-connectivity.md](supabase-connectivity.md) | Supabase connectivity |
 | [integration-fixes-knowledge-001.md](integration-fixes-knowledge-001.md) | Integration fixes knowledge base |
-| [INTEGRATION_COMPLETE.md](INTEGRATION_COMPLETE.md) | Integration completion summary |
+| [integration-complete.md](integration-complete.md) | Integration completion summary |
 
 ---
 
@@ -147,23 +147,23 @@ This directory contains user guides, setup instructions, and operational procedu
 | Guide | Description |
 |-------|-------------|
 | [architectural-guidelines.md](architectural-guidelines.md) | Architecture guidelines |
-| [TRIGGER_FIX_MANUAL_STEPS.md](TRIGGER_FIX_MANUAL_STEPS.md) | Trigger fix manual steps |
+| [trigger-fix-manual-steps.md](trigger-fix-manual-steps.md) | Trigger fix manual steps |
 
 ---
 
 ## Getting Started
 
 **New to EHG_Engineer?** Start here:
-1. [SIMPLE_PROJECT_SETUP.md](SIMPLE_PROJECT_SETUP.md) - Basic setup
+1. [simple-project-setup.md](simple-project-setup.md) - Basic setup
 2. [leo-protocol-quick-reference.md](leo-protocol-quick-reference.md) - LEO Protocol overview
-3. [INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md](INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md) - Understanding sub-agents
+3. [invisible-subagent-system-guide.md](invisible-subagent-system-guide.md) - Understanding sub-agents
 
 **Working on SDs/PRDs?**
 1. [prd-creation-process.md](prd-creation-process.md) - PRD workflow
-2. [LEAD_MANDATORY_CHECKLIST.md](LEAD_MANDATORY_CHECKLIST.md) - LEAD checklist
+2. [lead-mandatory-checklist.md](lead-mandatory-checklist.md) - LEAD checklist
 
 **Database work?**
-1. [DATABASE_MIGRATION_GUIDE.md](DATABASE_MIGRATION_GUIDE.md) - Migrations
+1. [database-migration-guide.md](database-migration-guide.md) - Migrations
 2. [database-connection.md](database-connection.md) - Connectivity
 
 ---
@@ -184,14 +184,14 @@ This directory contains user guides, setup instructions, and operational procedu
 ## Files
 
 - [Agents Integration Guide](agents-integration-guide.md)
-- [BEGINNER GUIDE CI CD SETUP](BEGINNER-GUIDE-CI-CD-SETUP.md)
+- [BEGINNER GUIDE CI CD SETUP](beginner-guide-ci-cd-setup.md)
 - [Database Troubleshooting](database-troubleshooting.md)
 - [Feature Flag Management](feature-flag-management.md)
 - [Learning System Explained](learning-system-explained.md)
 - [Leo Self Improvement Operations](leo-self-improvement-operations.md)
 - [Manual Completion Instructions](manual-completion-instructions.md)
-- [QUICK START SECRETS](QUICK-START-SECRETS.md)
-- [QUICK WINS WEEK1 PROGRESS](QUICK-WINS-WEEK1-PROGRESS.md)
+- [QUICK START SECRETS](quick-start-secrets.md)
+- [QUICK WINS WEEK1 PROGRESS](quick-wins-week1-progress.md)
 - [Uat Campaign Guide](uat-campaign-guide.md)
 - [Uat Migration Guide](uat-migration-guide.md)
 - [Working With Worktrees](working-with-worktrees.md)

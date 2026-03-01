@@ -689,7 +689,7 @@ grep -h "primary:" lib/keyword-intent-scorer.js | sort | uniq -d
 
 - **[Keyword Scoring Implementation](../summaries/implementations/keyword-scoring-implementation.md)** - Technical implementation details, architecture evolution
 - **[Root Cause Agent Guide](root-cause-agent.md)** - Example sub-agent with keyword triggers
-- **[LEO Protocol v4.3](../03_protocols_and_standards/LEO_v4.2_HYBRID_SUB_AGENTS.md)** - Sub-agent invocation patterns
+- **[LEO Protocol v4.3](../03_protocols_and_standards/leo-v4.2-hybrid-sub-agents.md)** - Sub-agent invocation patterns
 - **[Database Agent Patterns](database-agent-patterns.md)** - Another example sub-agent
 
 ---

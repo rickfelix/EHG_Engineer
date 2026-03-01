@@ -127,7 +127,7 @@ All new code includes:
 - Error handling documentation
 
 ### ✅ Workflow Documentation
-Complete workflow documented in `LEO_v4.2_PLAYWRIGHT_TESTING_INTEGRATION.md`:
+Complete workflow documented in `leo-v4.2-playwright-testing-integration.md`:
 - LEAD → PLAN → EXEC → TEST flow
 - Sub-agent activation triggers
 - Quality gates and thresholds

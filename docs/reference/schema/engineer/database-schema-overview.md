@@ -36,7 +36,7 @@ tags: [reference, auto-generated]
 
 | Table | Rows | RLS | Policies | Description |
 |-------|------|-----|----------|-------------|
-| [_migration_metadata](tables/_migration_metadata.md) | 2 | ✅ | 0 | - |
+| [_migration_metadata](tables/migration-metadata.md) | 2 | ✅ | 0 | - |
 | [activity_logs](tables/activity_logs.md) | 243 | ✅ | 3 | RLS: Append-only for authenticated, no delete/update |
 | [advisory_checkpoints](tables/advisory_checkpoints.md) | 3 | ✅ | 4 | - |
 | [aegis_constitutions](tables/aegis_constitutions.md) | 7 | ✅ | 4 | Registry of governance frameworks (constitutions) in AEGIS |
@@ -742,7 +742,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 
 ### Other (377 tables)
 
-- [_migration_metadata](tables/_migration_metadata.md)
+- [_migration_metadata](tables/migration-metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
 - [advisory_checkpoints](tables/advisory_checkpoints.md)
 - [aegis_constitutions](tables/aegis_constitutions.md) - Registry of governance frameworks (constitutions) in AEGIS

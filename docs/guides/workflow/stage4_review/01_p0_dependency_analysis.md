@@ -71,7 +71,7 @@ tags: [guide, auto-generated]
 
 ### Dossier Claim
 
-**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/FINAL_SUMMARY_REPORT.md:278-285`
+**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/final-summary-report.md:278-285`
 
 **Claimed Scope**:
 - Universal metrics framework for all 40 stages
@@ -118,7 +118,7 @@ tags: [guide, auto-generated]
 
 ### Dossier Claim
 
-**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/FINAL_SUMMARY_REPORT.md:286-292`
+**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/final-summary-report.md:286-292`
 
 **Claimed Scope**:
 - Implement recursion engine for 105 triggers across 28 families
@@ -165,7 +165,7 @@ tags: [guide, auto-generated]
 
 ### Dossier Claim
 
-**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/FINAL_SUMMARY_REPORT.md:456-462`
+**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/final-summary-report.md:456-462`
 
 **Claimed Scope**:
 - Implement 40 crews (160 agents)

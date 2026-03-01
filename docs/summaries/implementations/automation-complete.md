@@ -269,7 +269,7 @@ node scripts/auto-run-subagents.js MY_NEW_TRIGGER <SD_UUID>
 
 ### Phase 2: Database Triggers (Advanced)
 If you want FULLY automatic (no manual command):
-1. Complete manual migration: `MANUAL_MIGRATION_REQUIRED.md`
+1. Complete manual migration: `manual-migration-required.md`
 2. Deploy worker: `scripts/subagent-worker.js continuous`
 3. SD status changes → triggers run automatically
 

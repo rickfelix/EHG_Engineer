@@ -22,7 +22,7 @@ This directory contains API documentation for EHG_Engineer, organized by develop
 - **Letter variants (a/b/c)** - parallel implementations or progressive enhancements
 - **Example**: `04a`, `04c` exist but `04b` missing = intentional gap
 
-**See**: [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) for complete numbering explanation
+**See**: [file-numbering-audit.md](../01_architecture/file-numbering-audit.md) for complete numbering explanation
 
 ---
 
@@ -70,15 +70,15 @@ This directory contains API documentation for EHG_Engineer, organized by develop
 - [40b Portfolio Exit Sequencing](40b_portfolio_exit_sequencing.md)
 - [Ai Ceo Agent](ai_ceo_agent.md)
 - [Design System Handcrafted](design_system_handcrafted.md)
-- [EES 2025 001 Execution Sequences](EES-2025-001-execution-sequences.md)
+- [EES 2025 001 Execution Sequences](ees-2025-001-execution-sequences.md)
 - [Integration Hub](integration_hub.md)
-- [LEAD TO PLAN SDIP 2025 0903](LEAD-TO-PLAN-SDIP-2025-0903.md)
+- [LEAD TO PLAN SDIP 2025 0903](lead-to-plan-sdip-2025-0903.md)
 - [Navigation Framework Audit Report](navigation-framework-audit-report.md)
 - [Onboarding Quickstart](onboarding_quickstart.md)
-- [PRD ARCHITECTURE MAP](PRD_ARCHITECTURE_MAP.md)
+- [PRD ARCHITECTURE MAP](prd-architecture-map.md)
 - [Protocol Improvements Cli Guide](protocol-improvements-cli-guide.md)
-- [README EHG](README-EHG.md)
+- [README EHG](readme-ehg.md)
 - [Settings Personalization](settings_personalization.md)
 - [Stage1 Data Contract](stage1_data_contract.md)
-- [TESTING DEBUGGING SUBAGENTS REPORT](TESTING_DEBUGGING_SUBAGENTS_REPORT.md)
+- [TESTING DEBUGGING SUBAGENTS REPORT](testing-debugging-subagents-report.md)
 - [Testing Qa Enhanced](testing_qa_enhanced.md)

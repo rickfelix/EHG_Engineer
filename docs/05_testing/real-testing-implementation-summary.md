@@ -216,7 +216,7 @@ Each SD will have:
 
 ### Documentation
 8. `docs/REAL-TESTING-CAMPAIGN-GUIDE.md` - Complete guide
-9. `docs/REAL-TESTING-IMPLEMENTATION-SUMMARY.md` - This file
+9. `docs/REAL-TESTING-implementation-summary.md` - This file
 
 ### Generated Logs
 - `/tmp/batch-test-progress.log` - Progress tracking

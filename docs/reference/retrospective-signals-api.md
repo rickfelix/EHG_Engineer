@@ -429,7 +429,7 @@ console.log('Signal statistics:', JSON.stringify(stats, null, 2));
 
 ## Related Documentation
 
-- [Implementation Summary](../summaries/implementations/SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001-implementation.md)
+- [Implementation Summary](../summaries/implementations/sd-leo-enh-intelligent-retrospective-triggers-001-implementation.md)
 - [Retrospective Quality Gate](./retrospective-quality-gate.md)
 - [LEO Protocol v4.3.3](../03_protocols_and_standards/LEO_v4.3.3.md)
 

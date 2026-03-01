@@ -1215,9 +1215,9 @@ const validationNeeded = changedFiles.some(needsValidation);
 ## Related Documentation
 
 - **Stop Hook Operations**: `docs/06_deployment/stop-hook-operations.md`
-- **Hook Troubleshooting**: `docs/troubleshooting/FIX_HOOK_ERRORS.md`
+- **Hook Troubleshooting**: `docs/troubleshooting/fix-hook-errors.md`
 - **Claude Code Settings**: `docs/reference/claude-code-settings.md`
-- **LEO Protocol Enforcement**: `docs/03_protocols_and_standards/LEO_v4.3_subagent_enforcement.md`
+- **LEO Protocol Enforcement**: `docs/03_protocols_and_standards/leo-v4.3-subagent-enforcement.md`
 
 ## Version History
 

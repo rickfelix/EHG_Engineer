@@ -703,10 +703,10 @@ ${generateTeamProtocols(agent)}
 
 ## Related Documentation
 
-- **[LEO Protocol v4.2 - Hybrid Sub-Agent System](../03_protocols_and_standards/LEO_v4.2_HYBRID_SUB_AGENTS.md)** - Original sub-agent architecture
+- **[LEO Protocol v4.2 - Hybrid Sub-Agent System](../03_protocols_and_standards/leo-v4.2-hybrid-sub-agents.md)** - Original sub-agent architecture
 - **[Agent Patterns Guide](../reference/agent-patterns-guide.md)** - Agent base classes and patterns
 - **[Command Ecosystem Reference](../reference/command-ecosystem.md)** - How agents fit into LEO workflow
-- **[Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md)** - File organization rules
+- **[Documentation Standards](../03_protocols_and_standards/documentation-standards.md)** - File organization rules
 
 ---
 

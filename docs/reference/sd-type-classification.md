@@ -700,10 +700,10 @@ await supabase
 
 ## Related Documentation
 
-- [SD Type Detection Integration Guide](../guides/SD_TYPE_DETECTION_INTEGRATION_GUIDE.md) - SD type detection vs classification
+- [SD Type Detection Integration Guide](../guides/sd-type-detection-integration-guide.md) - SD type detection vs classification
 - [SD Key Generator Guide](./sd-key-generator-guide.md) - SD key generation patterns
 - [SD Validation Profiles](./sd-validation-profiles.md) - Validation rules per SD type
-- [LEO Protocol Standards](../03_protocols_and_standards/LEO_v4.3_subagent_enforcement.md) - Full LEO Protocol workflow
+- [LEO Protocol Standards](../03_protocols_and_standards/leo-v4.3-subagent-enforcement.md) - Full LEO Protocol workflow
 - [Strategic Directives v2 Field Reference](../database/strategic_directives_v2_field_reference.md) - Database field documentation including governance_metadata
 
 ## Troubleshooting

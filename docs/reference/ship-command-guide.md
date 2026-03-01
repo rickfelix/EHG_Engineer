@@ -271,7 +271,7 @@ const REPO_PATHS = {
 ## Related Documentation
 
 - [Branch Management Guide](./branch-management-guide.md) - Comprehensive branch lifecycle
-- [Git Commit Guidelines](../03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md) - Commit message standards
+- [Git Commit Guidelines](../03_protocols_and_standards/leo-git-commit-guidelines-v4.2.0.md) - Commit message standards
 - [Handoff System Guide](../leo/handoffs/handoff-system-guide.md) - LEO Protocol handoff process
 
 ---
