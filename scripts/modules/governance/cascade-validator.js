@@ -300,6 +300,225 @@ async function checkCascadeOverride(supabase, sd) {
 }
 
 /**
+ * Validate cascade alignment at handoff transitions for child SDs.
+ * Runs lighter-weight checks than full creation-time validation,
+ * focusing on parent-child alignment drift.
+ *
+ * SD: SD-MAN-GEN-CORRECTIVE-VISION-GAP-008 (V09 enhancement)
+ *
+ * @param {Object} options
+ * @param {Object} options.sd - The child SD being handed off
+ * @param {string} options.handoffType - Type of handoff (e.g., PLAN-TO-EXEC)
+ * @param {Object} [options.supabase] - Supabase client
+ * @param {Object} [options.logger] - Logger
+ * @returns {Promise<{aligned: boolean, score: number, warnings: Array, violations: Array}>}
+ */
+export async function validateCascadeAtHandoff({
+  sd,
+  handoffType,
+  supabase: supabaseClient,
+  logger = console,
+} = {}) {
+  const supabase = supabaseClient || createClient(
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  const warnings = [];
+  const violations = [];
+  let score = 100;
+
+  const parentSdId = sd.parent_sd_id;
+
+  // Only run for child SDs with a parent
+  if (!parentSdId) {
+    return { aligned: true, score: 100, warnings: [{ reason: 'Not a child SD — cascade check skipped' }], violations: [] };
+  }
+
+  try {
+    // Fetch parent SD
+    const { data: parent, error: parentError } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, strategic_objectives, key_changes, status')
+      .eq('id', parentSdId)
+      .single();
+
+    if (parentError || !parent) {
+      warnings.push({ reason: `Could not load parent SD: ${parentError?.message || 'not found'}` });
+      return { aligned: true, score: 80, warnings, violations };
+    }
+
+    // Check 1: Parent is not cancelled/abandoned
+    if (parent.status === 'cancelled' || parent.status === 'abandoned') {
+      violations.push({
+        check: 'parent_status',
+        reason: `Parent ${parent.sd_key} is ${parent.status} — child work may be orphaned`,
+        severity: 'blocking',
+      });
+      score -= 30;
+    }
+
+    // Check 2: Child objectives should align with parent objectives
+    const parentObjectives = parent.strategic_objectives || [];
+    const childObjectives = sd.strategic_objectives || [];
+
+    if (parentObjectives.length > 0 && childObjectives.length > 0) {
+      const parentText = parentObjectives.join(' ').toLowerCase();
+      const childText = childObjectives.join(' ').toLowerCase();
+
+      // Extract parent keywords for alignment check
+      const parentKeywords = extractKeywords(parentText);
+      const matchCount = parentKeywords.filter(kw => childText.includes(kw)).length;
+      const alignmentPercent = parentKeywords.length > 0
+        ? Math.round((matchCount / parentKeywords.length) * 100)
+        : 100;
+
+      if (alignmentPercent < 20) {
+        violations.push({
+          check: 'objective_alignment',
+          reason: `Child objectives have ${alignmentPercent}% keyword alignment with parent (threshold: 20%)`,
+          severity: 'warning',
+          parentSdKey: parent.sd_key,
+          alignmentPercent,
+        });
+        score -= 15;
+      } else if (alignmentPercent < 40) {
+        warnings.push({
+          check: 'objective_alignment',
+          reason: `Low alignment (${alignmentPercent}%) between child and parent objectives`,
+          parentSdKey: parent.sd_key,
+        });
+        score -= 5;
+      }
+    }
+
+    // Check 3: Key changes scope containment
+    const parentChanges = (parent.key_changes || []).map(k => typeof k === 'string' ? k : k.change || '').join(' ').toLowerCase();
+    const childChanges = (sd.key_changes || []).map(k => typeof k === 'string' ? k : k.change || '').join(' ').toLowerCase();
+
+    if (parentChanges && childChanges) {
+      const parentChangeKeywords = extractKeywords(parentChanges);
+      const childMatchCount = parentChangeKeywords.filter(kw => childChanges.includes(kw)).length;
+      const scopeContainment = parentChangeKeywords.length > 0
+        ? Math.round((childMatchCount / parentChangeKeywords.length) * 100)
+        : 100;
+
+      if (scopeContainment < 10) {
+        warnings.push({
+          check: 'scope_containment',
+          reason: `Child key_changes have minimal overlap (${scopeContainment}%) with parent scope`,
+          parentSdKey: parent.sd_key,
+        });
+        score -= 5;
+      }
+    }
+
+    // Log cascade check to eva_event_log
+    try {
+      await supabase.from('eva_event_log').insert({
+        event_type: 'cascade_alignment_check',
+        event_data: {
+          sd_key: sd.sd_key || sd.id,
+          parent_sd_key: parent.sd_key,
+          handoff_type: handoffType,
+          score,
+          aligned: violations.filter(v => v.severity === 'blocking').length === 0,
+          violations_count: violations.length,
+          warnings_count: warnings.length,
+        },
+        created_at: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      logger.warn(`[CascadeValidator] Event log failed: ${logErr.message}`);
+    }
+
+    const aligned = violations.filter(v => v.severity === 'blocking').length === 0;
+
+    logger.log(`[CascadeValidator] Handoff cascade check for ${sd.sd_key || sd.id}: score=${score}, aligned=${aligned}, warnings=${warnings.length}`);
+
+    return { aligned, score: Math.max(0, score), warnings, violations };
+  } catch (err) {
+    logger.warn(`[CascadeValidator] Error: ${err.message}`);
+    return { aligned: true, score: 70, warnings: [{ reason: `Cascade check error: ${err.message}` }], violations: [] };
+  }
+}
+
+/**
+ * Get cascade alignment summary across all parent-child relationships.
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {Object} [options]
+ * @param {string} [options.orchestratorId] - Filter by specific orchestrator
+ * @param {Object} [options.logger] - Logger
+ * @returns {Promise<{alignments: Array, overallScore: number, error?: string}>}
+ */
+export async function getCascadeAlignmentSummary(supabase, options = {}) {
+  const { orchestratorId = null, logger = console } = options;
+
+  if (!supabase) {
+    return { alignments: [], overallScore: 0, error: 'No supabase client' };
+  }
+
+  try {
+    let query = supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, parent_sd_id, strategic_objectives, status')
+      .not('parent_sd_id', 'is', null)
+      .in('status', ['draft', 'planning', 'in_progress', 'blocked']);
+
+    if (orchestratorId) {
+      query = query.eq('parent_sd_id', orchestratorId);
+    }
+
+    const { data: children, error: childError } = await query.limit(100);
+
+    if (childError) {
+      return { alignments: [], overallScore: 0, error: childError.message };
+    }
+
+    if (!children || children.length === 0) {
+      return { alignments: [], overallScore: 100 };
+    }
+
+    // Fetch all referenced parents
+    const parentIds = [...new Set(children.map(c => c.parent_sd_id))];
+    const { data: parents } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, strategic_objectives')
+      .in('id', parentIds);
+
+    const parentMap = new Map((parents || []).map(p => [p.id, p]));
+
+    const alignments = children.map(function(child) {
+      const parent = parentMap.get(child.parent_sd_id);
+      if (!parent) return { childKey: child.sd_key, parentKey: 'unknown', score: 50, reason: 'Parent not found' };
+
+      const parentText = (parent.strategic_objectives || []).join(' ').toLowerCase();
+      const childText = (child.strategic_objectives || []).join(' ').toLowerCase();
+      const parentKeywords = extractKeywords(parentText);
+      const matchCount = parentKeywords.filter(kw => childText.includes(kw)).length;
+      const alignmentScore = parentKeywords.length > 0 ? Math.round((matchCount / parentKeywords.length) * 100) : 100;
+
+      return {
+        childKey: child.sd_key,
+        parentKey: parent.sd_key,
+        score: alignmentScore,
+        status: child.status,
+      };
+    });
+
+    const overallScore = alignments.length > 0
+      ? Math.round(alignments.reduce((sum, a) => sum + a.score, 0) / alignments.length)
+      : 100;
+
+    return { alignments, overallScore };
+  } catch (err) {
+    logger.warn(`[CascadeValidator] Summary error: ${err.message}`);
+    return { alignments: [], overallScore: 0, error: err.message };
+  }
+}
+
+/**
  * Extract meaningful keywords from rule text for matching.
  */
 function extractKeywords(text) {
