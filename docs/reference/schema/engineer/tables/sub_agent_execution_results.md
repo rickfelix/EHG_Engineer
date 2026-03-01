@@ -1,3 +1,28 @@
+
+## Table of Contents
+
+- [Columns (23 total)](#columns-23-total)
+- [Constraints](#constraints)
+  - [Primary Key](#primary-key)
+  - [Foreign Keys](#foreign-keys)
+  - [Unique Constraints](#unique-constraints)
+  - [Check Constraints](#check-constraints)
+- [Indexes](#indexes)
+- [RLS Policies](#rls-policies)
+  - [1. Allow insert to service role (INSERT)](#1-allow-insert-to-service-role-insert)
+  - [2. Allow read access to all users (SELECT)](#2-allow-read-access-to-all-users-select)
+  - [3. Allow service_role to delete sub_agent_execution_results (DELETE)](#3-allow-service_role-to-delete-sub_agent_execution_results-delete)
+  - [4. Allow update to service role (UPDATE)](#4-allow-update-to-service-role-update)
+- [Triggers](#triggers)
+  - [strip_nested_findings_trigger](#strip_nested_findings_trigger)
+  - [strip_nested_findings_trigger](#strip_nested_findings_trigger)
+  - [trg_complete_deliverables_on_github_pass](#trg_complete_deliverables_on_github_pass)
+  - [trg_warn_testing_verdict](#trg_warn_testing_verdict)
+  - [trg_warn_testing_verdict](#trg_warn_testing_verdict)
+  - [trigger_complete_deliverables_on_subagent](#trigger_complete_deliverables_on_subagent)
+  - [trigger_complete_deliverables_on_subagent_update](#trigger_complete_deliverables_on_subagent_update)
+  - [update_sub_agent_results_timestamp](#update_sub_agent_results_timestamp)
+
 ---
 category: reference
 status: draft

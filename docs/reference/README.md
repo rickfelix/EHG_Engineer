@@ -1,5 +1,29 @@
 # Issues Documentation
 
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [File Naming Convention](#file-naming-convention)
+- [Severity Levels](#severity-levels)
+- [Issue Document Structure](#issue-document-structure)
+- [Description](#description)
+- [Steps to Reproduce](#steps-to-reproduce)
+- [Impact](#impact)
+- [Root Cause](#root-cause)
+- [Workaround](#workaround)
+- [Resolution](#resolution)
+- [Prevention](#prevention)
+- [Issue Lifecycle](#issue-lifecycle)
+- [Integration with SD System](#integration-with-sd-system)
+- [Tracking](#tracking)
+- [Related Documentation](#related-documentation)
+- [Quick Issue Template](#quick-issue-template)
+- [Description](#description)
+- [Impact](#impact)
+- [Workaround](#workaround)
+- [Files](#files)
+
 This directory contains documented issues, bugs, and known problems.
 
 ## Purpose

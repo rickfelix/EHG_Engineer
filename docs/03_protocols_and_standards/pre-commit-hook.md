@@ -1,3 +1,11 @@
+---
+category: protocol
+status: draft
+version: 1.0.0
+author: auto-fixer
+last_updated: 2026-03-01
+tags: [protocol, auto-generated]
+---
 
 ## Table of Contents
 
