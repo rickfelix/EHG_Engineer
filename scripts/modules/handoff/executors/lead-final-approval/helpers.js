@@ -395,5 +395,5 @@ export default {
   recordFailedCompletion,
   resolveLearningItems,
   pruneResolvedMemory,
-  releaseSessionClaim
+  releaseSessionClaim,
 };
