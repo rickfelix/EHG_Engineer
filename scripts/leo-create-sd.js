@@ -1145,6 +1145,54 @@ async function createSD(options) {
     }
   }
 
+  // Cascade Validator Check (V09: strategic_governance_cascade)
+  // Validates 6-layer governance hierarchy: Mission → Constitution → Vision → Strategy → OKR → SD
+  try {
+    const { validateCascade } = await import('./modules/governance/cascade-validator.js');
+    const cascadeResult = await validateCascade({
+      sd: {
+        title,
+        description,
+        strategic_objectives: finalStrategicObjectives,
+        key_changes: keyChanges || [],
+        vision_key: metadata?.vision_key || null,
+        venture_id: metadata?.venture_id || null,
+        metadata,
+      },
+      logger: console,
+      dryRun: false,
+    });
+
+    if (cascadeResult.warnings.length > 0) {
+      console.log('\n   ⚠️  CASCADE ADVISORY WARNINGS:');
+      for (const w of cascadeResult.warnings) {
+        console.log(`      [${w.layer || 'general'}] ${w.reason}`);
+      }
+    }
+
+    if (!cascadeResult.passed) {
+      console.log('\n' + '🛑'.repeat(30));
+      console.log('🛑 CASCADE VIOLATION — SD CREATION BLOCKED');
+      console.log('🛑'.repeat(30));
+      for (const v of cascadeResult.violations) {
+        console.log(`   [${v.enforcementLevel || 'blocking'}] ${v.layer || 'rule'}: ${v.reason || v.ruleText}`);
+      }
+      console.log(`\n   ${cascadeResult.rulesChecked} rules checked.`);
+      console.log('   Resolve violations or request chairman override.');
+      console.log('🛑'.repeat(30));
+
+      if (!forceCreate) {
+        process.exit(1);
+      }
+      console.log('\n   ⚠️  --force flag detected. Proceeding despite cascade violations.');
+    }
+  } catch (err) {
+    // Graceful degradation: if cascade validator fails, log and proceed
+    if (err.code !== 'MODULE_NOT_FOUND') {
+      console.log(`\n   ⚠️  Cascade validation error: ${err.message}. Proceeding with SD creation.`);
+    }
+  }
+
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,
