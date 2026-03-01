@@ -3,17 +3,20 @@
  *
  * Classifications:
  *   ACCURATE (100)      — Content matches codebase reality
+ *   VISIONARY (85)      — Grounded in DB schema/architecture, not code artifacts
  *   UNVERIFIABLE (75)   — Insufficient code references to verify
  *   DRIFTED (50)        — Some content doesn't match current state
  *   STALE (25)          — Old content with unverified references
  *   ASPIRATIONAL (0)    — Describes features that don't exist
  *
- * Uses 5 deterministic heuristics (no LLM):
+ * Uses 7 deterministic heuristics (no LLM):
  *   1. Code artifact cross-reference
  *   2. Stage number validation (>25 = invalid)
  *   3. DOCMON template detection
  *   4. TAM/market claim detection
  *   5. Content-code ratio analysis
+ *   6. Database schema cross-reference (tables, views, functions)
+ *   7. Template-aware reclassification (DOCMON → UNVERIFIABLE)
  */
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
@@ -82,6 +85,70 @@ function extractSourceArtifacts(filePath, rootDir, index) {
       if (match[1] && match[1].length > 1) index.set(match[1], relPath);
     }
   }
+}
+
+// ── Database Schema Index ────────────────────────────────────────────
+
+const MIGRATION_DIR = 'database/migrations';
+
+/**
+ * Scan SQL migration files and build an index of database objects.
+ * Extracts table names, view names, function names, and column names.
+ * @param {string} rootDir - Project root directory
+ * @returns {Set<string>} Set of known database object names (lowercase)
+ */
+export function buildSchemaIndex(rootDir) {
+  const schemaNames = new Set();
+  const migDir = join(rootDir, MIGRATION_DIR);
+  if (!existsSync(migDir)) return schemaNames;
+
+  let files;
+  try { files = readdirSync(migDir); } catch { return schemaNames; }
+
+  for (const file of files) {
+    if (!file.endsWith('.sql')) continue;
+    let sql;
+    try { sql = readFileSync(join(migDir, file), 'utf8'); } catch { continue; }
+
+    // Table names
+    const tablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)/gi;
+    let m;
+    while ((m = tablePattern.exec(sql)) !== null) schemaNames.add(m[1].toLowerCase());
+
+    // View names
+    const viewPattern = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)/gi;
+    while ((m = viewPattern.exec(sql)) !== null) schemaNames.add(m[1].toLowerCase());
+
+    // Function names
+    const funcPattern = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?([a-zA-Z_][a-zA-Z0-9_]*)/gi;
+    while ((m = funcPattern.exec(sql)) !== null) schemaNames.add(m[1].toLowerCase());
+
+    // Column names from CREATE TABLE blocks
+    const colPattern = /^\s+([a-z_][a-z0-9_]*)\s+(?:text|varchar|integer|bigint|boolean|jsonb|json|uuid|timestamp|numeric|serial|smallint|date|real|double)/gim;
+    while ((m = colPattern.exec(sql)) !== null) {
+      if (m[1].length > 3) schemaNames.add(m[1].toLowerCase());
+    }
+  }
+
+  return schemaNames;
+}
+
+/**
+ * Count how many of a document's unresolved names match known DB schema objects.
+ * @param {string[]} unresolvedNames - Code names not found in source code
+ * @param {Set<string>} schemaIndex - Known DB object names (lowercase)
+ * @returns {number} Count of names that match schema objects
+ */
+function countSchemaMatches(unresolvedNames, schemaIndex) {
+  let count = 0;
+  for (const name of unresolvedNames) {
+    // Try direct lowercase match
+    if (schemaIndex.has(name.toLowerCase())) { count++; continue; }
+    // Try snake_case conversion of PascalCase/camelCase
+    const snake = name.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    if (schemaIndex.has(snake)) { count++; continue; }
+  }
+  return count;
 }
 
 // ── Document Artifact Extraction ────────────────────────────────────
@@ -192,9 +259,10 @@ function resolveStandaloneFile(filename, rootDir) {
  * @param {object} fileInfo - Scanner FileInfo object
  * @param {Map} codeIndex - Code artifact index from buildCodeArtifactIndex
  * @param {string} rootDir - Project root directory
+ * @param {Set<string>} [schemaIndex] - Optional DB schema index from buildSchemaIndex
  * @returns {{ classification: string, score: number, evidence: string[] }}
  */
-export function classifyDocument(fileInfo, codeIndex, rootDir) {
+export function classifyDocument(fileInfo, codeIndex, rootDir, schemaIndex) {
   const fullPath = join(rootDir, fileInfo.relPath);
   let content;
   try { content = readFileSync(fullPath, 'utf8'); }
@@ -253,15 +321,44 @@ export function classifyDocument(fileInfo, codeIndex, rootDir) {
 
   const wordCount = content.split(/\s+/).length;
 
+  // ── Schema cross-reference (heuristic 6) ──
+  const schemaMatches = schemaIndex ? countSchemaMatches(unresolvedNames, schemaIndex) : 0;
+  const hasSchemaGrounding = schemaMatches >= 2;
+  if (schemaMatches > 0) {
+    evidence.push(`Schema matches: ${schemaMatches} unresolved name(s) found in DB schema`);
+  }
+
+  // ── Template detection flag (heuristic 7) ──
+  const isTemplate = templateMarkers.length > 0;
+
   // ── Decision tree ──
 
-  // ASPIRATIONAL: majority of references unresolved
+  // ASPIRATIONAL: majority of references unresolved AND not a template AND no schema grounding
   if (totalRefs > 0 && unresolvedPct > 50) {
+    // Template documents with unresolved refs → UNVERIFIABLE (not aspirational)
+    // Template content is auto-generated; it's unverifiable, not aspirational
+    if (isTemplate) {
+      evidence.push('Template reclassified: ASPIRATIONAL → UNVERIFIABLE');
+      return { classification: 'UNVERIFIABLE', score: 75, evidence };
+    }
+    // Documents grounded in DB schema → VISIONARY (architecture-aligned)
+    if (hasSchemaGrounding) {
+      evidence.push('Schema-grounded: references verified DB objects');
+      return { classification: 'VISIONARY', score: 85, evidence };
+    }
     return { classification: 'ASPIRATIONAL', score: 0, evidence };
   }
 
   // ASPIRATIONAL: invalid stages + notable unresolved
   if (invalidStages.length > 0 && unresolvedPct > 20) {
+    if (isTemplate) {
+      evidence.push('Template reclassified: ASPIRATIONAL → UNVERIFIABLE');
+      return { classification: 'UNVERIFIABLE', score: 75, evidence };
+    }
+    if (hasSchemaGrounding) {
+      evidence.push('Schema-grounded: references verified DB objects');
+      return { classification: 'VISIONARY', score: 85, evidence };
+    }
     return { classification: 'ASPIRATIONAL', score: 0, evidence };
   }
 
@@ -301,12 +398,13 @@ export function classifyDocument(fileInfo, codeIndex, rootDir) {
  * @param {object} scanResult - Result from scanDocs()
  * @param {Map} codeIndex - Code artifact index
  * @param {string} rootDir - Project root directory
+ * @param {Set<string>} [schemaIndex] - Optional DB schema index from buildSchemaIndex
  * @returns {Map<string, { classification: string, score: number, evidence: string[] }>}
  */
-export function classifyAll(scanResult, codeIndex, rootDir) {
+export function classifyAll(scanResult, codeIndex, rootDir, schemaIndex) {
   const results = new Map();
   for (const fileInfo of scanResult.files) {
-    results.set(fileInfo.relPath, classifyDocument(fileInfo, codeIndex, rootDir));
+    results.set(fileInfo.relPath, classifyDocument(fileInfo, codeIndex, rootDir, schemaIndex));
   }
   return results;
 }
@@ -317,7 +415,7 @@ export function classifyAll(scanResult, codeIndex, rootDir) {
  * @returns {{ ACCURATE: number, DRIFTED: number, ASPIRATIONAL: number, STALE: number, UNVERIFIABLE: number }}
  */
 export function getDistribution(classifications) {
-  const dist = { ACCURATE: 0, DRIFTED: 0, ASPIRATIONAL: 0, STALE: 0, UNVERIFIABLE: 0 };
+  const dist = { ACCURATE: 0, VISIONARY: 0, DRIFTED: 0, ASPIRATIONAL: 0, STALE: 0, UNVERIFIABLE: 0 };
   for (const [, result] of classifications) {
     dist[result.classification] = (dist[result.classification] || 0) + 1;
   }

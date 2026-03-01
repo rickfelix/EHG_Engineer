@@ -10,7 +10,7 @@
  *   scripts/modules/doc-audit/scorer.js  (async scoring path)
  */
 
-import { buildCodeArtifactIndex, classifyAll, getDistribution } from './content-classifier.js';
+import { buildCodeArtifactIndex, buildSchemaIndex, classifyAll, getDistribution } from './content-classifier.js';
 
 // ─── Stop words for keyword extraction ───────────────────────────────────────
 
@@ -264,8 +264,8 @@ export async function scoreD13(files, supabase) {
  * Score documentation content accuracy by classifying files against
  * the actual codebase using deterministic heuristics (no LLM).
  *
- * Classification scores: ACCURATE=100, UNVERIFIABLE=75, DRIFTED=50,
- *                        STALE=25, ASPIRATIONAL=0
+ * Classification scores: ACCURATE=100, VISIONARY=85, UNVERIFIABLE=75,
+ *                        DRIFTED=50, STALE=25, ASPIRATIONAL=0
  *
  * @param {{ files: object[] }} scanResult - Result from scanDocs()
  * @param {string} rootDir - Project root directory
@@ -278,7 +278,10 @@ export async function scoreD14(scanResult, rootDir) {
   const codeIndex = buildCodeArtifactIndex(rootDir);
   findings.push(`Code artifact index: ${codeIndex.size} artifacts indexed`);
 
-  const classifications = classifyAll(scanResult, codeIndex, rootDir);
+  const schemaIndex = buildSchemaIndex(rootDir);
+  findings.push(`Schema index: ${schemaIndex.size} DB objects indexed`);
+
+  const classifications = classifyAll(scanResult, codeIndex, rootDir, schemaIndex);
   const dist = getDistribution(classifications);
   const total = classifications.size;
 
@@ -287,7 +290,7 @@ export async function scoreD14(scanResult, rootDir) {
   }
 
   // Weighted average score
-  const SCORES = { ACCURATE: 100, UNVERIFIABLE: 75, DRIFTED: 50, STALE: 25, ASPIRATIONAL: 0 };
+  const SCORES = { ACCURATE: 100, VISIONARY: 85, UNVERIFIABLE: 75, DRIFTED: 50, STALE: 25, ASPIRATIONAL: 0 };
   let weightedSum = 0;
   for (const [, result] of classifications) {
     weightedSum += SCORES[result.classification] ?? 75;
@@ -296,7 +299,7 @@ export async function scoreD14(scanResult, rootDir) {
 
   // Distribution summary
   findings.push(
-    `Classification: ${dist.ACCURATE} accurate, ${dist.UNVERIFIABLE} unverifiable, ` +
+    `Classification: ${dist.ACCURATE} accurate, ${dist.VISIONARY} visionary, ${dist.UNVERIFIABLE} unverifiable, ` +
     `${dist.DRIFTED} drifted, ${dist.STALE} stale, ${dist.ASPIRATIONAL} aspirational`
   );
 
