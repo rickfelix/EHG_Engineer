@@ -1,19 +1,11 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-03-01
-tags: [reference, auto-generated]
----
 # risk_assessments Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T00:41:31.291Z
-**Rows**: 320
+**Generated**: 2026-03-01T14:20:42.746Z
+**Rows**: 338
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation

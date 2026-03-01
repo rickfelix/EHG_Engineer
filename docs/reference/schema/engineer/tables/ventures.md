@@ -1,41 +1,10 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-03-01
-tags: [reference, auto-generated]
----
 # ventures Table
-
-
-## Table of Contents
-
-- [Columns (76 total)](#columns-76-total)
-- [Constraints](#constraints)
-  - [Primary Key](#primary-key)
-  - [Foreign Keys](#foreign-keys)
-  - [Check Constraints](#check-constraints)
-- [Indexes](#indexes)
-- [RLS Policies](#rls-policies)
-  - [1. Allow authenticated users to delete ventures (DELETE)](#1-allow-authenticated-users-to-delete-ventures-delete)
-  - [2. Allow authenticated users to insert ventures (INSERT)](#2-allow-authenticated-users-to-insert-ventures-insert)
-  - [3. Allow authenticated users to update ventures (UPDATE)](#3-allow-authenticated-users-to-update-ventures-update)
-  - [4. Allow service_role to manage ventures (ALL)](#4-allow-service_role-to-manage-ventures-all)
-  - [5. Company access ventures (ALL)](#5-company-access-ventures-all)
-- [Triggers](#triggers)
-  - [auto_populate_company_id_trigger](#auto_populate_company_id_trigger)
-  - [enforce_tier0_stage_cap](#enforce_tier0_stage_cap)
-  - [enforce_tier0_stage_cap](#enforce_tier0_stage_cap)
-  - [trg_validate_stage_column](#trg_validate_stage_column)
-  - [trg_validate_stage_column](#trg_validate_stage_column)
-  - [update_ventures_updated_at](#update_ventures_updated_at)
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T00:41:31.291Z
+**Generated**: 2026-03-01T14:20:42.746Z
 **Rows**: 10
 **RLS**: Enabled (5 policies)
 

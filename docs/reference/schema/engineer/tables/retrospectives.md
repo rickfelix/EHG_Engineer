@@ -1,43 +1,11 @@
----
-category: reference
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-03-01
-tags: [reference, auto-generated]
----
 # retrospectives Table
-
-
-## Table of Contents
-
-- [Columns (83 total)](#columns-83-total)
-- [Constraints](#constraints)
-  - [Primary Key](#primary-key)
-  - [Foreign Keys](#foreign-keys)
-  - [Check Constraints](#check-constraints)
-- [Indexes](#indexes)
-- [RLS Policies](#rls-policies)
-  - [1. authenticated_read_retrospectives (SELECT)](#1-authenticated_read_retrospectives-select)
-  - [2. service_role_all_retrospectives (ALL)](#2-service_role_all_retrospectives-all)
-- [Triggers](#triggers)
-  - [tr_retrospectives_updated](#tr_retrospectives_updated)
-  - [trg_validate_retrospective_coverage](#trg_validate_retrospective_coverage)
-  - [trg_validate_retrospective_coverage](#trg_validate_retrospective_coverage)
-  - [trigger_auto_populate_retrospective_fields](#trigger_auto_populate_retrospective_fields)
-  - [trigger_auto_populate_retrospective_fields](#trigger_auto_populate_retrospective_fields)
-  - [validate_protocol_improvements_trigger](#validate_protocol_improvements_trigger)
-  - [validate_protocol_improvements_trigger](#validate_protocol_improvements_trigger)
-  - [validate_retrospective_quality_trigger](#validate_retrospective_quality_trigger)
-  - [validate_retrospective_quality_trigger](#validate_retrospective_quality_trigger)
-- [Usage Examples](#usage-examples)
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T00:41:31.291Z
-**Rows**: 1,887
+**Generated**: 2026-03-01T14:20:42.746Z
+**Rows**: 1,943
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
