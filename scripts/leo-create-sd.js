@@ -1105,6 +1105,8 @@ async function createSD(options) {
   // Blocking guardrails can prevent SD creation. Advisory guardrails log warnings.
   try {
     const guardrailRegistry = await import('../lib/governance/guardrail-registry.js');
+    // Compute OKR cycle day (day of current month, 1-31)
+    const okrCycleDay = new Date().getDate();
     const guardrailInput = {
       sd_type: dbType,
       scope: description,
@@ -1113,6 +1115,7 @@ async function createSD(options) {
       strategic_objectives: finalStrategicObjectives,
       risks: [],
       metadata,
+      okrCycleDay,
     };
     const guardrailResult = guardrailRegistry.check(guardrailInput);
 
