@@ -35,8 +35,9 @@ export const DEFAULT_AUTO_PROCEED = true;
 
 /**
  * Default CHAIN_ORCHESTRATORS value when no source provides it
+ * SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V01): Changed to true — automation by default
  */
-export const DEFAULT_CHAIN_ORCHESTRATORS = false;
+export const DEFAULT_CHAIN_ORCHESTRATORS = true;
 
 /**
  * Parse CLI arguments for AUTO-PROCEED flags
@@ -374,8 +375,8 @@ export async function getChainOrchestrators(supabase) {
       return { chainOrchestrators: false, sessionId: null };
     }
 
-    // Default to false if not set (conservative - pause at orchestrator boundary)
-    const chainOrchestrators = Boolean(data?.metadata?.chain_orchestrators ?? false);
+    // Default to true if not set (SD-MAN-GEN-CORRECTIVE-VISION-GAP-013: automation by default)
+    const chainOrchestrators = Boolean(data?.metadata?.chain_orchestrators ?? DEFAULT_CHAIN_ORCHESTRATORS);
 
     return {
       chainOrchestrators,
