@@ -157,9 +157,9 @@ function getHandoffRequirements(sdType) {
 async function validateHandoffs(sdKey) {
   const supabase = getSupabase();
   if (!supabase) {
-    // No database connection, allow operation (fail-open)
-    console.log('[handoff-enforcement] Warning: No database connection, allowing operation');
-    return { valid: true, reason: 'no_database' };
+    // No database connection, block operation (fail-closed) - GOV-008
+    console.log('[handoff-enforcement] BLOCKED: No database connection (fail-closed)');
+    return { valid: false, reason: 'db_unavailable', severity: 'critical', remediation: 'Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables' };
   }
 
   try {
@@ -186,8 +186,8 @@ async function validateHandoffs(sdKey) {
       .eq('status', 'accepted');
 
     if (handoffsError) {
-      console.log(`[handoff-enforcement] Warning: Query error: ${handoffsError.message}`);
-      return { valid: true, reason: 'query_error' };
+      console.log(`[handoff-enforcement] BLOCKED: Query error (fail-closed): ${handoffsError.message}`);
+      return { valid: false, reason: 'db_query_error', severity: 'critical', error: handoffsError.message, remediation: 'Check database connectivity and sd_phase_handoffs table access' };
     }
 
     const acceptedTypes = (handoffs || []).map(h => h.handoff_type);
@@ -226,8 +226,8 @@ async function validateHandoffs(sdKey) {
       acceptedHandoffs: acceptedTypes
     };
   } catch (error) {
-    console.log(`[handoff-enforcement] Warning: Error: ${error.message}`);
-    return { valid: true, reason: 'error', error: error.message };
+    console.log(`[handoff-enforcement] BLOCKED: Unexpected error (fail-closed): ${error.message}`);
+    return { valid: false, reason: 'enforcement_error', severity: 'critical', error: error.message, remediation: 'Check database connectivity and retry' };
   }
 }
 
@@ -329,7 +329,7 @@ async function main() {
 
 // Execute
 main().catch(err => {
-  console.error(`[handoff-enforcement] Error: ${err.message}`);
-  // Fail-open on errors
-  process.exit(0);
+  console.error(`[handoff-enforcement] BLOCKED: Unhandled error (fail-closed): ${err.message}`);
+  // Fail-closed on errors - GOV-008
+  process.exit(2);
 });

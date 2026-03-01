@@ -33,6 +33,8 @@ describe('FourOathsEnforcement', () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    // Use legacy validation path for unit tests (AEGIS active by default since GOV-008)
+    process.env.USE_AEGIS = 'false';
 
     mockSupabase = {
       from: vi.fn().mockReturnThis(),
@@ -45,6 +47,7 @@ describe('FourOathsEnforcement', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    delete process.env.USE_AEGIS;
   });
 
   // ===========================================================================
@@ -405,7 +408,7 @@ describe('FourOathsEnforcement', () => {
     test('should support setAegisMode toggle', () => {
       expect(typeof enforcement.setAegisMode).toBe('function');
 
-      // Default should be false (unless USE_AEGIS env is set)
+      // Default is now true (AEGIS active by default, GOV-008)
       enforcement.setAegisMode(false);
       expect(enforcement.useAegis).toBe(false);
 
