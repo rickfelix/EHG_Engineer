@@ -10,7 +10,10 @@ import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-trunca
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
-import { shouldSkipAndContinue, executeSkipAndContinue, DEFAULT_MAX_RETRIES } from '../skip-and-continue.js';
+import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
+
+// SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Max gate retry attempts before failure
+const GATE_MAX_RETRIES = 2;
 import { checkPendingMigrations } from '../pre-checks/pending-migrations-check.js';
 import { applyGatePolicies } from '../gate-policy-resolver.js';
 import { validateMultiSessionClaim } from '../gates/multi-session-claim-gate.js';
@@ -219,7 +222,7 @@ export class BaseExecutor {
       // SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Gate retry loop — auto-retry transient failures
       let gateResults;
       let currentRetryCount = options._retryCount || 0;
-      const maxGateRetries = DEFAULT_MAX_RETRIES;
+      const maxGateRetries = GATE_MAX_RETRIES;
 
       for (let attempt = 0; attempt <= maxGateRetries; attempt++) {
         gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
