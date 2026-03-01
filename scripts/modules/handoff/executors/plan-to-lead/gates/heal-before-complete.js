@@ -75,9 +75,9 @@ export function createHealBeforeCompleteGate(supabase) {
       // Query most recent SD heal score from eva_vision_scores
       const { data: healScores, error: healError } = await supabase
         .from('eva_vision_scores')
-        .select('id, sd_id, total_score, threshold_action, rubric_snapshot, created_at')
+        .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)
-        .order('created_at', { ascending: false })
+        .order('scored_at', { ascending: false })
         .limit(1);
 
       if (healError) {
@@ -114,7 +114,7 @@ export function createHealBeforeCompleteGate(supabase) {
 
       const latestScore = healScores[0];
       const sdHealScore = latestScore.total_score;
-      const scoreAge = Math.round((Date.now() - new Date(latestScore.created_at).getTime()) / (1000 * 60));
+      const scoreAge = Math.round((Date.now() - new Date(latestScore.scored_at).getTime()) / (1000 * 60));
       const isSDHeal = latestScore.rubric_snapshot?.mode === 'sd-heal';
 
       console.log(`   SD Heal Score: ${sdHealScore}/100 (threshold: ${threshold})`);
@@ -129,15 +129,15 @@ export function createHealBeforeCompleteGate(supabase) {
       try {
         const { data: visionScores } = await supabase
           .from('eva_vision_scores')
-          .select('id, total_score, created_at')
+          .select('id, total_score, scored_at')
           .is('sd_id', null)
-          .order('created_at', { ascending: false })
+          .order('scored_at', { ascending: false })
           .limit(1);
 
         if (visionScores && visionScores.length > 0) {
           visionAdvisory = {
             score: visionScores[0].total_score,
-            age_minutes: Math.round((Date.now() - new Date(visionScores[0].created_at).getTime()) / (1000 * 60))
+            age_minutes: Math.round((Date.now() - new Date(visionScores[0].scored_at).getTime()) / (1000 * 60))
           };
           console.log(`   Vision Heal (advisory): ${visionAdvisory.score}/100 (${visionAdvisory.age_minutes} min ago)`);
         } else {
