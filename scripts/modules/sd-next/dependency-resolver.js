@@ -63,20 +63,26 @@ export async function checkDependenciesResolved(supabase, dependencies) {
   const deps = parseDependencies(dependencies);
   if (deps.length === 0) return true;
 
-  for (const dep of deps) {
-    // Use sd_key with fallback to id (for UUID lookups)
-    const { data: sd } = await supabase
-      .from('strategic_directives_v2')
-      .select('status')
-      .or(`sd_key.eq.${dep.sd_id},id.eq.${dep.sd_id}`)
-      .single();
+  const depKeys = deps.map(d => d.sd_id);
 
-    if (!sd || sd.status !== 'completed') {
-      return false;
-    }
+  // Batch query: fetch all dependency SDs in one call
+  const { data: sds } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, id, status')
+    .or(`sd_key.in.(${depKeys.join(',')}),id.in.(${depKeys.join(',')})`)
+    .limit(depKeys.length * 2);
+
+  if (!sds) return false;
+
+  // Build lookup by both sd_key and id
+  const statusMap = new Map();
+  for (const sd of sds) {
+    statusMap.set(sd.sd_key, sd.status);
+    statusMap.set(sd.id, sd.status);
   }
 
-  return true;
+  // Check all deps are completed
+  return depKeys.every(key => statusMap.get(key) === 'completed');
 }
 
 /**
@@ -92,18 +98,31 @@ export async function getUnresolvedDependencies(supabase, dependencies) {
   const deps = parseDependencies(dependencies);
   if (deps.length === 0) return [];
 
-  const unresolvedDeps = [];
-  for (const dep of deps) {
-    // Use sd_key with fallback to id (for UUID lookups)
-    const { data: sd } = await supabase
-      .from('strategic_directives_v2')
-      .select('status, title')
-      .or(`sd_key.eq.${dep.sd_id},id.eq.${dep.sd_id}`)
-      .single();
+  const depKeys = deps.map(d => d.sd_id);
 
+  // Batch query: fetch all dependency SDs in one call
+  const { data: sds } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, id, status, title')
+    .or(`sd_key.in.(${depKeys.join(',')}),id.in.(${depKeys.join(',')})`)
+    .limit(depKeys.length * 2);
+
+  // Build lookup by both sd_key and id
+  const sdMap = new Map();
+  if (sds) {
+    for (const sd of sds) {
+      sdMap.set(sd.sd_key, sd);
+      sdMap.set(sd.id, sd);
+    }
+  }
+
+  // Find unresolved deps from the batch result
+  const unresolvedDeps = [];
+  for (const key of depKeys) {
+    const sd = sdMap.get(key);
     if (!sd || sd.status !== 'completed') {
       unresolvedDeps.push({
-        sd_id: dep.sd_id,
+        sd_id: key,
         status: sd?.status || 'not_found',
         title: sd?.title || 'Unknown'
       });
