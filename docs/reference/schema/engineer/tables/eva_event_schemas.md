@@ -1,4 +1,4 @@
-# enhancement_proposal_audit Table
+# eva_event_schemas Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -14,45 +14,48 @@
 
 ---
 
-## Columns (7 total)
+## Columns (6 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| proposal_id | `uuid` | **NO** | - | - |
-| actor_id | `uuid` | YES | - | - |
-| from_status | `character varying(20)` | **NO** | - | - |
-| to_status | `character varying(20)` | **NO** | - | - |
-| request_id | `uuid` | YES | - | - |
-| created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| event_type | `text` | **NO** | - | - |
+| version | `text` | **NO** | - | - |
+| schema_definition | `jsonb` | **NO** | - | - |
+| registered_at | `timestamp with time zone` | **NO** | `now()` | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `enhancement_proposal_audit_pkey`: PRIMARY KEY (id)
+- `eva_event_schemas_pkey`: PRIMARY KEY (id)
 
-### Foreign Keys
-- `enhancement_proposal_audit_proposal_id_fkey`: proposal_id → enhancement_proposals(id)
+### Unique Constraints
+- `eva_event_schemas_event_version_unique`: UNIQUE (event_type, version)
 
 ## Indexes
 
-- `enhancement_proposal_audit_pkey`
+- `eva_event_schemas_event_version_unique`
   ```sql
-  CREATE UNIQUE INDEX enhancement_proposal_audit_pkey ON public.enhancement_proposal_audit USING btree (id)
+  CREATE UNIQUE INDEX eva_event_schemas_event_version_unique ON public.eva_event_schemas USING btree (event_type, version)
   ```
-- `idx_enhancement_proposal_audit_proposal`
+- `eva_event_schemas_pkey`
   ```sql
-  CREATE INDEX idx_enhancement_proposal_audit_proposal ON public.enhancement_proposal_audit USING btree (proposal_id, created_at DESC)
+  CREATE UNIQUE INDEX eva_event_schemas_pkey ON public.eva_event_schemas USING btree (id)
+  ```
+- `idx_eva_event_schemas_event_type`
+  ```sql
+  CREATE INDEX idx_eva_event_schemas_event_type ON public.eva_event_schemas USING btree (event_type)
   ```
 
 ## RLS Policies
 
-### 1. authenticated_select_enhancement_proposal_audit (SELECT)
+### 1. eva_event_schemas_authenticated_select (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. service_role_all_enhancement_proposal_audit (ALL)
+### 2. eva_event_schemas_service_role_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
