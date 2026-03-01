@@ -8,6 +8,10 @@
  * Mandatory revision cycles enforced when alignment fails.
  *
  * Part of SD-MAN-ORCH-VISION-HEAL-GOVERNANCE-001-02
+ * Enhanced by SD-MAN-GEN-CORRECTIVE-VISION-GAP-005:
+ *   - Fixed AEGIS queries (is_active instead of status)
+ *   - Added Mission layer validation
+ *   - Extended bidirectional Strategy/Vision validation
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -37,99 +41,110 @@ export async function validateCascade({
   const warnings = [];
   let rulesChecked = 0;
 
-  // Step 1: Load AEGIS constitution rules
+  // Layer 1: Mission — validate active mission exists for the venture
+  const ventureId = sd.venture_id || sd.metadata?.venture_id || null;
+  if (ventureId) {
+    const { data: missions, error: missionError } = await supabase
+      .from('missions')
+      .select('id, mission_text, status')
+      .eq('venture_id', ventureId)
+      .eq('status', 'active')
+      .limit(1);
+
+    if (missionError) {
+      warnings.push({ layer: 'mission', reason: `Could not query missions: ${missionError.message}` });
+    } else if (!missions || missions.length === 0) {
+      violations.push({
+        layer: 'mission',
+        reason: `No active mission found for venture ${ventureId}. The Mission layer is required.`,
+        enforcementLevel: 'blocking',
+      });
+    }
+  } else {
+    warnings.push({ layer: 'mission', reason: 'SD has no venture_id — mission layer not verifiable' });
+  }
+
+  // Layer 2: Constitution — load AEGIS constitutions using is_active (boolean)
   const { data: constitutions, error: constError } = await supabase
     .from('aegis_constitutions')
-    .select('id, name, rules')
-    .eq('status', 'active');
+    .select('id, name, enforcement_mode')
+    .eq('is_active', true);
 
   if (constError) {
     logger.warn(`Cascade validation: Could not load constitutions: ${constError.message}`);
-    return { passed: true, violations: [], warnings: ['Could not load AEGIS constitutions'], rulesChecked: 0 };
+    return { passed: true, violations, warnings: [...warnings, 'Could not load AEGIS constitutions'], rulesChecked: 0 };
   }
 
   if (!constitutions || constitutions.length === 0) {
-    logger.log('Cascade validation: No active constitutions found — skipping');
-    return { passed: true, violations: [], warnings: ['No active AEGIS constitutions'], rulesChecked: 0 };
+    warnings.push({ layer: 'constitution', reason: 'No active AEGIS constitutions found' });
   }
 
-  // Step 2: Load AEGIS rules linked to constitutions
-  const constitutionIds = constitutions.map(c => c.id);
-  const { data: rules, error: rulesError } = await supabase
-    .from('aegis_rules')
-    .select('id, constitution_id, rule_type, rule_text, enforcement_level')
-    .in('constitution_id', constitutionIds)
-    .eq('status', 'active');
+  // Load AEGIS rules using is_active (boolean) — only if constitutions exist
+  let rules = [];
+  if (constitutions && constitutions.length > 0) {
+    const constitutionIds = constitutions.map(c => c.id);
+    const { data: rulesData, error: rulesError } = await supabase
+      .from('aegis_rules')
+      .select('id, constitution_id, category, rule_text, severity')
+      .in('constitution_id', constitutionIds)
+      .eq('is_active', true);
 
-  if (rulesError) {
-    logger.warn(`Cascade validation: Could not load rules: ${rulesError.message}`);
-    return { passed: true, violations: [], warnings: ['Could not load AEGIS rules'], rulesChecked: 0 };
-  }
-
-  if (!rules || rules.length === 0) {
-    logger.log('Cascade validation: No active rules found — skipping');
-    return { passed: true, violations: [], warnings: ['No active AEGIS rules'], rulesChecked: 0 };
-  }
-
-  // Step 3: Check SD against each rule
-  const sdText = [
-    sd.title || '',
-    sd.description || '',
-    ...(sd.strategic_objectives || []),
-    ...(sd.key_changes || []).map(k => typeof k === 'string' ? k : k.change || ''),
-  ].join(' ').toLowerCase();
-
-  for (const rule of rules) {
-    rulesChecked++;
-    const ruleText = (rule.rule_text || '').toLowerCase();
-
-    // Check for explicit constraint violations
-    if (rule.rule_type === 'prohibition' && ruleText) {
-      const keywords = extractKeywords(ruleText);
-      const matchedKeywords = keywords.filter(kw => sdText.includes(kw));
-
-      if (matchedKeywords.length >= 2) {
-        violations.push({
-          ruleId: rule.id,
-          constitutionId: rule.constitution_id,
-          ruleType: rule.rule_type,
-          ruleText: rule.rule_text,
-          enforcementLevel: rule.enforcement_level,
-          matchedKeywords,
-          sdTitle: sd.title,
-        });
-      }
-    }
-
-    // Check for alignment requirements
-    if (rule.rule_type === 'requirement' && ruleText) {
-      const keywords = extractKeywords(ruleText);
-      const matchedKeywords = keywords.filter(kw => sdText.includes(kw));
-
-      if (matchedKeywords.length === 0 && rule.enforcement_level === 'mandatory') {
-        warnings.push({
-          ruleId: rule.id,
-          ruleType: rule.rule_type,
-          ruleText: rule.rule_text,
-          reason: 'SD does not reference required governance area',
-        });
-      }
+    if (rulesError) {
+      logger.warn(`Cascade validation: Could not load rules: ${rulesError.message}`);
+    } else {
+      rules = rulesData || [];
     }
   }
 
-  // Step 4: Validate 6-layer governance hierarchy
-  // Layer 1: Mission — at least one active constitution must exist (mission derives constitutions)
-  if (!constitutions || constitutions.length === 0) {
-    violations.push({
-      layer: 'mission_constitution',
-      reason: 'No active AEGIS constitutions found — Mission→Constitution link missing',
-      enforcementLevel: 'blocking',
-    });
+  // Check SD text against each rule
+  if (rules.length > 0) {
+    const sdText = [
+      sd.title || '',
+      sd.description || '',
+      ...(sd.strategic_objectives || []),
+      ...(sd.key_changes || []).map(k => typeof k === 'string' ? k : k.change || ''),
+    ].join(' ').toLowerCase();
+
+    for (const rule of rules) {
+      rulesChecked++;
+      const ruleText = (rule.rule_text || '').toLowerCase();
+
+      // Check for prohibition violations
+      if (rule.category === 'prohibition' && ruleText) {
+        const keywords = extractKeywords(ruleText);
+        const matchedKeywords = keywords.filter(kw => sdText.includes(kw));
+
+        if (matchedKeywords.length >= 2) {
+          violations.push({
+            ruleId: rule.id,
+            constitutionId: rule.constitution_id,
+            ruleType: rule.category,
+            ruleText: rule.rule_text,
+            enforcementLevel: rule.severity,
+            matchedKeywords,
+            sdTitle: sd.title,
+          });
+        }
+      }
+
+      // Check for requirement alignment
+      if (rule.category === 'requirement' && ruleText) {
+        const keywords = extractKeywords(ruleText);
+        const matchedKeywords = keywords.filter(kw => sdText.includes(kw));
+
+        if (matchedKeywords.length === 0 && rule.severity === 'critical') {
+          warnings.push({
+            ruleId: rule.id,
+            ruleType: rule.category,
+            ruleText: rule.rule_text,
+            reason: 'SD does not reference required governance area',
+          });
+        }
+      }
+    }
   }
 
-  // Layer 2: Constitution → Rules already validated in Step 3
-
-  // Layer 3: Vision alignment (MANDATORY — not conditional on vision_key)
+  // Layer 3: Vision — verify vision_key references real eva_vision_documents record
   const visionKey = sd.vision_key || sd.metadata?.vision_key || null;
   if (visionKey) {
     const { data: vision } = await supabase
@@ -146,26 +161,39 @@ export async function validateCascade({
       });
     }
   } else {
-    // Vision alignment is mandatory — warn if no vision_key provided
     warnings.push({
       layer: 'vision',
       reason: 'SD has no vision_key — vision alignment not verifiable. Consider linking to a vision document.',
     });
   }
 
-  // Layer 4: Strategy alignment — SD should reference strategic objectives
+  // Layer 4: Strategy — bidirectional: check objectives AND active themes for current year
   const hasStrategicObjectives = sd.strategic_objectives && sd.strategic_objectives.length > 0;
   if (!hasStrategicObjectives) {
     warnings.push({
       layer: 'strategy',
       reason: 'SD has no strategic_objectives — strategy layer not linked',
     });
+  } else {
+    const currentYear = new Date().getFullYear();
+    const { data: themes, error: themesError } = await supabase
+      .from('strategic_themes')
+      .select('id, theme_key, title')
+      .eq('year', currentYear)
+      .eq('status', 'active')
+      .limit(5);
+
+    if (themesError) {
+      warnings.push({ layer: 'strategy', reason: `Could not query strategic_themes: ${themesError.message}` });
+    } else if (!themes || themes.length === 0) {
+      warnings.push({
+        layer: 'strategy',
+        reason: `SD has strategic_objectives but no active strategic themes found for ${currentYear}. Strategy alignment not verifiable.`,
+      });
+    }
   }
 
-  // Layer 5: OKR alignment — check if SD links to objectives/key results
-  // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-067 US-002: Bidirectional cascade validation
-  // Direction 1 (SD→OKR): SD should reference OKR objectives
-  // Direction 2 (OKR→SD): Referenced objectives must exist and be active
+  // Layer 5: OKR — bidirectional validation
   const objectiveIds = sd.metadata?.objective_ids || [];
   if (objectiveIds.length === 0) {
     warnings.push({
@@ -173,7 +201,6 @@ export async function validateCascade({
       reason: 'SD has no linked OKR objectives — OKR layer not connected',
     });
   } else {
-    // Reverse validation (OKR→SD): verify referenced objectives actually exist
     const { data: objectives, error: objError } = await supabase
       .from('key_results')
       .select('id, objective_id')
@@ -189,7 +216,6 @@ export async function validateCascade({
       const orphanedIds = objectiveIds.filter(id => !foundObjectiveIds.has(id));
 
       if (orphanedIds.length > 0) {
-        // Orphaned references are violations (blocking), not warnings
         violations.push({
           layer: 'okr_reverse',
           reason: `SD references ${orphanedIds.length} non-existent OKR objective(s): ${orphanedIds.join(', ')}. Cascade link is broken.`,
@@ -206,16 +232,14 @@ export async function validateCascade({
   let blocked = hasViolations;
   let overrideDecision = null;
 
-  // Step 5: Check for chairman override, then escalate if still blocked
+  // Check for chairman override, then escalate if still blocked
   if (hasViolations && !dryRun) {
-    // Check if chairman already approved an override
     overrideDecision = await checkCascadeOverride(supabase, sd);
 
     if (overrideDecision) {
       blocked = false;
       logger.log(`Cascade validation: ${violations.length} violation(s) OVERRIDDEN by chairman decision ${overrideDecision.id}`);
     } else {
-      // Escalate as blocking — chairman must approve to proceed
       try {
         await escalateToChairman(supabase, sd, violations);
         logger.log(`Cascade validation: ${violations.length} violation(s) BLOCKED — escalated to chairman for mandatory revision`);
@@ -227,7 +251,6 @@ export async function validateCascade({
 
   const passed = !blocked;
 
-  // Log results
   logger.log(`Cascade validation: ${rulesChecked} rules checked, ${violations.length} violations, ${warnings.length} warnings, blocked=${blocked}`);
 
   return { passed, blocked, violations, warnings, rulesChecked, overrideDecision };
@@ -235,7 +258,6 @@ export async function validateCascade({
 
 /**
  * Escalate cascade violations to chairman_decisions queue.
- * Creates a blocking decision — SD creation halted until chairman approves.
  */
 async function escalateToChairman(supabase, sd, violations) {
   const { error } = await supabase
