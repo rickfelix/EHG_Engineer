@@ -6,7 +6,7 @@
  */
 
 import ResultBuilder from '../ResultBuilder.js';
-import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
+import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
