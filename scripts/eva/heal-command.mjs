@@ -51,7 +51,14 @@ function cmdVision(args) {
 // ─── SD HEAL: Score codebase against completed SDs ───────────────────────────
 
 function parseSDArgs(args) {
-  const opts = { mode: 'query', today: false, sdId: null, last: 5, since: null, until: null };
+  const opts = { mode: 'query', today: false, sdId: null, last: 5, since: null, until: null, inProgress: false };
+
+  // SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-3): extract --in-progress before mode parsing
+  // (must be removed from args to avoid conflict with persist/generate subcommand parsers)
+  if (args.includes('--in-progress') || args.includes('--allow-in-progress')) {
+    opts.inProgress = true;
+    args = args.filter(a => a !== '--in-progress' && a !== '--allow-in-progress');
+  }
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -117,9 +124,16 @@ async function cmdSDQuery(opts) {
 
   let query = supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status')
-    .eq('status', 'completed')
-    .order('completion_date', { ascending: false });
+    .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status');
+
+  // SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-4): --in-progress includes non-completed SDs
+  if (opts.inProgress) {
+    query = query.in('status', ['completed', 'in_progress', 'active']);
+    console.log('   📋 --in-progress: including in_progress/active SDs (pre-completion scoring)');
+  } else {
+    query = query.eq('status', 'completed');
+  }
+  query = query.order('completion_date', { ascending: false });
 
   if (opts.sdId) {
     query = query.eq('sd_key', opts.sdId);
@@ -235,7 +249,7 @@ async function cmdSDQuery(opts) {
   console.log('===END_CONTEXT===');
 }
 
-async function cmdSDPersist(scoreJson, filePath) {
+async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
   const supabase = getSupabase();
   const gitMeta = getGitMeta();
   let rawJson = scoreJson;
@@ -412,9 +426,17 @@ async function cmdSDPersist(scoreJson, filePath) {
     for (const s of needsCorrection) {
       console.log(`    ${s.sdKey}: ${s.score}/100 — run: node scripts/eva/heal-command.mjs sd generate ${s.scoreId}`);
     }
-    console.log(`\nHEAL_STATUS=NEEDS_CORRECTION`);
-    console.log(`HEAL_SCORE_IDS=${needsCorrection.map(s => s.scoreId).join(',')}`);
-    console.log(`HEAL_NEXT_CMD=node scripts/eva/heal-command.mjs sd generate ${needsCorrection[0].scoreId}`);
+
+    // SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-5): suppress corrective generation for in-progress SDs
+    if (inProgress) {
+      console.log(`\n  ⚠️  --in-progress active: corrective SD generation suppressed (SD not yet complete)`);
+      console.log(`\nHEAL_STATUS=NEEDS_CORRECTION_DEFERRED`);
+      console.log(`HEAL_SCORE_IDS=${needsCorrection.map(s => s.scoreId).join(',')}`);
+    } else {
+      console.log(`\nHEAL_STATUS=NEEDS_CORRECTION`);
+      console.log(`HEAL_SCORE_IDS=${needsCorrection.map(s => s.scoreId).join(',')}`);
+      console.log(`HEAL_NEXT_CMD=node scripts/eva/heal-command.mjs sd generate ${needsCorrection[0].scoreId}`);
+    }
   } else {
     console.log(`\n  All SDs pass threshold! No corrective action needed.`);
     console.log(`\nHEAL_STATUS=PASS`);
@@ -661,7 +683,7 @@ if (isMain) {
           console.error('Usage: heal sd persist \'<JSON>\' OR heal sd persist --file <path>');
           process.exit(1);
         }
-        cmdSDPersist(opts.persistJson, opts.persistFile).catch(e => { console.error(e.message); process.exit(1); });
+        cmdSDPersist(opts.persistJson, opts.persistFile, { inProgress: opts.inProgress }).catch(e => { console.error(e.message); process.exit(1); });
       } else if (opts.mode === 'generate') {
         if (!opts.scoreId) { console.error('Usage: heal sd generate <score-id>'); process.exit(1); }
         cmdSDGenerate(opts.scoreId).catch(e => { console.error(e.message); process.exit(1); });
