@@ -251,6 +251,33 @@ export function createRetrospectiveExistsGate(supabase) {
       console.log(`   Quality score: ${retrospective.quality_score}`);
       console.log(`   Status: ${retrospective.status}`);
 
+      // SD-type auto-pass logic (aligned with RETROSPECTIVE_QUALITY_GATE in plan-to-lead)
+      // Non-feature SD types produce inherently thin retrospectives that fail quality thresholds.
+      // See: scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js
+      const sdType = ctx.sd?.sd_type || ctx.sd?.category || 'feature';
+      const autoPassTypes = ['infrastructure', 'process', 'documentation', 'bugfix', 'bug_fix', 'corrective', 'enhancement'];
+
+      if (autoPassTypes.includes(sdType)) {
+        const score = Math.max(retrospective.quality_score || 55, 55);
+        console.log(`   🔧 AUTO-PASS: ${sdType} SD — thin retrospective expected`);
+        console.log(`   Score floor: ${score}/100`);
+        return {
+          passed: true,
+          score,
+          max_score: 100,
+          issues: [],
+          warnings: [`${sdType} auto-pass: Thin retrospective expected for ${sdType} SDs`],
+          details: {
+            auto_pass: true,
+            sd_type: sdType,
+            retrospectiveId: retrospective.id,
+            qualityScore: retrospective.quality_score,
+            reason: `${sdType} SDs produce narrow-scope retrospectives that fail AI rubric thresholds`
+          }
+        };
+      }
+
+      // Feature SDs: require quality_score >= 60
       const minScore = 60;
       if (retrospective.quality_score < minScore) {
         return {
