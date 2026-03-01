@@ -203,7 +203,7 @@ export function scanMetadataForMisplacedDependencies(metadata) {
  * @returns {Promise<Object>} Trace result with paths, workable SDs, and diagnostics
  */
 export async function traceDependencyChain(supabase, sdKey, options = {}) {
-  const { maxDepth = 3, maxResults = 5 } = options;
+  const { maxDepth = 6, maxResults = 5 } = options; // Raised from 3 to support 6-level deep hierarchies (V09)
   const visited = new Set();
   const workableSDs = [];
   const tracedPaths = [];

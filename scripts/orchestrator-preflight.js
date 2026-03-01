@@ -24,6 +24,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { mapHierarchy, MAX_HIERARCHY_DEPTH } from './lib/sd-hierarchy-mapper.js';
 
 dotenv.config();
 
@@ -307,6 +308,33 @@ function getProfile(sdType) {
   return SD_TYPE_PROFILES[sdType] || SD_TYPE_PROFILES.feature;
 }
 
+/**
+ * Print deep hierarchy tree with depth indicators (V09: 6-level support)
+ */
+function printDeepTree(node, depth) {
+  const indent = '  '.repeat(depth);
+  const status = node.isComplete ? '✅' : (node.status === 'cancelled' ? '🚫' : '⬜');
+  const depthLabel = `[L${depth}]`;
+  const truncatedNote = node._truncated ? ' ⚠️  (truncated)' : '';
+  console.log(`${indent}${status} ${depthLabel} ${node.sd_key || node.id}: ${node.title || ''}${truncatedNote}`);
+
+  for (const child of node.children || []) {
+    printDeepTree(child, depth + 1);
+  }
+}
+
+/**
+ * Find nodes that were truncated due to maxDepth
+ */
+function findTruncated(node) {
+  const results = [];
+  if (node._truncated) results.push(node);
+  for (const child of node.children || []) {
+    results.push(...findTruncated(child));
+  }
+  return results;
+}
+
 function formatStatus(status) {
   const icons = {
     draft: '📝',
@@ -527,8 +555,16 @@ async function main() {
     process.exit(1);
   }
 
-  // Fetch children
+  // Fetch children (single-level for detection and validation)
   const children = await getChildren(sd.id);
+
+  // Also fetch deep hierarchy tree (up to 6 levels) for display
+  let hierarchyTree = null;
+  try {
+    hierarchyTree = await mapHierarchy(sd.sd_key || sd.id, { maxDepth: MAX_HIERARCHY_DEPTH });
+  } catch (e) {
+    // Non-fatal — fall back to single-level display
+  }
 
   // Detect orchestrator status
   const detection = detectOrchestratorStatus(sd, children);
@@ -573,6 +609,21 @@ async function main() {
     console.log(JSON.stringify(output, null, 2));
   } else {
     await printPreflightReport(sd, children, detection, validation);
+
+    // Display deep hierarchy tree if available (V09: 6-level depth support)
+    if (hierarchyTree && hierarchyTree.children && hierarchyTree.children.length > 0) {
+      console.log('');
+      console.log(`📊 HIERARCHY TREE (up to ${MAX_HIERARCHY_DEPTH} levels):`);
+      console.log('─'.repeat(60));
+      printDeepTree(hierarchyTree, 0);
+      const truncated = findTruncated(hierarchyTree);
+      if (truncated.length > 0) {
+        console.log('');
+        console.log(`⚠️  ${truncated.length} node(s) truncated at depth ${MAX_HIERARCHY_DEPTH}`);
+      }
+      console.log('─'.repeat(60));
+    }
+
     console.log('');
     console.log('PROCEEDING: Full LEAD→PLAN→EXEC workflow for each child.');
     console.log('');

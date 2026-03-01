@@ -36,13 +36,77 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+/** Maximum supported hierarchy depth */
+export const MAX_HIERARCHY_DEPTH = 6;
+
+/**
+ * Traverse upward from a child SD to its root ancestor.
+ *
+ * @param {string} sdId - The sd_key or UUID of the starting SD
+ * @param {number} [maxLevels=6] - Maximum ancestor levels to traverse
+ * @returns {Promise<Array>} Ordered array of ancestor SDs (child → root), empty if no parent
+ */
+export async function getAncestorChain(sdId, maxLevels = MAX_HIERARCHY_DEPTH) {
+  const visited = new Set();
+  const chain = [];
+
+  // Fetch the starting SD to get its parent_sd_id
+  const { data: startSd } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status, current_phase, parent_sd_id')
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
+    .eq('is_active', true)
+    .single();
+
+  if (!startSd || !startSd.parent_sd_id) {
+    return chain; // No parent — return empty
+  }
+
+  visited.add(startSd.id);
+  let currentParentId = startSd.parent_sd_id;
+
+  while (currentParentId && chain.length < maxLevels) {
+    // Cycle detection
+    if (visited.has(currentParentId)) {
+      console.warn(`[getAncestorChain] Cycle detected at ${currentParentId} — returning partial chain`);
+      break;
+    }
+
+    const { data: ancestor } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, current_phase, parent_sd_id')
+      .eq('id', currentParentId)
+      .eq('is_active', true)
+      .single();
+
+    if (!ancestor) break;
+
+    visited.add(ancestor.id);
+    chain.push({
+      id: ancestor.id,
+      sd_key: ancestor.sd_key,
+      title: ancestor.title,
+      status: ancestor.status,
+      current_phase: ancestor.current_phase,
+      depth: chain.length // 0 = immediate parent, 1 = grandparent, etc.
+    });
+
+    currentParentId = ancestor.parent_sd_id;
+  }
+
+  return chain;
+}
+
 /**
  * Map an SD's complete hierarchy (children, grandchildren, etc.)
  *
  * @param {string} sdId - The legacy_id or UUID of the parent SD
+ * @param {Object} [options] - Options
+ * @param {number} [options.maxDepth=6] - Maximum depth to traverse
  * @returns {Promise<Object>} Hierarchy tree with children nested
  */
-export async function mapHierarchy(sdId) {
+export async function mapHierarchy(sdId, options = {}) {
+  const { maxDepth = MAX_HIERARCHY_DEPTH } = options;
   // First, get the parent SD
   const { data: parent, error: parentError } = await supabase
     .from('strategic_directives_v2')
@@ -61,7 +125,7 @@ export async function mapHierarchy(sdId) {
 
   if (childError) {
     // Fallback to manual recursive query
-    return await buildHierarchyManual(parent);
+    return await buildHierarchyManual(parent, 0, maxDepth);
   }
 
   // Build tree structure from flat list
@@ -70,13 +134,25 @@ export async function mapHierarchy(sdId) {
 
 /**
  * Build hierarchy tree manually (fallback if DB function not available)
+ *
+ * @param {Object} parent - Parent SD record
+ * @param {number} [currentDepth=0] - Current depth in the tree
+ * @param {number} [maxDepth=6] - Maximum depth to traverse
  */
-async function buildHierarchyManual(parent) {
+async function buildHierarchyManual(parent, currentDepth = 0, maxDepth = MAX_HIERARCHY_DEPTH) {
+  const startTime = currentDepth === 0 ? Date.now() : null;
   const tree = {
     ...parent,
+    depth: currentDepth,
     isComplete: isComplete(parent.status),
     children: []
   };
+
+  // Depth limit check
+  if (currentDepth >= maxDepth) {
+    tree._truncated = true;
+    return tree;
+  }
 
   // Get immediate children
   const { data: children } = await supabase
@@ -87,12 +163,21 @@ async function buildHierarchyManual(parent) {
     .order('sequence_rank', { nullsFirst: false })
     .order('created_at');
 
+  // Circuit breaker: warn if >50 children at any level
+  if (children && children.length > 50) {
+    console.warn(`[sd-hierarchy-mapper] WARNING: ${children.length} children at depth ${currentDepth} for ${parent.sd_key || parent.id}. Performance may be impacted.`);
+  }
+
   if (children && children.length > 0) {
     for (const child of children) {
-      // Recursively get grandchildren
-      const childTree = await buildHierarchyManual(child);
+      const childTree = await buildHierarchyManual(child, currentDepth + 1, maxDepth);
       tree.children.push(childTree);
     }
+  }
+
+  // Circuit breaker: warn if traversal takes >5s
+  if (startTime && (Date.now() - startTime) > 5000) {
+    console.warn(`[sd-hierarchy-mapper] WARNING: Hierarchy traversal took ${Date.now() - startTime}ms (>5s threshold) for ${parent.sd_key || parent.id}`);
   }
 
   return tree;
@@ -297,9 +382,11 @@ if (process.argv[1].endsWith('sd-hierarchy-mapper.js')) {
 
 export default {
   mapHierarchy,
+  getAncestorChain,
   getDepthFirstOrder,
   getNextIncomplete,
   isHierarchyComplete,
   getHierarchyStats,
-  printHierarchy
+  printHierarchy,
+  MAX_HIERARCHY_DEPTH
 };
