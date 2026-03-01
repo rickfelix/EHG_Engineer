@@ -65,31 +65,31 @@ tags: [general, auto-generated]
 
 **Start Here** (5-minute orientation):
 1. **[Project Overview](../README.md)** - What is EHG_Engineer?
-2. **[Quick Setup](../04_features/SIMPLE_PROJECT_SETUP.md)** - Get running in 5 minutes
+2. **[Quick Setup](../guides/simple-project-setup.md)** - Get running in 5 minutes
 3. **[Architecture Overview](../01_architecture/README.md)** - System design basics
-4. **[LEO Protocol Intro](../CLAUDE.md)** - How we build features
+4. **LEO Protocol Intro** - How we build features
 
 **Next Steps**:
 - **[Developer Onboarding](#)** *(to be created)* - Your first week guide
-- **[Contributing Guidelines](../CONTRIBUTING.md)** - How to contribute
-- **[Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md)** - How we document
+- **Contributing Guidelines** - How to contribute
+- **[Documentation Standards](../03_protocols_and_standards/documentation-standards.md)** - How we document
 
 ---
 
 ## I'm Implementing a Feature (LEO Protocol)
 
 ### LEAD Phase (Approval)
-- **[CLAUDE_LEAD.md](../CLAUDE_LEAD.md)** - Full LEAD phase guide
+- **CLAUDE_LEAD.md** - Full LEAD phase guide
 - **[Lead Intent Clarification](../guides/lead-intent-clarification-guide.md)** - Clarify requirements
 - **[Validation Patterns](../reference/validation-enforcement.md)** - What to validate
 
 ### PLAN Phase (Design)
-- **[CLAUDE_PLAN.md](../CLAUDE_PLAN.md)** - Full PLAN phase guide
+- **CLAUDE_PLAN.md** - Full PLAN phase guide
 - **[PRD Creation](../guides/prd-creation-process.md)** - How to write PRDs
 - **[Database Patterns](../reference/database-agent-patterns.md)** - Schema design
 
 ### EXEC Phase (Implementation)
-- **[CLAUDE_EXEC.md](../CLAUDE_EXEC.md)** - Full EXEC phase guide
+- **CLAUDE_EXEC.md** - Full EXEC phase guide
 - **[Testing Integration](../guides/enhanced-testing-integration.md)** - Unit + E2E testing
 - **[Component Patterns](../reference/exec-component-recommendations-guide.md)** - UI components
 
@@ -105,7 +105,7 @@ tags: [general, auto-generated]
 ### Getting Started
 - **[Database Connection](../guides/database-connection.md)** - Connect to Supabase
 - **[Database Architecture](../guides/database-architecture.md)** - Schema overview
-- **[Important Distinctions](../operations/IMPORTANT_DATABASE_DISTINCTION.md)** - EHG vs EHG_Engineer DB
+- **[Important Distinctions](2026/duplicates/04_features/important-database-distinction.md)** - EHG vs EHG_Engineer DB
 
 ### Common Tasks
 - **[Schema Design](../reference/database-agent-patterns.md)** - Design patterns
@@ -113,7 +113,7 @@ tags: [general, auto-generated]
 - **[RLS Policies](../reference/database-best-practices.md)** - Row-level security
 
 ### Troubleshooting
-- **[Connection Issues](../summaries/sd-sessions/database/DATABASE_CONNECTION_ISSUE_SD-VISION-V2-003.md)** - Common connection problems
+- **[Connection Issues](../summaries/sd-sessions/database/database-connection-issue-sd-vision-v2-003.md)** - Common connection problems
 - **[Migration Validation](../guides/database-migration-validation.md)** - Validate migrations
 
 ---
@@ -132,20 +132,20 @@ tags: [general, auto-generated]
 - **[Testing Troubleshooting](../guides/enhanced-testing-troubleshooting.md)** - Fix test issues
 
 ### Sub-Agent Testing
-- **[Testing Agent](../.claude/agents/testing-agent.md)** - Testing sub-agent
-- **[UAT Agent](../.claude/agents/uat-agent.md)** - UAT automation
+- **Testing Agent** - Testing sub-agent
+- **UAT Agent** - UAT automation
 
 ---
 
 ## I'm Deploying / Operations
 
 ### Production Deployment
-- **[Production Go-Live](../operations/PRODUCTION_GO_LIVE.md)** - Deployment checklist
+- **[Production Go-Live](../06_deployment/production-go-live.md)** - Deployment checklist
 - **[Deployment Guide](../01_architecture/README.md)** - Deployment overview
 - **[CI/CD Setup](../guides/leo-ci-cd-integration-setup.md)** - GitHub Actions
 
 ### Monitoring & Troubleshooting
-- **[Troubleshooting Index](../troubleshooting)** - Common issues
+- **Troubleshooting Index** - Common issues
 - **[Database Health](../guides/database-connection.md)** - Check DB status
 - **[Performance Guide](../guides/cost-optimization-guide.md)** - Optimization tips
 
@@ -155,22 +155,22 @@ tags: [general, auto-generated]
 
 ### Sub-Agent System
 - **[Agent Directory](../01_architecture/README.md)** - All available agents
-- **[Invisible Subagent System](../guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md)** - Architecture
+- **[Invisible Subagent System](../guides/invisible-subagent-system-guide.md)** - Architecture
 - **[Hybrid Workflow](../guides/hybrid-sub-agent-workflow.md)** - Hybrid patterns
 - **[Sub-Agent Patterns](../reference/agent-patterns-guide.md)** - Best practices
 
 ### Specific Sub-Agents
 | Agent | Purpose | Guide |
 |-------|---------|-------|
-| DOCMON | Documentation generation | [docmon-agent.md](../.claude/agents/docmon-agent.md) |
-| Database | Schema design, migrations | [database-agent.md](../.claude/agents/database-agent.md) |
-| Design | UI/UX validation | [design-agent.md](../.claude/agents/design-agent.md) |
-| Testing | E2E test generation | [testing-agent.md](../.claude/agents/testing-agent.md) |
-| Security | Auth, authorization | [security-agent.md](../.claude/agents/security-agent.md) |
-| Validation | Codebase audits | [validation-agent.md](../.claude/agents/validation-agent.md) |
+| DOCMON | Documentation generation | docmon-agent.md |
+| Database | Schema design, migrations | database-agent.md |
+| Design | UI/UX validation | design-agent.md |
+| Testing | E2E test generation | testing-agent.md |
+| Security | Auth, authorization | security-agent.md |
+| Validation | Codebase audits | validation-agent.md |
 
 ### Agent Execution
-- **[Execute Sub-Agent](reference/native-sub-agent-invocation.md)** - How to invoke
+- **Execute Sub-Agent** - How to invoke
 - **[Agent Patterns](../reference/agent-patterns-guide.md)** - Usage patterns
 
 ---
@@ -189,7 +189,7 @@ tags: [general, auto-generated]
 - **[Quick Reference](../reference/quick-reference.md)** - Anti-patterns to avoid
 
 ### Advanced Topics
-- **[Protocol Self-Improvement](reference/protocol-self-improvement.md)** - LEO learning
+- **Protocol Self-Improvement** - LEO learning
 - **[Context Engineering](../reference/agentic-context-engineering-v3.md)** - Context optimization
 - **[Root Cause Agent](../reference/root-cause-agent.md)** - Debugging methodology
 
@@ -200,36 +200,36 @@ tags: [general, auto-generated]
 ### By Category
 
 **Architecture & Design**:
-- [01_architecture/](../05_testing/architecture.md) - System architecture
+- [01_architecture/](../database/architecture.md) - System architecture
 - [Design Patterns](../leo/sub-agents/design-sub-agent-guide.md)
 - [Component Registry](../reference/component-registry.md)
 
 **API Development**:
-- [02_api/](02_api/) - API documentation
-- [API Patterns](../.claude/agents/api-agent.md)
+- 02_api/ - API documentation
+- API Patterns
 
 **Protocols & Standards**:
 - [03_protocols_and_standards/](../03_protocols_and_standards) - LEO Protocol versions
-- [Git Guidelines](../03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md)
-- [GitHub Workflows](../03_protocols_and_standards/leo_github_deployment_workflow_v4.1.2.md)
+- [Git Guidelines](../03_protocols_and_standards/leo-git-commit-guidelines-v4.2.0.md)
+- [GitHub Workflows](../03_protocols_and_standards/leo-github-deployment-workflow-v4.1.2.md)
 
 **Feature Documentation**:
-- [04_features/](04_features/) - Feature-specific docs
+- 04_features/ - Feature-specific docs
 - [MVP Engine](../04_features/mvp_engine.md)
 - [AI Leadership Agents](../04_features/ai_leadership_agents.md)
 
 **Testing & QA**:
-- [05_testing/](05_testing/) - Testing documentation
+- 05_testing/ - Testing documentation
 - [QA Guides](../reference/qa-director-guide.md)
 
 **Deployment**:
-- [06_deployment/](06_deployment/) - Deployment guides
-- [Production Checklist](../operations/PRODUCTION_GO_LIVE.md)
+- 06_deployment/ - Deployment guides
+- [Production Checklist](../06_deployment/production-go-live.md)
 
 **Analysis & Reports**:
-- [analysis/](../analysis) - Issue analysis, assessments
+- analysis/ - Issue analysis, assessments
 - [Retrospectives](../retrospectives/lessons-learned-database-agent-rls-policy-chain.md) - Project retrospectives
-- [Summaries](summaries/) - Implementation summaries
+- Summaries - Implementation summaries
 
 **Guides & How-Tos**:
 - [guides/](../04_features/README.md) - 60+ step-by-step guides
@@ -244,19 +244,19 @@ tags: [general, auto-generated]
 ## I'm Troubleshooting an Issue
 
 ### Common Issues
-**[Troubleshooting Directory](../troubleshooting)** - Start here
+**Troubleshooting Directory** - Start here
 
 **Specific Issues**:
-- **Database connection**: [Database Connection Issues](../summaries/sd-sessions/database/DATABASE_CONNECTION_ISSUE_SD-VISION-V2-003.md)
-- **Git hook errors**: [Fix Hook Errors](../troubleshooting/FIX_HOOK_ERRORS.md)
-- **GitHub workflow YAML**: [YAML Parsing Errors](../troubleshooting/github-workflows-yaml-parsing-errors.md)
-- **Migration issues**: [Manual Migration Required](../troubleshooting/MANUAL_MIGRATION_REQUIRED.md)
+- **Database connection**: [Database Connection Issues](../summaries/sd-sessions/database/database-connection-issue-sd-vision-v2-003.md)
+- **Git hook errors**: [Fix Hook Errors](../reference/troubleshooting/fix-hook-errors.md)
+- **GitHub workflow YAML**: [YAML Parsing Errors](../reference/troubleshooting/github-workflows-yaml-parsing-errors.md)
+- **Migration issues**: [Manual Migration Required](../reference/troubleshooting/manual-migration-required.md)
 
 ### By Problem Type
 
 **Build/Deployment Issues**:
 - [CI/CD Guide](../guides/leo-ci-cd-integration-setup.md)
-- [Deployment Troubleshooting](06_deployment/)
+- Deployment Troubleshooting
 
 **Test Failures**:
 - [Testing Troubleshooting](../guides/enhanced-testing-troubleshooting.md)
@@ -268,7 +268,7 @@ tags: [general, auto-generated]
 
 **Performance Issues**:
 - [Cost Optimization](../guides/cost-optimization-guide.md)
-- [Performance Patterns](../.claude/agents/performance-agent.md)
+- Performance Patterns
 
 ---
 
@@ -293,17 +293,17 @@ tags: [general, auto-generated]
 - Production maintenance
 
 ### For Architects
-- [Architecture Docs](../05_testing/architecture.md)
+- [Architecture Docs](../database/architecture.md)
 - [System Design](../reference/database-agent-patterns.md)
-- [ADR Documents](../05_testing/architecture.md)
+- [ADR Documents](../database/architecture.md)
 
 ---
 
 ## Documentation Maintenance
 
 ### How to Update Documentation
-1. **Read Standards**: [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md)
-2. **Follow Structure**: [DIRECTORY_STRUCTURE.md](../01_architecture/DIRECTORY_STRUCTURE.md)
+1. **Read Standards**: [DOCUMENTATION_STANDARDS.md](../03_protocols_and_standards/documentation-standards.md)
+2. **Follow Structure**: [DIRECTORY_STRUCTURE.md](../01_architecture/directory-structure.md)
 3. **Use Templates**: See standards doc for templates
 
 ### How to Find Documentation
@@ -312,8 +312,8 @@ tags: [general, auto-generated]
 3. **Search**: `grep -r "topic" docs/`
 
 ### Documentation Health
-- **Structure Assessment**: [Full Report](../analysis/DOCUMENTATION_STRUCTURE_ASSESSMENT.md)
-- **Improvement Plan**: [Summary](DOCUMENTATION_IMPROVEMENT_SUMMARY.md)
+- **Structure Assessment**: [Full Report](../summaries/analysis/documentation-structure-assessment.md)
+- **Improvement Plan**: [Summary](documentation-improvement-summary.md)
 
 ---
 
@@ -321,16 +321,16 @@ tags: [general, auto-generated]
 
 | I need... | Go to... |
 |-----------|----------|
-| API endpoint docs | [02_api/](02_api/) |
-| Database schema | [Database Schema](../reference/database-schema-overview.md) |
-| LEO Protocol version | [CLAUDE.md](../CLAUDE.md) - shows current version |
-| Git commit guidelines | [Git Guidelines](../03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md) |
+| API endpoint docs | 02_api/ |
+| Database schema | [Database Schema](../reference/schema/engineer/database-schema-overview.md) |
+| LEO Protocol version | CLAUDE.md - shows current version |
+| Git commit guidelines | [Git Guidelines](../03_protocols_and_standards/leo-git-commit-guidelines-v4.2.0.md) |
 | Testing guide | [05_testing/README.md](../01_architecture/README.md) |
 | Sub-agent list | [Agent Directory](../01_architecture/README.md) |
-| Troubleshooting | [troubleshooting/](../troubleshooting) |
+| Troubleshooting | troubleshooting/ |
 | Best practices | [reference/](../reference) |
 | How-to guides | [guides/README.md](../04_features/README.md) |
-| Recent changes | [CHANGELOG.md](../CHANGELOG.md) |
+| Recent changes | CHANGELOG.md |
 
 ---
 

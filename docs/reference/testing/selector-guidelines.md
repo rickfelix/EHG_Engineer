@@ -336,5 +336,5 @@ Run `npm run lint:e2e` to check for violations.
 ## Related Documentation
 
 - [tests/e2e/README.md](./README.md) - E2E testing overview
-- [docs/reference/qa-director-guide.md](../../docs/reference/qa-director-guide.md) - QA Engineering Director guide
+- [docs/reference/qa-director-guide.md](../qa-director-guide.md) - QA Engineering Director guide
 - [Playwright Best Practices](https://playwright.dev/docs/best-practices) - Official Playwright guidance

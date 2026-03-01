@@ -510,7 +510,7 @@ function inferImplementationContext(sd) {
 
 ## Related Documentation
 
-- [PRD Generation Pipeline](../03_protocols_and_standards/LEO_v4.3_PRD_GENERATION.md)
+- PRD Generation Pipeline
 - [Strategic Directive Schema](../reference/schema/engineer/tables/strategic_directives_v2.md)
 - [Database Agent Patterns](../reference/database-agent-patterns.md)
 - [Validation Enforcement](../reference/validation-enforcement.md)

@@ -304,9 +304,9 @@ Consumers should:
 ## Related Documentation
 
 - [AUTO-PROCEED Protocol](../leo/protocol/v4.3.3-auto-proceed-enhancement.md) - Parent orchestrator
-- [Discovery Document](../discovery/auto-proceed-enhancement-discovery.md) - Requirements analysis
-- [Orchestrator Completion Hook](../reference/orchestrator-hooks.md) - Integration point
-- [Secret Redaction Patterns](../security/secret-redaction-patterns.md) - Security best practices
+- [Discovery Document](discovery/auto-proceed-enhancement-discovery.md) - Requirements analysis
+- Orchestrator Completion Hook - Integration point
+- Secret Redaction Patterns - Security best practices
 
 ## Troubleshooting
 

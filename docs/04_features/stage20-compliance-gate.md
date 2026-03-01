@@ -300,7 +300,7 @@ GROUP BY archetype;
 - **Parent Initiative**: [Venture Lifecycle Gap Remediation Overview](./venture-lifecycle-gap-remediation-overview.md)
 - **Database Schema**: [stage20-compliance-schema.md](../database/stage20-compliance-schema.md)
 - **RLS Policies**: [database-agent-patterns.md](../reference/database-agent-patterns.md)
-- **Stage 20 Overview**: [stages/stage-20-security-performance.md](../workflow/stages/stage-20-security-and-performance.md)
+- **Stage 20 Overview**: [stages/stage-20-security-performance.md](../guides/workflow/stages/stage-20-security-and-performance.md)
 
 ## Change History
 

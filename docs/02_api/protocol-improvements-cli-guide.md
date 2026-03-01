@@ -176,7 +176,7 @@ The Protocol Constitution contains 9 immutable rules that govern self-improvemen
 - CONST-008: Chesterton's Fence (review before removal)
 - CONST-009: Human FREEZE command
 
-**For complete details**: See [Protocol Constitution Guide](../governance/protocol-constitution-guide.md)
+**For complete details**: See [Protocol Constitution Guide](../03_protocols_and_standards/protocol-constitution-guide.md)
 
 #### Apply Improvements
 

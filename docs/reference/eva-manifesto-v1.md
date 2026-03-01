@@ -117,7 +117,7 @@ No agent may operate as a black box. The Chairman or EVA may request explanation
 
 **Enforcement**: All actions logged to `agent_audit_log`. Reasoning captured in `decision_rationale` field.
 
-*Source: [Governance Policy Engine Spec §2](../vision/specs/08-governance-policy-engine.md)*
+*Source: [Governance Policy Engine Spec §2](vision/specs/08-governance-policy-engine.md)*
 
 #### Oath II: Boundaries
 
@@ -137,7 +137,7 @@ Any action exceeding delegated authority MUST be escalated. Agents cannot grant 
 
 **Enforcement**: Authority checks via `governance_policy_engine` before every action.
 
-*Source: [Governance Policy Engine Spec §2.2](../vision/specs/08-governance-policy-engine.md)*
+*Source: [Governance Policy Engine Spec §2.2](vision/specs/08-governance-policy-engine.md)*
 
 #### Oath III: Escalation Integrity
 
@@ -153,7 +153,7 @@ Suppressing escalations is a critical violation.
 
 **Enforcement**: Escalation budgets prevent storm conditions. Batching and deduplication ensure Chairman isn't overwhelmed.
 
-*Source: [Governance Policy Engine Spec §4](../vision/specs/08-governance-policy-engine.md)*
+*Source: [Governance Policy Engine Spec §4](vision/specs/08-governance-policy-engine.md)*
 
 #### Oath IV: Non-Deception
 
@@ -173,7 +173,7 @@ All outputs must use the Four Buckets classification:
 
 **Enforcement**: Output validation against capability registry. Confidence calibration audits.
 
-*Source: [EVA Orchestration Spec §2.4](../vision/specs/04-eva-orchestration.md)*
+*Source: [EVA Orchestration Spec §2.4](vision/specs/04-eva-orchestration.md)*
 
 ---
 
@@ -216,7 +216,7 @@ Every token spent is attributed to:
 
 The Chairman may audit any cost category at any time.
 
-*Source: [EVA Orchestration Spec §8](../vision/specs/04-eva-orchestration.md)*
+*Source: [EVA Orchestration Spec §8](vision/specs/04-eva-orchestration.md)*
 
 ---
 
@@ -265,7 +265,7 @@ When the Chairman approves a venture (Stage 0 → Stage 1):
 
 3. **Crews dispatched** as needed for specific tasks
 
-*Source: [Hierarchical Agent Architecture Spec](../vision/specs/06-hierarchical-agent-architecture.md)*
+*Source: [Hierarchical Agent Architecture Spec](vision/specs/06-hierarchical-agent-architecture.md)*
 
 ---
 
@@ -304,7 +304,7 @@ If the Chairman is unreachable for a configurable period:
 3. **Alert escalation** — attempt alternative contact methods
 4. **Safe shutdown** if Chairman absence exceeds threshold
 
-*Source: [Agent Runtime Service Spec §5](../vision/specs/09-agent-runtime-service.md)*
+*Source: [Agent Runtime Service Spec §5](vision/specs/09-agent-runtime-service.md)*
 
 ---
 
@@ -316,12 +316,12 @@ This manifesto synthesizes governance principles from the Vision V2 specificatio
 
 | Spec | Title | Key Concepts |
 |------|-------|--------------|
-| [00](../vision/00_VISION_V2_CHAIRMAN_OS.md) | Chairman OS | Glass Cockpit, Chain of Command |
-| [04](../vision/specs/04-eva-orchestration.md) | EVA Orchestration | State Machine, Token Budgets |
-| [06](../vision/specs/06-hierarchical-agent-architecture.md) | Hierarchical Architecture | L1-L4 Levels, Agent Registry |
-| [07](../vision/specs/07-operational-handoff.md) | Operational Handoff | Mode Transitions, Venture Constitution |
-| [08](../vision/specs/08-governance-policy-engine.md) | Governance Policy Engine | Authority Matrix, Escalation Controls |
-| [09](../vision/specs/09-agent-runtime-service.md) | Agent Runtime Service | Claim/Lease, Failure Recovery |
+| [00](vision/00-vision-v2-chairman-os.md) | Chairman OS | Glass Cockpit, Chain of Command |
+| [04](vision/specs/04-eva-orchestration.md) | EVA Orchestration | State Machine, Token Budgets |
+| [06](vision/specs/06-hierarchical-agent-architecture.md) | Hierarchical Architecture | L1-L4 Levels, Agent Registry |
+| [07](vision/specs/07-operational-handoff.md) | Operational Handoff | Mode Transitions, Venture Constitution |
+| [08](vision/specs/08-governance-policy-engine.md) | Governance Policy Engine | Authority Matrix, Escalation Controls |
+| [09](vision/specs/09-agent-runtime-service.md) | Agent Runtime Service | Claim/Lease, Failure Recovery |
 
 ### Database References
 

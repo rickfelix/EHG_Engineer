@@ -244,8 +244,8 @@ bash scripts/leo-stack.sh restart
 
 ## Related Documentation
 
-- [important-database-distinction.md](../operations/important-database-distinction.md) - Database architecture
-- [Multi-Application Testing Architecture](../05_testing/architecture.md) - Test organization
+- [important-database-distinction.md](../archive/2026/duplicates/04_features/important-database-distinction.md) - Database architecture
+- [Multi-Application Testing Architecture](../database/architecture.md) - Test organization
 - [Database Architecture](../database/architecture.md) - Multi-database patterns
 
 ---

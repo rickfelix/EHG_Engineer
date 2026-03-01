@@ -46,7 +46,7 @@ tags: [general, auto-generated]
 - [QUESTIONS/BLOCKERS](#questionsblockers)
 
 **Date**: 2025-12-29
-**Source**: [DOCUMENTATION_CLEANUP_AUDIT_2025-12-29.md](DOCUMENTATION_CLEANUP_AUDIT_2025-12-29.md)
+**Source**: [DOCUMENTATION_CLEANUP_AUDIT_2025-12-29.md](documentation-cleanup-audit-2025-12-29.md)
 **Time Estimate**: 4-6 hours (Phase 1), 6-8 hours (Phase 2)
 
 ---

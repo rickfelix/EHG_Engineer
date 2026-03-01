@@ -333,6 +333,6 @@ This verifies:
 
 ## Related Documentation
 
-- [LEO Protocol Overview](../../01_architecture/leo-protocol-overview.md)
-- [AEGIS Governance](../../03_protocols_and_standards/aegis-governance.md)
-- [Strategic Directives Field Reference](../database/strategic_directives_v2_field_reference.md)
+- LEO Protocol Overview
+- AEGIS Governance
+- Strategic Directives Field Reference

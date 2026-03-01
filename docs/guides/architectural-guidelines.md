@@ -177,8 +177,8 @@ grep -r "src/services" --include="*.js" --include="*.mjs" | grep -v node_modules
 
 ## References
 
-- [Database Loader Consolidation](./DATABASE_LOADER_CONSOLIDATION.md)
-- [LEO Protocol Documentation](./03_protocols_and_standards/)
+- Database Loader Consolidation
+- LEO Protocol Documentation
 - Main Server: `/server.js`
 
 ---

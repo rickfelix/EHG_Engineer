@@ -46,7 +46,7 @@ The screen is dominated by the **Venture Health** visualization—a 3D or hologr
 -   **Truth, Engine, Identity, Blueprint, Build, Launch** are top-level "Phases" that light up based on activity.
 -   **Ticker Tape:** A subtle stream on the right shows active agent logs (e.g., *"Agent X drafting PRD..."*, *"Agent Y deployed...*") to give a sense of "life" without requiring attention.
 
-![Chairman's Glass Cockpit Dashboard](/C:/Users/rickf/.gemini/antigravity/brain/51d9a722-c9c0-47ba-ad9c-0d455ecc11ae/chairman_dashboard_wireframe_1765555358156.png)
+!Chairman's Glass Cockpit Dashboard
 
 ---
 

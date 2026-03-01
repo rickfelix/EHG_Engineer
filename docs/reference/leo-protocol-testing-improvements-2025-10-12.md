@@ -275,23 +275,23 @@ npm run test:unit && npm run test:e2e
 ## 🎯 Quick Reference Links
 
 ### For LEAD Agents
-- [Over-Engineering Rubric](../CLAUDE.md#lead-over-engineering-evaluation-process)
-- [Strategic Validation Gate](../CLAUDE.md#lead-pre-approval-strategic-validation-gate)
+- Over-Engineering Rubric
+- Strategic Validation Gate
 
 ### For PLAN Agents
 - [Test Timeout Handling](./test-timeout-handling.md)
 - [Checkpoint Pattern](./checkpoint-pattern.md)
-- [Pre-EXEC Checklist](../CLAUDE.md#plan-pre-exec-checklist)
+- Pre-EXEC Checklist
 
 ### For EXEC Agents
 - [Session Continuation Best Practices](./claude-code-session-continuation.md)
 - [Parallel Execution Opportunities](./parallel-execution-opportunities.md)
-- [EXEC Implementation Requirements](../CLAUDE.md#exec-agent-implementation-requirements)
+- EXEC Implementation Requirements
 
 ### For All Agents
-- [LEO Protocol Overview](../CLAUDE.md)
+- LEO Protocol Overview
 - [Context Management](./context-monitoring.md)
-- [Unified Handoff System](./unified-handoff-system.md)
+- Unified Handoff System
 
 ---
 

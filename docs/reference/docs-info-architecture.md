@@ -543,14 +543,14 @@ grep -L "^## Metadata" docs/**/*.md
 ## Related Documentation
 
 ### Prerequisites
-- [LEO Protocol v4.3.3](../03_protocols_and_standards/LEO_v4.3.3.md) - Core protocol context
+- LEO Protocol v4.3.3 - Core protocol context
 
 ### Related Standards
 - [Documentation Standards](../03_protocols_and_standards/documentation-standards.md) - Writing quality guidelines
 - [Directory Structure](../01_architecture/directory-structure.md) - Current folder organization
 
 ### Implementation Guides
-- [DOCMON Sub-Agent Guide](../agents/DOCMON-guide.md) - Documentation automation
+- DOCMON Sub-Agent Guide - Documentation automation
 
 ### Reference Materials
 - [Database Patterns](../reference/database-agent-patterns.md) - Database-first patterns

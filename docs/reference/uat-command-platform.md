@@ -803,8 +803,8 @@ ORDER BY avg_pass_rate DESC;
 - [Command Ecosystem Reference](../leo/commands/command-ecosystem.md)
 - [/uat Command Definition](../../.claude/commands/uat.md)
 - [UAT Database Schema](../../database/migrations/20260117_uat_command_support.sql)
-- [Quality Gate Patterns](quality-gate-patterns.md)
-- [Risk Assessment Guide](risk-assessment-guide.md)
+- Quality Gate Patterns
+- Risk Assessment Guide
 
 ## Strategic Directives
 

@@ -622,7 +622,7 @@ await expect(budgetSection.getByText('Monthly Budget Limit')).toBeVisible();
 
 > **Complete Selector Guidelines**: For comprehensive selector best practices,
 > naming conventions, and migration patterns, see:
-> [`tests/e2e/SELECTOR-GUIDELINES.md`](../../tests/e2e/SELECTOR-GUIDELINES.md)
+> [`tests/e2e/SELECTOR-GUIDELINES.md`](testing/selector-guidelines.md)
 >
 > This guide provides:
 > - Full selector priority hierarchy (4 tiers)

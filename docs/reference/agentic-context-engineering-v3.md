@@ -458,8 +458,8 @@ const results = {
 
 ## Related Documentation
 
-- [Generic Sub-Agent Executor Framework](./generic-sub-agent-executor-framework.md)
-- [Sub-Agent Compression System](./sub-agent-compression.md)
+- Generic Sub-Agent Executor Framework
+- Sub-Agent Compression System
 - [Context Monitoring](./context-monitoring.md)
 
 ---

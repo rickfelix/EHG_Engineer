@@ -904,7 +904,7 @@ cat .claude/logs/session-start.log
 - **[Agent Systems Bridge Architecture](../01_architecture/agent-systems-bridge-architecture.md)** - Technical architecture
 - **[LEO Protocol v4.2 - Hybrid Sub-Agent System](../03_protocols_and_standards/leo-v4.2-hybrid-sub-agents.md)** - Original sub-agent design
 - **[Agent Patterns Guide](./agent-patterns-guide.md)** - Agent base classes and patterns
-- **[Command Ecosystem Reference](./command-ecosystem.md)** - How agents fit into LEO workflow
+- **[Command Ecosystem Reference](../leo/commands/command-ecosystem.md)** - How agents fit into LEO workflow
 
 ---
 

@@ -160,8 +160,8 @@ If you're reading this as part of codebase ingestion:
 
 | Document | Purpose |
 |----------|---------|
-| [LEO Stack README](../scripts/README-LEO-STACK.md) | Server management |
-| [CLAUDE Generation README](../scripts/README-CLAUDE-GENERATION.md) | Auto-generation guide |
+| LEO Stack README | Server management |
+| CLAUDE Generation README | Auto-generation guide |
 
 ---
 
@@ -226,7 +226,7 @@ If you're reading this as part of codebase ingestion:
 
 | Document | Purpose |
 |----------|---------|
-| [Database Distinction](operations/important-database-distinction.md) | Database separation |
+| [Database Distinction](archive/2026/duplicates/04_features/important-database-distinction.md) | Database separation |
 
 ---
 
@@ -274,8 +274,8 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [vision/](vision/) | Vision documentation |
-| [API Contracts](vision/specs/02-api-contracts.md) | TypeScript contracts |
+| vision/ | Vision documentation |
+| [API Contracts](reference/vision/specs/02-api-contracts.md) | TypeScript contracts |
 
 ---
 
@@ -283,7 +283,7 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [workflows/](workflows/) | Workflow documentation |
+| workflows/ | Workflow documentation |
 
 ---
 
@@ -291,7 +291,7 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [planning/](planning/documentation-cleanup-master-plan.md) | Planning documentation |
+| [planning/](archive/plans/documentation-cleanup-master-plan.md) | Planning documentation |
 
 ---
 
@@ -299,7 +299,7 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [research/](research/) | Research documentation |
+| research/ | Research documentation |
 
 ---
 

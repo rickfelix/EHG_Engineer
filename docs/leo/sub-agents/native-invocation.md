@@ -382,7 +382,7 @@ cd EHG_Engineer  # navigate to project root
 
 - [Hybrid Sub-Agent Workflow Guide](../../guides/hybrid-sub-agent-workflow.md)
 - [Sub-Agent System Overview](./sub-agent-system.md)
-- [LEO Protocol CLAUDE.md](../../CLAUDE.md)
+- LEO Protocol CLAUDE.md
 
 ---
 

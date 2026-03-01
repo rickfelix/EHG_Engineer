@@ -60,7 +60,7 @@ tags: [reference, auto-generated]
 
 | Attribute | Value |
 |-----------|-------|
-| **Parent Document** | [GENESIS_OATH_V3.md](./GENESIS_OATH_V3.md) |
+| **Parent Document** | [GENESIS_OATH_V3.md](genesis-oath-v3.md) |
 | **Implementation Sprint** | The Mason (Dec 29 – Jan 19) |
 | **Technical Owner** | Claude Architect |
 

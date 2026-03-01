@@ -284,7 +284,7 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 - [Review Process](review_process.md) - Framework procedures
 - [Stage Review Template](review_templates/stage_review_template.md) - Section 5.9 feeds this log
 - [Best Practices Index](best_practices.md) - Consolidated best practices
-- [CrewAI Compliance Policy](crewai_compliance_policy.md) - Policy triggered by lessons learned
+- CrewAI Compliance Policy - Policy triggered by lessons learned
 
 ---
 

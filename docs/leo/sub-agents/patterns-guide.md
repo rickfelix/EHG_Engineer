@@ -492,8 +492,8 @@ console.log(JSON.stringify(result, null, 2));
 ## Related Documentation
 
 - [Governance Library Guide](../../reference/governance-library-guide.md) - Exception handling patterns
-- [Utility Library Guide](./utility-library-guide.md) - Shared utilities
-- [LEO Protocol Core](../CLAUDE_CORE.md) - Protocol execution philosophy
+- Utility Library Guide - Shared utilities
+- LEO Protocol Core - Protocol execution philosophy
 
 ---
 

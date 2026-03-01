@@ -1309,12 +1309,12 @@ After completing this review, key findings should be appended to `/docs/workflow
 - [Source Stage Metadata Field](../source_stage_metadata_field.md) - Database metadata spec
 
 **Policies & Best Practices**:
-- [CrewAI Compliance Policy](../crewai_compliance_policy.md) - **MANDATORY** for all stages
+- CrewAI Compliance Policy - **MANDATORY** for all stages
 - [Stage Review Lessons](../stage_review_lessons.md) - Living log of lessons learned
 - [Best Practices Index](../best_practices.md) - Central index for all best practices
 
 **Governance**:
-- [Exception Documentation](../../governance/exceptions) - Chairman-approved exceptions directory
+- Exception Documentation - Chairman-approved exceptions directory
 
 ---
 

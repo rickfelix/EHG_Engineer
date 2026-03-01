@@ -2548,10 +2548,10 @@ FROM ventures;
 ## References
 
 - Parent: [00-vision-v2-chairman-os.md](../00-vision-v2-chairman-os.md) Section 9.2
-- Related: [adr-002-venture-factory-architecture.md](../../architecture/adr-002-venture-factory-architecture.md)
+- Related: [adr-002-venture-factory-architecture.md](../../../01_architecture/adr-002-venture-factory-architecture.md)
 - Golden Nuggets: [venture-engine-golden-nuggets-plan.md](../venture-engine-golden-nuggets-plan.md)
 - Operational Handoff: [07-operational-handoff.md](./07-operational-handoff.md)
-- Blue Sky Assessment: [Architect's Addendum](../../plans/resilient-stargazing-pancake.md)
+- Blue Sky Assessment: Architect's Addendum
 - Hierarchical Architecture: [06-hierarchical-agent-architecture.md](./06-hierarchical-agent-architecture.md)
 - Governance Policy Engine: [08-governance-policy-engine.md](./08-governance-policy-engine.md)
 - Agent Runtime Service: [09-agent-runtime-service.md](./09-agent-runtime-service.md)

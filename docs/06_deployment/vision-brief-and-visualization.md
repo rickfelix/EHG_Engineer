@@ -379,6 +379,6 @@ WHERE metadata->'vision_discovery' IS NOT NULL;
 
 ## Related Documentation
 
-- [Vision Discovery Merge Summary](../merge-summaries/vision-discovery-visualization.md)
+- [Vision Discovery Merge Summary](../summaries/vision-discovery-visualization.md)
 - [Visualization Provider](../../scripts/lib/visualization-provider.js)
 - [CLAUDE.md - LEO Protocol](../../CLAUDE.md)

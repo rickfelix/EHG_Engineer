@@ -656,7 +656,7 @@ npm run llm:validate
 ## References
 
 - [Model Allocation Strategy](./model-allocation-strategy.md) - Tier philosophy and calibration
-- [Haiku-First Strategy](../research/haiku-first-strategy.md) - Cost optimization research
+- [Haiku-First Strategy](research/haiku-first-strategy.md) - Cost optimization research
 - [Sub-Agent Executor](../../lib/sub-agent-executor.js) - Routing implementation
 - [Multimodal Client](../../lib/ai/multimodal-client.js) - Vision API integration
 

@@ -811,7 +811,7 @@ AEGIS uses multi-layer caching to minimize database queries:
 - **[AEGIS CLI Guide](../reference/aegis-cli-guide.md)** - CLI tool usage
 - **[AEGIS Database Schema](../database/aegis-schema.md)** - Detailed schema reference
 - **[AEGIS Integration Guide](../guides/aegis-integration-guide.md)** - Integration patterns
-- **[SD-AEGIS-GOVERNANCE-001](../../docs/reference/SD-AEGIS-GOVERNANCE-001.md)** - Original strategic directive
+- **SD-AEGIS-GOVERNANCE-001** - Original strategic directive
 
 ## Version History
 

@@ -449,9 +449,9 @@ WHERE dimension_type = 'subagent' AND dimension_key = 'DEPRECATED_SUBAGENT';
 - [Workflow Trace Log Schema](../reference/schema/engineer/tables/workflow_trace_log.md)
 - [Telemetry Thresholds Schema](../reference/schema/engineer/tables/telemetry_thresholds.md)
 - [Telemetry Analysis Runs Schema](../reference/schema/engineer/tables/telemetry_analysis_runs.md)
-- [Continuous Improvements](../reference/schema/engineer/tables/continuous_improvements.md)
-- [LEO Protocol Hooks](../reference/hooks-system.md)
-- [Session Start Events](../reference/session-lifecycle.md)
+- Continuous Improvements
+- LEO Protocol Hooks
+- Session Start Events
 
 ## Version History
 

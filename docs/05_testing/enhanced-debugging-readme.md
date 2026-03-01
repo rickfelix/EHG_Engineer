@@ -253,7 +253,7 @@ Structured data format for passing failure context between agents.
 ## Getting Help
 
 - Review the [Integration Guide](../guides/enhanced-testing-integration.md) for detailed setup
-- Check [API Reference](./ENHANCED_TESTING_API_REFERENCE.md) for class documentation
+- Check API Reference for class documentation
 - Consult [Troubleshooting Guide](../guides/enhanced-testing-troubleshooting.md) for common issues
 - Study the [Collaboration Playbook](../guides/testing-debugging-collaboration-playbook.md) for patterns
 

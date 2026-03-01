@@ -541,10 +541,10 @@ node -e "const { createClient } = require('@supabase/supabase-js'); require('dot
 
 ## Related Documentation
 
-- [Native Sub-Agent Invocation Guide](../reference/native-sub-agent-invocation.md)
+- Native Sub-Agent Invocation Guide
 - [Sub-Agent System Overview](../leo/sub-agents/sub-agent-system.md)
 - [LEO Protocol CLAUDE.md](../../CLAUDE.md)
-- [Database-First Architecture](../reference/database-first.md)
+- Database-First Architecture
 
 ---
 

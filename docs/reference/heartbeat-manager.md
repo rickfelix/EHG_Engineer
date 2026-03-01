@@ -582,7 +582,7 @@ Claims are now managed exclusively through the `claude_sessions` table. The form
 
 ## Related Documentation
 
-- Migration: [20260201_intelligent_session_lifecycle.sql](../database/migrations/20260201_intelligent_session_lifecycle.sql)
+- Migration: 20260201_intelligent_session_lifecycle.sql
 - Session Management: [session-manager.mjs](../../lib/session-manager.mjs)
 - Status Line Integration: [leo-status-line.js](../../scripts/leo-status-line.js)
 - Operations: [Multi-Session Coordination Ops](../06_deployment/multi-session-coordination-ops.md)

@@ -816,9 +816,9 @@ Currently expected - debate is placeholder. Will be fixed by automation SD.
 
 - [Self-Improvement System Guide](./self-improvement-system-guide.md)
 - [AEGIS Integration Guide](./aegis-integration-guide.md)
-- [Protocol Constitution Guide](../governance/protocol-constitution-guide.md)
-- [Command Ecosystem Reference](../reference/command-ecosystem.md)
-- [Learning System Explained](../explanations/learning-system-explained.md)
+- [Protocol Constitution Guide](../03_protocols_and_standards/protocol-constitution-guide.md)
+- [Command Ecosystem Reference](../leo/commands/command-ecosystem.md)
+- [Learning System Explained](learning-system-explained.md)
 
 ---
 

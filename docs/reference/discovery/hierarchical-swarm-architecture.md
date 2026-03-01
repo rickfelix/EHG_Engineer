@@ -661,9 +661,9 @@ Net ROI: 2x (benefit outweighs cost)
 ## Related Documents
 
 - [Swarm Mode Readiness Rubric](./swarm-mode-readiness-rubric.md)
-- [Board Vetting Migration](../../database/migrations/20260202_model_families_board_vetting.sql)
-- [Vetting Engine](../../lib/sub-agents/vetting/index.js)
-- [Debate Orchestrator](../../lib/sub-agents/vetting/debate-orchestrator.js)
+- Board Vetting Migration
+- Vetting Engine
+- Debate Orchestrator
 
 ---
 

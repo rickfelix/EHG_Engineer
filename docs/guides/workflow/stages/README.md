@@ -138,7 +138,7 @@ This directory contains comprehensive documentation for each of the 25 stages in
 - [stages_v2.yaml](../stages_v2.yaml) - Canonical stage configuration
 - [25-Stage Overview](../25-stage-venture-lifecycle-overview.md) - High-level lifecycle overview
 - [Workflow README](../README.md) - Workflow documentation home
-- [Golden Nuggets Plan](../../vision/venture-engine-golden-nuggets-plan.md) - Feature specifications
+- [Golden Nuggets Plan](../../../reference/vision/venture-engine-golden-nuggets-plan.md) - Feature specifications
 
 ---
 
@@ -151,7 +151,7 @@ All 25 stages are **✅ Implemented in EHG** with:
 - E2E test coverage (stages 1-25)
 - Phase-based navigation accordion
 
-**Verified**: EHG codebase audit completed 2026-01-19. See [Implementation Audit Report](../../reports/ehg-stage-implementation-audit-2026-01-19.md) for details.
+**Verified**: EHG codebase audit completed 2026-01-19. See [Implementation Audit Report](../../../summaries/reports/ehg-stage-implementation-audit-2026-01-19.md) for details.
 
 ## Generation Information
 

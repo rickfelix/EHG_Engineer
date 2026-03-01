@@ -450,8 +450,8 @@ await supabase.from('telemetry_thresholds').insert({
 
 - [Workflow Telemetry System Architecture](../01_architecture/workflow-telemetry-system.md)
 - [Telemetry System Operations Guide](../06_deployment/telemetry-system-ops.md)
-- [LEO Protocol Overview](../03_protocols_and_standards/LEO_v4.3_HYBRID_SUB_AGENTS.md)
-- [Continuous Improvements System](../04_features/continuous-improvements.md)
+- LEO Protocol Overview
+- Continuous Improvements System
 
 ## Frequently Asked Questions
 

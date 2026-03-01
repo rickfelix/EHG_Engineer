@@ -478,8 +478,8 @@ git log --oneline --all --grep="SD-KEY"
 
 - **[LEO Protocol](../../CLAUDE.md)** - Context for SD workflow
 - **[Database Schema](../../database/migrations/20260211_gap_analysis_results.sql)** - Table structure
-- **[Orchestrator Hooks](../reference/orchestrator-completion-hooks.md)** - Post-completion integration
-- **[PRD Creation](../guides/prd-creation.md)** - How to write analyzable requirements
+- **Orchestrator Hooks** - Post-completion integration
+- **PRD Creation** - How to write analyzable requirements
 
 ## Changelog
 

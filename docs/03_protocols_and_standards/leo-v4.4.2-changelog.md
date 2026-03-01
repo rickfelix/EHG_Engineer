@@ -411,7 +411,7 @@ node scripts/regenerate-all-schema-docs.js
 ## Related Documentation
 
 ### Core Protocol Docs
-- [LEO Protocol v4.4.2 Testing Governance](./LEO_v4.4.2_testing_governance.md) - Full specification
+- [LEO Protocol v4.4.2 Testing Governance](leo-v4.4.2-testing-governance.md) - Full specification
 - [Handoff System Guide](../leo/handoffs/handoff-system-guide.md) - Gate architecture
 - [LEO Gates Documentation](../leo/gates/gates.md) - Gate 2A-3 validation
 

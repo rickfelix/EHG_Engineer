@@ -71,7 +71,7 @@ This document serves as the central index for all stage review best practices, l
 ## Core Policies
 
 ### 1. CrewAI Compliance Policy
-**Document**: [crewai_compliance_policy.md](./crewai_compliance_policy.md)
+**Document**: crewai_compliance_policy.md
 **Status**: **MANDATORY** for all stages
 **Summary**: CrewAI is foundational to EHG's automation strategy. All stages must implement prescribed agents/crews or obtain explicit Chairman-approved exceptions.
 
@@ -318,11 +318,11 @@ pattern: "src/lib/supabase/**/*.ts"
 - [Source Stage Metadata Field](./source_stage_metadata_field.md) - Database metadata specification
 
 ### Governance
-- [Exception Documentation](../governance/exceptions) - Chairman-approved exceptions directory
+- Exception Documentation - Chairman-approved exceptions directory
 - Strategic Directives: Query `strategic_directives_v2` table with filters
 
 ### Protocol Reference
-- LEO Protocol v4.2.0: [CLAUDE.md](/CLAUDE.md) router and core documentation
+- LEO Protocol v4.2.0: CLAUDE.md router and core documentation
 - Phase Gates: LEAD, PLAN, EXEC validation requirements
 
 ---

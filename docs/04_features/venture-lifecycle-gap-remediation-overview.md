@@ -121,7 +121,7 @@ The 25-stage model simplified the 40-stage workflow but left some elements impli
 **Type**: Feature
 **Impact**: New Phase 7 (The Orbit) - Active Operations
 **Status**: COMPLETED
-**Deliverable**: [Phase 7 Orbit Verification](../workflow/phase7-orbit-verification.md)
+**Deliverable**: [Phase 7 Orbit Verification](../guides/workflow/phase7-orbit-verification.md)
 
 **Problem**: The 25-stage model has no explicit framework for feature iteration based on market feedback. Ventures jump from "Growth Optimization" to "Exit Strategy" without a framework for product evolution during active operations.
 
@@ -248,7 +248,7 @@ const gate6 = {
 - [Capability Router Protocol](./capability-router-protocol.md) (SD-004)
 - [Risk Re-calibration Protocol](./risk-recalibration-protocol.md) (SD-005)
 - [Stage 20 Compliance Gate](./stage20-compliance-gate.md) (SD-002)
-- [Phase 7 Orbit Framework](../workflow/phase7-orbit-verification.md) (SD-003)
+- [Phase 7 Orbit Framework](../guides/workflow/phase7-orbit-verification.md) (SD-003)
 
 ### Related Legacy Documentation
 - [37 Strategic Risk Forecasting](./37_strategic_risk_forecasting.md) - Original 40-stage concept
