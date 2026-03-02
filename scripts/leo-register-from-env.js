@@ -212,7 +212,7 @@ class EnvProjectRegistration {
 }
 
 // Run the registration
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const registration = new EnvProjectRegistration();
   registration.run().catch(error => {
     console.error('❌ Fatal error:', error.message);

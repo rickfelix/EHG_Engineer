@@ -165,6 +165,6 @@ for (let i = 0; i < args.length; i++) {
 export { queryCatalogue };
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   queryCatalogue(options);
 }

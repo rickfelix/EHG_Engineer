@@ -500,7 +500,7 @@ class VisionAlignmentFeasibilityRubric {
 export default VisionAlignmentFeasibilityRubric;
 
 // CLI usage
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const { createDatabaseClient } = await import('./lib/supabase-connection.js');
 
   const args = process.argv.slice(2);

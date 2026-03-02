@@ -323,7 +323,7 @@ async function testCompleteSystem() {
 }
 
 // Run the test
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   testCompleteSystem()
     .then(success => {
       process.exit(success ? 0 : 1);

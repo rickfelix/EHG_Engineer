@@ -929,7 +929,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   createPRD();
 }
 

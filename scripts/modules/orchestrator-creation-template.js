@@ -250,7 +250,7 @@ async function createOrchestrator() {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}` ||
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` ||
     process.argv[1].includes('orchestrator-creation-template')) {
   createOrchestrator().catch(console.error);
 }

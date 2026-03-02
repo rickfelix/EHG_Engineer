@@ -514,7 +514,7 @@ export default HookSubAgentActivator;
 export { HookSubAgentActivator };
 
 // CLI testing
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const activator = new HookSubAgentActivator();
   const failureType = process.argv[2];
 

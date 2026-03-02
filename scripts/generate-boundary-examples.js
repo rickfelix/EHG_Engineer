@@ -96,7 +96,7 @@ ${tables.slice(0, 5).map(t => `- \`${t.table_name}\``).join('\n')}
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const generator = new BoundaryExamplesGenerator();
   generator.generate()
     .then(content => {

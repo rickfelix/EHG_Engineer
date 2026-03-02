@@ -258,7 +258,7 @@ function calculateStdDev(values) {
 }
 
 // CLI Execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   (async () => {
     let sdIds = process.argv.slice(2);
 

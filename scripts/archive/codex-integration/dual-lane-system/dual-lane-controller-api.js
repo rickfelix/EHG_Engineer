@@ -293,7 +293,7 @@ AUDIT_TRAIL_ENABLED=true
 export default DualLaneControllerAPI;
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const controller = new DualLaneControllerAPI();
 
   const command = process.argv[2];

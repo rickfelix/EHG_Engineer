@@ -277,7 +277,7 @@ Credentials encrypted in: ${appId}/.env.encrypted
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const registrar = new AppRegistration();
   registrar.registerApplication().catch(error => {
     console.error('❌ Registration failed:', error.message);

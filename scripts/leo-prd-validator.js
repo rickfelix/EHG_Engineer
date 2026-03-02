@@ -13,7 +13,7 @@ import fs from 'fs';
 import PRDValidator from './modules/prd-validator/index.js';
 
 // CLI interface
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const args = process.argv.slice(2);
 
   if (args.length < 1 || args[0] === '--help' || args[0] === '-h') {

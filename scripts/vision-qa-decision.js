@@ -492,7 +492,7 @@ This tool helps LEO Protocol agents determine when Vision QA is required.
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const helper = new VisionQADecisionHelper();
   const args = process.argv.slice(2);
 

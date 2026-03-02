@@ -56,7 +56,7 @@ export async function generateAll() {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   generateAll().catch(err => {
     console.error('Generation failed:', err.message);
     process.exit(1);

@@ -291,7 +291,7 @@ async function runSmokeTest() {
 }
 
 // Run if executed directly
-const isMain = import.meta.url === `file://${process.argv[1]}` ||
+const isMain = import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` ||
   process.argv[1]?.endsWith('test-pipeline-smoke.js');
 
 if (isMain) {

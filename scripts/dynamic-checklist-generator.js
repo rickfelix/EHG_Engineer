@@ -509,6 +509,6 @@ async function main() {
 }
 
 // Only run main if this script is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   main().catch(console.error);
 }

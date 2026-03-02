@@ -36,7 +36,7 @@ export {
 export { default } from './playwright-analyzer/index.js';
 
 // CLI execution - delegate to the domain module
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const { PlaywrightDesignAnalyzer } = await import('./playwright-analyzer/index.js');
   const analyzer = new PlaywrightDesignAnalyzer();
   analyzer.analyze().then(results => {

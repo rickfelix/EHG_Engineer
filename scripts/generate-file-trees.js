@@ -318,7 +318,7 @@ class FileTreeGenerator {
 }
 
 // CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
   const generator = new FileTreeGenerator();
   const force = process.argv.includes('--force');
 
