@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-02T00:03:49.900Z
+**Generated**: 2026-03-02T01:18:17.458Z
 **Rows**: 4
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,8 @@
 | source_file_path | `text` | YES | - | - |
 | source_brainstorm_id | `uuid` | YES | - | - |
 | vision_key | `text` | YES | - | - |
+| vision_version_aligned_to | `integer(32)` | YES | - | - |
+| needs_review_since | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -61,6 +63,10 @@
 - `eva_architecture_plans_plan_key_key`
   ```sql
   CREATE UNIQUE INDEX eva_architecture_plans_plan_key_key ON public.eva_architecture_plans USING btree (plan_key)
+  ```
+- `idx_arch_plans_needs_review`
+  ```sql
+  CREATE INDEX idx_arch_plans_needs_review ON public.eva_architecture_plans USING btree (needs_review_since) WHERE (needs_review_since IS NOT NULL)
   ```
 - `idx_eva_arch_plans_status`
   ```sql

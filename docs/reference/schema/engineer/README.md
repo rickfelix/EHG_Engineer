@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-02T00:03:49.900Z
-**Tables**: 505
+**Generated**: 2026-03-02T01:18:17.458Z
+**Tables**: 508
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (505)
+## All Tables (508)
 
 ### LEO Protocol
 
@@ -218,6 +218,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brand_variants](tables/brand_variants.md)
 - [campaign_content](tables/campaign_content.md)
 - [capital_transactions](tables/capital_transactions.md)
+- [cascade_invalidation_flags](tables/cascade_invalidation_flags.md)
+- [cascade_invalidation_log](tables/cascade_invalidation_log.md)
 - [chairman_approval_requests](tables/chairman_approval_requests.md)
 - [chairman_constraints](tables/chairman_constraints.md)
 - [chairman_decisions](tables/chairman_decisions.md)
@@ -382,6 +384,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [nursery_evaluation_log](tables/nursery_evaluation_log.md)
 - [objectives](tables/objectives.md)
 - [okr_generation_log](tables/okr_generation_log.md)
+- [okr_vision_alignment_records](tables/okr_vision_alignment_records.md)
 - [operations_audit_log](tables/operations_audit_log.md)
 - [opportunities](tables/opportunities.md)
 - [opportunity_blueprints](tables/opportunity_blueprints.md)

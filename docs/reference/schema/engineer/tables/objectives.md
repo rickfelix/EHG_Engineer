@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-02T00:03:49.900Z
+**Generated**: 2026-03-02T01:18:17.458Z
 **Rows**: 7
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (16 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,8 @@
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | generation_id | `uuid` | YES | - | References okr_generation_log.id if this objective was auto-generated |
+| vision_version_aligned_to | `integer(32)` | YES | - | - |
+| needs_review_since | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -52,6 +54,10 @@
 - `idx_objectives_is_active`
   ```sql
   CREATE INDEX idx_objectives_is_active ON public.objectives USING btree (is_active)
+  ```
+- `idx_objectives_needs_review`
+  ```sql
+  CREATE INDEX idx_objectives_needs_review ON public.objectives USING btree (needs_review_since) WHERE (needs_review_since IS NOT NULL)
   ```
 - `idx_objectives_vision_id`
   ```sql
