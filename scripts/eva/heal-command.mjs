@@ -47,7 +47,7 @@ function cmdVision(args) {
     const evidenceScript = join(__dirname, 'vision-evidence-scorer.js');
     const passthrough = args.slice(1).filter(a => a !== 'score');
     try {
-      execFileSync('node', [evidenceScript, ...passthrough], { stdio: 'inherit' });
+      execFileSync('node', [evidenceScript, '--persist', ...passthrough], { stdio: 'inherit' });
     } catch (err) {
       process.exit(err.status || 1);
     }
