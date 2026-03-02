@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-02T01:18:17.458Z
-**Rows**: 10
-**RLS**: Enabled (5 policies)
+**Generated**: 2026-03-02T17:36:47.591Z
+**Rows**: 1
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -194,34 +194,16 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ## RLS Policies
 
-### 1. Allow authenticated users to delete ventures (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `((auth.uid())::text = (created_by)::text)`
-
-### 2. Allow authenticated users to insert ventures (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `(((auth.uid())::text = (created_by)::text) OR (created_by IS NULL))`
-
-### 3. Allow authenticated users to update ventures (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `((auth.uid())::text = (created_by)::text)`
-- **With Check**: `((auth.uid())::text = (created_by)::text)`
-
-### 4. Allow service_role to manage ventures (ALL)
+### 1. Allow service_role to manage ventures (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 5. Company access ventures (ALL)
+### 2. authenticated_read_ventures (SELECT)
 
 - **Roles**: {authenticated}
-- **Using**: `(company_id IN ( SELECT user_company_access.company_id
-   FROM user_company_access
-  WHERE (user_company_access.user_id = auth.uid())))`
+- **Using**: `true`
 
 ## Triggers
 

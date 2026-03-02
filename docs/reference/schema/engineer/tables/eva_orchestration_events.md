@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-02T01:18:17.458Z
+**Generated**: 2026-03-02T17:36:47.591Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,12 +62,7 @@
 
 ## RLS Policies
 
-### 1. eva_orch_events_auth_select (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. eva_orch_events_service_all (ALL)
+### 1. eva_orch_events_service_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
