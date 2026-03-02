@@ -37,12 +37,28 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// ─── VISION: Delegate to vision-heal.js ──────────────────────────────────────
+// ─── VISION: Default to evidence scorer for 'score'; --llm falls back to LLM ─
 
 function cmdVision(args) {
+  const sub = args[0];
+
+  // Use deterministic evidence scorer by default for 'score'
+  if (sub === 'score' && !args.includes('--llm')) {
+    const evidenceScript = join(__dirname, 'vision-evidence-scorer.js');
+    const passthrough = args.slice(1).filter(a => a !== 'score');
+    try {
+      execFileSync('node', [evidenceScript, ...passthrough], { stdio: 'inherit' });
+    } catch (err) {
+      process.exit(err.status || 1);
+    }
+    return;
+  }
+
+  // All other subcommands (persist, generate, status, loop) + --llm score → vision-heal.js
   const visionScript = join(__dirname, 'vision-heal.js');
+  const filteredArgs = args.filter(a => a !== '--llm');
   try {
-    execFileSync('node', [visionScript, ...args], { stdio: 'inherit' });
+    execFileSync('node', [visionScript, ...filteredArgs], { stdio: 'inherit' });
   } catch (err) {
     process.exit(err.status || 1);
   }
