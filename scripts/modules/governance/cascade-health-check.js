@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { validateCascade } from './cascade-validator.js';
+import { getStaleDocuments, getCascadeSummary } from './cascade-invalidation-engine.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -169,15 +170,66 @@ function printReport(results, summary) {
   }
 }
 
+/**
+ * Query pending cascade invalidation flags and return stale document report.
+ * Integrates with cascade-invalidation-engine.js for V09 dimension scoring.
+ *
+ * @param {Object} options
+ * @param {Object} [options.supabaseClient] - Supabase client (uses module-level if omitted)
+ * @param {string} [options.documentType] - Filter by type
+ * @param {boolean} [options.jsonOutput] - Return JSON
+ * @returns {Promise<{stale: Array, summary: Object}>}
+ */
+async function runStaleDocumentCheck(options = {}) {
+  const client = options.supabaseClient || supabase;
+
+  const [staleResult, summaryResult] = await Promise.all([
+    getStaleDocuments(client, { documentType: options.documentType }),
+    getCascadeSummary(client),
+  ]);
+
+  if (staleResult.error) {
+    console.error('Failed to query stale documents:', staleResult.error);
+    return { stale: [], summary: { pending: 0, resolved: 0, dismissed: 0 } };
+  }
+
+  if (options.jsonOutput) {
+    console.log(JSON.stringify({ stale: staleResult.flags, summary: summaryResult }, null, 2));
+  } else if (staleResult.count > 0) {
+    console.log('');
+    console.log('  STALE DOCUMENTS (Pending Cascade Invalidation)');
+    console.log('  ' + '-'.repeat(60));
+    for (const f of staleResult.flags) {
+      console.log(`  [${f.document_type}] ${f.document_id} — flagged ${f.flagged_at}`);
+    }
+    console.log(`\n  Total: ${summaryResult.pending} pending, ${summaryResult.resolved} resolved, ${summaryResult.dismissed} dismissed`);
+    console.log('');
+  }
+
+  return { stale: staleResult.flags, summary: summaryResult };
+}
+
+export { runHealthCheck, runStaleDocumentCheck };
+
 // CLI entry point
 const args = process.argv.slice(2);
 const jsonFlag = args.includes('--json');
+const staleFlag = args.includes('--stale');
 const ventureIdx = args.indexOf('--venture');
 const ventureId = ventureIdx >= 0 ? args[ventureIdx + 1] : null;
 
-runHealthCheck({ ventureId, jsonOutput: jsonFlag }).then(({ summary }) => {
-  if (summary.unhealthy > 0) process.exit(1);
-}).catch(err => {
-  console.error('Health check failed:', err.message);
-  process.exit(1);
-});
+if (staleFlag) {
+  runStaleDocumentCheck({ jsonOutput: jsonFlag }).then(({ stale }) => {
+    if (stale.length > 0) process.exit(1);
+  }).catch(err => {
+    console.error('Stale document check failed:', err.message);
+    process.exit(1);
+  });
+} else {
+  runHealthCheck({ ventureId, jsonOutput: jsonFlag }).then(({ summary }) => {
+    if (summary.unhealthy > 0) process.exit(1);
+  }).catch(err => {
+    console.error('Health check failed:', err.message);
+    process.exit(1);
+  });
+}
