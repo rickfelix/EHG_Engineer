@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-02T01:18:17.458Z
-**Rows**: 0
-**RLS**: Enabled (4 policies)
+**Generated**: 2026-03-02T17:36:47.591Z
+**Rows**: 1
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -106,26 +106,16 @@
 
 ## RLS Policies
 
-### 1. chairman_decisions_delete_policy (DELETE)
+### 1. chairman_decisions_select_policy (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `fn_is_chairman()`
 
-### 2. chairman_decisions_insert_policy (INSERT)
+### 2. service_role_all_chairman_decisions (ALL)
 
-- **Roles**: {authenticated}
-- **With Check**: `fn_is_chairman()`
-
-### 3. chairman_decisions_select_policy (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `fn_is_chairman()`
-
-### 4. chairman_decisions_update_policy (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `fn_is_chairman()`
-- **With Check**: `fn_is_chairman()`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 
