@@ -107,6 +107,10 @@ ORDER BY disabled_gates DESC;
 | `GATE_INFRASTRUCTURE_CONSUMER_CHECK` | Infrastructure consumer check |
 | `GATE_INTEGRATION_SECTION_VALIDATION` | PRD integration section |
 | `GATE_DELIVERABLES_PLANNING` | Deliverables planning check |
+| `ACCEPTANCE_CRITERIA_VALIDATION` | Validates user stories have acceptance criteria + validation evidence (BLOCKING) |
+| `SUCCESS_METRICS_ACHIEVEMENT` | Validates SD success metrics have actual values recorded and targets met (BLOCKING) |
+| `VISION_COMPLETION_SCORE` | Re-scores SD against vision dimensions at completion, detects regression (advisory) |
+| `ARCHITECTURE_PLAN_VALIDATION` | Validates architecture plan dimension coverage in SD implementation (advisory) |
 
 ## Monitoring
 
