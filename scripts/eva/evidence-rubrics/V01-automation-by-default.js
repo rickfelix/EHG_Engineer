@@ -2,12 +2,12 @@
 export default {
   id: 'V01', name: 'automation_by_default',
   checks: [
-    { id: 'V01-C1', label: 'AUTO-PROCEED state management module exists',
-      type: 'file_count', weight: 25,
-      params: { glob: 'scripts/modules/auto-proceed/*.js', minCount: 2 } },
-    { id: 'V01-C2', label: 'Stage execution engine runs stages without manual confirmation',
-      type: 'code_pattern', weight: 25,
-      params: { glob: 'lib/eva/stage-execution-engine.js', pattern: 'executeStage|runStage' } },
+    { id: 'V01-C1', label: 'Urgency scorer exports calculateUrgencyScore',
+      type: 'export_exists', weight: 25,
+      params: { module: 'scripts/modules/auto-proceed/urgency-scorer.js', exportName: 'calculateUrgencyScore' } },
+    { id: 'V01-C2', label: 'Stage execution engine exports executeStage',
+      type: 'export_exists', weight: 25,
+      params: { module: 'lib/eva/stage-execution-engine.js', exportName: 'executeStage' } },
     { id: 'V01-C3', label: 'Stage templates have deterministic execute functions',
       type: 'file_count', weight: 25,
       params: { glob: 'lib/eva/stage-templates/stage-*.js', minCount: 20 } },

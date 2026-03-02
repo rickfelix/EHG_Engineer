@@ -2,12 +2,12 @@
 export default {
   id: 'A05', name: 'event_bus_integration',
   checks: [
-    { id: 'A05-C1', label: 'Event bus with handler registry exists',
-      type: 'file_exists', weight: 20,
-      params: { glob: 'lib/eva/event-bus/handler-registry.js' } },
-    { id: 'A05-C2', label: 'Event router dispatches events to handlers',
-      type: 'file_exists', weight: 20,
-      params: { glob: 'lib/eva/event-bus/event-router.js' } },
+    { id: 'A05-C1', label: 'Handler registry exports registerHandler',
+      type: 'export_exists', weight: 20,
+      params: { module: 'lib/eva/event-bus/handler-registry.js', exportName: 'registerHandler' } },
+    { id: 'A05-C2', label: 'Event router exports processEvent',
+      type: 'export_exists', weight: 20,
+      params: { module: 'lib/eva/event-bus/event-router.js', exportName: 'processEvent' } },
     { id: 'A05-C3', label: 'Multiple event handler implementations exist',
       type: 'file_count', weight: 30,
       params: { glob: 'lib/eva/event-bus/handlers/*.js', minCount: 10 } },
