@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { list, check, register, reset, MODES } from '../../../lib/governance/guardrail-registry.js';
+import { list, check, _test, MODES } from '../../../lib/governance/guardrail-registry.js';
+const { register, reset } = _test;
 
 describe('Guardrail Registry Smoke Tests', () => {
   beforeEach(() => {
