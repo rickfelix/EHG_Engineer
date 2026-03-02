@@ -364,11 +364,29 @@ async function getIssuePatterns(limit = TOP_N) {
   // Query more than needed to allow for filtering
   const queryLimit = limit * 3;
 
+  // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Pattern deduplication
+  // Exclude patterns already assigned to an SD (prevents duplicate SD creation)
+  let dedupFilterApplied = false;
   let { data, error } = await supabase
     .from('v_patterns_with_decay')
     .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold')
+    .is('assigned_sd_id', null)
     .order('composite_score', { ascending: false })
     .limit(queryLimit);
+
+  // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: If dedup filter caused the error, retry without it (fail-open)
+  if (error && error.message.includes('assigned_sd_id')) {
+    console.log('  Dedup filter failed on view (column may not exist). Retrying without filter (fail-open)...');
+    const retryResult = await supabase
+      .from('v_patterns_with_decay')
+      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status, severity_weight, composite_score, min_occurrence_threshold, meets_threshold')
+      .order('composite_score', { ascending: false })
+      .limit(queryLimit);
+    data = retryResult.data;
+    error = retryResult.error;
+  } else if (!error) {
+    dedupFilterApplied = true;
+  }
 
   // Fallback to base table if view fails (doesn't exist, schema error, or data type issues)
   // SD-LEARN-FIX-011: Also catch "cannot get array length of a scalar" from jsonb_array_length bug
@@ -378,8 +396,10 @@ async function getIssuePatterns(limit = TOP_N) {
       .from('issue_patterns')
       .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at')
       .eq('status', 'active')
+      .is('assigned_sd_id', null)
       .order('occurrence_count', { ascending: false })
       .limit(queryLimit);
+    dedupFilterApplied = true;
     data = fallback.data;
     error = fallback.error;
 
@@ -489,7 +509,11 @@ async function getIssuePatterns(limit = TOP_N) {
     })
     .slice(0, limit);
 
-  return { patterns, filtered };
+  if (dedupFilterApplied) {
+    console.log('  Pattern dedup: assigned_sd_id filter active');
+  }
+
+  return { patterns, filtered, dedupFilterApplied };
 }
 
 /**

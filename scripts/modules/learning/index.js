@@ -138,6 +138,20 @@ async function autoApproveCommand(threshold = 50, sdId = null) {
     }
   }
 
+  // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Include feedback_learnings in auto-approve
+  const feedbackLearnings = reviewed.feedback_learnings || [];
+  if (feedbackLearnings.length > 0) {
+    console.log(`\n  Feedback Learnings (${feedbackLearnings.length} resolved items):`);
+    for (const fb of feedbackLearnings) {
+      const score = fb.confidence || 0;
+      if (score >= threshold) {
+        qualifying.push({ ...fb, composite_score: score });
+      } else {
+        deferred.push({ ...fb, composite_score: score, reason: `feedback confidence ${score} < ${threshold}` });
+      }
+    }
+  }
+
   // Display what was found
   console.log('  ' + '-'.repeat(40));
   console.log(`  Items found:       ${qualifying.length + deferred.length}`);

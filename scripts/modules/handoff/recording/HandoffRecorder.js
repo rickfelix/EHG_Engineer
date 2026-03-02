@@ -20,6 +20,7 @@ import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import ContentBuilder from '../content/ContentBuilder.js';
 import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
 import { withRetry, isRetryable, RETRY_PRESETS } from '../../resilience/retry-executor.js';
+import { captureFailurePattern } from '../failure-pattern-capture.js';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -201,6 +202,17 @@ export class HandoffRecorder {
         console.log(`   (Completion recorded in leo_handoff_executions: ${executionId})`);
       } else {
         await this.createArtifact(handoffType, sdId, result, executionId);
+      }
+
+      // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Capture failure patterns on retry success
+      // Non-blocking: if capture fails, handoff still succeeds
+      try {
+        const captureResult = await captureFailurePattern(sdUuid, handoffType, { supabaseClient: this.supabase });
+        if (captureResult.patternCreated) {
+          console.log(`   [failure-capture] Issue pattern created: ${captureResult.patternId}`);
+        }
+      } catch (captureErr) {
+        console.warn(`   [failure-capture] Non-blocking error: ${captureErr.message}`);
       }
 
       return executionId;
