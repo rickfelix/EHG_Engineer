@@ -13,6 +13,6 @@ export default {
       params: { glob: 'lib/eva/stage-templates/analysis-steps/stage-*.js', pattern: 'return\\s*\\{|JSON\\.stringify', minMatches: 10 } },
     { id: 'V03-C4', label: 'Analysis steps reference prior stage data (compounding)',
       type: 'code_pattern', weight: 20,
-      params: { glob: 'lib/eva/stage-templates/analysis-steps/stage-*.js', pattern: 'previousStage|priorArtifact|stageData|getArtifact', minMatches: 3 } },
+      params: { glob: 'lib/eva/stage-templates/analysis-steps/stage-*.js', pattern: 'stage\\dData|previousStage|priorArtifact', minMatches: 5 } },
   ],
 };
