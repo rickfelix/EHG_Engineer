@@ -332,6 +332,20 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // Resolve patterns/improvements if this SD was created from /learn
     await resolveLearningItems(sd, this.supabase);
 
+    // SD-LEO-INFRA-ENHANCE-LEARN-SESSION-001: Session retrospective - analyze rejections
+    // Creates issue_patterns for gates with 2+ rejections (non-blocking)
+    try {
+      const { analyzeSDRejections } = await import('../../../../modules/learning/session-retrospective.js');
+      const retroResult = await analyzeSDRejections(sd.id, { supabaseClient: this.supabase });
+      if (retroResult.patternsCreated > 0) {
+        console.log(`   [session-retro] Created ${retroResult.patternsCreated} pattern(s) from rejection analysis`);
+      } else if (retroResult.analyzed) {
+        console.log('   [session-retro] No recurring rejection patterns found');
+      }
+    } catch (retroError) {
+      console.warn(`   ⚠️  Session retrospective failed (non-blocking): ${retroError.message}`);
+    }
+
     // SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001: Auto-rescore after corrective SD completion
     // If this SD was created to fix a vision gap (has vision_origin_score_id), re-score the
     // original SD to measure whether the gap was closed.
