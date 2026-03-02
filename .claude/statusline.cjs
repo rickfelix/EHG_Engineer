@@ -27,7 +27,7 @@ const LOG_DIR = 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/logs';
 const STATE_FILE = path.join(LOG_DIR, '.context-state.json');
 const AUTOCOMPACT_PCT = 80;
 const WARNING_THRESHOLD = 60;
-const CRITICAL_THRESHOLD = 80;
+const CRITICAL_THRESHOLD = 90;
 const EMERGENCY_THRESHOLD = 95;
 
 // ANSI escape codes
