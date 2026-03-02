@@ -255,8 +255,7 @@ async function createFromFeedback(feedbackId) {
   if (feedback.strategic_directive_id || feedback.resolution_sd_id) {
     const linkedId = feedback.strategic_directive_id || feedback.resolution_sd_id;
     console.log(`\n⚠️  Feedback already linked to SD: ${linkedId}`);
-    console.log('   Skipping SD creation to prevent duplicates.');
-    console.log('   Skipping to prevent duplicates.\n');
+    console.log('   Skipping SD creation to prevent duplicates.\n');
     process.exit(0);
   }
 
@@ -319,8 +318,13 @@ async function createFromFeedback(feedbackId) {
 
 /**
  * Create child SD
+ * @param {string} parentKey - Parent SD key or UUID
+ * @param {number} index - Child index (A=0, B=1, etc.)
+ * @param {Object} overrides - Optional overrides for child fields
+ * @param {string} overrides.type - Child SD type (default: 'feature', never inherits 'orchestrator')
+ * @param {string} overrides.title - Child title override
  */
-async function createChild(parentKey, index = 0) {
+async function createChild(parentKey, index = 0, overrides = {}) {
   console.log(`\n📋 Creating child SD for: ${parentKey}`);
 
   // Fetch parent SD
@@ -349,12 +353,25 @@ async function createChild(parentKey, index = 0) {
   // Inherit strategic fields from parent (SD-LEO-FIX-METADATA-001)
   const inheritedFields = inheritStrategicFields(parent);
 
+  // Resolve child type: explicit override > parent type (but NEVER inherit 'orchestrator')
+  // Orchestrator is a coordination pattern, not a child work type.
+  // Children are independent SDs with their own types (feature, infrastructure, etc.)
+  let childType = overrides.type || parent.sd_type || 'feature';
+  if (childType === 'orchestrator') {
+    childType = 'feature';
+    console.log('   ℹ️  Parent type \'orchestrator\' not inherited — child defaults to \'feature\'');
+    console.log('      Use --type <type> to specify: infrastructure, feature, fix, etc.');
+  }
+
   // Create child SD with inherited fields
+  const childTitle = overrides.title || `Child of ${parent.title}`;
   const sd = await createSD({
     sdKey,
-    title: `Child of ${parent.title}`,
-    description: `Child SD of ${parent.sd_key}. Implement specific component.`,
-    type: parent.sd_type || 'feature',
+    title: childTitle,
+    description: overrides.title
+      ? `Child SD of ${parent.sd_key}: ${overrides.title}`
+      : `Child SD of ${parent.sd_key}. Implement specific deliverable.`,
+    type: childType,
     priority: parent.priority || 'medium',
     rationale: `Child of ${parent.sd_key}`,
     parentId: parent.id,
@@ -926,6 +943,8 @@ async function createSD(options) {
       console.log('   Consider using a full SD workflow instead.');
     }
 
+    console.log('');
+    console.log('   Use a non-QF key prefix for full Strategic Directive workflow.');
     console.log('═'.repeat(60));
     process.exit(0);
   }
@@ -1130,6 +1149,7 @@ async function createSD(options) {
         console.log(`   [${v.severity.toUpperCase()}] ${v.name}: ${v.message}`);
       }
       console.log('\n   Resolve the above violations before creating this SD.');
+      console.log('   Guardrails are enforced at both CLI and database level — no bypass available.');
       console.log('🛑'.repeat(30));
       process.exit(1);
     }
@@ -1174,8 +1194,8 @@ async function createSD(options) {
       }
       console.log(`\n   ${cascadeResult.rulesChecked} rules checked.`);
       console.log('   Resolve violations or request chairman override.');
+      console.log('   Cascade rules are enforced at both CLI and database level — no bypass available.');
       console.log('🛑'.repeat(30));
-
       process.exit(1);
     }
   } catch (err) {
@@ -1400,7 +1420,7 @@ Usage:
   node scripts/leo-create-sd.js --from-learn <pattern-id>
   node scripts/leo-create-sd.js --from-feedback <feedback-id>
   node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
-  node scripts/leo-create-sd.js --child <parent-key> [index]
+  node scripts/leo-create-sd.js --child <parent-key> [index] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js <source> <type> "<title>"
 
 Sources: ${Object.keys(SD_SOURCES).join(', ')}
@@ -1408,8 +1428,8 @@ Types: ${Object.keys(SD_TYPES).join(', ')}
 
 Flags:
   --yes, -y          Skip confirmation for auto-detected plans
-  --type <type>      Override inferred SD type when using --from-plan
-  --title "<title>"  Override extracted title when using --from-plan
+  --type <type>      Override SD type (for --from-plan or --child; children never inherit 'orchestrator')
+  --title "<title>"  Override title (for --from-plan or --child)
   --venture <name>   Generate venture-scoped SD key (SD-{VENTURE}-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM})
   --vision-key <key> Link SD to EVA vision document (stored in metadata, used for vision scoring)
   --arch-key <key>   Link SD to EVA architecture plan (stored in metadata, used for vision scoring)
@@ -1446,7 +1466,10 @@ Examples:
   node scripts/leo-create-sd.js --from-plan --type feature --title "My SD" --yes  # Override both
   node scripts/leo-create-sd.js --child SD-LEO-FEAT-001 0
   node scripts/leo-create-sd.js LEO fix "Login button not working"
-Note: SD keys starting with QF- will redirect to create-quick-fix.js workflow.
+  node scripts/leo-create-sd.js LEO infrastructure "Tooling upgrade"
+
+Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
+      Guardrails are enforced at both CLI and database level — no bypass available.
 `);
     process.exit(0);
   }
@@ -1477,7 +1500,22 @@ Note: SD keys starting with QF- will redirect to create-quick-fix.js workflow.
       ) || null;
       await createFromPlan(planPath, hasYesFlag, { typeOverride, titleOverride });
     } else if (args[0] === '--child') {
-      await createChild(args[1], parseInt(args[2] || '0', 10));
+      // Parse --type and --title overrides for child creation
+      const childOverrides = {};
+      const childTypeIdx = args.indexOf('--type');
+      if (childTypeIdx !== -1 && args[childTypeIdx + 1]) {
+        childOverrides.type = args[childTypeIdx + 1];
+      }
+      const childTitleIdx = args.indexOf('--title');
+      if (childTitleIdx !== -1 && args[childTitleIdx + 1]) {
+        childOverrides.title = args[childTitleIdx + 1];
+      }
+      // args[1] = parent key, args[2] = index (skip flag positions)
+      const childParentKey = args[1];
+      const childIndexArg = args.find((a, i) =>
+        i >= 2 && !a.startsWith('-') && i !== childTypeIdx + 1 && i !== childTitleIdx + 1
+      );
+      await createChild(childParentKey, parseInt(childIndexArg || '0', 10), childOverrides);
     } else {
       // Direct creation: <source> <type> "<title>"
       // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)

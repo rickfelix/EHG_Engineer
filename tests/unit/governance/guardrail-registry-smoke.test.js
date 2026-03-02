@@ -4,7 +4,7 @@
  *
  * Validates that guardrail-registry.js is functional:
  * list() returns expected guardrails, check() produces correct
- * violation structure, register() adds custom guardrails.
+ * violation structure, register() is no longer exported (bypass vector removed).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -139,65 +139,17 @@ describe('Guardrail Registry Smoke Tests', () => {
     });
   });
 
-  describe('register()', () => {
-    it('adds a custom guardrail that appears in list()', () => {
-      const before = list().length;
-
-      register({
-        id: 'GR-CUSTOM-TEST',
-        name: 'Custom Test Guardrail',
-        mode: MODES.ADVISORY,
-        description: 'Test guardrail for smoke testing',
-        check: () => ({ violated: false }),
-      });
-
-      const after = list();
-      expect(after.length).toBe(before + 1);
-      const custom = after.find(g => g.id === 'GR-CUSTOM-TEST');
-      expect(custom).toBeDefined();
-      expect(custom.name).toBe('Custom Test Guardrail');
-    });
-
-    it('replaces an existing guardrail by id', () => {
-      const before = list().length;
-
-      register({
-        id: 'GR-VISION-ALIGNMENT',
-        name: 'Replaced Vision Alignment',
-        mode: MODES.ADVISORY, // Changed from blocking
-        description: 'Replaced for testing',
-        check: () => ({ violated: false }),
-      });
-
-      const after = list();
-      expect(after.length).toBe(before); // Same count, replaced in-place
-      const replaced = after.find(g => g.id === 'GR-VISION-ALIGNMENT');
-      expect(replaced.name).toBe('Replaced Vision Alignment');
-      expect(replaced.mode).toBe('advisory');
-    });
-
-    it('throws on missing id or check function', () => {
-      expect(() => register({ name: 'No ID' })).toThrow('Guardrail must have id and check function');
-      expect(() => register({ id: 'GR-NO-CHECK' })).toThrow('Guardrail must have id and check function');
+  describe('register() removed (SD-LEO-GEN-ENFORCE-GOVERNANCE-GUARDRAILS-001)', () => {
+    it('is no longer exported — runtime guardrail replacement was a bypass vector', () => {
+      expect(registryExports.register).toBeUndefined();
     });
   });
 
   describe('reset()', () => {
-    it('restores defaults after custom registration', () => {
-      register({
-        id: 'GR-TEMP',
-        name: 'Temp',
-        mode: MODES.ADVISORY,
-        description: 'Temp',
-        check: () => ({ violated: false }),
-      });
-
-      const withCustom = list().length;
+    it('restores default guardrail count', () => {
+      const defaultCount = list().length;
       reset();
-      const afterReset = list().length;
-
-      expect(afterReset).toBeLessThan(withCustom);
-      expect(list().find(g => g.id === 'GR-TEMP')).toBeUndefined();
+      expect(list().length).toBe(defaultCount);
     });
   });
 
