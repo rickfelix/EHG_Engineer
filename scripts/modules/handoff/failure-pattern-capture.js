@@ -93,7 +93,7 @@ export async function captureFailurePattern(sdId, handoffType, options = {}) {
     }
 
     // Create issue_pattern
-    const { data: inserted, error: insertError } = await sb
+    const { error: insertError } = await sb
       .from('issue_patterns')
       .insert({
         pattern_id: patternId,
