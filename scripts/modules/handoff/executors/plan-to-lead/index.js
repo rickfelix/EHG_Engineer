@@ -30,7 +30,11 @@ import {
   createWorkflowROIGate,
   createUserStoryExistenceGate,
   createDocumentationLinkValidationGate,
-  createHealBeforeCompleteGate
+  createHealBeforeCompleteGate,
+  createAcceptanceCriteriaValidationGate,
+  createSuccessMetricsAchievementGate,
+  createVisionCompletionScoreGate,
+  createArchitecturePlanValidationGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -120,8 +124,11 @@ export class PlanToLeadExecutor extends BaseExecutor {
     gates.push(createPrerequisiteCheckGate(this.supabase));
 
     // Heal-before-complete gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-007-03 FR-004)
-    // SD heal score must meet threshold before final approval
+    // SD heal score must meet threshold (93) before final approval
     gates.push(createHealBeforeCompleteGate(this.supabase));
+
+    // Vision completion re-score (advisory — detects vision regression)
+    gates.push(createVisionCompletionScoreGate(this.supabase));
 
     // Sub-agent orchestration
     gates.push(createSubAgentOrchestrationGate(this.supabase));
@@ -145,8 +152,17 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // User story existence gate
     gates.push(createUserStoryExistenceGate(this.supabase));
 
+    // Acceptance criteria validation (blocking — every story must have criteria)
+    gates.push(createAcceptanceCriteriaValidationGate(this.supabase));
+
+    // Success metrics achievement (blocking — actuals must be recorded)
+    gates.push(createSuccessMetricsAchievementGate(this.supabase));
+
     // Documentation link validation gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-D)
     gates.push(createDocumentationLinkValidationGate(this.supabase));
+
+    // Architecture plan validation (advisory — checks dimension coverage)
+    gates.push(createArchitecturePlanValidationGate(this.supabase));
 
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
     // Routes ESCALATE decisions to chairman_decisions for governance

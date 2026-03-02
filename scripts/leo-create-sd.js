@@ -1609,6 +1609,23 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
       const archKeyIdx = args.indexOf('--arch-key');
       const archKey = archKeyIdx !== -1 ? args[archKeyIdx + 1] : null;
 
+      // Advisory: suggest orchestrator creation when both vision and arch keys provided
+      if (visionKey && archKey) {
+        try {
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const { data: archPlan } = await sb
+            .from('eva_architecture_plans')
+            .select('content')
+            .eq('plan_key', archKey)
+            .single();
+          if (archPlan?.content && /^##?\s*(Phase|Implementation Phase|Step)\s+\d/im.test(archPlan.content)) {
+            console.log('\n💡 Advisory: Architecture plan has implementation phases.');
+            console.log('   Consider using the orchestrator creator for multi-phase work:');
+            console.log(`   node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children\n`);
+          }
+        } catch { /* Advisory only — continue regardless */ }
+      }
+
       const sdKey = await generateSDKey({ source, type, title, venturePrefix });
 
       await createSD({
