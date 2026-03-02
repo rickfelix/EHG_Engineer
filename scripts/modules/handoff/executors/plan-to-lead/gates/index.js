@@ -13,3 +13,7 @@ export { createTraceabilityGate, createWorkflowROIGate, requiresTraceabilityGate
 export { createUserStoryExistenceGate } from './user-story-existence.js';
 export { createDocumentationLinkValidationGate } from './documentation-link-validation.js';
 export { createHealBeforeCompleteGate } from './heal-before-complete.js';
+export { createAcceptanceCriteriaValidationGate } from './acceptance-criteria-validation.js';
+export { createSuccessMetricsAchievementGate } from './success-metrics-achievement.js';
+export { createVisionCompletionScoreGate } from './vision-completion-score.js';
+export { createArchitecturePlanValidationGate } from './architecture-plan-validation.js';

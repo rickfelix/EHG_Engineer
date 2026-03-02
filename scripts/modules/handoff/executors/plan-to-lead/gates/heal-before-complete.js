@@ -8,12 +8,12 @@
  * by catching gaps while context is fresh.
  *
  * - SD heal: BLOCKING — score must be >= threshold
- *   - Standard SDs: threshold from leo_config (default 80)
+ *   - Standard SDs: threshold from leo_config (default 93)
  *   - Corrective SDs: threshold from GRADE.A (93) via grade-scale.js
  * - Vision heal: ADVISORY — logged but does not block
  */
 
-const DEFAULT_HEAL_THRESHOLD = 80;
+const DEFAULT_HEAL_THRESHOLD = 93;
 const AUTO_HEAL_TIMEOUT_MS = 60_000; // 60 seconds
 
 /**
