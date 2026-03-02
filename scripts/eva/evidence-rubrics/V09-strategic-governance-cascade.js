@@ -2,9 +2,9 @@
 export default {
   id: 'V09', name: 'strategic_governance_cascade',
   checks: [
-    { id: 'V09-C1', label: 'Cascade validator with multi-layer check exists',
-      type: 'code_pattern', weight: 25,
-      params: { glob: 'scripts/modules/governance/cascade-validator.js', pattern: 'validate|cascade|layer' } },
+    { id: 'V09-C1', label: 'Cascade validator exports validateCascade',
+      type: 'export_exists', weight: 25,
+      params: { module: 'scripts/modules/governance/cascade-validator.js', exportName: 'validateCascade' } },
     { id: 'V09-C2', label: 'aegis_constitutions table has records',
       type: 'db_row_exists', weight: 20,
       params: { table: 'aegis_constitutions' } },
@@ -14,8 +14,8 @@ export default {
     { id: 'V09-C4', label: 'Cascade validation produces blocking failures on violation',
       type: 'code_pattern', weight: 20,
       params: { glob: 'scripts/modules/governance/cascade-validator.js', pattern: 'throw|reject|block|fail' } },
-    { id: 'V09-C5', label: 'Cascade invalidation engine propagates changes',
-      type: 'file_exists', weight: 15,
-      params: { glob: 'scripts/modules/governance/cascade-invalidation-engine.js' } },
+    { id: 'V09-C5', label: 'Cascade invalidation engine exports getStaleDocuments',
+      type: 'export_exists', weight: 15,
+      params: { module: 'scripts/modules/governance/cascade-invalidation-engine.js', exportName: 'getStaleDocuments' } },
   ],
 };
