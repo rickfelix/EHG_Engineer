@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-01T17:59:03.922Z
+**Generated**: 2026-03-02T00:03:49.900Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,8 @@
 | dfe_context | `jsonb` | YES | - | DFE engine output: { auto_proceed: bool, triggers: [{type, severity, message, details}], recommendation: string, evaluated_at: timestamp } |
 | mitigation_actions | `jsonb` | YES | `'[]'::jsonb` | Chairman actions on mitigations: [{ mitigation_id, action: accept|reject, reason, acted_at, idempotency_key }] |
 | decided_by | `text` | YES | - | - |
+| blocking | `boolean` | YES | `false` | When true, this decision blocks downstream SD progression. Set by chairman-sla-enforcer.js when SLA is violated with blockOnViolation=true. Read by enforceDecisionSLAs() to skip further escalation on already-blocking decisions. SD-MAN-GEN-CORRECTIVE-VISION-GAP-014 |
+| decision_type | `text` | YES | - | - |
 
 ## Constraints
 
@@ -60,6 +62,10 @@
 - `chairman_decisions_pkey`
   ```sql
   CREATE UNIQUE INDEX chairman_decisions_pkey ON public.chairman_decisions USING btree (id)
+  ```
+- `idx_chairman_decisions_blocking`
+  ```sql
+  CREATE INDEX idx_chairman_decisions_blocking ON public.chairman_decisions USING btree (blocking) WHERE (status = 'pending'::text)
   ```
 - `idx_chairman_decisions_created`
   ```sql
