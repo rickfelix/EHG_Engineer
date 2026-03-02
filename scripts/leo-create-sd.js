@@ -255,8 +255,7 @@ async function createFromFeedback(feedbackId) {
   if (feedback.strategic_directive_id || feedback.resolution_sd_id) {
     const linkedId = feedback.strategic_directive_id || feedback.resolution_sd_id;
     console.log(`\n⚠️  Feedback already linked to SD: ${linkedId}`);
-    console.log('   Skipping SD creation to prevent duplicates.');
-    console.log('   Use --force flag to create anyway.\n');
+    console.log('   Skipping SD creation to prevent duplicates.\n');
     process.exit(0);
   }
 
@@ -902,13 +901,11 @@ async function createSD(options) {
     // PAT-SDCREATE-001: Allow passing key_changes and smoke_test_steps
     key_changes = null,
     smoke_test_steps = null,
-    // QF-CLAIM-CONFLICT-UX-001: Allow forcing SD creation despite QF- prefix
-    forceCreate = false
   } = options;
 
   // QF-CLAIM-CONFLICT-UX-001 + SD-LEO-ENH-IMPLEMENT-TIERED-QUICK-001:
   // Detect Quick-Fix prefix and redirect via Unified Work-Item Router
-  if (sdKey && sdKey.startsWith('QF-') && !forceCreate) {
+  if (sdKey && sdKey.startsWith('QF-')) {
     // Use router to determine if this should be a QF or SD
     const routingDecision = await routeWorkItem({
       estimatedLoc: 0, // Unknown at SD creation time - use type/description signals
@@ -947,7 +944,7 @@ async function createSD(options) {
     }
 
     console.log('');
-    console.log('   To proceed as Strategic Directive anyway, add --force flag.');
+    console.log('   Use a non-QF key prefix for full Strategic Directive workflow.');
     console.log('═'.repeat(60));
     process.exit(0);
   }
@@ -1152,13 +1149,9 @@ async function createSD(options) {
         console.log(`   [${v.severity.toUpperCase()}] ${v.name}: ${v.message}`);
       }
       console.log('\n   Resolve the above violations before creating this SD.');
-      console.log('   To bypass (not recommended): add --force flag');
+      console.log('   Guardrails are enforced at both CLI and database level — no bypass available.');
       console.log('🛑'.repeat(30));
-
-      if (!forceCreate) {
-        process.exit(1);
-      }
-      console.log('\n   ⚠️  --force flag detected. Proceeding despite guardrail violations.');
+      process.exit(1);
     }
   } catch (err) {
     // Graceful degradation: if guardrail module fails, log warning and proceed
@@ -1201,12 +1194,9 @@ async function createSD(options) {
       }
       console.log(`\n   ${cascadeResult.rulesChecked} rules checked.`);
       console.log('   Resolve violations or request chairman override.');
+      console.log('   Cascade rules are enforced at both CLI and database level — no bypass available.');
       console.log('🛑'.repeat(30));
-
-      if (!forceCreate) {
-        process.exit(1);
-      }
-      console.log('\n   ⚠️  --force flag detected. Proceeding despite cascade violations.');
+      process.exit(1);
     }
   } catch (err) {
     // Graceful degradation: if cascade validator fails, log and proceed
@@ -1437,7 +1427,6 @@ Sources: ${Object.keys(SD_SOURCES).join(', ')}
 Types: ${Object.keys(SD_TYPES).join(', ')}
 
 Flags:
-  --force, -f        Force SD creation even if key has QF- prefix (normally redirects to quick-fix)
   --yes, -y          Skip confirmation for auto-detected plans
   --type <type>      Override SD type (for --from-plan or --child; children never inherit 'orchestrator')
   --title "<title>"  Override title (for --from-plan or --child)
@@ -1477,10 +1466,10 @@ Examples:
   node scripts/leo-create-sd.js --from-plan --type feature --title "My SD" --yes  # Override both
   node scripts/leo-create-sd.js --child SD-LEO-FEAT-001 0
   node scripts/leo-create-sd.js LEO fix "Login button not working"
-  node scripts/leo-create-sd.js QF bugfix "Quick fix" --force            # Force QF- prefix as full SD
+  node scripts/leo-create-sd.js LEO infrastructure "Tooling upgrade"
 
-Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
-      Use --force to override and create as full Strategic Directive.
+Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
+      Guardrails are enforced at both CLI and database level — no bypass available.
 `);
     process.exit(0);
   }
@@ -1530,11 +1519,11 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
     } else {
       // Direct creation: <source> <type> "<title>"
       // Detect unknown flags to prevent silent corruption (SD-LEO-FIX-CREATE-ARGS-001)
-      const knownDirectFlags = new Set(['--force', '-f', '--venture', '--vision-key', '--arch-key']);
+      const knownDirectFlags = new Set(['--venture', '--vision-key', '--arch-key']);
       const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
       if (unknownFlags.length > 0) {
         console.error('\n❌ Unknown flag(s): ' + unknownFlags.join(', '));
-        console.error('   Direct creation supports: <source> <type> "<title>" [--force] [--venture <name>]');
+        console.error('   Direct creation supports: <source> <type> "<title>" [--venture <name>]');
         console.error('   Did you mean one of these?');
         console.error('     --from-plan [path] [--type <type>] [--title "<title>"]');
         console.error('     --from-feedback <id>');
@@ -1595,20 +1584,17 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
       }
 
       // Triage Gate: Recommend QF for small work items (soft gate for CLI)
-      const forceCreate = args.includes('--force') || args.includes('-f');
-      if (!forceCreate) {
-        try {
-          const triageResult = await runTriageGate({ title, description: title, type, source: 'interactive' }, supabase);
-          if (triageResult.tier <= 2) {
-            console.log('\n' + formatTriageSummary(triageResult));
-            console.log('\n   💡 Consider using Quick Fix instead:');
-            console.log(`      node scripts/create-quick-fix.js --title "${title}" --type ${type}`);
-            console.log('   Continuing with full SD creation...\n');
-          }
-        } catch (triageErr) {
-          // Non-fatal: triage failure should not block SD creation
-          console.warn(`[triage-gate] Warning: ${triageErr.message}`);
+      try {
+        const triageResult = await runTriageGate({ title, description: title, type, source: 'interactive' }, supabase);
+        if (triageResult.tier <= 2) {
+          console.log('\n' + formatTriageSummary(triageResult));
+          console.log('\n   💡 Consider using Quick Fix instead:');
+          console.log(`      node scripts/create-quick-fix.js --title "${title}" --type ${type}`);
+          console.log('   Continuing with full SD creation...\n');
         }
+      } catch (triageErr) {
+        // Non-fatal: triage failure should not block SD creation
+        console.warn(`[triage-gate] Warning: ${triageErr.message}`);
       }
 
       // Phase 0 not required or complete - proceed with SD creation
@@ -1667,7 +1653,6 @@ Note: SD keys starting with QF- will prompt to use create-quick-fix.js instead.
         description: title,
         type,
         rationale: 'Created via /leo create',
-        forceCreate,
         metadata: {
           source: source.toLowerCase(),
           ...phase0Metadata,
