@@ -7,10 +7,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   list,
   check,
-  register,
-  reset,
+  _test,
   MODES,
 } from '../../../lib/governance/guardrail-registry.js';
+
+const { register, reset } = _test;
 
 beforeEach(() => {
   reset();
