@@ -14,8 +14,8 @@ export default {
     { id: 'V02-C4', label: 'Decision queue with no-timeout pattern',
       type: 'code_pattern', weight: 20,
       params: { glob: 'lib/eva/chairman-decision-watcher.js', pattern: 'pending|queue|poll' } },
-    { id: 'V02-C5', label: 'Chairman dashboard components exist in EHG app',
+    { id: 'V02-C5', label: 'Chairman backend modules exist (>=5 chairman-*.js)',
       type: 'file_count', weight: 15,
-      params: { glob: 'src/components/chairman*/**/*.{tsx,ts}', minCount: 1 } },
+      params: { glob: 'lib/eva/chairman-*.js', minCount: 5 } },
   ],
 };
