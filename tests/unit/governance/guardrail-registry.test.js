@@ -17,9 +17,9 @@ beforeEach(() => {
 });
 
 describe('Guardrail Registry - list()', () => {
-  it('returns all 9 default guardrails', () => {
+  it('returns all 15 default guardrails', () => {
     const guardrails = list();
-    expect(guardrails.length).toBe(9);
+    expect(guardrails.length).toBe(15);
     expect(guardrails[0]).toHaveProperty('id');
     expect(guardrails[0]).toHaveProperty('name');
     expect(guardrails[0]).toHaveProperty('mode');
@@ -361,5 +361,228 @@ describe('Guardrail Registry - MODES', () => {
   it('exports blocking and advisory modes', () => {
     expect(MODES.BLOCKING).toBe('blocking');
     expect(MODES.ADVISORY).toBe('advisory');
+  });
+});
+
+// SD-MAN-INFRA-CORRECTIVE-V11-GUARDRAIL-ENFORCEMENT-001: Domain guardrail tests
+
+describe('Guardrail Registry - GR-SPENDING-LIMIT', () => {
+  it('blocks when estimated cost exceeds budget threshold', () => {
+    const result = check({
+      estimated_cost: 15000,
+      budget_threshold: 10000,
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SPENDING-LIMIT');
+    expect(violation).toBeDefined();
+    expect(violation.severity).toBe('high');
+  });
+
+  it('passes when estimated cost is within budget', () => {
+    const result = check({
+      estimated_cost: 5000,
+      budget_threshold: 10000,
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SPENDING-LIMIT');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes when no cost data provided', () => {
+    const result = check({ strategic_objectives: ['OKR-1'] });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SPENDING-LIMIT');
+    expect(violation).toBeUndefined();
+  });
+
+  it('reads cost from metadata', () => {
+    const result = check({
+      metadata: { estimated_cost: 20000 },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SPENDING-LIMIT');
+    expect(violation).toBeDefined();
+  });
+});
+
+describe('Guardrail Registry - GR-COMMS-BLAST-GUARD', () => {
+  it('warns when scope involves bulk email', () => {
+    const result = check({
+      scope: 'Send bulk email notification to all users',
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-COMMS-BLAST-GUARD');
+    expect(warning).toBeDefined();
+    expect(warning.mode).toBe(MODES.ADVISORY);
+  });
+
+  it('warns when scope involves mass notification', () => {
+    const result = check({
+      scope: 'Mass notification to customers about downtime',
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-COMMS-BLAST-GUARD');
+    expect(warning).toBeDefined();
+  });
+
+  it('passes for normal scope without comms keywords', () => {
+    const result = check({
+      scope: 'Add database index optimization',
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-COMMS-BLAST-GUARD');
+    expect(warning).toBeUndefined();
+  });
+});
+
+describe('Guardrail Registry - GR-DELETION-SAFEGUARD', () => {
+  it('blocks when scope involves drop table without backup', () => {
+    const result = check({
+      scope: 'Drop table old_users and purge legacy data',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-DELETION-SAFEGUARD');
+    expect(violation).toBeDefined();
+    expect(violation.severity).toBe('critical');
+  });
+
+  it('passes when backup plan is provided', () => {
+    const result = check({
+      scope: 'Delete all legacy records from archive',
+      metadata: { backup_plan: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-DELETION-SAFEGUARD');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes when scope has no destructive operations', () => {
+    const result = check({
+      scope: 'Add new feature for user dashboard',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-DELETION-SAFEGUARD');
+    expect(violation).toBeUndefined();
+  });
+});
+
+describe('Guardrail Registry - GR-DEPLOY-WINDOW', () => {
+  it('warns when deploying during freeze period', () => {
+    const result = check({
+      scope: 'Deploy new release to production',
+      metadata: { deploy_freeze: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-DEPLOY-WINDOW');
+    expect(warning).toBeDefined();
+    expect(warning.severity).toBe('high');
+  });
+
+  it('passes deploy scope when no freeze', () => {
+    const result = check({
+      scope: 'Deploy new release to production',
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-DEPLOY-WINDOW');
+    expect(warning).toBeUndefined();
+  });
+
+  it('passes non-deploy scope during freeze', () => {
+    const result = check({
+      scope: 'Add unit tests for auth module',
+      metadata: { deploy_freeze: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const warning = result.warnings.find((w) => w.guardrail === 'GR-DEPLOY-WINDOW');
+    expect(warning).toBeUndefined();
+  });
+});
+
+describe('Guardrail Registry - GR-MIGRATION-REVIEW', () => {
+  it('blocks migration scope without review', () => {
+    const result = check({
+      scope: 'Database migration to add user_preferences column',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-MIGRATION-REVIEW');
+    expect(violation).toBeDefined();
+    expect(violation.severity).toBe('high');
+  });
+
+  it('passes migration scope with review flag', () => {
+    const result = check({
+      scope: 'Database migration to add user_preferences column',
+      metadata: { migration_reviewed: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-MIGRATION-REVIEW');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes non-migration scope', () => {
+    const result = check({
+      scope: 'Optimize existing query performance',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-MIGRATION-REVIEW');
+    expect(violation).toBeUndefined();
+  });
+
+  it('detects alter table keyword', () => {
+    const result = check({
+      scope: 'Alter table ventures to add status column',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-MIGRATION-REVIEW');
+    expect(violation).toBeDefined();
+  });
+});
+
+describe('Guardrail Registry - GR-SECURITY-BASELINE', () => {
+  it('blocks security scope without assessment', () => {
+    const result = check({
+      scope: 'Update authentication flow and RLS policies',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SECURITY-BASELINE');
+    expect(violation).toBeDefined();
+    expect(violation.severity).toBe('critical');
+  });
+
+  it('passes security scope with review flag', () => {
+    const result = check({
+      scope: 'Update authentication flow and RLS policies',
+      metadata: { security_reviewed: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SECURITY-BASELINE');
+    expect(violation).toBeUndefined();
+  });
+
+  it('passes non-security scope', () => {
+    const result = check({
+      scope: 'Add pagination to venture list',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SECURITY-BASELINE');
+    expect(violation).toBeUndefined();
+  });
+
+  it('detects credential keyword', () => {
+    const result = check({
+      scope: 'Rotate API key and update credential storage',
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SECURITY-BASELINE');
+    expect(violation).toBeDefined();
+  });
+
+  it('passes with threat model flag', () => {
+    const result = check({
+      scope: 'Implement OAuth token refresh',
+      metadata: { threat_model: true },
+      strategic_objectives: ['OKR-1'],
+    });
+    const violation = result.violations.find((v) => v.guardrail === 'GR-SECURITY-BASELINE');
+    expect(violation).toBeUndefined();
   });
 });
