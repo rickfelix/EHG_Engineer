@@ -13,7 +13,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -83,7 +83,7 @@ async function executeSubAgent(agentCode, sd_id) {
   try {
     console.log(`   🔄 Executing: node ${scriptPath} ${sd_id}`);
 
-    const output = execSync(`node ${fullPath} ${sd_id}`, {
+    const output = execFileSync('node', [fullPath, sd_id], {
       encoding: 'utf-8',
       stdio: 'pipe',
     });

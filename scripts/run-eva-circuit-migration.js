@@ -170,7 +170,14 @@ async function verifyTables() {
     'reset_eva_circuit'
   ];
 
+  // Allowlist: only known function names to prevent SQL injection
+  const allowedFunctions = new Set(functions);
+
   for (const func of functions) {
+    if (!allowedFunctions.has(func) || !/^[a-z_]+$/.test(func)) {
+      console.log(`  ❌ ${func}: Skipped (invalid function name)`);
+      continue;
+    }
     try {
       // Check if function exists by querying pg_proc
       const { data, error } = await supabase.rpc('exec_sql', {

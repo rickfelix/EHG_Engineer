@@ -49,6 +49,11 @@ if (!dbPassword) throw new Error('SUPABASE_DB_PASSWORD required');
     if (userTriggers.length > 0) {
       console.log('Step 2: Disable user-defined triggers...');
       for (const trigger of userTriggers) {
+        // Validate trigger name contains only safe identifier characters
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trigger.trigger_name)) {
+          console.log(`  ❌ Skipped unsafe trigger name: ${trigger.trigger_name}`);
+          continue;
+        }
         await client.query(`ALTER TABLE strategic_directives_v2 DISABLE TRIGGER ${trigger.trigger_name};`);
         console.log(`  ✅ Disabled: ${trigger.trigger_name}`);
       }
@@ -79,6 +84,10 @@ if (!dbPassword) throw new Error('SUPABASE_DB_PASSWORD required');
     if (userTriggers.length > 0) {
       console.log('Step 4: Re-enable user-defined triggers...');
       for (const trigger of userTriggers) {
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trigger.trigger_name)) {
+          console.log(`  ❌ Skipped unsafe trigger name: ${trigger.trigger_name}`);
+          continue;
+        }
         await client.query(`ALTER TABLE strategic_directives_v2 ENABLE TRIGGER ${trigger.trigger_name};`);
         console.log(`  ✅ Re-enabled: ${trigger.trigger_name}`);
       }

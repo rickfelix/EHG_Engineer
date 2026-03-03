@@ -446,13 +446,31 @@ export async function validateArtifactsForHandoff(sdId) {
  * @returns {Promise<{extended: number}>}
  */
 export async function extendArtifactTTLs(sdId, additionalHours = 4) {
+  const hours = parseInt(additionalHours, 10);
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 168) {
+    throw new Error('additionalHours must be a positive integer (max 168)');
+  }
+
+  // Fetch artifacts, then update with calculated new expiry (avoids raw SQL injection)
+  const { data: artifacts, error: fetchError } = await supabase
+    .from('agent_artifacts')
+    .select('id, expires_at')
+    .eq('sd_id', sdId)
+    .not('expires_at', 'is', null);
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch artifacts: ${fetchError.message}`);
+  }
+  if (!artifacts?.length) return { extended: 0 };
+
+  const updates = artifacts.map(a => ({
+    id: a.id,
+    expires_at: new Date(new Date(a.expires_at).getTime() + hours * 3600000).toISOString()
+  }));
+
   const { data, error } = await supabase
     .from('agent_artifacts')
-    .update({
-      expires_at: supabase.raw(`expires_at + interval '${additionalHours} hours'`)
-    })
-    .eq('sd_id', sdId)
-    .not('expires_at', 'is', null)
+    .upsert(updates, { onConflict: 'id' })
     .select('id');
 
   if (error) {
