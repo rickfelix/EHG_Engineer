@@ -10,6 +10,8 @@ import express from 'express';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -37,8 +39,19 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Middleware
-app.use(cors());
+// Security middleware
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173').split(',');
+app.use(helmet());
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: 'Rate limit exceeded. Try again later.' }
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Initialize the invisible sub-agent system

@@ -8,6 +8,26 @@
 import path from 'path';
 import { getProcessManager } from './CodebaseSearchService.js';
 
+/**
+ * Middleware: Require API key for admin endpoints.
+ * Set ADMIN_API_KEY env var; requests must send Authorization: Bearer <key>.
+ */
+function requireAdminAuth(req, res, next) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) {
+    // If no key configured, reject all admin requests in production
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({ error: 'Admin API not configured' });
+    }
+    return next(); // Allow in development when unconfigured
+  }
+  const auth = req.headers.authorization;
+  if (!auth || auth !== `Bearer ${adminKey}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
 class RefreshAPI {
   constructor(server, dbLoader) {
     this.server = server;
@@ -16,111 +36,91 @@ class RefreshAPI {
   }
 
   setupRoutes(app) {
-    // System status endpoint
+    // System status endpoint — sanitized (no PID, memory, or Node version)
     app.get('/api/system-status', (req, res) => {
       res.json({
         startTime: this.serverStartTime.toISOString(),
         uptime: Date.now() - this.serverStartTime.getTime(),
-        pid: process.pid,
-        memory: process.memoryUsage(),
-        version: process.version,
         status: 'running'
       });
     });
 
     // Health check endpoint
     app.get('/api/health', (req, res) => {
-      res.json({ 
-        status: 'ok', 
+      res.json({
+        status: 'ok',
         timestamp: new Date().toISOString(),
         database: this.dbLoader?.isConnected || false
       });
     });
 
-    // Database refresh endpoint
-    app.post('/api/refresh', async (req, res) => {
+    // Database refresh endpoint — requires admin auth
+    app.post('/api/refresh', requireAdminAuth, async (req, res) => {
       try {
         const { type } = req.body;
-        
+
         console.log(`🔄 Refresh request: ${type}`);
-        
+
         if (type === 'database') {
-          // Force reload data from database
           await this.refreshDatabase();
-          res.json({ 
-            success: true, 
+          res.json({
+            success: true,
             type: 'database',
             message: 'Database refreshed successfully',
             timestamp: new Date().toISOString()
           });
         } else {
-          res.status(400).json({ 
-            error: 'Invalid refresh type. Use "database"' 
+          res.status(400).json({
+            error: 'Invalid refresh type. Use "database"'
           });
         }
       } catch (error) {
-        console.error('❌ Refresh failed:', error.message);
-        res.status(500).json({ 
-          error: error.message,
-          type: 'refresh_error'
-        });
+        console.error('Refresh failed:', error.message);
+        res.status(500).json({ error: 'Refresh failed' });
       }
     });
 
-    // Server restart endpoint
-    app.post('/api/restart', async (req, res) => {
+    // Server restart endpoint — requires admin auth
+    app.post('/api/restart', requireAdminAuth, async (req, res) => {
       try {
         console.log('🔄 Server restart requested via API');
-        
-        // Send response before restarting
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           message: 'Server restart initiated',
-          timestamp: new Date().toISOString(),
-          expectedDowntime: '10-15 seconds'
+          timestamp: new Date().toISOString()
         });
 
-        // Give response time to send
         setTimeout(() => {
           this.restartServer();
         }, 1000);
 
       } catch (error) {
-        console.error('❌ Restart failed:', error.message);
-        res.status(500).json({ 
-          error: error.message,
-          type: 'restart_error'
-        });
+        console.error('Restart failed:', error.message);
+        res.status(500).json({ error: 'Restart failed' });
       }
     });
 
-    // Force refresh endpoint (database + restart)
-    app.post('/api/force-refresh', async (req, res) => {
+    // Force refresh endpoint (database + restart) — requires admin auth
+    app.post('/api/force-refresh', requireAdminAuth, async (req, res) => {
       try {
         console.log('🔄 Force refresh requested (database + restart)');
-        
-        // First refresh database
+
         await this.refreshDatabase();
-        
-        // Send response before restarting
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           message: 'Database refreshed, server restart initiated',
-          timestamp: new Date().toISOString(),
-          expectedDowntime: '10-15 seconds'
+          timestamp: new Date().toISOString()
         });
 
-        // Give response time to send, then restart
         setTimeout(() => {
           this.restartServer();
         }, 1000);
 
       } catch (error) {
-        console.error('❌ Force refresh failed:', error.message);
-        res.status(500).json({ 
-          error: error.message,
-          type: 'force_refresh_error'
-        });
+        console.error('Force refresh failed:', error.message);
+        res.status(500).json({ error: 'Force refresh failed' });
       }
     });
   }
