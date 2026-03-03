@@ -196,6 +196,6 @@ export async function verifyStories(req, res) {
 // Apply rate limiting
 export default {
   generateStories: [limiter, generateStories],
-  listStories,
+  listStories: [limiter, listStories],
   verifyStories: [limiter, verifyStories]
 };
