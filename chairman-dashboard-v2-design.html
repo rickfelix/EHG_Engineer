@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EHG Chairman Dashboard V2 - Design Prototype</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}
+</script>
+<style>
+:root{--glass-bg:rgba(255,255,255,0.04);--glass-border:rgba(255,255,255,0.07);--glow-primary:rgba(99,102,241,0.12);--glow-success:rgba(34,197,94,0.12);--glow-warn:rgba(234,179,8,0.12);--glow-danger:rgba(239,68,68,0.12)}
+.light{--glass-bg:rgba(0,0,0,0.02);--glass-border:rgba(0,0,0,0.06);--glow-primary:rgba(99,102,241,0.06);--glow-success:rgba(34,197,94,0.06);--glow-warn:rgba(234,179,8,0.06);--glow-danger:rgba(239,68,68,0.06)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;overflow:hidden}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.glass{background:var(--glass-bg);border:1px solid var(--glass-border);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.glow-p{box-shadow:0 0 24px var(--glow-primary),inset 0 1px 0 rgba(255,255,255,0.04)}
+.glow-s{box-shadow:0 0 24px var(--glow-success)}
+.glow-w{box-shadow:0 0 24px var(--glow-warn)}
+.glow-d{box-shadow:0 0 24px var(--glow-danger)}
+.mesh{background:radial-gradient(ellipse at 15% 50%,rgba(99,102,241,0.07) 0%,transparent 50%),radial-gradient(ellipse at 85% 15%,rgba(34,197,94,0.04) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(234,179,8,0.03) 0%,transparent 50%)}
+.light .mesh{background:radial-gradient(ellipse at 15% 50%,rgba(99,102,241,0.03) 0%,transparent 50%),radial-gradient(ellipse at 85% 15%,rgba(34,197,94,0.02) 0%,transparent 50%)}
+.grain{position:relative}.grain::after{content:'';position:absolute;inset:0;opacity:0.025;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");pointer-events:none;border-radius:inherit}
+.sb::-webkit-scrollbar{width:5px}.sb::-webkit-scrollbar-track{background:transparent}.sb::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:3px}
+.light .sb::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.1)}
+.ch:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(0,0,0,0.2)}.light .ch:hover{box-shadow:0 4px 24px rgba(0,0,0,0.06)}
+.ch{transition:all 0.15s ease}
+.view{display:none}.view.active{display:block;animation:fadeUp 0.25s ease-out}
+@keyframes fadeUp{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes pulse-slow{0%,100%{opacity:1}50%{opacity:0.6}}
+.pulse-slow{animation:pulse-slow 2.5s ease-in-out infinite}
+.nav-btn{color:#6b7280;transition:all 0.15s ease}
+.nav-btn:hover{background:rgba(255,255,255,0.04);color:#d1d5db}
+.nav-btn.act{background:rgba(99,102,241,0.1);color:#a5b4fc;font-weight:500}
+.light .nav-btn{color:#6b7280}.light .nav-btn:hover{background:rgba(0,0,0,0.04);color:#374151}
+.light .nav-btn.act{background:rgba(99,102,241,0.08);color:#4f46e5}
+.stage-dot{transition:all 0.15s ease;cursor:pointer}.stage-dot:hover{transform:scale(1.3)}
+.exp-content{max-height:0;overflow:hidden;transition:max-height 0.3s ease,opacity 0.2s ease;opacity:0}
+.exp-content.open{max-height:600px;opacity:1}
+.detail-panel{position:fixed;top:0;right:0;bottom:0;width:min(480px,90vw);transform:translateX(100%);transition:transform 0.3s ease;z-index:50}
+.detail-panel.open{transform:translateX(0)}
+.detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);opacity:0;transition:opacity 0.3s ease;pointer-events:none;z-index:45}
+.detail-overlay.open{opacity:1;pointer-events:auto}
+@media(max-width:768px){.sidebar-area{display:none!important}.mob-tabs{display:flex!important}.main-scroll{padding-bottom:5rem!important}}
+@media(min-width:769px){.mob-tabs{display:none!important}}
+</style>
+</head>
+<body class="bg-[#0a0e17] text-gray-200 h-screen overflow-hidden">
+<div id="app" class="flex h-screen">
+
+<!-- SIDEBAR -->
+<aside class="sidebar-area w-[232px] h-screen flex flex-col border-r border-white/[0.06] bg-[#0c1019] flex-shrink-0 z-20">
+  <div class="h-14 flex items-center px-4 border-b border-white/[0.06] flex-shrink-0 gap-2.5">
+    <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    </div>
+    <span class="text-sm font-bold tracking-tight">EHG</span>
+    <span class="text-[9px] font-mono text-gray-600 bg-white/[0.04] px-1.5 py-0.5 rounded">v2</span>
+  </div>
+  <div class="flex-1 overflow-y-auto py-4 px-2.5 space-y-5 sb">
+    <div>
+      <div class="px-2 mb-2 flex items-center gap-2"><span class="text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-600">Chairman</span><div class="flex-1 h-px bg-white/[0.04]"></div></div>
+      <nav class="space-y-0.5" id="nav-chairman">
+        <button onclick="go('briefing')" data-v="briefing" class="nav-btn act w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Briefing</button>
+        <button onclick="go('decisions')" data-v="decisions" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          Decisions<span class="ml-auto text-[9px] font-semibold bg-red-500/15 text-red-400 w-5 h-5 rounded-full flex items-center justify-center">3</span></button>
+        <button onclick="go('ventures')" data-v="ventures" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          Ventures</button>
+        <button onclick="go('vision')" data-v="vision" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          Vision</button>
+        <button onclick="go('prefs')" data-v="prefs" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          Preferences</button>
+      </nav>
+    </div>
+    <div>
+      <div class="px-2 mb-2 flex items-center gap-2"><span class="text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-600">Builder</span><div class="flex-1 h-px bg-white/[0.04]"></div></div>
+      <nav class="space-y-0.5" id="nav-builder">
+        <button onclick="go('active')" data-v="active" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          Active SDs<span class="ml-auto text-[9px] font-semibold bg-green-500/15 text-green-400 w-5 h-5 rounded-full flex items-center justify-center">4</span></button>
+        <button onclick="go('queue')" data-v="queue" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+          Build Queue</button>
+        <button onclick="go('inbox')" data-v="inbox" class="nav-btn w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px]">
+          <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+          Inbox<span class="ml-auto text-[9px] font-semibold bg-indigo-500/15 text-indigo-400 w-5 h-5 rounded-full flex items-center justify-center">2</span></button>
+      </nav>
+    </div>
+  </div>
+  <div class="p-3 border-t border-white/[0.06] flex-shrink-0">
+    <div class="flex items-center gap-2.5 px-1.5">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-[11px] font-bold text-white shadow-lg shadow-amber-500/20">RF</div>
+      <div class="flex-1 min-w-0"><p class="text-xs font-medium truncate">Rick Felix</p><p class="text-[10px] text-gray-600 truncate">Chairman & Builder</p></div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col min-w-0 h-screen">
+  <!-- TOPBAR -->
+  <header class="h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/[0.06] bg-[#0a0e17]/80 backdrop-blur-xl flex-shrink-0 z-10">
+    <div class="flex items-center gap-3">
+      <button class="md:hidden p-1.5 rounded-lg hover:bg-white/5" onclick="document.querySelector('.sidebar-area').classList.toggle('hidden')">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <h1 id="ptitle" class="text-sm font-semibold">Daily Briefing</h1>
+      <span class="text-[11px] text-gray-600 hidden md:inline font-mono">Mar 2, 2026</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="persona-btn" onclick="togglePersona()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all" style="border-color:rgba(251,191,36,0.25);background:rgba(251,191,36,0.04)">
+        <span id="p-icon" class="text-amber-400">&#9818;</span>
+        <span id="p-label">Chairman</span>
+      </button>
+      <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Toggle theme">
+        <svg id="t-dark" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        <svg id="t-light" class="w-4 h-4 text-amber-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+      </button>
+      <div class="relative">
+        <button class="p-2 rounded-lg hover:bg-white/5 transition-colors"><svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></button>
+        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- SCROLLABLE CONTENT -->
+  <main class="flex-1 overflow-y-auto main-scroll sb mesh grain">
+
+<!-- ========== VIEW: BRIEFING ========== -->
+<div id="v-briefing" class="view active p-4 md:p-6 space-y-4">
+  <div class="glass rounded-2xl p-5 glow-p">
+    <div class="flex flex-col sm:flex-row items-start justify-between gap-3">
+      <div>
+        <p class="text-[10px] text-indigo-400/70 font-semibold uppercase tracking-[0.15em] mb-1">Good Morning</p>
+        <h2 class="text-xl font-bold text-white">Welcome back, Rick</h2>
+        <p class="text-[13px] text-gray-400 mt-1.5 max-w-lg leading-relaxed">3 gate decisions need your attention today. Portfolio health is <span class="text-green-400 font-medium">strong at 82%</span>. VentureForge passed Stage 10 overnight.</p>
+      </div>
+      <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-medium hover:bg-indigo-500/15 transition-colors shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        Ask EVA
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="glass rounded-xl p-4 ch cursor-pointer" onclick="go('ventures')">
+      <div class="flex items-center justify-between mb-2"><span class="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-500">Active Ventures</span>
+        <svg class="w-4 h-4 text-indigo-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg></div>
+      <p class="text-2xl font-bold text-white">7</p>
+      <div class="flex items-center gap-1 mt-1"><svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg><span class="text-[10px] text-green-400 font-medium">+2 this month</span></div>
+    </div>
+    <div class="glass rounded-xl p-4 ch cursor-pointer glow-d" onclick="go('decisions')">
+      <div class="flex items-center justify-between mb-2"><span class="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-500">Pending Decisions</span>
+        <svg class="w-4 h-4 text-red-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+      <p class="text-2xl font-bold text-white">3</p>
+      <div class="flex items-center gap-1.5 mt-1"><span class="w-1.5 h-1.5 rounded-full bg-red-500 pulse-slow"></span><span class="text-[10px] text-red-400 font-medium">1 critical</span></div>
+    </div>
+    <div class="glass rounded-xl p-4 ch">
+      <div class="flex items-center justify-between mb-2"><span class="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-500">Portfolio Health</span>
+        <svg class="w-4 h-4 text-green-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg></div>
+      <p class="text-2xl font-bold text-white">82%</p>
+      <div class="w-full h-1.5 bg-white/[0.04] rounded-full mt-2 overflow-hidden"><div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full" style="width:82%"></div></div>
+    </div>
+    <div class="glass rounded-xl p-4 ch cursor-pointer" onclick="go('vision')">
+      <div class="flex items-center justify-between mb-2"><span class="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-500">Vision Alignment</span>
+        <svg class="w-4 h-4 text-purple-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+      <p class="text-2xl font-bold text-white">76%</p>
+      <div class="flex items-center gap-1 mt-1"><span class="text-[10px] text-amber-400 font-medium">~ Stable</span></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="glass rounded-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-5 pt-4 pb-2"><h3 class="text-[13px] font-semibold flex items-center gap-2"><svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>Awaiting Decision</h3><button onclick="go('decisions')" class="text-[10px] text-indigo-400 font-medium hover:text-indigo-300">View all &rarr;</button></div>
+      <div class="px-3 pb-3 space-y-1">
+        <button onclick="go('detail')" class="w-full text-left p-3 rounded-xl hover:bg-white/[0.03] transition-all border-l-[3px] border-red-500 group">
+          <div class="flex items-center gap-2 mb-1"><span class="text-[8px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">Critical</span><span class="text-[12px] font-medium text-white">Kill Gate: NeuralPay Stage 22</span></div>
+          <p class="text-[11px] text-gray-500 line-clamp-1">Health at 42%. Revenue validation failed. Recommend park or pivot.</p>
+        </button>
+        <button class="w-full text-left p-3 rounded-xl hover:bg-white/[0.03] transition-all border-l-[3px] border-amber-500 group">
+          <div class="flex items-center gap-2 mb-1"><span class="text-[8px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded">High</span><span class="text-[12px] font-medium text-white">Stage 0: DataWeave Routing</span></div>
+          <p class="text-[11px] text-gray-500 line-clamp-1">Portfolio synergy 74%. Constraint check: 4/5 passed. Horizon: 18mo.</p>
+        </button>
+        <button class="w-full text-left p-3 rounded-xl hover:bg-white/[0.03] transition-all border-l-[3px] border-blue-500 group">
+          <div class="flex items-center gap-2 mb-1"><span class="text-[8px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded">Normal</span><span class="text-[12px] font-medium text-white">Stage 10: VentureForge Brand</span></div>
+          <p class="text-[11px] text-gray-500 line-clamp-1">3 naming candidates scored. Top pick: VentureForge (87/100).</p>
+        </button>
+      </div>
+    </div>
+    <div class="glass rounded-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-5 pt-4 pb-2"><h3 class="text-[13px] font-semibold flex items-center gap-2"><svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>Portfolio Pulse</h3><button onclick="go('ventures')" class="text-[10px] text-indigo-400 font-medium hover:text-indigo-300">View all &rarr;</button></div>
+      <div class="px-5 pb-4 space-y-0">
+        <div class="flex items-center justify-between py-2.5 border-b border-white/[0.04]"><div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-green-500"></div><div><p class="text-[12px] font-medium text-white">VentureForge</p><p class="text-[10px] text-gray-600">Stage 10 &middot; Identity</p></div></div><div class="text-right"><p class="text-[12px] font-semibold text-green-400">91</p></div></div>
+        <div class="flex items-center justify-between py-2.5 border-b border-white/[0.04]"><div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-green-500"></div><div><p class="text-[12px] font-medium text-white">CodeLens AI</p><p class="text-[10px] text-gray-600">Stage 18 &middot; Build</p></div></div><div class="text-right"><p class="text-[12px] font-semibold text-green-400">85</p></div></div>
+        <div class="flex items-center justify-between py-2.5 border-b border-white/[0.04]"><div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-amber-500"></div><div><p class="text-[12px] font-medium text-white">SynthWave Audio</p><p class="text-[10px] text-gray-600">Stage 7 &middot; Engine</p></div></div><div class="text-right"><p class="text-[12px] font-semibold text-amber-400">67</p></div></div>
+        <div class="flex items-center justify-between py-2.5 border-b border-white/[0.04]"><div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-red-500"></div><div><p class="text-[12px] font-medium text-white">NeuralPay</p><p class="text-[10px] text-gray-600">Stage 22 &middot; Launch</p></div></div><div class="text-right"><p class="text-[12px] font-semibold text-red-400">42</p></div></div>
+        <div class="flex items-center justify-between py-2.5"><div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-green-500"></div><div><p class="text-[12px] font-medium text-white">PromptStack</p><p class="text-[10px] text-gray-600">Stage 3 &middot; Truth</p></div></div><div class="text-right"><p class="text-[12px] font-semibold text-green-400">88</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass rounded-xl p-4">
+    <div class="flex items-center justify-between mb-2"><span class="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-500">Monthly Token Budget</span><span class="text-[11px] text-gray-400 font-mono">142K / 200K</span></div>
+    <div class="w-full h-[6px] bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" style="width:71%"></div></div>
+    <p class="text-[10px] text-gray-600 mt-1.5">58K tokens remaining &middot; Projected: 189K by month end</p>
+  </div>
+</div>
+
+<!-- ========== VIEW: DECISIONS ========== -->
+<div id="v-decisions" class="view p-4 md:p-6 space-y-4">
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+    <h2 class="text-base font-semibold flex items-center gap-2 flex-wrap">
+      <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      Decision Gates<span class="text-[10px] font-medium bg-white/5 text-gray-400 px-2 py-0.5 rounded-full">3</span><span class="text-[10px] font-medium bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full pulse-slow">1 Critical</span>
+    </h2>
+    <div class="flex gap-1 flex-wrap">
+      <button class="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/20">All</button>
+      <button class="px-3 py-1.5 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-white/[0.03] border border-transparent">Investment</button>
+      <button class="px-3 py-1.5 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-white/[0.03] border border-transparent">Graduation</button>
+      <button class="px-3 py-1.5 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-white/[0.03] border border-transparent">Kill Gate</button>
+    </div>
+  </div>
+  <div class="space-y-2">
+    <button onclick="go('detail')" class="w-full text-left glass rounded-xl p-4 ch border-l-4 border-red-500 glow-d group">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1"><svg class="w-4 h-4 text-red-400 pulse-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><h4 class="text-sm font-semibold text-white">Kill Gate: NeuralPay Release Readiness</h4></div>
+          <div class="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap"><span>NeuralPay</span><span class="text-gray-700">&bull;</span><span>Stage 22</span><span class="text-gray-700">&bull;</span><span class="text-red-400 font-medium">Overdue 2d</span></div>
+          <p class="text-[12px] text-gray-400 mt-2 line-clamp-2">Health at 42%. Revenue validation failed. Three sprints missed. EVA: Park and reallocate to CodeLens AI.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          <span class="text-[8px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 px-2 py-1 rounded-lg">Kill Gate</span>
+          <span class="text-[8px] font-bold uppercase tracking-wider bg-red-500 text-white px-2 py-1 rounded-lg">Critical</span>
+          <svg class="w-4 h-4 text-gray-700 group-hover:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+    </button>
+    <button class="w-full text-left glass rounded-xl p-4 ch border-l-4 border-amber-500 group">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1"><div class="flex items-center gap-2 mb-1"><svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><h4 class="text-sm font-semibold text-white">Stage 0: DataWeave Venture Routing</h4></div>
+          <div class="flex items-center gap-2 text-[11px] text-gray-500"><span>DataWeave</span><span class="text-gray-700">&bull;</span><span>Stage 0</span><span class="text-gray-700">&bull;</span><span>Due in 3d</span></div>
+          <p class="text-[12px] text-gray-400 mt-2">AI data pipeline venture. Synergy: 74%. Constraints: 4/5. Horizon: 18mo.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0"><span class="text-[8px] font-bold uppercase bg-blue-500/15 text-blue-400 px-2 py-1 rounded-lg">Investment</span><span class="text-[8px] font-bold uppercase bg-amber-500 text-white px-2 py-1 rounded-lg">High</span></div>
+      </div>
+    </button>
+    <button class="w-full text-left glass rounded-xl p-4 ch group">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1"><div class="flex items-center gap-2 mb-1"><h4 class="text-sm font-semibold text-white">Stage 10: VentureForge Brand Approval</h4></div>
+          <div class="flex items-center gap-2 text-[11px] text-gray-500"><span>VentureForge</span><span class="text-gray-700">&bull;</span><span>Stage 10</span><span class="text-gray-700">&bull;</span><span>Due in 7d</span></div>
+          <p class="text-[12px] text-gray-400 mt-2">Brand naming finalized. 3 candidates. Top: VentureForge (87/100). Visual identity ready.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0"><span class="text-[8px] font-bold uppercase bg-green-500/15 text-green-400 px-2 py-1 rounded-lg">Graduation</span><span class="text-[8px] font-bold uppercase bg-blue-500 text-white px-2 py-1 rounded-lg">Normal</span></div>
+      </div>
+    </button>
+  </div>
+</div>
+
+<!-- ========== VIEW: DECISION DETAIL ========== -->
+<div id="v-detail" class="view p-4 md:p-6 space-y-4">
+  <button onclick="go('decisions')" class="flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-gray-300 transition-colors mb-1">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>
+    Back to Decisions
+  </button>
+  <div class="glass rounded-2xl p-5 glow-d border-l-4 border-red-500">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <div class="flex items-center gap-2 mb-2"><span class="text-[8px] font-bold uppercase bg-red-500/15 text-red-400 px-2 py-1 rounded-lg">Kill Gate</span><span class="text-[8px] font-bold uppercase bg-red-500 text-white px-2 py-1 rounded-lg">Critical</span><span class="text-[10px] text-red-400">Overdue 2d</span></div>
+        <h2 class="text-lg font-bold text-white">Kill Gate: NeuralPay Release Readiness</h2>
+        <p class="text-[12px] text-gray-400 mt-1">NeuralPay &middot; Stage 22 &middot; Launch & Learn phase</p>
+      </div>
+    </div>
+    <p class="text-[13px] text-gray-300 leading-relaxed">NeuralPay has failed to meet revenue validation targets for three consecutive sprints. The health score has dropped from 78 to 42 over the past 6 weeks. The EVA system recommends parking this venture and reallocating engineering resources to CodeLens AI, which is performing above targets.</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="glass rounded-xl p-4">
+      <h3 class="text-[12px] font-semibold mb-3 flex items-center gap-2"><svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>Health Metrics</h3>
+      <div class="space-y-3">
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Overall Health</span><span class="text-red-400 font-semibold">42%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-red-500 rounded-full" style="width:42%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Revenue Validation</span><span class="text-red-400 font-semibold">28%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-red-500 rounded-full" style="width:28%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Technical Readiness</span><span class="text-amber-400 font-semibold">65%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width:65%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Market Fit</span><span class="text-red-400 font-semibold">35%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-red-500 rounded-full" style="width:35%"></div></div></div>
+      </div>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <h3 class="text-[12px] font-semibold mb-3 flex items-center gap-2"><svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Risk Factors</h3>
+      <div class="space-y-2.5">
+        <div class="flex items-start gap-2.5 p-2.5 rounded-lg bg-red-500/[0.06] border border-red-500/10"><span class="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0"></span><div><p class="text-[11px] font-medium text-red-300">Revenue below threshold</p><p class="text-[10px] text-gray-500">3 consecutive sprints missed revenue targets by 40%+</p></div></div>
+        <div class="flex items-start gap-2.5 p-2.5 rounded-lg bg-red-500/[0.06] border border-red-500/10"><span class="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0"></span><div><p class="text-[11px] font-medium text-red-300">Market fit unvalidated</p><p class="text-[10px] text-gray-500">Customer interviews show 2/10 willingness to pay</p></div></div>
+        <div class="flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/[0.06] border border-amber-500/10"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></span><div><p class="text-[11px] font-medium text-amber-300">Resource opportunity cost</p><p class="text-[10px] text-gray-500">Engineering time could accelerate CodeLens AI launch</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass rounded-xl p-4">
+    <h3 class="text-[12px] font-semibold mb-3">EVA Recommendation</h3>
+    <div class="p-3 rounded-lg bg-indigo-500/[0.06] border border-indigo-500/10">
+      <p class="text-[12px] text-indigo-200 leading-relaxed"><strong>Park NeuralPay</strong> and reallocate 80% of engineering capacity to CodeLens AI (Stage 18, health 85%). NeuralPay can be revisited in Q3 2026 if market conditions change. Estimated portfolio health improvement: +8 points.</p>
+    </div>
+  </div>
+
+  <div class="flex flex-col sm:flex-row gap-2">
+    <button class="flex-1 px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/20 text-red-300 text-[12px] font-semibold hover:bg-red-500/25 transition-colors">Kill Venture</button>
+    <button class="flex-1 px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/20 text-amber-300 text-[12px] font-semibold hover:bg-amber-500/25 transition-colors">Park Venture</button>
+    <button class="flex-1 px-4 py-2.5 rounded-xl bg-green-500/15 border border-green-500/20 text-green-300 text-[12px] font-semibold hover:bg-green-500/25 transition-colors">Continue (Override)</button>
+    <button class="px-4 py-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 text-[12px] font-semibold hover:bg-indigo-500/25 transition-colors flex items-center gap-2">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      Open in Claude Code
+    </button>
+  </div>
+</div>
+
+<!-- ========== VIEW: VENTURES ========== -->
+<div id="v-ventures" class="view p-4 md:p-6 space-y-5">
+  <h2 class="text-base font-semibold flex items-center gap-2">
+    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
+    Venture Lifecycle Map
+  </h2>
+  <!-- 25-Stage Pipeline -->
+  <div class="glass rounded-2xl p-5 overflow-x-auto">
+    <div class="flex gap-3 min-w-[800px]">
+      <div class="flex-1 min-w-[120px]">
+        <div class="flex items-center gap-1.5 mb-2"><div class="w-2 h-2 rounded-full bg-purple-500"></div><span class="text-[9px] font-bold uppercase tracking-wider text-purple-400">Truth (0-3)</span></div>
+        <div class="space-y-1.5 p-2 rounded-lg border border-dashed border-purple-500/20 min-h-[80px] bg-purple-500/[0.02]">
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer" onclick="go('venturedetail')"><p class="text-[11px] font-medium text-white">PromptStack</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 3</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-green-500"></div><span class="text-[9px] font-semibold text-green-400">88</span></div></div></div>
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer"><p class="text-[11px] font-medium text-white">DataWeave</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 0</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-gray-500"></div><span class="text-[9px] text-gray-400">--</span></div></div></div>
+        </div>
+        <div class="text-center mt-1.5"><span class="text-[9px] text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded-full">2 ventures</span></div>
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <div class="flex items-center gap-1.5 mb-2"><div class="w-2 h-2 rounded-full bg-blue-500"></div><span class="text-[9px] font-bold uppercase tracking-wider text-blue-400">Engine (4-9)</span></div>
+        <div class="space-y-1.5 p-2 rounded-lg border border-dashed border-blue-500/20 min-h-[80px] bg-blue-500/[0.02]">
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer"><p class="text-[11px] font-medium text-white">SynthWave Audio</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 7</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div><span class="text-[9px] font-semibold text-amber-400">67</span></div></div></div>
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer"><p class="text-[11px] font-medium text-white">AgentMesh</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 5</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-green-500"></div><span class="text-[9px] font-semibold text-green-400">79</span></div></div></div>
+        </div>
+        <div class="text-center mt-1.5"><span class="text-[9px] text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded-full">2 ventures</span></div>
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <div class="flex items-center gap-1.5 mb-2"><div class="w-2 h-2 rounded-full bg-teal-500"></div><span class="text-[9px] font-bold uppercase tracking-wider text-teal-400">Identity (10-12)</span><span class="text-[8px] font-bold bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">Gate 10</span></div>
+        <div class="space-y-1.5 p-2 rounded-lg border border-dashed border-teal-500/20 min-h-[80px] bg-teal-500/[0.02]">
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer" onclick="go('venturedetail')"><p class="text-[11px] font-medium text-white">VentureForge</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 10</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-green-500"></div><span class="text-[9px] font-semibold text-green-400">91</span></div></div></div>
+        </div>
+        <div class="text-center mt-1.5"><span class="text-[9px] text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded-full">1 venture</span></div>
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <div class="flex items-center gap-1.5 mb-2"><div class="w-2 h-2 rounded-full bg-orange-500"></div><span class="text-[9px] font-bold uppercase tracking-wider text-orange-400">Blueprint (13-15)</span></div>
+        <div class="p-2 rounded-lg border border-dashed border-orange-500/20 min-h-[80px] bg-orange-500/[0.02] flex items-center justify-center"><p class="text-[10px] text-gray-600 italic">No ventures</p></div>
+        <div class="text-center mt-1.5"><span class="text-[9px] text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded-full">0 ventures</span></div>
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <div class="flex items-center gap-1.5 mb-2"><div class="w-2 h-2 rounded-full bg-pink-500"></div><span class="text-[9px] font-bold uppercase tracking-wider text-pink-400">Build (16-20)</span></div>
+        <div class="space-y-1.5 p-2 rounded-lg border border-dashed border-pink-500/20 min-h-[80px] bg-pink-500/[0.02]">
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer"><p class="text-[11px] font-medium text-white">CodeLens AI</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 18</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-green-500"></div><span class="text-[9px] font-semibold text-green-400">85</span></div></div></div>
+        </div>
+        <div class="text-center mt-1.5"><span class="text-[9px] text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded-full">1 venture</span></div>
+      </div>
+      <div class="flex-1 min-w-[120px]">
+        <div class="flex items-center gap-1.5 mb-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div><span class="text-[9px] font-bold uppercase tracking-wider text-emerald-400">Launch (21-25)</span><span class="text-[8px] font-bold bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">Gate 22</span></div>
+        <div class="space-y-1.5 p-2 rounded-lg border border-dashed border-emerald-500/20 min-h-[80px] bg-emerald-500/[0.02]">
+          <div class="p-2 rounded-md bg-white/[0.03] border border-red-500/20 hover:bg-white/[0.06] transition-colors cursor-pointer"><p class="text-[11px] font-medium text-white">NeuralPay</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 22</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-red-500"></div><span class="text-[9px] font-semibold text-red-400">42</span></div></div></div>
+          <div class="p-2 rounded-md bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] transition-colors cursor-pointer"><p class="text-[11px] font-medium text-white">IntelliRoute</p><div class="flex items-center justify-between mt-1"><span class="text-[9px] text-gray-500">Stage 24</span><div class="flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-green-500"></div><span class="text-[9px] font-semibold text-green-400">83</span></div></div></div>
+        </div>
+        <div class="text-center mt-1.5"><span class="text-[9px] text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded-full">2 ventures</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== VIEW: VENTURE DETAIL ========== -->
+<div id="v-venturedetail" class="view p-4 md:p-6 space-y-4">
+  <button onclick="go('ventures')" class="flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-gray-300 mb-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19l-7-7 7-7"/></svg>Back to Ventures</button>
+  <div class="glass rounded-2xl p-5 glow-s">
+    <div class="flex items-start justify-between gap-4">
+      <div><h2 class="text-lg font-bold text-white">VentureForge</h2><p class="text-[12px] text-gray-400 mt-1">AI-powered venture creation platform &middot; Identity phase</p></div>
+      <div class="text-right"><p class="text-3xl font-bold text-green-400">91</p><p class="text-[10px] text-gray-500 uppercase tracking-wider">Health</p></div>
+    </div>
+  </div>
+  <!-- Stage Timeline -->
+  <div class="glass rounded-xl p-4">
+    <h3 class="text-[12px] font-semibold mb-3">Journey Progress</h3>
+    <div class="flex items-center gap-0.5 flex-wrap">
+      <div class="flex items-center gap-1 mr-2"><span class="text-[9px] text-purple-400 font-medium w-10">Truth</span></div>
+      <div class="w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">1</div><div class="w-3 h-0.5 bg-purple-500"></div>
+      <div class="w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">2</div><div class="w-3 h-0.5 bg-purple-500"></div>
+      <div class="w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">3</div><div class="w-5 h-0.5 bg-white/[0.06]"></div>
+      <div class="flex items-center gap-1 mr-2"><span class="text-[9px] text-blue-400 font-medium">Engine</span></div>
+      <div class="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">4</div><div class="w-3 h-0.5 bg-blue-500"></div>
+      <div class="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">5</div><div class="w-3 h-0.5 bg-blue-500"></div>
+      <div class="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">6</div><div class="w-3 h-0.5 bg-blue-500"></div>
+      <div class="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">7</div><div class="w-3 h-0.5 bg-blue-500"></div>
+      <div class="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">8</div><div class="w-3 h-0.5 bg-blue-500"></div>
+      <div class="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-bold stage-dot">9</div><div class="w-5 h-0.5 bg-white/[0.06]"></div>
+      <div class="flex items-center gap-1 mr-2"><span class="text-[9px] text-teal-400 font-medium">ID</span></div>
+      <div class="w-5 h-5 rounded-full bg-teal-500 text-white flex items-center justify-center text-[8px] font-bold ring-2 ring-teal-400 ring-offset-2 ring-offset-[#0a0e17] stage-dot">10</div><div class="w-3 h-0.5 bg-white/[0.06]"></div>
+      <div class="w-5 h-5 rounded-full bg-teal-900/50 text-teal-500/50 flex items-center justify-center text-[8px] stage-dot">11</div><div class="w-3 h-0.5 bg-white/[0.04]"></div>
+      <div class="w-5 h-5 rounded-full bg-teal-900/50 text-teal-500/50 flex items-center justify-center text-[8px] stage-dot">12</div>
+    </div>
+    <div class="mt-3 px-2 py-1.5 rounded-lg bg-teal-500/[0.06] inline-block"><span class="text-[11px] text-teal-300 font-medium">Currently in: THE IDENTITY &middot; Stage 10 of 25 (40%)</span></div>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="glass rounded-xl p-3"><p class="text-[9px] text-gray-500 uppercase tracking-wider mb-1">AI Score</p><p class="text-lg font-bold text-green-400">91</p></div>
+    <div class="glass rounded-xl p-3"><p class="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Validation</p><p class="text-lg font-bold text-green-400">87</p></div>
+    <div class="glass rounded-xl p-3"><p class="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Status</p><p class="text-lg font-bold text-white capitalize">active</p></div>
+    <div class="glass rounded-xl p-3"><p class="text-[9px] text-gray-500 uppercase tracking-wider mb-1">Time in Stage</p><p class="text-lg font-bold text-white">4d</p></div>
+  </div>
+</div>
+
+<!-- ========== VIEW: VISION ========== -->
+<div id="v-vision" class="view p-4 md:p-6 space-y-4">
+  <div class="flex items-center justify-between"><div><h2 class="text-base font-semibold">Vision & Alignment</h2><p class="text-[12px] text-gray-500 mt-0.5">Portfolio alignment against EHG-2028 vision</p></div>
+    <button class="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-white/[0.04] border border-white/[0.06] text-gray-400 hover:bg-white/[0.06] transition-colors flex items-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Refresh</button>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- Score Ring -->
+    <div class="glass rounded-2xl p-5 flex flex-col items-center glow-p">
+      <div class="relative w-32 h-32">
+        <svg class="w-full h-full -rotate-90" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="8"/>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="url(#vgrad)" stroke-width="8" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="78.4" class="score-ring"/>
+          <defs><linearGradient id="vgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs>
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center"><p class="text-3xl font-bold text-white">76</p><p class="text-[9px] text-gray-500 uppercase tracking-wider">Score</p></div>
+      </div>
+      <p class="text-[12px] text-gray-400 mt-2">Portfolio Vision Score</p>
+    </div>
+    <!-- Dimensions -->
+    <div class="glass rounded-2xl p-4">
+      <h3 class="text-[12px] font-semibold mb-3">Dimension Breakdown</h3>
+      <div class="space-y-2.5">
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Innovation</span><span class="text-green-400 font-medium">84%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:84%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Market Reach</span><span class="text-amber-400 font-medium">71%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width:71%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Sustainability</span><span class="text-green-400 font-medium">82%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:82%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Revenue Potential</span><span class="text-red-400 font-medium">58%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-red-500 rounded-full" style="width:58%"></div></div></div>
+        <div><div class="flex justify-between text-[11px] mb-1"><span class="text-gray-400">Tech Moat</span><span class="text-green-400 font-medium">79%</span></div><div class="h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:79%"></div></div></div>
+      </div>
+    </div>
+    <!-- Trend -->
+    <div class="glass rounded-2xl p-4">
+      <h3 class="text-[12px] font-semibold mb-3">Score Trend (6mo)</h3>
+      <div class="flex items-end gap-2 h-32">
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-500/60 rounded-t" style="height:58%"></div><span class="text-[8px] text-gray-600">Oct</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-500/60 rounded-t" style="height:62%"></div><span class="text-[8px] text-gray-600">Nov</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-500/70 rounded-t" style="height:68%"></div><span class="text-[8px] text-gray-600">Dec</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-500/80 rounded-t" style="height:72%"></div><span class="text-[8px] text-gray-600">Jan</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-500/90 rounded-t" style="height:74%"></div><span class="text-[8px] text-gray-600">Feb</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-500 rounded-t" style="height:76%"></div><span class="text-[8px] text-gray-400 font-medium">Mar</span></div>
+      </div>
+    </div>
+  </div>
+  <!-- Corrective SDs -->
+  <div class="glass rounded-xl p-4">
+    <h3 class="text-[12px] font-semibold mb-3">Active Corrective SDs</h3>
+    <div class="overflow-x-auto"><table class="w-full text-[11px]"><thead><tr class="text-gray-500 border-b border-white/[0.06]"><th class="text-left py-2 px-2 font-medium">SD Key</th><th class="text-left py-2 px-2 font-medium">Title</th><th class="text-left py-2 px-2 font-medium">Dimension</th><th class="text-left py-2 px-2 font-medium">Status</th></tr></thead>
+    <tbody>
+      <tr class="border-b border-white/[0.03] hover:bg-white/[0.02]"><td class="py-2 px-2 font-mono text-indigo-400">SD-CORR-REV-001</td><td class="py-2 px-2 text-white">Revenue model diversification</td><td class="py-2 px-2"><span class="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">Revenue</span></td><td class="py-2 px-2"><span class="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">In Progress</span></td></tr>
+      <tr class="border-b border-white/[0.03] hover:bg-white/[0.02]"><td class="py-2 px-2 font-mono text-indigo-400">SD-CORR-MKT-002</td><td class="py-2 px-2 text-white">Market expansion strategy</td><td class="py-2 px-2"><span class="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">Market</span></td><td class="py-2 px-2"><span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">Planning</span></td></tr>
+    </tbody></table></div>
+  </div>
+</div>
+
+<!-- ========== VIEW: PREFERENCES ========== -->
+<div id="v-prefs" class="view p-4 md:p-6 space-y-4">
+  <h2 class="text-base font-semibold">Preferences</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="glass rounded-xl p-4 space-y-4">
+      <h3 class="text-[12px] font-semibold flex items-center gap-2"><svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Risk Tolerance</h3>
+      <div class="space-y-3">
+        <div><label class="text-[11px] text-gray-400 block mb-1.5">Kill Gate Threshold</label><div class="flex items-center gap-3"><input type="range" min="20" max="60" value="40" class="flex-1 accent-indigo-500 h-1"><span class="text-[11px] font-mono text-white bg-white/[0.04] px-2 py-1 rounded">40%</span></div></div>
+        <div><label class="text-[11px] text-gray-400 block mb-1.5">Max Concurrent Ventures</label><div class="flex items-center gap-3"><input type="range" min="3" max="15" value="8" class="flex-1 accent-indigo-500 h-1"><span class="text-[11px] font-mono text-white bg-white/[0.04] px-2 py-1 rounded">8</span></div></div>
+      </div>
+    </div>
+    <div class="glass rounded-xl p-4 space-y-4">
+      <h3 class="text-[12px] font-semibold flex items-center gap-2"><svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>Notifications</h3>
+      <div class="space-y-3">
+        <label class="flex items-center justify-between cursor-pointer"><span class="text-[11px] text-gray-300">Critical gate alerts</span><div class="w-9 h-5 bg-indigo-500 rounded-full relative"><div class="absolute w-4 h-4 bg-white rounded-full top-0.5 right-0.5 shadow-sm"></div></div></label>
+        <label class="flex items-center justify-between cursor-pointer"><span class="text-[11px] text-gray-300">Daily briefing email</span><div class="w-9 h-5 bg-indigo-500 rounded-full relative"><div class="absolute w-4 h-4 bg-white rounded-full top-0.5 right-0.5 shadow-sm"></div></div></label>
+        <label class="flex items-center justify-between cursor-pointer"><span class="text-[11px] text-gray-300">Health score drops</span><div class="w-9 h-5 bg-white/10 rounded-full relative"><div class="absolute w-4 h-4 bg-gray-400 rounded-full top-0.5 left-0.5 shadow-sm"></div></div></label>
+      </div>
+    </div>
+  </div>
+  <div class="glass rounded-xl p-4 space-y-3">
+    <h3 class="text-[12px] font-semibold">Budget Caps</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div><label class="text-[11px] text-gray-400 block mb-1">Monthly Token Budget</label><div class="flex items-center gap-2"><input type="text" value="200,000" class="bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white w-full outline-none focus:border-indigo-500/50"><span class="text-[10px] text-gray-500 shrink-0">tokens</span></div></div>
+      <div><label class="text-[11px] text-gray-400 block mb-1">Max Per-Venture Spend</label><div class="flex items-center gap-2"><input type="text" value="50,000" class="bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white w-full outline-none focus:border-indigo-500/50"><span class="text-[10px] text-gray-500 shrink-0">tokens</span></div></div>
+      <div><label class="text-[11px] text-gray-400 block mb-1">Alert Threshold</label><div class="flex items-center gap-2"><input type="text" value="80" class="bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white w-full outline-none focus:border-indigo-500/50"><span class="text-[10px] text-gray-500 shrink-0">%</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== VIEW: ACTIVE SDs ========== -->
+<div id="v-active" class="view p-4 md:p-6 space-y-4">
+  <h2 class="text-base font-semibold flex items-center gap-2">
+    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+    Active SDs<span class="text-[10px] font-medium bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full">4</span>
+  </h2>
+  <div class="space-y-4">
+    <div><h3 class="text-[10px] font-semibold uppercase tracking-wider text-purple-400 mb-2">LEAD Phase (1)</h3>
+      <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1 min-w-0"><p class="text-[10px] font-mono text-gray-600">SD-LEO-ARCH-007</p><h4 class="text-[13px] font-medium text-white truncate">Chairman Dashboard V3 Architecture</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-purple-500 text-white px-2 py-0.5 rounded">LEAD</span><button class="p-1 rounded hover:bg-white/5" title="Open in Claude Code"><svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button></div></div><div class="flex items-center gap-2 mt-2"><div class="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-purple-500 rounded-full" style="width:15%"></div></div><span class="text-[10px] text-gray-500 font-mono w-8 text-right">15%</span></div></div>
+    </div>
+    <div><h3 class="text-[10px] font-semibold uppercase tracking-wider text-blue-400 mb-2">PLAN Phase (1)</h3>
+      <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1 min-w-0"><p class="text-[10px] font-mono text-gray-600">SD-CORR-MKT-002</p><h4 class="text-[13px] font-medium text-white truncate">Market Expansion Strategy</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-blue-500 text-white px-2 py-0.5 rounded">PLAN</span><button class="p-1 rounded hover:bg-white/5"><svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button></div></div><div class="flex items-center gap-2 mt-2"><div class="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width:45%"></div></div><span class="text-[10px] text-gray-500 font-mono w-8 text-right">45%</span></div></div>
+    </div>
+    <div><h3 class="text-[10px] font-semibold uppercase tracking-wider text-green-400 mb-2">EXEC Phase (2)</h3>
+      <div class="space-y-2">
+        <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1 min-w-0"><p class="text-[10px] font-mono text-gray-600">SD-CORR-REV-001</p><h4 class="text-[13px] font-medium text-white truncate">Revenue Model Diversification</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-green-500 text-white px-2 py-0.5 rounded">EXEC</span><button class="p-1 rounded hover:bg-white/5"><svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button></div></div><div class="flex items-center gap-2 mt-2"><div class="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:72%"></div></div><span class="text-[10px] text-gray-500 font-mono w-8 text-right">72%</span></div></div>
+        <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1 min-w-0"><p class="text-[10px] font-mono text-gray-600">SD-INFRA-DB-004</p><h4 class="text-[13px] font-medium text-white truncate">Database Migration Pipeline</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-green-500 text-white px-2 py-0.5 rounded">EXEC</span><button class="p-1 rounded hover:bg-white/5"><svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button></div></div><div class="flex items-center gap-2 mt-2"><div class="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" style="width:38%"></div></div><span class="text-[10px] text-gray-500 font-mono w-8 text-right">38%</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== VIEW: BUILD QUEUE ========== -->
+<div id="v-queue" class="view p-4 md:p-6 space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-base font-semibold flex items-center gap-2"><svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>Build Queue<span class="text-[10px] font-medium bg-white/5 text-gray-400 px-2 py-0.5 rounded-full">6</span></h2>
+    <div class="flex gap-1">
+      <button class="px-2.5 py-1 rounded-lg text-[10px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/20">All</button>
+      <button class="px-2.5 py-1 rounded-lg text-[10px] font-medium text-gray-500 hover:bg-white/[0.03]">P0-P1</button>
+      <button class="px-2.5 py-1 rounded-lg text-[10px] font-medium text-gray-500 hover:bg-white/[0.03]">P2-P3</button>
+    </div>
+  </div>
+  <div class="space-y-2">
+    <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1"><p class="text-[10px] font-mono text-gray-600">SD-FEAT-AUTH-009</p><h4 class="text-[13px] font-medium text-white">Multi-tenant Auth System</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-red-500 text-white px-2 py-0.5 rounded">P0</span><span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded">feature</span></div></div></div>
+    <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1"><p class="text-[10px] font-mono text-gray-600">SD-INFRA-PERF-003</p><h4 class="text-[13px] font-medium text-white">API Response Time Optimization</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-red-500 text-white px-2 py-0.5 rounded">P1</span><span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded">infra</span></div></div></div>
+    <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1"><p class="text-[10px] font-mono text-gray-600">SD-FEAT-DASH-012</p><h4 class="text-[13px] font-medium text-white">Real-time Venture Health Streaming</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded">P2</span><span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded">feature</span></div></div></div>
+    <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1"><p class="text-[10px] font-mono text-gray-600">SD-QUAL-TEST-005</p><h4 class="text-[13px] font-medium text-white">E2E Test Coverage for Gate Flows</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-orange-500 text-white px-2 py-0.5 rounded">P3</span><span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded">quality</span></div></div></div>
+    <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1"><p class="text-[10px] font-mono text-gray-600">SD-FEAT-NOTIF-008</p><h4 class="text-[13px] font-medium text-white">Push Notification Infrastructure</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-gray-500 text-white px-2 py-0.5 rounded">P4</span><span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded">feature</span></div></div></div>
+    <div class="glass rounded-xl p-3.5 ch"><div class="flex items-start justify-between gap-2"><div class="flex-1"><p class="text-[10px] font-mono text-gray-600">SD-INFRA-LOG-006</p><h4 class="text-[13px] font-medium text-white">Structured Logging & Observability</h4></div><div class="flex items-center gap-1.5"><span class="text-[9px] font-bold bg-gray-500 text-white px-2 py-0.5 rounded">P5</span><span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded">infra</span></div></div></div>
+  </div>
+</div>
+
+<!-- ========== VIEW: INBOX ========== -->
+<div id="v-inbox" class="view p-4 md:p-6 space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-base font-semibold flex items-center gap-2"><svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>Brainstorm Inbox<span class="text-[10px] font-medium bg-indigo-500/15 text-indigo-400 px-2 py-0.5 rounded-full">2 new</span></h2>
+    <button class="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/25 transition-colors">+ New Idea</button>
+  </div>
+  <div class="space-y-2">
+    <div class="glass rounded-xl p-4 ch border-l-[3px] border-indigo-500">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1"><span class="text-[8px] font-bold uppercase bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded">New</span><h4 class="text-[13px] font-medium text-white">AI-Powered Competitor Intelligence Tool</h4></div>
+          <p class="text-[11px] text-gray-400 mt-1">Automated competitive landscape monitoring using LLMs to parse SEC filings, press releases, and product launches. Could integrate with existing EHG portfolio analysis.</p>
+          <div class="flex items-center gap-3 mt-2"><span class="text-[10px] text-gray-600">2h ago</span><span class="text-[10px] text-gray-600">&bull;</span><span class="text-[10px] text-gray-500">via brainstorm CLI</span></div>
+        </div>
+        <div class="flex gap-1 shrink-0">
+          <button class="p-1.5 rounded-lg hover:bg-green-500/10 text-gray-500 hover:text-green-400 transition-colors" title="Promote to SD"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg></button>
+          <button class="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors" title="Dismiss"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="glass rounded-xl p-4 ch border-l-[3px] border-indigo-500">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1"><span class="text-[8px] font-bold uppercase bg-indigo-500/15 text-indigo-400 px-1.5 py-0.5 rounded">New</span><h4 class="text-[13px] font-medium text-white">Voice-First Venture Management Interface</h4></div>
+          <p class="text-[11px] text-gray-400 mt-1">Natural language interface for EVA interactions. Chairman could review decisions, approve gates, and check portfolio health via voice commands during commute.</p>
+          <div class="flex items-center gap-3 mt-2"><span class="text-[10px] text-gray-600">1d ago</span><span class="text-[10px] text-gray-600">&bull;</span><span class="text-[10px] text-gray-500">via web capture</span></div>
+        </div>
+        <div class="flex gap-1 shrink-0">
+          <button class="p-1.5 rounded-lg hover:bg-green-500/10 text-gray-500 hover:text-green-400 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg></button>
+          <button class="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="glass rounded-xl p-4 ch opacity-60">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1">
+          <h4 class="text-[13px] font-medium text-white">Automated PR Review Bot for EHG Repos</h4>
+          <p class="text-[11px] text-gray-400 mt-1">LLM-powered code review that checks against LEO protocol compliance, component sizing, and accessibility standards.</p>
+          <div class="flex items-center gap-3 mt-2"><span class="text-[10px] text-gray-600">3d ago</span><span class="text-[10px] text-green-500">Promoted to SD-FEAT-REVIEW-010</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </main>
+</div>
+
+<!-- MOBILE TAB BAR -->
+<div class="mob-tabs hidden fixed bottom-0 left-0 right-0 h-16 bg-[#0c1019]/95 backdrop-blur-xl border-t border-white/[0.06] items-center justify-around px-2 z-30">
+  <button onclick="go('briefing')" class="mob-tab flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg" data-v="briefing">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    <span class="text-[9px]">Briefing</span></button>
+  <button onclick="go('decisions')" class="mob-tab flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg" data-v="decisions">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+    <span class="text-[9px]">Decisions</span></button>
+  <button onclick="go('ventures')" class="mob-tab flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg" data-v="ventures">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
+    <span class="text-[9px]">Ventures</span></button>
+  <button onclick="go('vision')" class="mob-tab flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg" data-v="vision">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+    <span class="text-[9px]">Vision</span></button>
+  <button onclick="go('active')" class="mob-tab flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg" data-v="active">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+    <span class="text-[9px]">Build</span></button>
+</div>
+
+</div>
+
+<script>
+const titles={briefing:'Daily Briefing',decisions:'Decision Gates',detail:'Decision Detail',ventures:'Venture Lifecycle',venturedetail:'Venture Detail',vision:'Vision & Alignment',prefs:'Preferences',active:'Active SDs',queue:'Build Queue',inbox:'Brainstorm Inbox'};
+let currentView='briefing';
+let isDark=true;
+let isChairman=true;
+
+function go(v){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  const target=document.getElementById('v-'+v);
+  if(target){target.classList.add('active');currentView=v;}
+  document.getElementById('ptitle').textContent=titles[v]||v;
+  document.querySelectorAll('.nav-btn').forEach(b=>{b.classList.remove('act');if(b.dataset.v===v)b.classList.add('act');});
+  document.querySelectorAll('.mob-tab').forEach(b=>{
+    b.style.color=b.dataset.v===v?'#a5b4fc':'#6b7280';
+  });
+}
+
+function toggleTheme(){
+  isDark=!isDark;
+  const html=document.documentElement;
+  if(isDark){html.classList.add('dark');html.classList.remove('light');document.body.style.background='#0a0e17';document.body.style.color='#e5e7eb';document.getElementById('t-dark').classList.remove('hidden');document.getElementById('t-light').classList.add('hidden');}
+  else{html.classList.remove('dark');html.classList.add('light');document.body.style.background='#f8fafc';document.body.style.color='#1e293b';document.getElementById('t-dark').classList.add('hidden');document.getElementById('t-light').classList.remove('hidden');}
+  // Update sidebar/topbar backgrounds
+  const sidebar=document.querySelector('.sidebar-area');
+  const topbar=document.querySelector('header');
+  if(sidebar)sidebar.style.background=isDark?'#0c1019':'#ffffff';
+  if(topbar)topbar.style.background=isDark?'rgba(10,14,23,0.8)':'rgba(248,250,252,0.8)';
+  document.querySelectorAll('.glass').forEach(el=>{
+    if(!isDark){el.style.background='rgba(255,255,255,0.7)';el.style.borderColor='rgba(0,0,0,0.06)';}
+    else{el.style.background='';el.style.borderColor='';}
+  });
+}
+
+function togglePersona(){
+  isChairman=!isChairman;
+  const btn=document.getElementById('persona-btn');
+  const icon=document.getElementById('p-icon');
+  const label=document.getElementById('p-label');
+  if(isChairman){icon.textContent='\u265A';icon.style.color='#fbbf24';label.textContent='Chairman';btn.style.borderColor='rgba(251,191,36,0.25)';btn.style.background='rgba(251,191,36,0.04)';}
+  else{icon.textContent='\u2692';icon.style.color='#60a5fa';label.textContent='Builder';btn.style.borderColor='rgba(96,165,250,0.25)';btn.style.background='rgba(96,165,250,0.04)';}
+}
+
+// Init mobile tabs
+document.querySelectorAll('.mob-tab').forEach(b=>{
+  b.style.color=b.dataset.v==='briefing'?'#a5b4fc':'#6b7280';
+});
+</script>
+</body>
+</html>
