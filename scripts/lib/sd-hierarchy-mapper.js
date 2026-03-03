@@ -326,7 +326,7 @@ export function printHierarchy(hierarchy, indent = 0) {
 }
 
 // CLI support
-if (process.argv[1].endsWith('sd-hierarchy-mapper.js')) {
+if (process.argv[1]?.endsWith('sd-hierarchy-mapper.js')) {
   const sdId = process.argv[2];
 
   if (!sdId) {
