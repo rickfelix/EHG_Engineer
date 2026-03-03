@@ -66,7 +66,14 @@ async function generateSchemaAuditReport() {
       { name: 'retrospectives', purpose: 'SD retrospectives and lessons learned' }
     ];
 
+    // Allowlist: only permit known table names to prevent SQL injection
+    const allowedTableNames = new Set(keyTables.map(t => t.name));
+
     for (const table of keyTables) {
+      if (!allowedTableNames.has(table.name) || !/^[a-z_]+$/.test(table.name)) {
+        report.push(`| ${table.name} | SKIPPED | Invalid table name |`);
+        continue;
+      }
       try {
         const countResult = await client.query(`SELECT COUNT(*) as count FROM ${table.name}`);
         report.push(`| ${table.name} | ${countResult.rows[0].count.toLocaleString()} | ${table.purpose} |`);

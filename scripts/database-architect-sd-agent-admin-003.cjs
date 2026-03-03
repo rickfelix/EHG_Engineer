@@ -368,7 +368,14 @@ async function executeDatabaseMigration() {
       { table: 'crew_members', expected: 4 }
     ];
 
+    // Allowlist: only permit known table names to prevent SQL injection
+    const allowedValidationTables = new Set(validationQueries.map(q => q.table));
+
     for (const { table, expected } of validationQueries) {
+      if (!allowedValidationTables.has(table) || !/^[a-z_]+$/.test(table)) {
+        console.log(`❌ ${table}: skipped (invalid table name)`);
+        continue;
+      }
       const result = await client.query(`SELECT COUNT(*) as count FROM ${table}`);
       const count = parseInt(result.rows[0].count);
       const status = count >= expected ? '✅' : '❌';
@@ -380,13 +387,18 @@ async function executeDatabaseMigration() {
     const newTables = ['ab_test_results', 'search_preferences', 'agent_executions', 'performance_alerts'];
 
     for (const table of newTables) {
-      const result = await client.query(`
-        SELECT EXISTS (
+      if (!/^[a-z_]+$/.test(table)) {
+        console.log(`❌ ${table}: skipped (invalid table name)`);
+        continue;
+      }
+      const result = await client.query(
+        `SELECT EXISTS (
           SELECT FROM information_schema.tables
           WHERE table_schema = 'public'
-          AND table_name = '${table}'
-        ) as exists
-      `);
+          AND table_name = $1
+        ) as exists`,
+        [table]
+      );
       const exists = result.rows[0].exists;
       const status = exists ? '✅' : '❌';
       console.log(`${status} ${table} table created`);

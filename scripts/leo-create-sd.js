@@ -236,9 +236,13 @@ async function createFromFeedback(feedbackId) {
   if (exactMatch) {
     feedback = exactMatch;
   } else {
-    // Partial UUID: use text cast via RPC
+    // Partial UUID: validate format then use text cast via RPC
+    if (!/^[0-9a-f-]+$/i.test(feedbackId)) {
+      console.error('Invalid feedback ID format (must be UUID hex characters):', feedbackId);
+      process.exit(1);
+    }
     const { data: partialResult } = await supabase
-      .rpc('exec_sql', { sql_text: `SELECT id FROM feedback WHERE id::text LIKE '${feedbackId.replace(/'/g, "''")}%' LIMIT 1` });
+      .rpc('exec_sql', { sql_text: `SELECT id FROM feedback WHERE id::text LIKE '${feedbackId}%' LIMIT 1` });
     const partialId = partialResult?.[0]?.result?.[0]?.id;
     if (partialId) {
       const { data } = await supabase.from('feedback').select('*').eq('id', partialId).single();

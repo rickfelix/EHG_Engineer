@@ -305,10 +305,12 @@ export class SDGitStateReconciler {
         ]
       });
 
+      // Validate sdState.id is UUID-like to prevent SQL injection in stored command
+      const safeId = /^[0-9a-f-]+$/i.test(sdState.id) ? sdState.id : 'INVALID_ID';
       autoFixOptions.push({
         type: 'REVERT_SD_STATUS',
         action: 'Update SD status to in_progress',
-        command: `UPDATE strategic_directives_v2 SET status='in_progress' WHERE id='${sdState.id}'`
+        command: `UPDATE strategic_directives_v2 SET status='in_progress' WHERE id='${safeId}'`
       });
     }
 

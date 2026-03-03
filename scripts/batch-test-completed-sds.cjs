@@ -6,7 +6,7 @@
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -45,7 +45,7 @@ async function batchTestCompletedSDs() {
 
     try {
       // Run QA Director
-      execSync(`node scripts/qa-engineering-director-enhanced.js ${sd.id} --skip-build`, {
+      execFileSync('node', ['scripts/qa-engineering-director-enhanced.js', sd.id, '--skip-build'], {
         stdio: 'inherit',
         timeout: 300000
       });

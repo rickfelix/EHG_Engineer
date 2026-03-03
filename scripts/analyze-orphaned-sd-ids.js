@@ -32,7 +32,14 @@ async function analyzeOrphanedRecords() {
       'sd_claims'                       // 1 orphaned
     ];
 
+    // Allowlist: only permit known table names to prevent SQL injection
+    const allowedTables = new Set(tablesToAnalyze);
+
     for (const tableName of tablesToAnalyze) {
+      if (!allowedTables.has(tableName) || !/^[a-z_]+$/.test(tableName)) {
+        console.error(`Skipping invalid table name: ${tableName}`);
+        continue;
+      }
       console.log(`\n📊 ${tableName.toUpperCase()}`);
       console.log('-'.repeat(80));
 

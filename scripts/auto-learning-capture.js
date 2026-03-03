@@ -17,7 +17,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -101,10 +101,9 @@ function parseArgs() {
  */
 async function getPRDetails(prNumber) {
   try {
-    const output = execSync(
-      `gh pr view ${prNumber} --json number,title,body,mergedAt,mergeCommit,headRefName,files,commits`,
-      { encoding: 'utf8', timeout: 30000 }
-    );
+    const output = execFileSync('gh', ['pr', 'view', String(prNumber), '--json', 'number,title,body,mergedAt,mergeCommit,headRefName,files,commits'], {
+      encoding: 'utf8', timeout: 30000
+    });
     return JSON.parse(output);
   } catch (error) {
     console.error(`Error getting PR details: ${error.message}`);
@@ -119,10 +118,9 @@ async function getPRDetails(prNumber) {
  */
 async function getPRFiles(prNumber) {
   try {
-    const output = execSync(
-      `gh pr view ${prNumber} --json files`,
-      { encoding: 'utf8', timeout: 30000 }
-    );
+    const output = execFileSync('gh', ['pr', 'view', String(prNumber), '--json', 'files'], {
+      encoding: 'utf8', timeout: 30000
+    });
     const data = JSON.parse(output);
     return data.files || [];
   } catch (error) {
