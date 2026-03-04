@@ -199,13 +199,6 @@ async function run() {
   // ═══════════════════════════════════════════════════════════════════
   console.log('\n── 5. Cross-Stage Contracts ──');
 
-  // Stage 6 output (hand-crafted to match what analysis step + computeDerived produce)
-  const stage6Output = {
-    risks: [{ ...goodRisk, score: 48 }],
-    aggregate_risk_score: 48,
-    normalized_risk_score: 3.79,
-  };
-
   // Stage 6 consumes Stage 5 unitEconomics
   const c1 = validatePreStage(6, new Map([[5, { unitEconomics: { cac: 100 } }]]), { logger: silentLogger });
   assert(c1.valid === true, 'Stage 5 → Stage 6 contract passes');
