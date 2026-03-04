@@ -50,6 +50,7 @@ function createServiceClient() {
 // ── Logging ────────────────────────────────────────────────────────
 
 const log = {
+  log: (...args) => console.log(`[${new Date().toISOString()}] [SZ-PROC]`, ...args),
   info: (...args) => console.log(`[${new Date().toISOString()}] [SZ-PROC]`, ...args),
   warn: (...args) => console.warn(`[${new Date().toISOString()}] [SZ-PROC] WARN:`, ...args),
   error: (...args) => console.error(`[${new Date().toISOString()}] [SZ-PROC] ERROR:`, ...args),
