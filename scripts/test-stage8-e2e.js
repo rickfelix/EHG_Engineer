@@ -208,7 +208,6 @@ function makeValidBMCData() {
   // ── Analysis step audit flags ──
   console.log('\n— Analysis step audit flags —');
   const analysisSrc = readFileSync(join(ROOT, 'lib/eva/stage-templates/analysis-steps/stage-08-bmc-generation.js'), 'utf8');
-  const templateSrc = readFileSync(join(ROOT, 'lib/eva/stage-templates/stage-08.js'), 'utf8');
 
   // AUDIT: BMC_BLOCKS imported from template (DRY)
   const importsBMCFromTemplate = /import\s+\{[^}]*BMC_BLOCKS[^}]*\}\s+from\s+['"]\.\.\/stage-08\.js['"]/.test(analysisSrc);
