@@ -70,6 +70,13 @@ stages:
         fields:
           archetype: { type: string }
           targetMarket: { type: string }
+      - stage: 3
+        fields:
+          overallScore: { type: integer, required: false }
+          decision: { type: string, required: false }
+      - stage: 4
+        fields:
+          competitors: { type: array, required: false }
     produces:
       unitEconomics: { type: object }
       decision: { type: string }
@@ -78,6 +85,16 @@ stages:
   6:
     name: "Risk Assessment"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          targetMarket: { type: string }
+      - stage: 3
+        fields:
+          overallScore: { type: integer, required: false }
+      - stage: 4
+        fields:
+          competitors: { type: array, required: false }
       - stage: 5
         fields:
           unitEconomics: { type: object }
@@ -89,9 +106,19 @@ stages:
   7:
     name: "Pricing Strategy"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          targetMarket: { type: string }
+      - stage: 4
+        fields:
+          competitors: { type: array, required: false }
       - stage: 5
         fields:
           unitEconomics: { type: object }
+      - stage: 6
+        fields:
+          risks: { type: array }
     produces:
       pricing_model: { type: string }
       tiers: { type: array, minItems: 1 }
@@ -99,6 +126,19 @@ stages:
   8:
     name: "Business Model Canvas"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          valueProp: { type: string }
+      - stage: 4
+        fields:
+          competitors: { type: array, required: false }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object }
+      - stage: 6
+        fields:
+          risks: { type: array }
       - stage: 7
         fields:
           pricing_model: { type: string }
@@ -111,6 +151,12 @@ stages:
   9:
     name: "Exit Strategy"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object }
       - stage: 6
         fields:
           risks: { type: array }
@@ -129,14 +175,37 @@ stages:
 
   10:
     name: "Brand Identity"
-    consumes: []
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          valueProp: { type: string }
+      - stage: 3
+        fields:
+          overallScore: { type: integer, required: false }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object, required: false }
+      - stage: 8
+        fields:
+          customerSegments: { type: object, required: false }
     produces:
       candidates: { type: array, minItems: 5 }
       brandGenome: { type: object }
 
   11:
     name: "Marketing Strategy"
-    consumes: []
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          targetMarket: { type: string }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object, required: false }
+      - stage: 10
+        fields:
+          candidates: { type: array }
     produces:
       tiers: { type: array, minItems: 3 }
       channels: { type: array, minItems: 8 }
@@ -144,6 +213,15 @@ stages:
   12:
     name: "Sales Framework"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object, required: false }
+      - stage: 7
+        fields:
+          tiers: { type: array, required: false }
       - stage: 10
         fields:
           candidates: { type: array, minItems: 5 }
@@ -159,7 +237,20 @@ stages:
 
   13:
     name: "Product Roadmap"
-    consumes: []
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+          valueProp: { type: string }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object, required: false }
+      - stage: 8
+        fields:
+          customerSegments: { type: object, required: false }
+      - stage: 9
+        fields:
+          exit_thesis: { type: string, required: false }
     produces:
       vision_statement: { type: string, minLength: 20 }
       milestones: { type: array, minItems: 3 }
@@ -167,7 +258,13 @@ stages:
 
   14:
     name: "Technical Architecture"
-    consumes: []
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+      - stage: 13
+        fields:
+          milestones: { type: array }
     produces:
       architecture_summary: { type: string, minLength: 20 }
       layers: { type: object }
@@ -175,7 +272,19 @@ stages:
 
   15:
     name: "Risk Matrix"
-    consumes: []
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+      - stage: 6
+        fields:
+          risks: { type: array, required: false }
+      - stage: 13
+        fields:
+          milestones: { type: array }
+      - stage: 14
+        fields:
+          layers: { type: object }
     produces:
       risks: { type: array, minItems: 1 }
       total_risks: { type: number }
@@ -183,6 +292,9 @@ stages:
   16:
     name: "Financial Projections"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
       - stage: 13
         fields:
           milestones: { type: array, minItems: 3 }
@@ -199,7 +311,19 @@ stages:
 
   17:
     name: "Launch Readiness"
-    consumes: []
+    consumes:
+      - stage: 13
+        fields:
+          milestones: { type: array }
+      - stage: 14
+        fields:
+          layers: { type: object }
+      - stage: 15
+        fields:
+          risks: { type: array }
+      - stage: 16
+        fields:
+          runway_months: { type: number }
     produces:
       checklist: { type: object }
       readiness_pct: { type: number }
@@ -207,7 +331,16 @@ stages:
 
   18:
     name: "Sprint Planning"
-    consumes: []
+    consumes:
+      - stage: 13
+        fields:
+          milestones: { type: array }
+      - stage: 14
+        fields:
+          layers: { type: object }
+      - stage: 17
+        fields:
+          checklist: { type: object }
     produces:
       sprint_name: { type: string }
       items: { type: array, minItems: 1 }
@@ -216,6 +349,9 @@ stages:
   19:
     name: "Development Execution"
     consumes:
+      - stage: 17
+        fields:
+          buildReadiness: { type: object, required: false }
       - stage: 18
         fields:
           items: { type: array, minItems: 1 }
@@ -225,26 +361,50 @@ stages:
   20:
     name: "QA & Testing"
     consumes:
+      - stage: 18
+        fields:
+          items: { type: array }
       - stage: 19
         fields:
           tasks: { type: array }
     produces:
-      testResults: { type: object }
-      coverage: { type: number }
+      test_suites: { type: array, minItems: 1 }
+      quality_gate_passed: { type: boolean }
 
   21:
-    name: "Launch Prep"
-    consumes: []
+    name: "Build Review"
+    consumes:
+      - stage: 19
+        fields:
+          tasks: { type: array }
+      - stage: 20
+        fields:
+          test_suites: { type: array }
     produces:
-      deployment_plan: { type: string, minLength: 20 }
-      monitoring_setup: { type: string }
+      integrations: { type: array }
+      environment: { type: object }
+      reviewDecision: { type: object }
 
   22:
     name: "Go-Live"
     consumes:
+      - stage: 17
+        fields:
+          readiness_pct: { type: number }
+      - stage: 18
+        fields:
+          items: { type: array }
+      - stage: 19
+        fields:
+          tasks: { type: array }
+      - stage: 20
+        fields:
+          test_suites: { type: array }
+          quality_gate_passed: { type: boolean, required: false }
       - stage: 21
         fields:
-          deployment_plan: { type: string }
+          integrations: { type: array }
+          reviewDecision: { type: object, required: false }
     produces:
       launch_date: { type: string }
       launch_status: { type: string }
@@ -252,6 +412,9 @@ stages:
   23:
     name: "Post-Launch Ops"
     consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
       - stage: 22
         fields:
           launch_status: { type: string }
@@ -261,14 +424,38 @@ stages:
 
   24:
     name: "Growth Operations"
-    consumes: []
+    consumes:
+      - stage: 5
+        fields:
+          unitEconomics: { type: object }
+      - stage: 23
+        fields:
+          incident_response_plan: { type: string, required: false }
     produces:
       growth_metrics: { type: object }
       optimization_plan: { type: string }
 
   25:
     name: "Portfolio Review"
-    consumes: []
+    consumes:
+      - stage: 1
+        fields:
+          description: { type: string }
+      - stage: 5
+        fields:
+          unitEconomics: { type: object }
+      - stage: 13
+        fields:
+          milestones: { type: array }
+      - stage: 16
+        fields:
+          runway_months: { type: number }
+      - stage: 23
+        fields:
+          incident_response_plan: { type: string, required: false }
+      - stage: 24
+        fields:
+          growth_metrics: { type: object }
     produces:
       venture_decision: { type: string }
       portfolio_score: { type: number }
