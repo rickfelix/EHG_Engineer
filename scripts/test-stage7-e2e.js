@@ -238,11 +238,8 @@ async function run() {
   assert(hasPricingModelSnake, '[AUDIT] Should output pricing_model (snake_case, not camelCase)');
 
   // Check: does analysis step produce flat unit economics fields?
-  const hasFlatGrossMargin = /gross_margin_pct\s*[=:]/.test(src) && !/unitEconomics\s*[=:{]/.test(src);
-  // Actually analysis step CAN nest in unitEconomics if the execution engine flattens later
-  // But let's check if it at least produces the contract fields
-  const hasContractPricingModel = src.includes('pricing_model') || src.includes('pricingModel');
-  assert(hasContractPricingModel, '[AUDIT] Analysis step produces pricing model field');
+  const hasFlatUnitEcon = /gross_margin_pct\s*[=,]/.test(src) && /churn_rate_monthly\s*[=,]/.test(src);
+  assert(hasFlatUnitEcon, '[AUDIT] Analysis step produces flat unit economics fields');
 
   // Check: does analysis step use current Stage 5 field name (churnRate, not monthlyChurn)?
   const usesChurnRate = src.includes('churnRate');
