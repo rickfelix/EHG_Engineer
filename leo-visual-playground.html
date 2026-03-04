@@ -86,6 +86,9 @@
   .q-key{font-size:9px;color:rgba(224,220,212,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .q-item.active .q-key{color:rgba(0,200,255,0.96)}
   .q-est{float:right;font-size:8px;color:rgba(224,220,212,0.36);font-style:italic}
+  .q-badge{font-size:7px;letter-spacing:.5px;padding:1px 4px;border-radius:2px;margin-left:4px;font-weight:600;vertical-align:middle}
+  .q-badge.claimed{background:rgba(66,165,245,0.15);color:#42A5F5;border:1px solid rgba(66,165,245,0.3)}
+  .q-badge.stale{background:rgba(255,171,64,0.15);color:#ffab40;border:1px solid rgba(255,171,64,0.3)}
   #history-panel{display:none;flex:1;overflow-y:auto;padding:0}
   .h-group{padding:8px 12px;border-bottom:1px solid rgba(0,200,255,0.06)}
   .h-group-title{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:rgba(0,200,255,0.6);margin-bottom:6px}
@@ -355,6 +358,7 @@ const CONFIG = {
   MAX_SDS: 500,
   DEFAULT_FILTER: 'active',
   SLIDE_DURATION: 24,
+  STALE_THRESHOLD_S: 300,  // 5 min, matches getStaleThresholdSeconds()
 };
 
 // ═══════════════════════════════════════════════
@@ -479,6 +483,7 @@ const state = {
   reconnectAttempts: 0, supabase: null, webglOk: true,
   slideQueue: [], slideIndex: 0, slidePaused: false, slideSpeed: 1,
   slideElapsed: 0, currentSDId: null, claimedIds: new Set(),
+  claimDetails: new Map(),  // sd_id → { sessionId, heartbeatAge, badge, hostname, terminalId }
   liveSessions: 0, burnRate: { avgHours: null, confidence: 'default', sampleSize: 0 },
   animationFrameId: null, intervalIds: [],
   slideDurations: new Map(), sessionOrbs: [],
@@ -515,6 +520,7 @@ function initThree() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.85;
 
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x040408);
   scene.fog = new THREE.FogExp2(0x040410, 0.008);
   camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 300);
   camera.position.set(0, 2, 18);
@@ -885,10 +891,16 @@ function rebuildSlideQueue() {
   state.slideQueue = getFilteredSDs().filter(sd => state.claimedIds.has(sd.id) || state.claimedIds.has(sd.sd_key)).map(sd => sd.id);
   if (state.slideIndex >= state.slideQueue.length) state.slideIndex = 0;
   computeSlideDurations();
-  const claimCount = state.slideQueue.length;
-  document.getElementById('subtitle').textContent = claimCount > 0
-    ? `${state.sds.size} directives · ${claimCount} claimed`
-    : `${state.sds.size} directives · none claimed`;
+  const staleCount = [...state.claimDetails.values()].filter(c => c.badge === 'STALE').length;
+  const activeClaimCount = state.claimDetails.size - staleCount;
+  let subtitle = `${state.sds.size} directives`;
+  if (state.claimDetails.size > 0) {
+    subtitle += ` · ${state.claimDetails.size} claimed`;
+    if (staleCount > 0) subtitle += ` (${staleCount} stale)`;
+  } else {
+    subtitle += ' · none claimed';
+  }
+  document.getElementById('subtitle').textContent = subtitle;
 }
 
 function crossfadeOut() {
@@ -1012,9 +1024,9 @@ function checkIdleSessions() {
     .then(function(result) {
       const sessions = result.data || [];
       const now = Date.now();
-      // A session is "active" if heartbeat is within 10 minutes
+      // A session is "active" if heartbeat is within stale threshold (5 min)
       const activeSessions = sessions.filter(function(s) {
-        return (now - new Date(s.heartbeat_at).getTime()) < 600000;
+        return (now - new Date(s.heartbeat_at).getTime()) < CONFIG.STALE_THRESHOLD_S * 1000;
       });
 
       if (activeSessions.length > 0) {
@@ -1075,6 +1087,17 @@ function showDiagCard(sdId, screenX, screenY) {
     <div class="dc-row"><span class="dc-label">Progress</span><span class="dc-value">${pct}%</span></div>
     <div class="dc-row"><span class="dc-label">Priority</span><span class="dc-value">${sd.priority || '—'}</span></div>
   `;
+  // Add claim details if this SD is claimed
+  const claimDetail = state.claimDetails.get(sdId) || state.claimDetails.get(sd.sd_key);
+  if (claimDetail) {
+    const badgeColor = claimDetail.badge === 'STALE' ? '#ffab40' : '#42A5F5';
+    rows += `
+    <div class="dc-row" style="margin-top:4px;border-top:1px solid rgba(0,200,255,0.15)"><span class="dc-label">Session</span><span class="dc-value">${(claimDetail.sessionId || '').slice(-8)}</span></div>
+    <div class="dc-row"><span class="dc-label">Hostname</span><span class="dc-value">${claimDetail.hostname}</span></div>
+    <div class="dc-row"><span class="dc-label">Heartbeat</span><span class="dc-value">${formatHeartbeatAge(claimDetail.heartbeatAge)} ago</span></div>
+    <div class="dc-row"><span class="dc-label">Claim</span><span class="dc-value" style="color:${badgeColor}">${claimDetail.badge}</span></div>
+    `;
+  }
   document.getElementById('dc-body').innerHTML = rows + '<div class="dc-loading" id="dc-extra">Loading details…</div>';
 
   // Position card near click (clamp to viewport)
@@ -1206,6 +1229,20 @@ function formatSDEstimate(sd) {
   return `~${Math.round(remain)}m`;
 }
 
+function formatHeartbeatAge(seconds) {
+  if (seconds < 60) return '<1m';
+  if (seconds < 3600) return Math.round(seconds / 60) + 'm';
+  return (seconds / 3600).toFixed(1) + 'h';
+}
+
+function getClaimBadgeHTML(sd) {
+  const detail = state.claimDetails.get(sd.id) || state.claimDetails.get(sd.sd_key);
+  if (!detail) return '';
+  const cls = detail.badge === 'STALE' ? 'stale' : 'claimed';
+  const ageStr = formatHeartbeatAge(detail.heartbeatAge);
+  return ` <span class="q-badge ${cls}">${detail.badge} ${ageStr}</span>`;
+}
+
 function updateUI() {
   const all = [...state.sds.values()], filtered = getFilteredSDs();
   document.getElementById('st-total').textContent = all.length;
@@ -1224,7 +1261,9 @@ function updateUI() {
   queueEl.innerHTML = sorted.map(sd => {
     const c = STATUS_COLORS[sd.status]||'#9E9E9E', act = sd.id===state.currentSDId;
     const claimed = state.claimedIds.has(sd.id) || state.claimedIds.has(sd.sd_key);
-    return `<div class="q-item${act?' active':''}${claimed?' claimed':''}" data-id="${sd.id}" title="${sd.title||''}\nType: ${sd.sd_type||'unknown'}\nStatus: ${sd.status}\nProgress: ${sd.progress_percentage??sd.progress??0}%${claimed?'\n⚡ Claimed':''}"><span class="q-dot" style="background:${c}${claimed?';box-shadow:0 0 6px '+c:''}"></span><span class="q-key">${sd.sd_key}</span><span class="q-est">${formatSDEstimate(sd)}</span></div>`;
+    const detail = state.claimDetails.get(sd.id) || state.claimDetails.get(sd.sd_key);
+    const hostTip = detail ? `\nHost: ${detail.hostname}\nHeartbeat: ${formatHeartbeatAge(detail.heartbeatAge)} ago\nClaim: ${detail.badge}` : '';
+    return `<div class="q-item${act?' active':''}${claimed?' claimed':''}" data-id="${sd.id}" title="${sd.title||''}\nType: ${sd.sd_type||'unknown'}\nStatus: ${sd.status}\nProgress: ${sd.progress_percentage??sd.progress??0}%${hostTip}"><span class="q-dot" style="background:${c}${claimed?';box-shadow:0 0 6px '+c:''}"></span><span class="q-key">${sd.sd_key}${getClaimBadgeHTML(sd)}</span><span class="q-est">${formatSDEstimate(sd)}</span></div>`;
   }).join('');
   queueEl.querySelectorAll('.q-item').forEach(el => el.addEventListener('click', () => {
     const idx = state.slideQueue.indexOf(el.dataset.id);
@@ -1315,43 +1354,65 @@ function removeSD(id) {
 async function loadClaimedSDs() {
   if (!state.supabase) return;
   try {
-    // Load ALL active/idle sessions (with and without claims)
+    // Load ALL active/idle sessions (with and without claims) — rich query
     const { data: allSessions } = await state.supabase.from('claude_sessions')
-      .select('sd_id, session_id, status, heartbeat_at')
+      .select('sd_id, session_id, status, heartbeat_at, terminal_id, hostname, pid')
       .in('status', ['active', 'idle']);
 
+    const now = Date.now();
     const withClaims = (allSessions || []).filter(s => s.sd_id);
     const claimedKeys = withClaims.map(s => s.sd_id);
     state.claimedIds = new Set(claimedKeys);
 
-    // Detect claim conflict: multiple live sessions + at least one claim
-    // When a claim is taken over, the bumped session loses sd_id but is still active.
-    // If 2+ sessions are alive and any SD is claimed, another session may have been bumped.
-    const liveSessions = (allSessions || []).filter(s => {
-      const age = (Date.now() - new Date(s.heartbeat_at).getTime()) / 1000;
-      return age < 600; // active within last 10 minutes
+    // Build rich claim details with badge classification
+    state.claimDetails.clear();
+    withClaims.forEach(s => {
+      const heartbeatAge = (now - new Date(s.heartbeat_at).getTime()) / 1000;
+      const badge = heartbeatAge < CONFIG.STALE_THRESHOLD_S ? 'CLAIMED' : 'STALE';
+      state.claimDetails.set(s.sd_id, {
+        sessionId: s.session_id,
+        heartbeatAge,
+        badge,
+        hostname: s.hostname || '—',
+        terminalId: s.terminal_id || '—',
+      });
     });
-    const claimedSDs = liveSessions.filter(s => s.sd_id);
-    const unclaimedLive = liveSessions.filter(s => !s.sd_id);
+
+    // Detect genuine claim conflicts: same SD claimed by 2+ non-stale sessions
+    const liveClaimsBySD = new Map();
+    withClaims.forEach(s => {
+      const age = (now - new Date(s.heartbeat_at).getTime()) / 1000;
+      if (age < CONFIG.STALE_THRESHOLD_S) {
+        if (!liveClaimsBySD.has(s.sd_id)) liveClaimsBySD.set(s.sd_id, []);
+        liveClaimsBySD.get(s.sd_id).push(s);
+      }
+    });
+    const conflicts = [...liveClaimsBySD.entries()].filter(([, sessions]) => sessions.length > 1);
+
+    // Non-stale sessions (for idle tracking)
+    const liveSessions = (allSessions || []).filter(s => {
+      const age = (now - new Date(s.heartbeat_at).getTime()) / 1000;
+      return age < CONFIG.STALE_THRESHOLD_S;
+    });
 
     // Reset idle tracker when any live sessions exist
     if (liveSessions.length > 0) {
-      lastActivitySeen = Date.now();
+      lastActivitySeen = now;
       if (document.getElementById('idle-alert').classList.contains('show')) {
         document.getElementById('idle-alert').classList.remove('show');
       }
     }
 
-    if (claimedSDs.length > 0 && unclaimedLive.length > 0) {
-      // There are live sessions without claims alongside sessions with claims — possible takeover
+    if (conflicts.length > 0) {
+      // True conflict: same SD claimed by multiple live sessions
       const listEl = document.getElementById('dup-alert-list');
-      const items = claimedSDs.map(s =>
-        `<li>${s.sd_id} — claimed by 1 session, ${unclaimedLive.length} other live session${unclaimedLive.length > 1 ? 's' : ''} without claims</li>`
+      const items = conflicts.map(([sdId, sessions]) =>
+        `<li>${sdId} — claimed by ${sessions.length} live sessions</li>`
       );
       listEl.innerHTML = items.join('');
       document.getElementById('dup-alert-title').textContent = 'CLAIM CONFLICT DETECTED';
       document.getElementById('dup-alert-msg').textContent =
-        `${liveSessions.length} active sessions detected. A claim may have been silently taken over.`;
+        `${conflicts.length} SD${conflicts.length > 1 ? 's' : ''} claimed by multiple active sessions.`;
       if (!document.getElementById('dup-alert').classList.contains('show')) {
         document.getElementById('dup-alert').classList.add('show');
         playAlertSound();
@@ -1894,6 +1955,7 @@ const errorCascade = { ratio: 0, targetRatio: 0, lastCheck: 0 };
 const CASCADE_NORMAL = new THREE.Color(0x040408);
 const CASCADE_ERROR = new THREE.Color(0x1a0808);
 const CASCADE_LERP = new THREE.Color();
+const CASCADE_GROUND_ERROR = new THREE.Color(0.15, 0.04, 0.04);
 
 function updateErrorCascade(t) {
   // Recompute every 30s from state data
@@ -1915,7 +1977,7 @@ function updateErrorCascade(t) {
     CASCADE_LERP.copy(CASCADE_NORMAL).lerp(CASCADE_ERROR, r);
     scene.fog.color.copy(CASCADE_LERP);
     scene.background.copy(CASCADE_LERP);
-    if (groundMat) groundMat.color.lerp(new THREE.Color(0.15, 0.04, 0.04), r * 0.3);
+    if (groundMat) groundMat.color.lerp(CASCADE_GROUND_ERROR, r * 0.3);
   } else if (scene && scene.fog) {
     scene.fog.color.copy(CASCADE_NORMAL);
     scene.background.copy(CASCADE_NORMAL);
@@ -2005,12 +2067,15 @@ function renderSessionTimeline(sessions) {
   const bar = document.getElementById('st-bar');
   if (!list || !bar) return;
 
+  const aliveThresholdMs = CONFIG.STALE_THRESHOLD_S * 1000;          // 300s — active
+  const deadThresholdMs = CONFIG.STALE_THRESHOLD_S * 3 * 1000;       // 900s — definitely dead
+
   // Status bar
   let alive = 0, stale = 0, dead = 0;
   sessions.forEach(s => {
     const age = now - new Date(s.heartbeat_at).getTime();
-    if (s.status === 'active' && age < 120000) alive++;
-    else if (s.status === 'active' && age < 900000) stale++;
+    if (s.status === 'active' && age < aliveThresholdMs) alive++;
+    else if (s.status === 'active' && age < deadThresholdMs) stale++;
     else dead++;
   });
   const total = sessions.length || 1;
@@ -2019,13 +2084,14 @@ function renderSessionTimeline(sessions) {
     (stale ? `<div class="st-bar-seg" style="flex:${stale};background:#ffab40" title="${stale} stale"></div>` : '') +
     (dead ? `<div class="st-bar-seg" style="flex:${dead};background:rgba(196,98,106,0.5)" title="${dead} ended"></div>` : '');
 
-  // Session rows (show top 8)
+  // Session rows (show top 8) — include SD claim info
   list.innerHTML = sessions.slice(0, 8).map(s => {
     const age = now - new Date(s.heartbeat_at).getTime();
-    const cls = s.status === 'active' && age < 120000 ? 'alive' : s.status === 'active' && age < 900000 ? 'stale' : 'dead';
+    const cls = s.status === 'active' && age < aliveThresholdMs ? 'alive' : s.status === 'active' && age < deadThresholdMs ? 'stale' : 'dead';
     const ageStr = age < 60000 ? '<1m' : age < 3600000 ? Math.round(age/60000) + 'm' : Math.round(age/3600000) + 'h';
     const id = s.session_id?.slice(-8) || '?';
-    return `<div class="st-row"><span class="st-dot ${cls}"></span><span class="st-id" title="${s.session_id}">${id}</span><span class="st-age">${ageStr} ago</span></div>`;
+    const sdTag = s.sd_id ? ` <span style="color:rgba(0,200,255,0.6);font-size:8px" title="${s.sd_id}">▸${s.sd_id.slice(-12)}</span>` : '';
+    return `<div class="st-row"><span class="st-dot ${cls}"></span><span class="st-id" title="${s.session_id}">${id}</span>${sdTag}<span class="st-age">${ageStr} ago</span></div>`;
   }).join('');
 }
 
