@@ -39,8 +39,8 @@ describe('stage-16.js - Financial Projections template', () => {
         total_projected_revenue: 0,
         total_projected_costs: 0,
         pnl: null,
-        cashBalanceEnd: [],
-        viabilityWarnings: [],
+        cash_balance_end: [],
+        viability_warnings: [],
         promotion_gate: null,
       });
     });

@@ -30,6 +30,7 @@ stages:
           valueProp: { type: string }
           targetMarket: { type: string }
           archetype: { type: string }
+          keyAssumptions: { type: array, required: false }
     produces:
       compositeScore: { type: integer, min: 0, max: 100 }
 
@@ -40,6 +41,7 @@ stages:
         fields:
           archetype: { type: string }
           problemStatement: { type: string }
+          keyAssumptions: { type: array, required: false }
       - stage: 2
         fields:
           compositeScore: { type: integer }
@@ -71,6 +73,7 @@ stages:
     produces:
       unitEconomics: { type: object }
       decision: { type: string }
+      roiBands: { type: object, required: false }
 
   6:
     name: "Risk Assessment"
@@ -122,6 +125,7 @@ stages:
       exit_thesis: { type: string, minLength: 20 }
       exit_paths: { type: array, minItems: 1 }
       reality_gate: { type: object }
+      valuationEstimate: { type: object, required: false }
 
   10:
     name: "Brand Identity"
