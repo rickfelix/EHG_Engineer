@@ -23,29 +23,38 @@ import {
 
 const DEFAULT_BLUEPRINTS = [
   {
-    id: 'bp-saas-1', name: 'SaaS Starter', category: 'software',
-    description: 'Standard SaaS venture template',
-    template_data: { name: 'SaaS Venture', problem_statement: 'Manual processes waste time', solution: 'Automated SaaS platform', target_market: 'SMBs', pricing_model: 'subscription' },
+    id: 'bp-saas-1', title: 'SaaS Starter', category: 'software',
+    summary: 'Standard SaaS venture template',
+    problem_statement: 'Manual processes waste time', solution_concept: 'Automated SaaS platform',
+    target_market: 'SMBs', differentiation: 'AI-powered', competitive_gaps: '',
+    customer_evidence: '', opportunity_score: 80, confidence_score: 0.85,
+    metadata: { pricing_model: 'subscription' }, enhanced_data: null,
     is_active: true,
   },
   {
-    id: 'bp-market-1', name: 'Marketplace Template', category: 'marketplace',
-    description: 'Two-sided marketplace template',
-    template_data: { name: 'AI Marketplace', problem_statement: 'Fragmented supply and demand', solution: 'AI-powered matching marketplace', target_market: 'Enterprises' },
+    id: 'bp-market-1', title: 'Marketplace Template', category: 'marketplace',
+    summary: 'Two-sided marketplace template',
+    problem_statement: 'Fragmented supply and demand', solution_concept: 'AI-powered matching marketplace',
+    target_market: 'Enterprises', differentiation: '', competitive_gaps: '',
+    customer_evidence: '', opportunity_score: 75, confidence_score: 0.8,
+    metadata: null, enhanced_data: null,
     is_active: true,
   },
   {
-    id: 'bp-saas-2', name: 'API-First SaaS', category: 'software',
-    description: 'API-first developer tools',
-    template_data: { name: 'DevTools API', problem_statement: 'Developers lack automation', solution: 'API-first developer platform', target_market: 'Developers' },
+    id: 'bp-saas-2', title: 'API-First SaaS', category: 'software',
+    summary: 'API-first developer tools',
+    problem_statement: 'Developers lack automation', solution_concept: 'API-first developer platform',
+    target_market: 'Developers', differentiation: '', competitive_gaps: '',
+    customer_evidence: '', opportunity_score: 70, confidence_score: 0.75,
+    metadata: null, enhanced_data: null,
     is_active: true,
   },
 ];
 
 function createMockSupabase(blueprints = DEFAULT_BLUEPRINTS, dbError = null) {
   // Build a chainable mock that handles:
-  // .from('venture_blueprints').select(...).eq('is_active', true).eq('category', X).order(...)
-  // .from('venture_blueprints').select(...).eq('is_active', true).order(...)
+  // .from('opportunity_blueprints').select(...).eq('is_active', true).eq('category', X).order(...)
+  // .from('opportunity_blueprints').select(...).eq('is_active', true).order(...)
   const buildChain = (data, error) => {
     const chain = {};
     chain.eq = vi.fn().mockImplementation((field, value) => {
@@ -89,7 +98,7 @@ describe('Blueprint Browse - executeBlueprintBrowse', () => {
 
     expect(result.origin_type).toBe('blueprint');
     expect(result.blueprint_id).toBe('bp-saas-1');
-    expect(result.suggested_name).toBe('SaaS Venture');
+    expect(result.suggested_name).toBe('SaaS Starter');
     expect(result.suggested_problem).toBe('Manual processes waste time');
   });
 
@@ -101,7 +110,7 @@ describe('Blueprint Browse - executeBlueprintBrowse', () => {
     );
 
     expect(result.blueprint_id).toBe('bp-market-1');
-    expect(result.suggested_name).toBe('AI Marketplace');
+    expect(result.suggested_name).toBe('Marketplace Template');
     expect(result.metadata.blueprint_category).toBe('marketplace');
   });
 
@@ -141,9 +150,13 @@ describe('Blueprint Browse - executeBlueprintBrowse', () => {
     expect(result.raw_material.categories_available).toContain('marketplace');
   });
 
-  test('handles blueprint with missing template_data', async () => {
+  test('handles blueprint with missing optional fields', async () => {
     const supabase = createMockSupabase([
-      { id: 'bp-empty', name: 'Empty Template', category: 'other', description: 'No data', template_data: null, is_active: true },
+      { id: 'bp-empty', title: 'Empty Template', category: 'other', summary: 'No data',
+        problem_statement: null, solution_concept: null, target_market: null,
+        differentiation: null, competitive_gaps: null, customer_evidence: null,
+        opportunity_score: null, confidence_score: null, metadata: null, enhanced_data: null,
+        is_active: true },
     ]);
 
     const result = await executeBlueprintBrowse({}, { supabase, logger: silentLogger });

@@ -39,11 +39,15 @@ function createMockSupabase(overrides = {}) {
     };
 
     // Table-specific mocks
-    if (table === 'venture_blueprints') {
+    if (table === 'opportunity_blueprints') {
       chain.eq = vi.fn().mockReturnValue({
         order: vi.fn().mockResolvedValue({
           data: overrides.blueprints || [
-            { id: 'bp-1', name: 'SaaS Blueprint', category: 'software', description: 'Standard SaaS', template_data: { name: 'SaaS Venture', problem_statement: 'test problem', solution: 'test solution', target_market: 'SMBs' }, is_active: true },
+            { id: 'bp-1', title: 'SaaS Blueprint', category: 'software', summary: 'Standard SaaS',
+              problem_statement: 'test problem', solution_concept: 'test solution', target_market: 'SMBs',
+              differentiation: '', competitive_gaps: '', customer_evidence: '',
+              opportunity_score: 80, confidence_score: 0.85, metadata: null, enhanced_data: null,
+              is_active: true },
           ],
           error: null,
         }),
