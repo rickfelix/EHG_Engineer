@@ -58,7 +58,7 @@ const log = {
 
 // ── Stale Claim Recovery ───────────────────────────────────────────
 
-async function releaseStaleCliams(supabase) {
+async function releaseStaleClaims(supabase) {
   const staleThreshold = new Date(Date.now() - STALE_CLAIM_MIN * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
@@ -184,10 +184,46 @@ function withTimeout(promise, ms) {
   ]);
 }
 
+// ── Deduplication ─────────────────────────────────────────────────
+
+async function checkForDuplicate(supabase, request) {
+  const path = request.metadata?.path || 'blueprint_browse';
+
+  // Only dedup blueprint_browse with an explicit blueprint_id
+  if (path !== 'blueprint_browse' || !request.blueprint_id) return null;
+
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour lookback
+
+  const { data, error } = await supabase
+    .from('stage_zero_requests')
+    .select('id, result')
+    .eq('status', 'completed')
+    .eq('blueprint_id', request.blueprint_id)
+    .gt('completed_at', since)
+    .neq('id', request.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.result) return null;
+  return data;
+}
+
 // ── Process a Single Request ───────────────────────────────────────
 
 async function processRequest(supabase, request) {
   log.info(`Processing request ${request.id} | path=${request.metadata?.path || 'blueprint_browse'} | priority=${request.priority}`);
+
+  // Check for duplicate completed request before doing expensive work
+  const duplicate = await checkForDuplicate(supabase, request);
+  if (duplicate) {
+    log.info(`Dedup hit: request ${request.id} matches completed ${duplicate.id}, copying result`);
+    await updateStatus(supabase, request.id, {
+      status: 'completed',
+      result: duplicate.result,
+      completed_at: new Date().toISOString(),
+    });
+    return true;
+  }
 
   // Mark as in_progress
   await updateStatus(supabase, request.id, {
@@ -197,9 +233,10 @@ async function processRequest(supabase, request) {
 
   try {
     const params = mapRequestToParams(request);
+    const deadline = Date.now() + EXECUTION_TIMEOUT_MS;
 
     const result = await withTimeout(
-      executeStageZero(params, { supabase, logger: log }),
+      executeStageZero({ ...params, options: { ...params.options, deadline } }, { supabase, logger: log }),
       EXECUTION_TIMEOUT_MS
     );
 
@@ -232,7 +269,7 @@ let running = true;
 
 async function pollOnce(supabase) {
   // Release stale claims first
-  await releaseStaleCliams(supabase);
+  await releaseStaleClaims(supabase);
 
   // Fetch next pending
   const request = await fetchNextPending(supabase);
@@ -302,4 +339,4 @@ if (isMainModule) {
   });
 }
 
-export { pollOnce, processRequest, mapRequestToParams, releaseStaleCliams };
+export { pollOnce, processRequest, mapRequestToParams, releaseStaleClaims };
