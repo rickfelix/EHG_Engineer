@@ -23,7 +23,7 @@
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet("start", "stop", "restart", "status", "clean", "emergency", "start-engineer", "start-app", "help")]
+    [ValidateSet("start", "stop", "restart", "status", "clean", "emergency", "start-engineer", "start-app", "start-worker", "help")]
     [string]$Command = "help",
 
     [Alias("f")]
@@ -43,6 +43,9 @@ if (-not (Test-Path $PidDir)) { New-Item -ItemType Directory -Path $PidDir -Forc
 
 $EngineerPidFile = Join-Path $PidDir "engineer.pid"
 $AppPidFile = Join-Path $PidDir "app.pid"
+
+# Worker Registry
+$WorkerRegistryFile = Join-Path $EngineerDir "config\workers.json"
 
 # Log directory
 $LogDir = Join-Path $EngineerDir ".logs"
@@ -200,6 +203,79 @@ function Start-App {
     }
 }
 
+# Function to read worker registry
+function Get-WorkerRegistry {
+    if (-not (Test-Path $WorkerRegistryFile)) {
+        Write-Log "WARN" "[WARN] Worker registry not found: $WorkerRegistryFile" "Yellow"
+        return @()
+    }
+    $registry = Get-Content $WorkerRegistryFile -Raw | ConvertFrom-Json
+    return $registry.workers
+}
+
+# Function to start all enabled workers from registry
+function Start-Workers {
+    $workers = Get-WorkerRegistry
+    if ($workers.Count -eq 0) { return }
+
+    Write-Log "INFO" "[WORKERS] Starting enabled workers..." "Blue"
+
+    foreach ($worker in $workers) {
+        if (-not $worker.enabled) { continue }
+
+        $pidFile = Join-Path $PidDir $worker.pid_file
+
+        # Check if already running
+        if (Test-Path $pidFile) {
+            $existingPid = Get-Content $pidFile -ErrorAction SilentlyContinue
+            $existingProc = Get-Process -Id $existingPid -ErrorAction SilentlyContinue
+            if ($existingProc) {
+                Write-Log "WARN" "[WARN] $($worker.display_name) already running (PID: $existingPid)" "Yellow"
+                continue
+            }
+            Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+        }
+
+        $workerCwd = if ($worker.cwd -eq ".") { $EngineerDir } else { $worker.cwd }
+        $workerLog = Join-Path $LogDir "$($worker.log_prefix)-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+
+        $process = Start-Process -FilePath "cmd" -ArgumentList "/c", "$($worker.command) > `"$workerLog`" 2>&1" `
+            -WorkingDirectory $workerCwd -WindowStyle Hidden -PassThru
+
+        $process.Id | Out-File -FilePath $pidFile -Encoding ASCII
+
+        Start-Sleep -Seconds 2
+
+        if (-not $process.HasExited) {
+            Write-Log "INFO" "[OK] $($worker.display_name) started (PID: $($process.Id))" "Green"
+            Write-Log "INFO" "   * Log: $workerLog" "White"
+        } else {
+            Write-Log "ERROR" "[ERROR] $($worker.display_name) failed to start! Check log: $workerLog" "Red"
+            if (Test-Path $workerLog) {
+                $logContent = Get-Content $workerLog -Tail 5 -ErrorAction SilentlyContinue
+                if ($logContent) {
+                    foreach ($line in $logContent) {
+                        Write-Log "ERROR" "   > $line" "Red"
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Function to stop all workers from registry
+function Stop-Workers {
+    $workers = Get-WorkerRegistry
+    if ($workers.Count -eq 0) { return }
+
+    Write-Log "INFO" "[WORKERS] Stopping workers..." "Yellow"
+
+    foreach ($worker in $workers) {
+        $pidFile = Join-Path $PidDir $worker.pid_file
+        Stop-Server -PidFile $pidFile -Name $worker.display_name
+    }
+}
+
 # Function to stop a server by PID file
 function Stop-Server {
     param(
@@ -242,6 +318,8 @@ function Stop-Server {
 function Stop-AllServers {
     Write-Log "INFO" "[STOP] Stopping all servers..." "Red"
     Write-Host "=================================="
+
+    Stop-Workers
 
     Stop-Server -PidFile $AppPidFile -Name "EHG App"
     Start-Sleep -Seconds 1
@@ -294,6 +372,31 @@ function Show-Status {
     Check-ServerStatus -PidFile $EngineerPidFile -Port 3000 -Name "EHG_Engineer (3000)"
     Check-ServerStatus -PidFile $AppPidFile -Port 8080 -Name "EHG App (8080)"
 
+    # Worker status
+    $workers = Get-WorkerRegistry
+    if ($workers.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Workers:" -ForegroundColor Cyan
+        foreach ($worker in $workers) {
+            if (-not $worker.enabled) {
+                Write-Log "INFO" "   [--] $($worker.display_name): Disabled" "DarkGray"
+                continue
+            }
+            $pidFile = Join-Path $PidDir $worker.pid_file
+            if (Test-Path $pidFile) {
+                $pidValue = Get-Content $pidFile -ErrorAction SilentlyContinue
+                $proc = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
+                if ($proc) {
+                    Write-Log "INFO" "   [OK] $($worker.display_name): Running (PID: $pidValue)" "Green"
+                } else {
+                    Write-Log "INFO" "   [!!] $($worker.display_name): Dead (stale PID: $pidValue)" "Red"
+                }
+            } else {
+                Write-Log "INFO" "   [--] $($worker.display_name): Not running" "Red"
+            }
+        }
+    }
+
     Write-Host "=================================="
 
     # Show memory
@@ -329,6 +432,8 @@ function Start-AllServers {
         Write-Log "ERROR" "Failed to start EHG App" "Red"
         return
     }
+
+    Start-Workers
 
     Write-Host "=================================="
     Write-Log "INFO" "[DONE] LEO Stack startup complete!" "Green"
@@ -394,6 +499,13 @@ function Invoke-EmergencyCleanup {
     # Clean PID files
     Remove-Item $EngineerPidFile, $AppPidFile -Force -ErrorAction SilentlyContinue
 
+    # Clean worker PID files
+    $workers = Get-WorkerRegistry
+    foreach ($worker in $workers) {
+        $pidFile = Join-Path $PidDir $worker.pid_file
+        Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+    }
+
     # Verify ports are clear
     foreach ($port in @(3000, 8080)) {
         if (Test-PortInUse -Port $port) {
@@ -429,10 +541,15 @@ function Show-Help {
     Write-Host "  emergency        - FORCE kill all node processes" -ForegroundColor White
     Write-Host "  start-engineer   - Start only EHG_Engineer (3000)" -ForegroundColor White
     Write-Host "  start-app        - Start only EHG App (8080)" -ForegroundColor White
+    Write-Host "  start-worker     - Start all enabled workers from config/workers.json" -ForegroundColor White
     Write-Host ""
     Write-Host "Servers:" -ForegroundColor Yellow
     Write-Host "  Port 3000 - EHG_Engineer (LEO Protocol Framework, Backend API)" -ForegroundColor White
     Write-Host "  Port 8080 - EHG App (Frontend UI with Vite)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Worker Registry:" -ForegroundColor Yellow
+    Write-Host "  Workers are defined in config/workers.json. Set `"enabled`": true to auto-start" -ForegroundColor White
+    Write-Host "  with the stack. See docs/reference/worker-registry-guide.md for details." -ForegroundColor White
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Yellow
     Write-Host "  .\scripts\leo-stack.ps1 start" -ForegroundColor Gray
@@ -454,6 +571,7 @@ switch ($Command) {
     "emergency" { Invoke-EmergencyCleanup }
     "start-engineer" { Start-Engineer }
     "start-app" { Start-App }
+    "start-worker" { Start-Workers }
     "help" { Show-Help }
     default { Show-Help }
 }

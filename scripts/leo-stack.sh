@@ -39,6 +39,9 @@ mkdir -p "$PID_DIR"
 ENGINEER_PID="$PID_DIR/engineer.pid"
 APP_PID="$PID_DIR/app.pid"
 
+# Worker Registry
+WORKER_REGISTRY="$ENGINEER_DIR/config/workers.json"
+
 # Log directory
 LOG_DIR="$ENGINEER_DIR/.logs"
 mkdir -p "$LOG_DIR"
@@ -188,10 +191,116 @@ stop_server() {
     fi
 }
 
+# Function to get worker list from registry (outputs JSON lines via node)
+get_workers() {
+    if [ ! -f "$WORKER_REGISTRY" ]; then
+        return
+    fi
+    node -e "
+        const r = require('$WORKER_REGISTRY');
+        r.workers.forEach(w => console.log(JSON.stringify(w)));
+    "
+}
+
+# Function to start all enabled workers from registry
+start_workers() {
+    if [ ! -f "$WORKER_REGISTRY" ]; then return; fi
+
+    log "INFO" "${BLUE}[WORKERS] Starting enabled workers...${NC}"
+
+    get_workers | while IFS= read -r worker_json; do
+        local enabled=$(node -e "console.log(JSON.parse(process.argv[1]).enabled)" "$worker_json")
+        if [ "$enabled" != "true" ]; then continue; fi
+
+        local name=$(node -e "console.log(JSON.parse(process.argv[1]).display_name)" "$worker_json")
+        local command=$(node -e "console.log(JSON.parse(process.argv[1]).command)" "$worker_json")
+        local cwd_val=$(node -e "console.log(JSON.parse(process.argv[1]).cwd)" "$worker_json")
+        local pid_file_name=$(node -e "console.log(JSON.parse(process.argv[1]).pid_file)" "$worker_json")
+        local log_prefix=$(node -e "console.log(JSON.parse(process.argv[1]).log_prefix)" "$worker_json")
+
+        local pid_file="$PID_DIR/$pid_file_name"
+        local worker_cwd="$ENGINEER_DIR"
+        if [ "$cwd_val" != "." ]; then worker_cwd="$cwd_val"; fi
+
+        # Check if already running
+        if [ -f "$pid_file" ]; then
+            local existing_pid=$(cat "$pid_file")
+            if ps -p $existing_pid > /dev/null 2>&1; then
+                log "WARN" "${YELLOW}[WARN] $name already running (PID: $existing_pid)${NC}"
+                continue
+            fi
+            rm -f "$pid_file"
+        fi
+
+        local worker_log="$LOG_DIR/${log_prefix}-$(date +%Y%m%d-%H%M%S).log"
+
+        cd "$worker_cwd"
+        eval "$command" >> "$worker_log" 2>&1 &
+        local pid=$!
+        echo $pid > "$pid_file"
+        cd "$ENGINEER_DIR"
+
+        sleep 2
+        if ps -p $pid > /dev/null 2>&1; then
+            log "INFO" "${GREEN}[OK] $name started (PID: $pid)${NC}"
+            log "INFO" "   * Log: $worker_log"
+        else
+            log "ERROR" "${RED}[ERROR] $name failed to start! Check log: $worker_log${NC}"
+        fi
+    done
+}
+
+# Function to stop all workers from registry
+stop_workers() {
+    if [ ! -f "$WORKER_REGISTRY" ]; then return; fi
+
+    log "INFO" "${YELLOW}[WORKERS] Stopping workers...${NC}"
+
+    get_workers | while IFS= read -r worker_json; do
+        local name=$(node -e "console.log(JSON.parse(process.argv[1]).display_name)" "$worker_json")
+        local pid_file_name=$(node -e "console.log(JSON.parse(process.argv[1]).pid_file)" "$worker_json")
+        local pid_file="$PID_DIR/$pid_file_name"
+        stop_server "$pid_file" "$name"
+    done
+}
+
+# Function to show worker status from registry
+show_worker_status() {
+    if [ ! -f "$WORKER_REGISTRY" ]; then return; fi
+
+    echo ""
+    echo -e "${BLUE}Workers:${NC}"
+
+    get_workers | while IFS= read -r worker_json; do
+        local name=$(node -e "console.log(JSON.parse(process.argv[1]).display_name)" "$worker_json")
+        local enabled=$(node -e "console.log(JSON.parse(process.argv[1]).enabled)" "$worker_json")
+        local pid_file_name=$(node -e "console.log(JSON.parse(process.argv[1]).pid_file)" "$worker_json")
+        local pid_file="$PID_DIR/$pid_file_name"
+
+        if [ "$enabled" != "true" ]; then
+            log "INFO" "   ${NC}[--] $name: Disabled"
+            continue
+        fi
+
+        if [ -f "$pid_file" ]; then
+            local pid_val=$(cat "$pid_file")
+            if ps -p $pid_val > /dev/null 2>&1; then
+                log "INFO" "   ${GREEN}[OK] $name: Running (PID: $pid_val)${NC}"
+            else
+                log "INFO" "   ${RED}[!!] $name: Dead (stale PID: $pid_val)${NC}"
+            fi
+        else
+            log "INFO" "   ${RED}[--] $name: Not running${NC}"
+        fi
+    done
+}
+
 # Function to stop all servers
 stop_all() {
     log "INFO" "${RED}[STOP] Stopping all servers...${NC}"
     echo "=================================="
+
+    stop_workers
 
     stop_server "$APP_PID" "EHG App"
     sleep 1
@@ -237,6 +346,9 @@ status() {
 
     check_status "$ENGINEER_PID" 3000 "EHG_Engineer (3000)"
     check_status "$APP_PID" 8080 "EHG App (8080)"
+
+    show_worker_status
+
     echo "=================================="
 
     # Show memory if available
@@ -269,6 +381,8 @@ start_all() {
     sleep $STARTUP_DELAY
 
     start_app || { log "ERROR" "${RED}Failed to start EHG App${NC}"; return 1; }
+
+    start_workers
 
     echo "=================================="
     log "INFO" "${GREEN}[DONE] LEO Stack startup complete!${NC}"
@@ -354,6 +468,9 @@ case "${1:-}" in
     start-app)
         start_app
         ;;
+    start-worker)
+        start_workers
+        ;;
     *)
         echo "LEO Stack Management Script - Cross-Platform Version"
         echo "====================================================="
@@ -374,10 +491,15 @@ case "${1:-}" in
         echo "Advanced Commands:"
         echo "  start-engineer   - Start only EHG_Engineer (3000)"
         echo "  start-app        - Start only EHG App (8080)"
+        echo "  start-worker     - Start all enabled workers from config/workers.json"
         echo ""
         echo "Servers:"
         echo "  Port 3000 - EHG_Engineer (LEO Protocol Framework, Backend API)"
         echo "  Port 8080 - EHG App (Frontend UI with Vite)"
+        echo ""
+        echo "Worker Registry:"
+        echo "  Workers are defined in config/workers.json. Set \"enabled\": true to auto-start"
+        echo "  with the stack. See docs/reference/worker-registry-guide.md for details."
         echo ""
         echo "NOTE: On Windows, use 'node scripts/cross-platform-run.js leo-stack'"
         echo "      which automatically uses the PowerShell version (leo-stack.ps1)"

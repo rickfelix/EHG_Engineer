@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "workers": [
+    {
+      "name": "stage-zero-processor",
+      "display_name": "Stage Zero Queue Processor",
+      "command": "node scripts/stage-zero-queue-processor.js",
+      "cwd": ".",
+      "health_check": { "type": "pid" },
+      "pid_file": "stage-zero.pid",
+      "log_prefix": "stage-zero",
+      "enabled": true,
+      "description": "Polls stage_zero_requests table every 30s for chairman discovery/teardown requests"
+    },
+    {
+      "name": "eva-workers",
+      "display_name": "EVA Workers",
+      "command": "node lib/eva/workers/index.js",
+      "cwd": ".",
+      "health_check": { "type": "pid" },
+      "pid_file": "eva-workers.pid",
+      "log_prefix": "eva-workers",
+      "enabled": false,
+      "description": "StageAdvance (120s), HealthMonitor (60s), MetricsCollector (60s)"
+    },
+    {
+      "name": "subagent-worker",
+      "display_name": "Sub-Agent Worker",
+      "command": "node scripts/subagent-worker.js",
+      "cwd": ".",
+      "health_check": { "type": "pid" },
+      "pid_file": "subagent-worker.pid",
+      "log_prefix": "subagent-worker",
+      "enabled": false,
+      "description": "Polls sub_agent_queue table for queued sub-agent activations"
+    },
+    {
+      "name": "eva-master-scheduler",
+      "display_name": "EVA Master Scheduler",
+      "command": "node lib/eva/eva-master-scheduler.js",
+      "cwd": ".",
+      "health_check": { "type": "pid" },
+      "pid_file": "eva-master-scheduler.pid",
+      "log_prefix": "eva-scheduler",
+      "enabled": false,
+      "description": "Priority-based venture processing from eva_scheduler_queue"
+    }
+  ]
+}
