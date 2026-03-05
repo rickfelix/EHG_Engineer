@@ -1,6 +1,6 @@
 /**
- * User Stories for Stage 22: Deployment & Infrastructure
- * Part of SD-VISION-TRANSITION-001D6 (Stages 21-25: LAUNCH & LEARN)
+ * User Stories for Stage 22: Release Readiness
+ * Part of SD-VISION-TRANSITION-001D6 (Stages 21-22: THE BUILD LOOP, 23-25: LAUNCH & LEARN)
  *
  * @module stage-22-stories
  */

@@ -2,10 +2,10 @@
  * Phase 2: THE ENGINE - Venture Lifecycle E2E Tests (Stages 6-9)
  *
  * Tests the business model development phase:
- * - Stage 6: Risk Evaluation Matrix (requires: risk_matrix)
- * - Stage 7: Pricing Strategy (requires: pricing_model)
+ * - Stage 6: Risk Assessment (requires: risk_matrix)
+ * - Stage 7: Revenue Architecture (requires: pricing_model)
  * - Stage 8: Business Model Canvas (requires: business_model_canvas)
- * - Stage 9: Exit-Oriented Design (requires: exit_strategy)
+ * - Stage 9: Exit Strategy (requires: exit_strategy)
  *
  * Golden Nugget Validation Requirements:
  * - risk_matrix: {risk, probability, impact, mitigation}
@@ -79,9 +79,9 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
   });
 
   // =========================================================================
-  // STAGE 6: Risk Evaluation Matrix
+  // STAGE 6: Risk Assessment
   // =========================================================================
-  test.describe('Stage 6: Risk Evaluation Matrix', () => {
+  test.describe('Stage 6: Risk Assessment', () => {
     test('S6-001: should advance to Stage 6 after Phase 1 complete', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -173,7 +173,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .insert({
           venture_id: testVentureId,
           document_type: 'risk_matrix',
-          title: 'Risk Evaluation Matrix',
+          title: 'Risk Assessment',
           content: riskMatrix,
           status: 'complete'
         })
@@ -213,9 +213,9 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
   });
 
   // =========================================================================
-  // STAGE 7: Pricing Strategy
+  // STAGE 7: Revenue Architecture
   // =========================================================================
-  test.describe('Stage 7: Pricing Strategy', () => {
+  test.describe('Stage 7: Revenue Architecture', () => {
     test('S7-001: should advance to Stage 7 after risk_matrix complete', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -274,7 +274,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .insert({
           venture_id: testVentureId,
           document_type: 'pricing_model',
-          title: 'Pricing Strategy',
+          title: 'Revenue Architecture',
           content: pricingModel,
           status: 'complete'
         })
@@ -386,9 +386,9 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
   });
 
   // =========================================================================
-  // STAGE 9: Exit-Oriented Design
+  // STAGE 9: Exit Strategy
   // =========================================================================
-  test.describe('Stage 9: Exit-Oriented Design', () => {
+  test.describe('Stage 9: Exit Strategy', () => {
     test('S9-001: should advance to Stage 9 after business_model_canvas complete', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -454,7 +454,7 @@ test.describe('Phase 2: THE ENGINE (Stages 6-9)', () => {
         .insert({
           venture_id: testVentureId,
           document_type: 'exit_strategy',
-          title: 'Exit-Oriented Design',
+          title: 'Exit Strategy',
           content: exitStrategy,
           status: 'complete'
         })

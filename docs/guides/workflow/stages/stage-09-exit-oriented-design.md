@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 9: Exit-Oriented Design
+# Stage 9: Exit Strategy
+
+> **Implementation Note**: This stage is implemented as **"Exit Strategy"** (`slug: exit-strategy`, `id: stage-09`) in `lib/eva/stage-templates/stage-09.js`. The original design spec called it "Exit-Oriented Design".
+<!-- Design spec title: Exit-Oriented Design -->
 
 ## Metadata
 - **Category**: Protocol

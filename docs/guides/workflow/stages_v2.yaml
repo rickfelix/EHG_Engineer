@@ -2,7 +2,20 @@
 # SD: SD-VISION-TRANSITION-001D
 # Created: 2025-12-06
 # Updated: 2025-12-09 (Golden Nuggets Integration)
+# Updated: 2026-03-05 (Aligned with codebase implementation)
 # Purpose: Definitive configuration for the streamlined 25-stage venture lifecycle
+#
+# ============================================================================
+# IMPLEMENTATION ALIGNMENT NOTE
+# ============================================================================
+# Stage titles below reflect the ACTUAL codebase implementation.
+# Original design-spec titles differed — if you need the design-spec mapping,
+# see the git history of this file or docs/guides/workflow/stages_v2_design_spec.yaml.
+#
+# Phase structure changes from design spec to implementation:
+#   - Phase 5 (THE BUILD LOOP): expanded from [17-20] to [17-22]
+#   - Phase 6 (LAUNCH & LEARN): condensed from [21-25] to [23-25]
+# ============================================================================
 
 version: "2.0"
 name: "Venture Vision v2.0"
@@ -106,18 +119,19 @@ phases:
   - id: 5
     name: "THE BUILD LOOP"
     description: "Implementation and development cycle"
-    stages: [17, 18, 19, 20]
+    stages: [17, 18, 19, 20, 21, 22]
   - id: 6
     name: "LAUNCH & LEARN"
     description: "Deployment, analytics, and optimization"
-    stages: [21, 22, 23, 24, 25]
+    stages: [23, 24, 25]
 
 stages:
   # ============================================================================
   # PHASE 1: THE TRUTH (Stages 1-5)
   # ============================================================================
   - id: 1
-    title: "Draft Idea & Chairman Review"
+    title: "Idea Capture"
+    design_spec_title: "Draft Idea & Chairman Review"
     description: "Capture and validate initial venture ideas with AI assistance and Chairman feedback."
     phase_number: 1
     phase_name: "THE TRUTH"
@@ -148,7 +162,8 @@ stages:
         - Chairman intent captured     # IDEATION-GENESIS-AUDIT: Immutable original recorded
 
   - id: 2
-    title: "AI Multi-Model Critique"
+    title: "Idea Analysis"
+    design_spec_title: "AI Multi-Model Critique"
     description: "Multi-agent AI system reviews and critiques the idea from multiple perspectives."
     phase_number: 1
     phase_name: "THE TRUTH"
@@ -182,7 +197,8 @@ stages:
       note: "Begin drafting Assumption Set V1 with initial market/competitor beliefs from critique"
 
   - id: 3
-    title: "Market Validation & RAT"
+    title: "Kill Gate"
+    design_spec_title: "Market Validation & RAT"
     description: "Validate problem-solution fit, user willingness to pay, and technical feasibility."
     phase_number: 1
     phase_name: "THE TRUTH"
@@ -223,7 +239,8 @@ stages:
       note: "Decision gate - all claims must be classified as Facts/Assumptions/Simulations/Unknowns"
 
   - id: 4
-    title: "Competitive Intelligence"
+    title: "Competitive Landscape"
+    design_spec_title: "Competitive Intelligence"
     description: "Deep analysis of competitive landscape, market gaps, and positioning opportunities."
     phase_number: 1
     phase_name: "THE TRUTH"
@@ -246,7 +263,8 @@ stages:
       - Gap opportunities scored
 
   - id: 5
-    title: "Profitability Forecasting"
+    title: "Kill Gate (Financial)"
+    design_spec_title: "Profitability Forecasting"
     description: "Financial modeling, unit economics validation, and ROI projections."
     phase_number: 1
     phase_name: "THE TRUTH"
@@ -289,7 +307,8 @@ stages:
   # PHASE 2: THE ENGINE (Stages 6-9)
   # ============================================================================
   - id: 6
-    title: "Risk Evaluation Matrix"
+    title: "Risk Assessment"
+    design_spec_title: "Risk Evaluation Matrix"
     description: "Comprehensive risk identification, probability assessment, and mitigation planning."
     phase_number: 2
     phase_name: "THE ENGINE"
@@ -324,7 +343,8 @@ stages:
       validation_rule: "checkEpistemicClassification() in golden-nugget-validator.js"
 
   - id: 7
-    title: "Pricing Strategy"
+    title: "Revenue Architecture"
+    design_spec_title: "Pricing Strategy"
     description: "Pricing model development, tier structure, and value-based pricing analysis."
     phase_number: 2
     phase_name: "THE ENGINE"
@@ -370,7 +390,8 @@ stages:
       - Strategic alignment
 
   - id: 9
-    title: "Exit-Oriented Design"
+    title: "Exit Strategy"
+    design_spec_title: "Exit-Oriented Design"
     description: "Strategic exit planning, valuation targets, and acquisition-friendly architecture."
     phase_number: 2
     phase_name: "THE ENGINE"
@@ -396,8 +417,9 @@ stages:
   # PHASE 3: THE IDENTITY (Stages 10-12)
   # ============================================================================
   - id: 10
-    title: "Strategic Naming"
-    description: "Brand naming, identity development, cultural design style selection, and guidelines creation."
+    title: "Customer & Brand Foundation"
+    design_spec_title: "Strategic Naming"
+    description: "Customer personas, brand genome grounded in persona insights, naming, and Chairman governance gate."
     phase_number: 3
     phase_name: "THE IDENTITY"
     work_type: sd_required
@@ -452,8 +474,9 @@ stages:
       - "Style can be overridden per-component when justified"
 
   - id: 11
-    title: "Go-to-Market Strategy"
-    description: "Marketing strategy, channel selection, and launch planning."
+    title: "Naming & Visual Identity"
+    design_spec_title: "Go-to-Market Strategy"
+    description: "Brand name candidates, visual identity system, and cultural design style application."
     phase_number: 3
     phase_name: "THE IDENTITY"
     work_type: artifact_only
@@ -484,8 +507,9 @@ stages:
       artifacts_produced: ["brand_messaging_options"]
 
   - id: 12
-    title: "Sales & Success Logic"
-    description: "Sales process design, customer success workflows, and support model."
+    title: "GTM & Sales Strategy"
+    design_spec_title: "Sales & Success Logic"
+    description: "Go-to-market strategy, sales playbook, and customer success workflows."
     phase_number: 3
     phase_name: "THE IDENTITY"
     work_type: artifact_only
@@ -510,8 +534,9 @@ stages:
   # PHASE 4: THE BLUEPRINT (Stages 13-16) - "Kochel Firewall"
   # ============================================================================
   - id: 13
-    title: "Tech Stack Interrogation"
-    description: "AI-driven challenge of technology choices, architecture decisions, and trade-offs."
+    title: "Product Roadmap"
+    design_spec_title: "Tech Stack Interrogation"
+    description: "Product roadmap with milestones, dependencies, and timeline. Kill gate enforces roadmap completeness."
     phase_number: 4
     phase_name: "THE BLUEPRINT"
     work_type: decision_gate
@@ -533,8 +558,9 @@ stages:
       - Future-proofing score
 
   - id: 14
-    title: "Data Model & Architecture"
-    description: "Entity relationship design, schema architecture, and data flow planning."
+    title: "Technical Architecture"
+    design_spec_title: "Data Model & Architecture"
+    description: "Technical architecture definition with required stack layers, security, data entities, and integration points."
     phase_number: 4
     phase_name: "THE BLUEPRINT"
     work_type: sd_required
@@ -558,8 +584,9 @@ stages:
       - Relationship clarity
 
   - id: 15
-    title: "Epic & User Story Breakdown"
-    description: "Feature decomposition into epics and user stories with acceptance criteria."
+    title: "Risk Register"
+    design_spec_title: "Epic & User Story Breakdown"
+    description: "Risk identification, severity/priority classification, mitigation planning, and budget coherence validation."
     phase_number: 4
     phase_name: "THE BLUEPRINT"
     work_type: sd_required
@@ -582,8 +609,9 @@ stages:
       - INVEST compliance
 
   - id: 16
-    title: "Spec-Driven Schema Generation"
-    description: "TypeScript interfaces, SQL schemas, and API contract generation from specifications."
+    title: "Financial Projections"
+    design_spec_title: "Spec-Driven Schema Generation"
+    description: "Financial projections with revenue/cost data, runway calculation, burn rate, break-even analysis, and Phase 4→5 Promotion Gate."
     phase_number: 4
     phase_name: "THE BLUEPRINT"
     work_type: decision_gate
@@ -618,11 +646,12 @@ stages:
       note: "Schema Firewall - all schema decisions must have epistemic classification (Facts/Assumptions/Unknowns)"
 
   # ============================================================================
-  # PHASE 5: THE BUILD LOOP (Stages 17-20)
+  # PHASE 5: THE BUILD LOOP (Stages 17-22)
   # ============================================================================
   - id: 17
-    title: "Environment & Agent Config"
-    description: "Development environment setup, AI agent configuration, and CI/CD pipeline."
+    title: "Pre-Build Checklist"
+    design_spec_title: "Environment & Agent Config"
+    description: "Pre-build validation checklist ensuring environment, dependencies, and configuration are ready."
     phase_number: 5
     phase_name: "THE BUILD LOOP"
     work_type: sd_required
@@ -646,8 +675,9 @@ stages:
       - Agent effectiveness
 
   - id: 18
-    title: "MVP Development Loop"
-    description: "Core feature implementation following story-driven development."
+    title: "Sprint Planning"
+    design_spec_title: "MVP Development Loop"
+    description: "Sprint planning with story prioritization, capacity estimation, and acceptance criteria."
     phase_number: 5
     phase_name: "THE BUILD LOOP"
     work_type: sd_required
@@ -669,8 +699,9 @@ stages:
       - Code quality score
 
   - id: 19
-    title: "Integration & API Layer"
-    description: "System integration, API implementation, and third-party connections."
+    title: "Build Execution"
+    design_spec_title: "Integration & API Layer"
+    description: "Core build execution with feature implementation, integration, and technical debt tracking."
     phase_number: 5
     phase_name: "THE BUILD LOOP"
     work_type: sd_required
@@ -692,8 +723,9 @@ stages:
       - Integration success rate
 
   - id: 20
-    title: "Security & Performance"
-    description: "Security hardening, performance optimization, and accessibility compliance."
+    title: "Quality Assurance"
+    design_spec_title: "Security & Performance"
+    description: "Quality assurance including security hardening, performance optimization, and accessibility compliance."
     phase_number: 5
     phase_name: "THE BUILD LOOP"
     work_type: sd_required
@@ -716,14 +748,13 @@ stages:
       - Performance targets met
       - WCAG 2.1 AA compliant
 
-  # ============================================================================
-  # PHASE 6: LAUNCH & LEARN (Stages 21-25)
-  # ============================================================================
+  # (Still Phase 5: THE BUILD LOOP)
   - id: 21
-    title: "QA & UAT"
-    description: "Quality assurance testing, user acceptance testing, and bug resolution."
-    phase_number: 6
-    phase_name: "LAUNCH & LEARN"
+    title: "Build Review"
+    design_spec_title: "QA & UAT"
+    description: "Integration testing, build review, and acceptance verification before release."
+    phase_number: 5
+    phase_name: "THE BUILD LOOP"
     work_type: sd_required
     sd_required: true
     sd_suffix: "QA"
@@ -746,10 +777,11 @@ stages:
       - UAT pass rate
 
   - id: 22
-    title: "Deployment & Infrastructure"
-    description: "Production deployment, infrastructure provisioning, and monitoring setup."
-    phase_number: 6
-    phase_name: "LAUNCH & LEARN"
+    title: "Release Readiness"
+    design_spec_title: "Deployment & Infrastructure"
+    description: "Release readiness gate with deployment checklist, infrastructure provisioning, and Phase 5→6 Promotion Gate."
+    phase_number: 5
+    phase_name: "THE BUILD LOOP"
     work_type: sd_required
     sd_required: true
     sd_suffix: "DEPLOY"
@@ -769,9 +801,13 @@ stages:
       - Deployment success
       - Monitoring coverage
 
+  # ============================================================================
+  # PHASE 6: LAUNCH & LEARN (Stages 23-25)
+  # ============================================================================
   - id: 23
-    title: "Production Launch"
-    description: "Go-live execution, launch checklist completion, and initial user onboarding."
+    title: "Marketing Preparation"
+    design_spec_title: "Production Launch"
+    description: "Pre-launch marketing preparation including asset creation, channel readiness, and go-live checklist."
     phase_number: 6
     phase_name: "LAUNCH & LEARN"
     work_type: decision_gate
@@ -797,8 +833,9 @@ stages:
       note: "Launch triggers reality data collection against Assumption Set V1"
 
   - id: 24
-    title: "Analytics & Feedback"
-    description: "Analytics implementation, feedback collection, and metric tracking."
+    title: "Launch Readiness"
+    design_spec_title: "Analytics & Feedback"
+    description: "Launch readiness scoring, distribution channel activation checklist, and launch authorization gate."
     phase_number: 6
     phase_name: "LAUNCH & LEARN"
     work_type: artifact_only
@@ -825,8 +862,9 @@ stages:
       note: "Analytics feed reality data for assumption comparison (market size, adoption, pricing)"
 
   - id: 25
-    title: "Optimization & Scale"
-    description: "Continuous improvement, scaling preparation, and growth optimization."
+    title: "Launch Execution"
+    design_spec_title: "Optimization & Scale"
+    description: "Go-live execution, distribution channel activation, operations handoff. Sets pipeline_mode to 'operations'."
     phase_number: 6
     phase_name: "LAUNCH & LEARN"
     work_type: sd_required
@@ -857,16 +895,33 @@ stages:
       output_artifact: "assumptions_vs_reality_report"
 
 # Advisory Checkpoint Configuration
+# NOTE: Stage numbers below reference the IMPLEMENTED stage positions.
+# Stage 16 in the design spec was "Schema Firewall" (Spec-Driven Schema Generation).
+# In the implementation, stage 16 is "Financial Projections" (Phase 4→5 Promotion Gate).
 advisory_checkpoints:
   - stage: 3
-    name: "Validation Checkpoint"
+    name: "Kill Gate (Market Validation)"
+    implementation_title: "Kill Gate"
     description: "Kill/Revise/Proceed decision based on market validation score"
     trigger: "validation_score < 6"
   - stage: 5
-    name: "Profitability Gate"
+    name: "Kill Gate (Financial)"
+    implementation_title: "Kill Gate (Financial)"
     description: "Financial viability assessment against archetype benchmarks"
     trigger: "gross_margin < threshold OR breakeven_months > threshold"
+  - stage: 13
+    name: "Product Roadmap Kill Gate"
+    implementation_title: "Product Roadmap"
+    description: "Kill gate enforces roadmap completeness before Blueprint phase"
+    trigger: "milestones < 3 OR missing deliverables OR no 'now' priority milestone"
   - stage: 16
-    name: "Schema Firewall"
-    description: "Pre-implementation schema completeness verification"
-    trigger: "schema_checklist incomplete"
+    name: "Financial Projections Promotion Gate"
+    implementation_title: "Financial Projections"
+    description: "Phase 4→5 Promotion Gate: positive runway and defined projections required"
+    trigger: "runway <= 0 OR projections incomplete"
+    note: "Design spec called this 'Schema Firewall' but implementation is Financial Projections gate"
+  - stage: 22
+    name: "Release Readiness Promotion Gate"
+    implementation_title: "Release Readiness"
+    description: "Phase 5→6 Promotion Gate: all pre-launch checks must pass"
+    trigger: "release_checklist incomplete"

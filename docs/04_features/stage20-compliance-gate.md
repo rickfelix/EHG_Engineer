@@ -54,7 +54,7 @@ tags: [feature, auto-generated]
 
 ## Overview
 
-The Stage 20 Compliance Gate is a hard gate that blocks venture progression from Stage 20 (Security & Performance) to Stage 21 (Pricing Strategy) until all required compliance and security certification items are complete.
+The Stage 20 Compliance Gate is a hard gate that blocks venture progression from Stage 20 (Quality Assurance) to Stage 21 (Build Review) until all required compliance and security certification items are complete.
 
 This ensures ventures have an enterprise-ready security posture before scaling to larger customers.
 

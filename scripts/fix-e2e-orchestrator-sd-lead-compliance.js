@@ -111,7 +111,7 @@ const sdComplianceFixes = [
     target_application: 'EHG_Engineer',
     governance_metadata: {
       strategic_validation: {
-        q1_value_delivery: 'YES - Validates Stage 10 (Strategic Naming) brand variant workflows.',
+        q1_value_delivery: 'YES - Validates Stage 10 (Customer & Brand Foundation) brand variant workflows.',
         q2_user_journey: 'YES - Brand naming is a critical user-facing Stage 10 workflow.',
         q3_alternative_solutions: 'No alternative - brand variants require specific domain and approval testing.',
         q4_scope_impact: '5 test files (~60 test cases) covering manual entry through chairman approval.',

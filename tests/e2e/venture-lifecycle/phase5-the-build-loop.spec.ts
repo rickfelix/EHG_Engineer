@@ -1,11 +1,13 @@
 /**
- * Phase 5: THE BUILD LOOP - Venture Lifecycle E2E Tests (Stages 17-20)
+ * Phase 5: THE BUILD LOOP - Venture Lifecycle E2E Tests (Stages 17-22)
  *
  * Tests the development and implementation phase:
- * - Stage 17: Environment & Agent Config (SD_REQUIRED, requires: system_prompt, cicd_config)
- * - Stage 18: MVP Development Loop (SD_REQUIRED)
- * - Stage 19: Integration & API Layer (SD_REQUIRED)
- * - Stage 20: Security & Performance (SD_REQUIRED, requires: security_audit)
+ * - Stage 17: Pre-Build Checklist (SD_REQUIRED, requires: system_prompt, cicd_config)
+ * - Stage 18: Sprint Planning (SD_REQUIRED)
+ * - Stage 19: Build Execution (SD_REQUIRED)
+ * - Stage 20: Quality Assurance (SD_REQUIRED, requires: security_audit)
+ * - Stage 21: Build Review (SD_REQUIRED, requires: test_plan, uat_report)
+ * - Stage 22: Release Readiness (SD_REQUIRED, requires: deployment_runbook)
  *
  * All stages in Phase 5 require Strategic Directives (SD)
  */
@@ -57,9 +59,9 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
   });
 
   // =========================================================================
-  // STAGE 17: Environment & Agent Config (SD_REQUIRED)
+  // STAGE 17: Pre-Build Checklist (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 17: Environment & Agent Config', () => {
+  test.describe('Stage 17: Pre-Build Checklist', () => {
     test('S17-001: should advance to Stage 17', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -164,9 +166,9 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
   });
 
   // =========================================================================
-  // STAGE 18: MVP Development Loop (SD_REQUIRED)
+  // STAGE 18: Sprint Planning (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 18: MVP Development Loop', () => {
+  test.describe('Stage 18: Sprint Planning', () => {
     test('S18-001: should advance to Stage 18', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -218,9 +220,9 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
   });
 
   // =========================================================================
-  // STAGE 19: Integration & API Layer (SD_REQUIRED)
+  // STAGE 19: Build Execution (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 19: Integration & API Layer', () => {
+  test.describe('Stage 19: Build Execution', () => {
     test('S19-001: should advance to Stage 19', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -274,9 +276,9 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
   });
 
   // =========================================================================
-  // STAGE 20: Security & Performance (SD_REQUIRED)
+  // STAGE 20: Quality Assurance (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 20: Security & Performance', () => {
+  test.describe('Stage 20: Quality Assurance', () => {
     test('S20-001: should advance to Stage 20', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -349,7 +351,7 @@ test.describe('Phase 5: THE BUILD LOOP (Stages 17-20)', () => {
         .insert({
           venture_id: testVentureId,
           document_type: 'security_audit',
-          title: 'Security & Performance Audit',
+          title: 'Quality Assurance Audit',
           content: securityAudit,
           status: 'complete'
         })

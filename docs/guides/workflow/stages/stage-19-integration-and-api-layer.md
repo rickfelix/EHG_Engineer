@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 19: Integration & API Layer
+# Stage 19: Build Execution
+
+> **Implementation Note**: This stage is implemented as **"Build Execution"** (`slug: build-execution`, `id: stage-19`) in `lib/eva/stage-templates/stage-19.js`. The original design spec called it "Integration & API Layer".
+<!-- Design spec title: Integration & API Layer -->
 
 ## Metadata
 - **Category**: Protocol

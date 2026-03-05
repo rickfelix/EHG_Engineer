@@ -8,6 +8,7 @@ tags: [general, auto-generated]
 ---
 # Venture Workflow: Complete 40-Stage System Architecture
 
+> **Historical Note (2026-03-05)**: This report documents the original 40-stage design which was subsequently consolidated into a 25-stage system. Stage names and phase boundaries differ from the current implementation. See `docs/guides/workflow/stages/README.md` for the current 25-stage mapping.
 
 ## Table of Contents
 

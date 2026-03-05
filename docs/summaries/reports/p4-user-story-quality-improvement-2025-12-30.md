@@ -8,6 +8,7 @@ tags: [general, auto-generated]
 ---
 # User Story Quality Improvement Report
 
+> **Historical Note (2026-03-05)**: This report uses the original design-spec stage names. The codebase implementation uses different titles (e.g., "Build Review" not "QA & UAT"). See `docs/guides/workflow/stages/README.md` for current implementation titles.
 
 ## Table of Contents
 

@@ -144,12 +144,12 @@ const enhancedStories = {
       },
       {
         id: 'AC-005-3',
-        criteria: 'Given I am on Stage 10 (Strategic Naming), When artifacts are present, Then brand identity visualizations are displayed prominently',
+        criteria: 'Given I am on Stage 10 (Customer & Brand Foundation), When artifacts are present, Then brand identity visualizations are displayed prominently',
         type: 'functional'
       },
       {
         id: 'AC-005-4',
-        criteria: 'Given I am on Stage 16 (Schema Firewall), When the hard gate is active, Then GateBlocker prevents progression without required design contracts',
+        criteria: 'Given I am on Stage 16 (Financial Projections), When the hard gate is active, Then GateBlocker prevents progression without required design contracts',
         type: 'integration'
       }
     ]

@@ -6,7 +6,11 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 16: Spec-Driven Schema Generation
+# Stage 16: Financial Projections
+
+> **Implementation Note**: This stage is implemented as **"Financial Projections"** (`slug: financial-projections`, `id: stage-16`) in `lib/eva/stage-templates/stage-16.js`. The original design spec called it "Spec-Driven Schema Generation" (the "Schema Firewall"). The implementation handles revenue/cost projections, runway calculation, burn rate, and break-even analysis, and serves as the Phase 4→5 Promotion Gate.
+
+<!-- Design spec title: Spec-Driven Schema Generation -->
 
 ## Metadata
 - **Category**: Protocol

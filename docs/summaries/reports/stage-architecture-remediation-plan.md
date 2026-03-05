@@ -8,7 +8,7 @@ tags: [general, auto-generated]
 ---
 # Stage Architecture Remediation Plan
 
-
+> **Historical Note (2026-03-05)**: This plan uses the original design-spec stage names. The codebase implementation uses different titles (e.g., Stage 10 is "Customer & Brand Foundation" not "Strategic Naming"). See `docs/guides/workflow/stages/README.md` for current implementation titles.
 
 ## Table of Contents
 

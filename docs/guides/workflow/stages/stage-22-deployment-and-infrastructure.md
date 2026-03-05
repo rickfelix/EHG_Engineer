@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 22: Deployment & Infrastructure
+# Stage 22: Release Readiness
+
+> **Implementation Note**: This stage is implemented as **"Release Readiness"** (`slug: release-readiness`, `id: stage-22`) in `lib/eva/stage-templates/stage-22.js`. The original design spec called it "Deployment & Infrastructure". Note: Phase change — now Phase 5 (THE BUILD LOOP), not Phase 6.
+<!-- Design spec title: Deployment & Infrastructure -->
 
 ## Metadata
 - **Category**: Protocol

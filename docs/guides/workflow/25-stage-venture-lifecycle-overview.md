@@ -20,8 +20,8 @@ tags: [guide, auto-generated]
   - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
   - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
   - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
-  - [Phase 5: THE BUILD LOOP (Stages 17-20)](#phase-5-the-build-loop-stages-17-20)
-  - [Phase 6: LAUNCH & LEARN (Stages 21-25)](#phase-6-launch-learn-stages-21-25)
+  - [Phase 5: THE BUILD LOOP (Stages 17-22)](#phase-5-the-build-loop-stages-17-22)
+  - [Phase 6: LAUNCH & LEARN (Stages 23-25)](#phase-6-launch-learn-stages-23-25)
 - [Phase 7: THE ORBIT (Post-Stage 25)](#phase-7-the-orbit-post-stage-25)
 - [Key Mechanisms](#key-mechanisms)
   - [1. Work Types](#1-work-types)
@@ -49,10 +49,12 @@ tags: [guide, auto-generated]
 - **Last Updated**: 2026-01-19
 - **Tags**: api, unit, schema, security
 
-**Version**: 2.0 (Venture Vision v2.0)
+**Version**: 2.1 (Venture Vision v2.0 — Implementation Aligned)
 **Status**: Active
-**Last Updated**: 2026-01-18
+**Last Updated**: 2026-03-05
 **Technical Reference**: [`stages_v2.yaml`](./stages_v2.yaml)
+
+> **⚠️ Implementation Alignment Note** (2026-03-05): Stage titles in this document have been updated to reflect the **actual codebase implementation** (`lib/eva/stage-templates/stage-XX.js`). Phase 5 spans stages 17-22 and Phase 6 spans stages 23-25 in the implementation (the original design spec had Phase 5: 17-20 and Phase 6: 21-25).
 
 ---
 
@@ -88,8 +90,8 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 │                        PHASE 5                    PHASE 6                   │
 │                        THE BUILD LOOP             LAUNCH & LEARN            │
 │                        ┌─────────────┐            ┌─────────────┐           │
-│                        │17 18 19 20  │ ────────►  │21 22 23 24  │           │
-│                        │             │            │25           │           │
+│                        │17 18 19 20  │ ────────►  │23 24        │           │
+│                        │21 22        │            │25           │           │
 │                        └─────────────┘            └─────────────┘           │
 │                                                         │                   │
 │                                                         ▼                   │
@@ -113,15 +115,15 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 
 > "Is this idea worth pursuing? Does the market want it? Can we make money?"
 
-| Stage | Title | Purpose | Key Output |
-|-------|-------|---------|------------|
-| 1 | Draft Idea & Chairman Review | Capture and validate initial idea | Structured idea document |
-| 2 | AI Multi-Model Critique | Multi-agent review from different perspectives | Critique report, risk assessment |
-| 3 | Market Validation & RAT | Validate problem-solution fit and WTP | Validation report (score >= 6 to proceed) |
-| 4 | Competitive Intelligence | Analyze competitive landscape | Competitive analysis, gap identification |
-| 5 | Profitability Forecasting | Financial modeling and unit economics | Financial model, ROI projections |
+| Stage | Implementation Title | Purpose | Key Output |
+|-------|---------------------|---------|------------|
+| 1 | Idea Capture | Capture and validate initial venture idea | Structured idea document |
+| 2 | Idea Analysis | Multi-agent review from different perspectives | Critique report, risk assessment |
+| 3 | **Kill Gate** | Validate problem-solution fit and WTP | Validation report (score >= 6 to proceed) |
+| 4 | Competitive Landscape | Analyze competitive landscape | Competitive analysis, gap identification |
+| 5 | **Kill Gate (Financial)** | Financial modeling and unit economics | Financial model, ROI projections |
 
-**Decision Gate**: Stage 3 is a **kill gate**. If validation score < 6, the venture can be killed, revised, or rejected.
+**Decision Gates**: Stage 3 and Stage 5 are **kill gates** where ventures can be killed, revised, or rejected.
 
 **Key Metrics**:
 - Validation score (1-10)
@@ -136,12 +138,12 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 
 > "How will this venture make money and sustain itself?"
 
-| Stage | Title | Purpose | Key Output |
-|-------|-------|---------|------------|
-| 6 | Risk Evaluation Matrix | Identify and mitigate risks | Risk matrix, mitigation strategies |
-| 7 | Pricing Strategy | Develop pricing model and tiers | Pricing model, discount policies |
+| Stage | Implementation Title | Purpose | Key Output |
+|-------|---------------------|---------|------------|
+| 6 | Risk Assessment | Identify and mitigate risks | Risk matrix, mitigation strategies |
+| 7 | Revenue Architecture | Develop pricing model and tiers | Revenue model, pricing tiers |
 | 8 | Business Model Canvas | Complete BMC documentation | Business Model Canvas |
-| 9 | Exit-Oriented Design | Plan for eventual exit | Exit strategy, valuation targets |
+| 9 | Exit Strategy | Plan for eventual exit | Exit strategy, valuation targets |
 
 **Key Insight**: Even early-stage ventures should design for exit. This prevents architectural decisions that make acquisition difficult later.
 
@@ -152,13 +154,13 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 
 > "Who are we? How do we reach customers?"
 
-| Stage | Title | Purpose | Key Output |
-|-------|-------|---------|------------|
-| 10 | Strategic Naming | Brand naming and visual identity | Brand name, guidelines, cultural design style |
-| 11 | Go-to-Market Strategy | Marketing strategy and channels | GTM plan, marketing manifest |
-| 12 | Sales & Success Logic | Sales process and customer success | Sales playbook, success workflows |
+| Stage | Implementation Title | Purpose | Key Output |
+|-------|---------------------|---------|------------|
+| 10 | **Customer & Brand Foundation** | Customer personas + brand genome + Chairman gate | Customer personas, brand genome, naming candidates |
+| 11 | Naming & Visual Identity | Visual identity system and cultural design style | Brand name, visual identity specs |
+| 12 | GTM & Sales Strategy | Go-to-market and sales playbook | GTM plan, sales playbook |
 
-**Cultural Design Styles** (selected at Stage 10):
+**Cultural Design Styles** (configured in Stage 10 via brand genome):
 - **Wabi-sabi (Japanese)**: Organic, imperfect, natural - for wellness, artisanal, sustainability
 - **Swiss Minimal**: Grid precision, trust, legibility - for fintech, enterprise B2B, healthcare
 - **Bauhaus**: Form follows function, geometric - for architecture, manufacturing, design tools
@@ -167,56 +169,52 @@ The 25-Stage Venture Lifecycle is EHG's structured framework for taking a ventur
 ---
 
 ### Phase 4: THE BLUEPRINT (Stages 13-16)
-**Purpose**: Technical architecture and specification before implementation.
+**Purpose**: Product planning and financial validation before build.
 
-> "What exactly are we building? What's the schema?"
+> "What's the roadmap? What are the risks? Can we afford to build?"
 
-| Stage | Title | Purpose | Key Output |
-|-------|-------|---------|------------|
-| 13 | Tech Stack Interrogation | Challenge and validate tech choices | Tech stack decision, trade-off analysis |
-| 14 | Data Model & Architecture | Entity relationships and schema | Data model, ERD diagrams |
-| 15 | Epic & User Story Breakdown | Feature decomposition | User story pack, acceptance criteria |
-| 16 | Spec-Driven Schema Generation | Generate TypeScript, SQL, API contracts | TypeScript interfaces, SQL schemas, API contracts |
+| Stage | Implementation Title | Purpose | Key Output |
+|-------|---------------------|---------|------------|
+| 13 | **Product Roadmap** | Roadmap with milestones, dependencies, timeline | Product roadmap, milestone plan |
+| 14 | Technical Architecture | Architecture layers, security, data entities | Architecture spec, integration points |
+| 15 | Risk Register | Risk identification, severity, mitigation | Risk register with mitigation plans |
+| 16 | **Financial Projections** | Revenue/cost projections, runway, break-even | Financial model, runway calculation |
 
-**Schema Firewall**: Stage 16 is a critical gate. Before implementation begins:
-- All entities must be named
-- All relationships must be explicit
-- All fields must be typed
-- All constraints must be stated
-- API contracts must be generated
+**Kill Gate**: Stage 13 enforces roadmap completeness (minimum 3 milestones, at least one `priority: now`).
+**Promotion Gate**: Stage 16 is the **Phase 4→5 Promotion Gate** — positive runway and defined projections required before build begins.
 
 ---
 
-### Phase 5: THE BUILD LOOP (Stages 17-20)
+### Phase 5: THE BUILD LOOP (Stages 17-22)
 **Purpose**: Implementation and development.
 
-> "Build the product according to the blueprint."
+> "Plan the build, execute it, review it, and confirm it's ready to ship."
 
-| Stage | Title | Purpose | Key Output |
-|-------|-------|---------|------------|
-| 17 | Environment & Agent Config | Dev environment, CI/CD setup | Environment setup, system prompts |
-| 18 | MVP Development Loop | Core feature implementation | Working code, feature implementations |
-| 19 | Integration & API Layer | System integration, third-party connections | Integrated system, API endpoints |
-| 20 | Security & Performance | Hardening, optimization, accessibility | Hardened system, security audit |
+| Stage | Implementation Title | Purpose | Key Output |
+|-------|---------------------|---------|------------|
+| 17 | Pre-Build Checklist | Validate environment and dependencies are ready | Pre-build checklist artifact |
+| 18 | Sprint Planning | Sprint plan with stories, capacity, acceptance criteria | Sprint plan artifact |
+| 19 | Build Execution | Core build with feature implementation and integrations | Build execution record |
+| 20 | Quality Assurance | QA including security, performance, and accessibility | QA report, security audit |
+| 21 | Build Review | Integration testing and acceptance verification | Build review report |
+| 22 | **Release Readiness** | Final release gate before launch | Release readiness checklist |
 
-**All stages require Strategic Directives (SDs)**: Implementation work is tracked through the LEO Protocol governance system.
+**Promotion Gate**: Stage 22 is the **Phase 5→6 Promotion Gate** — all pre-launch checks must pass before entering Launch & Learn.
 
 ---
 
-### Phase 6: LAUNCH & LEARN (Stages 21-25)
-**Purpose**: Deploy, measure, and optimize.
+### Phase 6: LAUNCH & LEARN (Stages 23-25)
+**Purpose**: Prepare, launch, and go live.
 
-> "Ship it, learn from users, and improve."
+> "Get marketing ready, confirm you're ready to launch, and execute."
 
-| Stage | Title | Purpose | Key Output |
-|-------|-------|---------|------------|
-| 21 | QA & UAT | Quality assurance and user acceptance | Test reports, UAT signoff |
-| 22 | Deployment & Infrastructure | Production deployment, monitoring | Deployed system, runbooks |
-| 23 | Production Launch | Go-live execution | Live product, launch metrics |
-| 24 | Analytics & Feedback | Analytics implementation, feedback collection | Analytics dashboard, KPI tracking |
-| 25 | Optimization & Scale | Continuous improvement, scaling | Optimization roadmap, Assumptions vs Reality Report |
+| Stage | Implementation Title | Purpose | Key Output |
+|-------|---------------------|---------|------------|
+| 23 | Marketing Preparation | Pre-launch marketing assets and channel readiness | Marketing assets, channel plan |
+| 24 | Launch Readiness | Launch readiness score and distribution channel activation | Launch readiness score |
+| 25 | **Launch Execution** | Go-live execution, channel activation, operations handoff | Live product, `pipeline_mode: 'operations'` |
 
-**Assumptions vs Reality Report**: Stage 25 generates a calibration report comparing initial assumptions (from Stages 2-5) against actual outcomes.
+**Authorization Gate**: Stage 25 calls `verifyLaunchAuthorization()` before activating distribution channels and transitioning the venture to operations mode.
 
 ---
 
@@ -249,13 +247,16 @@ Each stage has a `work_type` that determines how work is tracked:
 
 ### 2. Advisory Checkpoints
 
-Three stages have **advisory checkpoints** where the Chairman is required to make kill/revise/proceed decisions:
+Six stages have **gates** where the venture must pass criteria before advancing:
 
-| Stage | Checkpoint | Trigger |
-|-------|------------|---------|
-| 3 | Validation Checkpoint | validation_score < 6 |
-| 5 | Profitability Gate | gross_margin < threshold OR breakeven_months > threshold |
-| 16 | Schema Firewall | schema_checklist incomplete |
+| Stage | Implementation Title | Gate Type | Trigger |
+|-------|---------------------|-----------|---------|
+| 3 | Kill Gate | Kill Gate | validation_score < 6 |
+| 5 | Kill Gate (Financial) | Kill Gate | gross_margin < threshold OR breakeven_months > threshold |
+| 13 | Product Roadmap | Kill Gate | milestones < 3 OR no `priority: now` milestone |
+| 16 | Financial Projections | Promotion Gate (Phase 4→5) | runway <= 0 OR projections incomplete |
+| 22 | Release Readiness | Promotion Gate (Phase 5→6) | release_checklist incomplete |
+| 25 | Launch Execution | Authorization Gate | `verifyLaunchAuthorization()` fails |
 
 ### 3. Golden Nuggets
 
@@ -391,20 +392,22 @@ See: [Venture Lifecycle Gap Remediation Overview](../../04_features/venture-life
 ┌───────────────────────────────────────────────────────────────┐
 │                 25-STAGE QUICK REFERENCE                      │
 ├───────────────────────────────────────────────────────────────┤
-│ Phase 1: THE TRUTH (1-5)      → Validate idea                 │
-│ Phase 2: THE ENGINE (6-9)     → Build business model          │
-│ Phase 3: THE IDENTITY (10-12) → Brand and GTM                 │
-│ Phase 4: THE BLUEPRINT (13-16)→ Technical specification       │
-│ Phase 5: THE BUILD LOOP (17-20)→ Implementation               │
-│ Phase 6: LAUNCH & LEARN (21-25)→ Deploy and optimize          │
+│ Phase 1: THE TRUTH (1-5)       → Validate idea                │
+│ Phase 2: THE ENGINE (6-9)      → Build business model         │
+│ Phase 3: THE IDENTITY (10-12)  → Brand and GTM                │
+│ Phase 4: THE BLUEPRINT (13-16) → Roadmap, architecture, risk  │
+│ Phase 5: THE BUILD LOOP (17-22)→ Plan, build, review, release │
+│ Phase 6: LAUNCH & LEARN (23-25)→ Prepare, launch, go live     │
 ├───────────────────────────────────────────────────────────────┤
-│ Kill Gates: Stage 3, Stage 5                                  │
-│ Schema Firewall: Stage 16                                     │
-│ Compliance Gate: Stage 20                                     │
+│ Kill Gates: Stage 3 (validation), Stage 5 (financial),        │
+│             Stage 13 (roadmap)                                │
+│ Promotion Gates: Stage 16 (Phase 4→5), Stage 22 (Phase 5→6)  │
+│ Authorization Gate: Stage 25 (go-live)                        │
 ├───────────────────────────────────────────────────────────────┤
 │ Token Budgets: Exploratory (75K) | Standard (375K) | Deep (1.5M)│
 ├───────────────────────────────────────────────────────────────┤
-│ Technical Reference: docs/workflow/stages_v2.yaml             │
+│ Technical Reference: docs/guides/workflow/stages_v2.yaml      │
+│ Code Reference: lib/eva/stage-templates/stage-XX.js           │
 └───────────────────────────────────────────────────────────────┘
 ```
 

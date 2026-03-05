@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 3: Market Validation & RAT
+# Stage 3: Kill Gate
+
+> **Implementation Note**: This stage is implemented as **"Kill Gate"** (`slug: validation`, `id: stage-03`) in `lib/eva/stage-templates/stage-03.js`. The original design spec called it "Market Validation & RAT".
+<!-- Design spec title: Market Validation & RAT -->
 
 ## Metadata
 - **Category**: Protocol

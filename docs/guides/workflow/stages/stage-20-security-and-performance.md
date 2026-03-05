@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 20: Security & Performance
+# Stage 20: Quality Assurance
+
+> **Implementation Note**: This stage is implemented as **"Quality Assurance"** (`slug: quality-assurance`, `id: stage-20`) in `lib/eva/stage-templates/stage-20.js`. The original design spec called it "Security & Performance".
+<!-- Design spec title: Security & Performance -->
 
 ## Metadata
 - **Category**: Protocol

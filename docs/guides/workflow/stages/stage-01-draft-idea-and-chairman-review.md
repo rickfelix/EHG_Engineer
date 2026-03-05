@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 1: Draft Idea & Chairman Review
+# Stage 1: Idea Capture
+
+> **Implementation Note**: This stage is implemented as **"Idea Capture"** (`slug: draft-idea`, `id: stage-01`) in `lib/eva/stage-templates/stage-01.js`. The original design spec called it "Draft Idea & Chairman Review".
+<!-- Design spec title: Draft Idea & Chairman Review -->
 
 ## Metadata
 - **Category**: Protocol

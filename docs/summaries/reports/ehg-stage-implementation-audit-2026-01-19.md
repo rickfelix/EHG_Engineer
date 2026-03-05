@@ -16,6 +16,8 @@ tags: [general, auto-generated]
 - **Last Updated**: 2026-01-19
 - **Tags**: audit, implementation, venture-workflow, vision-v2, ehg, stages
 
+> **Historical Note (2026-03-05)**: This report uses the original design-spec stage names (e.g., "Strategic Naming", "QA & UAT"). The codebase has since evolved with different implementation titles (e.g., "Customer & Brand Foundation", "Build Review"). See `docs/guides/workflow/stages/README.md` for the current mapping. Phase boundaries also changed: Phase 5 = Stages 17-22, Phase 6 = Stages 23-25.
+
 ## Executive Summary
 
 This audit verified the implementation status of all 25 stages in the Vision V2 Venture Lifecycle against the EHG codebase.

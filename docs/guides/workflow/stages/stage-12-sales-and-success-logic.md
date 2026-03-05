@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 12: Sales & Success Logic
+# Stage 12: GTM & Sales Strategy
+
+> **Implementation Note**: This stage is implemented as **"GTM & Sales Strategy"** (`slug: gtm-sales-strategy`, `id: stage-12`) in `lib/eva/stage-templates/stage-12.js`. The original design spec called it "Sales & Success Logic".
+<!-- Design spec title: Sales & Success Logic -->
 
 ## Metadata
 - **Category**: Protocol

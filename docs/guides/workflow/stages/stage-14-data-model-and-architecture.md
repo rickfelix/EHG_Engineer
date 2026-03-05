@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 14: Data Model & Architecture
+# Stage 14: Technical Architecture
+
+> **Implementation Note**: This stage is implemented as **"Technical Architecture"** (`slug: technical-architecture`, `id: stage-14`) in `lib/eva/stage-templates/stage-14.js`. The original design spec called it "Data Model & Architecture".
+<!-- Design spec title: Data Model & Architecture -->
 
 ## Metadata
 - **Category**: Protocol

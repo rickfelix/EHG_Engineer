@@ -3,9 +3,9 @@
 ## Metadata
 - **Category**: Guide
 - **Status**: Approved
-- **Version**: 2.1
+- **Version**: 2.2
 - **Author**: Documentation Sub-Agent (DOCMON)
-- **Last Updated**: 2026-01-19
+- **Last Updated**: 2026-03-05
 - **Tags**: venture-workflow, stages, vision-v2, index, documentation-standards-compliant
 - **Compliance**: documentation-standards.md v1.1.0
 
@@ -13,9 +13,11 @@
 
 This directory contains comprehensive documentation for each of the 25 stages in the Vision V2 Venture Lifecycle. Each stage document provides detailed information about purpose, inputs, outputs, gates, metrics, and implementation guidance.
 
+> **⚠️ Implementation Alignment Note** (2026-03-05): Stage titles and phase boundaries in this index reflect the **actual codebase implementation** (`lib/eva/stage-templates/stage-XX.js`). The original design spec (`stages_v2.yaml` pre-2026-03-05) used different names — these are preserved as `design_spec_title` in the YAML. Individual stage `.md` files below still use the original design-spec filenames and may reference the old titles in their content.
+
 ## Canonical Source
 
-**`stages_v2.yaml`** is the single source of truth for stage definitions. These documents are generated from and should be consistent with that file.
+**`stages_v2.yaml`** is the single source of truth for stage definitions (updated 2026-03-05 to align with codebase).
 
 ---
 
@@ -23,15 +25,15 @@ This directory contains comprehensive documentation for each of the 25 stages in
 
 *Validation and market reality assessment*
 
-| Stage | Title | Work Type | SD Required |
-|-------|-------|-----------|-------------|
-| [1](stage-01-draft-idea-and-chairman-review.md) | Draft Idea & Chairman Review | artifact_only | No |
-| [2](stage-02-ai-multi-model-critique.md) | AI Multi-Model Critique | automated_check | No |
-| [3](stage-03-market-validation-and-rat.md) | Market Validation & RAT | **decision_gate** | No |
-| [4](stage-04-competitive-intelligence.md) | Competitive Intelligence | artifact_only | No |
-| [5](stage-05-profitability-forecasting.md) | Profitability Forecasting | **decision_gate** | No |
+| Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
+|-------|---------------------|-------------------|-----------|-------------|
+| [1](stage-01-draft-idea-and-chairman-review.md) | Idea Capture | Draft Idea & Chairman Review | artifact_only | No |
+| [2](stage-02-ai-multi-model-critique.md) | Idea Analysis | AI Multi-Model Critique | automated_check | No |
+| [3](stage-03-market-validation-and-rat.md) | **Kill Gate** | Market Validation & RAT | **decision_gate** | No |
+| [4](stage-04-competitive-intelligence.md) | Competitive Landscape | Competitive Intelligence | artifact_only | No |
+| [5](stage-05-profitability-forecasting.md) | **Kill Gate (Financial)** | Profitability Forecasting | **decision_gate** | No |
 
-**Key Decision Point**: Stage 3 is a **kill gate** where ventures can be killed, revised, or rejected based on validation score.
+**Key Decision Points**: Stage 3 and Stage 5 are **kill gates** where ventures can be killed, revised, or rejected.
 
 ---
 
@@ -39,12 +41,12 @@ This directory contains comprehensive documentation for each of the 25 stages in
 
 *Business model and strategy foundation*
 
-| Stage | Title | Work Type | SD Required |
-|-------|-------|-----------|-------------|
-| [6](stage-06-risk-evaluation-matrix.md) | Risk Evaluation Matrix | artifact_only | No |
-| [7](stage-07-pricing-strategy.md) | Pricing Strategy | artifact_only | No |
-| [8](stage-08-business-model-canvas.md) | Business Model Canvas | artifact_only | No |
-| [9](stage-09-exit-oriented-design.md) | Exit-Oriented Design | artifact_only | No |
+| Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
+|-------|---------------------|-------------------|-----------|-------------|
+| [6](stage-06-risk-evaluation-matrix.md) | Risk Assessment | Risk Evaluation Matrix | artifact_only | No |
+| [7](stage-07-pricing-strategy.md) | Revenue Architecture | Pricing Strategy | artifact_only | No |
+| [8](stage-08-business-model-canvas.md) | Business Model Canvas | Business Model Canvas | artifact_only | No |
+| [9](stage-09-exit-oriented-design.md) | Exit Strategy | Exit-Oriented Design | artifact_only | No |
 
 ---
 
@@ -52,57 +54,59 @@ This directory contains comprehensive documentation for each of the 25 stages in
 
 *Brand, positioning, and go-to-market*
 
-| Stage | Title | Work Type | SD Required |
-|-------|-------|-----------|-------------|
-| [10](stage-10-strategic-naming.md) | Strategic Naming | **sd_required** | Yes (BRAND) |
-| [11](stage-11-go-to-market-strategy.md) | Go-to-Market Strategy | artifact_only | No |
-| [12](stage-12-sales-and-success-logic.md) | Sales & Success Logic | artifact_only | No |
+| Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
+|-------|---------------------|-------------------|-----------|-------------|
+| [10](stage-10-strategic-naming.md) | **Customer & Brand Foundation** | Strategic Naming | **sd_required** | Yes (BRAND) |
+| [11](stage-11-go-to-market-strategy.md) | Naming & Visual Identity | Go-to-Market Strategy | artifact_only | No |
+| [12](stage-12-sales-and-success-logic.md) | GTM & Sales Strategy | Sales & Success Logic | artifact_only | No |
 
-**Key Feature**: Stage 11 includes the **Crew Tournament Pilot** for brand messaging competition.
+**Key Feature**: Stage 10 includes Chairman governance gate for brand approval. Stage 11 includes the **Crew Tournament Pilot** for brand messaging competition.
 
 ---
 
 ## Phase 4: THE BLUEPRINT (Stages 13-16)
 
-*Technical architecture and specification - "Kochel Firewall"*
+*Product planning and financial validation*
 
-| Stage | Title | Work Type | SD Required |
-|-------|-------|-----------|-------------|
-| [13](stage-13-tech-stack-interrogation.md) | Tech Stack Interrogation | **decision_gate** | No |
-| [14](stage-14-data-model-and-architecture.md) | Data Model & Architecture | **sd_required** | Yes (DATAMODEL) |
-| [15](stage-15-epic-and-user-story-breakdown.md) | Epic & User Story Breakdown | **sd_required** | Yes (STORIES) |
-| [16](stage-16-spec-driven-schema-generation.md) | Spec-Driven Schema Generation | **decision_gate** | Yes (SCHEMA) |
+| Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
+|-------|---------------------|-------------------|-----------|-------------|
+| [13](stage-13-tech-stack-interrogation.md) | **Product Roadmap** | Tech Stack Interrogation | **decision_gate** | No |
+| [14](stage-14-data-model-and-architecture.md) | Technical Architecture | Data Model & Architecture | artifact_only | No |
+| [15](stage-15-epic-and-user-story-breakdown.md) | Risk Register | Epic & User Story Breakdown | artifact_only | No |
+| [16](stage-16-spec-driven-schema-generation.md) | **Financial Projections** | Spec-Driven Schema Generation | **promotion_gate** | No |
 
-**Key Decision Point**: Stage 16 is the **Schema Firewall** - a critical advisory checkpoint before implementation begins.
+**Key Decision Points**: Stage 13 is a **kill gate** enforcing roadmap completeness. Stage 16 is the **Phase 4→5 Promotion Gate** requiring positive runway and defined projections.
 
 ---
 
-## Phase 5: THE BUILD LOOP (Stages 17-20)
+## Phase 5: THE BUILD LOOP (Stages 17-22)
 
 *Implementation and development cycle*
 
-| Stage | Title | Work Type | SD Required |
-|-------|-------|-----------|-------------|
-| [17](stage-17-environment-and-agent-config.md) | Environment & Agent Config | **sd_required** | Yes (ENVCONFIG) |
-| [18](stage-18-mvp-development-loop.md) | MVP Development Loop | **sd_required** | Yes (MVP) |
-| [19](stage-19-integration-and-api-layer.md) | Integration & API Layer | **sd_required** | Yes (INTEGRATION) |
-| [20](stage-20-security-and-performance.md) | Security & Performance | **sd_required** | Yes (SECURITY) |
+| Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
+|-------|---------------------|-------------------|-----------|-------------|
+| [17](stage-17-environment-and-agent-config.md) | Pre-Build Checklist | Environment & Agent Config | artifact_only | No |
+| [18](stage-18-mvp-development-loop.md) | Sprint Planning | MVP Development Loop | artifact_only | No |
+| [19](stage-19-integration-and-api-layer.md) | Build Execution | Integration & API Layer | artifact_only | No |
+| [20](stage-20-security-and-performance.md) | Quality Assurance | Security & Performance | artifact_only | No |
+| [21](stage-21-qa-and-uat.md) | Build Review | QA & UAT | artifact_only | No |
+| [22](stage-22-deployment-and-infrastructure.md) | **Release Readiness** | Deployment & Infrastructure | **promotion_gate** | No |
+
+**Key Decision Point**: Stage 22 is the **Phase 5→6 Promotion Gate** — release readiness must be confirmed before launch.
 
 ---
 
-## Phase 6: LAUNCH & LEARN (Stages 21-25)
+## Phase 6: LAUNCH & LEARN (Stages 23-25)
 
-*Deployment, analytics, and optimization*
+*Deployment, distribution, and go-live*
 
-| Stage | Title | Work Type | SD Required |
-|-------|-------|-----------|-------------|
-| [21](stage-21-qa-and-uat.md) | QA & UAT | **sd_required** | Yes (QA) |
-| [22](stage-22-deployment-and-infrastructure.md) | Deployment & Infrastructure | **sd_required** | Yes (DEPLOY) |
-| [23](stage-23-production-launch.md) | Production Launch | **decision_gate** | No |
-| [24](stage-24-analytics-and-feedback.md) | Analytics & Feedback | artifact_only | No |
-| [25](stage-25-optimization-and-scale.md) | Optimization & Scale | **sd_required** | Yes (OPTIMIZE) |
+| Stage | Implementation Title | Design Spec Title | Work Type | SD Required |
+|-------|---------------------|-------------------|-----------|-------------|
+| [23](stage-23-production-launch.md) | Marketing Preparation | Production Launch | artifact_only | No |
+| [24](stage-24-analytics-and-feedback.md) | Launch Readiness | Analytics & Feedback | artifact_only | No |
+| [25](stage-25-optimization-and-scale.md) | **Launch Execution** | Optimization & Scale | **decision_gate** | No |
 
-**Key Feature**: Stages 23-25 collect **Assumptions vs Reality** data and generate the calibration report.
+**Key Feature**: Stage 25 activates distribution channels and transitions venture `pipeline_mode` to `'operations'`.
 
 ---
 
@@ -114,18 +118,22 @@ This directory contains comprehensive documentation for each of the 25 stages in
 | `artifact_only` | Produces artifacts without requiring an SD |
 | `automated_check` | AI-driven automated validation |
 | `decision_gate` | Kill/revise/proceed decision point |
+| `promotion_gate` | Phase transition gate — must pass to advance |
 | `sd_required` | Requires Strategic Directive creation |
 
-### Advisory Checkpoints
-| Stage | Checkpoint Name |
-|-------|-----------------|
-| 3 | Validation Checkpoint |
-| 5 | Profitability Gate |
-| 16 | Schema Firewall |
+### Kill & Promotion Gates
+| Stage | Implementation Title | Gate Type |
+|-------|---------------------|-----------|
+| 3 | Kill Gate | Kill Gate (market validation score) |
+| 5 | Kill Gate (Financial) | Kill Gate (profitability benchmarks) |
+| 13 | Product Roadmap | Kill Gate (roadmap completeness) |
+| 16 | Financial Projections | Promotion Gate (Phase 4→5) |
+| 22 | Release Readiness | Promotion Gate (Phase 5→6) |
+| 25 | Launch Execution | Authorization Gate (go-live) |
 
 ### Golden Nuggets Integration
-| Feature | Stages |
-|---------|--------|
+| Feature | Stages (by implementation number) |
+|---------|-----------------------------------|
 | Assumptions vs Reality | 2, 3, 5, 23, 24, 25 |
 | Token Budget Profiles | 5 |
 | Four Buckets (Epistemic) | 3, 5, 6, 16 |
@@ -135,46 +143,19 @@ This directory contains comprehensive documentation for each of the 25 stages in
 
 ## Related Documentation
 
-- [stages_v2.yaml](../stages_v2.yaml) - Canonical stage configuration
+- [stages_v2.yaml](../stages_v2.yaml) - Canonical stage configuration (updated 2026-03-05)
 - [25-Stage Overview](../25-stage-venture-lifecycle-overview.md) - High-level lifecycle overview
 - [Workflow README](../README.md) - Workflow documentation home
-- [Golden Nuggets Plan](../../../reference/vision/venture-engine-golden-nuggets-plan.md) - Feature specifications
+- [Stage Templates](../../../../lib/eva/stage-templates/) - Actual stage implementations (source of truth for titles)
 
 ---
 
 ## Implementation Status
 
-All 25 stages are **✅ Implemented in EHG** with:
-- Full UI components (`Stage*.tsx`)
-- Stage-specific viewers (`Stage*Viewer.tsx`)
-- Database tracking (`ventures.current_workflow_stage`)
-- E2E test coverage (stages 1-25)
-- Phase-based navigation accordion
+All 25 stages are **✅ Implemented in EHG** (`lib/eva/stage-templates/stage-01.js` through `stage-25.js`).
 
-**Verified**: EHG codebase audit completed 2026-01-19. See [Implementation Audit Report](../../../summaries/reports/ehg-stage-implementation-audit-2026-01-19.md) for details.
-
-## Generation Information
-
-These stage documents were generated from `stages_v2.yaml` using:
-```bash
-node scripts/generate-stage-docs.cjs
-```
-
-**Compliance**: Generator updated 2026-01-19 to meet `documentation-standards.md` v1.1.0:
-- ✅ Complete metadata headers (Category, Status, Version, Author, Tags)
-- ✅ Implementation status verified against EHG codebase
-- ✅ Accurate UI component references
-- ✅ Database-first documentation approach
-
-To regenerate after YAML changes:
-```bash
-# Remove existing files first
-rm docs/workflow/stages/stage-*.md
-
-# Regenerate all 25 stages
-node scripts/generate-stage-docs.cjs
-```
+**Note on individual stage .md files**: Files in this directory were generated from the original `stages_v2.yaml` design spec. File names and internal content may reflect the original design-spec titles rather than the final implementation titles shown in the tables above.
 
 ---
 *Part of Vision V2 (25-Stage Venture Lifecycle)*
-*Last Generated: 2026-01-19 (documentation-standards.md v1.1.0 compliant)*
+*Last Updated: 2026-03-05 (aligned with codebase implementation)*

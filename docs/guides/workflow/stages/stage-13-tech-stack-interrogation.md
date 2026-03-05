@@ -6,7 +6,11 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 13: Tech Stack Interrogation
+# Stage 13: Product Roadmap
+
+> **Implementation Note**: This stage is implemented as **"Product Roadmap"** (`slug: product-roadmap`, `id: stage-13`) in `lib/eva/stage-templates/stage-13.js`. The original design spec called it "Tech Stack Interrogation". The implementation focuses on roadmap milestones with a kill gate (requires ≥3 milestones, all with deliverables, at least one `priority: now`).
+
+<!-- Design spec title: Tech Stack Interrogation -->
 
 ## Metadata
 - **Category**: Protocol

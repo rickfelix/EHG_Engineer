@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 24: Analytics & Feedback
+# Stage 24: Launch Readiness
+
+> **Implementation Note**: This stage is implemented as **"Launch Readiness"** (`slug: launch-readiness`, `id: stage-24`) in `lib/eva/stage-templates/stage-24.js`. The original design spec called it "Analytics & Feedback".
+<!-- Design spec title: Analytics & Feedback -->
 
 ## Metadata
 - **Category**: Protocol

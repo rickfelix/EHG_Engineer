@@ -6,7 +6,11 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 10: Strategic Naming
+# Stage 10: Customer & Brand Foundation
+
+> **Implementation Note**: This stage is implemented as **"Customer & Brand Foundation"** (`slug: customer-brand-foundation`, `id: stage-10`) in `lib/eva/stage-templates/stage-10.js`. The original design spec called it "Strategic Naming". The implementation expanded scope to include customer personas (minimum 3 required) before the brand genome, plus a Chairman governance gate.
+
+<!-- Design spec title: Strategic Naming -->
 
 ## Metadata
 - **Category**: Protocol

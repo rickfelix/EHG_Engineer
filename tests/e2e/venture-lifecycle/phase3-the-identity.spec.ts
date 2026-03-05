@@ -2,9 +2,9 @@
  * Phase 3: THE IDENTITY - Venture Lifecycle E2E Tests (Stages 10-12)
  *
  * Tests the brand and go-to-market phase:
- * - Stage 10: Strategic Naming (SD_REQUIRED, requires: brand_guidelines)
- * - Stage 11: Go-to-Market Strategy (requires: gtm_plan, marketing_manifest)
- * - Stage 12: Sales & Success Logic (requires: sales_playbook)
+ * - Stage 10: Customer & Brand Foundation (SD_REQUIRED, requires: brand_guidelines)
+ * - Stage 11: Naming & Visual Identity (requires: gtm_plan, marketing_manifest)
+ * - Stage 12: GTM & Sales Strategy (requires: sales_playbook)
  *
  * Note: Stage 10 requires a Strategic Directive (SD) with suffix 'BRAND'
  */
@@ -60,9 +60,9 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
   });
 
   // =========================================================================
-  // STAGE 10: Strategic Naming (SD_REQUIRED)
+  // STAGE 10: Customer & Brand Foundation (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 10: Strategic Naming', () => {
+  test.describe('Stage 10: Customer & Brand Foundation', () => {
     test('S10-001: should require Strategic Directive for Stage 10', async () => {
       // Stage 10 has sd_required=true with suffix 'BRAND'
       const timestamp = Date.now();
@@ -159,9 +159,9 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
   });
 
   // =========================================================================
-  // STAGE 11: Go-to-Market Strategy
+  // STAGE 11: Naming & Visual Identity
   // =========================================================================
-  test.describe('Stage 11: Go-to-Market Strategy', () => {
+  test.describe('Stage 11: Naming & Visual Identity', () => {
     test('S11-001: should advance to Stage 11 after brand_guidelines', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -285,9 +285,9 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
   });
 
   // =========================================================================
-  // STAGE 12: Sales & Success Logic
+  // STAGE 12: GTM & Sales Strategy
   // =========================================================================
-  test.describe('Stage 12: Sales & Success Logic', () => {
+  test.describe('Stage 12: GTM & Sales Strategy', () => {
     test('S12-001: should advance to Stage 12', async () => {
       const { error } = await supabase
         .from('ventures')

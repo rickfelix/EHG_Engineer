@@ -6,7 +6,11 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 25: Optimization & Scale
+# Stage 25: Launch Execution
+
+> **Implementation Note**: This stage is implemented as **"Launch Execution"** (`slug: launch-execution`, `id: stage-25`) in `lib/eva/stage-templates/stage-25.js`. The original design spec called it "Optimization & Scale". The implementation is the pipeline terminus: it activates distribution channels and transitions `ventures.pipeline_mode` to `'operations'`.
+
+<!-- Design spec title: Optimization & Scale -->
 
 ## Metadata
 - **Category**: Protocol

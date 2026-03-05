@@ -2,11 +2,11 @@
  * Phase 1: THE TRUTH - Venture Lifecycle E2E Tests (Stages 1-5)
  *
  * Tests the complete validation phase of a venture:
- * - Stage 1: Draft Idea & Chairman Review (covered in venture-creation/)
- * - Stage 2: AI Multi-Model Critique
- * - Stage 3: Market Validation & RAT (Decision Gate)
- * - Stage 4: Competitive Intelligence
- * - Stage 5: Profitability Forecasting (Decision Gate)
+ * - Stage 1: Idea Capture (covered in venture-creation/)
+ * - Stage 2: Idea Analysis
+ * - Stage 3: Kill Gate (Decision Gate)
+ * - Stage 4: Competitive Landscape
+ * - Stage 5: Kill Gate - Financial (Decision Gate)
  *
  * Required Artifacts by Stage:
  * - Stage 1: idea_brief
@@ -65,9 +65,9 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
   });
 
   // =========================================================================
-  // STAGE 2: AI Multi-Model Critique
+  // STAGE 2: Idea Analysis
   // =========================================================================
-  test.describe('Stage 2: AI Multi-Model Critique', () => {
+  test.describe('Stage 2: Idea Analysis', () => {
     test('S2-001: should require Stage 1 completion before advancing', async () => {
       // Given venture at Stage 1 without idea_brief artifact
       const { data: venture } = await supabase
@@ -160,7 +160,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .insert({
           venture_id: testVentureId,
           document_type: 'critique_report',
-          title: 'AI Multi-Model Critique Report',
+          title: 'Idea Analysis Report',
           content: critiqueReport,
           status: 'complete'
         })
@@ -198,9 +198,9 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
   });
 
   // =========================================================================
-  // STAGE 3: Market Validation & RAT (Decision Gate)
+  // STAGE 3: Kill Gate (Decision Gate)
   // =========================================================================
-  test.describe('Stage 3: Market Validation & RAT', () => {
+  test.describe('Stage 3: Kill Gate', () => {
     test('S3-001: should require critique_report before Stage 3 entry', async () => {
       // Given Stage 2 complete
       const { data: critiques } = await supabase
@@ -251,7 +251,7 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
         .insert({
           venture_id: testVentureId,
           document_type: 'validation_report',
-          title: 'Market Validation & RAT Report',
+          title: 'Kill Gate Report',
           content: validationReport,
           status: 'complete'
         })
@@ -390,9 +390,9 @@ test.describe('Phase 1: THE TRUTH (Stages 1-5)', () => {
   });
 
   // =========================================================================
-  // STAGE 5: Profitability Forecasting (Decision Gate)
+  // STAGE 5: Kill Gate (Financial) (Decision Gate)
   // =========================================================================
-  test.describe('Stage 5: Profitability Forecasting', () => {
+  test.describe('Stage 5: Kill Gate (Financial)', () => {
     test('S5-001: should advance to Stage 5 after competitive_analysis', async () => {
       const { error } = await supabase
         .from('ventures')

@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 5: Profitability Forecasting
+# Stage 5: Kill Gate (Financial)
+
+> **Implementation Note**: This stage is implemented as **"Kill Gate (Financial)"** (`slug: profitability`, `id: stage-05`) in `lib/eva/stage-templates/stage-05.js`. The original design spec called it "Profitability Forecasting".
+<!-- Design spec title: Profitability Forecasting -->
 
 ## Metadata
 - **Category**: Protocol
