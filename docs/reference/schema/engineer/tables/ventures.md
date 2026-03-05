@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-05T01:07:39.810Z
+**Generated**: 2026-03-05T13:07:08.715Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (76 total)
+## Columns (77 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -99,6 +99,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | discovery_strategy | `text` | YES | - | - |
 | vision_id | `uuid` | YES | - | FK to eva_vision_documents. Replaces free-text vision_alignment over time. vision_alignment TEXT kept for backward compatibility until data migration + column drop in a future SD. |
 | architecture_plan_id | `uuid` | YES | - | FK to eva_architecture_plans. Links venture to its formal Architecture Plan. |
+| pipeline_mode | `text` | YES | `'building'::text` | Venture lifecycle mode including exit readiness states |
 
 ## Constraints
 
@@ -117,6 +118,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 ### Check Constraints
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 25)))
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
+- `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
 - `ventures_portfolio_synergy_score_check`: CHECK (((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric)))
 - `ventures_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
 - `ventures_vertical_category_check`: CHECK ((vertical_category = ANY (ARRAY['healthcare'::text, 'fintech'::text, 'edtech'::text, 'logistics'::text, 'other'::text])))
@@ -158,6 +160,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_origin_type`
   ```sql
   CREATE INDEX idx_ventures_origin_type ON public.ventures USING btree (origin_type)
+  ```
+- `idx_ventures_pipeline_mode`
+  ```sql
+  CREATE INDEX idx_ventures_pipeline_mode ON public.ventures USING btree (pipeline_mode) WHERE (pipeline_mode IS NOT NULL)
   ```
 - `idx_ventures_portfolio`
   ```sql

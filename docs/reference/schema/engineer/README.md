@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-05T01:07:39.810Z
-**Tables**: 510
+**Generated**: 2026-03-05T13:07:08.715Z
+**Tables**: 512
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (510)
+## All Tables (512)
 
 ### LEO Protocol
 
@@ -525,6 +525,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [validation_gate_registry](tables/validation_gate_registry.md)
 - [venture_archetypes](tables/venture_archetypes.md)
 - [venture_artifacts](tables/venture_artifacts.md)
+- [venture_asset_registry](tables/venture_asset_registry.md)
 - [venture_blueprints](tables/venture_blueprints.md)
 - [venture_briefs](tables/venture_briefs.md)
 - [venture_capabilities](tables/venture_capabilities.md)
@@ -534,6 +535,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_dependencies](tables/venture_dependencies.md)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
+- [venture_exit_profiles](tables/venture_exit_profiles.md)
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
