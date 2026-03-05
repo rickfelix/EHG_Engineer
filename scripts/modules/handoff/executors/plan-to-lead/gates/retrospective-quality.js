@@ -180,9 +180,10 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
     };
   }
 
-  // BUGFIX FAST-PATH
-  if ((sdType === 'bugfix' || sdType === 'bug_fix') && retrospective) {
-    console.log('   🔧 BUGFIX AUTO-PASS: Bugfix SD with retrospective exists');
+  // BUGFIX / FIX FAST-PATH
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Added 'fix' type (PAT-AUTO-1cae3b92)
+  if ((sdType === 'bugfix' || sdType === 'bug_fix' || sdType === 'fix') && retrospective) {
+    console.log(`   🔧 FIX AUTO-PASS: ${sdType} SD with retrospective exists`);
     console.log(`      Retrospective quality_score: ${retrospective.quality_score || 0}/100`);
 
     return {
@@ -190,7 +191,7 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
       score: Math.max(retrospective.quality_score || 50, 50),
       max_score: 100,
       issues: [],
-      warnings: ['Bugfix auto-pass: Simple fix validated via git commit evidence'],
+      warnings: [`${sdType} auto-pass: Simple fix validated via git commit evidence`],
       details: {
         bugfix_auto_pass: true,
         sd_type: sdType,
@@ -277,7 +278,7 @@ async function checkAutoPassConditions(ctx, retrospective, children, allChildren
 async function determineThreshold(sd, allChildrenComplete) {
   const isInfrastructure = isInfrastructureSDSync(sd);
   const sdType = sd?.sd_type || sd?.category || 'feature';
-  const isBugfix = sdType === 'bugfix' || sdType === 'bug_fix';
+  const isBugfix = sdType === 'bugfix' || sdType === 'bug_fix' || sdType === 'fix';
 
   let threshold;
   if (allChildrenComplete) {
