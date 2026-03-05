@@ -334,17 +334,36 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       } : null
     };
 
-    // Insert retrospective
-    const { data, error } = await supabase
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Upsert to prevent duplicate rows on retry
+    const { data: existing } = await supabase
       .from('retrospectives')
-      .insert(retrospective)
-      .select();
+      .select('id')
+      .eq('sd_id', retrospective.sd_id)
+      .eq('retrospective_type', retrospectiveType)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let data, error;
+    if (existing) {
+      ({ data, error } = await supabase
+        .from('retrospectives')
+        .update(retrospective)
+        .eq('id', existing.id)
+        .select());
+    } else {
+      ({ data, error } = await supabase
+        .from('retrospectives')
+        .insert(retrospective)
+        .select());
+    }
 
     if (error) {
       console.log(`\n   ⚠️  Could not save retrospective: ${error.message}`);
       console.log('   Retrospective data will not be persisted');
     } else {
-      console.log(`\n   ✅ Handoff retrospective created (ID: ${data[0].id})`);
+      const verb = existing ? 'updated (avoided duplicate)' : 'created';
+      console.log(`\n   ✅ Handoff retrospective ${verb} (ID: ${data[0].id})`);
       console.log(`   Quality Score: ${qualityScore}% | Team Satisfaction: ${Math.round(avgRating * 2)}/10`);
     }
 
