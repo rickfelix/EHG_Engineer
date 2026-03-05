@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-20T21:53:28.254Z -->
-<!-- git_commit: 58a9f184 -->
-<!-- db_snapshot_hash: 1787835840a9ee3a -->
+<!-- generated_at: 2026-03-05T19:13:19.784Z -->
+<!-- git_commit: 666354e7 -->
+<!-- db_snapshot_hash: a35556466804808f -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -50,7 +50,7 @@ Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate
 | Need detailed sub-agent config | CLAUDE_CORE.md (full) |
 | Need detailed handoff procedures | CLAUDE_PLAN.md (full) |
 | Complex debugging or unknown errors | Full phase file |
-| Everything else | DIGEST files |
+| ... | *(see full file for complete table)* |
 
 ### Escalation Triggers (When to Load Full Files)
 - Gate validation fails and root cause is unclear
@@ -73,7 +73,7 @@ Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate
 | Migration execution | docs/reference/database-agent-patterns.md |
 | Validation failures | docs/reference/validation-enforcement.md |
 | Test/E2E issues | docs/reference/qa-director-guide.md |
-| Context >70% | docs/reference/context-monitoring.md |
+| ... | *(see full file for complete table)* |
 
 ### Context Budget (Digest-First)
 - Router + Core Digest: ~12k (6% of 200k budget)
@@ -125,8 +125,7 @@ This command provides:
 | **READY** | Past LEAD phase, dependencies resolved | **YES** - Proceed to next handoff in workflow |
 | **PLANNING** | In PLAN phase (PRD creation) | **YES** - Continue planning work |
 | **EXEC N%** | In EXEC phase with progress | **YES** - Continue implementation |
-| **BLOCKED** | Dependencies not resolved | **NO** - Work on blocking SDs first |
-| **CLAIMED** | Another session is actively working on it | **NO** - Pick a different SD |
+| ... | *(see full file for complete table)* |
 
 ### After Running sd:next
 1. If SD marked "CONTINUE" (is_working_on=true) and not CLAIMED by another session → Resume that SD
@@ -153,5 +152,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-02-20 4:53:28 PM*
+*DIGEST generated: 2026-03-05 2:13:19 PM*
 *Protocol: 4.3.3*

@@ -26,27 +26,47 @@ function getSectionsByMapping(sections, fileKey, fileMapping) {
 
 /**
  * Generate compact section content for digest files
- * Strips examples and verbose content while preserving rules
+ * Strips examples, verbose content, and large tables while preserving rules
+ * SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Enhanced compression
  * @param {Object} section - Section data
+ * @param {Object} [options] - Compression options
+ * @param {number} [options.maxChars=3000] - Maximum characters per section
  * @returns {string} Compact formatted markdown
  */
-function formatSectionCompact(section) {
+function formatSectionCompact(section, options = {}) {
+  const maxChars = options.maxChars || 3000;
   let content = section.content;
 
   // Remove header if it duplicates section title
   const headerPattern = new RegExp(`^##\\s+${section.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\n`, 'i');
   content = content.replace(headerPattern, '');
 
-  // Strip code blocks marked as examples (preserve essential ones)
-  content = content.replace(/```(?:example|bash|javascript)\n[\s\S]*?\n```\n*/gi, '');
+  // Strip ALL code blocks (digest should reference full file for code)
+  content = content.replace(/```[\s\S]*?```\n*/g, '');
 
   // Remove "Example:" sections
   content = content.replace(/\*\*Example[s]?\*\*:[\s\S]*?(?=\n##|\n\*\*|$)/gi, '');
 
+  // Remove "Note:" and "Details:" verbose blocks
+  content = content.replace(/\*\*(?:Note|Details|Explanation)\*\*:[\s\S]*?(?=\n##|\n\*\*|\n-|\n\d|$)/gi, '');
+
+  // Compress markdown tables with more than 6 rows to header + first 4 data rows
+  content = content.replace(/((?:\|[^\n]+\|\n){2})((?:\|[^\n]+\|\n){5,})/g, (match, header, rows) => {
+    const rowLines = rows.trim().split('\n');
+    return header + rowLines.slice(0, 4).join('\n') + '\n| ... | *(see full file for complete table)* |\n';
+  });
+
   // Compress multiple newlines
   content = content.replace(/\n{3,}/g, '\n\n');
 
-  return `## ${section.title}\n\n${content.trim()}`;
+  let result = `## ${section.title}\n\n${content.trim()}`;
+
+  // Hard cap: truncate if still over budget
+  if (result.length > maxChars) {
+    result = result.substring(0, maxChars - 80) + '\n\n*...truncated. Read full file for complete section.*';
+  }
+
+  return result;
 }
 
 /**
@@ -145,24 +165,40 @@ function generateCoreDigest(data, fileMapping, metadata) {
   const { today, time } = getMetadata(protocol);
 
   const coreSections = getSectionsByMapping(sections, 'CLAUDE_CORE_DIGEST.md', fileMapping);
-  const coreContent = coreSections.map(s => formatSectionCompact(s)).join('\n\n');
+  const coreContent = coreSections.map(s => formatSectionCompact(s, { maxChars: 1500 })).join('\n\n');
 
-  // Generate compact sub-agent trigger reference
-  const triggerReference = generateTriggerQuickReference(subAgents);
+  // Compact trigger reference (full table in CLAUDE_CORE.md)
+  const triggerReference = `## Sub-Agent Routing
+
+**Use Task tool** with \`subagent_type="<type>"\`. Key agents: TESTING, DESIGN, DATABASE, SECURITY, RCA, REGRESSION, PERFORMANCE, UAT, VALIDATION, DOCMON.
+
+*Full trigger keyword table in CLAUDE_CORE.md.*
+`;
 
   const header = generateDigestHeader('CLAUDE_CORE_DIGEST.md', metadata);
   const fullLoadInstr = generateFullLoadInstructions('CLAUDE_CORE.md');
 
+  const escalationBlock = `## ESCALATE TO FULL FILE WHEN
+
+- Writing sub-agent prompts (need prompt quality standards from CLAUDE_CORE.md)
+- Debugging gate failures (need full gate scoring details)
+- Understanding governance hierarchy or strategic priorities
+- Auto-proceed or continuation logic is unclear (full tables in CLAUDE_CORE.md)
+- Need execution philosophy or design principles
+`;
+
   return `${header}# CLAUDE_CORE_DIGEST.md - Core Protocol (Enforcement)
 
 **Protocol**: LEO ${protocol.version}
-**Purpose**: Essential workflow rules and constraints (<10k chars)
+**Purpose**: Essential enforcement rules (<10k chars)
 
 ---
 
 ${coreContent}
 
 ${triggerReference}
+
+${escalationBlock}
 
 ${fullLoadInstr}
 
@@ -227,14 +263,23 @@ function generatePlanDigest(data, fileMapping, metadata) {
   const header = generateDigestHeader('CLAUDE_PLAN_DIGEST.md', metadata);
   const fullLoadInstr = generateFullLoadInstructions('CLAUDE_PLAN.md');
 
+  const escalationBlock = `## ESCALATE TO FULL FILE WHEN
+
+- Debugging specific gate scoring or failure reasons
+- Need handoff quality gate details (thresholds, weights, rubrics)
+- PRD field requirements are unclear beyond anti-patterns
+`;
+
   return `${header}# CLAUDE_PLAN_DIGEST.md - PLAN Phase (Enforcement)
 
 **Protocol**: LEO ${protocol.version}
-**Purpose**: PRD requirements and validation gates (<5k chars)
+**Purpose**: PRD requirements and constraints (<5k chars)
 
 ---
 
 ${planContent}
+
+${escalationBlock}
 
 ${fullLoadInstr}
 
@@ -263,14 +308,23 @@ function generateExecDigest(data, fileMapping, metadata) {
   const header = generateDigestHeader('CLAUDE_EXEC_DIGEST.md', metadata);
   const fullLoadInstr = generateFullLoadInstructions('CLAUDE_EXEC.md');
 
+  const escalationBlock = `## ESCALATE TO FULL FILE WHEN
+
+- Writing retrospectives (need anti-pattern checklist from CLAUDE_EXEC.md)
+- Debugging migration failures (need migration execution protocol)
+- Need detailed implementation examples or patterns
+`;
+
   return `${header}# CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
 
 **Protocol**: LEO ${protocol.version}
-**Purpose**: Implementation requirements and constraints (<5k chars)
+**Purpose**: Implementation requirements and constraints (<10k chars)
 
 ---
 
 ${execContent}
+
+${escalationBlock}
 
 ${fullLoadInstr}
 

@@ -1,192 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-
-## Table of Contents
-
-- [Autonomous Continuation Directives](#autonomous-continuation-directives)
-  - [Core Directives (Always Apply)](#core-directives-always-apply)
-  - [Handoff Directives (Apply at Phase Start)](#handoff-directives-apply-at-phase-start)
-  - [Conditional Directives (Apply When Issues Occur)](#conditional-directives-apply-when-issues-occur)
-- [🎯 Multi-Perspective Planning](#-multi-perspective-planning)
-- [Multi-Perspective Planning](#multi-perspective-planning)
-  - [When to Use Plan Agents](#when-to-use-plan-agents)
-  - [Pattern: Perspectives → Selection → PRD](#pattern-perspectives-selection-prd)
-  - [Perspective Examples by Task Type](#perspective-examples-by-task-type)
-  - [Quality Over Quantity](#quality-over-quantity)
-- [Branch Creation (Automated at LEAD-TO-PLAN)](#branch-creation-automated-at-lead-to-plan)
-- [🌿 Branch Creation (Automated at LEAD-TO-PLAN)](#-branch-creation-automated-at-lead-to-plan)
-  - [Automatic Branch Creation](#automatic-branch-creation)
-  - [Manual Branch Creation (If Needed)](#manual-branch-creation-if-needed)
-  - [Branch Naming Convention](#branch-naming-convention)
-  - [Branch Hygiene Rules](#branch-hygiene-rules)
-  - [When Branch is Created](#when-branch-is-created)
-- [Deferred Work Management](#deferred-work-management)
-  - [What Gets Deferred](#what-gets-deferred)
-  - [Creating Deferred Items](#creating-deferred-items)
-  - [Tracking](#tracking)
-  - [Rules](#rules)
-- [PLAN Phase Negative Constraints](#plan-phase-negative-constraints)
-- [🚫 PLAN Phase Negative Constraints](#-plan-phase-negative-constraints)
-  - [NC-PLAN-001: No Implementation in PLAN Phase](#nc-plan-001-no-implementation-in-plan-phase)
-  - [NC-PLAN-002: No PRD Without Exploration](#nc-plan-002-no-prd-without-exploration)
-  - [NC-PLAN-003: No Boilerplate Acceptance Criteria](#nc-plan-003-no-boilerplate-acceptance-criteria)
-  - [NC-PLAN-004: No Skipping Sub-Agents](#nc-plan-004-no-skipping-sub-agents)
-  - [NC-PLAN-005: No Placeholder Requirements](#nc-plan-005-no-placeholder-requirements)
-- [PRD Template Scaffolding](#prd-template-scaffolding)
-- [📋 PRD Template Scaffolding](#-prd-template-scaffolding)
-  - [PRD Creation Checklist](#prd-creation-checklist)
-  - [PRD Section Guide](#prd-section-guide)
-  - [PRD Script Usage](#prd-script-usage)
-  - [Self-Critique Before Handoff](#self-critique-before-handoff)
-- [Stubbed/Mocked Code Detection](#stubbedmocked-code-detection)
-- [PLAN-TO-EXEC Checklist (MANDATORY)](#plan-to-exec-checklist-mandatory)
-- [🚪 PLAN-TO-EXEC Checklist (MANDATORY)](#-plan-to-exec-checklist-mandatory)
-  - [1. PRD Complete ✅](#1-prd-complete-)
-  - [2. Integration & Operationalization Complete ✅](#2-integration-operationalization-complete-)
-  - [3. User Stories Generated ✅](#3-user-stories-generated-)
-  - [3. Sub-Agents Executed ✅ (GATE 1 Requirement)](#3-sub-agents-executed-gate-1-requirement)
-  - [4. Validation Gates Pass ✅](#4-validation-gates-pass-)
-  - [Common Failures and Fixes](#common-failures-and-fixes)
-- [✅ Scope Verification with Explore (PLAN_VERIFY)](#-scope-verification-with-explore-plan_verify)
-- [Scope Verification with Explore](#scope-verification-with-explore)
-  - [Pattern: Explore → Compare → Validate](#pattern-explore-compare-validate)
-  - [Why Explore Before Validation?](#why-explore-before-validation)
-  - [Explore Questions for PLAN_VERIFY](#explore-questions-for-plan_verify)
-  - [Example Verification Flow](#example-verification-flow)
-- [Enhanced QA Engineering Director v2.0 - Testing-First Edition](#enhanced-qa-engineering-director-v20---testing-first-edition)
-- [PLAN Pre-EXEC Checklist](#plan-pre-exec-checklist)
-- [PLAN Agent Pre-EXEC Checklist (MANDATORY)](#plan-agent-pre-exec-checklist-mandatory)
-  - [Database Dependencies ✅](#database-dependencies-)
-  - [Architecture Planning ✅](#architecture-planning-)
-  - [Testing Strategy ✅](#testing-strategy-)
-  - [Quality Validation ✅](#quality-validation-)
-- [🧪 Test Infrastructure Readiness Gate (Before PLAN→EXEC)](#-test-infrastructure-readiness-gate-before-planexec)
-  - [MANDATORY Verification Before PLAN→EXEC Handoff](#mandatory-verification-before-planexec-handoff)
-- [Test Infrastructure Readiness Checklist](#test-infrastructure-readiness-checklist)
-  - [Authentication](#authentication)
-  - [Unit Tests](#unit-tests)
-  - [E2E Tests](#e2e-tests)
-  - [Environment](#environment)
-  - [Exit Criteria](#exit-criteria)
-  - [Why This Gate Exists](#why-this-gate-exists)
-- [🔬 BMAD Method Enhancements](#-bmad-method-enhancements)
-- [BMAD Enhancements](#bmad-enhancements)
-  - [6 Key Improvements](#6-key-improvements)
-  - [Using Handoff System](#using-handoff-system)
-  - [PRD Creation](#prd-creation)
-  - [Never Bypass](#never-bypass)
-- [Research Lookup Before PRD Creation](#research-lookup-before-prd-creation)
-- [Research Lookup Before PRD Creation (MANDATORY)](#research-lookup-before-prd-creation-mandatory)
-  - [Research Directory Structure](#research-directory-structure)
-  - [Lookup Process (Step 0 of PRD Creation)](#lookup-process-step-0-of-prd-creation)
-  - [index.json Structure](#indexjson-structure)
-  - [Integration with PRD Creation](#integration-with-prd-creation)
-  - [Example PRD Creation Flow](#example-prd-creation-flow)
-- [CI/CD Pipeline Verification](#cicd-pipeline-verification)
-- [CI/CD Pipeline Verification (MANDATORY)](#cicd-pipeline-verification-mandatory)
-  - [Verification Process](#verification-process)
-- [DESIGN→DATABASE Validation Gates](#designdatabase-validation-gates)
-  - [Gate 1: PLAN→EXEC (Pre-Implementation)](#gate-1-planexec-pre-implementation)
-  - [Gate 2: EXEC→PLAN (Post-Implementation)](#gate-2-execplan-post-implementation)
-  - [Gate 2.5: Human Inspectability](#gate-25-human-inspectability)
-  - [Gate 3: LEAD Final Approval](#gate-3-lead-final-approval)
-- [🚪 Gate 2.5: Human Inspectability Validation](#-gate-25-human-inspectability-validation)
-  - [Purpose](#purpose)
-  - [Gate Checklist](#gate-checklist)
-  - [Scoring](#scoring)
-  - [Enforcement](#enforcement)
-  - [Handoff Template Addition](#handoff-template-addition)
-- [Refactor Brief Documentation](#refactor-brief-documentation)
-  - [When to Use Refactor Brief vs Full PRD](#when-to-use-refactor-brief-vs-full-prd)
-  - [Creating a Refactor Brief](#creating-a-refactor-brief)
-  - [Refactor Brief Structure](#refactor-brief-structure)
-  - [REGRESSION-VALIDATOR Integration](#regression-validator-integration)
-  - [Refactoring Handoff Validation](#refactoring-handoff-validation)
-  - [Example: Structural Refactoring Workflow](#example-structural-refactoring-workflow)
-- [Child SD Field Requirements for LEAD Evaluation](#child-sd-field-requirements-for-lead-evaluation)
-  - [Required Fields for Child SDs](#required-fields-for-child-sds)
-  - [Validation Before LEAD Handoff](#validation-before-lead-handoff)
-  - [Use Validation Script](#use-validation-script)
-- [Pre-Implementation Plan Presentation Template](#pre-implementation-plan-presentation-template)
-- [Plan Presentation Template](#plan-presentation-template)
-  - [Required Sections](#required-sections)
-  - [Format](#format)
-- [Summary](#summary)
-- [Technical Approach](#technical-approach)
-- [Database Changes](#database-changes)
-- [Testing Strategy](#testing-strategy)
-- [Risks](#risks)
-- [Testing Tier Strategy (Updated)](#testing-tier-strategy-updated)
-- [Testing Requirements - Dual Test Execution (SD-ARCH-EHG-007 Updated)](#testing-requirements---dual-test-execution-sd-arch-ehg-007-updated)
-  - [Architecture Context](#architecture-context)
-  - [Tier 1: Smoke Tests (MANDATORY) ✅](#tier-1-smoke-tests-mandatory-)
-  - [Tier 2: Comprehensive Testing (RECOMMENDED) 📋](#tier-2-comprehensive-testing-recommended-)
-  - [Tier 3: Manual Testing (SITUATIONAL) 🔍](#tier-3-manual-testing-situational-)
-  - [⚠️ Architecture Note](#-architecture-note)
-- [Branch Should Already Exist (LEO v4.4.1)](#branch-should-already-exist-leo-v441)
-  - [Branch Should Already Exist (LEO v4.4.1)](#branch-should-already-exist-leo-v441)
-- [Documentation Link Validation Gate (PLAN-TO-LEAD)](#documentation-link-validation-gate-plan-to-lead)
-  - [Enforcement Modes](#enforcement-modes)
-  - [What It Checks](#what-it-checks)
-  - [Scoring](#scoring)
-  - [Auto-Skip Conditions](#auto-skip-conditions)
-  - [Remediation](#remediation)
-  - [Implementation](#implementation)
-- [Triangulated Runtime Audit Protocol](#triangulated-runtime-audit-protocol)
-  - [Purpose](#purpose)
-  - [When to Use](#when-to-use)
-  - [Quick Start](#quick-start)
-  - [Protocol Phases](#protocol-phases)
-  - [Roles](#roles)
-  - [Templates](#templates)
-- [Context Anchor](#context-anchor)
-  - [Vision & Immutables](#vision-immutables)
-  - [Pending SDs](#pending-sds)
-  - [Guardrails](#guardrails)
-  - [Synthesis Grid Template](#synthesis-grid-template)
-  - [Decision Rules](#decision-rules)
-  - [Checklist](#checklist)
-  - [Artifacts](#artifacts)
-  - [Related Skills](#related-skills)
-- [Child SD Pattern: When to Decompose](#child-sd-pattern-when-to-decompose)
-  - [PLAN Agent Responsibility](#plan-agent-responsibility)
-  - [Decision Matrix](#decision-matrix)
-  - [Decomposition Workflow](#decomposition-workflow)
-  - [Parent PRD Template](#parent-prd-template)
-- [Child SD Overview](#child-sd-overview)
-- [Sequential Execution](#sequential-execution)
-- [Why Children Need Individual LEAD Approval](#why-children-need-individual-lead-approval)
-- [Completion Criteria](#completion-criteria)
-  - [Metadata Inheritance Requirement](#metadata-inheritance-requirement)
-- [Vision V2 PRD Requirements (SD-VISION-V2-*)](#vision-v2-prd-requirements-sd-vision-v2-)
-  - [MANDATORY: Vision Spec Integration in PRDs](#mandatory-vision-spec-integration-in-prds)
-  - [PRD Section Requirements for Vision V2](#prd-section-requirements-for-vision-v2)
-  - [PRD Template for Vision V2](#prd-template-for-vision-v2)
-  - [Vision Specification References](#vision-specification-references)
-  - [Implementation Guidance (from SD metadata)](#implementation-guidance-from-sd-metadata)
-- [PRD Creation Anti-Pattern (PROHIBITED)](#prd-creation-anti-pattern-prohibited)
-  - [Why This Matters](#why-this-matters)
-  - [Archived Scripts Location](#archived-scripts-location)
-  - [Correct Workflow](#correct-workflow)
-- [Quality Assessment Integration in Handoffs](#quality-assessment-integration-in-handoffs)
-  - [When Quality Assessment Runs](#when-quality-assessment-runs)
-  - [Hierarchical Context in Handoff Validation](#hierarchical-context-in-handoff-validation)
-  - [Handoff Failure Handling](#handoff-failure-handling)
-  - [Integration with PRD Schema](#integration-with-prd-schema)
-  - [Common Quality Issues and AI Feedback](#common-quality-issues-and-ai-feedback)
-  - [Best Practices for PLAN Phase](#best-practices-for-plan-phase)
-  - [Quality Assessment vs Traditional Validation](#quality-assessment-vs-traditional-validation)
-  - [Performance and Cost in Handoffs](#performance-and-cost-in-handoffs)
-  - [Example: Successful PLAN → EXEC Handoff](#example-successful-plan-exec-handoff)
-  - [Files Reference](#files-reference)
-- [KR Linkage in PRD Creation](#kr-linkage-in-prd-creation)
-  - [How to Link](#how-to-link)
-  - [KR Fields Reference](#kr-fields-reference)
-  - [When to Skip](#when-to-skip)
-- [Handoff Templates](#handoff-templates)
-- [Validation Rules](#validation-rules)
-
-**Generated**: 2026-02-20 4:53:28 PM
+**Generated**: 2026-03-05 2:13:19 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -598,6 +412,23 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -668,23 +499,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
@@ -1748,6 +1562,34 @@ for (const childId of childIds) {
 
 > **Team Capabilities**: When planning complex SDs, consider whether team spawning (any agent leading specialists) could parallelize cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
+
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1778,7 +1620,7 @@ Add this to PRD's `technical_context`:
 
 This PRD implements requirements from:
 - **Primary Spec**: [spec-name.md](path/to/spec) - Sections X, Y, Z
-- **Design Philosophy**: [vision-v2-glass-cockpit.md](vision-v2-glass-cockpit.md)
+- **Design Philosophy**: [VISION_V2_GLASS_COCKPIT.md](VISION_V2_GLASS_COCKPIT.md)
 
 Key spec requirements addressed:
 1. [Requirement from spec Section X]
@@ -1788,34 +1630,6 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
-
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
 
 ## Quality Assessment Integration in Handoffs
 
@@ -2154,10 +1968,10 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
   - Criteria: allow_empty: true; description: "Risks array is defined (can be empty for low-risk SDs)"
 
 
-- **prdQualityValidation** (Gate 1)
-  - Weight: 0.15
+- **hasTestEvidence** (Gate Q)
+  - Weight: 0.25
   - Required: Yes
-  - Criteria: 4 criteria defined (model, uses_ai, min_score...)
+  - Criteria: 4 criteria defined (command, description, successCriteria...)
 
 
 - **userStoryQualityValidation** (Gate 1)
@@ -2166,10 +1980,10 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
   - Criteria: 4 criteria defined (uses_ai, min_score, description...)
 
 
-- **hasTestEvidence** (Gate Q)
-  - Weight: 0.25
+- **prdQualityValidation** (Gate 1)
+  - Weight: 0.15
   - Required: Yes
-  - Criteria: 4 criteria defined (command, description, successCriteria...)
+  - Criteria: uses_ai: true; min_score: 50; description: "PRD quality validation - lowered for refactor SDs"
 
 
 - **designSubAgentExecution** (Gate 1)
@@ -2468,6 +2282,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-02-20*
+*Generated from database: 2026-03-05*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

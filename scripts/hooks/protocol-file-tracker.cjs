@@ -41,8 +41,11 @@ const PROTOCOL_FILES = [
   'CLAUDE_DIGEST.md'
 ];
 
-// Mapping between FULL and DIGEST equivalents
-// When one is read, mark both as read for gate compatibility
+// SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Equivalence mapping for gate compatibility
+// Gates check if EITHER the digest OR full version was read — this mapping tells
+// the gate which file satisfies the same requirement, WITHOUT conflating telemetry.
+// The tracker now records the ACTUAL file read, and only marks the equivalent
+// in the legacy protocolFilesRead array (for gate backward compatibility).
 const PROTOCOL_FILE_EQUIVALENTS = {
   'CLAUDE_LEAD.md': 'CLAUDE_LEAD_DIGEST.md',
   'CLAUDE_LEAD_DIGEST.md': 'CLAUDE_LEAD.md',
@@ -248,13 +251,31 @@ function processHookInput(hookInput) {
     console.log(`[protocol-file-tracker] ✅ Full read of ${normalizedPath}${fileStatus.lastPartialRead ? ' (clears partial read flag)' : ''}`);
   }
 
-  // Save updated status
+  // Save updated status for ACTUAL file read only
   state.protocolFileReadStatus[normalizedPath] = fileStatus;
 
-  // Also track equivalent file status (SD-LEO-SELF-IMPROVE-002A: dual-mode support)
-  if (normalizedEquivalent) {
-    state.protocolFileReadStatus[normalizedEquivalent] = { ...fileStatus };
+  // SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Track escalation events
+  // When a full file is read AND its digest was previously read, record escalation
+  if (!state.protocolFileEscalations) {
+    state.protocolFileEscalations = [];
   }
+  if (normalizedEquivalent) {
+    const equivalentStatus = state.protocolFileReadStatus[normalizedEquivalent];
+    const isDigestFile = normalizedPath.includes('DIGEST');
+    const isFullFile = !isDigestFile && normalizedEquivalent?.includes('DIGEST');
+    // Escalation = reading FULL file after digest was already read
+    if (isFullFile && equivalentStatus && equivalentStatus.readCount > 0) {
+      state.protocolFileEscalations.push({
+        from: normalizedEquivalent,
+        to: normalizedPath,
+        timestamp: now
+      });
+      console.log(`[protocol-file-tracker] ESCALATION: ${normalizedEquivalent} -> ${normalizedPath}`);
+    }
+  }
+
+  // NOTE: Do NOT copy status to equivalent file — this was the telemetry conflation bug.
+  // The equivalent mapping is only used for the legacy protocolFilesRead array (gate compat).
 
   // Maintain legacy array for backward compatibility (TR-2)
   // Track BOTH the actual file read AND its equivalent for gate compatibility

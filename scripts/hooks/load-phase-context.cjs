@@ -23,7 +23,18 @@ const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-sessio
 const ENGINEER_DIR = '.';
 
 // Phase context document mapping
+// SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Default to DIGEST versions
+// Full files are escalation targets, not defaults
 const PHASE_CONTEXT_DOCS = {
+  'LEAD': 'CLAUDE_LEAD_DIGEST.md',
+  'PLAN': 'CLAUDE_PLAN_DIGEST.md',
+  'PLAN_PRD': 'CLAUDE_PLAN_DIGEST.md',
+  'PLAN_VERIFY': 'CLAUDE_PLAN_DIGEST.md',
+  'EXEC': 'CLAUDE_EXEC_DIGEST.md'
+};
+
+// Full file escalation targets (when digest is insufficient)
+const PHASE_FULL_DOCS = {
   'LEAD': 'CLAUDE_LEAD.md',
   'PLAN': 'CLAUDE_PLAN.md',
   'PLAN_PRD': 'CLAUDE_PLAN.md',
@@ -160,8 +171,12 @@ function main() {
   const contextDocPath = getContextDocPath(toPhase);
 
   if (contextDocPath && fs.existsSync(contextDocPath)) {
-    console.log(`[load-phase-context] Context document: ${PHASE_CONTEXT_DOCS[toPhase]}`);
+    const fullDoc = PHASE_FULL_DOCS[toPhase];
+    console.log(`[load-phase-context] Context document: ${PHASE_CONTEXT_DOCS[toPhase]} (digest)`);
     console.log(`[load-phase-context] INSTRUCTION: Read ${contextDocPath} for phase-specific guidance`);
+    if (fullDoc) {
+      console.log(`[load-phase-context] ESCALATION: If digest is insufficient, read ${fullDoc} for full reference`);
+    }
   } else {
     console.warn(`[load-phase-context] Context document not found for phase: ${toPhase}`);
   }
@@ -178,5 +193,6 @@ module.exports = {
   detectHandoffType,
   getTargetPhase,
   HANDOFF_TO_PHASE,
-  PHASE_CONTEXT_DOCS
+  PHASE_CONTEXT_DOCS,
+  PHASE_FULL_DOCS
 };

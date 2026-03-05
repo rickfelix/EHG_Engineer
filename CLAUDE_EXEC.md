@@ -1,187 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-
-## Table of Contents
-
-- [Autonomous Continuation Directives](#autonomous-continuation-directives)
-  - [Core Directives (Always Apply)](#core-directives-always-apply)
-  - [Handoff Directives (Apply at Phase Start)](#handoff-directives-apply-at-phase-start)
-  - [Conditional Directives (Apply When Issues Occur)](#conditional-directives-apply-when-issues-occur)
-- [🔍 Implementation Reminders — Active Vision Gaps](#-implementation-reminders-active-vision-gaps)
-- [🚨 EXEC Agent Implementation Requirements](#-exec-agent-implementation-requirements)
-  - [MANDATORY Pre-Implementation Verification](#mandatory-pre-implementation-verification)
-  - [Implementation Checklist Template](#implementation-checklist-template)
-- [EXEC Pre-Implementation Checklist](#exec-pre-implementation-checklist)
-  - [Common Mistakes to AVOID](#common-mistakes-to-avoid)
-  - [Gate 0 Enforcement 🚨](#gate-0-enforcement-)
-- [❌ Anti-Patterns from Retrospectives (EXEC Phase)](#-anti-patterns-from-retrospectives-exec-phase)
-  - [1. Manual Test Creation (2-3 hours waste per SD)](#1-manual-test-creation-2-3-hours-waste-per-sd)
-  - [2. Skipping Knowledge Retrieval (4-6 hours rework)](#2-skipping-knowledge-retrieval-4-6-hours-rework)
-  - [3. Workarounds Before Root Cause (2-3x time multiplier)](#3-workarounds-before-root-cause-2-3x-time-multiplier)
-  - [4. Accepting Environmental Blockers Without Debug](#4-accepting-environmental-blockers-without-debug)
-  - [5. Manual Sub-Agent Simulation (15% quality delta)](#5-manual-sub-agent-simulation-15-quality-delta)
-  - [Quick Reference](#quick-reference)
-- [Branch Creation (Automated at LEAD-TO-PLAN)](#branch-creation-automated-at-lead-to-plan)
-- [🌿 Branch Creation (Automated at LEAD-TO-PLAN)](#-branch-creation-automated-at-lead-to-plan)
-  - [Automatic Branch Creation](#automatic-branch-creation)
-  - [Manual Branch Creation (If Needed)](#manual-branch-creation-if-needed)
-  - [Branch Naming Convention](#branch-naming-convention)
-  - [Branch Hygiene Rules](#branch-hygiene-rules)
-  - [When Branch is Created](#when-branch-is-created)
-- [EXEC Phase Negative Constraints](#exec-phase-negative-constraints)
-- [🚫 EXEC Phase Negative Constraints](#-exec-phase-negative-constraints)
-  - [NC-EXEC-001: No Scope Creep](#nc-exec-001-no-scope-creep)
-  - [NC-EXEC-002: No Wrong Application Directory](#nc-exec-002-no-wrong-application-directory)
-  - [NC-EXEC-003: No Tests Without Execution](#nc-exec-003-no-tests-without-execution)
-  - [NC-EXEC-004: No Manual Sub-Agent Simulation](#nc-exec-004-no-manual-sub-agent-simulation)
-  - [NC-EXEC-005: No UI Without Visibility](#nc-exec-005-no-ui-without-visibility)
-- [Migration Script Pattern (MANDATORY)](#migration-script-pattern-mandatory)
-  - [Correct Pattern](#correct-pattern)
-  - [NEVER Use This Pattern](#never-use-this-pattern)
-  - [Before Writing Migration Scripts](#before-writing-migration-scripts)
-- [📚 Skill Integration (EXEC Phase)](#-skill-integration-exec-phase)
-- [Skill Integration During EXEC](#skill-integration-during-exec)
-  - [When to Invoke Skills](#when-to-invoke-skills)
-  - [Skill Invocation](#skill-invocation)
-  - [Skills vs Sub-Agents in EXEC](#skills-vs-sub-agents-in-exec)
-  - [Common Skill Chains by Task](#common-skill-chains-by-task)
-  - [Skill Selection Guide](#skill-selection-guide)
-  - [Remember](#remember)
-- [Multi-Instance Coordination (MANDATORY)](#multi-instance-coordination-mandatory)
-- [🔀 Multi-Instance Coordination (MANDATORY)](#-multi-instance-coordination-mandatory)
-  - [MANDATORY: Git Worktrees for Parallel SD Work](#mandatory-git-worktrees-for-parallel-sd-work)
-  - [Forbidden Operations (Multi-Instance)](#forbidden-operations-multi-instance)
-  - [Quick Reference](#quick-reference)
-  - [Why Worktrees?](#why-worktrees)
-- [📦 Database-First Progress Tracking (MANDATORY)](#-database-first-progress-tracking-mandatory)
-  - [✅ AUTOMATED TRACKING (SD-DELIVERABLES-V2-001)](#-automated-tracking-sd-deliverables-v2-001)
-  - [How Automated Tracking Works](#how-automated-tracking-works)
-  - [When Manual Updates Are Still Needed](#when-manual-updates-are-still-needed)
-  - [Verification Functions](#verification-functions)
-  - [Handoff Verification Gate](#handoff-verification-gate)
-  - [Why This Matters](#why-this-matters)
-- [Component Sizing Guidelines](#component-sizing-guidelines)
-  - [Optimal Component Size: 300-600 Lines](#optimal-component-size-300-600-lines)
-  - [Sizing Rules](#sizing-rules)
-- [Human-Like E2E Testing Fixtures](#human-like-e2e-testing-fixtures)
-  - [Human-Like E2E Testing Enhancements (LEO v4.4)](#human-like-e2e-testing-enhancements-leo-v44)
-  - [Available Fixtures (`tests/e2e/fixtures/`)](#available-fixtures-testse2efixtures)
-  - [Stringency Levels (Auto-Determined)](#stringency-levels-auto-determined)
-  - [LLM UX Evaluation Lenses (~$20/month budget)](#llm-ux-evaluation-lenses-20month-budget)
-  - [Chaos Testing Capabilities](#chaos-testing-capabilities)
-  - [Sample Test Files](#sample-test-files)
-  - [CI Workflow](#ci-workflow)
-  - [Integration with Evidence Pack](#integration-with-evidence-pack)
-- [TODO Comment Standard](#todo-comment-standard)
-- [TODO Comment Standard (When Deferring Work)](#todo-comment-standard-when-deferring-work)
-  - [Standard TODO Format](#standard-todo-format)
-- [EXEC Dual Test Requirement](#exec-dual-test-requirement)
-  - [⚠️ MANDATORY: Dual Test Execution](#-mandatory-dual-test-execution)
-  - [Why This Matters](#why-this-matters)
-- [✅ EXEC UI Parity Verification Checklist](#-exec-ui-parity-verification-checklist)
-  - [Pre-Completion Checklist](#pre-completion-checklist)
-  - [Integration with Dual Test Requirement](#integration-with-dual-test-requirement)
-  - [Handoff Modification](#handoff-modification)
-- [🌿 Branch Hygiene Gate (MANDATORY)](#-branch-hygiene-gate-mandatory)
-- [Branch Hygiene Gate (MANDATORY)](#branch-hygiene-gate-mandatory)
-  - [MANDATORY Before PLAN-TO-EXEC Handoff](#mandatory-before-plan-to-exec-handoff)
-  - [1. Branch Freshness (≤7 Days Stale)](#1-branch-freshness-7-days-stale)
-  - [2. Single-SD Branch Rule (No Mixing)](#2-single-sd-branch-rule-no-mixing)
-  - [3. Merge Main at Phase Transitions](#3-merge-main-at-phase-transitions)
-  - [4. Maximum Branch Lifetime (14 Days)](#4-maximum-branch-lifetime-14-days)
-  - [Branch Health Check Script](#branch-health-check-script)
-  - [Why This Matters](#why-this-matters)
-  - [EXEC Agent Action](#exec-agent-action)
-- [🔀 SD/Quick-Fix Completion: Commit, Push, Merge](#-sdquick-fix-completion-commit-push-merge)
-- [🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)](#-sdquick-fix-completion-commit-push-merge-mandatory)
-  - [For Quick-Fixes](#for-quick-fixes)
-  - [For Strategic Directives](#for-strategic-directives)
-  - [Merge Checklist](#merge-checklist)
-  - [Anti-Patterns](#anti-patterns)
-  - [Verification](#verification)
-- [Auto-Merge Workflow for SD Completion](#auto-merge-workflow-for-sd-completion)
-  - [Auto-Merge Workflow (RECOMMENDED)](#auto-merge-workflow-recommended)
-- [E2E Testing: Dev Mode vs Preview Mode](#e2e-testing-dev-mode-vs-preview-mode)
-- [Working with Child SDs During EXEC](#working-with-child-sds-during-exec)
-  - [Child SD Lifecycle](#child-sd-lifecycle)
-  - [Sequential Execution Rules](#sequential-execution-rules)
-  - [Progress Tracking](#progress-tracking)
-  - [Parent Completion](#parent-completion)
-  - [Common Mistakes](#common-mistakes)
-  - [Why Full Workflow Matters](#why-full-workflow-matters)
-- [Branch Should Already Exist (LEO v4.4.1)](#branch-should-already-exist-leo-v441)
-  - [Branch Should Already Exist (LEO v4.4.1)](#branch-should-already-exist-leo-v441)
-- [Test Coverage Quality Gate (EXEC-TO-PLAN)](#test-coverage-quality-gate-exec-to-plan)
-  - [Complexity Thresholds](#complexity-thresholds)
-  - [What It Checks](#what-it-checks)
-  - [Auto-Skip Conditions](#auto-skip-conditions)
-  - [Remediation](#remediation)
-  - [Implementation](#implementation)
-- [Integration Test Requirement Gate (EXEC-TO-PLAN)](#integration-test-requirement-gate-exec-to-plan)
-  - [Complexity Criteria (ANY triggers the gate)](#complexity-criteria-any-triggers-the-gate)
-  - [Enforcement Modes](#enforcement-modes)
-  - [What It Checks](#what-it-checks)
-  - [Security](#security)
-  - [Remediation](#remediation)
-  - [Implementation](#implementation)
-- [Playwright MCP Integration](#playwright-mcp-integration)
-- [🎭 Playwright MCP Integration](#-playwright-mcp-integration)
-  - [Overview](#overview)
-  - [Installed Components](#installed-components)
-  - [Available MCP Tools](#available-mcp-tools)
-  - [Testing Integration](#testing-integration)
-  - [Usage Example](#usage-example)
-  - [QA Director Integration](#qa-director-integration)
-- [Triangulated Runtime Audit Protocol](#triangulated-runtime-audit-protocol)
-  - [Purpose](#purpose)
-  - [When to Use](#when-to-use)
-  - [Quick Start](#quick-start)
-  - [Protocol Phases](#protocol-phases)
-  - [Roles](#roles)
-  - [Templates](#templates)
-- [Context Anchor](#context-anchor)
-  - [Vision & Immutables](#vision-immutables)
-  - [Pending SDs](#pending-sds)
-  - [Guardrails](#guardrails)
-  - [Synthesis Grid Template](#synthesis-grid-template)
-  - [Decision Rules](#decision-rules)
-  - [Checklist](#checklist)
-  - [Artifacts](#artifacts)
-  - [Related Skills](#related-skills)
-- [Edge Case Testing Checklist](#edge-case-testing-checklist)
-  - [Input Validation Edge Cases](#input-validation-edge-cases)
-  - [Boundary Conditions](#boundary-conditions)
-  - [Concurrent Operations](#concurrent-operations)
-  - [Error Scenarios](#error-scenarios)
-  - [State Transitions](#state-transitions)
-- [Vision V2 Implementation Requirements (SD-VISION-V2-*)](#vision-v2-implementation-requirements-sd-vision-v2-)
-  - [MANDATORY: Vision Spec Consultation Before Implementation](#mandatory-vision-spec-consultation-before-implementation)
-  - [Implementation Requirements for Vision V2](#implementation-requirements-for-vision-v2)
-  - [CREATE_FROM_NEW Policy](#create_from_new-policy)
-  - [25-Stage Insulation Checklist (SD-VISION-V2-005 CRITICAL)](#25-stage-insulation-checklist-sd-vision-v2-005-critical)
-- [KR Progress Tracking in EXEC](#kr-progress-tracking-in-exec)
-  - [Post-Ship KR Update Workflow](#post-ship-kr-update-workflow)
-  - [When to Update](#when-to-update)
-  - [Example](#example)
-- [Database Schema Constraints Reference](#database-schema-constraints-reference)
-  - [leo_handoff_executions](#leo_handoff_executions)
-  - [leo_protocols](#leo_protocols)
-  - [product_requirements_v2](#product_requirements_v2)
-  - [sd_backlog_map](#sd_backlog_map)
-  - [sd_phase_handoffs](#sd_phase_handoffs)
-  - [sd_scope_deliverables](#sd_scope_deliverables)
-  - [strategic_directives_v2](#strategic_directives_v2)
-  - [sub_agent_execution_results](#sub_agent_execution_results)
-  - [user_stories](#user_stories)
-- [LEO Process Scripts Reference](#leo-process-scripts-reference)
-  - [Generation Scripts](#generation-scripts)
-  - [Handoff Scripts](#handoff-scripts)
-  - [Migration Scripts](#migration-scripts)
-  - [Prd Scripts](#prd-scripts)
-  - [Utility Scripts](#utility-scripts)
-  - [Validation Scripts](#validation-scripts)
-
-**Generated**: 2026-02-20 4:53:28 PM
+**Generated**: 2026-03-05 2:13:19 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -221,11 +40,6 @@ Resolve root causes so they do not happen again in the future. Update processes,
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## 🔍 Implementation Reminders — Active Vision Gaps
-
-- **VGAP-V10** (MEDIUM): Vision gap: okr_driven_prioritization scored 52/100 — 1 occurrences in last 30d — ensure implementation does not worsen this gap
-- **VGAP-V11** (MEDIUM): Vision gap: governance_guardrail_enforcement scored 55/100 — 1 occurrences in last 30d — ensure implementation does not worsen this gap
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -361,6 +175,70 @@ See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for c
 **If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
 
 
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
+
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -448,70 +326,6 @@ If `research_confidence_score = 0.00`, you skipped this step.
 | Simulate sub-agents | 15% quality loss | Execute actual tools |
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
-
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
 
 ## EXEC Phase Negative Constraints
 
@@ -813,6 +627,24 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
+
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -896,24 +728,6 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
-
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -1966,6 +1780,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2026-02-20*
+*Generated from database: 2026-03-05*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

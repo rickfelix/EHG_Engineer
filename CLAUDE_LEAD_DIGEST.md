@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-20T21:53:28.254Z -->
-<!-- git_commit: 58a9f184 -->
-<!-- db_snapshot_hash: 1787835840a9ee3a -->
+<!-- generated_at: 2026-03-05T19:13:19.784Z -->
+<!-- git_commit: 666354e7 -->
+<!-- db_snapshot_hash: a35556466804808f -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_LEAD_DIGEST.md - LEAD Phase (Enforcement)
@@ -126,5 +126,5 @@ These are kept for reference but should NEVER be used as templates.
 
 ---
 
-*DIGEST generated: 2026-02-20 4:53:28 PM*
+*DIGEST generated: 2026-03-05 2:13:19 PM*
 *Protocol: 4.3.3*

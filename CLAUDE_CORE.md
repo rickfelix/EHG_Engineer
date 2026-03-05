@@ -1,164 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-
-## Table of Contents
-
-- [Migration Execution Protocol](#migration-execution-protocol)
-- [⚠️ CRITICAL: Migration Execution Protocol](#-critical-migration-execution-protocol)
-- [🏗️ Application Architecture - UNIFIED FRONTEND](#-application-architecture---unified-frontend)
-- [Application Architecture - UNIFIED FRONTEND](#application-architecture---unified-frontend)
-  - [System Overview](#system-overview)
-  - [CRITICAL: During EXEC Phase](#critical-during-exec-phase)
-  - [Stack Startup](#stack-startup)
-- [🚀 Session Verification & Quick Start (MANDATORY)](#-session-verification-quick-start-mandatory)
-- [Session Start Checklist](#session-start-checklist)
-  - [Required Verification](#required-verification)
-  - [⚠️ MANDATORY: Read Entire Files (No Partial Reads)](#-mandatory-read-entire-files-no-partial-reads)
-  - [Before Starting Work](#before-starting-work)
-  - [Key Commands](#key-commands)
-- [🔍 Session Start Verification (MANDATORY)](#-session-start-verification-mandatory)
-  - [Before Starting ANY SD Work:](#before-starting-any-sd-work)
-  - [Verification Queries:](#verification-queries)
-  - [Why This Matters:](#why-this-matters)
-- [🚫 MANDATORY: Phase Transition Commands (BLOCKING)](#-mandatory-phase-transition-commands-blocking)
-- [MANDATORY: Phase Transition Commands (BLOCKING)](#mandatory-phase-transition-commands-blocking)
-  - [Required Commands](#required-commands)
-  - [Error Codes](#error-codes)
-  - [Emergency Bypass (Rate-Limited)](#emergency-bypass-rate-limited)
-  - [Compliance Check](#compliance-check)
-- [Claude Code Plan Mode Integration](#claude-code-plan-mode-integration)
-  - [Overview](#overview)
-  - [SD Type Profiles](#sd-type-profiles)
-  - [Permission Bundling by Phase](#permission-bundling-by-phase)
-  - [Automatic Activation](#automatic-activation)
-  - [Configuration](#configuration)
-  - [Module Location](#module-location)
-- [🤖 Built-in Agent Integration](#-built-in-agent-integration)
-- [Built-in Agent Integration](#built-in-agent-integration)
-  - [Three-Layer Agent Architecture](#three-layer-agent-architecture)
-  - [Integration Principle](#integration-principle)
-  - [When to Use Each Layer](#when-to-use-each-layer)
-  - [Parallel Execution](#parallel-execution)
-- [Sub-Agent Model Routing](#sub-agent-model-routing)
-  - [Model Selection Rule](#model-selection-rule)
-  - [Why This Matters](#why-this-matters)
-  - [LLM Provider Cascade](#llm-provider-cascade)
-  - [Examples](#examples)
-- [Work Tracking Policy](#work-tracking-policy)
-  - [Strategic Directive (SD) - For Substantial Work](#strategic-directive-sd---for-substantial-work)
-  - [Quick-Fix (QF) - For Small Fixes](#quick-fix-qf---for-small-fixes)
-  - [Why This Matters](#why-this-matters)
-  - [Emergency Bypass (Logged)](#emergency-bypass-logged)
-  - [Pre-Push Enforcement](#pre-push-enforcement)
-- [🖥️ UI Parity Requirement (MANDATORY)](#-ui-parity-requirement-mandatory)
-  - [Principle](#principle)
-  - [Requirements](#requirements)
-  - [Verification Checklist](#verification-checklist)
-- [Execution Philosophy](#execution-philosophy)
-  - [Quality-First (PARAMOUNT)](#quality-first-paramount)
-  - [Testing-First (MANDATORY)](#testing-first-mandatory)
-  - [Database-First (REQUIRED)](#database-first-required)
-  - [Validation-First (GATEKEEPING)](#validation-first-gatekeeping)
-  - [Anti-Bias Rules (MANDATORY)](#anti-bias-rules-mandatory)
-- [🚫 Stage 7 Hard Block: UI Coverage Prerequisite](#-stage-7-hard-block-ui-coverage-prerequisite)
-  - [Block Condition](#block-condition)
-  - [Rationale](#rationale)
-  - [Verification Before Stage 7](#verification-before-stage-7)
-  - [Exception Process](#exception-process)
-- [Child SD Pre-Work Validation (MANDATORY)](#child-sd-pre-work-validation-mandatory)
-  - [Validation Command](#validation-command)
-  - [What It Checks](#what-it-checks)
-  - [Results](#results)
-  - [Integration](#integration)
-- [Global Negative Constraints](#global-negative-constraints)
-  - [NC-001: No Markdown Files as Source of Truth](#nc-001-no-markdown-files-as-source-of-truth)
-  - [NC-002: No Bypassing Process Scripts](#nc-002-no-bypassing-process-scripts)
-  - [NC-003: No Guessing File Locations](#nc-003-no-guessing-file-locations)
-  - [NC-004: No Implementation Without Reading](#nc-004-no-implementation-without-reading)
-  - [NC-005: No Workarounds Before Root Cause Analysis](#nc-005-no-workarounds-before-root-cause-analysis)
-  - [NC-006: No Background Execution for Validation](#nc-006-no-background-execution-for-validation)
-- [🔄 Git Commit Guidelines](#-git-commit-guidelines)
-- [PR Size Guidelines](#pr-size-guidelines)
-- [Critical Term Definitions](#critical-term-definitions)
-- [🚫 CRITICAL TERM DEFINITIONS (BINDING)](#-critical-term-definitions-binding)
-  - ["Complete an SD"](#complete-an-sd)
-  - ["Continue autonomously"](#continue-autonomously)
-  - ["Child SD"](#child-sd)
-  - ["Ship" vs "Complete"](#ship-vs-complete)
-- [🔍 Issue Pattern Search (Knowledge Base)](#-issue-pattern-search-knowledge-base)
-- [Issue Pattern Search (Knowledge Base)](#issue-pattern-search-knowledge-base)
-  - [When to Search](#when-to-search)
-  - [CLI Commands](#cli-commands)
-  - [Programmatic API](#programmatic-api)
-  - [Category → Sub-Agent Mapping](#category-sub-agent-mapping)
-  - [Auto-SD Creation Thresholds](#auto-sd-creation-thresholds)
-- [Genesis Codebase Locations](#genesis-codebase-locations)
-  - [Quick Reference](#quick-reference)
-  - [Full Documentation](#full-documentation)
-- [Parent-Child SD Hierarchy](#parent-child-sd-hierarchy)
-  - [Overview](#overview)
-  - [Relationship Types](#relationship-types)
-  - [Key Rules](#key-rules)
-  - [Orchestrator STOP Conditions](#orchestrator-stop-conditions)
-  - [Child SD Completion Checklist](#child-sd-completion-checklist)
-  - [Database Functions](#database-functions)
-- [SD Type-Aware Workflow Paths](#sd-type-aware-workflow-paths)
-- [SD Type Validation & Workflow Paths](#sd-type-validation-workflow-paths)
-  - [Gate Pass Thresholds](#gate-pass-thresholds)
-  - [Workflow Paths](#workflow-paths)
-  - [Required Sub-Agents by Type](#required-sub-agents-by-type)
-  - [UAT Requirements](#uat-requirements)
-  - [Pre-Handoff Check](#pre-handoff-check)
-- [Database Sub-Agent Auto-Invocation](#database-sub-agent-auto-invocation)
-- [Database Sub-Agent Semantic Triggering](#database-sub-agent-semantic-triggering)
-  - [Intent Detection Triggers](#intent-detection-triggers)
-  - [Denylist Phrases (Block Execution Intent)](#denylist-phrases-block-execution-intent)
-  - [Integration](#integration)
-  - [Configuration](#configuration)
-  - [Audit Trail](#audit-trail)
-- [Database-First Enforcement - Expanded](#database-first-enforcement---expanded)
-- [🗄️ Supabase Database Operations](#-supabase-database-operations)
-  - [Connection Details (CONSOLIDATED DATABASE)](#connection-details-consolidated-database)
-  - [⚠️ CRITICAL: Database Connection Pattern](#-critical-database-connection-pattern)
-  - [Running SQL Migrations](#running-sql-migrations)
-- [Compaction Instructions (CRITICAL)](#compaction-instructions-critical)
-- [Script Creation Anti-Patterns](#script-creation-anti-patterns)
-  - [PROHIBITED Patterns](#prohibited-patterns)
-  - [Archived Script Locations](#archived-script-locations)
-  - [Required CLI Tools](#required-cli-tools)
-- [Background Task Output Retrieval](#background-task-output-retrieval)
-- [Global Negative Constraints](#global-negative-constraints)
-  - [NC-001: No Markdown Files as Source of Truth](#nc-001-no-markdown-files-as-source-of-truth)
-  - [NC-002: No Bypassing Process Scripts](#nc-002-no-bypassing-process-scripts)
-  - [NC-003: No Guessing File Locations](#nc-003-no-guessing-file-locations)
-  - [NC-004: No Implementation Without Reading](#nc-004-no-implementation-without-reading)
-  - [NC-005: No Workarounds Before Root Cause Analysis](#nc-005-no-workarounds-before-root-cause-analysis)
-  - [NC-006: No Background Execution for Validation](#nc-006-no-background-execution-for-validation)
-- [📊 Database Column Quick Reference](#-database-column-quick-reference)
-  - [Priority Column (strategic_directives_v2)](#priority-column-strategic_directives_v2)
-- [AI-Powered Russian Judge Quality Assessment](#ai-powered-russian-judge-quality-assessment)
-  - [Overview](#overview)
-  - [Rubric Criteria Summary](#rubric-criteria-summary)
-  - [Scoring Scale](#scoring-scale)
-  - [Anti-Patterns (Score 0-3)](#anti-patterns-score-0-3)
-  - [Integration](#integration)
-  - [Files Reference](#files-reference)
-- [Strategic Governance Hierarchy](#strategic-governance-hierarchy)
-- [Chairman and CEO Governance Roles](#chairman-and-ceo-governance-roles)
-  - [Chairman (Human Owner)](#chairman-human-owner)
-  - [CEO Agent (EVA)](#ceo-agent-eva)
-  - [Separation of Concerns](#separation-of-concerns)
-- [Recent Lessons (Last 30 Days)](#recent-lessons-last-30-days)
-  - [1. PLAN_TO_EXEC Handoff Retrospective: Enum Validation & Field Naming (SD-EVA-FIX-ENUM-NAMING-001) [QUALITY]](#1-plan_to_exec-handoff-retrospective-enum-validation-field-naming-sd-eva-fix-enum-naming-001-quality)
-  - [2. SD Completion Retrospective: Enum Validation & Field Naming (SD-EVA-FIX-ENUM-NAMING-001) [QUALITY]](#2-sd-completion-retrospective-enum-validation-field-naming-sd-eva-fix-enum-naming-001-quality)
-  - [3. Kill Gate Logic Fixes - EXEC Completion Retrospective [QUALITY]](#3-kill-gate-logic-fixes---exec-completion-retrospective-quality)
-  - [4. Chairman Governance Gates: Pattern Reuse and Cross-SD Test Compatibility [QUALITY]](#4-chairman-governance-gates-pattern-reuse-and-cross-sd-test-compatibility-quality)
-  - [5. SD Completion Retrospective: EVA Event Bus Unit Test Coverage (SD-EVA-FIX-POST-LAUNCH-001) [QUALITY]](#5-sd-completion-retrospective-eva-event-bus-unit-test-coverage-sd-eva-fix-post-launch-001-quality)
-- [Agent Responsibilities](#agent-responsibilities)
-- [Progress Calculation](#progress-calculation)
-- [Available Sub-Agents](#available-sub-agents)
-
-**Generated**: 2026-02-20 4:53:28 PM
+**Generated**: 2026-03-05 2:13:19 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -212,6 +54,41 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
+
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -251,41 +128,6 @@ bash scripts/leo-stack.sh restart   # All 3 servers
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
-
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -497,39 +339,6 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -566,6 +375,39 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -686,7 +528,7 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Branch Strategy**: `eng/` prefix for EHG_Engineer, standard prefixes for EHG app features
 **Size**: <100 lines ideal, <200 max
 
-**Full Guidelines**: See `docs/03_protocols_and_standards/leo-git-commit-guidelines-v4.2.0.md`
+**Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
 ## PR Size Guidelines
 
@@ -813,7 +655,7 @@ const solution = await kb.getSolution('PAT-003');
 | Production gen (Stage 17) | `ehg/scripts/genesis/production-generator.js` |
 
 ### Full Documentation
-- Implementation guide: `docs/architecture/genesis-implementation-guide.md`
+- Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
 - Quick reference: `docs/reference/genesis-codebase-guide.md`
 
 ## Parent-Child SD Hierarchy
@@ -1257,60 +1099,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. PLAN_TO_EXEC Handoff Retrospective: Enum Validation & Field Naming (SD-EVA-FIX-ENUM-NAMING-001) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
+### 1. SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001: Worktree Manager Re-keyed from Session to SD Isolation [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- PLAN-TO-EXEC handoff required 7 attempts due to cascading gate failures: PRD status mismatch, target...
-- SD description stated "typeof string checks" but actual codebase used type:string in schemas with va...
+- Node.js v24 libuv crash (Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)) in pre-commit hook ...
+- ESLint caught unused imports (removeWorktree, afterEach, symlinkNodeModules) during pre-commit that ...
 
 **Action Items**:
-- [ ] Add enum value validation to Build Loop stage template CI: if a new category is ...
-- [ ] Update SD description writing guidelines to require code-level specificity: refe...
+- [ ] Investigate Node.js v24 libuv async handle crash on Windows (UV_HANDLE_CLOSING a...
+- [ ] Add ESLint --fix to IDE save hooks or incremental lint step in dev workflow to c...
 
-### 2. SD Completion Retrospective: Enum Validation & Field Naming (SD-EVA-FIX-ENUM-NAMING-001) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
+### 2. SD-LEO-INFRA-FIX-LEARNING-SYSTEM-001 Retrospective [QUALITY]
+**Category**: USER_EXPERIENCE | **Date**: 2/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- PLAN-TO-EXEC handoff required 7 attempts due to cascading gate failures: PRD status mismatch, target...
-- SD description stated "typeof string checks" but actual codebase used type:string in schemas with va...
+- Auto-generated user stories from PRD were UI-oriented boilerplate for an infrastructure SD - had to ...
+- Initial SD title mentioned ESM dependency resolution but actual root cause was dotenv CWD resolution...
 
 **Action Items**:
-- [ ] Add enum value validation to Build Loop stage template CI: if a new category is ...
-- [ ] Update SD description writing guidelines to require code-level specificity: refe...
+- [ ] Ship the 6-file fix via /ship - Owner: current session, Timeline: immediate
+- [ ] Audit remaining modules for bare dotenv.config() - Owner: next /learn cycle, Tim...
 
-### 3. Kill Gate Logic Fixes - EXEC Completion Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
+### 3. SD-LEO-INFRA-STANDARDIZE-VITEST-MIGRATE-001: Jest to Vitest Migration [QUALITY]
+**Category**: TESTING_STRATEGY | **Date**: 2/6/2026 | **Score**: 100
 
 **Key Improvements**:
-- {"issue":"PLAN-TO-EXEC handoff rejected 3 times before passing. First rejection: stale session claim...
-- {"issue":"User story acceptance_criteria format mismatch: BMAD story generator output JSON strings f...
+- Branch switch during handoff caused git stash/unstash that reverted working-directory changes: the m...
+- Stale .git/COMMIT_EDITMSG from a previous commit caused Gate 0 (pre-flight check) false positive, bl...
 
 **Action Items**:
-- [ ] Add acceptance_criteria format validation to BMAD story generator output, ensuri...
-- [ ] Implement batch rejection reporting in handoff pre-validation: surface ALL block...
+- [ ] {"action":"Address 95 pre-existing test failures now visible under Vitest","owne...
+- [ ] {"action":"Improve bulk migration scripts to detect actual mock usage before add...
 
-### 4. Chairman Governance Gates: Pattern Reuse and Cross-SD Test Compatibility [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
+### 4. Target-Application-Aware Persona Validation - Retrospective [QUALITY]
+**Category**: DATABASE_SCHEMA | **Date**: 2/5/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-b37be076] Handoff EXEC-TO-LEAD failed with exit code 1
-- [PAT-AUTO-280c5347] Gate PLAN_TO_LEAD_HANDOFF_EXISTS failed: score 0/100
+- SD had 16 handoffs including 9 LEAD-TO-PLAN transitions, indicating excessive iteration during plann...
+- SD was initially misclassified as feature type during LEAD phase, requiring RCA and governance overr...
 
 **Action Items**:
-- [ ] SD-LEO-FIX-CLAIM-DUAL-TRUTH-001: Unify claim resolution to use sd_claims as sing...
-- [ ] Address 13 pre-existing analysis-steps test failures in a separate SD to prevent...
+- [ ] Integrate test runner output with unified_test_evidence table to automatically r...
+- [ ] Update deliverable statuses and success metrics actuals for SD-LEO-ENH-TARGET-AP...
 
-### 5. SD Completion Retrospective: EVA Event Bus Unit Test Coverage (SD-EVA-FIX-POST-LAUNCH-001) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/14/2026 | **Score**: 100
+### 5. SD-LEO-INFRA-REALITY-GATES-001 Retrospective [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- Mock fidelity risk: vi.mock() stubs for Supabase return hardcoded success responses that may not ref...
-- No integration test layer exists to validate event-router against a real Supabase instance - mocks m...
+- Boundary config artifact types need validation against actual venture_artifacts data - currently asp...
+- URL verification hardcoded timeouts need to be configurable per deployment environment
 
 **Action Items**:
-- [ ] Create integration test suite for event-router that runs processEvent against a ...
-- [ ] Add vitest coverage threshold configuration for eva/event-bus/ modules to preven...
+- [ ] Owner: Infra Eng, Due: 2026-02-14 - Add operational monitoring for DB_ERROR reas...
+- [ ] Owner: Infra Eng, Due: 2026-02-21 - Create integration test with real Supabase; ...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1376,7 +1218,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-02-20*
+*Generated from database: 2026-03-05*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
