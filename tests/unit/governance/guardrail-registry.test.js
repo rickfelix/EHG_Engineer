@@ -11,7 +11,7 @@ import {
   MODES,
 } from '../../../lib/governance/guardrail-registry.js';
 
-const { register, reset } = _test;
+const { reset } = _test;
 
 beforeEach(() => {
   reset();
@@ -142,59 +142,17 @@ describe('Guardrail Registry - check()', () => {
   });
 });
 
-describe('Guardrail Registry - register()', () => {
-  it('adds a new custom guardrail', () => {
-    register({
-      id: 'GR-CUSTOM-TEST',
-      name: 'Custom Test',
-      mode: MODES.ADVISORY,
-      description: 'Test guardrail',
-      check: () => ({ violated: false }),
-    });
-    const guardrails = list();
-    const custom = guardrails.find((g) => g.id === 'GR-CUSTOM-TEST');
-    expect(custom).toBeDefined();
-  });
-
-  it('replaces existing guardrail by ID', () => {
-    const initialCount = list().length;
-    register({
-      id: 'GR-VISION-ALIGNMENT',
-      name: 'Updated Vision',
-      mode: MODES.ADVISORY,
-      description: 'Updated',
-      check: () => ({ violated: false }),
-    });
-    expect(list().length).toBe(initialCount);
-    const updated = list().find((g) => g.id === 'GR-VISION-ALIGNMENT');
-    expect(updated.mode).toBe(MODES.ADVISORY);
-  });
-
-  it('throws for guardrail without id', () => {
-    expect(() =>
-      register({ name: 'No ID', check: () => ({}) })
-    ).toThrow('Guardrail must have id and check function');
-  });
-
-  it('throws for guardrail without check function', () => {
-    expect(() => register({ id: 'GR-NO-CHECK' })).toThrow(
-      'Guardrail must have id and check function'
-    );
+describe('Guardrail Registry - register() removed', () => {
+  it('register is no longer exported (bypass vector removed by SD-LEO-GEN-ENFORCE-GOVERNANCE-GUARDRAILS-001)', () => {
+    expect(_test.register).toBeUndefined();
   });
 });
 
 describe('Guardrail Registry - reset()', () => {
-  it('restores default guardrails after customization', () => {
-    register({
-      id: 'GR-TEMP',
-      name: 'Temp',
-      mode: MODES.ADVISORY,
-      description: 'Temporary',
-      check: () => ({ violated: false }),
-    });
-    const withCustom = list().length;
+  it('restores default guardrail count', () => {
+    const defaultCount = list().length;
     reset();
-    expect(list().length).toBe(withCustom - 1);
+    expect(list().length).toBe(defaultCount);
   });
 });
 
