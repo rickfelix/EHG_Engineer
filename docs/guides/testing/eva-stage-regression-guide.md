@@ -1,9 +1,9 @@
 ---
 category: guide
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: DOCMON Sub-Agent
-last_updated: 2026-03-04
+last_updated: 2026-03-05
 tags: [eva, testing, regression, e2e, stage-templates]
 ---
 
@@ -13,9 +13,9 @@ tags: [eva, testing, regression, e2e, stage-templates]
 
 - **Category**: Guide
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-03-04
+- **Last Updated**: 2026-03-05
 - **Tags**: [eva, testing, regression, e2e, stage-templates]
 
 ## Overview
@@ -52,14 +52,14 @@ Two layers, complementary purposes:
 4. `computeDerived()` executes and returns correct shape
 5. Every schema key exists in `defaultData`
 
-Plus 4 gate suites: kill gates (Stages 3, 5, 13, 23), reality gates (Stage 9, 12), promotion gates (Stages 16, 22), decision filter engine.
+Plus gate suites: kill gates (Stages 3, 5, 13), release readiness (Stage 23), reality gates (Stage 9, 12), promotion gates (Stages 16, 22), decision filter engine.
 
 **Unit Tests** — deeper per-stage assertions in `tests/unit/eva/stage-templates/`:
 - Enum constraints, string minLength, integer ranges, array minItems
 - Derived field correctness, weighted scoring, decision logic
 - Cross-stage contract matching (Stage N output → Stage N+1 `consume`)
 - Constants (MIN_CANDIDATES, WEIGHT_SUM, APPROVAL_STATUSES, etc.)
-- Chairman gate enforcement (Stages 10, 22, 25)
+- Chairman gate enforcement (Stages 10, 22, 24)
 
 ---
 
@@ -147,7 +147,8 @@ Phase 1: THE TRUTH (Stages 1-5)
   ...
 
 Gate Tests
-  ✓ Kill gates (Stages 3, 5, 13, 23)
+  ✓ Kill gates (Stages 3, 5, 13)
+  ✓ Release readiness (Stage 23)
   ✓ Reality gates
   ✓ Decision filter engine
   ✓ Reality gate module boundaries
@@ -241,7 +242,7 @@ For the deferred items, see `brainstorm/2026-03-04-systemic-audit-findings-remed
 
 ## Related Documentation
 
-- **Test report** (last clean run, 2026-02-15): [`docs/eva/e2e-stage-test-report.md`](../../eva/e2e-stage-test-report.md)
+- **Test report** (last clean run, 2026-03-05): [`docs/eva/e2e-stage-test-report.md`](../../eva/e2e-stage-test-report.md)
 - **Full testing guide** (orchestrator, integration, UAT): [`docs/guides/workflow/cli-venture-lifecycle/guides/testing-guide.md`](../workflow/cli-venture-lifecycle/guides/testing-guide.md)
 - **Audit findings and remediation**: [`brainstorm/2026-03-04-systemic-audit-findings-remediation.md`](../../../brainstorm/2026-03-04-systemic-audit-findings-remediation.md)
 - **Stage lifecycle overview**: [`docs/guides/workflow/25-stage-venture-lifecycle-overview.md`](../workflow/25-stage-venture-lifecycle-overview.md)
@@ -253,4 +254,5 @@ For the deferred items, see `brainstorm/2026-03-04-systemic-audit-findings-remed
 ---
 
 *Version History*
+- **v1.1.0** (2026-03-05): Updated gate references after orchestrator SD-LEO-ORCH-EVA-STAGE-PIPELINE-001. Stage 23 is now release readiness (not kill gate). Stage 24 added as chairman gate. Test report link updated.
 - **v1.0.0** (2026-03-04): Initial runbook. Captures regression suite built during March 2026 systemic audit (PRs #1747–#1773).
