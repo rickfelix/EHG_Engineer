@@ -2,7 +2,8 @@
  * Unit tests for stage templates index/registry
  * Part of SD-LEO-FEAT-TMPL-TRUTH-001, SD-LEO-FEAT-TMPL-ENGINE-001,
  *   SD-LEO-FEAT-TMPL-IDENTITY-001, SD-LEO-FEAT-TMPL-BLUEPRINT-001,
- *   SD-LEO-FEAT-TMPL-BUILD-001, SD-LEO-FEAT-TMPL-LAUNCH-001
+ *   SD-LEO-FEAT-TMPL-BUILD-001, SD-LEO-FEAT-TMPL-LAUNCH-001,
+ *   SD-LEO-ORCH-EVA-STAGE-PIPELINE-001-B
  *
  * Test Scenario TS-5: Registry returns correct templates (stages 1-25)
  *
@@ -39,12 +40,12 @@ import {
   evaluateStage03KillGate,
   evaluateStage05KillGate,
   evaluateStage13KillGate,
-  evaluateStage23KillGate,
+  checkReleaseReadiness,
   evaluatePhase2RealityGate,
   evaluatePhase3RealityGate,
   evaluatePhase4PromotionGate,
   evaluatePhase5PromotionGate,
-  detectDrift,
+  verifyLaunchAuthorization,
   getTemplate,
   getAllTemplates,
 } from '../../../../lib/eva/stage-templates/index.js';
@@ -222,9 +223,9 @@ describe('index.js - Stage templates registry', () => {
       expect(stage25).toBeDefined();
     });
 
-    it('should export Phase 6 gate and drift detection functions', () => {
-      expect(typeof evaluateStage23KillGate).toBe('function');
-      expect(typeof detectDrift).toBe('function');
+    it('should export Phase 6 gate functions', () => {
+      expect(typeof checkReleaseReadiness).toBe('function');
+      expect(typeof verifyLaunchAuthorization).toBe('function');
     });
 
     it('should have correct Phase 6 template IDs', () => {
@@ -234,15 +235,15 @@ describe('index.js - Stage templates registry', () => {
     });
 
     it('should have correct Phase 6 template slugs', () => {
-      expect(stage23.slug).toBe('launch-execution');
-      expect(stage24.slug).toBe('metrics-learning');
-      expect(stage25.slug).toBe('venture-review');
+      expect(stage23.slug).toBe('marketing-preparation');
+      expect(stage24.slug).toBe('launch-readiness');
+      expect(stage25.slug).toBe('launch-execution');
     });
 
     it('should have correct Phase 6 template titles', () => {
-      expect(stage23.title).toBe('Launch Execution');
-      expect(stage24.title).toBe('Metrics & Learning');
-      expect(stage25.title).toBe('Venture Review');
+      expect(stage23.title).toBe('Marketing Preparation');
+      expect(stage24.title).toBe('Launch Readiness');
+      expect(stage25.title).toBe('Launch Execution');
     });
   });
 
@@ -325,21 +326,21 @@ describe('index.js - Stage templates registry', () => {
       const template = getTemplate(23);
       expect(template).toBe(stage23);
       expect(template.id).toBe('stage-23');
-      expect(template.slug).toBe('launch-execution');
+      expect(template.slug).toBe('marketing-preparation');
     });
 
     it('should return stage24 for stageNumber 24', () => {
       const template = getTemplate(24);
       expect(template).toBe(stage24);
       expect(template.id).toBe('stage-24');
-      expect(template.slug).toBe('metrics-learning');
+      expect(template.slug).toBe('launch-readiness');
     });
 
     it('should return stage25 for stageNumber 25', () => {
       const template = getTemplate(25);
       expect(template).toBe(stage25);
       expect(template.id).toBe('stage-25');
-      expect(template.slug).toBe('venture-review');
+      expect(template.slug).toBe('launch-execution');
     });
 
     it('should return null for invalid stage numbers', () => {
@@ -454,23 +455,38 @@ describe('index.js - Stage templates registry', () => {
       expect(result.blockers).toEqual([]);
     });
 
-    it('evaluateStage23KillGate should work correctly', () => {
-      const result = evaluateStage23KillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
+    it('checkReleaseReadiness should work correctly', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'release' },
+        },
       });
-      expect(result.decision).toBe('pass');
-      expect(result.blockProgression).toBe(false);
+      expect(result.ready).toBe(true);
+      expect(result.reasons).toEqual([]);
     });
 
-    it('detectDrift should work correctly', () => {
-      const result = detectDrift({
-        original_vision: 'Building revolutionary platform technology solutions',
-        current_vision: 'Building revolutionary platform technology solutions',
+    it('checkReleaseReadiness should detect missing stage22Data', () => {
+      const result = checkReleaseReadiness({ stage22Data: undefined });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.length).toBeGreaterThan(0);
+    });
+
+    it('verifyLaunchAuthorization should work correctly', () => {
+      const result = verifyLaunchAuthorization({
+        stage24Data: {
+          chairmanGate: { status: 'approved' },
+          go_no_go_decision: 'go',
+        },
       });
-      expect(result.drift_detected).toBe(false);
+      expect(result.authorized).toBe(true);
+      expect(result.reasons).toEqual([]);
+    });
+
+    it('verifyLaunchAuthorization should detect missing stage24Data', () => {
+      const result = verifyLaunchAuthorization({ stage24Data: undefined });
+      expect(result.authorized).toBe(false);
+      expect(result.reasons.length).toBeGreaterThan(0);
     });
   });
 
@@ -608,14 +624,14 @@ describe('index.js - Stage templates registry', () => {
   describe('Round-trip determinism for stages 23-25', () => {
     it('should produce deterministic output for stage 23', () => {
       const input = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [
-          { name: 'Deploy to production', status: 'ready', owner: 'DevOps' },
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch PR', type: 'press_release', priority: 'high' },
+          { title: 'Email', description: 'Launch email', type: 'email_campaign', priority: 'medium' },
         ],
-        launch_date: '2026-03-01',
+        marketing_strategy_summary: 'Comprehensive marketing strategy for launch',
+        sd_bridge_payloads: [],
+        marketing_sds: [],
       };
       const result1 = stage23.computeDerived(input);
       const result2 = stage23.computeDerived(input);
@@ -624,19 +640,16 @@ describe('index.js - Stage templates registry', () => {
 
     it('should produce deterministic output for stage 24', () => {
       const input = {
-        aarrr: {
-          acquisition: [{ name: 'Signups', value: 100, target: 150 }],
-          activation: [{ name: 'First Action', value: 80, target: 90 }],
-          retention: [{ name: '30-day retention', value: 70, target: 75 }],
-          revenue: [{ name: 'MRR', value: 10000, target: 12000 }],
-          referral: [{ name: 'Referral rate', value: 5, target: 10 }],
+        readiness_checklist: {
+          release_confirmed: { status: 'pass', evidence: 'Verified' },
+          marketing_complete: { status: 'pass', evidence: 'Ready' },
+          monitoring_ready: { status: 'pass', evidence: 'Configured' },
+          rollback_plan_exists: { status: 'pass', evidence: 'Approved' },
         },
-        funnels: [
-          { name: 'Signup funnel', steps: ['Landing', 'Signup', 'Activation'] },
-        ],
-        learnings: [
-          { insight: 'Users drop off at step 2', action: 'Simplify onboarding' },
-        ],
+        incident_response_plan: 'Full incident response plan details here',
+        monitoring_setup: 'Full monitoring setup details here',
+        rollback_plan: 'Full rollback plan details here',
+        chairmanGate: { status: 'approved', rationale: null, decision_id: null },
       };
       const result1 = stage24.computeDerived(input);
       const result2 = stage24.computeDerived(input);
@@ -645,18 +658,15 @@ describe('index.js - Stage templates registry', () => {
 
     it('should produce deterministic output for stage 25', () => {
       const input = {
-        review_summary: 'Comprehensive review of all venture aspects',
-        initiatives: {
-          product: [{ title: 'MVP Launch', status: 'complete', outcome: 'Success' }],
-          market: [{ title: 'Market Analysis', status: 'complete', outcome: 'Success' }],
-          technical: [{ title: 'Infrastructure', status: 'complete', outcome: 'Success' }],
-          financial: [{ title: 'Funding Round', status: 'complete', outcome: 'Success' }],
-          team: [{ title: 'Team Expansion', status: 'complete', outcome: 'Success' }],
-        },
-        current_vision: 'Building revolutionary platform technology solutions',
-        next_steps: [
-          { action: 'Launch next phase', owner: 'CEO', timeline: 'Q1 2026' },
+        distribution_channels: [
+          { name: 'Web App', type: 'web', status: 'active' },
         ],
+        operations_handoff: {
+          monitoring: { dashboards: ['main'], alerts: ['cpu'] },
+          escalation: { contacts: ['ops@example.com'] },
+        },
+        launch_summary: 'Comprehensive launch execution summary',
+        go_live_timestamp: '2026-03-01T00:00:00Z',
       };
       const result1 = stage25.computeDerived(input);
       const result2 = stage25.computeDerived(input);

@@ -1,637 +1,402 @@
 /**
- * Unit tests for Stage 23 - Launch Execution template
- * Part of SD-LEO-FEAT-TMPL-LAUNCH-001
+ * Unit tests for Stage 23 - Marketing Preparation template
+ * Part of SD-LEO-ORCH-EVA-STAGE-PIPELINE-001-B
  *
- * Test Scenario: Stage 23 validation enforces Go/No-Go kill gate with
- * incident response, monitoring, and rollback plan requirements.
+ * Test Scenario: Stage 23 validation enforces marketing item requirements,
+ * marketing strategy summary, and release readiness checks against Stage 22.
  *
  * @module tests/unit/eva/stage-templates/stage-23.test
  */
 
 import { describe, it, expect } from 'vitest';
-import stage23, { evaluateKillGate, GO_DECISIONS, LAUNCH_TYPES, MIN_LAUNCH_TASKS } from '../../../../lib/eva/stage-templates/stage-23.js';
+import stage23, {
+  checkReleaseReadiness,
+  MARKETING_ITEM_TYPES,
+  MARKETING_PRIORITIES,
+  MIN_MARKETING_ITEMS,
+} from '../../../../lib/eva/stage-templates/stage-23.js';
 
-describe('stage-23.js - Launch Execution template', () => {
-  describe('Template metadata', () => {
-    it('should have correct template structure', () => {
+describe('stage-23.js - Marketing Preparation template', () => {
+  describe('Template contract', () => {
+    it('should export TEMPLATE with required properties', () => {
+      expect(stage23).toBeDefined();
+      expect(stage23.id).toBeDefined();
+      expect(stage23.slug).toBeDefined();
+      expect(stage23.title).toBeDefined();
+      expect(stage23.version).toBeDefined();
+    });
+
+    it('should have correct id, slug, title, version', () => {
       expect(stage23.id).toBe('stage-23');
-      expect(stage23.slug).toBe('launch-execution');
-      expect(stage23.title).toBe('Launch Execution');
-      expect(stage23.version).toBe('1.0.0');
+      expect(stage23.slug).toBe('marketing-preparation');
+      expect(stage23.title).toBe('Marketing Preparation');
+      expect(stage23.version).toBe('2.0.0');
     });
 
-    it('should have schema definition', () => {
+    it('should have schema, defaultData, validate, computeDerived', () => {
       expect(stage23.schema).toBeDefined();
-      expect(stage23.schema.go_decision).toBeDefined();
-      expect(stage23.schema.incident_response_plan).toBeDefined();
-      expect(stage23.schema.monitoring_setup).toBeDefined();
-      expect(stage23.schema.rollback_plan).toBeDefined();
-      expect(stage23.schema.launch_tasks).toBeDefined();
-      expect(stage23.schema.launch_date).toBeDefined();
-      expect(stage23.schema.decision).toBeDefined();
-      expect(stage23.schema.blockProgression).toBeDefined();
-      expect(stage23.schema.reasons).toBeDefined();
-    });
-
-    it('should have defaultData', () => {
-      expect(stage23.defaultData).toEqual({
-        go_decision: null,
-        launchType: null,
-        incident_response_plan: null,
-        monitoring_setup: null,
-        rollback_plan: null,
-        launch_tasks: [],
-        launch_date: null,
-        planned_launch_date: null,
-        actual_launch_date: null,
-        successCriteria: [],
-        rollbackTriggers: [],
-        decision: null,
-        blockProgression: false,
-        reasons: [],
-      });
-    });
-
-    it('should have validate function', () => {
+      expect(stage23.defaultData).toBeDefined();
       expect(typeof stage23.validate).toBe('function');
-    });
-
-    it('should have computeDerived function', () => {
       expect(typeof stage23.computeDerived).toBe('function');
     });
 
+    it('should have analysisStep function', () => {
+      expect(typeof stage23.analysisStep).toBe('function');
+    });
+
+    it('should have outputSchema from extractOutputSchema', () => {
+      expect(stage23.outputSchema).toBeDefined();
+    });
+
+    it('should have schema with expected fields', () => {
+      expect(stage23.schema.marketing_items).toBeDefined();
+      expect(stage23.schema.sd_bridge_payloads).toBeDefined();
+      expect(stage23.schema.marketing_sds).toBeDefined();
+      expect(stage23.schema.marketing_strategy_summary).toBeDefined();
+      expect(stage23.schema.target_audience).toBeDefined();
+      expect(stage23.schema.marketing_readiness_pct).toBeDefined();
+      expect(stage23.schema.total_marketing_items).toBeDefined();
+      expect(stage23.schema.sds_created_count).toBeDefined();
+    });
+
+    it('should have correct defaultData', () => {
+      expect(stage23.defaultData).toEqual({
+        marketing_items: [],
+        sd_bridge_payloads: [],
+        marketing_sds: [],
+        marketing_strategy_summary: null,
+        target_audience: null,
+        marketing_readiness_pct: 0,
+        total_marketing_items: 0,
+        sds_created_count: 0,
+      });
+    });
+
     it('should export constants', () => {
-      expect(GO_DECISIONS).toEqual(['go', 'no-go', 'conditional_go']);
-      expect(LAUNCH_TYPES).toEqual(['soft_launch', 'beta', 'general_availability']);
-      expect(MIN_LAUNCH_TASKS).toBe(1);
+      expect(Array.isArray(MARKETING_ITEM_TYPES)).toBe(true);
+      expect(MARKETING_ITEM_TYPES).toContain('landing_page');
+      expect(MARKETING_ITEM_TYPES).toContain('social_media_campaign');
+      expect(MARKETING_ITEM_TYPES).toContain('press_release');
+      expect(MARKETING_ITEM_TYPES).toContain('email_campaign');
+      expect(MARKETING_ITEM_TYPES).toContain('launch_announcement');
+      expect(MARKETING_ITEM_TYPES).toHaveLength(10);
+
+      expect(MARKETING_PRIORITIES).toEqual(['critical', 'high', 'medium', 'low']);
+      expect(MIN_MARKETING_ITEMS).toBe(3);
     });
 
-    it('should export evaluateKillGate function', () => {
-      expect(typeof evaluateKillGate).toBe('function');
+    it('should export checkReleaseReadiness function', () => {
+      expect(typeof checkReleaseReadiness).toBe('function');
     });
   });
 
-  describe('validate() - Go/No-Go decision', () => {
-    it('should pass for valid go decision', () => {
+  describe('validate() - Marketing items', () => {
+    const validBase = {
+      marketing_strategy_summary: 'Comprehensive marketing strategy for launch',
+    };
+
+    it('should pass for well-formed data with 3+ marketing items', () => {
       const validData = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [
-          { name: 'Deploy to production', status: 'ready', owner: 'DevOps' },
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
         ],
-        launch_date: '2026-03-01',
       };
-      const result = stage23.validate(validData);
+      const result = stage23.validate(validData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
     });
 
-    it('should pass for valid no-go decision', () => {
-      const validData = {
-        go_decision: 'no-go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [
-          { name: 'Deploy to production', status: 'blocked' },
-        ],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(validData);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toEqual([]);
-    });
-
-    it('should fail for missing go_decision', () => {
+    it('should fail for fewer than 3 marketing items', () => {
       const invalidData = {
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('go_decision'))).toBe(true);
-    });
-
-    it('should fail for invalid go_decision value', () => {
-      const invalidData = {
-        go_decision: 'maybe',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('go_decision'))).toBe(true);
-    });
-  });
-
-  describe('validate() - Required plans', () => {
-    const validTasks = [{ name: 'Deploy to production', status: 'ready' }];
-
-    it('should fail for missing incident_response_plan', () => {
-      const invalidData = {
-        go_decision: 'go',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: validTasks,
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('incident_response_plan'))).toBe(true);
-    });
-
-    it('should fail for incident_response_plan < 10 characters', () => {
-      const invalidData = {
-        go_decision: 'go',
-        incident_response_plan: 'Short',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: validTasks,
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('incident_response_plan'))).toBe(true);
-    });
-
-    it('should fail for missing monitoring_setup', () => {
-      const invalidData = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: validTasks,
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('monitoring_setup'))).toBe(true);
-    });
-
-    it('should fail for monitoring_setup < 10 characters', () => {
-      const invalidData = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Short',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: validTasks,
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('monitoring_setup'))).toBe(true);
-    });
-
-    it('should fail for missing rollback_plan', () => {
-      const invalidData = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        launch_tasks: validTasks,
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('rollback_plan'))).toBe(true);
-    });
-
-    it('should fail for rollback_plan < 10 characters', () => {
-      const invalidData = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Short',
-        launch_tasks: validTasks,
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('rollback_plan'))).toBe(true);
-    });
-  });
-
-  describe('validate() - Launch tasks', () => {
-    const validPlans = {
-      go_decision: 'go',
-      incident_response_plan: 'Incident response plan details',
-      monitoring_setup: 'Monitoring setup details',
-      rollback_plan: 'Rollback plan details',
-      launch_date: '2026-03-01',
-    };
-
-    it('should fail for missing launch_tasks', () => {
-      const invalidData = { ...validPlans };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('launch_tasks'))).toBe(true);
-    });
-
-    it('should fail for empty launch_tasks array', () => {
-      const invalidData = {
-        ...validPlans,
-        launch_tasks: [],
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('launch_tasks') && e.includes('at least 1'))).toBe(true);
-    });
-
-    it('should fail for launch task missing name', () => {
-      const invalidData = {
-        ...validPlans,
-        launch_tasks: [{ status: 'ready' }],
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('launch_tasks[0].name'))).toBe(true);
-    });
-
-    it('should fail for launch task missing status', () => {
-      const invalidData = {
-        ...validPlans,
-        launch_tasks: [{ name: 'Deploy to production' }],
-      };
-      const result = stage23.validate(invalidData);
-      expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('launch_tasks[0].status'))).toBe(true);
-    });
-
-    it('should pass with optional owner field', () => {
-      const validData = {
-        ...validPlans,
-        launch_tasks: [
-          { name: 'Deploy to production', status: 'ready', owner: 'DevOps' },
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
         ],
       };
-      const result = stage23.validate(validData);
-      expect(result.valid).toBe(true);
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items') && e.includes('at least 3'))).toBe(true);
     });
 
-    it('should validate multiple launch tasks', () => {
-      const validData = {
-        ...validPlans,
-        launch_tasks: [
-          { name: 'Deploy to production', status: 'ready', owner: 'DevOps' },
-          { name: 'Update DNS', status: 'pending', owner: 'SRE' },
-          { name: 'Notify customers', status: 'ready', owner: 'Marketing' },
+    it('should fail for empty marketing items array', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
+    });
+
+    it('should fail for missing marketing_items', () => {
+      const invalidData = {
+        ...validBase,
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
+    });
+
+    it('should fail for marketing item missing title', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
         ],
       };
-      const result = stage23.validate(validData);
-      expect(result.valid).toBe(true);
-    });
-  });
-
-  describe('validate() - Launch date', () => {
-    const validData = {
-      go_decision: 'go',
-      incident_response_plan: 'Incident response plan details',
-      monitoring_setup: 'Monitoring setup details',
-      rollback_plan: 'Rollback plan details',
-      launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-    };
-
-    it('should fail for missing launch_date', () => {
-      const invalidData = { ...validData };
-      const result = stage23.validate(invalidData);
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('launch_date'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items[0].title'))).toBe(true);
     });
 
-    it('should fail for empty launch_date', () => {
+    it('should fail for marketing item missing description', () => {
       const invalidData = {
-        ...validData,
-        launch_date: '',
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
       };
-      const result = stage23.validate(invalidData);
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('launch_date'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items[0].description'))).toBe(true);
     });
 
-    it('should pass for valid launch_date', () => {
-      const validDataWithDate = {
-        ...validData,
-        launch_date: '2026-03-01',
+    it('should fail for marketing item with invalid type', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'invalid_type', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
       };
-      const result = stage23.validate(validDataWithDate);
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items[0].type'))).toBe(true);
+    });
+
+    it('should fail for marketing item with invalid priority', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'urgent' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items[0].priority'))).toBe(true);
+    });
+
+    it('should validate multiple items and collect all errors', () => {
+      const invalidData = {
+        ...validBase,
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
+          { description: 'Missing title', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', type: 'email_campaign', priority: 'medium' },
+        ],
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items[1].title'))).toBe(true);
+      expect(result.errors.some(e => e.includes('marketing_items[2].description'))).toBe(true);
+    });
+  });
+
+  describe('validate() - Marketing strategy summary', () => {
+    const validItems = [
+      { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+      { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+      { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
+    ];
+
+    it('should fail for missing marketing_strategy_summary', () => {
+      const invalidData = {
+        marketing_items: validItems,
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_strategy_summary'))).toBe(true);
+    });
+
+    it('should fail for marketing_strategy_summary shorter than 10 characters', () => {
+      const invalidData = {
+        marketing_items: validItems,
+        marketing_strategy_summary: 'Short',
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_strategy_summary'))).toBe(true);
+    });
+
+    it('should pass for marketing_strategy_summary with 10+ characters', () => {
+      const validData = {
+        marketing_items: validItems,
+        marketing_strategy_summary: 'Comprehensive marketing strategy for product launch',
+      };
+      const result = stage23.validate(validData, { logger: { warn: () => {} } });
       expect(result.valid).toBe(true);
     });
   });
 
-  describe('evaluateKillGate() - Pure function', () => {
-    it('should pass for go decision with all required plans', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
+  describe('computeDerived()', () => {
+    it('should spread input data to output', () => {
+      const data = {
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main page', type: 'landing_page', priority: 'critical' },
+        ],
+        marketing_strategy_summary: 'Strategy summary text here',
+      };
+      const result = stage23.computeDerived(data);
+      expect(result.marketing_items).toEqual(data.marketing_items);
+      expect(result.marketing_strategy_summary).toBe(data.marketing_strategy_summary);
+    });
+  });
+
+  describe('checkReleaseReadiness() - Pure function', () => {
+    it('should return ready when stage22 promotion gate passes and release decision is release', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'release' },
+        },
       });
-      expect(result.decision).toBe('pass');
-      expect(result.blockProgression).toBe(false);
+      expect(result.ready).toBe(true);
       expect(result.reasons).toEqual([]);
     });
 
-    it('should kill for no-go decision', () => {
-      const result = evaluateKillGate({
-        go_decision: 'no-go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('no_go_decision');
-      expect(result.reasons[0].message).toContain('no-go');
-    });
-
-    it('should kill for null go_decision', () => {
-      const result = evaluateKillGate({
-        go_decision: null,
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('no_go_decision');
-      expect(result.reasons[0].message).toContain('not set');
-    });
-
-    it('should kill for go decision missing incident_response_plan', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: null,
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('missing_incident_response');
-      expect(result.reasons[0].message).toContain('Incident response plan');
-    });
-
-    it('should kill for go decision with short incident_response_plan', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Short',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('missing_incident_response');
-    });
-
-    it('should kill for go decision missing monitoring_setup', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: null,
-        rollback_plan: 'Rollback plan details',
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('missing_monitoring');
-      expect(result.reasons[0].message).toContain('Monitoring setup');
-    });
-
-    it('should kill for go decision missing rollback_plan', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: null,
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('missing_rollback');
-      expect(result.reasons[0].message).toContain('Rollback plan');
-    });
-
-    it('should collect multiple blockers for go decision', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: null,
-        monitoring_setup: 'Short',
-        rollback_plan: null,
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(3);
-      expect(result.reasons.some(r => r.type === 'missing_incident_response')).toBe(true);
-      expect(result.reasons.some(r => r.type === 'missing_monitoring')).toBe(true);
-      expect(result.reasons.some(r => r.type === 'missing_rollback')).toBe(true);
-    });
-
-    it('should not check plans for no-go decision', () => {
-      const result = evaluateKillGate({
-        go_decision: 'no-go',
-        incident_response_plan: null,
-        monitoring_setup: null,
-        rollback_plan: null,
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons).toHaveLength(1);
-      expect(result.reasons[0].type).toBe('no_go_decision');
-    });
-
-    it('should kill when stage22 promotion gate has not passed (Launch CC-3)', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
+    it('should return ready when release decision is approved', () => {
+      const result = checkReleaseReadiness({
         stage22Data: {
-          promotion_gate: { pass: false, blockers: ['Test coverage below 80%', 'Integration failing'] },
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'approved' },
         },
       });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      const s22Reason = result.reasons.find(r => r.type === 'stage22_not_complete');
-      expect(s22Reason).toBeDefined();
-      expect(s22Reason.message).toContain('2 blocker(s)');
-    });
-
-    it('should pass when stage22 promotion gate has passed', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        stage22Data: {
-          promotion_gate: { pass: true, blockers: [], warnings: [] },
-        },
-      });
-      expect(result.decision).toBe('pass');
-      expect(result.blockProgression).toBe(false);
-    });
-
-    it('should not check stage22 when stage22Data is not provided', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-      });
-      expect(result.decision).toBe('pass');
-      expect(result.reasons.some(r => r.type === 'stage22_not_complete')).toBe(false);
-    });
-  });
-
-  describe('computeDerived() - Kill gate integration', () => {
-    it('should include kill gate evaluation in derived fields', () => {
-      const data = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.computeDerived(data);
-      expect(result.decision).toBe('pass');
-      expect(result.blockProgression).toBe(false);
+      expect(result.ready).toBe(true);
       expect(result.reasons).toEqual([]);
     });
 
-    it('should block progression for no-go decision', () => {
-      const data = {
-        go_decision: 'no-go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [{ name: 'Deploy', status: 'blocked' }],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.computeDerived(data);
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
+    it('should return not ready when stage22Data is not provided', () => {
+      const result = checkReleaseReadiness({ stage22Data: undefined });
+      expect(result.ready).toBe(false);
       expect(result.reasons).toHaveLength(1);
+      expect(result.reasons[0]).toContain('not available');
     });
 
-    it('should block progression for missing plans', () => {
-      const data = {
-        go_decision: 'go',
-        incident_response_plan: null,
-        monitoring_setup: null,
-        rollback_plan: null,
-        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.computeDerived(data);
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
+    it('should return not ready when promotion gate has not passed', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: false, blockers: ['Test coverage below 80%'] },
+          releaseDecision: { decision: 'release' },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.some(r => r.includes('promotion gate'))).toBe(true);
+    });
+
+    it('should return not ready when release decision is not release or approved', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+          releaseDecision: { decision: 'hold' },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
+    });
+
+    it('should return not ready when releaseDecision is missing', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: true, blockers: [] },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons.some(r => r.includes('release decision not found'))).toBe(true);
+    });
+
+    it('should collect multiple reasons when both gate and decision fail', () => {
+      const result = checkReleaseReadiness({
+        stage22Data: {
+          promotion_gate: { pass: false, blockers: ['Not ready'] },
+          releaseDecision: { decision: 'hold' },
+        },
+      });
+      expect(result.ready).toBe(false);
+      expect(result.reasons).toHaveLength(2);
+      expect(result.reasons.some(r => r.includes('promotion gate'))).toBe(true);
+      expect(result.reasons.some(r => r.includes('release decision'))).toBe(true);
+    });
+
+    it('should handle null stage22Data', () => {
+      const result = checkReleaseReadiness({ stage22Data: null });
+      expect(result.ready).toBe(false);
       expect(result.reasons.length).toBeGreaterThan(0);
-    });
-
-    it('should pass prerequisites stage22Data to kill gate', () => {
-      const data = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-        launch_date: '2026-03-01',
-      };
-      const prerequisites = {
-        stage22: { promotion_gate: { pass: false, blockers: ['Not ready'] } },
-      };
-      const result = stage23.computeDerived(data, prerequisites);
-      expect(result.decision).toBe('kill');
-      expect(result.reasons.some(r => r.type === 'stage22_not_complete')).toBe(true);
-    });
-
-    it('should preserve original data fields', () => {
-      const data = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [{ name: 'Deploy', status: 'ready' }],
-        launch_date: '2026-03-01',
-      };
-      const result = stage23.computeDerived(data);
-      expect(result.go_decision).toBe('go');
-      expect(result.incident_response_plan).toBe('Incident response plan details');
-      expect(result.monitoring_setup).toBe('Monitoring setup details');
-      expect(result.rollback_plan).toBe('Rollback plan details');
-      expect(result.launch_tasks).toEqual(data.launch_tasks);
-      expect(result.launch_date).toBe('2026-03-01');
     });
   });
 
   describe('Edge cases', () => {
     it('should handle null data in validate', () => {
-      const result = stage23.validate(null);
+      const result = stage23.validate(null, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should handle undefined data in validate', () => {
-      const result = stage23.validate(undefined);
+      const result = stage23.validate(undefined, { logger: { warn: () => {} } });
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle whitespace-only strings in kill gate', () => {
-      const result = evaluateKillGate({
-        go_decision: 'go',
-        incident_response_plan: '          ',
-        monitoring_setup: '          ',
-        rollback_plan: '          ',
-      });
-      expect(result.decision).toBe('kill');
-      expect(result.blockProgression).toBe(true);
-      expect(result.reasons.length).toBe(3);
+    it('should handle non-array marketing_items', () => {
+      const invalidData = {
+        marketing_items: 'not an array',
+        marketing_strategy_summary: 'Valid strategy summary text',
+      };
+      const result = stage23.validate(invalidData, { logger: { warn: () => {} } });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('marketing_items'))).toBe(true);
     });
   });
 
   describe('Integration: validate + computeDerived workflow', () => {
     it('should work together for valid data', () => {
       const data = {
-        go_decision: 'go',
-        incident_response_plan: 'Incident response plan details',
-        monitoring_setup: 'Monitoring setup details',
-        rollback_plan: 'Rollback plan details',
-        launch_tasks: [
-          { name: 'Deploy to production', status: 'ready', owner: 'DevOps' },
-          { name: 'Update DNS', status: 'ready', owner: 'SRE' },
+        marketing_items: [
+          { title: 'Landing Page', description: 'Main product landing page', type: 'landing_page', priority: 'critical' },
+          { title: 'Press Release', description: 'Launch press release', type: 'press_release', priority: 'high' },
+          { title: 'Email Blast', description: 'Launch email campaign', type: 'email_campaign', priority: 'medium' },
         ],
-        launch_date: '2026-03-01',
+        marketing_strategy_summary: 'Comprehensive marketing strategy for product launch',
+        sd_bridge_payloads: [],
+        marketing_sds: [],
       };
-      const validation = stage23.validate(data);
+      const validation = stage23.validate(data, { logger: { warn: () => {} } });
       expect(validation.valid).toBe(true);
 
       const computed = stage23.computeDerived(data);
-      expect(computed.decision).toBe('pass');
-      expect(computed.blockProgression).toBe(false);
+      expect(computed.marketing_items).toEqual(data.marketing_items);
+      expect(computed.marketing_strategy_summary).toBe(data.marketing_strategy_summary);
     });
 
     it('should not require validation before computeDerived (decoupled)', () => {
       const data = {
-        go_decision: 'invalid',
-        incident_response_plan: 'Short',
-        monitoring_setup: null,
-        rollback_plan: null,
-        launch_tasks: [],
-        launch_date: '',
+        marketing_items: [],
+        marketing_strategy_summary: 'Short',
       };
+      // computeDerived should not throw even with invalid data
       const computed = stage23.computeDerived(data);
-      expect(computed.decision).toBe('kill');
-      expect(computed.blockProgression).toBe(true);
+      expect(computed.marketing_items).toEqual([]);
     });
   });
 });
