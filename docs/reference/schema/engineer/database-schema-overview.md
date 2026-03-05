@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-05T01:07:39.810Z
-**Tables**: 510
+**Generated**: 2026-03-05T13:07:08.715Z
+**Tables**: 512
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -540,6 +540,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [validation_gate_registry](tables/validation_gate_registry.md) | N/A (RLS restricted) | ✅ | 2 | Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001. |
 | [venture_archetypes](tables/venture_archetypes.md) | N/A (RLS restricted) | ✅ | 5 | Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies. |
 | [venture_artifacts](tables/venture_artifacts.md) | N/A (RLS restricted) | ✅ | 5 | - |
+| [venture_asset_registry](tables/venture_asset_registry.md) | N/A (RLS restricted) | ✅ | 5 | Tracks assets owned by each venture for acquisition readiness assessment |
 | [venture_blueprints](tables/venture_blueprints.md) | N/A (RLS restricted) | ✅ | 1 | Pre-made venture templates for the Blueprint Browse entry path in Stage 0 |
 | [venture_briefs](tables/venture_briefs.md) | N/A (RLS restricted) | ✅ | 1 | Stage 0 output contract - structured brief produced by the synthesis engine that becomes Stage 1 input |
 | [venture_capabilities](tables/venture_capabilities.md) | N/A (RLS restricted) | ✅ | 2 | Tracks reusable capabilities across ventures for the Capability Lattice (SD-LEO-FEAT-CAPABILITY-LATTICE-001) |
@@ -549,6 +550,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_dependencies](tables/venture_dependencies.md) | N/A (RLS restricted) | ✅ | 2 | Directed dependency graph between ventures for stage-transition blocking (Decision #32) |
 | [venture_documents](tables/venture_documents.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_drafts](tables/venture_drafts.md) | N/A (RLS restricted) | ✅ | 1 | - |
+| [venture_exit_profiles](tables/venture_exit_profiles.md) | N/A (RLS restricted) | ✅ | 4 | Per-venture exit model selection with version history |
 | [venture_financial_contract](tables/venture_financial_contract.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [venture_nursery](tables/venture_nursery.md) | N/A (RLS restricted) | ✅ | 1 | Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation |
 | [venture_phase_budgets](tables/venture_phase_budgets.md) | N/A (RLS restricted) | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Phase-level token budget tracking. Enables granular budget allocation across venture lifecycle stages. Default 20k tokens per phase. |
@@ -739,7 +741,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (384 tables)
+### Other (386 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1112,6 +1114,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [validation_gate_registry](tables/validation_gate_registry.md) - Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001.
 - [venture_archetypes](tables/venture_archetypes.md) - Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies.
 - [venture_artifacts](tables/venture_artifacts.md)
+- [venture_asset_registry](tables/venture_asset_registry.md) - Tracks assets owned by each venture for acquisition readiness assessment
 - [venture_blueprints](tables/venture_blueprints.md) - Pre-made venture templates for the Blueprint Browse entry path in Stage 0
 - [venture_briefs](tables/venture_briefs.md) - Stage 0 output contract - structured brief produced by the synthesis engine that becomes Stage 1 input
 - [venture_capabilities](tables/venture_capabilities.md) - Tracks reusable capabilities across ventures for the Capability Lattice (SD-LEO-FEAT-CAPABILITY-LATTICE-001)
@@ -1121,6 +1124,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_dependencies](tables/venture_dependencies.md) - Directed dependency graph between ventures for stage-transition blocking (Decision #32)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
+- [venture_exit_profiles](tables/venture_exit_profiles.md) - Per-venture exit model selection with version history
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md) - Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation
 - [venture_raid_summary](tables/venture_raid_summary.md)
@@ -2085,6 +2089,10 @@ _Key relationships between tables:_
 **venture_artifacts**:
 - `venture_id` → `ventures.id`
 
+**venture_asset_registry**:
+- `created_by` → `users.id`
+- `venture_id` → `ventures.id`
+
 **venture_briefs**:
 - `profile_id` → `evaluation_profiles.id`
 - `venture_id` → `ventures.id`
@@ -2112,6 +2120,10 @@ _Key relationships between tables:_
 - `provider_venture_id` → `ventures.id`
 
 **venture_documents**:
+- `venture_id` → `ventures.id`
+
+**venture_exit_profiles**:
+- `created_by` → `users.id`
 - `venture_id` → `ventures.id`
 
 **venture_financial_contract**:
