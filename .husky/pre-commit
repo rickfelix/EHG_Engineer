@@ -551,11 +551,11 @@ if [ "$LOC_TOTAL" -gt "$LOC_THRESHOLD" ]; then
   echo "⚠️  LARGE CHANGE DETECTED: $LOC_TOTAL lines (threshold: $LOC_THRESHOLD)"
   echo ""
 
-  # SD-LEO-INFRA-PRE-COMMIT-HOOK-001: Exempt docs/, reports/, test/ branches from LOC threshold
-  # These branches typically contain documentation regeneration, reports, or test additions
-  # that don't need SD tracking (database-generated CLAUDE.md files often exceed 500 LOC)
-  if echo "$BRANCH" | grep -qE '^(docs|reports|test)/'; then
-    echo "   ✅ Large change permitted - documentation/reports/test branch"
+  # SD-LEO-INFRA-PRE-COMMIT-HOOK-001: Exempt docs/, reports/, test/, chore/ branches from LOC threshold
+  # These branches typically contain documentation regeneration, reports, test additions,
+  # or housekeeping (cleanup, gitignore, config) that don't need SD tracking
+  if echo "$BRANCH" | grep -qE '^(docs|reports|test|chore)/'; then
+    echo "   ✅ Large change permitted - documentation/reports/test/chore branch"
     echo "   ℹ️  Branch type '$(echo "$BRANCH" | cut -d'/' -f1)/' exempt from SD requirement"
   # If we have an SD, verify it's in EXEC phase
   elif [ ! -z "$SD_ID" ]; then

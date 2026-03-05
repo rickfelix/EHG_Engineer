@@ -139,6 +139,9 @@ class BranchCleanupV2 {
       await this.saveReviewQueue();
     }
 
+    // Prune local branches whose upstream tracking branch was deleted (merged PRs)
+    await this.pruneMergedOrphans(repoPath);
+
     return this.stats;
   }
 
@@ -174,6 +177,71 @@ class BranchCleanupV2 {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Find local branches whose upstream tracking branch is gone (merged & deleted on remote).
+   * These are branches where `git branch -vv` shows ": gone]" — the remote was deleted
+   * (typically after a PR merge + branch deletion).
+   */
+  async getMergedOrphanBranches(repoPath) {
+    try {
+      const { stdout } = await execAsync(
+        `cd "${repoPath}" && git branch -vv 2>/dev/null | grep ': gone]' || true`,
+        { maxBuffer: 5 * 1024 * 1024, timeout: 10000 }
+      );
+
+      if (!stdout.trim()) return [];
+
+      return stdout.trim().split('\n').filter(Boolean).map(line => {
+        // Format: "  branch-name  hash [origin/branch-name: gone] commit message"
+        const name = line.trim().replace(/^\* /, '').split(/\s+/)[0];
+        return name;
+      }).filter(name => name && !PROTECTED_BRANCHES.includes(name));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Prune local branches whose upstream tracking branch is gone.
+   * Run after Stage 1/2 analysis as a separate cleanup step.
+   */
+  async pruneMergedOrphans(repoPath) {
+    const orphans = await this.getMergedOrphanBranches(repoPath);
+    if (orphans.length === 0) return 0;
+
+    console.log(`\n🧹 MERGED ORPHANS: ${orphans.length} local branches with deleted upstream`);
+
+    if (this.options.dryRun) {
+      for (const name of orphans) {
+        console.log(`   • ${name} (upstream gone)`);
+      }
+      console.log('\n💡 These will be auto-deleted with --execute');
+      return 0;
+    }
+
+    let deleted = 0;
+    for (const name of orphans) {
+      try {
+        await execAsync(
+          `cd "${repoPath}" && git branch -D "${name}" 2>/dev/null`,
+          { timeout: 10000 }
+        );
+        deleted++;
+        if (this.options.verbose) {
+          console.log(`   ✅ Deleted: ${name}`);
+        }
+      } catch {
+        if (this.options.verbose) {
+          console.log(`   ❌ Failed: ${name}`);
+        }
+      }
+    }
+
+    console.log(`   ✅ Pruned ${deleted}/${orphans.length} merged orphan branches`);
+    this.stats.deleted += deleted;
+    return deleted;
   }
 
   async categorizeBranch(branch, repoPath) {
