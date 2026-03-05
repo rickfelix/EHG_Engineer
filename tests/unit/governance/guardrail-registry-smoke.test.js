@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { list, check, _test, MODES } from '../../../lib/governance/guardrail-registry.js';
-const { register, reset } = _test;
+const { reset } = _test;
 
 describe('Guardrail Registry Smoke Tests', () => {
   beforeEach(() => {
@@ -140,8 +140,13 @@ describe('Guardrail Registry Smoke Tests', () => {
   });
 
   describe('register() removed (SD-LEO-GEN-ENFORCE-GOVERNANCE-GUARDRAILS-001)', () => {
-    it('is no longer exported — runtime guardrail replacement was a bypass vector', () => {
-      expect(registryExports.register).toBeUndefined();
+    it('is no longer a public export — runtime guardrail replacement was a bypass vector', async () => {
+      const mod = await import('../../../lib/governance/guardrail-registry.js');
+      expect(mod.register).toBeUndefined();
+    });
+
+    it('is no longer in _test exports', () => {
+      expect(_test.register).toBeUndefined();
     });
   });
 

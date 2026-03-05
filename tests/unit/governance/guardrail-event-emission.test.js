@@ -9,11 +9,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   check,
   emitGuardrailEvent,
-  register,
-  reset,
+  _test,
   MODES,
 } from '../../../lib/governance/guardrail-registry.js';
 import { classifyRoutingMode, ROUTING_MODES } from '../../../lib/eva/event-bus/event-router.js';
+
+const { reset } = _test;
 
 beforeEach(() => {
   reset();
