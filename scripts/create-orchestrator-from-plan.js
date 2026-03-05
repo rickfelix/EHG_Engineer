@@ -36,7 +36,7 @@ function parsePhases(content) {
   let current = null;
 
   for (const line of lines) {
-    const match = line.match(/^##?\s*(Phase|Implementation Phase|Step)\s+(\d+)[:\s-]*(.*)/i);
+    const match = line.match(/^#{1,4}\s*(Phase|Implementation Phase|Step)\s+(\d+)[:\s-]*(.*)/i);
     if (match) {
       if (current) phases.push(current);
       current = {
@@ -155,6 +155,18 @@ async function main() {
   const orchestratorId = randomUUID();
   const orchestratorKey = generateSDKey(title, '-ORCH');
 
+  // Build strategic objectives from phases
+  const strategicObjectives = phases.map(p => `Phase ${p.number}: ${p.title}`);
+  if (strategicObjectives.length === 0) {
+    strategicObjectives.push(title);
+  }
+
+  // Build success criteria from traceable metrics
+  const successCriteria = allMetrics.slice(0, 5).map(m => m.metric);
+  if (successCriteria.length === 0) {
+    successCriteria.push(`All implementation phases completed for ${title}`);
+  }
+
   const orchestratorSD = {
     id: orchestratorId,
     sd_key: orchestratorKey,
@@ -168,6 +180,13 @@ async function main() {
     scope: `Orchestrator coordinating ${phases.length} implementation phase(s)`,
     rationale: `Auto-generated from vision (${visionKey || 'N/A'}) and architecture (${archKey || 'N/A'}) plans`,
     success_metrics: allMetrics,
+    key_principles: ['Follow LEO Protocol for all changes', 'Ensure backward compatibility'],
+    strategic_objectives: strategicObjectives,
+    success_criteria: successCriteria,
+    implementation_guidelines: [],
+    dependencies: [],
+    risks: [],
+    stakeholders: [],
     metadata: {
       is_orchestrator: true,
       vision_key: visionKey,
@@ -175,7 +194,8 @@ async function main() {
       auto_generated: true,
       child_count: phases.length
     },
-    key_changes: JSON.stringify(phases.map(p => `Phase ${p.number}: ${p.title}`)),
+    key_changes: phases.map(p => `Phase ${p.number}: ${p.title}`),
+    target_application: 'EHG_Engineer',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -211,7 +231,8 @@ async function main() {
       const childId = randomUUID();
       const suffix = `-${String.fromCharCode(64 + phase.number)}`; // -A, -B, -C...
       const childKey = `${orchestratorKey}${suffix}`;
-      const childType = inferSDType(phase.title, phase.description || '', phase.content || '');
+      const typeResult = inferSDType(phase.title, phase.description || '', phase.content || '');
+      const childType = typeof typeResult === 'string' ? typeResult : (typeResult?.sdType || 'feature');
 
       // Inherit strategic fields from orchestrator
       const inherited = inheritStrategicFields(orchestratorSD, {
@@ -244,10 +265,14 @@ async function main() {
         scope: phase.content?.trim().slice(0, 2000) || phase.description || '',
         rationale: `Phase ${phase.number} of ${title}`,
         success_metrics: phaseMetrics.length > 0 ? phaseMetrics : inherited.success_metrics || [],
-        key_principles: inherited.key_principles || [],
-        strategic_objectives: inherited.strategic_objectives || [],
-        success_criteria: inherited.success_criteria || [],
+        key_principles: inherited.key_principles?.length > 0 ? inherited.key_principles : orchestratorSD.key_principles,
+        strategic_objectives: inherited.strategic_objectives?.length > 0 ? inherited.strategic_objectives : [`Phase ${phase.number}: ${phase.title}`],
+        success_criteria: inherited.success_criteria?.length > 0 ? inherited.success_criteria : [`Phase ${phase.number} deliverables completed`],
+        implementation_guidelines: [],
+        dependencies: [],
         risks: inherited.risks || [],
+        stakeholders: [],
+        target_application: 'EHG_Engineer',
         metadata: {
           vision_key: visionKey,
           arch_key: archKey,
@@ -255,7 +280,7 @@ async function main() {
           parent_orchestrator: orchestratorKey,
           auto_generated: true
         },
-        key_changes: JSON.stringify([phase.title]),
+        key_changes: [phase.title],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

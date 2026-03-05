@@ -195,6 +195,10 @@ src/client/dist/
 .claude/auto-proceed-state.json
 .claude/continuation-state.json
 .claude/status-line/
+.claude/plans/
+.claude/projects/
+.claude/.protocol-sync/
+.claude/tmp-*
 .claude-code-config.json
 .claude-status-line
 .leo-status.json
