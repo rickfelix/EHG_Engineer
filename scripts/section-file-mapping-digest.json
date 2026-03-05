@@ -15,21 +15,16 @@
     ]
   },
   "CLAUDE_CORE_DIGEST.md": {
-    "description": "Essential workflow context (~10-12k chars) - non-negotiable rules and constraints",
+    "description": "Essential enforcement rules (~10k chars) - non-negotiable constraints only",
     "sections": [
       "rca_issue_resolution_mandate",
       "mandatory_phase_transitions",
       "negative_constraints_global",
-      "execution_philosophy",
       "critical_term_definitions",
       "sd_type_workflow_paths",
-      "sub_agent_config",
-      "mandatory_agent_invocation",
-      "sub_agent_prompt_quality",
-      "auto_proceed_mode",
-      "sd_continuation_truth_table",
-      "governance_strategic_hierarchy"
-    ]
+      "mandatory_agent_invocation"
+    ],
+    "_removed_sections_note": "auto_proceed_mode (10K, already in CLAUDE.md), sd_continuation_truth_table (7K, already in CLAUDE.md), sub_agent_config (2K, DB agent semantic triggers are reference), sub_agent_prompt_quality (reference), execution_philosophy (reference), governance_strategic_hierarchy (reference). ESCALATE TO FULL FILE WHEN: writing sub-agent prompts, debugging gate failures, understanding governance hierarchy, DB agent semantic triggering."
   },
   "CLAUDE_LEAD_DIGEST.md": {
     "description": "LEAD phase essentials (~3-4k chars) - approval gates and validation requirements",
@@ -42,24 +37,22 @@
     "_removed_sections_note": "mandatory_phase_transitions_lead (duplicate of CORE_DIGEST mandatory_phase_transitions)"
   },
   "CLAUDE_PLAN_DIGEST.md": {
-    "description": "PLAN phase essentials (~4-5k chars) - PRD requirements and validation gates",
+    "description": "PLAN phase essentials (~4k chars) - PRD requirements and constraints",
     "sections": [
       "prd_creation_anti_pattern",
       "plan_pre_exec_checklist",
-      "handoff_quality_gates",
       "negative_constraints_plan"
     ],
-    "_removed_sections_note": "mandatory_phase_transitions_plan (duplicate of CORE_DIGEST mandatory_phase_transitions)"
+    "_removed_sections_note": "handoff_quality_gates (8.6K, gates run in code not from agent reading MD — reference only), mandatory_phase_transitions_plan (duplicate of CORE_DIGEST). ESCALATE TO FULL FILE WHEN: debugging gate failures, understanding specific gate scoring."
   },
   "CLAUDE_EXEC_DIGEST.md": {
-    "description": "EXEC phase essentials (~4-5k chars) - implementation requirements and constraints",
+    "description": "EXEC phase essentials (~8k chars) - implementation requirements and constraints",
     "sections": [
       "exec_implementation_requirements",
       "exec_dual_test_requirement",
       "branch_hygiene_gate",
-      "negative_constraints_exec",
-      "exec_retrospective_anti_patterns"
+      "negative_constraints_exec"
     ],
-    "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE_DIGEST mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol)"
+    "_removed_sections_note": "exec_retrospective_anti_patterns (reference, escalate for retro writing), mandatory_phase_transitions_exec (duplicate of CORE), migration_execution_delegation (duplicate of CORE). ESCALATE TO FULL FILE WHEN: writing retrospectives, debugging migration failures."
   }
 }

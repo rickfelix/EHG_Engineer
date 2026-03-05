@@ -1,50 +1,13 @@
-
-## Table of Contents
-
-- [🚨 EXEC Agent Implementation Requirements](#-exec-agent-implementation-requirements)
-  - [MANDATORY Pre-Implementation Verification](#mandatory-pre-implementation-verification)
-  - [Implementation Checklist Template](#implementation-checklist-template)
-- [EXEC Pre-Implementation Checklist](#exec-pre-implementation-checklist)
-  - [Common Mistakes to AVOID](#common-mistakes-to-avoid)
-  - [Gate 0 Enforcement 🚨](#gate-0-enforcement-)
-- [❌ Anti-Patterns from Retrospectives (EXEC Phase)](#-anti-patterns-from-retrospectives-exec-phase)
-  - [1. Manual Test Creation (2-3 hours waste per SD)](#1-manual-test-creation-2-3-hours-waste-per-sd)
-  - [2. Skipping Knowledge Retrieval (4-6 hours rework)](#2-skipping-knowledge-retrieval-4-6-hours-rework)
-  - [3. Workarounds Before Root Cause (2-3x time multiplier)](#3-workarounds-before-root-cause-2-3x-time-multiplier)
-  - [4. Accepting Environmental Blockers Without Debug](#4-accepting-environmental-blockers-without-debug)
-  - [5. Manual Sub-Agent Simulation (15% quality delta)](#5-manual-sub-agent-simulation-15-quality-delta)
-  - [Quick Reference](#quick-reference)
-- [EXEC Phase Negative Constraints](#exec-phase-negative-constraints)
-- [🚫 EXEC Phase Negative Constraints](#-exec-phase-negative-constraints)
-  - [NC-EXEC-001: No Scope Creep](#nc-exec-001-no-scope-creep)
-  - [NC-EXEC-002: No Wrong Application Directory](#nc-exec-002-no-wrong-application-directory)
-  - [NC-EXEC-003: No Tests Without Execution](#nc-exec-003-no-tests-without-execution)
-  - [NC-EXEC-004: No Manual Sub-Agent Simulation](#nc-exec-004-no-manual-sub-agent-simulation)
-  - [NC-EXEC-005: No UI Without Visibility](#nc-exec-005-no-ui-without-visibility)
-- [EXEC Dual Test Requirement](#exec-dual-test-requirement)
-  - [⚠️ MANDATORY: Dual Test Execution](#-mandatory-dual-test-execution)
-  - [Why This Matters](#why-this-matters)
-- [🌿 Branch Hygiene Gate (MANDATORY)](#-branch-hygiene-gate-mandatory)
-- [Branch Hygiene Gate (MANDATORY)](#branch-hygiene-gate-mandatory)
-  - [MANDATORY Before PLAN-TO-EXEC Handoff](#mandatory-before-plan-to-exec-handoff)
-  - [1. Branch Freshness (≤7 Days Stale)](#1-branch-freshness-7-days-stale)
-  - [2. Single-SD Branch Rule (No Mixing)](#2-single-sd-branch-rule-no-mixing)
-  - [3. Merge Main at Phase Transitions](#3-merge-main-at-phase-transitions)
-  - [4. Maximum Branch Lifetime (14 Days)](#4-maximum-branch-lifetime-14-days)
-  - [Branch Health Check Script](#branch-health-check-script)
-  - [Why This Matters](#why-this-matters)
-  - [EXEC Agent Action](#exec-agent-action)
-
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-02-20T21:53:28.254Z -->
-<!-- git_commit: 58a9f184 -->
-<!-- db_snapshot_hash: 1787835840a9ee3a -->
+<!-- generated_at: 2026-03-05T19:13:19.784Z -->
+<!-- git_commit: 666354e7 -->
+<!-- db_snapshot_hash: a35556466804808f -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
 
 **Protocol**: LEO 4.3.3
-**Purpose**: Implementation requirements and constraints (<5k chars)
+**Purpose**: Implementation requirements and constraints (<10k chars)
 
 ---
 
@@ -71,14 +34,6 @@ Before writing ANY code, EXEC MUST:
 - Undefined behavior for error states
 
 **Example Ambiguity Resolution**:
-```
-❌ BAD: Guess at implementation based on similar feature
-✅ GOOD:
-  - Tier 1: Re-read PRD section 3.2 → Still unclear on validation rules
-  - Tier 2: Query user_stories table → Found implementation_context with validation spec
-  - Resolution: "Email validation will use regex pattern from US-002 context"
-```
-
 0.5. **PRD INTEGRATION SECTION CHECK** 📋 CRITICAL
    - Read PRD `integration_operationalization` section BEFORE coding
    - Extract and document:
@@ -111,152 +66,9 @@ Before writing ANY code, EXEC MUST:
    - Confirm component exists at specified location
    - Document: "Target component: [full/path/to/component.tsx]"
 
-4. **Application Context** 📁
-   - Verify correct application directory
-   - Confirm port number matches PRD (8080 for frontend, 3000 for backend API)
-   - Document: "Application: [/path/to/app] on port [XXXX]"
+4. **Application C
 
-5. **Visual Confirmation** 📸
-   - Screenshot current state BEFORE changes
-   - Identify exact location for new features
-   - Document: "Current state captured, changes will go at [location]"
-
-### Implementation Checklist Template
-```markdown
-## EXEC Pre-Implementation Checklist
-- [ ] **Ambiguity Check**: All requirements clear and unambiguous
-- [ ] **Ambiguity Resolution**: [NONE FOUND | Resolved via Tier X: description]
-- [ ] **Application verified**: [EHG unified frontend confirmed]
-- [ ] **Feature type**: [User /src/ | Admin /src/components/admin/ | Backend API EHG_Engineer]
-- [ ] **URL verified**: [exact URL from PRD]
-- [ ] **Page accessible**: [YES/NO]
-- [ ] **Component identified**: [path/to/component]
-- [ ] **Port confirmed**: [8080 frontend | 3000 backend API]
-- [ ] **Screenshot taken**: [timestamp]
-- [ ] **Target location confirmed**: [where changes go]
-```
-
-### Common Mistakes to AVOID
-- ❌ Assuming component location based on naming similarity
-- ❌ Implementing without navigating to the URL first
-- ❌ Ignoring port numbers in URLs
-- ❌ Pattern matching without verification
-- ❌ Starting to code before completing checklist
-- ❌ Not restarting dev servers after changes
-- ❌ **CRITICAL**: Creating files for PRDs, handoffs, or documentation
-- ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
-- ❌ **CRITICAL**: Putting admin UI code in EHG_Engineer (all UI goes to EHG)
-
-### Gate 0 Enforcement 🚨
-
-**CRITICAL**: Before ANY implementation work, verify SD has passed LEAD approval:
-
-**Valid Phases for Implementation**:
-- PLANNING, PLAN_PRD, PLAN, PLAN_VERIFICATION (PRD creation)
-- EXEC (implementation authorized)
-
-**Blocked Phases**:
-- draft - SD not approved
-- LEAD_APPROVAL - Awaiting LEAD approval
-
-**Why This Matters**: Gate 0 prevents the anti-pattern where code is shipped while SDs remain in draft status. This is the "naming illusion" - using LEO terminology while bypassing LEO workflow.
-
-**Enforcement Layers**:
-1. Pre-commit hook (blocks commits for draft SDs)
-2. CLAUDE_EXEC.md (mandatory Phase 1 check)
-3. LOC threshold (>500 LOC requires SD)
-4. verify-sd-phase.js script
-5. GitHub Action (PR validation)
-6. Orchestrator progress calculation
-
-See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for complete documentation.
-
-**If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
-
-## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
-
-**Source**: Analysis of 175 high-quality retrospectives (score ≥60)
-
-These patterns have caused significant time waste. **AVOID them.**
-
-### 1. Manual Test Creation (2-3 hours waste per SD)
-**Pattern**: Writing tests manually instead of delegating to testing-agent
-
-**Evidence**: SD-VENTURE-UNIFICATION-001
-> "Manual test creation wasted 2-3 hours instead of delegating to testing-agent"
-
-**Fix**: Always use Task tool with `subagent_type: "testing-agent"`
-```
-Task(subagent_type="testing-agent", prompt="Create E2E tests for [feature] based on PRD acceptance criteria")
-```
-
----
-
-### 2. Skipping Knowledge Retrieval (4-6 hours rework)
-**Pattern**: Starting implementation without querying retrospectives/patterns
-
-**Evidence**: SD-VENTURE-UNIFICATION-001
-> "Zero consultation of retrospectives before implementation (research_confidence_score = 0.00)"
-
-**Fix**: Run before EXEC starts:
-If `research_confidence_score = 0.00`, you skipped this step.
-
----
-
-### 3. Workarounds Before Root Cause (2-3x time multiplier)
-**Pattern**: Working around issues instead of fixing root causes
-
-**Evidence**: SD-2025-1020-E2E-SELECTORS (Score: 100)
-> "Time spent on workarounds >> time to follow protocol"
-> "Multiple workarounds instead of fixing root causes"
-
-**Fix**: Before implementing a workaround, ask:
-- [ ] Have I identified the root cause?
-- [ ] Is this a fix or a workaround?
-- [ ] What is the time multiplier? (typical: 2-3x)
-
----
-
-### 4. Accepting Environmental Blockers Without Debug
-**Pattern**: Accepting "it's environmental" without investigation
-
-**Evidence**: SD-VENTURE-UNIFICATION-001
-> "Environmental issues treated as blockers rather than investigation opportunities"
-
-**Fix**: 5-step minimum debug before accepting as environmental:
-1. Check logs for specific error
-2. Verify credentials/tokens
-3. Test in isolation (curl, manual browser)
-4. Check network/ports
-5. Compare with known working state
-
----
-
-### 5. Manual Sub-Agent Simulation (15% quality delta)
-**Pattern**: Manually creating sub-agent results instead of executing tools
-
-**Evidence**: SD-RECONNECT-014 (Score: 90)
-> "Manual: 75% confidence. Tool: 60% confidence (-15% delta)"
-> "Manual sub-agent simulation is an anti-pattern"
-
-**Fix**: Sub-agent results MUST have:
-- `tool_executed: true`
-- Actual execution timestamp
-- Real output (not simulated)
-
----
-
-### Quick Reference
-
-| Anti-Pattern | Time Cost | Fix |
-|--------------|-----------|-----|
-| Manual test creation | 2-3 hours | Use testing-agent |
-| Skip knowledge retrieval | 4-6 hours | Run automated-knowledge-retrieval.js |
-| Workarounds first | 2-3x multiplier | Fix root cause |
-| Accept environmental | Hours of idle | 5-step debug minimum |
-| Simulate sub-agents | 15% quality loss | Execute actual tools |
-
-**Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
+*...truncated. Read full file for complete section.*
 
 ## EXEC Phase Negative Constraints
 
@@ -392,6 +204,13 @@ When starting implementation:
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
 
+## ESCALATE TO FULL FILE WHEN
+
+- Writing retrospectives (need anti-pattern checklist from CLAUDE_EXEC.md)
+- Debugging migration failures (need migration execution protocol)
+- Need detailed implementation examples or patterns
+
+
 
 ---
 
@@ -402,5 +221,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-02-20 4:53:28 PM*
+*DIGEST generated: 2026-03-05 2:13:19 PM*
 *Protocol: 4.3.3*
