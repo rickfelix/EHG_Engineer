@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 23: Production Launch
+# Stage 23: Marketing Preparation
+
+> **Implementation Note**: This stage is implemented as **"Marketing Preparation"** (`slug: marketing-preparation`, `id: stage-23`) in `lib/eva/stage-templates/stage-23.js`. The original design spec called it "Production Launch".
+<!-- Design spec title: Production Launch -->
 
 ## Metadata
 - **Category**: Protocol

@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 2: AI Multi-Model Critique
+# Stage 2: Idea Analysis
+
+> **Implementation Note**: This stage is implemented as **"Idea Analysis"** (`slug: idea-validation`, `id: stage-02`) in `lib/eva/stage-templates/stage-02.js`. The original design spec called it "AI Multi-Model Critique".
+<!-- Design spec title: AI Multi-Model Critique -->
 
 ## Metadata
 - **Category**: Protocol

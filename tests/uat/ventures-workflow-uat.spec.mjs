@@ -32,27 +32,27 @@ const WORKFLOW_PHASES = [
   { name: 'THE ENGINE', stages: [6, 7, 8, 9], color: 'blue' },
   { name: 'THE IDENTITY', stages: [10, 11, 12], color: 'cyan' },
   { name: 'THE BLUEPRINT', stages: [13, 14, 15, 16], color: 'emerald' },
-  { name: 'THE BUILD LOOP', stages: [17, 18, 19, 20], color: 'amber' },
-  { name: 'LAUNCH & LEARN', stages: [21, 22, 23, 24, 25], color: 'rose' },
+  { name: 'THE BUILD LOOP', stages: [17, 18, 19, 20, 21, 22], color: 'amber' },
+  { name: 'LAUNCH & LEARN', stages: [23, 24, 25], color: 'rose' },
 ];
 
 const STAGE_NAMES = {
-  1: 'Draft Idea', 2: 'AI Review', 3: 'Comprehensive Validation',
-  4: 'Competitive Intelligence', 5: 'Profitability Forecasting',
-  6: 'Risk Evaluation', 7: 'Comprehensive Planning',
-  8: 'Problem Decomposition', 9: 'Gap Analysis',
-  10: 'Technical Review', 11: 'Go-to-Market Strategy',
-  12: 'Sales & Success Logic',
-  13: 'Tech Stack Interrogation', 14: 'Data Model & Architecture',
-  15: 'Epic & User Story Breakdown', 16: 'Schema Firewall',
-  17: 'Environment Config', 18: 'MVP Development Loop',
-  19: 'Integration & API Layer', 20: 'Security & Performance',
-  21: 'QA & UAT', 22: 'Deployment', 23: 'Production Launch',
-  24: 'Analytics & Feedback', 25: 'Optimization & Scale',
+  1: 'Idea Capture', 2: 'Idea Analysis', 3: 'Kill Gate',
+  4: 'Competitive Landscape', 5: 'Kill Gate (Financial)',
+  6: 'Risk Assessment', 7: 'Revenue Architecture',
+  8: 'Business Model Canvas', 9: 'Exit Strategy',
+  10: 'Customer & Brand Foundation', 11: 'Naming & Visual Identity',
+  12: 'GTM & Sales Strategy',
+  13: 'Product Roadmap', 14: 'Technical Architecture',
+  15: 'Risk Register', 16: 'Financial Projections',
+  17: 'Pre-Build Checklist', 18: 'Sprint Planning',
+  19: 'Build Execution', 20: 'Quality Assurance',
+  21: 'Build Review', 22: 'Release Readiness', 23: 'Marketing Preparation',
+  24: 'Launch Readiness', 25: 'Launch Execution',
 };
 
-const KILL_GATES = [3, 5, 13, 23];
-const PROMOTION_GATES = [16, 17, 22];
+const KILL_GATES = [3, 5, 13];
+const PROMOTION_GATES = [16, 22];
 
 // Ensure screenshot directory exists
 if (!fs.existsSync(SCREENSHOT_DIR)) {

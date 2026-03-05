@@ -133,7 +133,7 @@ const childSDs = [
     progress_percentage: 0,
     sd_type: 'infrastructure',
     sd_key: 'E2E-BRAND-VARIANTS-R2',
-    description: 'Tests Stage 10 (Strategic Naming) brand variant workflows including manual entry, domain validation, chairman approval, and lifecycle transitions.',
+    description: 'Tests Stage 10 (Customer & Brand Foundation) brand variant workflows including manual entry, domain validation, chairman approval, and lifecycle transitions.',
     rationale: 'Brand naming is a critical Stage 10 workflow. These tests validate the complete brand variant lifecycle from creation to approval.',
     scope: 'Tests: brand-variants/ (5 files) - manual-entry.spec.ts, domain-validation.spec.ts, chairman-approval.spec.ts, lifecycle-transitions.spec.ts, table-operations.spec.ts. Total: 5 files, ~60 test cases.',
     relationship_type: 'child',

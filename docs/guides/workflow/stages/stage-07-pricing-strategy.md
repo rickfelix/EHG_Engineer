@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 7: Pricing Strategy
+# Stage 7: Revenue Architecture
+
+> **Implementation Note**: This stage is implemented as **"Revenue Architecture"** (`slug: pricing`, `id: stage-07`) in `lib/eva/stage-templates/stage-07.js`. The original design spec called it "Pricing Strategy".
+<!-- Design spec title: Pricing Strategy -->
 
 ## Metadata
 - **Category**: Protocol

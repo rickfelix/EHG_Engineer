@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 11: Go-to-Market Strategy
+# Stage 11: Naming & Visual Identity
+
+> **Implementation Note**: This stage is implemented as **"Naming & Visual Identity"** (`slug: naming-visual-identity`, `id: stage-11`) in `lib/eva/stage-templates/stage-11.js`. The original design spec called it "Go-to-Market Strategy".
+<!-- Design spec title: Go-to-Market Strategy -->
 
 ## Metadata
 - **Category**: Protocol

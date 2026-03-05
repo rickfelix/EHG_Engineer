@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 15: Epic & User Story Breakdown
+# Stage 15: Risk Register
+
+> **Implementation Note**: This stage is implemented as **"Risk Register"** (`slug: risk-register`, `id: stage-15`) in `lib/eva/stage-templates/stage-15.js`. The original design spec called it "Epic & User Story Breakdown".
+<!-- Design spec title: Epic & User Story Breakdown -->
 
 ## Metadata
 - **Category**: Protocol

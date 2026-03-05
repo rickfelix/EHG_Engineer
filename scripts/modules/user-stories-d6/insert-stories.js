@@ -34,7 +34,7 @@ export async function insertUserStories() {
 
   console.log('\n=== User Story Generation for SD-VISION-TRANSITION-001D6 ===\n');
   console.log(`Total stories to insert: ${allStories.length}\n`);
-  console.log('Note: This script includes Stories for Stages 21-23. Stage 24-25 stories are defined');
+  console.log('Note: This script includes Stories for Stages 21-23 (Phase 5: BUILD LOOP + Phase 6: LAUNCH & LEARN). Stage 24-25 stories are defined');
   console.log('    in the comprehensive version but truncated here due to file size.\n');
 
   const client = await createDatabaseClient('engineer', { verbose: false });

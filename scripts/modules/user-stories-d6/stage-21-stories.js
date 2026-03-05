@@ -1,6 +1,6 @@
 /**
- * User Stories for Stage 21: QA & UAT
- * Part of SD-VISION-TRANSITION-001D6 (Stages 21-25: LAUNCH & LEARN)
+ * User Stories for Stage 21: Build Review
+ * Part of SD-VISION-TRANSITION-001D6 (Stages 21-22: THE BUILD LOOP, 23-25: LAUNCH & LEARN)
  *
  * @module stage-21-stories
  */

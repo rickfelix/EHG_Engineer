@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 17: Environment & Agent Config
+# Stage 17: Pre-Build Checklist
+
+> **Implementation Note**: This stage is implemented as **"Pre-Build Checklist"** (`slug: pre-build-checklist`, `id: stage-17`) in `lib/eva/stage-templates/stage-17.js`. The original design spec called it "Environment & Agent Config". Note: Now Phase 5 (THE BUILD LOOP).
+<!-- Design spec title: Environment & Agent Config -->
 
 ## Metadata
 - **Category**: Protocol

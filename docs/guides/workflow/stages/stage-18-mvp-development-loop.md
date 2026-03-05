@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 18: MVP Development Loop
+# Stage 18: Sprint Planning
+
+> **Implementation Note**: This stage is implemented as **"Sprint Planning"** (`slug: sprint-planning`, `id: stage-18`) in `lib/eva/stage-templates/stage-18.js`. The original design spec called it "MVP Development Loop".
+<!-- Design spec title: MVP Development Loop -->
 
 ## Metadata
 - **Category**: Protocol

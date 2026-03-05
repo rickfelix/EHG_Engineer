@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 21: QA & UAT
+# Stage 21: Build Review
+
+> **Implementation Note**: This stage is implemented as **"Build Review"** (`slug: integration-testing`, `id: stage-21`) in `lib/eva/stage-templates/stage-21.js`. The original design spec called it "QA & UAT". Note: Phase change — now Phase 5 (THE BUILD LOOP), not Phase 6.
+<!-- Design spec title: QA & UAT -->
 
 ## Metadata
 - **Category**: Protocol

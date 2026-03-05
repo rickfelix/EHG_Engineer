@@ -8,7 +8,7 @@ tags: [general, auto-generated]
 ---
 # EHG Platform Route Audit Report
 
-
+> **Historical Note (2026-03-05)**: This report uses the original design-spec stage names. The codebase implementation uses different titles. See `docs/guides/workflow/stages/README.md` for current implementation titles. Phase boundaries also changed: Phase 5 = Stages 17-22, Phase 6 = Stages 23-25.
 
 ## Table of Contents
 

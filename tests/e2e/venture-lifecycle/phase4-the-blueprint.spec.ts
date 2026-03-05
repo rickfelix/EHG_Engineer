@@ -3,10 +3,10 @@
  * "Kochel Firewall" - Technical specification phase
  *
  * Tests the technical planning phase:
- * - Stage 13: Tech Stack Interrogation (DECISION_GATE, requires: tech_stack_decision)
- * - Stage 14: Data Model & Architecture (SD_REQUIRED, requires: data_model, erd_diagram)
- * - Stage 15: Epic & User Story Breakdown (SD_REQUIRED, requires: user_story_pack)
- * - Stage 16: Spec-Driven Schema Generation (DECISION_GATE, SD_REQUIRED, requires: api_contract, schema_spec)
+ * - Stage 13: Product Roadmap (DECISION_GATE, requires: tech_stack_decision)
+ * - Stage 14: Technical Architecture (SD_REQUIRED, requires: data_model, erd_diagram)
+ * - Stage 15: Risk Register (SD_REQUIRED, requires: user_story_pack)
+ * - Stage 16: Financial Projections (DECISION_GATE, SD_REQUIRED, requires: api_contract, schema_spec)
  */
 
 import { test, expect } from '@playwright/test';
@@ -56,9 +56,9 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
   });
 
   // =========================================================================
-  // STAGE 13: Tech Stack Interrogation (Decision Gate)
+  // STAGE 13: Product Roadmap (Decision Gate)
   // =========================================================================
-  test.describe('Stage 13: Tech Stack Interrogation', () => {
+  test.describe('Stage 13: Product Roadmap', () => {
     test('S13-001: should advance to Stage 13', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -155,9 +155,9 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
   });
 
   // =========================================================================
-  // STAGE 14: Data Model & Architecture (SD_REQUIRED)
+  // STAGE 14: Technical Architecture (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 14: Data Model & Architecture', () => {
+  test.describe('Stage 14: Technical Architecture', () => {
     test('S14-001: should advance to Stage 14', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -276,9 +276,9 @@ erDiagram
   });
 
   // =========================================================================
-  // STAGE 15: Epic & User Story Breakdown (SD_REQUIRED)
+  // STAGE 15: Risk Register (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 15: Epic & User Story Breakdown', () => {
+  test.describe('Stage 15: Risk Register', () => {
     test('S15-001: should advance to Stage 15', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -377,9 +377,9 @@ erDiagram
   });
 
   // =========================================================================
-  // STAGE 16: Spec-Driven Schema Generation (Decision Gate, SD_REQUIRED)
+  // STAGE 16: Financial Projections (Decision Gate, SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 16: Spec-Driven Schema Generation', () => {
+  test.describe('Stage 16: Financial Projections', () => {
     test('S16-001: should advance to Stage 16', async () => {
       const { error } = await supabase
         .from('ventures')

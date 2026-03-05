@@ -8,7 +8,7 @@ tags: [reference, auto-generated]
 ---
 # Route Assessment Strategic Directive Structure
 
-
+> **Note (2026-03-05)**: The SD description blocks below contain original design-spec stage names as they were inserted into the database. The tree diagram has been updated to use implementation titles. See `docs/guides/workflow/stages/README.md` for the complete mapping between implementation and design-spec names. Phase boundaries: Phase 5 = Stages 17-22 (THE BUILD LOOP), Phase 6 = Stages 23-25 (LAUNCH & LEARN).
 
 ## Table of Contents
 
@@ -34,8 +34,8 @@ tags: [reference, auto-generated]
   - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
   - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
   - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
-  - [Phase 5: THE BUILD LOOP (Stages 17-20)](#phase-5-the-build-loop-stages-17-20)
-  - [Phase 6: LAUNCH & LEARN (Stages 21-25)](#phase-6-launch-learn-stages-21-25)
+  - [Phase 5: THE BUILD LOOP (Stages 17-22)](#phase-5-the-build-loop-stages-17-20)
+  - [Phase 6: LAUNCH & LEARN (Stages 23-25)](#phase-6-launch-learn-stages-21-25)
 - [Corrective Actions Required](#corrective-actions-required)
   - [Critical (P0)](#critical-p0)
   - [High (P1)](#high-p1)
@@ -60,8 +60,8 @@ tags: [reference, auto-generated]
   - [Phase 2: THE ENGINE (Stages 6-9)](#phase-2-the-engine-stages-6-9)
   - [Phase 3: THE IDENTITY (Stages 10-12)](#phase-3-the-identity-stages-10-12)
   - [Phase 4: THE BLUEPRINT (Stages 13-16)](#phase-4-the-blueprint-stages-13-16)
-  - [Phase 5: THE BUILD LOOP (Stages 17-20)](#phase-5-the-build-loop-stages-17-20)
-  - [Phase 6: LAUNCH & LEARN (Stages 21-25)](#phase-6-launch-learn-stages-21-25)
+  - [Phase 5: THE BUILD LOOP (Stages 17-22)](#phase-5-the-build-loop-stages-17-20)
+  - [Phase 6: LAUNCH & LEARN (Stages 23-25)](#phase-6-launch-learn-stages-21-25)
 - [Report Generation SD](#report-generation-sd)
   - [SD-ROUTE-AUDIT-REPORT (Final Report Generation)](#sd-route-audit-report-final-report-generation)
 - [Summary Statistics](#summary-statistics)
@@ -124,31 +124,31 @@ SD-ROUTE-AUDIT-PARENT (Parent - Orchestrator)
 ├── SD-ROUTE-AUDIT-ADMIN (Child - Platform Administration Routes)
 │
 └── SD-ROUTE-AUDIT-WORKFLOW (Child - 25-Stage Workflow Parent)
-    ├── SD-ROUTE-AUDIT-STAGE-01 (Child of WORKFLOW - Draft Idea)
-    ├── SD-ROUTE-AUDIT-STAGE-02 (Child of WORKFLOW - AI Multi-Model Critique)
-    ├── SD-ROUTE-AUDIT-STAGE-03 (Child of WORKFLOW - Market Validation)
-    ├── SD-ROUTE-AUDIT-STAGE-04 (Child of WORKFLOW - Competitive Intelligence)
-    ├── SD-ROUTE-AUDIT-STAGE-05 (Child of WORKFLOW - Profitability Forecasting)
-    ├── SD-ROUTE-AUDIT-STAGE-06 (Child of WORKFLOW - Risk Evaluation)
-    ├── SD-ROUTE-AUDIT-STAGE-07 (Child of WORKFLOW - Pricing Strategy)
+    ├── SD-ROUTE-AUDIT-STAGE-01 (Child of WORKFLOW - Idea Capture)
+    ├── SD-ROUTE-AUDIT-STAGE-02 (Child of WORKFLOW - Idea Analysis)
+    ├── SD-ROUTE-AUDIT-STAGE-03 (Child of WORKFLOW - Kill Gate)
+    ├── SD-ROUTE-AUDIT-STAGE-04 (Child of WORKFLOW - Competitive Landscape)
+    ├── SD-ROUTE-AUDIT-STAGE-05 (Child of WORKFLOW - Kill Gate Financial)
+    ├── SD-ROUTE-AUDIT-STAGE-06 (Child of WORKFLOW - Risk Assessment)
+    ├── SD-ROUTE-AUDIT-STAGE-07 (Child of WORKFLOW - Revenue Architecture)
     ├── SD-ROUTE-AUDIT-STAGE-08 (Child of WORKFLOW - Business Model Canvas)
-    ├── SD-ROUTE-AUDIT-STAGE-09 (Child of WORKFLOW - Exit-Oriented Design)
-    ├── SD-ROUTE-AUDIT-STAGE-10 (Child of WORKFLOW - Strategic Naming)
-    ├── SD-ROUTE-AUDIT-STAGE-11 (Child of WORKFLOW - Go-to-Market Strategy)
-    ├── SD-ROUTE-AUDIT-STAGE-12 (Child of WORKFLOW - Sales & Success Logic)
-    ├── SD-ROUTE-AUDIT-STAGE-13 (Child of WORKFLOW - Tech Stack Interrogation)
-    ├── SD-ROUTE-AUDIT-STAGE-14 (Child of WORKFLOW - Data Model & Architecture)
-    ├── SD-ROUTE-AUDIT-STAGE-15 (Child of WORKFLOW - Epic & User Story Breakdown)
-    ├── SD-ROUTE-AUDIT-STAGE-16 (Child of WORKFLOW - Spec-Driven Schema)
-    ├── SD-ROUTE-AUDIT-STAGE-17 (Child of WORKFLOW - Environment & Agent Config)
-    ├── SD-ROUTE-AUDIT-STAGE-18 (Child of WORKFLOW - MVP Development Loop)
-    ├── SD-ROUTE-AUDIT-STAGE-19 (Child of WORKFLOW - Integration & API Layer)
-    ├── SD-ROUTE-AUDIT-STAGE-20 (Child of WORKFLOW - Security & Performance)
-    ├── SD-ROUTE-AUDIT-STAGE-21 (Child of WORKFLOW - QA & UAT)
-    ├── SD-ROUTE-AUDIT-STAGE-22 (Child of WORKFLOW - Deployment & Infrastructure)
-    ├── SD-ROUTE-AUDIT-STAGE-23 (Child of WORKFLOW - Production Launch)
-    ├── SD-ROUTE-AUDIT-STAGE-24 (Child of WORKFLOW - Analytics & Feedback)
-    └── SD-ROUTE-AUDIT-STAGE-25 (Child of WORKFLOW - Optimization & Scale)
+    ├── SD-ROUTE-AUDIT-STAGE-09 (Child of WORKFLOW - Exit Strategy)
+    ├── SD-ROUTE-AUDIT-STAGE-10 (Child of WORKFLOW - Customer & Brand Foundation)
+    ├── SD-ROUTE-AUDIT-STAGE-11 (Child of WORKFLOW - Naming & Visual Identity)
+    ├── SD-ROUTE-AUDIT-STAGE-12 (Child of WORKFLOW - GTM & Sales Strategy)
+    ├── SD-ROUTE-AUDIT-STAGE-13 (Child of WORKFLOW - Product Roadmap)
+    ├── SD-ROUTE-AUDIT-STAGE-14 (Child of WORKFLOW - Technical Architecture)
+    ├── SD-ROUTE-AUDIT-STAGE-15 (Child of WORKFLOW - Risk Register)
+    ├── SD-ROUTE-AUDIT-STAGE-16 (Child of WORKFLOW - Financial Projections)
+    ├── SD-ROUTE-AUDIT-STAGE-17 (Child of WORKFLOW - Pre-Build Checklist)
+    ├── SD-ROUTE-AUDIT-STAGE-18 (Child of WORKFLOW - Sprint Planning)
+    ├── SD-ROUTE-AUDIT-STAGE-19 (Child of WORKFLOW - Build Execution)
+    ├── SD-ROUTE-AUDIT-STAGE-20 (Child of WORKFLOW - Quality Assurance)
+    ├── SD-ROUTE-AUDIT-STAGE-21 (Child of WORKFLOW - Build Review)
+    ├── SD-ROUTE-AUDIT-STAGE-22 (Child of WORKFLOW - Release Readiness)
+    ├── SD-ROUTE-AUDIT-STAGE-23 (Child of WORKFLOW - Marketing Preparation)
+    ├── SD-ROUTE-AUDIT-STAGE-24 (Child of WORKFLOW - Launch Readiness)
+    └── SD-ROUTE-AUDIT-STAGE-25 (Child of WORKFLOW - Launch Execution)
 ```
 
 ---
@@ -177,8 +177,8 @@ Upon completion of all child and grandchild SDs, the following report will be ge
 ### Phase 2: THE ENGINE (Stages 6-9)
 ### Phase 3: THE IDENTITY (Stages 10-12)
 ### Phase 4: THE BLUEPRINT (Stages 13-16)
-### Phase 5: THE BUILD LOOP (Stages 17-20)
-### Phase 6: LAUNCH & LEARN (Stages 21-25)
+### Phase 5: THE BUILD LOOP (Stages 17-22)
+### Phase 6: LAUNCH & LEARN (Stages 23-25)
 ## Corrective Actions Required
 ### Critical (P0)
 ### High (P1)
@@ -830,8 +830,8 @@ the stage assessments and aggregates findings into the workflow section of the a
 - Phase 2: THE ENGINE (Stages 6-9) - Business model and strategy
 - Phase 3: THE IDENTITY (Stages 10-12) - Brand and positioning
 - Phase 4: THE BLUEPRINT (Stages 13-16) - Technical architecture
-- Phase 5: THE BUILD LOOP (Stages 17-20) - Implementation
-- Phase 6: LAUNCH & LEARN (Stages 21-25) - Deployment and optimization`,
+- Phase 5: THE BUILD LOOP (Stages 17-22) - Implementation
+- Phase 6: LAUNCH & LEARN (Stages 23-25) - Deployment and optimization`,
 
   rationale: `The 25-stage venture workflow is the core differentiator of EHG. Each stage has
 specific UI requirements, data dependencies, gate logic, and progression rules. Deep assessment
@@ -1828,7 +1828,7 @@ from simulation to production. Assessment must verify elevation mechanics.`,
 }
 ```
 
-### Phase 5: THE BUILD LOOP (Stages 17-20)
+### Phase 5: THE BUILD LOOP (Stages 17-22)
 
 #### SD-ROUTE-AUDIT-STAGE-17
 
@@ -2056,7 +2056,7 @@ ensures these tools identify and help resolve issues.`,
 }
 ```
 
-### Phase 6: LAUNCH & LEARN (Stages 21-25)
+### Phase 6: LAUNCH & LEARN (Stages 23-25)
 
 #### SD-ROUTE-AUDIT-STAGE-21
 

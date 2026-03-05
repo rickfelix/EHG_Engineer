@@ -1,12 +1,15 @@
 /**
- * Phase 6: LAUNCH & LEARN - Venture Lifecycle E2E Tests (Stages 21-25)
+ * Phase 6: LAUNCH & LEARN - Venture Lifecycle E2E Tests (Stages 23-25)
  *
- * Tests the deployment and optimization phase:
- * - Stage 21: QA & UAT (SD_REQUIRED, requires: test_plan, uat_report)
- * - Stage 22: Deployment & Infrastructure (SD_REQUIRED, requires: deployment_runbook)
- * - Stage 23: Production Launch (DECISION_GATE, requires: launch_checklist)
- * - Stage 24: Analytics & Feedback (requires: analytics_dashboard)
- * - Stage 25: Optimization & Scale (SD_REQUIRED, requires: optimization_roadmap)
+ * Note: Stages 21-22 moved to Phase 5 (THE BUILD LOOP). This file still tests
+ * stages 21-25 for E2E coverage but phases are: 21-22 = BUILD LOOP, 23-25 = LAUNCH & LEARN.
+ *
+ * Tests the launch and learning phase:
+ * - Stage 21: Build Review (SD_REQUIRED, requires: test_plan, uat_report)
+ * - Stage 22: Release Readiness (SD_REQUIRED, requires: deployment_runbook)
+ * - Stage 23: Marketing Preparation (DECISION_GATE, requires: launch_checklist)
+ * - Stage 24: Launch Readiness (requires: analytics_dashboard)
+ * - Stage 25: Launch Execution (SD_REQUIRED, requires: optimization_roadmap)
  *
  * Test coverage requirement: minimum 80% as per lifecycle_stage_config
  */
@@ -58,9 +61,9 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
   });
 
   // =========================================================================
-  // STAGE 21: QA & UAT (SD_REQUIRED)
+  // STAGE 21: Build Review (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 21: QA & UAT', () => {
+  test.describe('Stage 21: Build Review', () => {
     test('S21-001: should advance to Stage 21', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -177,9 +180,9 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
   });
 
   // =========================================================================
-  // STAGE 22: Deployment & Infrastructure (SD_REQUIRED)
+  // STAGE 22: Release Readiness (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 22: Deployment & Infrastructure', () => {
+  test.describe('Stage 22: Release Readiness', () => {
     test('S22-001: should advance to Stage 22', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -252,9 +255,9 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
   });
 
   // =========================================================================
-  // STAGE 23: Production Launch (Decision Gate)
+  // STAGE 23: Marketing Preparation (Decision Gate)
   // =========================================================================
-  test.describe('Stage 23: Production Launch', () => {
+  test.describe('Stage 23: Marketing Preparation', () => {
     test('S23-001: should advance to Stage 23', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -327,9 +330,9 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
   });
 
   // =========================================================================
-  // STAGE 24: Analytics & Feedback
+  // STAGE 24: Launch Readiness
   // =========================================================================
-  test.describe('Stage 24: Analytics & Feedback', () => {
+  test.describe('Stage 24: Launch Readiness', () => {
     test('S24-001: should advance to Stage 24', async () => {
       const { error } = await supabase
         .from('ventures')
@@ -417,9 +420,9 @@ test.describe('Phase 6: LAUNCH & LEARN (Stages 21-25)', () => {
   });
 
   // =========================================================================
-  // STAGE 25: Optimization & Scale (SD_REQUIRED)
+  // STAGE 25: Launch Execution (SD_REQUIRED)
   // =========================================================================
-  test.describe('Stage 25: Optimization & Scale', () => {
+  test.describe('Stage 25: Launch Execution', () => {
     test('S25-001: should advance to Stage 25 (final stage)', async () => {
       const { error } = await supabase
         .from('ventures')

@@ -14,12 +14,12 @@ tags: [general, auto-generated]
 - [1. Build Loop Overview](#1-build-loop-overview)
   - [Phase-Stage Mapping (Database Source of Truth)](#phase-stage-mapping-database-source-of-truth)
 - [2. Stage Entry/Exit Criteria Matrix](#2-stage-entryexit-criteria-matrix)
-  - [Stage 17: Environment & Agent Config (ENVCONFIG)](#stage-17-environment-agent-config-envconfig)
-  - [Stage 18: MVP Development Loop (MVP)](#stage-18-mvp-development-loop-mvp)
-  - [Stage 19: Build Execution (Integration & API Layer)](#stage-19-build-execution-integration-api-layer)
-  - [Stage 20: Quality Assurance (Security & Performance)](#stage-20-quality-assurance-security-performance)
-  - [Stage 21: QA & UAT (Build Review)](#stage-21-qa-uat-build-review)
-  - [Stage 22: Deployment & Infrastructure (Release Readiness)](#stage-22-deployment-infrastructure-release-readiness)
+  - [Stage 17: Pre-Build Checklist (ENVCONFIG)](#stage-17-pre-build-checklist-envconfig)
+  - [Stage 18: Sprint Planning (MVP)](#stage-18-sprint-planning-mvp)
+  - [Stage 19: Build Execution (INTEGRATION)](#stage-19-build-execution-integration)
+  - [Stage 20: Quality Assurance (SECURITY)](#stage-20-quality-assurance-security)
+  - [Stage 21: Build Review (QA)](#stage-21-build-review-qa)
+  - [Stage 22: Release Readiness (DEPLOY)](#stage-22-release-readiness-deploy)
 - [3. Artifact Manifest per Stage](#3-artifact-manifest-per-stage)
   - [Data Flow Chain](#data-flow-chain)
 - [4. Decision Gate Documentation](#4-decision-gate-documentation)
@@ -41,7 +41,7 @@ tags: [general, auto-generated]
 
 ## 1. Build Loop Overview
 
-The Build Loop spans **Phase 5: THE BUILD LOOP** (Stages 17-20) and **Phase 6: LAUNCH & LEARN** (Stages 21-22 for QA/Deploy, 23-25 for post-launch).
+The Build Loop spans **Phase 5: THE BUILD LOOP** (Stages 17-22) and **Phase 6: LAUNCH & LEARN** (Stages 23-25 for launch).
 
 The analysis step implementations (stages 17-22) form the core build-to-deploy pipeline. Each stage consumes the previous stage's output and produces structured JSON artifacts via LLM analysis.
 
@@ -49,12 +49,12 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 | Stage | Name | Phase | Work Type | SD Required | SD Suffix | Dependencies |
 |-------|------|-------|-----------|-------------|-----------|--------------|
-| 17 | Environment & Agent Config | 5 - THE BUILD LOOP | sd_required | Yes | ENVCONFIG | [16] |
-| 18 | MVP Development Loop | 5 - THE BUILD LOOP | sd_required | Yes | MVP | [17] |
-| 19 | Integration & API Layer | 5 - THE BUILD LOOP | sd_required | Yes | INTEGRATION | [18] |
-| 20 | Security & Performance | 5 - THE BUILD LOOP | sd_required | Yes | SECURITY | [19] |
-| 21 | QA & UAT | 6 - LAUNCH & LEARN | sd_required | Yes | QA | [20] |
-| 22 | Deployment & Infrastructure | 6 - LAUNCH & LEARN | sd_required | Yes | DEPLOY | [21] |
+| 17 | Pre-Build Checklist | 5 - THE BUILD LOOP | sd_required | Yes | ENVCONFIG | [16] |
+| 18 | Sprint Planning | 5 - THE BUILD LOOP | sd_required | Yes | MVP | [17] |
+| 19 | Build Execution | 5 - THE BUILD LOOP | sd_required | Yes | INTEGRATION | [18] |
+| 20 | Quality Assurance | 5 - THE BUILD LOOP | sd_required | Yes | SECURITY | [19] |
+| 21 | Build Review | 5 - THE BUILD LOOP | sd_required | Yes | QA | [20] |
+| 22 | Release Readiness | 5 - THE BUILD LOOP | sd_required | Yes | DEPLOY | [21] |
 
 **All 6 stages require SDs** — each generates a LEO Protocol Strategic Directive for implementation tracking.
 
@@ -62,7 +62,7 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 ## 2. Stage Entry/Exit Criteria Matrix
 
-### Stage 17: Environment & Agent Config (ENVCONFIG)
+### Stage 17: Pre-Build Checklist (ENVCONFIG)
 
 **Entry Criteria:**
 - Stage 16 (Spec-Driven Schema Generation) complete
@@ -81,7 +81,7 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 ---
 
-### Stage 18: MVP Development Loop (MVP)
+### Stage 18: Sprint Planning (MVP)
 
 **Entry Criteria:**
 - Stage 17 readiness decision is `go` or `conditional_go`
@@ -101,7 +101,7 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 ---
 
-### Stage 19: Build Execution (Integration & API Layer)
+### Stage 19: Build Execution (INTEGRATION)
 
 **Entry Criteria:**
 - Stage 18 sprint plan complete
@@ -122,7 +122,7 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 ---
 
-### Stage 20: Quality Assurance (Security & Performance)
+### Stage 20: Quality Assurance (SECURITY)
 
 **Entry Criteria:**
 - Stage 19 build execution data available
@@ -149,7 +149,7 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 ---
 
-### Stage 21: QA & UAT (Build Review)
+### Stage 21: Build Review (QA)
 
 **Entry Criteria:**
 - Stage 20 QA assessment available
@@ -173,7 +173,7 @@ The analysis step implementations (stages 17-22) form the core build-to-deploy p
 
 ---
 
-### Stage 22: Deployment & Infrastructure (Release Readiness)
+### Stage 22: Release Readiness (DEPLOY)
 
 **Entry Criteria:**
 - Stage 20 (QA) AND Stage 21 (review) data available

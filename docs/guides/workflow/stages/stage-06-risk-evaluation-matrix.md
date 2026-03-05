@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 6: Risk Evaluation Matrix
+# Stage 6: Risk Assessment
+
+> **Implementation Note**: This stage is implemented as **"Risk Assessment"** (`slug: risk-matrix`, `id: stage-06`) in `lib/eva/stage-templates/stage-06.js`. The original design spec called it "Risk Evaluation Matrix".
+<!-- Design spec title: Risk Evaluation Matrix -->
 
 ## Metadata
 - **Category**: Protocol

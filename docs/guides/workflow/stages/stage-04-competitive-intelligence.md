@@ -6,7 +6,10 @@ author: auto-fixer
 last_updated: 2026-02-28
 tags: [guide, auto-generated]
 ---
-# Stage 4: Competitive Intelligence
+# Stage 4: Competitive Landscape
+
+> **Implementation Note**: This stage is implemented as **"Competitive Landscape"** (`slug: competitive-intel`, `id: stage-04`) in `lib/eva/stage-templates/stage-04.js`. The original design spec called it "Competitive Intelligence".
+<!-- Design spec title: Competitive Intelligence -->
 
 ## Metadata
 - **Category**: Protocol
