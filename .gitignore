@@ -41,6 +41,9 @@ docs/summaries/compliance/
 # Process ID files
 .pids/
 
+# Temporary investigation/debugging scripts directory
+scripts/temp/
+
 # One-off debugging and query scripts (temporary investigation tools)
 query-*.cjs
 create-auth-lesson-learned*.cjs
