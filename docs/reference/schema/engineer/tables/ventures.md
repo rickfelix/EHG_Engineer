@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-05T17:31:18.441Z
+**Generated**: 2026-03-05T22:05:50.526Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (77 total)
+## Columns (78 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -100,6 +100,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | vision_id | `uuid` | YES | - | FK to eva_vision_documents. Replaces free-text vision_alignment over time. vision_alignment TEXT kept for backward compatibility until data migration + column drop in a future SD. |
 | architecture_plan_id | `uuid` | YES | - | FK to eva_architecture_plans. Links venture to its formal Architecture Plan. |
 | pipeline_mode | `text` | YES | `'building'::text` | Venture lifecycle mode including exit readiness states |
+| deleted_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -148,6 +149,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_current_lifecycle_stage`
   ```sql
   CREATE INDEX idx_ventures_current_lifecycle_stage ON public.ventures USING btree (current_lifecycle_stage)
+  ```
+- `idx_ventures_deleted_at`
+  ```sql
+  CREATE INDEX idx_ventures_deleted_at ON public.ventures USING btree (deleted_at) WHERE (deleted_at IS NOT NULL)
   ```
 - `idx_ventures_health_score`
   ```sql
