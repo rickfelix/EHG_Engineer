@@ -174,12 +174,14 @@ stages:
       valuationEstimate: { type: object, required: false }
 
   10:
-    name: "Brand Identity"
+    name: "Customer & Brand Foundation"
     consumes:
       - stage: 1
         fields:
           description: { type: string }
           valueProp: { type: string }
+          targetMarket: { type: string }
+          problemStatement: { type: string }
       - stage: 3
         fields:
           overallScore: { type: integer, required: false }
@@ -190,11 +192,12 @@ stages:
         fields:
           customerSegments: { type: object, required: false }
     produces:
-      candidates: { type: array, minItems: 5 }
+      customerPersonas: { type: array, minItems: 3 }
       brandGenome: { type: object }
+      candidates: { type: array, minItems: 5 }
 
   11:
-    name: "Marketing Strategy"
+    name: "Naming & Visual Identity"
     consumes:
       - stage: 1
         fields:
@@ -205,34 +208,42 @@ stages:
           unitEconomics: { type: object, required: false }
       - stage: 10
         fields:
-          candidates: { type: array }
+          customerPersonas: { type: array, minItems: 3 }
+          brandGenome: { type: object }
     produces:
-      tiers: { type: array, minItems: 3 }
-      channels: { type: array, minItems: 8 }
+      candidates: { type: array, minItems: 5 }
+      visualIdentity: { type: object }
+      scoringCriteria: { type: array, minItems: 1 }
 
   12:
-    name: "Sales Framework"
+    name: "GTM & Sales Strategy"
     consumes:
       - stage: 1
         fields:
           description: { type: string }
+          targetMarket: { type: string }
       - stage: 5
         fields:
           unitEconomics: { type: object, required: false }
       - stage: 7
         fields:
-          tiers: { type: array, required: false }
+          pricing_model: { type: string, required: false }
+          arpa: { type: number, required: false }
       - stage: 10
         fields:
-          candidates: { type: array, minItems: 5 }
+          customerPersonas: { type: array, minItems: 3 }
+          brandGenome: { type: object }
       - stage: 11
         fields:
-          tiers: { type: array, minItems: 3 }
-          channels: { type: array, minItems: 8 }
+          candidates: { type: array, minItems: 5 }
+          decision: { type: object, required: false }
     produces:
-      sales_model: { type: string }
+      marketTiers: { type: array, minItems: 3 }
+      channels: { type: array, minItems: 8 }
+      salesModel: { type: string }
       deal_stages: { type: array, minItems: 3 }
       funnel_stages: { type: array, minItems: 4 }
+      customer_journey: { type: array, minItems: 5 }
       reality_gate: { type: object }
 
   13:
