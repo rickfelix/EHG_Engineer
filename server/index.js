@@ -50,6 +50,7 @@ import testingCampaignRoutes from './routes/testing-campaign.js';
 import venturesRoutes from './routes/ventures.js';
 import v2ApiRoutes from './routes/v2-apis.js';
 import chairmanRoutes from './routes/chairman.js';
+import evaOperationsRoutes from './routes/eva-operations.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
 // Import Story API
@@ -142,6 +143,7 @@ app.use('/api/ventures', optionalAuth, venturesRoutes);
 app.use('/api/competitor-analysis', optionalAuth, venturesRoutes);
 app.use('/api/v2', optionalAuth, v2ApiRoutes);
 app.use('/api/chairman', optionalAuth, createChairmanScopeGuard({ blocking: true }), chairmanRoutes);
+app.use('/api/eva/operations', optionalAuth, evaOperationsRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 
