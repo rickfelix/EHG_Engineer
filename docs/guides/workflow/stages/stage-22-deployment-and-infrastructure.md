@@ -126,7 +126,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L959) - Stage 22 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-launch-learn) - Phase context
+- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-5-the-build-loop) - Phase context
 - [Stage 21: QA & UAT](stage-21-qa-and-uat.md) - Previous stage
 - [Stage 23: Production Launch](stage-23-production-launch.md) - Next stage
 

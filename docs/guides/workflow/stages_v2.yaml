@@ -14,7 +14,7 @@
 #
 # Phase structure changes from design spec to implementation:
 #   - Phase 5 (THE BUILD LOOP): expanded from [17-20] to [17-22]
-#   - Phase 6 (LAUNCH & LEARN): condensed from [21-25] to [23-25]
+#   - Phase 6 (THE LAUNCH): condensed from [21-25] to [23-25]
 # ============================================================================
 
 version: "2.0"
@@ -54,7 +54,7 @@ golden_nuggets:
           THE_IDENTITY: 0.10   # 10% (Stages 10-12)
           THE_BLUEPRINT: 0.20  # 20% (Stages 13-16)
           THE_BUILD_LOOP: 0.20 # 20% (Stages 17-20)
-          LAUNCH_LEARN: 0.10   # 10% (Stages 21-25)
+          THE_LAUNCH: 0.10     # 10% (Stages 23-25)
       deep_due_diligence:
         total_tokens: 1500000  # 1M-2M midpoint
         use_case: "High-stakes, complex markets"
@@ -121,8 +121,8 @@ phases:
     description: "Implementation and development cycle"
     stages: [17, 18, 19, 20, 21, 22]
   - id: 6
-    name: "LAUNCH & LEARN"
-    description: "Deployment, analytics, and optimization"
+    name: "THE LAUNCH"
+    description: "Launch preparation, execution, and go-live"
     stages: [23, 24, 25]
 
 stages:
@@ -802,14 +802,14 @@ stages:
       - Monitoring coverage
 
   # ============================================================================
-  # PHASE 6: LAUNCH & LEARN (Stages 23-25)
+  # PHASE 6: THE LAUNCH (Stages 23-25)
   # ============================================================================
   - id: 23
     title: "Marketing Preparation"
     design_spec_title: "Production Launch"
     description: "Pre-launch marketing preparation including asset creation, channel readiness, and go-live checklist."
     phase_number: 6
-    phase_name: "LAUNCH & LEARN"
+    phase_name: "THE LAUNCH"
     work_type: decision_gate
     sd_required: false
     advisory_enabled: false
@@ -837,7 +837,7 @@ stages:
     design_spec_title: "Analytics & Feedback"
     description: "Launch readiness scoring, distribution channel activation checklist, and launch authorization gate."
     phase_number: 6
-    phase_name: "LAUNCH & LEARN"
+    phase_name: "THE LAUNCH"
     work_type: artifact_only
     sd_required: false
     advisory_enabled: false
@@ -866,7 +866,7 @@ stages:
     design_spec_title: "Optimization & Scale"
     description: "Go-live execution, distribution channel activation, operations handoff. Sets pipeline_mode to 'operations'."
     phase_number: 6
-    phase_name: "LAUNCH & LEARN"
+    phase_name: "THE LAUNCH"
     work_type: sd_required
     sd_required: true
     sd_suffix: "OPTIMIZE"
