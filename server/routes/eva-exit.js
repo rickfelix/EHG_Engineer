@@ -240,6 +240,94 @@ router.get('/summary', asyncHandler(async (req, res) => {
   });
 }));
 
+// ── Portfolio Exit Readiness ────────────────────────────────────
+// SD: SD-LEO-FEAT-ACQUISITION-READINESS-GAP-001 (ARG05:US-005)
+
+/**
+ * GET /api/eva/exit/portfolio-readiness
+ * Aggregated exit readiness across all ventures owned by the user.
+ * Returns venture array with separability scores, data room completion, and rehearsal dates.
+ */
+router.get('/portfolio-readiness', asyncHandler(async (req, res) => {
+  // Get all ventures
+  const { data: ventures, error: ventureError } = await dbLoader.supabase
+    .from('ventures')
+    .select('id, name, pipeline_mode')
+    .order('name');
+
+  if (ventureError) return res.status(500).json({ error: ventureError.message });
+  if (!ventures || ventures.length === 0) return res.json([]);
+
+  const ventureIds = ventures.map(v => v.id);
+
+  // Parallel fetch: exit profiles, latest scores, asset counts, data room completeness
+  const [profilesResult, scoresResult, assetsResult, dataRoomResult] = await Promise.all([
+    dbLoader.supabase
+      .from('venture_exit_profiles')
+      .select('venture_id, exit_model, readiness_assessment, updated_at')
+      .in('venture_id', ventureIds)
+      .eq('is_current', true),
+    dbLoader.supabase
+      .from('venture_separability_scores')
+      .select('venture_id, overall_score, scored_at')
+      .in('venture_id', ventureIds)
+      .order('scored_at', { ascending: false }),
+    dbLoader.supabase
+      .from('venture_asset_registry')
+      .select('venture_id')
+      .in('venture_id', ventureIds),
+    dbLoader.supabase
+      .from('venture_data_room_artifacts')
+      .select('venture_id, is_current')
+      .in('venture_id', ventureIds)
+      .eq('is_current', true),
+  ]);
+
+  // Index profiles by venture_id
+  const profileMap = {};
+  for (const p of profilesResult.data || []) {
+    profileMap[p.venture_id] = p;
+  }
+
+  // Index latest score per venture (first match per venture since ordered desc)
+  const scoreMap = {};
+  for (const s of scoresResult.data || []) {
+    if (!scoreMap[s.venture_id]) scoreMap[s.venture_id] = s;
+  }
+
+  // Count assets per venture
+  const assetCountMap = {};
+  for (const a of assetsResult.data || []) {
+    assetCountMap[a.venture_id] = (assetCountMap[a.venture_id] || 0) + 1;
+  }
+
+  // Count data room artifacts per venture (approximation for data_room_pct)
+  const dataRoomCountMap = {};
+  for (const d of dataRoomResult.data || []) {
+    dataRoomCountMap[d.venture_id] = (dataRoomCountMap[d.venture_id] || 0) + 1;
+  }
+
+  // Assemble response
+  const result = ventures.map(v => {
+    const profile = profileMap[v.id];
+    const score = scoreMap[v.id];
+    const rehearsal = profile?.readiness_assessment;
+
+    return {
+      id: v.id,
+      name: v.name,
+      pipeline_mode: v.pipeline_mode || null,
+      exit_model: profile?.exit_model || null,
+      separability_score: score?.overall_score ?? null,
+      data_room_pct: dataRoomCountMap[v.id] ? Math.min(Math.round((dataRoomCountMap[v.id] / 8) * 100), 100) : null,
+      last_rehearsal: rehearsal ? profile.updated_at : null,
+      asset_count: assetCountMap[v.id] || 0,
+    };
+  });
+
+  res.json(result);
+}));
+
 // ── Separability Scores (Phase 2) ──────────────────────────────
 // SD: SD-VENTURE-ACQUISITIONREADINESS-ARCHITECTURE-ORCH-001-B
 
