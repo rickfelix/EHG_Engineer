@@ -44,12 +44,16 @@ function genStage02() {
     metrics: {
       marketFit: 75, customerNeed: 80, momentum: 65,
       revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72,
+      designQuality: 68,
     },
     evidence: {
       market: 'TAM analysis shows $50B global artisan goods market growing at 8% CAGR',
       customer: '200 artisan interviews confirm logistics as top pain point',
+      growth: 'Artisan economy growing at 8% CAGR with increasing online adoption',
+      revenue: 'Transaction-based revenue model with 15% take rate validated by comparable marketplaces',
       competitive: 'No AI-powered artisan marketplace exists; closest is Etsy (manual matching)',
       execution: 'Team has relevant marketplace and AI experience from prior ventures',
+      design: 'UX research confirms mobile-first approach resonates with artisan seller demographic',
     },
     suggestions: [
       { type: 'immediate', text: 'Validate pricing with 50 target artisan users in pilot region' },
@@ -62,6 +66,7 @@ function genStage03() {
   return {
     marketFit: 75, customerNeed: 80, momentum: 65,
     revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72,
+    designQuality: 68,
     competitorEntities: [
       { name: 'CompetitorA', positioning: 'Market leader', threat_level: 'H' },
       { name: 'CompetitorB', positioning: 'Niche player', threat_level: 'M' },
@@ -191,6 +196,15 @@ function genStage09() {
 }
 
 function genStage10() {
+  const personaNames = ['Small Artisan Producer', 'Boutique Gallery Owner', 'Craft-Conscious Consumer'];
+  const customerPersonas = personaNames.map((name, i) => ({
+    name,
+    demographics: { age: '25-45', location: `Region ${i + 1}`, income: 'Middle' },
+    goals: [`Expand market reach ${i + 1}`, `Increase revenue ${i + 1}`],
+    painPoints: [`High logistics cost ${i + 1}`, `Limited online presence ${i + 1}`],
+    behaviors: [`Social media active ${i + 1}`],
+    motivations: [`Financial growth ${i + 1}`],
+  }));
   const criteria = [
     { name: 'memorability', weight: 25 },
     { name: 'relevance', weight: 25 },
@@ -201,37 +215,71 @@ function genStage10() {
   const candidates = [];
   for (let i = 0; i < 5; i++) {
     const scores = {};
-    for (const c of criteria) {
-      scores[c.name] = 60 + Math.floor(Math.random() * 30);
-    }
-    candidates.push({
-      name: `BrandName${i + 1}`,
-      rationale: `Rationale for candidate ${i + 1}`,
-      scores,
-    });
+    for (const c of criteria) scores[c.name] = 60 + (i * 5 + 10);
+    candidates.push({ name: `BrandName${i + 1}`, rationale: `Rationale for candidate ${i + 1}`, scores });
   }
   return {
+    customerPersonas,
     brandGenome: {
-      archetype: 'marketplace',
+      archetype: 'Explorer',
       values: ['trust', 'craft'],
       tone: 'Warm and professional',
       audience: 'Small artisan businesses',
       differentiators: ['AI logistics', 'Global reach'],
+      customerAlignment: [
+        { trait: 'trust', personaInsight: 'Artisans value reliable partnerships', personaName: personaNames[0] },
+        { trait: 'craft', personaInsight: 'Gallery owners seek authentic brands', personaName: personaNames[1] },
+      ],
     },
+    brandPersonality: { vision: 'Empower artisans globally', mission: 'Connect craft to commerce', brandVoice: 'Warm, authentic, empowering' },
     scoringCriteria: criteria,
     candidates,
-    narrativeExtension: { vision: 'Empower artisans globally', mission: 'Connect craft to commerce', brandVoice: 'Warm, authentic, empowering' },
     namingStrategy: 'descriptive',
     chairmanGate: { status: 'approved', rationale: 'Brand direction approved', decision_id: 'test-decision-10' },
   };
 }
 
 function genStage11() {
+  const criteria = [
+    { name: 'memorability', weight: 25 },
+    { name: 'relevance', weight: 25 },
+    { name: 'uniqueness', weight: 20 },
+    { name: 'pronounceability', weight: 15 },
+    { name: 'availability', weight: 15 },
+  ];
+  const candidates = [];
+  for (let i = 0; i < 5; i++) {
+    const scores = {};
+    for (const c of criteria) scores[c.name] = 60 + (i * 5 + 10);
+    candidates.push({
+      name: `CandidateName${i + 1}`,
+      rationale: `Naming rationale for candidate ${i + 1}`,
+      scores,
+      personaFit: [
+        { personaName: 'Small Artisan Producer', fitScore: 70 + i },
+        { personaName: 'Boutique Gallery Owner', fitScore: 65 + i },
+      ],
+    });
+  }
+  return {
+    namingStrategy: { approach: 'descriptive', rationale: 'Descriptive names best convey artisan marketplace value' },
+    scoringCriteria: criteria,
+    candidates,
+    visualIdentity: {
+      colorPalette: [{ name: 'Primary', hex: '#2D5016' }, { name: 'Secondary', hex: '#F5E6D3' }],
+      typography: { heading: 'Playfair Display', body: 'Inter', monospace: 'Fira Code' },
+      imageryGuidance: 'Use warm, natural photography showcasing artisan craftsmanship and authentic materials',
+    },
+    brandExpression: { tagline: 'Craft meets commerce', elevator_pitch: 'AI marketplace for artisans', messaging_pillars: ['Authenticity', 'Global reach'] },
+  };
+}
+
+function genStage12() {
   const tiers = [];
   for (let i = 0; i < 3; i++) {
     tiers.push({
       name: `Tier ${i + 1}`,
-      description: `Target market tier ${i + 1} description`,
+      description: `Target market tier ${i + 1} description with sufficient detail`,
       persona: `Persona ${i + 1}`,
       painPoints: [`Pain ${i + 1}a`, `Pain ${i + 1}b`],
       tam: 1000000 * (i + 1),
@@ -239,9 +287,9 @@ function genStage11() {
       som: 100000 * (i + 1),
     });
   }
-  const channels = [];
   const channelNames = ['Organic Search', 'Paid Search', 'Social Media', 'Content Marketing', 'Email Marketing', 'Partnerships', 'Events', 'Direct Sales'];
   const channelTypes = ['organic', 'paid', 'organic', 'owned', 'owned', 'earned', 'earned', 'paid'];
+  const channels = [];
   for (let i = 0; i < 8; i++) {
     channels.push({
       name: channelNames[i],
@@ -249,23 +297,13 @@ function genStage11() {
       primaryTier: `Tier ${(i % 3) + 1}`,
       monthly_budget: 1000 * (i + 1),
       expected_cac: 20 + i * 5,
-      target_cac: 15 + i * 3,
       primary_kpi: `KPI for ${channelNames[i]}`,
     });
   }
   return {
-    tiers,
+    marketTiers: tiers,
     channels,
-    launch_timeline: [
-      { milestone: 'Soft launch', date: '2026-Q2', owner: 'Marketing' },
-      { milestone: 'Full launch', date: '2026-Q3', owner: 'Marketing' },
-    ],
-  };
-}
-
-function genStage12() {
-  return {
-    sales_model: 'hybrid',
+    salesModel: 'hybrid',
     sales_cycle_days: 30,
     deal_stages: [
       { name: 'Prospecting', description: 'Identify and qualify potential customers' },
@@ -466,85 +504,57 @@ function genStage22() {
 
 function genStage23() {
   return {
-    go_decision: 'go',
-    launchType: 'soft_launch',
-    incident_response_plan: 'On-call rotation with 15-minute response SLA. Escalation path: Dev → SRE → CTO.',
-    monitoring_setup: 'Datadog APM with custom dashboards for key metrics: latency, error rate, throughput.',
-    rollback_plan: 'Blue-green deployment with instant rollback capability. Database migrations are backward compatible.',
-    launch_tasks: [
-      { name: 'Deploy to production', status: 'complete', owner: 'DevOps' },
-      { name: 'Enable feature flags', status: 'complete', owner: 'Dev Lead' },
+    marketing_items: [
+      { title: 'Press Release', description: 'Announce marketplace launch to artisan media outlets', type: 'press_release', priority: 'critical' },
+      { title: 'Social Campaign', description: 'Instagram and Pinterest campaign targeting craft communities', type: 'social_media_campaign', priority: 'high' },
+      { title: 'Email Blast', description: 'Launch announcement to waitlist subscribers', type: 'email_campaign', priority: 'high' },
     ],
-    launch_date: '2026-06-15',
-    planned_launch_date: '2026-06-15',
-    actual_launch_date: '2026-06-15',
-    successCriteria: [
-      { metric: 'DAU', target: '500', measurementWindow: '30 days', priority: 'primary' },
-      { metric: 'Error Rate', target: '<1%', measurementWindow: '7 days', priority: 'primary' },
-    ],
-    rollbackTriggers: [
-      { trigger: 'Error rate spike', threshold: '>5% for 10 minutes', action: 'Auto-rollback' },
-    ],
+    marketing_strategy_summary: 'Multi-channel launch campaign targeting artisan communities through content marketing, social media, and direct outreach to established craft networks.',
+    target_audience: 'Small artisan producers and craft-conscious consumers aged 25-45',
   };
 }
 
 function genStage24() {
-  const aarrr = {};
-  for (const cat of ['acquisition', 'activation', 'retention', 'revenue', 'referral']) {
-    aarrr[cat] = [
-      { name: `${cat} metric 1`, value: 100, target: 120, previousValue: 80, trendDirection: 'up', trend_window_days: 30 },
-      { name: `${cat} metric 2`, value: 50, target: 60, previousValue: 45, trendDirection: 'up', trend_window_days: 30 },
-    ];
-  }
   return {
-    aarrr,
-    funnels: [
-      {
-        name: 'User Acquisition Funnel',
-        steps: [
-          { name: 'Visit', count: 10000 },
-          { name: 'Signup', count: 500 },
-          { name: 'Activation', count: 250 },
-        ],
-      },
-    ],
-    learnings: [
-      { insight: 'Organic search drives highest quality traffic', action: 'Double SEO investment', category: 'acquisition', impactLevel: 'high' },
-    ],
+    readiness_checklist: {
+      release_confirmed: { status: 'pass', evidence: 'Release candidate RC-1.0.0 tested and confirmed', verified_at: '2026-06-10T10:00:00Z' },
+      marketing_complete: { status: 'pass', evidence: 'All marketing materials approved and scheduled', verified_at: '2026-06-11T14:00:00Z' },
+      monitoring_ready: { status: 'pass', evidence: 'Datadog dashboards and alerts configured', verified_at: '2026-06-12T09:00:00Z' },
+      rollback_plan_exists: { status: 'pass', evidence: 'Blue-green rollback tested in staging', verified_at: '2026-06-12T11:00:00Z' },
+    },
+    incident_response_plan: 'On-call rotation with 15-minute response SLA. Escalation path: Dev → SRE → CTO. Runbook at /docs/runbook.',
+    monitoring_setup: 'Datadog APM with custom dashboards for key metrics: latency, error rate, throughput, and user engagement.',
+    rollback_plan: 'Blue-green deployment with instant rollback capability. Database migrations are backward compatible. Tested in staging.',
+    chairmanGate: { status: 'approved', rationale: 'Launch readiness confirmed', decision_id: 'test-decision-24' },
   };
 }
 
 function genStage25() {
-  const initiatives = {};
-  for (const cat of ['product', 'market', 'technical', 'financial', 'team']) {
-    initiatives[cat] = [
-      { title: `${cat} initiative 1`, status: 'completed', outcome: `${cat} outcome achieved` },
-    ];
-  }
   return {
-    review_summary: 'Comprehensive venture review after MVP launch phase showing strong product-market fit signals',
-    initiatives,
-    current_vision: 'AI-powered artisan marketplace connecting global buyers with local craft',
-    drift_justification: null,
-    next_steps: [
-      { action: 'Scale marketing spend', owner: 'CMO', timeline: 'Q3 2026', priority: 'high' },
-      { action: 'Hire additional engineers', owner: 'CTO', timeline: 'Q3 2026', priority: 'medium' },
+    distribution_channels: [
+      { name: 'Web App', type: 'direct', status: 'active', activation_date: '2026-06-15', metrics_endpoint: '/api/metrics/web' },
+      { name: 'Mobile App (iOS)', type: 'app_store', status: 'activating', activation_date: '2026-07-01' },
+      { name: 'Partner API', type: 'api', status: 'inactive' },
     ],
-    chairmanGate: { status: 'approved', rationale: 'Venture review approved', decision_id: 'test-decision-25' },
-    financialComparison: {
-      projectedRevenue: '$500K', actualRevenue: '$480K', projectedCosts: '$300K', actualCosts: '$310K',
-      revenueVariancePct: -4, financialTrajectory: 'on_plan', variance: 'Minor', assessment: 'Within acceptable range',
-    },
-    ventureHealth: {
-      overallRating: 'viable',
-      dimensions: {
-        product: { score: 75, rationale: 'Strong MVP' },
-        market: { score: 70, rationale: 'Growing demand' },
-        technical: { score: 80, rationale: 'Solid architecture' },
-        financial: { score: 65, rationale: 'Runway adequate' },
-        team: { score: 72, rationale: 'Core team in place' },
+    operations_handoff: {
+      monitoring: {
+        dashboards: ['Main KPI Dashboard', 'Error Rate Dashboard'],
+        alerts: ['Error spike > 5%', 'Latency > 2s p95'],
+        health_check_url: 'https://api.artisanmarket.com/health',
+      },
+      escalation: {
+        contacts: ['oncall@artisanmarket.com', '+1-555-DEVOPS'],
+        runbook_url: 'https://docs.internal/runbook',
+        sla_targets: { p1: '15min', p2: '1hr', p3: '24hr' },
+      },
+      maintenance: {
+        schedule: 'Weekly Tuesday 2AM UTC maintenance window',
+        backup_strategy: 'Daily automated backups with 30-day retention',
+        update_policy: 'Semantic versioning with staged rollout',
       },
     },
+    launch_summary: 'Artisan marketplace launched with web app as primary channel. iOS app in activation phase. Partner API planned for Q3 2026.',
+    go_live_timestamp: '2026-06-15T00:00:00Z',
   };
 }
 
@@ -561,7 +571,7 @@ const TEST_DATA_GENERATORS = {
 const STAGES_WITH_PREREQUISITES_VALIDATE = new Set([2, 3, 4, 5, 6, 7, 8, 9]);
 
 // Stages that accept an extra arg to computeDerived()
-const STAGES_WITH_EXTRA_COMPUTE = new Set([1, 9, 12, 15, 16, 22, 23, 25]);
+const STAGES_WITH_EXTRA_COMPUTE = new Set([1, 9, 12, 15, 16, 22, 23, 24, 25]);
 
 // ───────────────────────────────────────────────────────────────────
 // Core test runner
@@ -718,13 +728,13 @@ async function testKillGates() {
   try {
     const { evaluateKillGate } = await import('../lib/eva/stage-templates/stage-03.js');
     // PASS case
-    const passResult = evaluateKillGate({ overallScore: 75, metrics: { marketFit: 75, customerNeed: 80, momentum: 65, revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72 } });
+    const passResult = evaluateKillGate({ overallScore: 75, metrics: { marketFit: 75, customerNeed: 80, momentum: 65, revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72, designQuality: 68 } });
     if (passResult.decision !== 'pass') findings.push({ severity: 'high', check: 'gate_stage03', message: `Expected pass, got ${passResult.decision}` });
     // KILL case
-    const killResult = evaluateKillGate({ overallScore: 40, metrics: { marketFit: 30, customerNeed: 80, momentum: 65, revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72 } });
+    const killResult = evaluateKillGate({ overallScore: 40, metrics: { marketFit: 30, customerNeed: 80, momentum: 65, revenuePotential: 70, competitiveBarrier: 60, executionFeasibility: 72, designQuality: 40 } });
     if (killResult.decision !== 'kill') findings.push({ severity: 'high', check: 'gate_stage03', message: `Expected kill, got ${killResult.decision}` });
     // REVISE case
-    const reviseResult = evaluateKillGate({ overallScore: 60, metrics: { marketFit: 55, customerNeed: 65, momentum: 55, revenuePotential: 60, competitiveBarrier: 55, executionFeasibility: 70 } });
+    const reviseResult = evaluateKillGate({ overallScore: 60, metrics: { marketFit: 55, customerNeed: 65, momentum: 55, revenuePotential: 60, competitiveBarrier: 55, executionFeasibility: 70, designQuality: 55 } });
     if (reviseResult.decision !== 'revise') findings.push({ severity: 'high', check: 'gate_stage03', message: `Expected revise, got ${reviseResult.decision}` });
   } catch (err) {
     findings.push({ severity: 'critical', check: 'gate_stage03', message: `Stage 3 kill gate threw: ${err.message}` });
@@ -758,22 +768,26 @@ async function testKillGates() {
     findings.push({ severity: 'critical', check: 'gate_stage13', message: `Stage 13 kill gate threw: ${err.message}` });
   }
 
-  // Stage 23 kill gate
+  // Stage 23 release readiness check
   try {
-    const stage23 = getTemplate(23);
-    const data = genStage23();
-    const derived = stage23.computeDerived(data, null, { logger: silentLogger });
-    if (derived.decision === 'kill') {
-      findings.push({ severity: 'medium', check: 'gate_stage23', message: `Valid go data triggered kill: ${derived.reasons?.map(r => r.message).join('; ')}` });
+    const { checkReleaseReadiness } = await import('../lib/eva/stage-templates/stage-23.js');
+    // PASS case: stage 22 has promotion_gate.pass and releaseDecision
+    const passResult = checkReleaseReadiness({
+      stage22Data: {
+        promotion_gate: { pass: true },
+        releaseDecision: { decision: 'release', rationale: 'All approved' },
+      },
+    });
+    if (!passResult.ready) {
+      findings.push({ severity: 'high', check: 'gate_stage23', message: `Expected ready, got not ready: ${passResult.reasons?.join('; ')}` });
     }
-    // Test no-go kill
-    const noGoData = { ...data, go_decision: 'no-go' };
-    const noGoDerived = stage23.computeDerived(noGoData, null, { logger: silentLogger });
-    if (noGoDerived.decision !== 'kill') {
-      findings.push({ severity: 'high', check: 'gate_stage23', message: `no-go should trigger kill, got ${noGoDerived.decision}` });
+    // FAIL case: no stage 22 data
+    const failResult = checkReleaseReadiness({ stage22Data: null });
+    if (failResult.ready) {
+      findings.push({ severity: 'high', check: 'gate_stage23', message: 'Expected not ready without stage 22 data, got ready' });
     }
   } catch (err) {
-    findings.push({ severity: 'critical', check: 'gate_stage23', message: `Stage 23 kill gate threw: ${err.message}` });
+    findings.push({ severity: 'critical', check: 'gate_stage23', message: `Stage 23 release readiness threw: ${err.message}` });
   }
 
   return findings;
