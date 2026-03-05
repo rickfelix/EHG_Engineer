@@ -5,7 +5,7 @@
  * Phase-aware weighting: Reduced from 25 to make room for critical database checks
  */
 
-import { getSDSearchTerms, gitLogForSD, detectImplementationRepo } from '../utils/index.js';
+import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 
 /**
  * Validate Design Implementation Fidelity
@@ -146,13 +146,18 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
   console.log('\n   [A1] UI Components Implementation...');
 
   try {
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
     const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const gitLog = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
-      searchTerms,
-      { timeout: 10000 }
-    );
+    let gitLog = '';
+    for (const repo of implementationRepos) {
+      try {
+        gitLog += await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
+          searchTerms,
+          { timeout: 10000 }
+        );
+      } catch (_) { /* skip repos without matching commits */ }
+    }
 
     const componentFiles = gitLog.split('\n')
       .filter(f => f.match(/\.(tsx?|jsx?)$/) && (f.includes('component') || f.includes('Component') || f.includes('src/')))
@@ -211,12 +216,17 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
 
   try {
     const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    const gitDiff = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
-      searchTerms,
-      { timeout: 15000 }
-    );
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+    let gitDiff = '';
+    for (const repo of implementationRepos) {
+      try {
+        gitDiff += await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+          searchTerms,
+          { timeout: 15000 }
+        );
+      } catch (_) { /* skip repos without matching commits */ }
+    }
 
     const hasCRUD = gitDiff.toLowerCase().includes('create') ||
                     gitDiff.toLowerCase().includes('update') ||

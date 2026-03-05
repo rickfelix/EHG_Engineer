@@ -7,7 +7,7 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getSDSearchTerms, gitLogForSD, detectImplementationRepo, EHG_ENGINEER_ROOT, EHG_ROOT } from '../utils/index.js';
+import { getSDSearchTerms, gitLogForSD, detectImplementationRepos, EHG_ENGINEER_ROOT, EHG_ROOT } from '../utils/index.js';
 
 const execAsync = promisify(exec);
 
@@ -98,16 +98,25 @@ async function checkAmbiguityResolution(sd_id, validation, supabase) {
 
   try {
     const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    const gitLog = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --format="%H" -n 1`,
-      searchTerms,
-      { timeout: 10000 }
-    );
-    const commitHash = gitLog.trim().split('\n')[0];
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+    let combinedDiff = '';
+    for (const repo of implementationRepos) {
+      try {
+        const gitLog = await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --format="%H" -n 1`,
+          searchTerms,
+          { timeout: 10000 }
+        );
+        const hash = gitLog.trim().split('\n')[0];
+        if (hash) {
+          const { stdout: d } = await execAsync(`git -C "${repo}" show ${hash}`);
+          combinedDiff += d;
+        }
+      } catch (_) { /* skip repos without matching commits */ }
+    }
 
-    if (commitHash) {
-      const { stdout: diff } = await execAsync(`git -C "${implementationRepo}" show ${commitHash}`);
+    if (combinedDiff) {
+      const diff = combinedDiff;
 
       const ambiguityPatterns = [
         /TODO:.*\?/gi,
@@ -212,16 +221,25 @@ async function checkStubbedCode(sd_id, validation, supabase) {
 
   try {
     const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    const gitLog = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --format="%H" -n 1`,
-      searchTerms,
-      { timeout: 10000 }
-    );
-    const commitHash = gitLog.trim().split('\n')[0];
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+    let combinedDiff = '';
+    for (const repo of implementationRepos) {
+      try {
+        const gitLog = await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --format="%H" -n 1`,
+          searchTerms,
+          { timeout: 10000 }
+        );
+        const hash = gitLog.trim().split('\n')[0];
+        if (hash) {
+          const { stdout: d } = await execAsync(`git -C "${repo}" show ${hash}`);
+          combinedDiff += d;
+        }
+      } catch (_) { /* skip repos without matching commits */ }
+    }
 
-    if (commitHash) {
-      const { stdout: diff } = await execAsync(`git -C "${implementationRepo}" show ${commitHash}`);
+    if (combinedDiff) {
+      const diff = combinedDiff;
 
       const stubbedCodePatterns = [
         /throw new Error\(['"]not implemented/gi,

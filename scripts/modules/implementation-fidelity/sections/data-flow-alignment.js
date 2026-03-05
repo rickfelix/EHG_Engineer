@@ -3,7 +3,7 @@
  * Part of SD-LEO-REFACTOR-IMPL-FIDELITY-001
  */
 
-import { getSDSearchTerms, gitLogForSD, detectImplementationRepo } from '../utils/index.js';
+import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 
 /**
  * Validate Data Flow Alignment
@@ -143,12 +143,16 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
   let gitDiff = '';
   try {
     const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    gitDiff = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
-      searchTerms,
-      { timeout: 15000 }
-    );
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+    for (const repo of implementationRepos) {
+      try {
+        gitDiff += await gitLogForSD(
+          `git -C "${repo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+          searchTerms,
+          { timeout: 15000 }
+        );
+      } catch (_) { /* skip repos without matching commits */ }
+    }
   } catch (_e) {
     gitDiff = '';
   }

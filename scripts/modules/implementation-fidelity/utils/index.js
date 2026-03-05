@@ -11,6 +11,8 @@ export {
 
 export {
   detectImplementationRepo,
+  detectImplementationRepos,
+  resolveReposForSD,
   EHG_ENGINEER_ROOT,
   EHG_ROOT
 } from './repo-detection.js';
