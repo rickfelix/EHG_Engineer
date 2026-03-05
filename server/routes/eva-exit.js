@@ -309,4 +309,76 @@ router.post('/data-room/:ventureId/generate', asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+// ── Separation Rehearsal (Phase 3) ────────────────────────────
+// SD: SD-VENTURE-ACQUISITIONREADINESS-ARCHITECTURE-ORCH-001-C
+
+/**
+ * POST /api/eva/exit/:ventureId/rehearsal
+ * Trigger a separation rehearsal (dry_run or full).
+ */
+router.post('/:ventureId/rehearsal', asyncHandler(async (req, res) => {
+  const { mode } = req.body;
+  const validModes = ['dry_run', 'full'];
+  const rehearsalMode = validModes.includes(mode) ? mode : 'dry_run';
+
+  const { rehearseSeparation } = await import('../../lib/eva/exit/separation-rehearsal.js');
+  const result = await rehearseSeparation(req.params.ventureId, rehearsalMode, dbLoader.supabase);
+  res.json(result);
+}));
+
+/**
+ * GET /api/eva/exit/:ventureId/rehearsal/latest
+ * Get most recent rehearsal results (stored on exit profile).
+ */
+router.get('/:ventureId/rehearsal/latest', asyncHandler(async (req, res) => {
+  const { data, error } = await dbLoader.supabase
+    .from('venture_exit_profiles')
+    .select('readiness_assessment, updated_at')
+    .eq('venture_id', req.params.ventureId)
+    .eq('is_current', true)
+    .single();
+
+  if (error) return res.status(404).json({ error: 'No exit profile found for this venture' });
+  res.json({
+    venture_id: req.params.ventureId,
+    rehearsal_results: data.readiness_assessment || null,
+    last_updated: data.updated_at
+  });
+}));
+
+// ── Data Room Templates (Phase 3) ────────────────────────────
+
+/**
+ * GET /api/eva/exit/:ventureId/data-room/template
+ * Get data room document checklist for venture's current exit model.
+ */
+router.get('/:ventureId/data-room/template', asyncHandler(async (req, res) => {
+  const { generateDataRoomChecklist } = await import('../../lib/eva/exit/data-room-templates.js');
+  const result = await generateDataRoomChecklist(req.params.ventureId, dbLoader.supabase);
+  res.json(result);
+}));
+
+/**
+ * GET /api/eva/exit/:ventureId/data-room/completeness
+ * Get data room completion percentage and missing items.
+ */
+router.get('/:ventureId/data-room/completeness', asyncHandler(async (req, res) => {
+  const { generateDataRoomChecklist } = await import('../../lib/eva/exit/data-room-templates.js');
+  const checklist = await generateDataRoomChecklist(req.params.ventureId, dbLoader.supabase);
+
+  const missing = checklist.items.filter(i => i.status === 'missing' && i.required);
+  const stale = checklist.items.filter(i => i.status === 'stale');
+
+  res.json({
+    venture_id: req.params.ventureId,
+    exit_model: checklist.exit_model,
+    completion_pct: checklist.completion_pct,
+    total_required: checklist.total_required,
+    completed: checklist.completed,
+    missing_required: missing.map(i => ({ document_type: i.document_type, title: i.title })),
+    stale_documents: stale.map(i => ({ document_type: i.document_type, title: i.title })),
+    warnings: checklist.warnings || []
+  });
+}));
+
 export default router;
