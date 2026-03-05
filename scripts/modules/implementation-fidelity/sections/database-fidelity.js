@@ -8,7 +8,7 @@
 import { existsSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
-import { getSDSearchTerms, gitLogForSD, detectImplementationRepo } from '../utils/index.js';
+import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 
 /**
  * Validate Database Implementation Fidelity
@@ -56,24 +56,30 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
     console.log('   ✅ B1 exempt for this SD type - full credit (25/25)');
   } else {
     try {
-      const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-      console.log(`   📂 Searching for migrations in: ${implementationRepo}`);
+      const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+      console.log(`   📂 Searching for migrations in: ${implementationRepos.join(', ')}`);
 
       const migrationDirs = ['database/migrations', 'supabase/migrations', 'migrations'];
       let migrationFiles = [];
+      let primaryMigrationRepo = null;
       // Search by both UUID and sd_key for migration file matching
       const searchTerms = await getSDSearchTerms(sd_id, supabase);
       const searchLower = searchTerms.map(t => t.replace('SD-', '').toLowerCase());
 
-      for (const dir of migrationDirs) {
-        const fullPath = path.join(implementationRepo, dir);
-        if (existsSync(fullPath)) {
-          const files = await readdir(fullPath);
-          const sdMigrations = files.filter(f => {
-            const fileLower = f.toLowerCase();
-            return searchLower.some(term => fileLower.includes(term));
-          });
-          migrationFiles.push(...sdMigrations.map(f => ({ dir, file: f })));
+      for (const repo of implementationRepos) {
+        for (const dir of migrationDirs) {
+          const fullPath = path.join(repo, dir);
+          if (existsSync(fullPath)) {
+            const files = await readdir(fullPath);
+            const sdMigrations = files.filter(f => {
+              const fileLower = f.toLowerCase();
+              return searchLower.some(term => fileLower.includes(term));
+            });
+            if (sdMigrations.length > 0 && !primaryMigrationRepo) {
+              primaryMigrationRepo = repo;
+            }
+            migrationFiles.push(...sdMigrations.map(f => ({ dir, file: f })));
+          }
         }
       }
 
@@ -81,7 +87,7 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
         sectionScore += 5;
         sectionDetails.migration_files = migrationFiles.map(m => `${m.dir}/${m.file}`);
         sectionDetails.migration_count = migrationFiles.length;
-        sectionDetails.implementation_repo = implementationRepo;
+        sectionDetails.implementation_repo = primaryMigrationRepo || implementationRepos[0];
         console.log(`   ✅ Found ${migrationFiles.length} migration file(s) (5/25)`);
 
         // B1.2: Verify migrations were executed (20 points - CRITICAL)
@@ -111,12 +117,17 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
   } else {
     try {
       const searchTerms = await getSDSearchTerms(sd_id, supabase);
-      const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-      const gitDiff = await gitLogForSD(
-        `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
-        searchTerms,
-        { timeout: 15000 }
-      );
+      const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+      let gitDiff = '';
+      for (const repo of implementationRepos) {
+        try {
+          gitDiff += await gitLogForSD(
+            `git -C "${repo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+            searchTerms,
+            { timeout: 15000 }
+          );
+        } catch (_) { /* skip repos without matching commits */ }
+      }
 
       const hasRLS = gitDiff.includes('CREATE POLICY') ||
                      gitDiff.includes('ALTER POLICY') ||

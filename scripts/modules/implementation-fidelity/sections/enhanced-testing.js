@@ -8,7 +8,7 @@
 import { existsSync } from 'fs';
 import { readdir } from 'fs/promises';
 import path from 'path';
-import { getSDSearchTerms, gitLogForSD, detectImplementationRepo } from '../utils/index.js';
+import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
 
 /**
  * Validate Enhanced Testing
@@ -29,7 +29,7 @@ export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAna
   console.log('\n   [D1] E2E Test Coverage & Execution (CRITICAL)...');
 
   try {
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    const implementationRepos = await detectImplementationRepos(sd_id, supabase);
 
     const testDirs = [
       'tests/e2e',
@@ -40,20 +40,22 @@ export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAna
     ];
 
     let testFiles = [];
-    for (const dir of testDirs) {
-      const fullPath = path.join(implementationRepo, dir);
-      if (existsSync(fullPath)) {
-        const files = await readdir(fullPath, { recursive: true });
-        const sdTests = files.filter(f =>
-          typeof f === 'string' &&
-          (f.includes(sd_id.toLowerCase()) ||
-           f.includes(sd_id.replace('SD-', '').toLowerCase()) ||
-           f.endsWith('.test.ts') ||
-           f.endsWith('.test.js') ||
-           f.endsWith('.spec.ts') ||
-           f.endsWith('.spec.js'))
-        );
-        testFiles.push(...sdTests.map(f => path.join(dir, f)));
+    for (const repo of implementationRepos) {
+      for (const dir of testDirs) {
+        const fullPath = path.join(repo, dir);
+        if (existsSync(fullPath)) {
+          const files = await readdir(fullPath, { recursive: true });
+          const sdTests = files.filter(f =>
+            typeof f === 'string' &&
+            (f.includes(sd_id.toLowerCase()) ||
+             f.includes(sd_id.replace('SD-', '').toLowerCase()) ||
+             f.endsWith('.test.ts') ||
+             f.endsWith('.test.js') ||
+             f.endsWith('.spec.ts') ||
+             f.endsWith('.spec.js'))
+          );
+          testFiles.push(...sdTests.map(f => path.join(dir, f)));
+        }
       }
     }
 
@@ -139,12 +141,17 @@ export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAna
   } else {
     try {
       const searchTerms = await getSDSearchTerms(sd_id, supabase);
-      const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-      const gitLog = await gitLogForSD(
-        `git -C "${implementationRepo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
-        searchTerms,
-        { timeout: 10000 }
-      );
+      const implementationRepos = await detectImplementationRepos(sd_id, supabase);
+      let gitLog = '';
+      for (const repo of implementationRepos) {
+        try {
+          gitLog += await gitLogForSD(
+            `git -C "${repo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
+            searchTerms,
+            { timeout: 10000 }
+          );
+        } catch (_) { /* skip repos without matching commits */ }
+      }
 
       const hasMigrationTests = gitLog.includes('migration') && gitLog.includes('test');
 

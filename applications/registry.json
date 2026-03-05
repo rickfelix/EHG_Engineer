@@ -13,7 +13,8 @@
       "status": "active",
       "environment": "development",
       "registered_at": "2025-08-30T15:20:08.903Z",
-      "note": "CONSOLIDATED: Now uses same DB as EHG_Engineer (SD-ARCH-EHG-006)"
+      "note": "CONSOLIDATED: Now uses same DB as EHG_Engineer (SD-ARCH-EHG-006)",
+      "local_path": "C:/Users/rickf/Projects/_EHG/ehg"
     },
     "APP002": {
       "id": "APP002",
@@ -26,7 +27,8 @@
       "status": "active",
       "environment": "development",
       "registered_at": "2025-08-30T16:06:36.693Z",
-      "registered_by": "ENV_REGISTRATION"
+      "registered_by": "ENV_REGISTRATION",
+      "local_path": "C:/Users/rickf/Projects/_EHG/test-leo-project"
     }
   },
   "metadata": {
