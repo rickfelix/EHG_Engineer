@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-05T13:07:08.715Z
-**Tables**: 512
+**Generated**: 2026-03-05T14:08:44.554Z
+**Tables**: 514
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -546,6 +546,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_capabilities](tables/venture_capabilities.md) | N/A (RLS restricted) | ✅ | 2 | Tracks reusable capabilities across ventures for the Capability Lattice (SD-LEO-FEAT-CAPABILITY-LATTICE-001) |
 | [venture_compliance_artifacts](tables/venture_compliance_artifacts.md) | N/A (RLS restricted) | ✅ | 4 | SD-LIFECYCLE-GAP-002: Venture-owned generated artifacts |
 | [venture_compliance_progress](tables/venture_compliance_progress.md) | N/A (RLS restricted) | ✅ | 4 | SD-LIFECYCLE-GAP-002: Per-venture compliance item completion tracking |
+| [venture_data_room_artifacts](tables/venture_data_room_artifacts.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [venture_decisions](tables/venture_decisions.md) | N/A (RLS restricted) | ✅ | 4 | Gate decisions for ventures - created for chairman_unified_decisions VIEW |
 | [venture_dependencies](tables/venture_dependencies.md) | N/A (RLS restricted) | ✅ | 2 | Directed dependency graph between ventures for stage-transition blocking (Decision #32) |
 | [venture_documents](tables/venture_documents.md) | N/A (RLS restricted) | ✅ | 1 | - |
@@ -555,6 +556,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_nursery](tables/venture_nursery.md) | N/A (RLS restricted) | ✅ | 1 | Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation |
 | [venture_phase_budgets](tables/venture_phase_budgets.md) | N/A (RLS restricted) | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Phase-level token budget tracking. Enables granular budget allocation across venture lifecycle stages. Default 20k tokens per phase. |
 | [venture_raid_summary](tables/venture_raid_summary.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [venture_separability_scores](tables/venture_separability_scores.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [venture_stage_transitions](tables/venture_stage_transitions.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_stage_work](tables/venture_stage_work.md) | N/A (RLS restricted) | ✅ | 5 | - |
 | [venture_templates](tables/venture_templates.md) | N/A (RLS restricted) | ✅ | 2 | Reusable patterns extracted from ventures completing Stage 25 |
@@ -741,7 +743,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (386 tables)
+### Other (388 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1120,6 +1122,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_capabilities](tables/venture_capabilities.md) - Tracks reusable capabilities across ventures for the Capability Lattice (SD-LEO-FEAT-CAPABILITY-LATTICE-001)
 - [venture_compliance_artifacts](tables/venture_compliance_artifacts.md) - SD-LIFECYCLE-GAP-002: Venture-owned generated artifacts
 - [venture_compliance_progress](tables/venture_compliance_progress.md) - SD-LIFECYCLE-GAP-002: Per-venture compliance item completion tracking
+- [venture_data_room_artifacts](tables/venture_data_room_artifacts.md)
 - [venture_decisions](tables/venture_decisions.md) - Gate decisions for ventures - created for chairman_unified_decisions VIEW
 - [venture_dependencies](tables/venture_dependencies.md) - Directed dependency graph between ventures for stage-transition blocking (Decision #32)
 - [venture_documents](tables/venture_documents.md)
@@ -1128,6 +1131,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md) - Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation
 - [venture_raid_summary](tables/venture_raid_summary.md)
+- [venture_separability_scores](tables/venture_separability_scores.md)
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
 - [venture_templates](tables/venture_templates.md) - Reusable patterns extracted from ventures completing Stage 25
@@ -2112,6 +2116,9 @@ _Key relationships between tables:_
 - `updated_by` → `users.id`
 - `venture_id` → `ventures.id`
 
+**venture_data_room_artifacts**:
+- `venture_id` → `eva_ventures.id`
+
 **venture_decisions**:
 - `venture_id` → `ventures.id`
 
@@ -2135,6 +2142,9 @@ _Key relationships between tables:_
 
 **venture_phase_budgets**:
 - `venture_id` → `ventures.id`
+
+**venture_separability_scores**:
+- `venture_id` → `eva_ventures.id`
 
 **venture_stage_transitions**:
 - `venture_id` → `ventures.id`

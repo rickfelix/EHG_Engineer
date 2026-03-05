@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-05T13:07:08.715Z
-**Tables**: 512
+**Generated**: 2026-03-05T14:08:44.554Z
+**Tables**: 514
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (512)
+## All Tables (514)
 
 ### LEO Protocol
 
@@ -531,6 +531,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_capabilities](tables/venture_capabilities.md)
 - [venture_compliance_artifacts](tables/venture_compliance_artifacts.md)
 - [venture_compliance_progress](tables/venture_compliance_progress.md)
+- [venture_data_room_artifacts](tables/venture_data_room_artifacts.md)
 - [venture_decisions](tables/venture_decisions.md)
 - [venture_dependencies](tables/venture_dependencies.md)
 - [venture_documents](tables/venture_documents.md)
@@ -539,6 +540,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
+- [venture_separability_scores](tables/venture_separability_scores.md)
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
 - [venture_templates](tables/venture_templates.md)
