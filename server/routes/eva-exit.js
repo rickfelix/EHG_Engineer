@@ -240,4 +240,73 @@ router.get('/summary', asyncHandler(async (req, res) => {
   });
 }));
 
+// ── Separability Scores (Phase 2) ──────────────────────────────
+// SD: SD-VENTURE-ACQUISITIONREADINESS-ARCHITECTURE-ORCH-001-B
+
+/**
+ * GET /api/eva/exit/scores/:ventureId
+ * Get separability score history for a venture.
+ */
+router.get('/scores/:ventureId', asyncHandler(async (req, res) => {
+  const { data, error } = await dbLoader.supabase
+    .from('venture_separability_scores')
+    .select('*')
+    .eq('venture_id', req.params.ventureId)
+    .order('scored_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+}));
+
+/**
+ * GET /api/eva/exit/scores/:ventureId/latest
+ * Get most recent separability score.
+ */
+router.get('/scores/:ventureId/latest', asyncHandler(async (req, res) => {
+  const { data, error } = await dbLoader.supabase
+    .from('venture_separability_scores')
+    .select('*')
+    .eq('venture_id', req.params.ventureId)
+    .order('scored_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) return res.status(404).json({ error: 'No scores found' });
+  res.json(data);
+}));
+
+// ── Data Room Artifacts (Phase 2) ──────────────────────────────
+
+/**
+ * GET /api/eva/exit/data-room/:ventureId
+ * List current data room artifacts for a venture.
+ */
+router.get('/data-room/:ventureId', asyncHandler(async (req, res) => {
+  const { data, error } = await dbLoader.supabase
+    .from('venture_data_room_artifacts')
+    .select('id, artifact_type, artifact_version, content, content_hash, is_current, generated_at')
+    .eq('venture_id', req.params.ventureId)
+    .eq('is_current', true)
+    .order('artifact_type');
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data || []);
+}));
+
+/**
+ * POST /api/eva/exit/data-room/:ventureId/generate
+ * Trigger data room artifact refresh.
+ */
+router.post('/data-room/:ventureId/generate', asyncHandler(async (req, res) => {
+  const { generateDataRoom } = await import('../../lib/eva/exit/data-room-generator.js');
+  const { types } = req.body;
+
+  const result = await generateDataRoom(req.params.ventureId, {
+    supabase: dbLoader.supabase,
+    types: types || undefined,
+  });
+
+  res.json(result);
+}));
+
 export default router;
