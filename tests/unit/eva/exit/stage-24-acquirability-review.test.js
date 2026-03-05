@@ -118,7 +118,7 @@ function createMockSupabase() {
   };
 
   // Wire stage work chain: two paths (stage0 via maybeSingle, deltas via order)
-  let stageWorkCallCount = 0;
+  let _stageWorkCallCount = 0;
   let stage0Result = { data: null, error: null };
 
   stageWorkChain.select.mockReturnValue(stageWorkChain);
@@ -166,16 +166,16 @@ function createMockSupabase() {
 
   const fromFn = vi.fn().mockImplementation((table) => {
     if (table === 'venture_stage_work') {
-      stageWorkCallCount++;
+      _stageWorkCallCount++;
       // Return a fresh chain each time so .eq/.in routing works
       // We'll detect stage0 vs deltas by whether .in() or .maybeSingle() is called
       const perCallChain = {};
-      let isInQuery = false;
+      let _isInQuery = false;
 
       perCallChain.select = vi.fn().mockReturnValue(perCallChain);
       perCallChain.eq = vi.fn().mockReturnValue(perCallChain);
       perCallChain.in = vi.fn().mockImplementation(() => {
-        isInQuery = true;
+        _isInQuery = true;
         return perCallChain;
       });
       perCallChain.order = vi.fn().mockImplementation(() => {
@@ -195,12 +195,12 @@ function createMockSupabase() {
     if (table === 'venture_exit_profiles') {
       // Two calls: first is select (check profile exists), second is update
       const perCallChain = {};
-      let isUpdate = false;
+      let _isUpdate = false;
 
       perCallChain.select = vi.fn().mockReturnValue(perCallChain);
       perCallChain.eq = vi.fn().mockReturnValue(perCallChain);
       perCallChain.update = vi.fn().mockImplementation(() => {
-        isUpdate = true;
+        _isUpdate = true;
         return perCallChain;
       });
       perCallChain.maybeSingle = vi.fn().mockImplementation(() => {
@@ -209,7 +209,7 @@ function createMockSupabase() {
       // For the update path: { error } = await supabase.from().update().eq()
       // .eq() on the update path must be thenable
       // Actually let's handle this differently: after .update() is called, .eq() returns thenable
-      const updateEqChain = {
+      const _updateEqChain = {
         then: (resolve) => resolve(exitProfileUpdateResult),
       };
       // Override: when update is called, chain eq to return thenable

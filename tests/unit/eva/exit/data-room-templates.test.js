@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   DATA_ROOM_TEMPLATES,
   getDataRoomTemplate,
@@ -87,7 +87,7 @@ describe('DATA_ROOM_TEMPLATES', () => {
   });
 
   it('every template item has required fields', () => {
-    for (const [model, items] of Object.entries(DATA_ROOM_TEMPLATES)) {
+    for (const [_model, items] of Object.entries(DATA_ROOM_TEMPLATES)) {
       for (const item of items) {
         expect(item).toHaveProperty('document_type');
         expect(item).toHaveProperty('title');

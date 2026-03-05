@@ -6,7 +6,7 @@
  *        dry_run vs full mode, graceful degradation on missing data
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   rehearseSeparation,
   getDefaultDimensionWeights,
@@ -486,7 +486,7 @@ describe('separation-rehearsal', () => {
       const supabase = createMockSupabase({ assets });
       const result = await rehearseSeparation(VENTURE_ID, 'dry_run', supabase);
 
-      const weights = getDefaultDimensionWeights();
+      const _weights = getDefaultDimensionWeights();
 
       // Manual calculation:
       // technical: 3 tech assets (<=5), no shared deps => 100. Has assets, no shared => +recommendation.
