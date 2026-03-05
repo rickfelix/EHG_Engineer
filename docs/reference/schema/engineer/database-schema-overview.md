@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-04T10:34:20.394Z
-**Tables**: 509
+**Generated**: 2026-03-05T00:38:57.526Z
+**Tables**: 510
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -549,6 +549,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_dependencies](tables/venture_dependencies.md) | N/A (RLS restricted) | ✅ | 2 | Directed dependency graph between ventures for stage-transition blocking (Decision #32) |
 | [venture_documents](tables/venture_documents.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_drafts](tables/venture_drafts.md) | N/A (RLS restricted) | ✅ | 1 | - |
+| [venture_financial_contract](tables/venture_financial_contract.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [venture_nursery](tables/venture_nursery.md) | N/A (RLS restricted) | ✅ | 1 | Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation |
 | [venture_phase_budgets](tables/venture_phase_budgets.md) | N/A (RLS restricted) | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Phase-level token budget tracking. Enables granular budget allocation across venture lifecycle stages. Default 20k tokens per phase. |
 | [venture_raid_summary](tables/venture_raid_summary.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -738,7 +739,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (383 tables)
+### Other (384 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1120,6 +1121,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_dependencies](tables/venture_dependencies.md) - Directed dependency graph between ventures for stage-transition blocking (Decision #32)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
+- [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md) - Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
@@ -2110,6 +2112,9 @@ _Key relationships between tables:_
 - `provider_venture_id` → `ventures.id`
 
 **venture_documents**:
+- `venture_id` → `ventures.id`
+
+**venture_financial_contract**:
 - `venture_id` → `ventures.id`
 
 **venture_nursery**:
