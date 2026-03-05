@@ -125,7 +125,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L1039) - Stage 24 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-launch-learn) - Phase context
+- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-the-launch) - Phase context
 - [Stage 23: Production Launch](stage-23-production-launch.md) - Previous stage
 - [Stage 25: Optimization & Scale](stage-25-optimization-and-scale.md) - Next stage
 
