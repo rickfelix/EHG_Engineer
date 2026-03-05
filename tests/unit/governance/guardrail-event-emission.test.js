@@ -10,7 +10,6 @@ import {
   check,
   emitGuardrailEvent,
   _test,
-  MODES,
 } from '../../../lib/governance/guardrail-registry.js';
 import { classifyRoutingMode, ROUTING_MODES } from '../../../lib/eva/event-bus/event-router.js';
 
