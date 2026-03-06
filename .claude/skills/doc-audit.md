@@ -1,3 +1,7 @@
+---
+description: "Documentation health audit: score 13 dimensions (structural + coverage), persist results, generate corrective SDs, iterate until Grade A (≥93). Mirrors the /heal pattern."
+---
+
 # /doc-audit - Documentation Health Audit
 
 Comprehensive documentation quality scoring across 10 dimensions with automatic corrective SD generation. Mirrors the `/heal` iterative pattern: score → persist → generate → re-score until Grade A (≥93).

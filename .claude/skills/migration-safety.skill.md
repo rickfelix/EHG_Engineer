@@ -1,5 +1,6 @@
 ---
 name: migration-safety
+description: "Database migration safety patterns: idempotent DDL, backward-compatible schema changes, rollback procedures"
 version: 1.0.0
 triggers: [migration, migrate, alter table, drop, rename column, schema change]
 context_keywords: [database, infrastructure]

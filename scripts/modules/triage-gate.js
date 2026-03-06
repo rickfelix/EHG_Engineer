@@ -10,8 +10,12 @@
  * @module scripts/modules/triage-gate
  */
 
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 import { estimateLOC } from '../../lib/ai-loc-estimator.js';
 import { routeWorkItem } from '../../lib/utils/work-item-router.js';
+
+dotenv.config();
 
 /**
  * @typedef {Object} TriageInput
@@ -58,6 +62,42 @@ export function isHardGateSource(source) {
 }
 
 /**
+ * Lookup architecture plan LOC estimate from EVA.
+ *
+ * @param {string} archKey - Architecture plan key (e.g., ARCH-SKILL-AB-TEST-001)
+ * @returns {Promise<number|null>} Estimated LOC from arch plan, or null
+ */
+async function lookupArchPlanLOC(archKey) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || !archKey) return null;
+
+  try {
+    const sb = createClient(url, key);
+    const { data } = await sb
+      .from('eva_architecture_plans')
+      .select('plan_content')
+      .eq('plan_key', archKey)
+      .order('version', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!data?.plan_content) return null;
+
+    // Look for LOC estimate in plan content
+    const content = typeof data.plan_content === 'string'
+      ? data.plan_content
+      : JSON.stringify(data.plan_content);
+
+    const locMatch = content.match(/estimated[_\s-]*loc[:\s]*(\d+)/i)
+      || content.match(/(\d+)\s*(?:lines?\s*of\s*code|LOC)/i);
+    return locMatch ? parseInt(locMatch[1], 10) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Run the triage gate to determine if a work item should be a Quick Fix or full SD.
  *
  * @param {TriageInput} input - Work item details
@@ -66,6 +106,8 @@ export function isHardGateSource(source) {
  */
 export async function runTriageGate(input, supabaseClient) {
   const { title = '', description = '', type = 'bug', source = 'interactive' } = input;
+  const estimatedLocOverride = input.estimatedLoc;
+  const archKey = input.archKey;
 
   // Exempt sources skip triage entirely
   const lowerSource = (source || '').toLowerCase();
@@ -84,13 +126,42 @@ export async function runTriageGate(input, supabaseClient) {
     };
   }
 
-  // Step 1: Estimate LOC
+  // Step 0: Check for --estimated-loc override or --arch-key LOC lookup
+  let locOverride = null;
+  let overrideReason = null;
+
+  if (typeof estimatedLocOverride === 'number' && estimatedLocOverride > 0) {
+    locOverride = estimatedLocOverride;
+    overrideReason = `--estimated-loc override: ${estimatedLocOverride}`;
+  } else if (archKey) {
+    const archLOC = await lookupArchPlanLOC(archKey);
+    if (archLOC && archLOC > 75) {
+      locOverride = archLOC;
+      overrideReason = `arch-plan-override: ${archKey} estimates ${archLOC} LOC`;
+    }
+  }
+
+  // If override forces Tier 3, short-circuit
+  if (locOverride && locOverride > 75) {
+    return {
+      tier: 3,
+      tierLabel: 'TIER_3',
+      shouldGate: false,
+      workItemType: 'STRATEGIC_DIRECTIVE',
+      estimatedLoc: locOverride,
+      confidence: 100,
+      reasoning: overrideReason,
+      escalationReason: overrideReason,
+      askUserQuestionPayload: null,
+      routingDecision: null,
+    };
+  }
+
+  // Step 1: Estimate LOC (use override if provided, else heuristic)
   const combinedDescription = [title, description].filter(Boolean).join(' — ');
-  const locResult = estimateLOC({
-    title,
-    description: combinedDescription,
-    type,
-  });
+  const locResult = locOverride
+    ? { estimatedLoc: locOverride, confidence: 100, reasoning: overrideReason }
+    : estimateLOC({ title, description: combinedDescription, type });
 
   // Step 2: Route through work-item-router
   const routingDecision = await routeWorkItem(
@@ -134,8 +205,8 @@ export async function runTriageGate(input, supabaseClient) {
 /**
  * Build AskUserQuestion payload for Tier 1/2 triage gate.
  */
-function buildAskUserQuestionPayload(routingDecision, locResult, title, type) {
-  const { tier, tier1MaxLoc, tier2MaxLoc, requiresComplianceRubric } = routingDecision;
+function buildAskUserQuestionPayload(routingDecision, locResult, _title, _type) {
+  const { tier, tier1MaxLoc, tier2MaxLoc } = routingDecision;
 
   let questionText;
   if (tier === 1) {
@@ -213,7 +284,7 @@ export function formatTriageSummary(result) {
 // ============================================================================
 
 function parseCliArgs(args) {
-  const parsed = { title: '', type: 'bug', source: 'interactive', outputJson: false };
+  const parsed = { title: '', type: 'bug', source: 'interactive', outputJson: false, estimatedLoc: null, archKey: null };
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -226,6 +297,12 @@ function parseCliArgs(args) {
       case '--source':
         parsed.source = args[++i] || 'interactive';
         break;
+      case '--estimated-loc':
+        parsed.estimatedLoc = parseInt(args[++i], 10) || null;
+        break;
+      case '--arch-key':
+        parsed.archKey = args[++i] || null;
+        break;
       case '--output-json':
         parsed.outputJson = true;
         break;
@@ -235,14 +312,17 @@ Triage Gate - Intelligent Work Item Triage
 
 Usage:
   node scripts/modules/triage-gate.js --title "Fix typo" --type fix --source interactive
-  node scripts/modules/triage-gate.js --title "Add SSO" --type feature --source interactive --output-json
+  node scripts/modules/triage-gate.js --title "Add SSO" --type feature --estimated-loc 200
+  node scripts/modules/triage-gate.js --title "New feature" --arch-key ARCH-SKILL-AB-TEST-001
 
 Options:
-  --title <text>     Work item title (required)
-  --type <type>      SD type: fix, feature, infrastructure, refactor, etc.
-  --source <source>  Entry source: interactive, uat, feedback, learn, plan, child
-  --output-json      Output JSON to stdout (human summary to stderr)
-  --help             Show this help
+  --title <text>         Work item title (required)
+  --type <type>          SD type: fix, feature, infrastructure, refactor, etc.
+  --source <source>      Entry source: interactive, uat, feedback, learn, plan, child
+  --estimated-loc <num>  Override LOC estimate (forces tier 3 if >75)
+  --arch-key <key>       Lookup LOC from architecture plan (forces tier 3 if LOC >75)
+  --output-json          Output JSON to stdout (human summary to stderr)
+  --help                 Show this help
 `);
         process.exit(0);
     }
@@ -253,14 +333,14 @@ Options:
 
 async function main() {
   const args = process.argv.slice(2);
-  const { title, type, source, outputJson } = parseCliArgs(args);
+  const { title, type, source, outputJson, estimatedLoc, archKey } = parseCliArgs(args);
 
   if (!title) {
     console.error('Error: --title is required');
     process.exit(1);
   }
 
-  const result = await runTriageGate({ title, description: title, type, source });
+  const result = await runTriageGate({ title, description: title, type, source, estimatedLoc, archKey });
 
   if (outputJson) {
     // JSON to stdout, human-readable to stderr

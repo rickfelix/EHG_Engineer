@@ -1,3 +1,7 @@
+---
+description: "Create, version, and manage EVA Architecture Plans linked to Vision documents"
+---
+
 # /eva archplan - EVA Architecture Plan Manager
 
 Create, version, and manage Architecture Plans linked to Vision documents

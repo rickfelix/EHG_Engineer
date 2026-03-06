@@ -1,3 +1,7 @@
+---
+description: "Manage organizational mission statements in the missions table for EHG ventures"
+---
+
 # /eva mission - Organizational Mission Management
 
 Manage organizational mission statements in the missions table.

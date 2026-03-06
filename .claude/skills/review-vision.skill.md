@@ -1,3 +1,7 @@
+---
+description: "Review existing vision and architecture plans using a 3-agent team to identify blind spots and feasibility concerns"
+---
+
 # /eva review - Post-Creation Vision & Architecture Review
 
 Review existing vision documents and/or architecture plans using a 3-agent team (Challenger, Visionary, Pragmatist) to identify blind spots, opportunities, and feasibility concerns.

@@ -1,3 +1,7 @@
+---
+description: "Run read-only audits against strategic directives to detect gaps, staleness, and missing artifacts"
+---
+
 # /audit - Self-Audit Command
 
 Run read-only audits against strategic directives to detect gaps, staleness, and missing artifacts.

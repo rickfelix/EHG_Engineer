@@ -1,5 +1,6 @@
 ---
 name: schema-design
+description: "Database schema design patterns for Supabase: UUID keys, JSONB columns, RLS policies, naming conventions"
 version: 1.0.0
 triggers: [schema, table, column, create table, alter table, add column, database design]
 context_keywords: [database, infrastructure, migration]
