@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T19:46:37.097Z
-**Tables**: 521
+**Generated**: 2026-03-06T22:06:16.469Z
+**Tables**: 522
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -151,6 +151,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [doctrine_constraint_violations](tables/doctrine_constraint_violations.md) | N/A (RLS restricted) | ✅ | 2 | Audit log for Doctrine of Constraint violations (Law 1).
 Captures all attempts by EXEC agents to create/modify governance artifacts.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
+| [document_section_schemas](tables/document_section_schemas.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [documentation_health_checks](tables/documentation_health_checks.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Documentation health check results |
 | [documentation_inventory](tables/documentation_inventory.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Documentation inventory |
 | [documentation_templates](tables/documentation_templates.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Documentation templates |
@@ -752,7 +753,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (395 tables)
+### Other (396 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -870,6 +871,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [doctrine_constraint_violations](tables/doctrine_constraint_violations.md) - Audit log for Doctrine of Constraint violations (Law 1).
 Captures all attempts by EXEC agents to create/modify governance artifacts.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
+- [document_section_schemas](tables/document_section_schemas.md)
 - [documentation_health_checks](tables/documentation_health_checks.md) - RLS enabled 2025-10-26 (migration 021) - Documentation health check results
 - [documentation_inventory](tables/documentation_inventory.md) - RLS enabled 2025-10-26 (migration 021) - Documentation inventory
 - [documentation_templates](tables/documentation_templates.md) - RLS enabled 2025-10-26 (migration 021) - Documentation templates

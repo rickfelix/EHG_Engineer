@@ -1,4 +1,4 @@
-# telegram_forum_topics Table
+# document_section_schemas Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -14,41 +14,45 @@
 
 ---
 
-## Columns (10 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| thread_id | `integer(32)` | **NO** | - | - |
-| topic_name | `text` | **NO** | - | - |
-| persona | `text` | **NO** | - | - |
-| system_prompt_key | `text` | **NO** | - | - |
-| allowed_tools | `jsonb` | **NO** | `'[]'::jsonb` | - |
-| is_read_only | `boolean` | **NO** | `true` | - |
+| document_type | `text` | **NO** | - | - |
+| domain | `text` | YES | - | - |
+| section_key | `text` | **NO** | - | - |
+| section_name | `text` | **NO** | - | - |
 | description | `text` | YES | - | - |
+| section_order | `integer(32)` | **NO** | - | - |
+| is_required | `boolean` | **NO** | `true` | - |
+| min_content_length | `integer(32)` | YES | `50` | - |
+| json_schema | `jsonb` | YES | - | - |
+| is_active | `boolean` | **NO** | `true` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `telegram_forum_topics_pkey`: PRIMARY KEY (id)
+- `document_section_schemas_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `telegram_forum_topics_thread_id_key`: UNIQUE (thread_id)
-
-### Check Constraints
-- `telegram_forum_topics_persona_check`: CHECK ((persona = ANY (ARRAY['chairman'::text, 'builder'::text, 'shared'::text])))
+- `document_section_schemas_document_type_domain_section_key_key`: UNIQUE (document_type, domain, section_key)
 
 ## Indexes
 
-- `telegram_forum_topics_pkey`
+- `document_section_schemas_document_type_domain_section_key_key`
   ```sql
-  CREATE UNIQUE INDEX telegram_forum_topics_pkey ON public.telegram_forum_topics USING btree (id)
+  CREATE UNIQUE INDEX document_section_schemas_document_type_domain_section_key_key ON public.document_section_schemas USING btree (document_type, domain, section_key)
   ```
-- `telegram_forum_topics_thread_id_key`
+- `document_section_schemas_pkey`
   ```sql
-  CREATE UNIQUE INDEX telegram_forum_topics_thread_id_key ON public.telegram_forum_topics USING btree (thread_id)
+  CREATE UNIQUE INDEX document_section_schemas_pkey ON public.document_section_schemas USING btree (id)
+  ```
+- `idx_dss_type_domain`
+  ```sql
+  CREATE INDEX idx_dss_type_domain ON public.document_section_schemas USING btree (document_type, domain) WHERE (is_active = true)
   ```
 
 ## RLS Policies
