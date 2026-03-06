@@ -46,6 +46,22 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
   const isAdvisory = enforcement === 'ADVISORY';
   const issueCountBefore = validation.issues.length;
 
+  // PAT-GATE2-BE-001: target_application-aware exemption (checked FIRST - definitive signal)
+  // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has UI components
+  {
+    const targetApp = validation.details.target_application || null;
+    if (targetApp === 'EHG_Engineer') {
+      console.log('   ✅ EHG_Engineer target application (backend-only) - Section A not applicable (25/25)');
+      validation.score += 25;
+      validation.gate_scores.design_fidelity = 25;
+      validation.details.design_fidelity = {
+        skipped: true,
+        reason: 'EHG_Engineer target application - backend-only repo, no UI components'
+      };
+      return;
+    }
+  }
+
   // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI requirements (hardcoded fallback)
   try {
     let sd = null;
@@ -58,7 +74,6 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
     if (sdById) {
       sd = sdById;
     } else {
-      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key instead (column dropped 2026-01-24)
       const { data: sdBySdKey } = await supabase
         .from('strategic_directives_v2')
         .select('sd_type, scope, title')
@@ -99,23 +114,6 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
         reason: `${sd.sd_type} SD without UI requirements - design fidelity not applicable`
       };
       return;
-    }
-
-    // PAT-GATE2-BE-001: target_application-aware exemption
-    // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has UI components
-    if (!hasUIScope) {
-      const targetApp = validation.details.target_application || null;
-
-      if (targetApp === 'EHG_Engineer') {
-        console.log('   ✅ EHG_Engineer target application (backend-only) - Section A not applicable (25/25)');
-        validation.score += 25;
-        validation.gate_scores.design_fidelity = 25;
-        validation.details.design_fidelity = {
-          skipped: true,
-          reason: 'EHG_Engineer target application - backend-only repo, no UI components'
-        };
-        return;
-      }
     }
 
     // PAT-GATE2-BACKEND-ONLY-001: Backend-only feature SDs (CLI, scripts, APIs)
