@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T10:57:10.213Z
-**Tables**: 515
+**Generated**: 2026-03-06T13:28:12.959Z
+**Tables**: 519
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -317,6 +317,10 @@ Reference: docs/workflow/stages_v2.yaml |
 | [marketing_content](tables/marketing_content.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [marketing_content_queue](tables/marketing_content_queue.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [marketing_content_variants](tables/marketing_content_variants.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [mental_model_applications](tables/mental_model_applications.md) | N/A (RLS restricted) | ✅ | 4 | Tracks which models were applied to which ventures at which stages |
+| [mental_model_archetype_affinity](tables/mental_model_archetype_affinity.md) | N/A (RLS restricted) | ✅ | 2 | Which models work best for which venture archetypes |
+| [mental_model_effectiveness](tables/mental_model_effectiveness.md) | N/A (RLS restricted) | ✅ | 2 | Aggregate effectiveness scores correlated with venture outcomes |
+| [mental_models](tables/mental_models.md) | N/A (RLS restricted) | ✅ | 2 | Core mental model definitions for structured decision-making frameworks |
 | [missions](tables/missions.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [model_usage_log](tables/model_usage_log.md) | N/A (RLS restricted) | ✅ | 3 | RLS: Append-only for authenticated |
 | [modeling_requests](tables/modeling_requests.md) | N/A (RLS restricted) | ✅ | 1 | Horizontal forecasting and modeling engine serving Stage 0 components including time-horizon positioning, build cost estimation, and market analysis |
@@ -744,7 +748,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (389 tables)
+### Other (393 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -961,6 +965,10 @@ Reference: docs/workflow/stages_v2.yaml
 - [marketing_content](tables/marketing_content.md)
 - [marketing_content_queue](tables/marketing_content_queue.md)
 - [marketing_content_variants](tables/marketing_content_variants.md)
+- [mental_model_applications](tables/mental_model_applications.md) - Tracks which models were applied to which ventures at which stages
+- [mental_model_archetype_affinity](tables/mental_model_archetype_affinity.md) - Which models work best for which venture archetypes
+- [mental_model_effectiveness](tables/mental_model_effectiveness.md) - Aggregate effectiveness scores correlated with venture outcomes
+- [mental_models](tables/mental_models.md) - Core mental model definitions for structured decision-making frameworks
 - [missions](tables/missions.md)
 - [model_usage_log](tables/model_usage_log.md) - RLS: Append-only for authenticated
 - [modeling_requests](tables/modeling_requests.md) - Horizontal forecasting and modeling engine serving Stage 0 components including time-horizon positioning, build cost estimation, and market analysis
@@ -1678,6 +1686,15 @@ _Key relationships between tables:_
 
 **marketing_content_variants**:
 - `content_id` → `marketing_content.id`
+
+**mental_model_applications**:
+- `model_id` → `mental_models.id`
+
+**mental_model_archetype_affinity**:
+- `model_id` → `mental_models.id`
+
+**mental_model_effectiveness**:
+- `model_id` → `mental_models.id`
 
 **missions**:
 - `venture_id` → `ventures.id`
