@@ -114,7 +114,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     // Try direct ID lookup first (works for both UUID and SD-KEY format IDs)
     const result = await supabase
       .from('strategic_directives_v2')
-      .select('id, title, sd_type, scope, category, intensity_level')
+      .select('id, title, sd_type, scope, category, intensity_level, target_application')
       .eq('id', sd_id)
       .single();
 
@@ -126,8 +126,9 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     const sdType = (sd?.sd_type || '').toLowerCase();
     const intensityLevel = (sd?.intensity_level || '').toLowerCase();
     validation.details.sd_type = sdType;
+    validation.details.target_application = sd?.target_application || '';
 
-    console.log(`   🔍 SD Type check: sd_type=${sdType}, intensity_level=${intensityLevel}`);
+    console.log(`   🔍 SD Type check: sd_type=${sdType}, intensity_level=${intensityLevel}, target=${sd?.target_application || 'unknown'}`);
 
     // Fetch Gate 2 exempt sections
     try {

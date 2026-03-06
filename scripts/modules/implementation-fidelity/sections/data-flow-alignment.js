@@ -101,18 +101,8 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
 
     // PAT-GATE2-BE-001: target_application-aware exemption for Section C
     // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has form/UI integration
-    // Mirrors the same exemption already applied in Section A (design-fidelity.js)
     if (!hasUIScope) {
-      let targetApp = null;
-      try {
-        const sdKey = sd_id;
-        const { data: fullSd } = await supabase
-          .from('strategic_directives_v2')
-          .select('target_application')
-          .or(`id.eq.${sdKey},sd_key.eq.${sdKey}`)
-          .single();
-        targetApp = fullSd?.target_application;
-      } catch { /* continue with other checks */ }
+      const targetApp = validation.details.target_application || null;
 
       if (targetApp === 'EHG_Engineer') {
         console.log('   ✅ EHG_Engineer target application (backend-only) - Section C not applicable (25/25)');
