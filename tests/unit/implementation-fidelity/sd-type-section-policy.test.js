@@ -30,7 +30,7 @@ describe('sd-type-section-policy', () => {
 
     it('returns correct policy for infrastructure SDs', () => {
       expect(getSectionEnforcement('infrastructure', 'A')).toBe('SKIP');
-      expect(getSectionEnforcement('infrastructure', 'B')).toBe('SKIP');
+      expect(getSectionEnforcement('infrastructure', 'B')).toBe('REQUIRED');
       expect(getSectionEnforcement('infrastructure', 'C')).toBe('SKIP');
       expect(getSectionEnforcement('infrastructure', 'D')).toBe('ADVISORY');
     });
@@ -46,7 +46,7 @@ describe('sd-type-section-policy', () => {
 
     it('returns correct policy for performance SDs', () => {
       expect(getSectionEnforcement('performance', 'A')).toBe('SKIP');
-      expect(getSectionEnforcement('performance', 'B')).toBe('SKIP');
+      expect(getSectionEnforcement('performance', 'B')).toBe('ADVISORY');
       expect(getSectionEnforcement('performance', 'C')).toBe('ADVISORY');
       expect(getSectionEnforcement('performance', 'D')).toBe('REQUIRED');
     });
@@ -82,7 +82,7 @@ describe('sd-type-section-policy', () => {
       const result = getAllSectionEnforcements('infrastructure');
       expect(result).toEqual({
         A: 'SKIP',
-        B: 'SKIP',
+        B: 'REQUIRED',
         C: 'SKIP',
         D: 'ADVISORY'
       });

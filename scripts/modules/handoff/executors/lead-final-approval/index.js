@@ -280,6 +280,25 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       console.log('   ✅ Pre-inserted LEAD-FINAL-APPROVAL into leo_handoff_executions');
     }
 
+    // Pre-completion migration verification: ensure migration files have been applied
+    try {
+      const migrationCheck = await this.verifyMigrationsApplied(sd);
+      if (migrationCheck.hasMigrations && migrationCheck.missingTables.length > 0) {
+        console.log(`   ⚠️  MIGRATION WARNING: ${migrationCheck.missingTables.length} table(s) from migrations not found in DB`);
+        console.log(`      Missing: ${migrationCheck.missingTables.join(', ')}`);
+        console.log('      Migrations must be applied before marking SD completed');
+        return ResultBuilder.rejected(
+          'UNAPPLIED_MIGRATIONS',
+          `Migration files exist but ${migrationCheck.missingTables.length} table(s) not found in live DB: ${migrationCheck.missingTables.join(', ')}. Apply migrations before completing.`,
+          { missingTables: migrationCheck.missingTables, migrationFiles: migrationCheck.migrationFiles }
+        );
+      } else if (migrationCheck.hasMigrations) {
+        console.log(`   ✅ Migration verification: all ${migrationCheck.foundTables.length} table(s) exist in DB`);
+      }
+    } catch (migCheckError) {
+      console.warn(`   ⚠️  Migration verification check failed (non-blocking): ${migCheckError.message}`);
+    }
+
     // Transition SD to completed status
     const { error: sdError } = await this.supabase
       .from('strategic_directives_v2')
@@ -477,6 +496,59 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null
       } : null
     };
+  }
+
+  /**
+   * Verify that migration files for this SD have been applied to the live DB.
+   * Parses CREATE TABLE statements from migration files and checks information_schema.
+   * @param {Object} sd - Strategic directive object
+   * @returns {{hasMigrations: boolean, migrationFiles: string[], foundTables: string[], missingTables: string[]}}
+   */
+  async verifyMigrationsApplied(sd) {
+    const { existsSync } = await import('fs');
+    const { readdir, readFile } = await import('fs/promises');
+    const pathMod = await import('path');
+    const { getSDSearchTerms, detectImplementationRepos } = await import('../../../../modules/implementation-fidelity/utils/index.js');
+
+    const result = { hasMigrations: false, migrationFiles: [], foundTables: [], missingTables: [] };
+    const implementationRepos = await detectImplementationRepos(sd.id, this.supabase);
+    const searchTerms = await getSDSearchTerms(sd.id, this.supabase);
+    const searchLower = searchTerms.map(t => t.replace('SD-', '').toLowerCase());
+    const migrationDirs = ['database/migrations', 'supabase/migrations', 'migrations'];
+
+    for (const repo of implementationRepos) {
+      for (const dir of migrationDirs) {
+        const fullPath = pathMod.join(repo, dir);
+        if (!existsSync(fullPath)) continue;
+        const files = await readdir(fullPath);
+        const sdMigrations = files.filter(f => {
+          const fileLower = f.toLowerCase();
+          return searchLower.some(term => fileLower.includes(term));
+        });
+        for (const file of sdMigrations) {
+          result.migrationFiles.push(`${dir}/${file}`);
+          try {
+            const content = await readFile(pathMod.join(fullPath, file), 'utf-8');
+            const matches = content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?(\w+)/gi);
+            for (const match of matches) {
+              const tableName = match[1].toLowerCase();
+              const { error } = await this.supabase.from(tableName).select('*').limit(0);
+              if (error && error.message.includes('Could not find')) {
+                result.missingTables.push(tableName);
+              } else {
+                result.foundTables.push(tableName);
+              }
+            }
+          } catch (_) { /* skip unreadable files */ }
+        }
+      }
+    }
+
+    result.hasMigrations = result.migrationFiles.length > 0 &&
+      (result.foundTables.length > 0 || result.missingTables.length > 0);
+    result.foundTables = [...new Set(result.foundTables)];
+    result.missingTables = [...new Set(result.missingTables)];
+    return result;
   }
 
   /**
