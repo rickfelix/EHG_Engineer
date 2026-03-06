@@ -242,14 +242,16 @@ node scripts/ship-preflight.js --json
 
 ---
 
-### Step 0.6: Code Simplification (OPTIONAL)
+### Step 0.6: Code Simplification (MANDATORY)
 
-Before committing, consider running `/simplify` to clean up code without changing behavior.
+Before committing, run `/simplify` to clean up code without changing behavior. This step is **mandatory** to prevent technical debt accumulation.
 
-**When to run:**
-- Session had rapid iteration (multiple debug cycles)
-- Code works but feels "messy"
-- Pre-PR polish desired
+**Procedure:**
+1. Run `/simplify` to preview available simplifications
+2. Review changes (especially `logic` type rules)
+3. Run `/simplify --apply` if acceptable
+4. If no simplifications found, proceed to Step 0.9
+5. Proceed to Step 0.9
 
 **Quick check:**
 ```javascript
@@ -261,24 +263,21 @@ const engine = new SimplificationEngine(supabase);
 const files = engine.getSessionChangedFiles();
 
 if (files.length > 0) {
-  console.log(`📝 ${files.length} files changed - consider /simplify`);
+  console.log(`${files.length} files changed - running /simplify`);
   const results = await engine.simplify(files, { dryRun: true });
   if (results.totalChanges > 0) {
-    console.log(`   🔧 ${results.totalChanges} simplifications available`);
+    console.log(`   ${results.totalChanges} simplifications available`);
   }
 }
 ```
 
-**If changes found:**
-1. Run `/simplify` to preview
-2. Review changes (especially `logic` type rules)
-3. Run `/simplify --apply` if acceptable
-4. Proceed to Step 1
+**Escape hatch (`--skip-simplify`):**
 
-**Skip if:**
-- No simplifications found
-- Time-sensitive shipping
-- Changes are too risky (manual cleanup preferred)
+For time-sensitive shipping, use `--skip-simplify` to bypass this step. The bypass is logged:
+```
+[SIMPLIFY-SKIP] /simplify skipped via --skip-simplify flag. Reason: <provide reason>
+```
+Only use this escape hatch when shipping is genuinely time-sensitive. Habitual skipping defeats the purpose of enforcement.
 
 See `/simplify` command for full details.
 

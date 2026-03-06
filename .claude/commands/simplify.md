@@ -156,13 +156,19 @@ The engine uses confidence scores from database rules:
 
 ---
 
-## Integration with /ship
+## Integration with /ship (Mandatory Enforcement)
 
-The `/ship` command includes an optional Step 0.6 that suggests running `/simplify`:
+The `/ship` command enforces `/simplify` as a **mandatory** step (Step 0.6) before committing:
 
 ```
-/leo complete → /simplify (optional) → /ship → /learn
+/leo complete → /simplify (MANDATORY) → /ship → /learn
 ```
+
+**Enforcement behavior:**
+- `/ship` requires `/simplify` to be run before proceeding to commit
+- If no simplifications are found, `/simplify` completes instantly and `/ship` continues
+- Use `--skip-simplify` with `/ship` for time-sensitive shipping (bypass is logged)
+- When invoked directly (not via `/ship`), `/simplify` works unchanged
 
 See `/ship` command for the integrated workflow.
 
