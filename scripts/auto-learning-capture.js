@@ -21,6 +21,7 @@ import { execFileSync } from 'child_process';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getGitHubRepo } from '../lib/venture-resolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -457,7 +458,8 @@ async function captureLearningSFromMerge(prNumber) {
   const captureData = {
     prNumber,
     prTitle: pr.title,
-    prUrl: `https://github.com/${process.env.GITHUB_REPO || 'rickfelix/ehg-engineer'}/pull/${prNumber}`,
+    // SD-LEO-REFAC-ELIMINATE-HARD-CODED-001: Use venture-resolver for GitHub repo
+    prUrl: `https://github.com/${process.env.GITHUB_REPO || getGitHubRepo('EHG_Engineer')}/pull/${prNumber}`,
     workType: mapWorkTypeToCategory(workType),
     learningWorthyCategories,
     learnings,

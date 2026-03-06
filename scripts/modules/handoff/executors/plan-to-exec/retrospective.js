@@ -231,7 +231,7 @@ export async function createHandoffRetrospective(supabase, sdId, sd, handoffResu
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
       performance_impact: 'Standard',
-      target_application: 'EHG_Engineer',
+      target_application: sd.target_application || 'EHG_Engineer',
       learning_category: 'PROCESS_IMPROVEMENT',
       related_files: [],
       related_commits: [],

@@ -126,23 +126,25 @@ export async function validateTargetApplication(sd, supabase) {
   }
 
   if (!currentTarget && !inferredTarget) {
-    // No target and couldn't infer - default to EHG with warning
-    console.log('\n   ⚠️  Could not determine target_application, defaulting to EHG');
+    // SD-LEO-REFAC-ELIMINATE-HARD-CODED-001: Use venture-resolver for default
+    const { getCurrentVenture } = await import('../../../../../../lib/venture-resolver.js');
+    const defaultTarget = getCurrentVenture();
+    console.log(`\n   ⚠️  Could not determine target_application, defaulting to ${defaultTarget}`);
 
     const { error } = await supabase
       .from('strategic_directives_v2')
-      .update({ target_application: 'EHG' })
+      .update({ target_application: defaultTarget })
       .eq('id', sd.id);
 
     if (!error) {
-      console.log('   ✅ Default target_application set to: EHG');
+      console.log(`   ✅ Default target_application set to: ${defaultTarget}`);
     }
 
     return {
       pass: true,
       score: 70,
       issues: [],
-      warnings: ['target_application defaulted to EHG - verify this is correct']
+      warnings: [`target_application defaulted to ${defaultTarget} - verify this is correct`]
     };
   }
 

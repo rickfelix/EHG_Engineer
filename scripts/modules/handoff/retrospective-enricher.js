@@ -18,6 +18,8 @@
 
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { execSync } from 'child_process';
+// SD-LEO-REFAC-ELIMINATE-HARD-CODED-001: Registry-driven venture paths
+import { getVenturePath } from '../../../lib/venture-resolver.js';
 import { RetrospectiveQualityRubric } from '../rubrics/retrospective-quality-rubric.js';
 
 /**
@@ -612,9 +614,8 @@ export async function enrichRetrospectivePreGate(supabase, sdId, sd) {
  */
 function getGitChangedFiles(targetApp) {
   try {
-    const repoPath = targetApp === 'EHG'
-      ? 'C:/Users/rickf/Projects/_EHG/ehg'
-      : 'C:/Users/rickf/Projects/_EHG/EHG_Engineer';
+    // SD-LEO-REFAC-ELIMINATE-HARD-CODED-001: Use venture-resolver instead of absolute paths
+    const repoPath = getVenturePath(targetApp);
     const output = execSync('git diff --name-only HEAD~5 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null', {
       cwd: repoPath,
       encoding: 'utf8',
