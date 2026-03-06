@@ -24,15 +24,12 @@ tags: [guide, auto-generated]
   - [Reality Check](#reality-check)
   - [Dependency Analysis](#dependency-analysis)
   - [True Blocker Status: ❌ **NOT A BLOCKER**](#true-blocker-status-not-a-blocker)
-- [P0 SD #3: CREWAI-ARCHITECTURE-001 / EXPANSION-001](#p0-sd-3-crewai-architecture-001-expansion-001)
-  - [Dossier Claim](#dossier-claim)
-  - [Reality Check](#reality-check)
-  - [Dependency Analysis](#dependency-analysis)
-  - [True Blocker Status: ❌ **NOT A BLOCKER** (full architecture), ⚠️ **MAYBE** (Stage 4 specific crew)](#true-blocker-status-not-a-blocker-full-architecture-maybe-stage-4-specific-crew)
+- [P0 SD #3: CREWAI-ARCHITECTURE-001 [DROPPED]](#p0-sd-3-crewai-architecture-001-dropped)
+  - [Status: DROPPED](#status-dropped)
 - [Dependency Map: Which Stages Actually Need Which P0 SDs](#dependency-map-which-stages-actually-need-which-p0-sds)
   - [METRICS-FRAMEWORK-001](#metrics-framework-001)
   - [RECURSION-ENGINE-001](#recursion-engine-001)
-  - [CREWAI-ARCHITECTURE (40 crews)](#crewai-architecture-40-crews)
+  - [CREWAI-ARCHITECTURE [DROPPED]](#crewai-architecture-dropped)
 - [Chairman Decision Matrix](#chairman-decision-matrix)
   - [Option A: Build All 3 P0 SDs Now (Wave 1 as Proposed)](#option-a-build-all-3-p0-sds-now-wave-1-as-proposed)
   - [Option B: Defer All 3 P0 SDs (Start Stage 4 Manual)](#option-b-defer-all-3-p0-sds-start-stage-4-manual)
@@ -161,49 +158,15 @@ tags: [guide, auto-generated]
 
 ---
 
-## P0 SD #3: CREWAI-ARCHITECTURE-001 / EXPANSION-001
+## P0 SD #3: CREWAI-ARCHITECTURE-001 [DROPPED]
 
-### Dossier Claim
+### Status: DROPPED
 
-**Source**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/final-summary-report.md:456-462`
+**Note**: This SD and all associated CrewAI tables (`crewai_agents`, `crewai_crews`, `crewai_flows`, `crewai_flow_executions`, `crewai_flow_templates`, `crew_members`, `crew_semantic_diffs`, `agent_tools`) have been dropped from the database. The CrewAI architecture approach has been superseded.
 
-**Claimed Scope**:
-- Implement 40 crews (160 agents)
-- Expand existing SD-CREWAI-ARCHITECTURE-001
-- Effort: 20 weeks (parallelizable by crew)
-- Impact: "Operationalizes entire CrewAI architecture"
+**Original Claimed Scope**: Implement 40 crews (160 agents), 20 weeks effort.
 
-### Reality Check
-
-**What Actually Exists Today**:
-- EHG has some CrewAI infrastructure (likely research agents based on past context)
-- Exact crew/agent inventory unknown (needs EHG repo scan)
-- Most proposed crews in dossiers are **speculative blueprints**
-
-**What This SD Would Add**:
-- 40 new CrewAI crews (4 agents each)
-- Agent orchestration for all 40 stages
-- Automated execution workflows
-
-### Dependency Analysis
-
-**Does Stage 4 need this to function?**
-- **PARTIAL** — Stage 4 (Competitive Intelligence) might benefit from a small crew
-- BUT: Can start with manual research or simple script
-- Full 40-crew architecture is **massive over-engineering** for Stage 4 exploration
-
-**What breaks if we defer?**
-- ❌ **NOTHING** — Stages can use manual processes or simple scripts
-- Chairman can perform competitive analysis manually (or delegate to human analyst)
-- If automation is needed, build **one crew for Stage 4**, not all 40
-
-**Deferral Risk**: **MEDIUM** (for full architecture), **LOW** (for Stage 4 specifically)
-- Building 40 crews upfront is high risk (may not match real needs)
-- Building Stage 4 crew incrementally is low risk
-
-### True Blocker Status: ❌ **NOT A BLOCKER** (full architecture), ⚠️ **MAYBE** (Stage 4 specific crew)
-
-**Justification**: Full CrewAI architecture is speculative. If Stage 4 needs automation, build **one small crew**, not 40.
+**Current Status**: ❌ **NOT A BLOCKER** — This SD is no longer relevant.
 
 ---
 
@@ -235,19 +198,13 @@ tags: [guide, auto-generated]
 
 **True Dependency**: Recursion needed **only if/when** stages become automated.
 
-### CREWAI-ARCHITECTURE (40 crews)
+### CREWAI-ARCHITECTURE [DROPPED]
 
-**Dossier Claim**: "40 crews required to operationalize workflow"
+**Note**: CrewAI tables have been dropped. This SD is no longer relevant.
 
-**Reality**:
-| Stage | Needs Crew? | Priority |
-|-------|-------------|----------|
-| Stage 1-3 (Idea validation) | ❌ NO | Manual Chairman review sufficient |
-| Stage 4 (Competitive Intel) | ⚠️ MAYBE | Could benefit from research automation |
-| Stage 5-7 (Planning) | ❌ NO | Manual planning sufficient |
-| Stage 8-40 (Development+) | ⚠️ VARIES | Some stages might benefit, others won't |
+**Original Dossier Claim**: "40 crews required to operationalize workflow"
 
-**True Dependency**: Crews needed **stage-by-stage** based on ROI analysis, not all 40 upfront.
+**Current Status**: Not applicable - CrewAI architecture superseded.
 
 ---
 
@@ -279,12 +236,12 @@ tags: [guide, auto-generated]
 - Stage-by-stage exploration will reveal true automation needs
 - Build infrastructure **in response to proven need**, not speculation
 
-### Option C: Hybrid — Build Minimal Stage 4 Crew Only
+### Option C: Hybrid — Build Minimal Stage 4 Automation Only
 
-**Effort**: 2-3 weeks (single crew: CompetitiveIntelligenceCrew, 4 agents)
+**Effort**: 2-3 weeks (targeted automation scripts)
 **Cost**: Moderate (might not be needed, but low investment)
 **Risk**: **MEDIUM** — Might over-engineer if Stage 4 doesn't need automation
-**Benefit**: Tests CrewAI approach on one stage before scaling
+**Benefit**: Tests automation approach on one stage before scaling
 
 **Recommendation**: ⚠️ **CONDITIONAL**
 
@@ -292,7 +249,7 @@ tags: [guide, auto-generated]
 1. Complete Stage 4 exploration (scan EHG repo)
 2. Confirm Chairman performs competitive analysis manually today
 3. Estimate Chairman time savings (must be >5h/week to justify 2-3 week build)
-4. If ROI unclear, defer crew and proceed manually
+4. If ROI unclear, defer and proceed manually
 
 ---
 
@@ -359,12 +316,12 @@ Based on Stage 4 findings:
 
 - **SD-METRICS-FRAMEWORK-001**: Valuable for automation monitoring, not required for manual stages
 - **SD-RECURSION-ENGINE-001**: Valuable for automated transitions, not required for manual advancement
-- **SD-CREWAI-ARCHITECTURE (40 crews)**: Speculative, build incrementally per stage if needed
+- **SD-CREWAI-ARCHITECTURE [DROPPED]**: CrewAI tables dropped, SD no longer relevant
 
 **Chairman Decision Required**:
 - ✅ **Defer all 3 P0 SDs** → Proceed to Stage 4 exploration immediately
-- ⚠️ **Build minimal Stage 4 crew** → Conditional on exploration findings
-- ❌ **Build all 3 P0 SDs now** → Not recommended (no validated need)
+- ⚠️ **Build minimal Stage 4 automation** → Conditional on exploration findings
+- ❌ **Build all P0 SDs now** → Not recommended (no validated need, CrewAI dropped)
 
 **Next Step**: Scan EHG repository for Stage 4 competitive intelligence artifacts to inform Chairman decision.
 

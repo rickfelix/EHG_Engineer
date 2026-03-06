@@ -125,7 +125,7 @@ async function generateMissingVariants() {
         ca.role,
         COUNT(aa.id) as avatar_count,
         ARRAY_AGG(aa.variant_number ORDER BY aa.variant_number) as existing_variants
-      FROM crewai_agents ca
+      FROM agents ca
       LEFT JOIN agent_avatars aa ON ca.id = aa.agent_id
       WHERE ca.status = 'active'
       GROUP BY ca.id, ca.name, ca.role

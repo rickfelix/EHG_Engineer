@@ -46,7 +46,7 @@ const stage1SD = {
 
   description: `Implement Stage 1 dedicated orchestrator for the 40-Stage Venture Wizard workflow.
 
-Currently, Stage 1 (Draft Idea) uses the generic crewai_agents pool without specialized validation.
+Currently, Stage 1 (Draft Idea) uses the generic agent pool without specialized validation.
 This SD creates a Stage1Orchestrator following the established patterns from Stages 3-6.
 
 Stage 1 Purpose: Capture and structure raw venture ideas with initial validation.
@@ -157,7 +157,7 @@ const stage2SD = {
 
   description: `Implement Stage 2 dedicated orchestrator for the 40-Stage Venture Wizard workflow.
 
-Currently, Stage 2 (AI Review) uses the generic crewai_agents pool without structured critique.
+Currently, Stage 2 (AI Review) uses the generic agent pool without structured critique.
 This SD creates a Stage2Orchestrator following the established patterns from Stages 3-6.
 
 Stage 2 Purpose: Multi-agent AI critique and contrarian analysis of venture ideas.

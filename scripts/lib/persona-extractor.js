@@ -52,7 +52,7 @@ const DEFAULT_PERSONAS = {
  */
 const EVA_KEYWORDS = [
   'orchestration', 'automation', 'agent', 'eva', 'ai', 'autonomous',
-  'workflow', 'crew', 'crewai', 'pipeline', 'scheduled', 'recurring'
+  'workflow', 'crew', 'pipeline', 'scheduled', 'recurring'
 ];
 
 /**

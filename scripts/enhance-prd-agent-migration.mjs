@@ -9,7 +9,7 @@ async function enhancePRD() {
   const enhancements = {
     system_architecture: {
       current_state: {
-        description: 'System B: Flat 4-table structure (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)',
+        description: 'System B: Flat table structure (venture_drafts)',
         limitations: [
           'No organizational hierarchy',
           'Single-tenant design',
@@ -18,20 +18,16 @@ async function enhancePRD() {
         ]
       },
       target_state: {
-        description: 'System A: Hierarchical 8-table architecture with department organization',
+        description: 'System A: Hierarchical architecture with department organization',
         components: {
           data_layer: [
             'agent_departments (11 seeded departments with parent-child hierarchy)',
-            'crewai_agents (agent configs with department_id FK)',
-            'crewai_crews (team definitions with manager_agent_id)',
-            'crew_members (many-to-many crew-agent mapping)',
             'research_sessions (EVA-orchestrated session tracking)',
             'agent_knowledge (pgvector semantic search with 1536-dim embeddings)',
-            'api_cache (24-hour TTL external API caching)',
-            'agent_tools (tool registry with rate limiting)'
+            'api_cache (24-hour TTL external API caching)'
           ],
           service_layer: [
-            'useCrewAIAgents hook (React Query + Supabase realtime)',
+            'useAgents hook (React Query + Supabase realtime)',
             'useDepartments hook (department hierarchy management)',
             'useResearchSessions hook (session orchestration)',
             'useAgentKnowledge hook (semantic search via pgvector)'
@@ -40,7 +36,7 @@ async function enhancePRD() {
             'AIAgentsPage.tsx (department hierarchy + filter)',
             'DepartmentSelector.tsx (org tree navigation)',
             'AgentCard.tsx (individual agent display)',
-            'CrewManager.tsx (crew composition UI)',
+            'TeamManager.tsx (team composition UI)',
             'ResearchSessionDashboard.tsx (session monitoring)'
           ]
         },
@@ -53,7 +49,7 @@ async function enhancePRD() {
         ]
       },
       migration_path: {
-        phase_1: 'Database migration (drop System B, create System A)',
+        phase_1: 'Database migration (create System A tables)',
         phase_2: 'Backend migration (preserve 5,700 LOC Python, update DB calls)',
         phase_3: 'Frontend rewrite (React hooks + UI components)',
         phase_4: 'Avatar integration (12 PNGs from OpenAI GPT-4o)',
@@ -70,22 +66,20 @@ async function enhancePRD() {
             'Execute 20251008000000_agent_platform_schema.sql',
             'Verify pgvector extension enabled',
             'Seed 11 departments with hierarchy',
-            'Validate RLS policies using test accounts',
-            'Drop System B tables (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)'
+            'Validate RLS policies using test accounts'
           ],
           success_criteria: [
-            'All 8 System A tables created',
+            'All System A tables created',
             'pgvector extension active',
             '11 departments in agent_departments',
-            'RLS policies enforce auth.uid() isolation',
-            'Zero System B tables remaining'
+            'RLS policies enforce auth.uid() isolation'
           ]
         },
         {
           phase: 'React Hooks Rewrite',
           duration: '3 hours',
           tasks: [
-            'Create useCrewAIAgents hook with department joins',
+            'Create useAgents hook with department joins',
             'Create useDepartments hook for hierarchy navigation',
             'Add Supabase realtime subscriptions',
             'Implement optimistic updates',
@@ -105,13 +99,11 @@ async function enhancePRD() {
             'Rewrite AIAgentsPage.tsx with department filter',
             'Create DepartmentSelector component',
             'Update AgentCard for department display',
-            'Add CrewManager for crew composition',
             'Implement ResearchSessionDashboard'
           ],
           success_criteria: [
             'Department filter functional',
             'Agent cards show department badges',
-            'Crew manager allows member assignment',
             'Session dashboard displays active research'
           ]
         },
@@ -137,7 +129,6 @@ async function enhancePRD() {
           tasks: [
             'Write smoke tests for department filter',
             'Test agent card rendering',
-            'Validate crew assignment workflow',
             'Test research session creation'
           ],
           success_criteria: [

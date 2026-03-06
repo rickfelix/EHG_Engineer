@@ -67,7 +67,7 @@ tags: [general, auto-generated]
 
 **Scope Delivered**:
 - ✅ 5-step progressive workflow UI (Idea → Research → Results → Review → Confirm)
-- ✅ Database schema for CrewAI integration (4 tables, RLS policies, 4 agents seeded)
+- ✅ Database schema for agent integration (venture_drafts table, RLS policies)
 - ✅ Real-time research progress tracking interface
 - ✅ Chairman control with pause/resume and review/edit capabilities
 - ✅ Draft auto-save functionality (30-second intervals)
@@ -78,7 +78,7 @@ tags: [general, auto-generated]
 
 **Out of Scope** (Documented for Phase 2):
 - ⏳ Python FastAPI backend service (~500-800 LOC)
-- ⏳ 4 CrewAI research agent implementations
+- ⏳ 4 research agent implementations
 - ⏳ Security controls (rate limiting, encryption, cost tracking)
 - ⏳ E2E tests with backend integration
 
@@ -110,13 +110,11 @@ tags: [general, auto-generated]
 - [x] WCAG 2.1 AA compliance
 
 #### Database Schema (100%)
-- [x] crewai_agents table (agent registry)
-- [x] crewai_crews table (crew configurations)
-- [x] crewai_tasks table (task tracking)
 - [x] venture_drafts table (pause/resume state)
 - [x] RLS policies for multi-tenancy
 - [x] Performance indexes
-- [x] 4 research agents seeded
+
+> **Note**: The original implementation also included `crewai_agents`, `crewai_crews`, and `crewai_tasks` tables with seeded agent data. Those tables have since been dropped.
 
 #### Testing (100% Smoke Tests)
 - [x] 7 smoke tests covering all 5 components
@@ -134,7 +132,7 @@ tags: [general, auto-generated]
 
 ### Requirements Deferred (Backend Phase 2):
 - [ ] Python FastAPI service implementation
-- [ ] CrewAI agent implementations (4 agents)
+- [ ] Research agent implementations (4 agents)
 - [ ] Rate limiting (Redis)
 - [ ] Result encryption (AES-256)
 - [ ] Cost tracking system
@@ -177,13 +175,10 @@ tags: [general, auto-generated]
 **Total UI Code**: 1,813 lines React/TypeScript
 
 **Database Schema**:
-- File: `/mnt/c/_EHG/EHG/database/migrations/008_crewai_venture_research.sql`
-- Lines: 237
-- Tables: 4 (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)
-- Policies: 12 RLS policies
-- Indexes: 5 performance indexes
-- Seed Data: 4 research agents + 1 crew
-- Status: ✅ Complete & Ready
+- File: `/mnt/c/_EHG/EHG/database/migrations/008_crewai_venture_research.sql` (migration file retained for history)
+- Tables: venture_drafts (remaining active table)
+- Policies: RLS policies for venture_drafts
+- Status: ✅ Complete (crewai_agents, crewai_crews, crewai_tasks tables since dropped)
 
 **Route Configuration**:
 - File: `/mnt/c/_EHG/EHG/src/App.tsx`
@@ -209,7 +204,7 @@ tags: [general, auto-generated]
 - **Files Created**: 9 files
 - **Lines of Code**: ~2,480 lines (1,813 UI + 237 SQL + 430 docs)
 - **Components**: 5 React components
-- **Database Tables**: 4 tables
+- **Database Tables**: 1 active table (venture_drafts; 3 CrewAI tables since dropped)
 - **Tests**: 7 smoke tests
 - **Documentation**: 2 comprehensive docs
 
@@ -296,7 +291,7 @@ tags: [general, auto-generated]
 
 **Resolution Plan**:
 1. Implement FastAPI service (~3-4 days)
-2. Integrate CrewAI framework (~2-3 days)
+2. Integrate agent framework (~2-3 days)
 3. Add security controls (~1-2 days)
 4. Connect UI to APIs (~1-2 days)
 
@@ -420,16 +415,16 @@ tags: [general, auto-generated]
 
 #### 2. Database Schema Verification
 - [ ] Review migration file: `/mnt/c/_EHG/EHG/database/migrations/008_crewai_venture_research.sql`
-- [ ] Verify 4 tables created (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)
-- [ ] Verify 4 agents seeded in crewai_agents
+- [ ] Verify venture_drafts table created
 - [ ] Verify RLS policies active
 - [ ] Query verification:
   ```sql
-  SELECT COUNT(*) FROM crewai_agents WHERE is_active = true; -- Should return 4
-  SELECT * FROM crewai_crews WHERE crew_name = 'Venture Research Crew'; -- Should exist
+  SELECT COUNT(*) FROM venture_drafts; -- Should exist
   ```
 
-**Success Criteria**: All tables exist, data seeded correctly
+> **Note**: The original verification included queries for `crewai_agents`, `crewai_crews`, and `crewai_tasks` tables which have since been dropped.
+
+**Success Criteria**: venture_drafts table exists with RLS policies
 
 #### 3. Route Configuration Verification
 - [ ] Review App.tsx modifications
@@ -527,7 +522,7 @@ tags: [general, auto-generated]
 
 **What You're Receiving**:
 - ✅ Complete UI layer (5 components, 1,813 lines)
-- ✅ Production-ready database schema (4 tables, RLS)
+- ✅ Database schema (venture_drafts table, RLS)
 - ✅ Route configuration
 - ✅ Smoke tests (7 tests)
 - ✅ Comprehensive backend documentation

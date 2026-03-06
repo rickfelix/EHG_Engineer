@@ -37,7 +37,7 @@ const schemaAnalysis = {
   // CRITICAL: Address SD-AGENT-ADMIN-002 seed data failure
   root_cause_analysis: {
     problem: 'Migration 20251008000000_agent_platform_schema.sql created tables but seed data failed silently',
-    impact: 'All agent tables empty: ai_ceo_agents (0), crewai_agents (0), agent_departments (0)',
+    impact: 'All agent tables empty: ai_ceo_agents (0), agent_departments (0)',
     evidence: 'AGENT_DATA_INVESTIGATION_REPORT.md (489 lines)',
     lesson_learned: 'Need robust seed data validation and error handling'
   },
@@ -56,36 +56,12 @@ const schemaAnalysis = {
       schema: 'id, agent_key, name, role, capabilities, status, created_at',
       verdict: 'REQUIRES SEED DATA - Fix with validation script'
     },
-    crewai_agents: {
-      status: '⚠️ EXISTS but EMPTY (0 records)',
-      issue: 'Seed data failed in SD-AGENT-ADMIN-002',
-      schema: 'id, agent_key, name, role, goal, backstory, department_id, tools, status',
-      verdict: 'REQUIRES SEED DATA - 4 research agents + 11 departments + 8 tools'
-    },
     agent_departments: {
       status: '⚠️ EXISTS but EMPTY (0 records)',
       issue: 'Seed data failed in SD-AGENT-ADMIN-002',
       schema: 'id, department_name, description, status, created_at',
       verdict: 'REQUIRES SEED DATA - 11 departments (R&D, Marketing, Sales, etc.)'
     },
-    crewai_crews: {
-      status: '⚠️ EXISTS but EMPTY (0 records)',
-      issue: 'Seed data failed in SD-AGENT-ADMIN-002',
-      schema: 'id, crew_name, crew_type, description, status, created_at',
-      verdict: 'REQUIRES SEED DATA - Quick Research Crew with 4 agents'
-    },
-    crew_members: {
-      status: '⚠️ EXISTS but EMPTY (0 records)',
-      issue: 'Seed data failed in SD-AGENT-ADMIN-002',
-      schema: 'id, crew_id, agent_id, role_in_crew, sequence_order, created_at',
-      verdict: 'REQUIRES SEED DATA - 4 crew member records'
-    },
-    agent_tools: {
-      status: '⚠️ EXISTS but EMPTY (0 records)',
-      issue: 'Seed data failed in SD-AGENT-ADMIN-002',
-      schema: 'id, tool_name, tool_type, description, configuration, rate_limit_per_minute, status',
-      verdict: 'REQUIRES SEED DATA - 8 tools (search_openvc, search_growjo, etc.)'
-    }
   },
 
   new_tables_required: [
@@ -329,35 +305,6 @@ CREATE INDEX idx_perf_alerts_alert_type ON performance_alerts(alert_type);
           'Advertising', 'Technical/Engineering', 'Investor Relations'
         ],
         validation: 'COUNT(*) = 11'
-      },
-      {
-        table: 'agent_tools',
-        records: 8,
-        data: [
-          'search_openvc', 'search_growjo', 'search_reddit', 'search_hackernews',
-          'query_knowledge_base', 'store_knowledge', 'calculate_market_size', 'analyze_sentiment'
-        ],
-        validation: 'COUNT(*) = 8'
-      },
-      {
-        table: 'crewai_agents',
-        records: 4,
-        data: [
-          'market-researcher', 'sentiment-analyst', 'financial-analyst', 'tech-intelligence'
-        ],
-        validation: 'COUNT(*) = 4'
-      },
-      {
-        table: 'crewai_crews',
-        records: 1,
-        data: ['Quick Research Crew'],
-        validation: 'COUNT(*) = 1'
-      },
-      {
-        table: 'crew_members',
-        records: 4,
-        data: '4 agent assignments to Quick Research Crew',
-        validation: 'COUNT(*) = 4'
       }
     ],
     validation_script: 'scripts/validate-seed-data-sd-agent-admin-003.mjs',
@@ -379,12 +326,6 @@ CREATE INDEX idx_perf_alerts_alert_type ON performance_alerts(alert_type);
         current: 'TO authenticated only',
         new: 'TO anon - SELECT for all departments',
         rationale: 'Department list needs anon access'
-      },
-      {
-        table: 'crew_members',
-        current: 'TO authenticated only',
-        new: 'TO anon - SELECT for crew composition',
-        rationale: 'Crew member list needs anon access'
       }
     ],
     policy_template: `
@@ -433,7 +374,7 @@ USING (user_id = auth.uid());
 
   migration_strategy: {
     order: [
-      '1. Fix seed data for existing tables (agent_departments, agent_tools, etc.)',
+      '1. Fix seed data for existing tables (agent_departments)',
       '2. Update RLS policies for anon access',
       '3. Create prompt_templates table',
       '4. Create prompt_ab_tests table (depends on prompt_templates)',
@@ -511,13 +452,13 @@ const { data, error } = await supabase
       {
         issue: 'Seed data must be validated',
         severity: 'HIGH',
-        location: 'existing tables (agent_departments, agent_tools, etc.)',
+        location: 'existing tables (agent_departments)',
         recommendation: 'Create validation script and run after seeding'
       },
       {
         issue: 'RLS policies need anon access',
         severity: 'MEDIUM',
-        location: 'ai_ceo_agents, agent_departments, crew_members',
+        location: 'ai_ceo_agents, agent_departments',
         recommendation: 'Add anon SELECT policies for public access'
       }
     ],
@@ -531,10 +472,10 @@ const { data, error } = await supabase
     detailed_analysis: JSON.stringify(schemaAnalysis, null, 2),
     execution_time: 0,
     metadata: {
-      tables_analyzed: 7,
+      tables_analyzed: 3,
       new_tables_required: 6,
-      seed_data_records: 28,
-      rls_updates_required: 3,
+      seed_data_records: 11,
+      rls_updates_required: 2,
       migration_steps: 10,
       database_readiness: 'READY_WITH_FIXES',
       risk_level: 'LOW',
@@ -553,11 +494,7 @@ console.log('✅ Database Schema Analysis Complete\n');
 console.log('📊 Existing Tables Status:');
 console.log('   ✅ agent_configs: Functional (preset management)');
 console.log('   ⚠️  ai_ceo_agents: Empty (needs seed data)');
-console.log('   ⚠️  crewai_agents: Empty (needs 4 agents)');
 console.log('   ⚠️  agent_departments: Empty (needs 11 departments)');
-console.log('   ⚠️  agent_tools: Empty (needs 8 tools)');
-console.log('   ⚠️  crewai_crews: Empty (needs 1 crew)');
-console.log('   ⚠️  crew_members: Empty (needs 4 assignments)');
 
 console.log('\n🆕 New Tables Required: 6');
 console.log('   1. prompt_templates (CRITICAL)');
@@ -568,18 +505,13 @@ console.log('   5. agent_executions (HIGH)');
 console.log('   6. performance_alerts (HIGH)');
 
 console.log('\n🔧 Seed Data Plan:');
-console.log('   Total records: 28');
+console.log('   Total records: 11');
 console.log('   - 11 departments');
-console.log('   - 8 tools');
-console.log('   - 4 research agents');
-console.log('   - 1 crew');
-console.log('   - 4 crew members');
 console.log('   ✅ Validation script: validate-seed-data-sd-agent-admin-003.mjs');
 
-console.log('\n🔐 RLS Policy Updates: 3 tables');
+console.log('\n🔐 RLS Policy Updates: 2 tables');
 console.log('   - ai_ceo_agents: Add anon SELECT');
 console.log('   - agent_departments: Add anon SELECT');
-console.log('   - crew_members: Add anon SELECT');
 
 console.log('\n⚡ Performance:');
 console.log('   ✅ Indexes on all FK and query columns');

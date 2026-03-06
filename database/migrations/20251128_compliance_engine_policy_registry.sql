@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS compliance_policies (
   policy_id TEXT NOT NULL UNIQUE, -- e.g., 'CREWAI-001', 'DOSSIER-001'
   policy_name TEXT NOT NULL,
   policy_version INTEGER NOT NULL DEFAULT 1,
-  category TEXT NOT NULL CHECK (category IN ('crewai', 'dossier', 'session', 'integration', 'custom')),
+  category TEXT NOT NULL CHECK (category IN ('dossier', 'session', 'integration', 'custom')),
   severity TEXT NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
   is_active BOOLEAN NOT NULL DEFAULT true,
   description TEXT,
@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS compliance_policies (
   -- rule_config schema:
   -- {
   --   "check_type": "table_exists" | "row_count" | "field_exists" | "custom",
-  --   "target_table": "crewai_agents",
-  --   "where_clause": "stage = $1",
+  --   "target_table": "stage_dossiers",
+  --   "where_clause": "stage_number = $1",
   --   "expected_condition": "count >= 1",
-  --   "custom_function": "check_crewai_agents"
+  --   "custom_function": "check_stage_compliance"
   -- }
 
   -- Validation targets
@@ -131,21 +131,6 @@ COMMENT ON COLUMN compliance_events.event_type IS 'Type of compliance event for 
 -- Seed default policies from existing COMPLIANCE_RULES
 INSERT INTO compliance_policies (policy_id, policy_name, category, severity, description, rule_config, remediation_template)
 VALUES
-  ('CREWAI-001', 'CrewAI Agent Registration', 'crewai', 'critical',
-   'Stage must have registered CrewAI agents per dossier specification',
-   '{"check_type": "row_count", "target_table": "crewai_agents", "where_clause": "stage = $1", "expected_condition": "count >= 1"}',
-   'Register CrewAI agents for stage ${stage} according to dossier requirements'),
-
-  ('CREWAI-002', 'CrewAI Crew Configuration', 'crewai', 'critical',
-   'Stage must have configured CrewAI crews with proper orchestration',
-   '{"check_type": "row_count", "target_table": "crewai_crews", "where_clause": "stage = $1", "expected_condition": "count >= 1"}',
-   'Configure CrewAI crews for stage ${stage}'),
-
-  ('CREWAI-003', 'CrewAI Agent-Crew Assignments', 'crewai', 'high',
-   'Agents must be properly assigned to crews',
-   '{"check_type": "custom", "custom_function": "check_agent_assignments"}',
-   'Assign agents to crews for stage ${stage}'),
-
   ('DOSSIER-001', 'Stage Dossier Documentation', 'dossier', 'high',
    'Stage must have a documented dossier',
    '{"check_type": "row_count", "target_table": "stage_dossiers", "where_clause": "stage_number = $1", "expected_condition": "count >= 1"}',

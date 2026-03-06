@@ -5,7 +5,6 @@
  *
  * Verifies all 25 stages against:
  * - Universal Stage Review Framework v1.1
- * - CrewAI Compliance Policy v1.0
  * - Database-driven policy registry (compliance_policies table)
  *
  * Usage:
@@ -39,27 +38,6 @@ const useRegistry = !args.includes('--no-registry'); // Default: use registry
 
 // Compliance rules configuration
 const COMPLIANCE_RULES = {
-  CREWAI: {
-    id: 'CREWAI-001',
-    name: 'CrewAI Agent Registration',
-    severity: 'critical',
-    description: 'Stage must have registered CrewAI agents per dossier specification',
-    check: async (stage) => checkCrewAIAgents(stage)
-  },
-  CREWAI_CREWS: {
-    id: 'CREWAI-002',
-    name: 'CrewAI Crew Configuration',
-    severity: 'critical',
-    description: 'Stage must have configured CrewAI crews with proper orchestration',
-    check: async (stage) => checkCrewAICrews(stage)
-  },
-  CREWAI_ASSIGNMENTS: {
-    id: 'CREWAI-003',
-    name: 'CrewAI Agent-Crew Assignments',
-    severity: 'high',
-    description: 'Agents must be properly assigned to crews',
-    check: async (stage) => checkAgentAssignments(stage)
-  },
   DOSSIER_EXISTS: {
     id: 'DOSSIER-001',
     name: 'Stage Dossier Documentation',
@@ -84,84 +62,6 @@ const COMPLIANCE_RULES = {
 };
 
 // Check functions
-async function checkCrewAIAgents(stage) {
-  const { data, error } = await supabase
-    .from('crewai_agents')
-    .select('id, name, role, stage')
-    .eq('stage', stage);
-
-  if (error) {
-    return {
-      passed: false,
-      expected: 'At least 1 registered agent',
-      actual: `Error: ${error.message}`,
-      details: { error: error.message }
-    };
-  }
-
-  const hasAgents = data && data.length > 0;
-  return {
-    passed: hasAgents,
-    expected: 'At least 1 registered agent',
-    actual: `${data?.length || 0} agents found`,
-    details: { agents: data?.map(a => ({ name: a.name, role: a.role })) || [] }
-  };
-}
-
-async function checkCrewAICrews(stage) {
-  const { data, error } = await supabase
-    .from('crewai_crews')
-    .select('id, name, orchestration_type, stage')
-    .eq('stage', stage);
-
-  if (error) {
-    return {
-      passed: false,
-      expected: 'At least 1 configured crew',
-      actual: `Error: ${error.message}`,
-      details: { error: error.message }
-    };
-  }
-
-  const hasCrews = data && data.length > 0;
-  return {
-    passed: hasCrews,
-    expected: 'At least 1 configured crew',
-    actual: `${data?.length || 0} crews found`,
-    details: { crews: data?.map(c => ({ name: c.name, type: c.orchestration_type })) || [] }
-  };
-}
-
-async function checkAgentAssignments(stage) {
-  const { data, error } = await supabase
-    .from('crewai_agent_assignments')
-    .select(`
-      id,
-      agent_order,
-      crewai_agents!inner(name, stage),
-      crewai_crews!inner(name, stage)
-    `)
-    .eq('crewai_crews.stage', stage);
-
-  if (error) {
-    // Table might not exist or no assignments
-    return {
-      passed: true, // Pass if table doesn't exist (older setup)
-      expected: 'Agents assigned to crews',
-      actual: 'Unable to verify (table may not exist)',
-      details: { warning: 'crewai_agent_assignments table check skipped' }
-    };
-  }
-
-  const hasAssignments = data && data.length > 0;
-  return {
-    passed: hasAssignments,
-    expected: 'Agents assigned to crews',
-    actual: `${data?.length || 0} assignments found`,
-    details: { assignments: data?.length || 0 }
-  };
-}
-
 async function checkDossierExists(stage) {
   // Check if stage dossier exists in the documentation structure
   // For now, we check if there's stage metadata in the database
@@ -187,29 +87,13 @@ async function checkDossierExists(stage) {
   };
 }
 
-async function checkSessionRouting(stage) {
-  // Check if session routing is configured for this stage
-  const { data, error } = await supabase
-    .from('crewai_sessions')
-    .select('id, stage_number, status')
-    .eq('stage_number', stage)
-    .limit(1);
-
-  if (error) {
-    return {
-      passed: true, // Pass if table doesn't exist
-      expected: 'Session routing configured',
-      actual: 'Unable to verify (table may not exist)',
-      details: { warning: 'Session routing check skipped' }
-    };
-  }
-
-  // Pass if sessions exist or if this is normal (not all stages have sessions)
+async function checkSessionRouting(_stage) {
+  // Session routing check - previously queried crewai_sessions (now dropped)
   return {
-    passed: true, // Session routing is optional per stage
+    passed: true,
     expected: 'Session routing configured or N/A',
-    actual: `${data?.length || 0} sessions found`,
-    details: { sessions: data?.length || 0 }
+    actual: 'Check skipped (table removed)',
+    details: { warning: 'Session routing check skipped - table dropped' }
   };
 }
 
@@ -218,7 +102,7 @@ async function checkExceptionStatus(stage) {
   const { data, error: _error } = await supabase
     .from('strategic_directives_v2')
     .select('id, title, metadata')
-    .filter('metadata->crewai_compliance_status', 'eq', 'exception')
+    .filter('metadata->compliance_status', 'eq', 'exception')
     .filter('metadata->source_stage', 'eq', stage.toString());
 
   const hasException = data && data.length > 0;
@@ -359,9 +243,6 @@ async function checkTableExists(tableName) {
 async function executeCustomCheck(stage, functionName) {
   // Map function names to actual check functions
   const customChecks = {
-    'check_crewai_agents': () => checkCrewAIAgents(stage),
-    'check_crewai_crews': () => checkCrewAICrews(stage),
-    'check_agent_assignments': () => checkAgentAssignments(stage),
     'check_session_routing': () => checkSessionRouting(stage),
     'check_exception_status': () => checkExceptionStatus(stage),
   };

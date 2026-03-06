@@ -42,7 +42,7 @@ tags: [guide, auto-generated]
 - **Last Updated**: 2025-12-18
 - **Tags**: database, testing, e2e, unit
 
-**SD Created**: SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
+**SD Created**: SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED]
 **Date**: 2025-11-07
 **Phase**: LEAD → PLAN Handoff
 **Status**: ✅ COMPLETE
@@ -51,7 +51,7 @@ tags: [guide, auto-generated]
 
 ## Executive Summary
 
-LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 to bring Stage 4 (Competitive Intelligence & Market Defense) into compliance with mandatory CrewAI baseline infrastructure policy. The directive was created per LEO Protocol v4.3.0 with full database-first approach, sub-agent delegation, and validation gates.
+LEAD phase created Strategic Directive SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED] for Stage 4 (Competitive Intelligence & Market Defense). The directive was created per LEO Protocol v4.3.0 with full database-first approach, sub-agent delegation, and validation gates. NOTE: The CrewAI tables referenced by this SD have since been dropped.
 
 ---
 
@@ -59,7 +59,7 @@ LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELL
 
 ### 1. ✅ Strategic Directive Creation
 **Database Record**: strategic_directives_v2 table (EHG_Engineer: dedlbzhpgkmetvhbkyzq)
-**SD ID**: SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
+**SD ID**: SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED]
 **Created**: 2025-11-07 17:37:36 UTC
 **Status**: pending_approval
 
@@ -75,7 +75,6 @@ LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELL
   - `rollback_strategy` (trigger conditions + steps)
   - `non_goals` (5 exclusions)
   - `implementation_guidelines` (10-step plan)
-  - `crewai_agents`, `crewai_crew`, `stage2_infrastructure_reuse`
   - `chairman_approved`: '2025-11-07'
 
 ---
@@ -127,15 +126,12 @@ LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELL
 **Stage 4 Dossier**: 06_agent-orchestration.md prescribes LEAD agent for substages 4.1-4.4
 
 **Acceptance Criteria Provided** (7 criteria):
-1. CrewAI Invocation: Stage 4 invokes Marketing Department Crew
-2. UI Behavior: Baseline + deep analysis displayed side-by-side
-3. Resilience: Graceful fallback on crew failure
-4. SLA: ≤25 min P95 execution time with progress indicator
-5. Telemetry: Session metrics logged
-6. Security: RLS policies intact
-7. Documentation: Stage 4 dossier compliance status updated
-
-**Implementation Pattern**: Hybrid approach - Stage 2 baseline (competitive_mapper from Quick Validation Crew) + Stage 4 deep analysis (Marketing Department Crew with 4 agents).
+1. UI Behavior: Baseline + deep analysis displayed side-by-side
+2. Resilience: Graceful fallback on failure
+3. SLA: Reasonable execution time with progress indicator
+4. Telemetry: Session metrics logged
+5. Security: RLS policies intact
+6. Documentation: Stage 4 dossier compliance status updated
 
 ---
 
@@ -144,12 +140,12 @@ LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELL
 **File Updated**: `/docs/workflow/stage_reviews/stage-04/05_outcome_log.md`
 
 **Changes**:
-- Moved CrewAI integration from "Deferred Items" to "Strategic Directives Created"
-- Added SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 details
+- Moved integration from "Deferred Items" to "Strategic Directives Created"
+- Added SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED] details
 - Documented LEAD phase validation (database-agent + design-agent)
 - Added "Next Phase: PLAN" status
 
-**Decision Change**: Stage 4 review reopened under mandatory CrewAI policy. Original "Accept As-Is" decision revised to "Accept with SD for CrewAI compliance."
+**Decision Change**: Stage 4 review reopened. Original "Accept As-Is" decision revised to "Accept with SD for compliance."
 
 ---
 
@@ -158,7 +154,7 @@ LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELL
 ### Database Records Created
 | Table | Record | Status |
 |-------|--------|--------|
-| `strategic_directives_v2` | SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 | ✅ Created |
+| `strategic_directives_v2` | SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED] | ✅ Created |
 | `sd_phase_handoffs` | LEAD→PLAN handoff | ⚠️ Skipped (unified-handoff-system.js .single() bug) |
 
 **Handoff Status**: Manual handoff documented in this file. PLAN agent can proceed with PRD creation using SD metadata.
@@ -208,7 +204,7 @@ LEAD phase successfully created Strategic Directive SD-CREWAI-COMPETITIVE-INTELL
 ### 1. PRD Creation (add-prd-to-database.js)
 ```bash
 node scripts/add-prd-to-database.js \
-  --sd-key "SD-CREWAI-COMPETITIVE-INTELLIGENCE-001" \
+  --sd-key "SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED]" \
   --title "CrewAI Stage 4 Competitive Intelligence Integration PRD" \
   # ... PRD parameters from SD metadata
 ```
@@ -266,7 +262,7 @@ node scripts/add-prd-to-database.js \
 4. `/docs/workflow/stage_reviews/stage-04/06_lead_completion_summary.md` (this file, new)
 
 **Database Tables Affected**:
-- `strategic_directives_v2`: +1 row (SD-CREWAI-COMPETITIVE-INTELLIGENCE-001)
+- `strategic_directives_v2`: +1 row (SD-COMPETITIVE-INTELLIGENCE-001 [DROPPED])
 
 **Git Commit Required**: Yes (Stage 4 review files + SD scripts)
 

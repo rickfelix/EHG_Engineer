@@ -25,10 +25,10 @@ tags: [guide, auto-generated]
   - [Features Implemented](#features-implemented)
   - [Configuration & Environment](#configuration-environment)
   - [UI Routes & Navigation](#ui-routes-navigation)
-  - [2.6 CrewAI Agent & Crew Registry ⚠️ MANDATORY](#26-crewai-agent-crew-registry-mandatory)
+  - [2.6 Automation Agent Registry ⚠️ MANDATORY](#26-automation-agent-registry-mandatory)
 - [3. Gap Analysis](#3-gap-analysis)
   - [Executive Summary](#executive-summary)
-  - [3.2 CrewAI Compliance Gaps ⚠️ MANDATORY CATEGORY](#32-crewai-compliance-gaps-mandatory-category)
+  - [3.2 Automation Compliance Gaps ⚠️ MANDATORY CATEGORY](#32-automation-compliance-gaps-mandatory-category)
   - [Critical Gaps (Blockers)](#critical-gaps-blockers)
   - [High Priority Gaps](#high-priority-gaps)
   - [Medium Priority Gaps](#medium-priority-gaps)
@@ -48,7 +48,7 @@ tags: [guide, auto-generated]
   - [Next Steps](#next-steps)
 - [5. Review Outcome Log](#5-review-outcome-log)
   - [Review Summary](#review-summary)
-  - [5.2 CrewAI Compliance Score ⚠️ MANDATORY](#52-crewai-compliance-score-mandatory)
+  - [5.2 Automation Compliance Score ⚠️ MANDATORY](#52-automation-compliance-score-mandatory)
   - [5.3 Technical Debt Summary ⚠️ MANDATORY](#53-technical-debt-summary-mandatory)
   - [5.4 Cross-Stage Patterns Applied ⚠️ MANDATORY](#54-cross-stage-patterns-applied-mandatory)
   - [Actions Taken](#actions-taken)
@@ -249,90 +249,47 @@ npm list [package-name]
 
 ---
 
-### 2.6 CrewAI Agent & Crew Registry ⚠️ MANDATORY
+### 2.6 Automation Agent Registry ⚠️ MANDATORY
 
-**Policy**: CrewAI is **MANDATORY** for all stages per `/docs/workflow/crewai_compliance_policy.md`. This section cannot be omitted.
+**Policy**: Automation compliance is **MANDATORY** for all stages. This section cannot be omitted.
 
 #### Dossier Prescriptions
 
 **Required Agents** (extracted from dossier):
-| Prescribed Agent | Role | Goal | Backstory | Dossier Reference |
-|-----------------|------|------|-----------|-------------------|
-| [Agent Name] | [Role per dossier] | [Goal per dossier] | [Backstory summary] | `stage-XX.md:line YY` |
-| [Agent Name] | [Role] | [Goal] | [Backstory] | `stage-XX.md:line YY` |
+| Prescribed Agent | Role | Goal | Dossier Reference |
+|-----------------|------|------|-------------------|
+| [Agent Name] | [Role per dossier] | [Goal per dossier] | `stage-XX.md:line YY` |
+| [Agent Name] | [Role] | [Goal] | `stage-XX.md:line YY` |
 
-**Required Crews** (extracted from dossier):
-| Crew Name | Orchestration Pattern | Required Agents | Dossier Reference |
+**Required Orchestration Patterns** (extracted from dossier):
+| Pattern Name | Orchestration Type | Required Agents | Dossier Reference |
 |-----------|----------------------|-----------------|-------------------|
-| [Crew Name] | Sequential/Hierarchical/Parallel | [Agent 1, Agent 2] | `stage-XX.md:line YY` |
+| [Pattern Name] | Sequential/Hierarchical/Parallel | [Agent 1, Agent 2] | `stage-XX.md:line YY` |
 
 **Required APIs/Endpoints** (for agent invocation):
 | Endpoint | Purpose | Dossier Reference |
 |----------|---------|-------------------|
-| `/api/[route]` | [Invoke crew/agent] | `stage-XX.md:line YY` |
-
----
-
-#### Database Verification
-
-**Query Results**:
-```sql
--- Check for agents
-SELECT id, name, role, goal, stage, version
-FROM crewai_agents
-WHERE stage = [STAGE_NUMBER];
--- Results: [X rows] (Expected: [Y] agents per dossier)
-
--- Check for crews
-SELECT id, name, orchestration_type, stage
-FROM crewai_crews
-WHERE stage = [STAGE_NUMBER];
--- Results: [X rows] (Expected: [Y] crews per dossier)
-
--- Check agent-crew assignments
-SELECT ca.name as agent_name, cc.name as crew_name,
-       caa.agent_order, caa.role_in_crew
-FROM crewai_agent_assignments caa
-JOIN crewai_agents ca ON ca.id = caa.agent_id
-JOIN crewai_crews cc ON cc.id = caa.crew_id
-WHERE cc.stage = [STAGE_NUMBER]
-ORDER BY cc.name, caa.agent_order;
--- Results: [X assignments] (Expected: [Y])
-```
-
-**Findings**:
-| Agent/Crew | Expected | Database Status | Evidence |
-|------------|----------|----------------|----------|
-| [Agent Name] | Required | ✅ Registered | Query shows id=[X], version=[Y] |
-| [Agent Name] | Required | ❌ Missing | Query returned 0 rows |
-| [Crew Name] | Required | ✅ Configured | Query shows orchestration_type=[X] |
+| `/api/[route]` | [Invoke agent] | `stage-XX.md:line YY` |
 
 ---
 
 #### Code Verification
 
 **Agent Definitions**:
-| Agent | File Path | Status | Configuration Match | Evidence |
-|-------|-----------|--------|---------------------|----------|
-| [Agent Name] | `agent-platform/app/agents/[name].py` | ✅ Exists | ✅ Matches 67-param spec | Lines [XX-YY] |
-| [Agent Name] | `agent-platform/app/agents/[name].py` | ❌ Missing | N/A | Expected by dossier |
+| Agent | File Path | Status | Evidence |
+|-------|-----------|--------|----------|
+| [Agent Name] | `agent-platform/app/agents/[name].py` | ✅ Exists | Lines [XX-YY] |
+| [Agent Name] | `agent-platform/app/agents/[name].py` | ❌ Missing | Expected by dossier |
 
-**Crew Orchestrations**:
-| Crew | File Path | Status | Pattern Match | Evidence |
+**Orchestration Flows**:
+| Flow | File Path | Status | Pattern Match | Evidence |
 |------|-----------|--------|---------------|----------|
-| [Crew Name] | `agent-platform/app/crews/[name].py` | ✅ Exists | ✅ Sequential pattern correct | Lines [XX-YY] |
+| [Flow Name] | `agent-platform/app/crews/[name].py` | ✅ Exists | ✅ Sequential pattern correct | Lines [XX-YY] |
 
 **API Endpoints** (for agent invocation):
 | Endpoint | File Path | Status | Evidence |
 |----------|-----------|--------|----------|
 | `/api/agents/[route]` | `agent-platform/app/api/[file].py` | ✅ Exists | Lines [XX-YY] |
-| `/api/crews/[route]` | [Expected path] | ❌ Missing | Dossier expected |
-
-**CrewAI Version & Parameters**:
-- CrewAI Version Expected: `1.3.0+`
-- CrewAI Version Found: `[version from code]`
-- Parameter Count: [67 expected] / [X found]
-- Parameters Missing: [list if any, e.g., "allow_delegation", "max_rpm"]
 
 ---
 
@@ -340,24 +297,22 @@ ORDER BY cc.name, caa.agent_order;
 
 **Select exactly ONE:**
 
-- [ ] ✅ **COMPLIANT**: All prescribed agents/crews implemented per dossier spec
-  - All agents registered in database ✅
-  - All crews configured correctly ✅
+- [ ] ✅ **COMPLIANT**: All prescribed agents implemented per dossier spec
+  - All agents implemented ✅
+  - All orchestration flows configured correctly ✅
   - All API endpoints functional ✅
-  - CrewAI 1.3.0+ parameters complete ✅
   - **Action**: Proceed to Section 3
 
 - [ ] ❌ **NON_COMPLIANT**: Missing or incorrect implementations
   - Missing agents: [list]
-  - Missing crews: [list]
   - Incorrect configurations: [describe]
   - **Required Action**: MUST either:
     - **Option A**: Spawn SD to implement missing components (see Section 4)
     - **Option B**: Obtain Chairman exception (see below)
 
 - [ ] ⚠️ **EXCEPTION**: Chairman-approved deviation
-  - Exception ID: `EX-STAGE-XX-CREWAI`
-  - Exception File: `/docs/governance/exceptions/stage-XX-crewai-exception.md`
+  - Exception ID: `EX-STAGE-XX-AUTOMATION`
+  - Exception File: `/docs/governance/exceptions/stage-XX-automation-exception.md`
   - Rationale: [Why deviation necessary]
   - Sunset Date: [YYYY-MM-DD - when compliance required]
   - Chairman Signature: ✅ [Name, Date]
@@ -370,7 +325,7 @@ ORDER BY cc.name, caa.agent_order;
 **Exception Granted By**: Chairman
 **Exception Date**: YYYY-MM-DD
 **Rationale**:
-[2-3 sentences explaining why CrewAI deviation is acceptable for this stage]
+[2-3 sentences explaining why automation deviation is acceptable for this stage]
 
 **Conditions**:
 1. [Condition 1 - e.g., "Must not block downstream automation"]
@@ -404,29 +359,25 @@ ORDER BY cc.name, caa.agent_order;
 
 ---
 
-### 3.2 CrewAI Compliance Gaps ⚠️ MANDATORY CATEGORY
+### 3.2 Automation Compliance Gaps ⚠️ MANDATORY CATEGORY
 
-**Evidence Standards**: All findings MUST include file paths, DB queries, code snippets, and dossier references per policy.
+**Evidence Standards**: All findings MUST include file paths, code snippets, and dossier references per policy.
 
 | Gap ID | Description | Evidence | Severity | Blocks Automation? | Recommended Action |
 |--------|-------------|----------|----------|-------------------|-------------------|
-| CCI-001 | [Missing agent registration in database] | DB Query: `SELECT * FROM crewai_agents WHERE name='[agent]'` → 0 rows<br>Dossier: `stage-XX.md:line YY` | Critical/High/Medium/Low | Yes/No | Spawn SD / Exception |
-| CCI-002 | [Incorrect crew orchestration pattern] | Code: `agent-platform/app/crews/[file].py:lines [XX-YY]`<br>Expected: Sequential<br>Found: Parallel | High | Yes | Fix in SD |
+| ACI-001 | [Missing agent implementation] | Code: `agent-platform/app/agents/` → no matching file<br>Dossier: `stage-XX.md:line YY` | Critical/High/Medium/Low | Yes/No | Spawn SD / Exception |
+| ACI-002 | [Incorrect orchestration pattern] | Code: `agent-platform/app/crews/[file].py:lines [XX-YY]`<br>Expected: Sequential<br>Found: Parallel | High | Yes | Fix in SD |
 
-**Common CrewAI Compliance Gaps**:
-- Missing agent registrations in `crewai_agents` table
-- Incorrect crew orchestration (doesn't match dossier pattern: Sequential/Hierarchical/Parallel)
+**Common Automation Compliance Gaps**:
+- Missing agent implementations
+- Incorrect orchestration (doesn't match dossier pattern: Sequential/Hierarchical/Parallel)
 - RAG/knowledge source gaps (agent lacks access to required data)
 - Service role key violations (automation blockers - missing RLS bypass keys)
 - RLS policy misconfigurations (app vs engineer database separation violated)
-- CrewAI 1.3.0+ parameter mismatches (missing required config like `allow_delegation`, `max_rpm`)
 
 **Evidence Format** (REQUIRED for each gap):
 ```
 **File Path**: agent-platform/app/agents/researcher.py:45-67
-**Database Query**:
-  SELECT * FROM crewai_agents WHERE stage=4;
-  -- Results: 0 rows (Expected: 2 agents per dossier)
 **Code Snippet**:
   [10-20 lines demonstrating the issue]
 **Dossier Reference**: stage-04.md:lines 123-145 (prescribes "Research Agent")
@@ -589,7 +540,7 @@ ORDER BY cc.name, caa.agent_order;
 **Revisit Trigger Examples**:
 - "When Stage [XX] begins implementation"
 - "When user count exceeds 100"
-- "When next CrewAI upgrade occurs"
+- "When next agent framework upgrade occurs"
 - "When SD-XXX-001 completes"
 - "Q2 2025 technical debt sprint"
 
@@ -608,7 +559,7 @@ ORDER BY cc.name, caa.agent_order;
 
 **Search Scope**:
 - **Stages Searched**: [e.g., "1-4, 7-10" - list all stages reviewed]
-- **Keywords Used**: [e.g., "research pipeline", "CrewAI orchestration", "venture analysis", "RLS patterns"]
+- **Keywords Used**: [e.g., "research pipeline", "agent orchestration", "venture analysis", "RLS patterns"]
 - **Search Method**: [e.g., "Glob pattern searches + stage review file reads + SD metadata queries"]
 
 #### Reusable Patterns Found
@@ -811,8 +762,8 @@ New implementation justified: [rationale]
   "spawned_from_review": true,
   "review_date": "YYYY-MM-DD",
   "review_decision_file": "/docs/workflow/stage_reviews/stage-XX/04_decision_record.md",
-  "crewai_verified": true|false,
-  "crewai_compliance_status": "compliant" | "exception" | "non_compliant",
+  "automation_verified": true|false,
+  "automation_compliance_status": "compliant" | "exception" | "non_compliant",
   "technical_debt_items": ["TD-001", "TD-002", "TD-003"],
   "cross_stage_patterns_applied": ["RP-001-stage-02-research-pipeline", "RP-002-stage-04-rls-pattern"],
   "chairman_notes": "[Optional additional context]"
@@ -828,11 +779,11 @@ SET metadata = metadata || jsonb_build_object(
   'spawned_from_review', true,
   'review_date', 'YYYY-MM-DD',
   'review_decision_file', '/docs/workflow/stage_reviews/stage-XX/04_decision_record.md',
-  'crewai_verified', true,
-  'crewai_compliance_status', 'non_compliant',
+  'automation_verified', true,
+  'automation_compliance_status', 'non_compliant',
   'technical_debt_items', '["TD-001", "TD-002"]'::jsonb,
   'cross_stage_patterns_applied', '["RP-001"]'::jsonb,
-  'chairman_notes', 'Addressing CrewAI gaps identified in Stage XX review'
+  'chairman_notes', 'Addressing automation gaps identified in Stage XX review'
 )
 WHERE id = 'SD-XXXX-XXXX-XXX';
 ```
@@ -841,7 +792,7 @@ WHERE id = 'SD-XXXX-XXXX-XXX';
 ```sql
 SELECT id, title, status,
        metadata->>'source_stage' as stage,
-       metadata->>'crewai_compliance_status' as crewai_status,
+       metadata->>'automation_compliance_status' as automation_status,
        metadata->'technical_debt_items' as debt,
        metadata->'cross_stage_patterns_applied' as patterns
 FROM strategic_directives_v2
@@ -967,7 +918,7 @@ WHERE id = 'SD-XXXX-XXXX-XXX';
 
 ---
 
-### 5.2 CrewAI Compliance Score ⚠️ MANDATORY
+### 5.2 Automation Compliance Score ⚠️ MANDATORY
 
 **Status**: [Select one: Compliant / Exception / Non-Compliant]
 
@@ -990,8 +941,8 @@ WHERE id = 'SD-XXXX-XXXX-XXX';
 | RLS Policies | [count] | [count] | ✅/⚠️/❌ | CCI-006 |
 
 **Exception Details** (if status = Exception):
-- **Exception ID**: EX-STAGE-XX-CREWAI
-- **Exception File**: `/docs/governance/exceptions/stage-XX-crewai-exception.md`
+- **Exception ID**: EX-STAGE-XX-AUTOMATION
+- **Exception File**: `/docs/governance/exceptions/stage-XX-automation-exception.md`
 - **Rationale**: [Brief summary - 1-2 sentences]
 - **Sunset Date**: YYYY-MM-DD
 - **Chairman Approval**: ✅ [Name, Date]
@@ -1204,12 +1155,12 @@ WHERE metadata->>'source_stage' = 'XX';
 - [ ] **Template versioning maintained** - [Y/N and evidence]
 - [ ] **Error handling follows standards** - [Y/N and evidence]
 - [ ] **Testing coverage meets tier requirements** - [Y/N and evidence]
-- [ ] **CrewAI 1.3.0+ parameters complete** - [Y/N and evidence]
+- [ ] **Agent parameters complete** - [Y/N and evidence]
 - [ ] **Database migrations use RLS bypass pattern** - [Y/N and evidence]
 
 #### New Patterns Discovered
 1. **Pattern Name**: [Name]
-   - **Type**: [Architecture / Testing / Documentation / Performance / Security / CrewAI]
+   - **Type**: [Architecture / Testing / Documentation / Performance / Security / Automation]
    - **Description**: [What the pattern is, 1-2 sentences]
    - **Location**: `[file path]:lines [XX-YY]`
    - **Reusability**: [High / Medium / Low] - [Why]
@@ -1245,11 +1196,11 @@ After completing this review, key findings should be appended to `/docs/workflow
 - Success criteria met: [XX%]
 - Overall stage completion: [XX%]
 
-**CrewAI Compliance Metrics** ⚠️ NEW:
-- **CrewAI compliance rate**: [%] = (Agents+Crews implemented / prescribed) × 100
+**Automation Compliance Metrics** ⚠️ NEW:
+- **Automation compliance rate**: [%] = (Agents implemented / prescribed) x 100
 - **Compliance status**: [Compliant / Exception / Non-Compliant]
-- **CrewAI gaps**: [count]
-- **CrewAI exceptions granted**: [count]
+- **Automation gaps**: [count]
+- **Automation exceptions granted**: [count]
 
 **Cross-Stage Reuse Metrics** ⚠️ NEW:
 - **Stages searched**: [count]
@@ -1309,7 +1260,7 @@ After completing this review, key findings should be appended to `/docs/workflow
 - [Source Stage Metadata Field](../source_stage_metadata_field.md) - Database metadata spec
 
 **Policies & Best Practices**:
-- CrewAI Compliance Policy - **MANDATORY** for all stages
+- Automation Compliance Policy - **MANDATORY** for all stages
 - [Stage Review Lessons](../stage_review_lessons.md) - Living log of lessons learned
 - [Best Practices Index](../best_practices.md) - Central index for all best practices
 
@@ -1319,4 +1270,4 @@ After completing this review, key findings should be appended to `/docs/workflow
 ---
 
 <!-- Generated by Claude Code | Stage Review Framework | Template v1.1 | 2025-11-07 -->
-<!-- Version 1.1: Added CrewAI compliance (Section 2.6), technical debt register (Section 3.7), cross-stage reuse (Section 3.8), and enhanced outcome log (Sections 5.2-5.4, 5.9-5.10) -->
+<!-- Version 1.1: Added automation compliance (Section 2.6), technical debt register (Section 3.7), cross-stage reuse (Section 3.8), and enhanced outcome log (Sections 5.2-5.4, 5.9-5.10) -->

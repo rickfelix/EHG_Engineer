@@ -25,7 +25,7 @@ async function createHandoff() {
       // 1. Executive Summary
       executive_summary: `SD-BOARD-VISUAL-BUILDER-001 approved for PLAN phase with CRITICAL DEPENDENCY.
 
-**Scope**: Full-page visual workflow builder powered by React Flow for drag-and-drop flow design with CrewAI Flows backend integration.
+**Scope**: Full-page visual workflow builder powered by React Flow for drag-and-drop flow design with backend integration.
 
 **Strategic Context**: Phase 2 of board governance infrastructure. Builds on SD-BOARD-GOVERNANCE-001 (Phase 1 - board members and hardcoded templates). Enables non-technical users to create custom AI agent workflows beyond the 3 hardcoded templates.
 
@@ -33,7 +33,7 @@ async function createHandoff() {
 
 **Split History**: Originally part of SD-BOARD-WORKFLOWS-001. Split per SIMPLICITY FIRST gate to deliver core board governance (Phase 1) before visual customization (Phase 2).
 
-**Approval**: SIMPLICITY FIRST gate passed. Scope appropriately sized for Phase 2. Not over-engineered - using industry-standard libraries (React Flow, CrewAI Flows).`,
+**Approval**: SIMPLICITY FIRST gate passed. Scope appropriately sized for Phase 2. Not over-engineered - using industry-standard libraries (React Flow).`,
 
       // 2. Completeness Report
       completeness_report: {
@@ -46,14 +46,14 @@ async function createHandoff() {
               name: 'Principal Systems Analyst',
               verdict: 'PASS',
               confidence: 90,
-              summary: 'Partial infrastructure exists (CrewAI, board members). Build visual builder on existing foundation.',
+              summary: 'Partial infrastructure exists (board members). Build visual builder on existing foundation.',
               reuse_percentage: 35
             },
             {
               name: 'Principal Database Architect',
               verdict: 'CONDITIONAL_PASS',
               confidence: 75,
-              summary: 'CRITICAL: Board tables missing. Need crewai_flows + crewai_flow_executions tables.',
+              summary: 'CRITICAL: Board tables missing. Need workflow definitions + executions tables.',
               blockers: ['board_members table missing', 'board_meetings table missing', 'board_meeting_attendance table missing']
             },
             {
@@ -84,8 +84,8 @@ async function createHandoff() {
           },
           {
             type: 'REQUIRED',
-            description: 'crewai_flows database tables',
-            tables_required: ['crewai_flows', 'crewai_flow_executions'],
+            description: 'Workflow database tables',
+            tables_required: ['workflow_definitions', 'workflow_executions'],
             resolution: 'PLAN must create schema and migration',
             status: 'PENDING'
           }
@@ -141,9 +141,9 @@ async function createHandoff() {
         ],
         technical_decisions: [
           {
-            decision: 'CrewAI Flows backend integration',
-            rationale: 'Production-ready (12M+ executions/day). Decorators (@start, @listen, @router) match visual flow paradigm perfectly.',
-            implementation: 'Python code generator converts JSON workflow definitions to CrewAI Flows classes'
+            decision: 'Workflow engine backend integration',
+            rationale: 'Production-ready. Decorators (@start, @listen, @router) match visual flow paradigm perfectly.',
+            implementation: 'Python code generator converts JSON workflow definitions to workflow engine classes'
           },
           {
             decision: '3-panel layout (Palette | Canvas | Inspector)',
@@ -238,8 +238,8 @@ async function createHandoff() {
           },
           {
             priority: 'HIGH',
-            action: 'Design crewai_flows database schema',
-            details: 'Create schema for crewai_flows and crewai_flow_executions tables. Include RLS policies.',
+            action: 'Design workflow database schema',
+            details: 'Create schema for workflow definitions and executions tables. Include RLS policies.',
             reference: 'See Database Architect sub-agent findings for schema design',
             deadline: 'Before PLAN→EXEC handoff'
           }

@@ -94,9 +94,9 @@ Example (US-002):
 ```json
 {
   "migration_file": "Create database/migrations/002_core_tables.sql with CREATE TABLE statements. Follow naming conventions: snake_case, singular table names avoided, use created_at/updated_at timestamps.",
-  "schema_design": "portfolios: Primary entity for grouping ventures. ventures: Core business entity with JSONB for flexible metrics. crewai_crews: Registry of AI agent teams with capability metadata.",
-  "indexes": "Add indexes: portfolios(owner_id), ventures(portfolio_id, stage_id, status), crewai_crews(crew_name, crew_type). Use GIN index for JSONB columns if querying nested fields.",
-  "rls_policies": "Enable RLS on all tables. Create policies: portfolios (owner can CRUD), ventures (portfolio owner can CRUD), crewai_crews (admin only can write, all can read).",
+  "schema_design": "portfolios: Primary entity for grouping ventures. ventures: Core business entity with JSONB for flexible metrics.",
+  "indexes": "Add indexes: portfolios(owner_id), ventures(portfolio_id, stage_id, status). Use GIN index for JSONB columns if querying nested fields.",
+  "rls_policies": "Enable RLS on all tables. Create policies: portfolios (owner can CRUD), ventures (portfolio owner can CRUD).",
   "rollback": "Create corresponding down migration: 003_rollback_core_tables.sql with DROP TABLE statements in reverse dependency order."
 }
 ```

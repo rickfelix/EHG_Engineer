@@ -97,7 +97,7 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 **Review Date**: YYYY-MM-DD
 **Reviewer**: Chairman
 **Decision**: [Accepted / SD Created / Deferred / Cancelled]
-**CrewAI Compliance**: [Compliant / Exception / Non-Compliant]
+**Automation Compliance**: [Compliant / Exception / Non-Compliant]
 
 ### Lessons Learned
 
@@ -132,7 +132,7 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 ### Metrics
 - Review cycle time: [X days]
 - Gaps identified: [count]
-- CrewAI compliance rate: [%]
+- Automation compliance rate: [%]
 - Cross-stage reuse applied: [count patterns]
 
 ---
@@ -170,8 +170,8 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 **Stage Name**: Stage 4 - Deep Research & Validation on Best Fit Ventures
 **Review Date**: 2025-11-06
 **Reviewer**: Chairman
-**Decision**: SD Created (SD-CREWAI-ARCHITECTURE-001)
-**CrewAI Compliance**: Non-Compliant (agents missing, SD spawned)
+**Decision**: SD Created (SD-AGENT-ARCHITECTURE-001)
+**Automation Compliance**: Non-Compliant (agents missing, SD spawned)
 
 ### Lessons Learned
 
@@ -181,11 +181,11 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 - **Recommendation**: All future reviews must verify dossier assumptions against code/database before accepting quality scores at face value
 - **Applied To**: All future stage reviews (5-40)
 
-#### Lesson 2: CrewAI Agent Registration Missing
-- **Context**: Stage 4 prescribes research agents, but database queries returned 0 rows in `crewai_agents` table
+#### Lesson 2: Agent Registration Missing
+- **Context**: Stage 4 prescribes research agents, but database queries returned 0 rows for agent registrations
 - **Impact**: Automation blocked; stage cannot operate autonomously as designed
-- **Recommendation**: CrewAI compliance check must be mandatory gate (now formalized in framework v1.1)
-- **Applied To**: All stages; triggered CrewAI compliance policy creation
+- **Recommendation**: Automation compliance check must be mandatory gate (now formalized in framework v1.1)
+- **Applied To**: All stages; triggered automation compliance policy creation
 
 #### Lesson 3: RLS Policy Separation Critical
 - **Context**: Found mixed app/engineer RLS policies causing security boundary violations
@@ -217,15 +217,15 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
   - **Description**: Sequential crew with researcher → validator → synthesizer agent flow
 
 ### Protocol Enhancements Triggered
-- Created `/docs/workflow/crewai_compliance_policy.md` (formal policy)
-- Added Step 2.5 "CrewAI Compliance Check" to review process (mandatory gate)
+- Created automation compliance policy (formal policy)
+- Added Step 2.5 "Automation Compliance Check" to review process (mandatory gate)
 - Added Section 3.7 "Technical Debt Register" to template
 - Enhanced evidence standards: "No evidence, no claim" policy formalized
 
 ### Metrics
 - Review cycle time: 2 days
 - Gaps identified: 15 (1 critical, 4 high, 7 medium, 3 low)
-- CrewAI compliance rate: 0% (0/2 agents, 0/1 crews)
+- Automation compliance rate: 0% (0/2 agents)
 - Cross-stage reuse applied: 1 pattern (Stage 2 research pipeline adapted)
 
 ---
@@ -257,7 +257,7 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 5. [TBD after 10 reviews]
 
 ### Framework Evolution Triggers
-- **Version 1.0 → 1.1** (2025-11-07): Added CrewAI compliance, technical debt, cross-stage reuse based on Stage 4 review insights
+- **Version 1.0 → 1.1** (2025-11-07): Added automation compliance, technical debt, cross-stage reuse based on Stage 4 review insights
 
 ---
 
@@ -284,7 +284,7 @@ This living log captures patterns, anti-patterns, and continuous improvements fr
 - [Review Process](review_process.md) - Framework procedures
 - [Stage Review Template](review_templates/stage_review_template.md) - Section 5.9 feeds this log
 - [Best Practices Index](best_practices.md) - Consolidated best practices
-- CrewAI Compliance Policy - Policy triggered by lessons learned
+- Automation Compliance Policy - Policy triggered by lessons learned
 
 ---
 

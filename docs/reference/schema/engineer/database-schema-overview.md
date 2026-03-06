@@ -55,9 +55,8 @@ Example: SELECT * FROM agent_memory_stores WHERE agent_id = ? AND venture_id = ?
 instead of inheriting parent agent context, reducing context overhead by 50-70%.
 Pattern: Extends sd_data_contracts for agent-to-agent communication.
 Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0) |
-| [agent_tools](tables/agent_tools.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [agentic_reviews](tables/agentic_reviews.md) | N/A (RLS restricted) | ✅ | 4 | - |
-| [agents](tables/agents.md) | N/A (RLS restricted) | ✅ | 2 | Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations. |
+| [agents](tables/agents.md) | N/A (RLS restricted) | ✅ | 2 | Governance agents for chairman/CEO system. Referenced by ventures.ceo_agent_id and directive_delegations. |
 | [ai_quality_assessments](tables/ai_quality_assessments.md) | N/A (RLS restricted) | ✅ | 3 | AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement. |
 | [app_config](tables/app_config.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [app_rankings](tables/app_rankings.md) | N/A (RLS restricted) | ❌ | 0 | Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001) |
@@ -126,7 +125,6 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [context_usage_log](tables/context_usage_log.md) | N/A (RLS restricted) | ✅ | 3 | Raw context usage entries from Claude Code status line (server-authoritative token counts) |
 | [continuous_execution_log](tables/continuous_execution_log.md) | N/A (RLS restricted) | ✅ | 3 | RLS: Append-only for authenticated |
 | [counterfactual_scores](tables/counterfactual_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
-| [crewai_agents](tables/crewai_agents.md) | N/A (RLS restricted) | ❌ | 0 | - |
 | [cross_agent_correlations](tables/cross_agent_correlations.md) | N/A (RLS restricted) | ✅ | 2 | Tracks how decisions by one agent correlate with outcomes in other agents |
 | [cross_sd_utilization](tables/cross_sd_utilization.md) | N/A (RLS restricted) | ✅ | 2 | Manages cross-SD utilization requests and approvals |
 | [cultural_design_styles](tables/cultural_design_styles.md) | N/A (RLS restricted) | ✅ | 4 | - |
@@ -776,9 +774,8 @@ Example: SELECT * FROM agent_memory_stores WHERE agent_id = ? AND venture_id = ?
 instead of inheriting parent agent context, reducing context overhead by 50-70%.
 Pattern: Extends sd_data_contracts for agent-to-agent communication.
 Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0)
-- [agent_tools](tables/agent_tools.md)
 - [agentic_reviews](tables/agentic_reviews.md)
-- [agents](tables/agents.md) - Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations.
+- [agents](tables/agents.md) - Governance agents for chairman/CEO system. Referenced by ventures.ceo_agent_id and directive_delegations.
 - [ai_quality_assessments](tables/ai_quality_assessments.md) - AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement.
 - [app_config](tables/app_config.md)
 - [app_rankings](tables/app_rankings.md) - Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001)
@@ -842,7 +839,6 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [context_usage_log](tables/context_usage_log.md) - Raw context usage entries from Claude Code status line (server-authoritative token counts)
 - [continuous_execution_log](tables/continuous_execution_log.md) - RLS: Append-only for authenticated
 - [counterfactual_scores](tables/counterfactual_scores.md)
-- [crewai_agents](tables/crewai_agents.md)
 - [cross_agent_correlations](tables/cross_agent_correlations.md) - Tracks how decisions by one agent correlate with outcomes in other agents
 - [cultural_design_styles](tables/cultural_design_styles.md)
 - [daily_rollups](tables/daily_rollups.md)

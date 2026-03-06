@@ -28,11 +28,11 @@ async function createHandoff() {
 **Deliverables Created**:
 ✅ Comprehensive PRD in product_requirements_v2 (PRD-SD-BOARD-VISUAL-BUILDER-001)
 ✅ 12 User Stories in user_stories table (39 story points total)
-✅ Database schema designed: crewai_flows, crewai_flow_executions, crewai_flow_templates
+✅ Database schema designed for workflow storage and execution tracking
 ✅ Dependencies added: @xyflow/react v11.11.0, @monaco-editor/react v4.6.0
 ✅ Component architecture defined: 8 components (1800-2400 LOC total)
 
-**Implementation Scope**: Full-page visual workflow builder with 3-panel layout (Node Palette | Flow Canvas | Inspector Panel). Drag-and-drop interface using React Flow. Python code generation using CrewAI Flows decorators. 8+ node types (Start, Agent Task, Decision, Parallel, Wait, Router, Listener, End).
+**Implementation Scope**: Full-page visual workflow builder with 3-panel layout (Node Palette | Flow Canvas | Inspector Panel). Drag-and-drop interface using React Flow. Python code generation using workflow decorators. 8+ node types (Start, Agent Task, Decision, Parallel, Wait, Router, Listener, End).
 
 **CRITICAL BLOCKER**: Board infrastructure tables (board_members, board_meetings, board_meeting_attendance) DO NOT EXIST. Migration file created: database/migrations/20251011_board_infrastructure_tables.sql. EXEC MUST apply via Supabase CLI before implementation begins.
 
@@ -61,16 +61,12 @@ async function createHandoff() {
         },
         database_schema: {
           migrations_created: [
-            'database/migrations/20251011_board_infrastructure_tables.sql (prerequisite - NOT APPLIED)',
-            'database/migrations/20251011_crewai_flows_tables.sql (new tables for this SD)'
+            'database/migrations/20251011_board_infrastructure_tables.sql (prerequisite - NOT APPLIED)'
           ],
           tables_designed: {
             board_members: '❌ BLOCKER - Table does not exist (prerequisite)',
             board_meetings: '❌ BLOCKER - Table does not exist (prerequisite)',
-            board_meeting_attendance: '❌ BLOCKER - Table does not exist (prerequisite)',
-            crewai_flows: '✅ Schema designed, migration ready',
-            crewai_flow_executions: '✅ Schema designed, migration ready',
-            crewai_flow_templates: '✅ Schema designed, migration ready (includes 3 seed templates)'
+            board_meeting_attendance: '❌ BLOCKER - Table does not exist (prerequisite)'
           },
           rls_policies_defined: true,
           triggers_defined: true
@@ -132,7 +128,6 @@ async function createHandoff() {
           'PRD in product_requirements_v2 table (id: PRD-SD-BOARD-VISUAL-BUILDER-001)',
           '12 user stories in user_stories table',
           'database/migrations/20251011_board_infrastructure_tables.sql',
-          'database/migrations/20251011_crewai_flows_tables.sql',
           'PLAN→EXEC handoff (this document)',
           'scripts/create-prd-board-visual-builder.mjs',
           'scripts/generate-user-stories-board-visual-builder.mjs',
@@ -181,9 +176,9 @@ async function createHandoff() {
             alternatives_considered: ['CodeMirror (less feature-rich)', 'Plain textarea (no syntax highlighting)']
           },
           {
-            decision: 'CrewAI Flows for backend execution',
-            rationale: 'Production-ready (12M+ executions/day). Python decorators (@start, @listen, @router) match visual flow paradigm perfectly.',
-            alternatives_considered: ['Custom Python execution (rejected - too complex)', 'LangChain (CrewAI is better fit for agent workflows)']
+            decision: 'Workflow engine for backend execution',
+            rationale: 'Production-ready execution engine. Python decorators (@start, @listen, @router) match visual flow paradigm perfectly.',
+            alternatives_considered: ['Custom Python execution (rejected - too complex)', 'LangChain (less suited for agent workflows)']
           },
           {
             decision: '3-panel layout (Palette | Canvas | Inspector)',
@@ -318,14 +313,6 @@ async function createHandoff() {
             action: 'Apply board infrastructure migration',
             details: 'Run database/migrations/20251011_board_infrastructure_tables.sql via Supabase CLI or SQL editor',
             verification: 'Query: SELECT COUNT(*) FROM board_members; -- Expected: 7',
-            blocker: true,
-            estimated_time: '10 minutes'
-          },
-          {
-            priority: 'CRITICAL - Day 1',
-            action: 'Apply crewai_flows migration',
-            details: 'Run database/migrations/20251011_crewai_flows_tables.sql',
-            verification: 'Query: SELECT COUNT(*) FROM crewai_flow_templates; -- Expected: 3',
             blocker: true,
             estimated_time: '10 minutes'
           },
@@ -487,9 +474,8 @@ async function createHandoff() {
     console.log('   Progress: 20% → 55%');
     console.log('\n⚠️ CRITICAL ACTION FOR EXEC:');
     console.log('   1. Apply board infrastructure migration (Day 1)');
-    console.log('   2. Apply crewai_flows migration (Day 1)');
-    console.log('   3. Install npm dependencies (Day 1)');
-    console.log('   4. Follow 5-phase implementation sequence (10 days estimated)');
+    console.log('   2. Install npm dependencies (Day 1)');
+    console.log('   3. Follow 5-phase implementation sequence (10 days estimated)');
     console.log('\n' + '═'.repeat(70));
 
   } finally {

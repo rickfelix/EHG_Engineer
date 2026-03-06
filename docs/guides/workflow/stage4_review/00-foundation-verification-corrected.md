@@ -17,7 +17,7 @@ tags: [guide, auto-generated]
 - [Queried P0 Strategic Directives (Corrected Status)](#queried-p0-strategic-directives-corrected-status)
 - [Detailed Status of Existing P0 SDs](#detailed-status-of-existing-p0-sds)
   - [SD-RECURSION-ENGINE-001 ✅](#sd-recursion-engine-001-)
-  - [SD-CREWAI-ARCHITECTURE-001 ✅](#sd-crewai-architecture-001-)
+  - [SD-CREWAI-ARCHITECTURE-001 [DROPPED] ✅](#sd-crewai-architecture-001-dropped-)
   - [SD-METRICS-FRAMEWORK-001 ❌](#sd-metrics-framework-001-)
 - [Revised Analysis](#revised-analysis)
   - [What Actually Exists](#what-actually-exists)
@@ -68,7 +68,7 @@ tags: [guide, auto-generated]
 |-------|----------------|----------|--------|---------------|---------|
 | SD-METRICS-FRAMEWORK-001 | ❌ NOT FOUND | N/A | N/A | N/A | Never created |
 | SD-RECURSION-ENGINE-001 | ✅ EXISTS | critical | draft | LEAD_APPROVAL | 2025-11-06 |
-| SD-CREWAI-ARCHITECTURE-001 | ✅ EXISTS | critical | draft | LEAD_APPROVAL | 2025-11-05 |
+| SD-CREWAI-ARCHITECTURE-001 [DROPPED] | ✅ EXISTS (now dropped) | critical | draft | LEAD_APPROVAL | 2025-11-05 |
 
 ---
 
@@ -102,7 +102,7 @@ tags: [guide, auto-generated]
 - **Dossier**: "SD-RECURSION-ENGINE-001 (P0 CRITICAL, 8-10 weeks, 105 triggers across 40 stages)"
 - **Reality**: Exists as draft in LEAD_APPROVAL, but title is "Dual-Network Recursion Engine" (scope unclear)
 
-### SD-CREWAI-ARCHITECTURE-001 ✅
+### SD-CREWAI-ARCHITECTURE-001 [DROPPED] ✅
 
 **Full Details**:
 ```json
@@ -119,16 +119,7 @@ tags: [guide, auto-generated]
 }
 ```
 
-**Analysis**:
-- ✅ **EXISTS** in database
-- 📝 **Status**: draft (not queued for execution)
-- 🚪 **Phase**: LEAD_APPROVAL (awaiting Chairman review)
-- 🎯 **Target**: EHG application (not EHG_Engineer)
-- ⚠️ **Note**: "Assessment & Registry Consolidation" suggests audit/consolidation, not implementation
-
-**Dossier Claim vs. Reality**:
-- **Dossier**: "SD-CREWAI-ARCHITECTURE-EXPANSION-001 (P0, 20 weeks, implement 40 crews, 160 agents)"
-- **Reality**: Exists as "SD-CREWAI-ARCHITECTURE-001" (not EXPANSION), focused on assessment/registry consolidation
+**Note**: This SD and all associated CrewAI tables (`crewai_agents`, `crewai_crews`, `crewai_flows`, etc.) have been dropped. The CrewAI architecture approach has been superseded.
 
 ### SD-METRICS-FRAMEWORK-001 ❌
 
@@ -149,7 +140,7 @@ tags: [guide, auto-generated]
 
 **2 of 3 proposed P0 SDs exist**:
 1. ✅ SD-RECURSION-ENGINE-001 (draft, LEAD_APPROVAL)
-2. ✅ SD-CREWAI-ARCHITECTURE-001 (draft, LEAD_APPROVAL)
+2. ✅ SD-CREWAI-ARCHITECTURE-001 [DROPPED] (draft, LEAD_APPROVAL - CrewAI tables since dropped)
 3. ❌ SD-METRICS-FRAMEWORK-001 (does not exist)
 
 **Both existing SDs are**:
@@ -166,10 +157,9 @@ tags: [guide, auto-generated]
    - Target is EHG (customer app), not EHG_Engineer (governance)
    - Needs Chairman LEAD review before any execution
 
-2. **SD-CREWAI-ARCHITECTURE-001** exists but is focused on "Assessment & Registry Consolidation"
-   - Different from dossier's "implement 40 crews" proposal
-   - Appears to be audit/consolidation work, not greenfield implementation
-   - Target is EHG (customer app), not EHG_Engineer (governance)
+2. **SD-CREWAI-ARCHITECTURE-001** [DROPPED] - CrewAI tables have since been dropped
+   - This SD and associated infrastructure are no longer relevant
+   - CrewAI architecture approach has been superseded
 
 3. **SD-METRICS-FRAMEWORK-001** does not exist
    - Dossier proposed it as "universal blocker"
@@ -186,11 +176,9 @@ tags: [guide, auto-generated]
   - Phase: LEAD_APPROVAL (not approved for execution)
   - ❌ **NOT BLOCKING** — Stage 4 can proceed with manual Chairman oversight
 
-- **SD-CREWAI-ARCHITECTURE-001**:
-  - Status: draft (not implemented)
-  - Phase: LEAD_APPROVAL (not approved for execution)
-  - Focus: Assessment/consolidation (not Stage 4 crew implementation)
-  - ❌ **NOT BLOCKING** — Stage 4 can proceed without full CrewAI architecture
+- **SD-CREWAI-ARCHITECTURE-001** [DROPPED]:
+  - CrewAI tables have been dropped; this SD is no longer relevant
+  - ❌ **NOT BLOCKING** — CrewAI architecture has been superseded
 
 - **SD-METRICS-FRAMEWORK-001**:
   - Does not exist
@@ -215,7 +203,7 @@ tags: [guide, auto-generated]
 - Stage 4 exploration can proceed **immediately**
 - No foundation SDs are blocking Stage 4 work
 - Chairman can review 2 existing SDs in parallel with Stage 4 exploration
-- If Chairman approves RECURSION or CREWAI SDs, can integrate into Stage 4 plan
+- If Chairman approves RECURSION SD, can integrate into Stage 4 plan
 
 ---
 
@@ -225,12 +213,12 @@ tags: [guide, auto-generated]
 
 **Two SDs await LEAD review**:
 - SD-RECURSION-ENGINE-001 (draft, LEAD_APPROVAL)
-- SD-CREWAI-ARCHITECTURE-001 (draft, LEAD_APPROVAL)
+- SD-CREWAI-ARCHITECTURE-001 [DROPPED] (CrewAI tables dropped)
 
 **Options**:
-- **A**: Review and approve both SDs for Wave 1 execution → Delays Stage 4 by weeks/months
-- **B**: Defer both SDs, proceed with Stage 4 exploration → Stage 4 starts immediately
-- **C**: Review SDs in parallel with Stage 4 exploration → No delay, flexible
+- **A**: Review and approve remaining SD for Wave 1 execution
+- **B**: Defer remaining SD, proceed with Stage 4 exploration → Stage 4 starts immediately
+- **C**: Review SD in parallel with Stage 4 exploration → No delay, flexible
 
 **Recommendation**: **Option C** (parallel review)
 

@@ -24,7 +24,6 @@
 - [agent relationships](./agent_relationships.md)
 - [agent skills](./agent_skills.md)
 - [agent task contracts](./agent_task_contracts.md)
-- [agent tools](./agent_tools.md)
 - [agentic reviews](./agentic_reviews.md)
 - [agents](./agents.md)
 - [ai quality assessments](./ai_quality_assessments.md)

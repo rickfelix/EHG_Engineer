@@ -43,7 +43,7 @@ COMMENT ON COLUMN venture_artifacts.validated_at IS 'Timestamp when artifact was
 ALTER TABLE venture_artifacts
 ADD COLUMN IF NOT EXISTS validated_by VARCHAR(100);
 
-COMMENT ON COLUMN venture_artifacts.validated_by IS 'Who validated: chairman, auto_validation, crewai_agent_name, etc.';
+COMMENT ON COLUMN venture_artifacts.validated_by IS 'Who validated: chairman, auto_validation, agent_name, etc.';
 
 -- ============================================================================
 -- 5. Create index for quality queries

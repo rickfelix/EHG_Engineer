@@ -16,7 +16,7 @@ tags: [general, auto-generated]
 - [Problem Statement](#problem-statement)
 - [Proposed Solution: Child SD Pattern](#proposed-solution-child-sd-pattern)
   - [Concept](#concept)
-  - [Example: SD-CREWAI-ARCHITECTURE-001 (Refactored)](#example-sd-crewai-architecture-001-refactored)
+  - [Example: SD-CREWAI-ARCHITECTURE-001 [DROPPED] (Refactored)](#example-sd-crewai-architecture-001-refactored)
 - [Implementation Guidelines](#implementation-guidelines)
   - [1. When to Use Child SDs](#1-when-to-use-child-sds)
   - [2. Parent SD Responsibilities](#2-parent-sd-responsibilities)
@@ -58,7 +58,7 @@ tags: [general, auto-generated]
 
 **Date**: 2025-11-07
 **Status**: RECOMMENDATION
-**Learning From**: SD-CREWAI-ARCHITECTURE-001 completion challenges
+**Learning From**: SD-CREWAI-ARCHITECTURE-001 [DROPPED] completion challenges
 
 ---
 
@@ -94,11 +94,11 @@ The current LEO Protocol assumes **linear, single-session SD completion**:
 - Own user stories, deliverables, handoffs
 - Own retrospective (phase-specific lessons)
 
-### Example: SD-CREWAI-ARCHITECTURE-001 (Refactored)
+### Example: SD-CREWAI-ARCHITECTURE-001 [DROPPED] (Refactored)
 
 #### Current Approach (Problematic)
 ```
-SD-CREWAI-ARCHITECTURE-001
+SD-CREWAI-ARCHITECTURE-001 [DROPPED]
 ├── Phase 2: Agent Migration (session 1)
 ├── Phase 6: RAG UI (pre-existing)
 └── Infrastructure: RLS Fixes (session 2)
@@ -109,7 +109,7 @@ Result: 55% progress despite 100% implementation complete
 
 #### Proposed Child SD Approach
 ```
-SD-CREWAI-ARCHITECTURE-001 (Parent - Orchestrator)
+SD-CREWAI-ARCHITECTURE-001 [DROPPED] (Parent - Orchestrator)
 ├── SD-CREWAI-ARCH-001-PHASE2 (Child - Agent Migration)
 │   ├── Status: completed (100%)
 │   ├── User Stories: 3 stories (21 points)
@@ -441,7 +441,7 @@ node scripts/check-child-sd-status.js SD-PAYMENT-SYSTEM-001
 
 ## Learning Source
 
-**SD**: SD-CREWAI-ARCHITECTURE-001
+**SD**: SD-CREWAI-ARCHITECTURE-001 [DROPPED]
 **Challenge**: 55% progress despite 100% implementation
 **Root Cause**: Phased multi-session work doesn't fit linear validation
 **Solution**: Child SD pattern would have avoided all validation issues
@@ -488,7 +488,7 @@ For technical details, see [Child SD LLM Generation Reference](../reference/chil
 
 ---
 
-**Author**: Claude Code (analyzing SD-CREWAI-ARCHITECTURE-001 completion challenges)
+**Author**: Claude Code (analyzing SD-CREWAI-ARCHITECTURE-001 [DROPPED] completion challenges)
 **Updated**: 2026-01-25 (added AI-powered generation documentation)
 **Reviewed By**: [Pending human review]
 **Status**: RECOMMENDATION - Ready for LEO Protocol integration
