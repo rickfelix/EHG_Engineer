@@ -3,6 +3,7 @@
  * SD-MAN-GEN-CORRECTIVE-VISION-GAP-007-03 (FR-004)
  * SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-1, FR-2)
  * SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-047 (SD-type-aware thresholds)
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-053 (auto-re-heal on below-threshold)
  *
  * Checks that the SD has a recent heal score meeting the threshold
  * before allowing final approval. Prevents premature SD completion
@@ -277,38 +278,107 @@ export function createHealBeforeCompleteGate(supabase) {
         console.log('   Vision Heal (advisory): Query failed (non-blocking)');
       }
 
-      // SD heal score below threshold — NEEDS_ITERATION
+      // SD heal score below threshold — auto-re-heal before failing
+      // (SD-LEARN-FIX-ADDRESS-PAT-AUTO-053: single retry eliminates manual re-heal cycle)
       if (sdHealScore < threshold) {
         const gaps = latestScore.rubric_snapshot?.gaps || [];
         console.log('');
-        console.log(`   ❌ NEEDS_ITERATION: SD heal score ${sdHealScore} < ${threshold} threshold`);
+        console.log(`   ⚠️  SD heal score ${sdHealScore} < ${threshold} threshold — attempting auto-re-heal...`);
         if (gaps.length > 0) {
-          console.log('   Gaps to address:');
+          console.log('   Gaps identified in previous score:');
           gaps.forEach((gap, i) => {
             console.log(`     ${i + 1}. ${gap}`);
           });
         }
+
+        // Attempt single auto-re-heal
+        let reHealScore = null;
+        try {
+          const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
+          const healPromise = scoreSD({ sdKey, supabase });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Auto-re-heal timed out')), AUTO_HEAL_TIMEOUT_MS)
+          );
+          await Promise.race([healPromise, timeoutPromise]);
+
+          // Re-query for the newly created score
+          const { data: newScores } = await supabase
+            .from('eva_vision_scores')
+            .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
+            .eq('sd_id', sdKey)
+            .order('scored_at', { ascending: false })
+            .limit(1);
+
+          if (newScores && newScores.length > 0) {
+            reHealScore = newScores[0];
+            console.log(`   🔄 Auto-re-heal complete: score ${reHealScore.total_score}/100 (was ${sdHealScore}/100)`);
+          } else {
+            console.log('   ⚠️  Auto-re-heal ran but no new score was persisted');
+          }
+        } catch (err) {
+          console.log(`   ❌ Auto-re-heal failed: ${err.message}`);
+        }
+
+        // Evaluate re-heal result
+        if (reHealScore && reHealScore.total_score >= threshold) {
+          console.log(`   ✅ Re-heal score ${reHealScore.total_score} >= ${threshold} threshold — PASS`);
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: [
+              `Auto-re-heal improved score from ${sdHealScore} to ${reHealScore.total_score}`,
+              ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : [])
+            ],
+            details: {
+              sd_heal_score: reHealScore.total_score,
+              original_score: sdHealScore,
+              auto_re_healed: true,
+              threshold,
+              is_corrective: isCorrective,
+              score_id: reHealScore.id,
+              score_age_minutes: 0,
+              vision_advisory: visionAdvisory
+            }
+          };
+        }
+
+        // Re-heal did not meet threshold — fail with best available info
+        const finalScore = reHealScore?.total_score ?? sdHealScore;
+        const finalScoreId = reHealScore?.id ?? latestScore.id;
+        const finalGaps = reHealScore?.rubric_snapshot?.gaps || gaps;
+        const reHealNote = reHealScore
+          ? `Auto-re-heal attempted: ${sdHealScore} → ${reHealScore.total_score} (still below ${threshold})`
+          : 'Auto-re-heal attempted but failed to produce a new score';
+
+        console.log('');
+        console.log(`   ❌ NEEDS_ITERATION: score ${finalScore} still below ${threshold} after re-heal`);
+        console.log(`   ${reHealNote}`);
         console.log('');
         console.log('   Fix the gaps within this SD, re-ship, then re-run:');
         console.log(`   /heal sd --sd-id ${sdKey}`);
 
         return {
           passed: false,
-          score: Math.round((sdHealScore / threshold) * 100),
+          score: Math.round((finalScore / threshold) * 100),
           max_score: 100,
           issues: [
-            `SD heal score ${sdHealScore}/100 below threshold ${threshold} — NEEDS_ITERATION`,
-            ...gaps.map(g => `Gap: ${g}`)
+            `SD heal score ${finalScore}/100 below threshold ${threshold} — NEEDS_ITERATION`,
+            reHealNote,
+            ...finalGaps.map(g => `Gap: ${g}`)
           ],
           warnings: visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : [],
           remediation: `Fix identified gaps, re-ship, run /heal sd --sd-id ${sdKey}, then retry PLAN-TO-LEAD`,
           details: {
-            sd_heal_score: sdHealScore,
+            sd_heal_score: finalScore,
+            original_score: sdHealScore,
+            auto_re_healed: !!reHealScore,
             threshold,
             is_corrective: isCorrective,
-            score_id: latestScore.id,
-            score_age_minutes: scoreAge,
-            gaps,
+            score_id: finalScoreId,
+            score_age_minutes: reHealScore ? 0 : scoreAge,
+            gaps: finalGaps,
             vision_advisory: visionAdvisory
           }
         };
