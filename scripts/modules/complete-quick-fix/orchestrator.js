@@ -261,6 +261,20 @@ export async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
+  // Release QF claim after successful completion
+  try {
+    const { default: sessionManager } = await import('../../../lib/session-manager.mjs');
+    const session = await sessionManager.getOrCreateSession();
+    if (session?.session_id) {
+      await supabase.rpc('release_sd', {
+        p_session_id: session.session_id,
+        p_reason: 'qf_completed'
+      });
+    }
+  } catch {
+    // Non-fatal — claim release is best-effort
+  }
+
   displayCompletionSummary(qf, actualLoc, commitSha, branchName, finalPrUrl, filesChanged);
 
   // Merge to Main

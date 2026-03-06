@@ -17,7 +17,7 @@ import { analyzeClaimRelationship } from '../claim-analysis.js';
  * @param {Array} conflicts - Active conflicts
  * @returns {{ action: string, sd_id: string|null, reason: string }} Recommended next action
  */
-export async function displayRecommendations(supabase, baselineItems, conflicts = [], sessionContext = {}) {
+export async function displayRecommendations(supabase, baselineItems, conflicts = [], sessionContext = {}, qfContext = {}) {
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
   console.log(`${colors.bold}${colors.green}RECOMMENDED ACTIONS:${colors.reset}\n`);
 
@@ -137,6 +137,11 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
     }
 
     return { action: 'start', sd_id: sdId, reason: `SD ${sdId} is next in queue (rank: ${sd.sequence_rank}, deps satisfied)` };
+  }
+  // QF fallback: if no SDs are actionable but quick fixes exist, suggest one
+  if (qfContext.totalCount > 0 && qfContext.topStartableQF) {
+    const qfId = qfContext.topStartableQF.id;
+    return { action: 'qf_start', sd_id: null, qf_id: qfId, reason: `No actionable SDs — ${qfContext.totalCount} open quick fix(es) available (top: ${qfId})` };
   }
   return { action: 'none', sd_id: null, reason: 'No actionable SDs found in queue' };
 }

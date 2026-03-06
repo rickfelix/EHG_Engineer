@@ -30,7 +30,9 @@ import {
   loadSDHierarchy,
   loadOKRScorecard,
   loadVisionScores,
-  countActionableBaselineItems
+  countActionableBaselineItems,
+  loadOpenQuickFixes,
+  triageQuickFixes
 } from './data-loaders.js';
 import {
   displayOKRScorecard,
@@ -46,7 +48,8 @@ import {
   showExhaustedBaselineMessage,
   displayBlockedStateBanner,
   isOrchestratorBlocked,
-  displayTelemetryFindings
+  displayTelemetryFindings,
+  displayQuickFixes
 } from './display/index.js';
 import {
   detectAllBlockedState,
@@ -97,6 +100,8 @@ export class SDNextSelector {
     this.ventureContext = null; // Active venture context for SD filtering
     this.visionScores = new Map(); // Per-SD vision score aggregates (SD-MAN-INFRA-VISION-PORTFOLIO-SCORECARD-001)
     this.localSignals = new Map(); // Local filesystem signals (worktrees, auto-proceed-state) SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
+    this.openQuickFixes = [];
+    this.qfTriageResults = new Map();
   }
 
   /**
@@ -149,6 +154,10 @@ export class SDNextSelector {
     this.conflicts = await loadConflicts(this.supabase);
     await this.loadActiveSessions();
     this.pendingProposals = await loadPendingProposals(this.supabase);
+    this.openQuickFixes = await loadOpenQuickFixes(this.supabase);
+    if (this.openQuickFixes.length > 0) {
+      this.qfTriageResults = await triageQuickFixes(this.openQuickFixes, this.supabase);
+    }
     this.loadMultiRepoStatus();
 
     // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Detect local signals
@@ -175,6 +184,10 @@ export class SDNextSelector {
       await showFallbackQueue(this.supabase, {
         sessionContext: this.getSessionContext()
       });
+      const qfSummaryNoBaseline = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+      if (qfSummaryNoBaseline.topStartableQF) {
+        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryNoBaseline.topStartableQF.id, reason: `${qfSummaryNoBaseline.totalCount} open quick fix(es) available` };
+      }
       return { action: 'none', sd_id: null, reason: 'No active baseline found' };
     }
 
@@ -188,14 +201,21 @@ export class SDNextSelector {
         skipBaselineWarning: true,
         sessionContext: this.getSessionContext()
       });
+      const qfSummaryExhausted = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+      if (qfSummaryExhausted.topStartableQF) {
+        return { action: 'qf_start', sd_id: null, qf_id: qfSummaryExhausted.topStartableQF.id, reason: `Baseline exhausted but ${qfSummaryExhausted.totalCount} open quick fix(es) available` };
+      }
       return { action: 'none', sd_id: null, reason: 'Baseline exhausted - all items completed' };
     }
 
     // Display tracks
     await this.displayTracks();
 
+    // Display open quick fixes with re-triage escalation warnings
+    const qfSummary = displayQuickFixes(this.openQuickFixes, this.qfTriageResults, this.getSessionContext());
+
     // Display recommendations and get structured action data
-    const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts, this.getSessionContext());
+    const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts, this.getSessionContext(), qfSummary);
 
     // Display proactive proposals (LEO v4.4)
     displayProposals(this.pendingProposals);
