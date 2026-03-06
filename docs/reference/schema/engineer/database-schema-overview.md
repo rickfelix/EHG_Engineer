@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T03:17:26.865Z
-**Tables**: 514
+**Generated**: 2026-03-06T04:31:19.611Z
+**Tables**: 515
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -462,6 +462,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [session_lifecycle_events](tables/session_lifecycle_events.md) | N/A (RLS restricted) | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
 | [shipping_decisions](tables/shipping_decisions.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
+| [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ❌ | 0 | - |
 | [soul_extractions](tables/soul_extractions.md) | N/A (RLS restricted) | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
 | [stage13_assessments](tables/stage13_assessments.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated exit readiness assessments. SD-STAGE-13-001. |
 | [stage13_substage_states](tables/stage13_substage_states.md) | N/A (RLS restricted) | ✅ | 1 | Tracks current Stage 13 substage position per venture. SD-STAGE-13-001. |
@@ -743,7 +744,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (388 tables)
+### Other (389 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1039,6 +1040,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [session_lifecycle_events](tables/session_lifecycle_events.md) - Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5.
 - [shipping_decisions](tables/shipping_decisions.md)
 - [simulation_sessions](tables/simulation_sessions.md) - Tracks Genesis simulation lifecycle including ephemeral deployments and incineration
+- [skill_assessment_scores](tables/skill_assessment_scores.md)
 - [soul_extractions](tables/soul_extractions.md) - Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17)
 - [stage13_assessments](tables/stage13_assessments.md) - EVA-generated exit readiness assessments. SD-STAGE-13-001.
 - [stage13_substage_states](tables/stage13_substage_states.md) - Tracks current Stage 13 substage position per venture. SD-STAGE-13-001.
