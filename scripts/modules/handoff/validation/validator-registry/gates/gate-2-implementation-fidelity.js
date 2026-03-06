@@ -23,7 +23,9 @@ export function registerGate2Validators(registry) {
     // Normalize section score (max 25) to 0-100 scale
     const rawScore = sectionA.score ?? scoreFromGateScores ?? 0;
     const finalScore = Math.round((rawScore / 25) * 100);
-    const passed = result?.passed ?? (finalScore >= 70);
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-057: Use section-specific threshold,
+    // not overall result.passed which inherits cross-section failures
+    const passed = finalScore >= 70;
 
     return {
       passed,
@@ -54,7 +56,8 @@ export function registerGate2Validators(registry) {
     // Normalize section score (max 35) to 0-100 scale
     const rawScore = sectionB.score ?? scoreFromGateScores ?? 0;
     const finalScore = Math.round((rawScore / 35) * 100);
-    const passed = result?.passed ?? (finalScore >= 50); // Lower threshold for DB
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-057: Use section-specific threshold
+    const passed = finalScore >= 50; // Lower threshold for DB
 
     return {
       passed,
@@ -85,7 +88,8 @@ export function registerGate2Validators(registry) {
     // Normalize section score (max 25) to 0-100 scale
     const rawScore = sectionC.score ?? scoreFromGateScores ?? 0;
     const finalScore = Math.round((rawScore / 25) * 100);
-    const passed = result?.passed ?? (finalScore >= 70);
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-057: Use section-specific threshold
+    const passed = finalScore >= 70;
 
     return {
       passed,
@@ -116,7 +120,8 @@ export function registerGate2Validators(registry) {
     // Normalize section score (max 25) to 0-100 scale
     const rawScore = sectionD.score ?? scoreFromGateScores ?? 0;
     const finalScore = Math.round((rawScore / 25) * 100);
-    const passed = result?.passed ?? (finalScore >= 70);
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-057: Use section-specific threshold
+    const passed = finalScore >= 70;
 
     return {
       passed,
