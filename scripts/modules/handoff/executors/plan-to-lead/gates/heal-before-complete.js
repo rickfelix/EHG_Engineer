@@ -140,13 +140,40 @@ export function createHealBeforeCompleteGate(supabase) {
         console.log(`   📏 Using resolved threshold (${threshold})`);
       }
 
-      // Query most recent SD heal score from eva_vision_scores
-      let { data: healScores, error: healError } = await supabase
+      // Query SD heal scores - prefer sd-heal mode over vision-scorer auto-created
+      // Strategy: try sd-heal mode first, fall back to most recent of any mode
+      let healError = null;
+      let healScores = null;
+
+      // First try: get the most recent sd-heal mode score
+      const { data: sdHealScores } = await supabase
         .from('eva_vision_scores')
         .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)
+        .containedBy('rubric_snapshot', { mode: 'sd-heal' })
         .order('scored_at', { ascending: false })
         .limit(1);
+
+      // containedBy may not work for jsonb — fall back to fetching all and filtering
+      if (sdHealScores && sdHealScores.length > 0) {
+        healScores = sdHealScores;
+      } else {
+        // Fetch recent scores and filter client-side
+        const { data: allScores, error: allErr } = await supabase
+          .from('eva_vision_scores')
+          .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
+          .eq('sd_id', sdKey)
+          .order('scored_at', { ascending: false })
+          .limit(20);
+
+        healError = allErr;
+        if (allScores && allScores.length > 0) {
+          const sdHealMode = allScores.filter(s => s.rubric_snapshot?.mode === 'sd-heal');
+          healScores = sdHealMode.length > 0 ? [sdHealMode[0]] : [allScores[0]];
+        } else {
+          healScores = allScores;
+        }
+      }
 
       if (healError) {
         console.log(`   ⚠️  Database error querying heal scores: ${healError.message}`);
