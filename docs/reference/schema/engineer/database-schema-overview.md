@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T13:28:12.959Z
-**Tables**: 519
+**Generated**: 2026-03-06T17:06:49.668Z
+**Tables**: 517
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -56,7 +56,7 @@ instead of inheriting parent agent context, reducing context overhead by 50-70%.
 Pattern: Extends sd_data_contracts for agent-to-agent communication.
 Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0) |
 | [agentic_reviews](tables/agentic_reviews.md) | N/A (RLS restricted) | ✅ | 4 | - |
-| [agents](tables/agents.md) | N/A (RLS restricted) | ✅ | 2 | Governance agents for chairman/CEO system. Referenced by ventures.ceo_agent_id and directive_delegations. |
+| [agents](tables/agents.md) | N/A (RLS restricted) | ✅ | 2 | Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations. |
 | [ai_quality_assessments](tables/ai_quality_assessments.md) | N/A (RLS restricted) | ✅ | 3 | AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement. |
 | [app_config](tables/app_config.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [app_rankings](tables/app_rankings.md) | N/A (RLS restricted) | ❌ | 0 | Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001) |
@@ -746,7 +746,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (393 tables)
+### Other (391 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -775,7 +775,7 @@ instead of inheriting parent agent context, reducing context overhead by 50-70%.
 Pattern: Extends sd_data_contracts for agent-to-agent communication.
 Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0)
 - [agentic_reviews](tables/agentic_reviews.md)
-- [agents](tables/agents.md) - Governance agents for chairman/CEO system. Referenced by ventures.ceo_agent_id and directive_delegations.
+- [agents](tables/agents.md) - Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations.
 - [ai_quality_assessments](tables/ai_quality_assessments.md) - AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement.
 - [app_config](tables/app_config.md)
 - [app_rankings](tables/app_rankings.md) - Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001)
