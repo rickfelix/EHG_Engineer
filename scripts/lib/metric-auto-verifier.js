@@ -21,7 +21,7 @@ import { execSync } from 'child_process';
  * @property {string} metric - Metric name
  * @property {string} reportedValue - Value claimed by agent
  * @property {string|number|null} measuredValue - Independently measured value
- * @property {number} score - 0 (mismatch), 50 (self-reported), 100 (verified match)
+ * @property {number} score - 0 (mismatch), 65 (self-reported), 100 (verified match)
  * @property {'verified'|'mismatch'|'self_reported'} status
  * @property {string|null} issue - Description of mismatch if any
  */
@@ -64,7 +64,7 @@ export function verifyMetric(metricDef, repoRoot) {
     metric: name,
     reportedValue: reported,
     measuredValue: null,
-    score: 50,
+    score: 65,
     status: 'self_reported',
     issue: null
   };
@@ -95,7 +95,7 @@ export function verifyAllMetrics(metrics, repoRoot) {
 function verifyTestPassRate(name, reported, target, repoRoot) {
   const measured = getTestPassRate(repoRoot);
   if (measured === null) {
-    return { metric: name, reportedValue: reported, measuredValue: null, score: 50, status: 'self_reported', issue: 'No test report found to verify' };
+    return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'No test report found to verify' };
   }
   const reportedNum = extractNumber(reported);
   const match = reportedNum !== null && Math.abs(reportedNum - measured) < 2; // 2% tolerance
@@ -112,7 +112,7 @@ function verifyTestPassRate(name, reported, target, repoRoot) {
 function verifyCoverage(name, reported, target, repoRoot) {
   const measured = getCoveragePercent(repoRoot);
   if (measured === null) {
-    return { metric: name, reportedValue: reported, measuredValue: null, score: 50, status: 'self_reported', issue: 'No coverage report found to verify' };
+    return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'No coverage report found to verify' };
   }
   const reportedNum = extractNumber(reported);
   const match = reportedNum !== null && Math.abs(reportedNum - measured) < 2;
@@ -129,7 +129,7 @@ function verifyCoverage(name, reported, target, repoRoot) {
 function verifyFilesCreated(name, reported, target, repoRoot) {
   const measured = getGitFilesCreated(repoRoot);
   if (measured === null) {
-    return { metric: name, reportedValue: reported, measuredValue: null, score: 50, status: 'self_reported', issue: 'Could not determine files created from git' };
+    return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'Could not determine files created from git' };
   }
   const reportedNum = extractNumber(reported);
   const match = reportedNum !== null && reportedNum === measured;
@@ -146,7 +146,7 @@ function verifyFilesCreated(name, reported, target, repoRoot) {
 function verifyLinesOfCode(name, reported, target, repoRoot) {
   const measured = getGitInsertions(repoRoot);
   if (measured === null) {
-    return { metric: name, reportedValue: reported, measuredValue: null, score: 50, status: 'self_reported', issue: 'Could not determine LOC from git' };
+    return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'Could not determine LOC from git' };
   }
   const reportedNum = extractNumber(reported);
   // Allow 20% tolerance for LOC (formatting, comments, etc.)
@@ -164,7 +164,7 @@ function verifyLinesOfCode(name, reported, target, repoRoot) {
 function verifyTestCount(name, reported, target, repoRoot) {
   const measured = getTestCount(repoRoot);
   if (measured === null) {
-    return { metric: name, reportedValue: reported, measuredValue: null, score: 50, status: 'self_reported', issue: 'Could not determine test count' };
+    return { metric: name, reportedValue: reported, measuredValue: null, score: 65, status: 'self_reported', issue: 'Could not determine test count' };
   }
   const reportedNum = extractNumber(reported);
   const match = reportedNum !== null && reportedNum === measured;
