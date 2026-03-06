@@ -44,10 +44,28 @@ export async function validateTransitionReadiness(sd, supabase) {
 
   // Check 2: SD status allows LEAD→PLAN transition
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-019: Added 'DRAFT' - the standard starting state for LEAD-TO-PLAN
-  const validStatuses = ['ACTIVE', 'APPROVED', 'PLANNING', 'READY', 'LEAD_APPROVED', 'DRAFT', null, undefined];
-  const blockingStatuses = ['COMPLETED', 'CANCELLED', 'ARCHIVED', 'ON_HOLD'];
+  const validStatuses = ['ACTIVE', 'APPROVED', 'PLANNING', 'READY', 'LEAD_APPROVED', 'DRAFT', 'IN_PROGRESS', null, undefined];
+  const blockingStatuses = ['COMPLETED', 'ARCHIVED', 'ON_HOLD'];
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-055: Cancelled SDs are auto-reactivated instead of blocked.
+  // Attempting LEAD-TO-PLAN on a cancelled SD signals clear intent to work on it.
+  const autoReactivateStatuses = ['CANCELLED'];
 
-  if (blockingStatuses.includes(sd.status?.toUpperCase())) {
+  if (autoReactivateStatuses.includes(sd.status?.toUpperCase())) {
+    // Auto-reactivate: set status back to draft so the workflow can proceed
+    try {
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ status: 'draft', is_active: true })
+        .eq('id', sd.id);
+      warnings.push(`SD status was '${sd.status}' — auto-reactivated to 'draft' (LEAD-TO-PLAN intent detected)`);
+      console.log(`   ⚠️  Auto-reactivated: ${sd.status} → draft (LEAD-TO-PLAN intent)`);
+      score -= 5;
+    } catch (reactivateError) {
+      issues.push(`SD status '${sd.status}' does not allow handoff and auto-reactivation failed: ${reactivateError.message}`);
+      console.log(`   ❌ Blocking status: ${sd.status} (auto-reactivation failed)`);
+      score -= 30;
+    }
+  } else if (blockingStatuses.includes(sd.status?.toUpperCase())) {
     issues.push(`SD status '${sd.status}' does not allow handoff - must be active/approved`);
     console.log(`   ❌ Blocking status: ${sd.status}`);
     score -= 30;
