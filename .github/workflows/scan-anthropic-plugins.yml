@@ -1,0 +1,38 @@
+name: Scan Anthropic Plugins (Weekly)
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6:00 UTC
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  scan-and-evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Scan Anthropic repos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/scan-anthropic-plugins.js scan
+
+      - name: Evaluate and adapt plugins
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/scan-anthropic-plugins.js evaluate
+
+      - name: Show registry status
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/scan-anthropic-plugins.js status
