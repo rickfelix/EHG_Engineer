@@ -317,6 +317,69 @@ export async function loadVisionScores(supabase) {
 }
 
 /**
+ * Load open quick fixes for display in the SD queue.
+ *
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Array>} Array of quick fix objects
+ */
+export async function loadOpenQuickFixes(supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('quick_fixes')
+      .select('id, title, type, severity, status, estimated_loc, description, created_at, target_application, claiming_session_id')
+      .in('status', ['open', 'in_progress'])
+      .order('created_at', { ascending: true })
+      .limit(50);
+
+    if (error) {
+      logQueryFailure('loadOpenQuickFixes', error, { table: 'quick_fixes' });
+      return [];
+    }
+
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Re-triage open quick fixes to detect tier drift (e.g., QFs that should be escalated to SDs).
+ * Uses the existing runTriageGate() with a non-interactive source so no gate prompt is shown.
+ *
+ * @param {Array} quickFixes - Array of quick fix objects from loadOpenQuickFixes
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Map<string, import('../triage-gate.js').TriageResult>>}
+ */
+export async function triageQuickFixes(quickFixes, supabase) {
+  const results = new Map();
+  if (!quickFixes || quickFixes.length === 0) return results;
+
+  let runTriageGate;
+  try {
+    const mod = await import('../triage-gate.js');
+    runTriageGate = mod.runTriageGate;
+  } catch {
+    return results;
+  }
+
+  for (const qf of quickFixes) {
+    try {
+      const triageResult = await runTriageGate({
+        title: qf.title || '',
+        description: qf.description || '',
+        type: qf.type || 'bug',
+        source: 'sd-next-display',
+      }, supabase);
+      results.set(qf.id, triageResult);
+    } catch {
+      // Individual triage failure — skip, will fall back to stored tier
+    }
+  }
+
+  return results;
+}
+
+/**
  * Count how many baseline items have non-completed SDs
  *
  * @param {Object} supabase - Supabase client
