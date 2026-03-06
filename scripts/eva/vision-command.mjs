@@ -34,6 +34,9 @@ import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
+import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sections-parser.mjs';
+import { buildSectionKeyMapping, getSectionSchema, validateSections } from './document-section-registry.mjs';
+import { renderSectionsToMarkdown, renderSectionsSummary } from './sections-to-markdown-renderer.mjs';
 
 dotenv.config();
 
@@ -135,15 +138,62 @@ async function cmdExtract({ source }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
-  if (!source) { console.error('--source is required'); process.exit(1); }
+  if (!source && !sectionsJson) { console.error('--source or --sections is required'); process.exit(1); }
 
-  const fullPath = resolve(REPO_ROOT, source);
-  if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  const content = readFileSync(fullPath, 'utf8');
+  let content = '';
+  let sections = null;
+
+  // Sections-first path: --sections flag provides structured sections directly
+  if (sectionsJson) {
+    try {
+      sections = JSON.parse(sectionsJson);
+    } catch (e) {
+      console.error('Invalid --sections JSON:', e.message);
+      process.exit(1);
+    }
+
+    // Validate against schema
+    const validation = await validateSections(sections, 'vision', { supabase });
+    if (!validation.valid) {
+      console.error('Section validation errors:');
+      validation.errors.forEach(e => console.error(`  - ${e}`));
+      process.exit(1);
+    }
+    if (validation.warnings.length > 0) {
+      validation.warnings.forEach(w => console.warn(`  ⚠️  ${w}`));
+    }
+
+    // Render content from sections
+    const schema = await getSectionSchema('vision', { supabase });
+    content = renderSectionsToMarkdown(sections, visionKey, schema);
+  }
+
+  // Source file path: backward-compatible (auto-parse sections from markdown)
+  if (source) {
+    const fullPath = resolve(REPO_ROOT, source);
+    if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
+    content = readFileSync(fullPath, 'utf8');
+
+    // Auto-parse sections from source markdown if not provided
+    if (!sections) {
+      let mapping;
+      try {
+        mapping = await buildSectionKeyMapping('vision', { supabase });
+      } catch {
+        mapping = buildDefaultMapping();
+      }
+      sections = parseMarkdownToSections(content, mapping);
+      const sectionCount = Object.keys(sections).length;
+      if (sectionCount > 0) {
+        console.log(`   Auto-parsed ${sectionCount} sections from source file`);
+      }
+    }
+  }
 
   let dimensions = null;
   if (dimensionsJson) {
@@ -157,8 +207,6 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     console.error('\n🤖 No pre-extracted dimensions provided — extracting now...');
     dimensions = await extractDimensions(content);
   }
-
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   if (dimensions) {
     const weightSum = dimensions.reduce((sum, d) => sum + (d.weight || 0), 0);
@@ -183,10 +231,11 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     extracted_dimensions: dimensions,
     version,
     status: 'active',
-    chairman_approved: true, // approval already happened in skill before calling upsert
-    source_file_path: source,
+    chairman_approved: true,
+    source_file_path: source || null,
     created_by: 'eva-vision-command',
     addendums: existing?.addendums || [],
+    ...(sections && Object.keys(sections).length > 0 ? { sections } : {}),
     ...(ventureId ? { venture_id: ventureId } : {}),
     ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
   };
@@ -206,6 +255,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   console.log(`   Version: ${data.version}`);
   console.log(`   Status:  ${data.status}`);
   if (dimensions) console.log(`   Dimensions: ${dimensions.length} extracted`);
+  if (sections) console.log(`   Sections: ${renderSectionsSummary(sections)}`);
 }
 
 async function cmdAddendum({ visionKey, section, brainstormId }) {
@@ -276,17 +326,68 @@ async function cmdList() {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const { data, error } = await supabase
     .from('eva_vision_documents')
-    .select('id, vision_key, level, version, status, chairman_approved, created_at')
+    .select('id, vision_key, level, version, status, chairman_approved, sections, created_at')
     .order('created_at', { ascending: false });
 
   if (error) { console.error('❌ List failed:', error.message); process.exit(1); }
   if (!data?.length) { console.log('No vision documents found.'); return; }
 
   console.log('\n📋 EVA Vision Documents:\n');
-  console.log('  ' + 'Key'.padEnd(28) + 'Level'.padEnd(6) + 'Ver'.padEnd(5) + 'Status'.padEnd(12) + 'Approved');
-  console.log('  ' + '-'.repeat(65));
+  console.log('  ' + 'Key'.padEnd(35) + 'Level'.padEnd(6) + 'Ver'.padEnd(5) + 'Status'.padEnd(10) + 'Sections');
+  console.log('  ' + '-'.repeat(75));
   for (const d of data) {
-    console.log('  ' + d.vision_key.padEnd(28) + d.level.padEnd(6) + String(d.version).padEnd(5) + d.status.padEnd(12) + (d.chairman_approved ? '✅' : '⏳'));
+    const sectionsInfo = renderSectionsSummary(d.sections);
+    console.log('  ' + d.vision_key.padEnd(35) + d.level.padEnd(6) + String(d.version).padEnd(5) + d.status.padEnd(10) + sectionsInfo);
+  }
+}
+
+async function cmdView({ visionKey, section: sectionKey, format }) {
+  if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const { data, error } = await supabase
+    .from('eva_vision_documents')
+    .select('vision_key, level, version, status, content, sections')
+    .eq('vision_key', visionKey)
+    .single();
+
+  if (error) { console.error(`❌ Not found: ${visionKey}`); process.exit(1); }
+
+  // JSON format output
+  if (format === 'json') {
+    console.log(JSON.stringify({
+      vision_key: data.vision_key,
+      level: data.level,
+      version: data.version,
+      status: data.status,
+      sections: data.sections || {},
+      sections_summary: renderSectionsSummary(data.sections),
+    }, null, 2));
+    return;
+  }
+
+  // View specific section
+  if (sectionKey) {
+    const content = data.sections?.[sectionKey];
+    if (!content) {
+      const available = data.sections ? Object.keys(data.sections).join(', ') : 'none';
+      console.error(`Section "${sectionKey}" not found. Available: ${available}`);
+      process.exit(1);
+    }
+    console.log(`\n## ${sectionKey}\n`);
+    console.log(content);
+    return;
+  }
+
+  // Full document view
+  console.log(`\n📄 ${data.vision_key} (${data.level}, v${data.version}, ${data.status})\n`);
+  if (data.sections && Object.keys(data.sections).length > 0) {
+    const schema = await getSectionSchema('vision', { supabase });
+    console.log(renderSectionsToMarkdown(data.sections, data.vision_key, schema));
+  } else if (data.content) {
+    console.log(data.content);
+  } else {
+    console.log('(no content)');
   }
 }
 
@@ -301,8 +402,9 @@ switch (subcommand) {
   case 'upsert':   await cmdUpsert(opts); break;
   case 'addendum': await cmdAddendum(opts); break;
   case 'list':     await cmdList(); break;
+  case 'view':     await cmdView(opts); break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
-    console.error('Valid subcommands: extract, upsert, addendum, list');
+    console.error('Valid subcommands: extract, upsert, addendum, list, view');
     process.exit(1);
 }
