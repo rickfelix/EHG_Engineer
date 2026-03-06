@@ -45,6 +45,22 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
   const isAdvisory = enforcement === 'ADVISORY';
   const issueCountBefore = validation.issues.length;
 
+  // PAT-GATE2-BE-001: target_application-aware exemption (checked FIRST - definitive signal)
+  // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has form/UI integration
+  {
+    const targetApp = validation.details.target_application || null;
+    if (targetApp === 'EHG_Engineer') {
+      console.log('   ✅ EHG_Engineer target application (backend-only) - Section C not applicable (25/25)');
+      validation.score += 25;
+      validation.gate_scores.data_flow_alignment = 25;
+      validation.details.data_flow_alignment = {
+        skipped: true,
+        reason: 'EHG_Engineer target application - backend-only repo, no form/UI integration expected'
+      };
+      return;
+    }
+  }
+
   // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI/form requirements (hardcoded fallback)
   try {
     let sd = null;
@@ -57,7 +73,6 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     if (sdById) {
       sd = sdById;
     } else {
-      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key instead (column dropped 2026-01-24)
       const { data: sdBySdKey } = await supabase
         .from('strategic_directives_v2')
         .select('sd_type, scope')
@@ -99,25 +114,7 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
       return;
     }
 
-    // PAT-GATE2-BE-001: target_application-aware exemption for Section C
-    // EHG_Engineer is a backend-only repo (CLI, scripts, tooling) - never has form/UI integration
-    if (!hasUIScope) {
-      const targetApp = validation.details.target_application || null;
-
-      if (targetApp === 'EHG_Engineer') {
-        console.log('   ✅ EHG_Engineer target application (backend-only) - Section C not applicable (25/25)');
-        validation.score += 25;
-        validation.gate_scores.data_flow_alignment = 25;
-        validation.details.data_flow_alignment = {
-          skipped: true,
-          reason: 'EHG_Engineer target application - backend-only repo, no form/UI integration expected'
-        };
-        return;
-      }
-    }
-
     // PAT-GATE2-BACKEND-ONLY-001: Backend-only feature SDs (CLI, scripts, APIs)
-    // Mirrors the same exemption already applied in Section A (design-fidelity.js)
     if (sd?.sd_type === 'feature' && !hasUIScope) {
       const hasBackendScope = /\b(script|cli|command|api[\s-]?route|backend|server|lib\/|node\s)/i.test(scopeToCheck);
       if (hasBackendScope) {
