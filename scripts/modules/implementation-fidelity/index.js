@@ -125,6 +125,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
     const sdType = (sd?.sd_type || '').toLowerCase();
     const intensityLevel = (sd?.intensity_level || '').toLowerCase();
+    validation.details.sd_type = sdType;
 
     console.log(`   🔍 SD Type check: sd_type=${sdType}, intensity_level=${intensityLevel}`);
 

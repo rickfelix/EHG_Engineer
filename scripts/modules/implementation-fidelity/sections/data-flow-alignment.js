@@ -4,6 +4,7 @@
  */
 
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
+import { getSectionEnforcement } from '../sd-type-section-policy.js';
 
 /**
  * Validate Data Flow Alignment
@@ -27,6 +28,22 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     console.log('   ✅ Section C exempt via gate2_exempt_sections (25/25)');
     return;
   }
+
+  // Centralized SD-type section enforcement policy (fallback after DB exemptions)
+  const sdType = validation.details.sd_type || '';
+  const enforcement = getSectionEnforcement(sdType, 'C');
+  if (enforcement === 'SKIP') {
+    validation.score += 25;
+    validation.gate_scores.data_flow_alignment = 25;
+    validation.details.data_flow_alignment = {
+      skipped: true,
+      reason: `Section C skipped for ${sdType} SD (policy: SKIP)`
+    };
+    console.log(`   ✅ Section C skipped for ${sdType} SD - full credit (25/25)`);
+    return;
+  }
+  const isAdvisory = enforcement === 'ADVISORY';
+  const issueCountBefore = validation.issues.length;
 
   // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI/form requirements (hardcoded fallback)
   try {
@@ -223,6 +240,14 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     validation.warnings.push('[C3] No data validation detected');
     sectionScore += 3;
     console.log('   ⚠️  No data validation detected (3/5)');
+  }
+
+  // ADVISORY mode: convert issues to warnings, award full credit
+  if (isAdvisory) {
+    const newIssues = validation.issues.splice(issueCountBefore);
+    validation.warnings.push(...newIssues.map(i => `[ADVISORY] ${i}`));
+    sectionScore = 25;
+    console.log(`   ℹ️  Section C in ADVISORY mode for ${sdType} SD - full credit (25/25)`);
   }
 
   validation.score += sectionScore;
