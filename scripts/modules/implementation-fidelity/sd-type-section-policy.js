@@ -21,13 +21,13 @@ const SECTION_POLICY = {
   feature:        { A: 'REQUIRED', B: 'REQUIRED', C: 'REQUIRED', D: 'REQUIRED' },
   frontend:       { A: 'REQUIRED', B: 'REQUIRED', C: 'REQUIRED', D: 'REQUIRED' },
   database:       { A: 'SKIP',     B: 'REQUIRED', C: 'ADVISORY', D: 'REQUIRED' },
-  infrastructure: { A: 'SKIP',     B: 'SKIP',     C: 'SKIP',     D: 'ADVISORY' },
+  infrastructure: { A: 'SKIP',     B: 'REQUIRED', C: 'SKIP',     D: 'ADVISORY' },
   documentation:  { A: 'SKIP',     B: 'SKIP',     C: 'SKIP',     D: 'SKIP'     },
   fix:            { A: 'ADVISORY', B: 'ADVISORY', C: 'ADVISORY', D: 'REQUIRED' },
   bugfix:         { A: 'ADVISORY', B: 'ADVISORY', C: 'ADVISORY', D: 'REQUIRED' },
   refactor:       { A: 'ADVISORY', B: 'ADVISORY', C: 'ADVISORY', D: 'REQUIRED' },
   enhancement:    { A: 'ADVISORY', B: 'ADVISORY', C: 'ADVISORY', D: 'REQUIRED' },
-  performance:    { A: 'SKIP',     B: 'SKIP',     C: 'ADVISORY', D: 'REQUIRED' },
+  performance:    { A: 'SKIP',     B: 'ADVISORY', C: 'ADVISORY', D: 'REQUIRED' },
 };
 
 /**

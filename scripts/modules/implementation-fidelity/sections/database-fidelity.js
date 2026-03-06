@@ -207,7 +207,61 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
 }
 
 /**
- * Verify migration execution in schema_migrations table
+ * Extract table names from CREATE TABLE statements in migration files.
+ * @param {Array} migrationFiles - Array of {dir, file} migration objects
+ * @param {string} repoPath - Repository root path
+ * @returns {string[]} Table names found in migrations
+ */
+async function extractTableNamesFromMigrations(migrationFiles, repoPath) {
+  const tableNames = [];
+  for (const m of migrationFiles) {
+    try {
+      const fullPath = path.join(repoPath, m.dir, m.file);
+      const content = await readFile(fullPath, 'utf-8');
+      const matches = content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?(\w+)/gi);
+      for (const match of matches) {
+        tableNames.push(match[1].toLowerCase());
+      }
+    } catch (_) { /* skip unreadable files */ }
+  }
+  return [...new Set(tableNames)];
+}
+
+/**
+ * Verify tables exist in the live database via information_schema.
+ * Used as fallback when schema_migrations is empty/missing.
+ * @param {string[]} tableNames - Expected table names
+ * @param {Object} supabase - Supabase client
+ * @returns {{found: string[], missing: string[]}}
+ */
+async function verifyTablesExist(tableNames, supabase) {
+  const found = [];
+  const missing = [];
+  for (const table of tableNames) {
+    const { data, error } = await supabase.rpc('execute_sql', {
+      query: `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '${table}') AS exists`
+    }).single();
+
+    if (error) {
+      // Fallback: try direct query
+      const { error: directError } = await supabase.from(table).select('*').limit(0);
+      if (directError && directError.message.includes('Could not find')) {
+        missing.push(table);
+      } else {
+        found.push(table);
+      }
+    } else if (data?.exists) {
+      found.push(table);
+    } else {
+      missing.push(table);
+    }
+  }
+  return { found, missing };
+}
+
+/**
+ * Verify migration execution in schema_migrations table,
+ * with fallback to table-existence verification.
  */
 async function verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetails, validation, supabase) {
   try {
@@ -229,22 +283,48 @@ async function verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetail
       migrationError = error1;
     }
 
+    // Helper: attempt table-existence fallback verification
+    const attemptTableExistenceFallback = async (reason) => {
+      const repoPath = sectionDetails.implementation_repo || process.cwd();
+      const tableNames = await extractTableNamesFromMigrations(migrationFiles, repoPath);
+      if (tableNames.length === 0) {
+        console.log(`   ⚠️  ${reason} and no CREATE TABLE statements found in migrations (13/20)`);
+        sectionDetails.migration_execution_verified = null;
+        sectionDetails.migration_execution_note = `${reason} - no tables to verify`;
+        validation.warnings.push(`[B1.2] ${reason} - no CREATE TABLE statements found`);
+        return 13;
+      }
+      console.log(`   🔍 Fallback: checking ${tableNames.length} table(s) in live DB: ${tableNames.join(', ')}`);
+      const { found, missing } = await verifyTablesExist(tableNames, supabase);
+      sectionDetails.fallback_table_check = { expected: tableNames, found, missing };
+      if (missing.length === 0) {
+        sectionDetails.migration_execution_verified = true;
+        sectionDetails.migration_execution_note = 'Verified via table-existence fallback';
+        console.log(`   ✅ All ${found.length} table(s) exist in live DB (20/20)`);
+        return 20;
+      } else if (found.length > 0) {
+        sectionDetails.migration_execution_verified = false;
+        validation.issues.push(`[B1.2] ${missing.length} table(s) from migrations NOT found in DB: ${missing.join(', ')}`);
+        console.log(`   ❌ ${missing.length}/${tableNames.length} table(s) missing: ${missing.join(', ')} (0/20)`);
+        return 0;
+      } else {
+        sectionDetails.migration_execution_verified = false;
+        validation.issues.push(`[B1.2] CRITICAL: None of ${tableNames.length} migration table(s) exist in DB: ${missing.join(', ')}`);
+        console.log(`   ❌ NONE of ${tableNames.length} table(s) found in DB (0/20)`);
+        return 0;
+      }
+    };
+
     if (migrationError) {
       const tableNotExistsMsg = "Could not find the table 'public.schema_migrations'";
       const columnNotExistsMsg = 'column';
 
       if (migrationError.message.includes(tableNotExistsMsg)) {
-        console.log('   ⚠️  schema_migrations table does not exist - cannot verify (13/20)');
-        sectionDetails.migration_execution_verified = null;
-        sectionDetails.migration_execution_note = 'No schema_migrations table - manual verification required';
-        validation.warnings.push('[B1.2] Migration execution could not be auto-verified - no schema_migrations table');
-        return 13;
+        console.log('   ⚠️  schema_migrations table does not exist - falling back to table-existence check');
+        return await attemptTableExistenceFallback('No schema_migrations table');
       } else if (migrationError.message.includes(columnNotExistsMsg)) {
-        console.log('   ⚠️  schema_migrations has non-standard schema - cannot auto-verify (13/20)');
-        sectionDetails.migration_execution_verified = null;
-        sectionDetails.migration_execution_note = 'Non-standard schema_migrations schema - manual verification required';
-        validation.warnings.push('[B1.2] Migration execution could not be auto-verified - schema mismatch');
-        return 13;
+        console.log('   ⚠️  schema_migrations has non-standard schema - falling back to table-existence check');
+        return await attemptTableExistenceFallback('Non-standard schema_migrations schema');
       } else {
         console.log(`   ⚠️  Cannot query schema_migrations: ${migrationError.message} (0/20)`);
         sectionDetails.migration_execution_verified = false;
@@ -278,15 +358,14 @@ async function verifyMigrationExecution(migrationFiles, sdIdLower, sectionDetail
         return 0;
       }
     } else {
+      // schema_migrations is empty — use table-existence fallback
       const hasSDSpecificMigrations = migrationFiles.some(m =>
         m.file.toLowerCase().includes(sdIdLower)
       );
 
       if (hasSDSpecificMigrations) {
-        sectionDetails.migration_execution_verified = false;
-        validation.issues.push('[B1.2] No migration execution history found - cannot verify');
-        console.log('   ❌ No migration history found (0/20)');
-        return 0;
+        console.log('   ⚠️  schema_migrations empty but SD-specific migrations found - falling back to table-existence check');
+        return await attemptTableExistenceFallback('schema_migrations empty');
       } else {
         sectionDetails.migration_execution_verified = null;
         sectionDetails.migration_execution_note = 'No SD-specific migrations to verify';

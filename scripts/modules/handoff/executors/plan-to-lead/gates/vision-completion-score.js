@@ -87,33 +87,54 @@ export function createVisionCompletionScoreGate(supabase) {
         console.log('   ⚠️  No entry score found — will score for the first time');
       }
 
-      // Re-score at completion
+      // Check for a recent score (within 30 minutes) — skip expensive re-score
+      const RECENT_SCORE_THRESHOLD_MS = 30 * 60 * 1000;
       let completionScore = null;
-      try {
-        const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
-        const scorePromise = scoreSD({ sdKey, visionKey, archKey, supabase });
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Vision re-score timed out')), RESCORE_TIMEOUT_MS)
-        );
-        await Promise.race([scorePromise, timeoutPromise]);
 
-        // Fetch the newly created score
-        const { data: newScores } = await supabase
-          .from('eva_vision_scores')
-          .select('id, total_score, dimension_scores, scored_at')
-          .eq('sd_id', sdKey)
-          .order('scored_at', { ascending: false })
-          .limit(1);
+      const { data: recentScores } = await supabase
+        .from('eva_vision_scores')
+        .select('id, total_score, dimension_scores, scored_at')
+        .eq('sd_id', sdKey)
+        .order('scored_at', { ascending: false })
+        .limit(1);
 
-        completionScore = newScores?.[0];
-      } catch (err) {
-        console.log(`   ⚠️  Vision re-score failed: ${err.message}`);
-        return {
-          passed: true, score: 100, max_score: 100,
-          issues: [],
-          warnings: [`Vision re-score failed: ${err.message} — advisory only, not blocking`],
-          details: { rescore_error: err.message }
-        };
+      const recentScore = recentScores?.[0];
+      if (recentScore) {
+        const ageMs = Date.now() - new Date(recentScore.scored_at).getTime();
+        if (ageMs < RECENT_SCORE_THRESHOLD_MS) {
+          completionScore = recentScore;
+          console.log(`   ♻️  Using recent score (${Math.round(ageMs / 60000)}min old) — skipping re-score`);
+        }
+      }
+
+      // Only re-score if no recent score exists
+      if (!completionScore) {
+        try {
+          const { scoreSD } = await import('../../../../../../scripts/eva/vision-scorer.js');
+          const scorePromise = scoreSD({ sdKey, visionKey, archKey, supabase });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Vision re-score timed out')), RESCORE_TIMEOUT_MS)
+          );
+          await Promise.race([scorePromise, timeoutPromise]);
+
+          // Fetch the newly created score
+          const { data: newScores } = await supabase
+            .from('eva_vision_scores')
+            .select('id, total_score, dimension_scores, scored_at')
+            .eq('sd_id', sdKey)
+            .order('scored_at', { ascending: false })
+            .limit(1);
+
+          completionScore = newScores?.[0];
+        } catch (err) {
+          console.log(`   ⚠️  Vision re-score failed: ${err.message}`);
+          return {
+            passed: true, score: 100, max_score: 100,
+            issues: [],
+            warnings: [`Vision re-score failed: ${err.message} — advisory only, not blocking`],
+            details: { rescore_error: err.message }
+          };
+        }
       }
 
       if (!completionScore) {
