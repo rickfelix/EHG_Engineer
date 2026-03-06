@@ -4,10 +4,10 @@
  * Routes to operation adapters with dry-run enforcement and audit logging.
  *
  * Usage:
- *   node scripts/batch-dispatcher.mjs <operation> [--apply] [--type <value>] [--parent <value>]
+ *   node scripts/batch-dispatcher.mjs <operation> [--apply] [--type <value>] [--parent <value>] [--concurrency <N>]
  *   node scripts/batch-dispatcher.mjs --list
  *
- * SD: SD-LEO-SIMPLIFY-ENFORCEMENT-AND-ORCH-001-B
+ * SD: SD-LEO-SIMPLIFY-ENFORCEMENT-AND-ORCH-001-B, SD-LEO-SIMPLIFY-ENFORCEMENT-AND-ORCH-001-C
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -39,6 +39,8 @@ function parseFlags(argv) {
 }
 
 const flags = parseFlags(args);
+const concurrency = parseInt(flags.concurrency, 10) || 1;
+delete flags.concurrency; // Don't pass to adapters as a regular flag
 
 // --- Supabase Client ---
 
@@ -106,6 +108,25 @@ function listOperations() {
   console.log();
 }
 
+// --- Concurrency Helper ---
+
+/**
+ * Process items with configurable concurrency using Promise.allSettled.
+ * @param {Array} items - Items to process
+ * @param {Function} processor - async (item) => result
+ * @param {number} maxConcurrency - Max parallel items (default: 1)
+ * @returns {Array<{status: string, value?: any, reason?: any}>}
+ */
+export async function processConcurrently(items, processor, maxConcurrency = 1) {
+  const results = [];
+  for (let i = 0; i < items.length; i += maxConcurrency) {
+    const chunk = items.slice(i, i + maxConcurrency);
+    const chunkResults = await Promise.allSettled(chunk.map(processor));
+    results.push(...chunkResults);
+  }
+  return results;
+}
+
 // --- Main ---
 
 async function main() {
@@ -127,7 +148,7 @@ async function main() {
   const dryRun = !applyMode;
   const supabase = createSupabaseClient(operation.requiresServiceRole);
 
-  console.log(`\n/batch ${operationKey}${dryRun ? ' (DRY RUN)' : ' (APPLY)'}`);
+  console.log(`\n/batch ${operationKey}${dryRun ? ' (DRY RUN)' : ' (APPLY)'}${concurrency > 1 ? ` (concurrency: ${concurrency})` : ''}`);
   console.log('='.repeat(60));
 
   if (Object.keys(flags).length > 0) {
@@ -143,6 +164,7 @@ async function main() {
     result = await operation.execute(supabase, {
       dryRun,
       flags,
+      concurrency,
       verifiedWrite: dryRun ? null : verifiedWrite,
     });
   } catch (err) {

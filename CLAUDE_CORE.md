@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-05 2:13:19 PM
+**Generated**: 2026-03-06 12:32:00 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -266,6 +266,38 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
+## Work Tracking Policy
+
+**ALL changes to main must be tracked** as either:
+
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>50 LOC)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
+
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (<=50 LOC)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
+
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
+
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
+
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
+
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -307,37 +339,38 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
 
-## Work Tracking Policy
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**ALL changes to main must be tracked** as either:
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>50 LOC)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (<=50 LOC)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
+### Requirements
 
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -375,39 +408,6 @@ The pre-push hook automatically:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1218,7 +1218,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-05*
+*Generated from database: 2026-03-06*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*

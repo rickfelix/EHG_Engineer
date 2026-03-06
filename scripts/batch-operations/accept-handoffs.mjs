@@ -11,7 +11,7 @@ export default {
   flags: [
     { name: 'type', description: 'Handoff type filter', values: ['lead-to-plan', 'plan-to-exec', 'exec-to-plan', 'plan-to-lead', 'all'] }
   ],
-  async execute(supabase, { dryRun, flags = {} }) {
+  async execute(supabase, { dryRun, flags = {}, concurrency = 1 }) {
     const typeFilter = flags.type || 'all';
 
     const handoffTypeMap = {
@@ -56,23 +56,14 @@ export default {
 
       result.total += pendingHandoffs.length;
 
-      for (const handoff of pendingHandoffs) {
+      // Process handoffs with configurable concurrency
+      const processHandoff = async (handoff) => {
         if (!handoff.executive_summary || handoff.executive_summary.length < 50) {
-          result.skipped++;
-          result.details.push({
-            type: typeName, sd_id: handoff.sd_id, status: 'skipped',
-            reason: 'Missing or incomplete executive summary'
-          });
-          continue;
+          return { type: typeName, sd_id: handoff.sd_id, status: 'skipped', reason: 'Missing or incomplete executive summary' };
         }
 
         if (dryRun) {
-          result.processed++;
-          result.details.push({
-            type: typeName, sd_id: handoff.sd_id, status: 'would_accept',
-            summary: handoff.executive_summary.substring(0, 80)
-          });
-          continue;
+          return { type: typeName, sd_id: handoff.sd_id, status: 'would_accept', summary: handoff.executive_summary.substring(0, 80) };
         }
 
         const { error: acceptError } = await supabase.rpc('accept_phase_handoff', {
@@ -80,16 +71,23 @@ export default {
         });
 
         if (acceptError) {
-          result.failed++;
-          result.details.push({
-            type: typeName, sd_id: handoff.sd_id, status: 'failed',
-            error: acceptError.message
-          });
-        } else {
-          result.processed++;
-          result.details.push({
-            type: typeName, sd_id: handoff.sd_id, status: 'accepted'
-          });
+          return { type: typeName, sd_id: handoff.sd_id, status: 'failed', error: acceptError.message };
+        }
+        return { type: typeName, sd_id: handoff.sd_id, status: 'accepted' };
+      };
+
+      // Chunk processing for concurrency
+      for (let i = 0; i < pendingHandoffs.length; i += concurrency) {
+        const chunk = pendingHandoffs.slice(i, i + concurrency);
+        const settled = await Promise.allSettled(chunk.map(processHandoff));
+
+        for (const outcome of settled) {
+          const detail = outcome.status === 'fulfilled' ? outcome.value : { status: 'failed', error: outcome.reason?.message || 'Unknown error' };
+          result.details.push(detail);
+
+          if (detail.status === 'skipped') result.skipped++;
+          else if (detail.status === 'failed') result.failed++;
+          else result.processed++;
         }
       }
     }

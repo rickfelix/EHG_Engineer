@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-03-05 2:13:19 PM
+**Generated**: 2026-03-06 12:32:00 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -594,33 +594,6 @@ From retrospectives:
 
 **Time saved**: 2-4 hours per SD by catching infrastructure issues before implementation.
 
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
-
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -718,6 +691,33 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
+
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
 
 ## CI/CD Pipeline Verification
 
@@ -2282,6 +2282,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-03-05*
+*Generated from database: 2026-03-06*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
