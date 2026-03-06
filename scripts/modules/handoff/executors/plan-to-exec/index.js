@@ -22,7 +22,8 @@ import {
   createInfrastructureConsumerCheckGate,
   createIntegrationSectionValidationGate,
   createMigrationDataVerificationGate,
-  createArchitecturalPatternChecklistGate
+  createArchitecturalPatternChecklistGate,
+  createPlanningCompletenessGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -165,6 +166,11 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     // Deliverables Planning (non-blocking)
     gates.push(createDeliverablesPlanningGate(this.supabase, sd));
+
+    // Planning Completeness (SD-LEO-INFRA-UNIVERSAL-PLANNING-COMPLETENESS-003)
+    // 3-ring validation: Individual SD, Orchestrator coherence, Venture foundation
+    // BLOCKING for feature/infrastructure/database/security; ADVISORY for fix/docs/enhancement
+    gates.push(createPlanningCompletenessGate(this.supabase, sd));
 
     // Branch Enforcement
     gates.push(createBranchEnforcementGate(sd, appPath));
