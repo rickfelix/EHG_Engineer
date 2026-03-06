@@ -25,6 +25,14 @@ const BASE_THRESHOLDS = {
 /**
  * Special case minimum thresholds (cannot go below these)
  */
+/**
+ * Yellow band width for near-miss tolerance (GREEN/YELLOW/RED zones)
+ */
+export const YELLOW_BAND_WIDTH = 5;
+
+/**
+ * Special case minimum thresholds (cannot go below these)
+ */
 const SPECIAL_MINIMUMS = {
   PRODUCTION: 90,
   SECURITY: 95,
@@ -180,8 +188,12 @@ export function calculateAdaptiveThreshold(options) {
   // Step 6: Cap at 100% (no artificial cap at 95%, can require 100%)
   const finalThreshold = Math.min(100, thresholdWithSpecialCases);
 
+  const yellowThreshold = Math.max(0, finalThreshold - YELLOW_BAND_WIDTH);
+
   return {
     finalThreshold,
+    yellowThreshold,
+    yellowBandWidth: YELLOW_BAND_WIDTH,
     breakdown: {
       baseThreshold,
       performanceMod,
@@ -196,6 +208,7 @@ export function calculateAdaptiveThreshold(options) {
       performanceMod,
       maturityMod,
       finalThreshold,
+      yellowThreshold,
       gateNumber
     })
   };
@@ -208,7 +221,7 @@ export function calculateAdaptiveThreshold(options) {
  * @returns {string} Reasoning text
  */
 function generateReasoningText(params) {
-  const { sd, baseThreshold, performanceMod, maturityMod, finalThreshold, gateNumber } = params;
+  const { sd, baseThreshold, performanceMod, maturityMod, finalThreshold, yellowThreshold, gateNumber } = params;
 
   const parts = [];
 
@@ -244,6 +257,8 @@ function generateReasoningText(params) {
     parts.push('100% required for emergency hotfix');
   }
 
+  parts.push(`yellow band ${yellowThreshold}-${finalThreshold - 1}%`);
+
   return `Gate ${gateNumber} threshold: ${parts.join(', ')}. Final: ${finalThreshold}%`;
 }
 
@@ -255,20 +270,37 @@ function generateReasoningText(params) {
  * @returns {Object} Pass/fail result with details
  */
 export function checkGatePassed(score, thresholdResult) {
-  const { finalThreshold, reasoning } = thresholdResult;
-  const passed = score >= finalThreshold;
+  const { finalThreshold, yellowThreshold, reasoning } = thresholdResult;
   const margin = score - finalThreshold;
+
+  let zone, passed;
+  if (score >= finalThreshold) {
+    zone = 'GREEN';
+    passed = true;
+  } else if (yellowThreshold !== undefined && score >= yellowThreshold) {
+    zone = 'YELLOW';
+    passed = true;  // Auto-pass with advisory warnings
+  } else {
+    zone = 'RED';
+    passed = false;
+  }
+
+  const messages = {
+    GREEN: `Gate passed: ${score}/${finalThreshold} (margin: +${margin.toFixed(1)}% | GREEN)`,
+    YELLOW: `Gate near-miss passed: ${score}/${finalThreshold} (shortfall: ${Math.abs(margin).toFixed(1)}% within ${YELLOW_BAND_WIDTH}pt tolerance | YELLOW)`,
+    RED: `Gate failed: ${score}/${finalThreshold} (shortfall: ${Math.abs(margin).toFixed(1)}% exceeds ${YELLOW_BAND_WIDTH}pt tolerance | RED)`
+  };
 
   return {
     passed,
+    zone,
     score,
     threshold: finalThreshold,
+    yellowThreshold: yellowThreshold ?? finalThreshold - YELLOW_BAND_WIDTH,
     margin,
     reasoning,
-    status: passed ? 'PASS' : 'FAIL',
-    message: passed
-      ? `Gate passed: ${score}/${finalThreshold} (margin: +${margin.toFixed(1)}%)`
-      : `Gate failed: ${score}/${finalThreshold} (shortfall: ${margin.toFixed(1)}%)`
+    status: zone,
+    message: messages[zone]
   };
 }
 

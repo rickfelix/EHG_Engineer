@@ -9,7 +9,7 @@
  * Refactored from 1,559 LOC monolithic file into focused modules.
  */
 
-import { calculateAdaptiveThreshold } from '../adaptive-threshold-calculator.js';
+import { calculateAdaptiveThreshold, checkGatePassed, YELLOW_BAND_WIDTH } from '../adaptive-threshold-calculator.js';
 import { getPatternStats } from '../pattern-tracking.js';
 import {
   shouldSkipCodeValidation,
@@ -262,12 +262,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     console.log(`\nAdaptive Threshold: ${requiredThreshold.toFixed(1)}%`);
     console.log(`Reasoning: ${thresholdResult.reasoning}`);
 
-    if (validation.score >= requiredThreshold) {
-      validation.passed = true;
-      console.log(`✅ GATE 2: PASSED (${validation.score} ≥ ${requiredThreshold.toFixed(1)} points)`);
+    const gateResult = checkGatePassed(validation.score, thresholdResult);
+    validation.passed = gateResult.passed;
+    validation.zone = gateResult.zone;
+
+    if (gateResult.zone === 'GREEN') {
+      console.log(`✅ GATE 2: PASSED (${validation.score} >= ${requiredThreshold.toFixed(1)} | GREEN)`);
+    } else if (gateResult.zone === 'YELLOW') {
+      console.log(`🟡 GATE 2: PASSED (${validation.score} >= ${gateResult.yellowThreshold} | YELLOW — within ${YELLOW_BAND_WIDTH}pt tolerance of ${requiredThreshold.toFixed(1)})`);
+      validation.warnings.push(`Score ${validation.score} is in YELLOW zone (${gateResult.yellowThreshold}-${requiredThreshold.toFixed(0)}). Passed with advisory.`);
     } else {
-      validation.passed = false;
-      console.log(`❌ GATE 2: FAILED (${validation.score} < ${requiredThreshold.toFixed(1)} points)`);
+      console.log(`🔴 GATE 2: FAILED (${validation.score} < ${gateResult.yellowThreshold} | RED)`);
     }
 
     if (validation.issues.length > 0) {
