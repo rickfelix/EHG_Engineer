@@ -96,12 +96,6 @@
     {
       "severity": "MEDIUM",
       "category": "api-error",
-      "description": "HTTP 400: https://dedlbzhpgkmetvhbkyzq.supabase.co/rest/v1/crewai_agents?select=*%2Cdepartment%3Aagent_departments%28*%29&status=eq.active&order=created_at.desc",
-      "timestamp": "2026-02-06T23:17:59.155Z"
-    },
-    {
-      "severity": "MEDIUM",
-      "category": "api-error",
       "description": "HTTP 404: http://localhost:8080/api/placeholder/150/150",
       "timestamp": "2026-02-06T23:17:59.155Z"
     }
@@ -112,11 +106,11 @@
     "partial": 0,
     "failed": 0,
     "overallPassRate": 1,
-    "totalFindings": 9,
+    "totalFindings": 8,
     "criticalFindings": 0,
     "highFindings": 0,
-    "mediumFindings": 6,
+    "mediumFindings": 5,
     "consoleErrors": 5,
-    "apiErrors": 6
+    "apiErrors": 5
   }
 }

@@ -73,14 +73,14 @@ const STORY_IMPROVEMENTS = {
     acceptance_criteria: [
       'Given the migration script is executed, When the DBA runs the Core Tables migration, Then portfolios table is created with columns: id, name, description, created_at, owner_id and appropriate constraints (PK, NOT NULL, FK to users)',
       'Given the migration completes successfully, When querying information_schema, Then ventures table exists with all required columns: id, portfolio_id, name, stage_id, status, metrics (JSONB), created_at and foreign key relationships to portfolios and venture_stages are enforced',
-      'Given the migration completes successfully, When querying information_schema, Then crewai_crews table exists with columns: id, crew_name, crew_type, agent_composition (JSONB), capabilities (JSONB), status and appropriate indexes for crew_name and crew_type lookups',
+      'Given the migration completes successfully, When querying information_schema, Then all required tables exist with appropriate columns, constraints, and indexes',
       'Given all tables are created, When the DBA tests basic CRUD operations, Then INSERT, SELECT, UPDATE, DELETE operations succeed on all three tables with proper referential integrity enforcement (e.g., cannot delete portfolio if ventures exist)'
     ],
     implementation_context: {
       migration_file: 'Create database/migrations/002_core_tables.sql with CREATE TABLE statements. Follow naming conventions: snake_case, singular table names avoided, use created_at/updated_at timestamps.',
-      schema_design: 'portfolios: Primary entity for grouping ventures. ventures: Core business entity with JSONB for flexible metrics. crewai_crews: Registry of AI agent teams with capability metadata.',
-      indexes: 'Add indexes: portfolios(owner_id), ventures(portfolio_id, stage_id, status), crewai_crews(crew_name, crew_type). Use GIN index for JSONB columns if querying nested fields.',
-      rls_policies: 'Enable RLS on all tables. Create policies: portfolios (owner can CRUD), ventures (portfolio owner can CRUD), crewai_crews (admin only can write, all can read).',
+      schema_design: 'portfolios: Primary entity for grouping ventures. ventures: Core business entity with JSONB for flexible metrics.',
+      indexes: 'Add indexes: portfolios(owner_id), ventures(portfolio_id, stage_id, status). Use GIN index for JSONB columns if querying nested fields.',
+      rls_policies: 'Enable RLS on all tables. Create policies: portfolios (owner can CRUD), ventures (portfolio owner can CRUD).',
       rollback: 'Create corresponding down migration: 003_rollback_core_tables.sql with DROP TABLE statements in reverse dependency order.'
     }
   },
@@ -157,13 +157,13 @@ const STORY_IMPROVEMENTS = {
     user_benefit: 'Enables natural language interaction with EVA without requiring Rick to learn specific command syntax or navigate complex UIs, accelerating directive issuance and reducing cognitive load by allowing business intent expression in plain English that EVA automatically translates to structured crewAI task assignments.',
     acceptance_criteria: [
       'Given Rick types a natural language directive like "Analyze the Acme Corp opportunity and generate investment memo", When submitted through EVA interface, Then EVA NLP engine parses the text, extracts intent (venture_analysis), entities (company: Acme Corp, output: investment_memo), and creates directive record in directives table',
-      'Given EVA receives a parsed directive, When intent classification completes with confidence >80%, Then EVA automatically selects the appropriate crewAI crew (e.g., VentureAnalysisCrew) from crewai_crews table based on intent→crew mapping and creates task delegation in delegation_chain table',
+      'Given EVA receives a parsed directive, When intent classification completes with confidence >80%, Then EVA automatically selects the appropriate agent team based on intent mapping and creates task delegation in delegation_chain table',
       'Given intent confidence is <80% (ambiguous directive), When EVA cannot confidently classify, Then EVA prompts Rick with clarification questions: "Did you mean: A) Analyze financials, B) Analyze market fit, C) Both?" and waits for Rick response before proceeding',
       'Given EVA delegates to a crew, When delegation completes, Then Rick receives confirmation message: "Directive received. VentureAnalysisCrew is analyzing Acme Corp. Estimated completion: 2 hours. I will notify you when ready." with task tracking link'
     ],
     implementation_context: {
       nlp_engine: 'Use OpenAI GPT-4 or Claude for intent classification. System prompt: "Extract intent category and entities from this venture directive." Parse JSON response: {intent, entities[], confidence}.',
-      intent_mapping: 'Create intent_crew_mapping table: intent_category (varchar), crew_name (FK to crewai_crews), priority. Query this table after classification to determine which crew handles which intent.',
+      intent_mapping: 'Create intent_mapping table: intent_category (varchar), team_name (varchar), priority. Query this table after classification to determine which team handles which intent.',
       workflow: 'Rick input → EVA /api/directives POST → NLP parse → confidence check → if >80%: auto-delegate, else: ask clarification → create directive record → create delegation_chain → return confirmation.',
       ui_components: 'Simple textarea for directive input. Submit button. Response area showing EVA acknowledgment or clarification questions. Task tracking panel showing active directives status.',
       error_handling: 'If NLP API fails, log error, show Rick: "EVA is temporarily unavailable. Please try again." Store directive as status="pending_nlp" for retry queue.'

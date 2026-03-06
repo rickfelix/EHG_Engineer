@@ -22,7 +22,7 @@ const prd = {
   executive_summary: `
 ## Executive Summary
 
-Build a comprehensive multi-agent AI research platform using CrewAI framework to automate venture analysis and opportunity validation. The platform will consist of 40+ specialized AI agents organized into 11 functional departments, integrated with EVA (Chairman's AI assistant) as the central orchestrator.
+Build a comprehensive multi-agent AI research platform to automate venture analysis and opportunity validation. The platform will consist of 40+ specialized AI agents organized into 11 functional departments, integrated with EVA (Chairman's AI assistant) as the central orchestrator.
 
 **Key Objectives:**
 - Replace manual research (weeks) with automated AI analysis (hours)
@@ -65,7 +65,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 
 **Backend:**
 - Python 3.11+ with FastAPI framework
-- CrewAI 0.70+ for agent orchestration
+- Agent orchestration framework
 - Pydantic for data validation
 - asyncio for concurrent operations
 
@@ -78,7 +78,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 **AI & ML:**
 - OpenAI GPT-4 Turbo for agent reasoning
 - text-embedding-ada-002 for vectorization
-- CrewAI Flows for multi-stage orchestration
+- Multi-stage agent orchestration flows
 - Hierarchical agent teams (CEO, department heads, specialists)
 
 **External Integrations (FREE):**
@@ -143,7 +143,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
   - Chairman can query EVA for research status and interim results
   - Integration with existing EVA conversation history
 - **Technical Notes:**
-  - Extend EVA's function calling with CrewAI crew execution
+  - Extend EVA's function calling with agent crew execution
   - Store session state in \`eva_sessions\` table
   - Real-time status updates via WebSocket
 
@@ -282,7 +282,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 
 ### Phase 3: EVA Orchestration (Sprint 5, 28 points)
 
-**US-012: CrewAI Flows Orchestration** (8 points, HIGH)
+**US-012: Agent Flows Orchestration** (8 points, HIGH)
 - **As a** system architect
 - **I want** multi-stage research workflows
 - **So that** complex research tasks execute in proper sequence
@@ -291,7 +291,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
   - Sequential execution with dependency management
   - Parallel execution of independent agents
   - Error handling and retry logic for failed agent calls
-- **CrewAI Flows Features:**
+- **Agent Flows Features:**
   - Conditional branching based on intermediate results
   - State persistence between flow steps
 
@@ -327,7 +327,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 - **Acceptance Criteria:**
   - Agents publish findings to shared context (Redis pub/sub)
   - Agents subscribe to topics relevant to their domain
-  - CrewAI context sharing enabled across crews
+  - Context sharing enabled across agent crews
   - Communication logged for debugging and learning
 
 **US-016: EVA Action Execution & Coordination** (5 points, CRITICAL)
@@ -346,7 +346,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 
 #### Sprint 6 (21 points) - Executive & Organizational Framework
 
-**US-017: CrewAI Hierarchical Agent Configuration** (8 points, CRITICAL)
+**US-017: Hierarchical Agent Configuration** (8 points, CRITICAL)
 - **As a** system architect
 - **I want** hierarchical agent teams mirroring org structure
 - **So that** research follows realistic delegation and accountability
@@ -355,7 +355,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
   - Department heads manage specialist agents
   - Task assignment based on agent role and expertise
   - Clear reporting hierarchy in research output
-- **CrewAI Implementation:** Manager agents with task delegation to subordinate agents
+- **Implementation:** Manager agents with task delegation to subordinate agents
 
 **US-018: Organizational Structure Framework** (8 points, CRITICAL)
 - **As a** platform designer
@@ -392,7 +392,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
   - Backstories include industry experience, expertise areas, decision-making style
   - Agents reference backstory in their reasoning
   - Admin UI to edit backstories without code changes
-- **Schema:** \`crewai_agents\` table with \`role\`, \`goal\`, \`backstory\`, \`expertise\` fields
+- **Schema:** Agent configuration with \`role\`, \`goal\`, \`backstory\`, \`expertise\` fields
 
 ---
 
@@ -403,7 +403,7 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 - **I want** to delegate tasks to subordinate agents
 - **So that** complex research decomposes into manageable sub-tasks
 - **Acceptance Criteria:**
-  - CrewAI tasks assigned to specific agents
+  - Tasks assigned to specific agents
   - Tasks have context, expected output, and dependencies
   - Manager reviews subordinate outputs before aggregation
   - Retry logic for failed tasks
@@ -579,48 +579,13 @@ Multi-agent AI platform that orchestrates specialized research agents to automat
 ### New Tables Required
 
 \`\`\`sql
--- Agent configuration
-CREATE TABLE crewai_agents (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_key VARCHAR(100) UNIQUE NOT NULL,
-  name VARCHAR(200) NOT NULL,
-  role TEXT NOT NULL,
-  goal TEXT NOT NULL,
-  backstory TEXT NOT NULL,
-  department_id UUID REFERENCES agent_departments(id),
-  tools TEXT[] DEFAULT '{}',
-  llm_model VARCHAR(50) DEFAULT 'gpt-4-turbo-preview',
-  status VARCHAR(20) DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Organizational hierarchy
 CREATE TABLE agent_departments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   department_name VARCHAR(100) UNIQUE NOT NULL,
-  department_head_id UUID REFERENCES crewai_agents(id),
   parent_department_id UUID REFERENCES agent_departments(id),
   description TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- CrewAI crews (teams of agents)
-CREATE TABLE crewai_crews (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  crew_name VARCHAR(100) UNIQUE NOT NULL,
-  crew_type VARCHAR(50), -- 'sequential', 'hierarchical', 'parallel'
-  manager_agent_id UUID REFERENCES crewai_agents(id),
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Crew membership
-CREATE TABLE crew_members (
-  crew_id UUID REFERENCES crewai_crews(id),
-  agent_id UUID REFERENCES crewai_agents(id),
-  role_in_crew VARCHAR(50), -- 'leader', 'member', 'reviewer'
-  PRIMARY KEY (crew_id, agent_id)
 );
 
 -- Research sessions
@@ -883,7 +848,7 @@ GET    /api/eva/sessions                    # Get EVA's sessions
 **Risk 2: Agent Orchestration Complexity**
 - **Impact:** 40+ agents hard to coordinate, debug, optimize
 - **Mitigation:**
-  - Use proven CrewAI framework (battle-tested)
+  - Use proven agent orchestration framework
   - Start small (4 agents) and scale incrementally
   - Comprehensive logging and debugging tools
 
@@ -970,7 +935,7 @@ GET    /api/eva/sessions                    # Get EVA's sessions
 
 1. **Python 3.11+** installed
 2. **FastAPI framework** knowledge
-3. **CrewAI 0.70+** familiarity
+3. **Agent orchestration framework** familiarity
 4. **PostgreSQL pgvector** extension
 
 ---
@@ -993,12 +958,12 @@ GET    /api/eva/sessions                    # Get EVA's sessions
 
 ### Glossary
 
-- **CrewAI:** Python framework for orchestrating AI agents with roles, goals, and tasks
+- **Agent Orchestration:** Framework for orchestrating AI agents with roles, goals, and tasks
 - **pgvector:** PostgreSQL extension for vector similarity search
 - **EVA:** Chairman's AI assistant (existing system)
 - **TAM/SAM/SOM:** Total Addressable Market / Serviceable Available Market / Serviceable Obtainable Market
 - **RLS:** Row Level Security (PostgreSQL security feature)
-- **Hierarchical Crew:** CrewAI pattern where manager agent delegates to subordinate agents
+- **Hierarchical Crew:** Pattern where manager agent delegates to subordinate agents
 
 ---
 
@@ -1015,8 +980,8 @@ GET    /api/eva/sessions                    # Get EVA's sessions
     { text: 'PRD created and saved to database', checked: true },
     { text: 'All 33 user stories documented with acceptance criteria', checked: true },
     { text: 'Free API integrations researched and documented', checked: true },
-    { text: 'Technical architecture defined (CrewAI + FastAPI + pgvector)', checked: true },
-    { text: 'Database schema designed (8 new tables)', checked: true },
+    { text: 'Technical architecture defined (Agent orchestration + FastAPI + pgvector)', checked: true },
+    { text: 'Database schema designed (new tables)', checked: true },
     { text: 'API endpoints specified (15 routes)', checked: true },
     { text: 'Test plan comprehensive (300+ unit, 50+ integration, 10+ E2E)', checked: true },
     { text: 'Security controls documented (RLS, rate limiting, cost controls)', checked: true },
@@ -1033,10 +998,10 @@ GET    /api/eva/sessions                    # Get EVA's sessions
     { text: 'Sprint 5: EVA Orchestration (28 points)', checked: false },
     { text: 'Sprint 6-8: Hierarchical Organization (42 points)', checked: false },
     { text: 'Sprint 9-14: Department Teams (84 points)', checked: false },
-    { text: 'Database migrations applied (8 tables created)', checked: false },
+    { text: 'Database migrations applied', checked: false },
     { text: 'FastAPI service deployed', checked: false },
     { text: 'Free API integrations tested (OpenVC, Growjo, Reddit, HN)', checked: false },
-    { text: 'CrewAI agents configured (40+ agents)', checked: false },
+    { text: 'AI agents configured (40+ agents)', checked: false },
     { text: 'EVA integration complete', checked: false },
     { text: 'Knowledge base operational (pgvector)', checked: false },
     { text: 'Unit tests passing (300+)', checked: false },

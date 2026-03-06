@@ -171,7 +171,7 @@ const userStories = [
         scenario: 'Happy path - VP assigns to Crew',
         given: 'VP Market Intelligence receives task',
         when: 'VP creates work assignments for Crew members (Market Analyst, Competitive Analyst)',
-        then: 'Crew work_items created in crew_work table AND crew_members assigned AND work status=in_progress'
+        then: 'Work items created in work table AND team members assigned AND work status=in_progress'
       },
       {
         id: 'AC-002-5',
