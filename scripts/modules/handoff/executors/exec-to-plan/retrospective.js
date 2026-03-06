@@ -411,7 +411,7 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
       performance_impact: 'Standard',
-      target_application: 'EHG_Engineer',
+      target_application: sd.target_application || 'EHG_Engineer',
       learning_category: 'IMPLEMENTATION_REVIEW',
       related_files: [],
       related_commits: [],

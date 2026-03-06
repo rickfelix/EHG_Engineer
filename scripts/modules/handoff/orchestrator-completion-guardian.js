@@ -521,7 +521,7 @@ export class OrchestratorCompletionGuardian {
         quality_score: 80,
         generated_by: 'SUB_AGENT',
         trigger_event: 'Orchestrator auto-completion',
-        target_application: 'EHG_Engineer',
+        target_application: this.parentData?.target_application || 'EHG_Engineer',
         learning_category: 'PROCESS_IMPROVEMENT',
         affected_components: this.childData.map(c => c.id)
       });
