@@ -51,6 +51,21 @@ export function createSuccessMetricsVerificationGate(supabase) {
         };
       }
 
+      // Child SD detection: child SDs have scoped metrics that typically can't be
+      // independently verified (they report on sub-components, not full-system metrics
+      // like "test pass rate" or "coverage %"). Treat as advisory.
+      let isChildSD = false;
+      try {
+        const { data: parentCheck } = await supabase
+          .from('strategic_directives_v2')
+          .select('parent_sd_id')
+          .eq('id', sdUuid)
+          .single();
+        isChildSD = !!parentCheck?.parent_sd_id;
+      } catch {
+        // Fail-open: if check fails, treat as standalone
+      }
+
       // SD type check — disabled types auto-pass
       if (DISABLED_SD_TYPES.has(sdType)) {
         console.log(`   ℹ️  SD type '${sdType}' — metric verification disabled`);
@@ -61,7 +76,10 @@ export function createSuccessMetricsVerificationGate(supabase) {
         };
       }
 
-      const isAdvisory = ADVISORY_SD_TYPES.has(sdType);
+      const isAdvisory = ADVISORY_SD_TYPES.has(sdType) || isChildSD;
+      if (isChildSD) {
+        console.log('   👶 Child SD detected — metric verification advisory (scoped metrics)');
+      }
       console.log(`   SD Type: ${sdType} (${isAdvisory ? 'ADVISORY' : 'REQUIRED'})`);
 
       // Fetch SD success_metrics
@@ -141,6 +159,7 @@ export function createSuccessMetricsVerificationGate(supabase) {
           verification_results: results,
           overall_score: overallScore,
           threshold: SCORE_THRESHOLD,
+          is_child_sd: isChildSD,
           enforcement: isAdvisory ? 'advisory' : 'required',
           verified_count: results.filter(r => r.status === 'verified').length,
           mismatch_count: results.filter(r => r.status === 'mismatch').length,
