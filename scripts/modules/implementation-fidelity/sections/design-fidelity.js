@@ -6,6 +6,7 @@
  */
 
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
+import { getSectionEnforcement } from '../sd-type-section-policy.js';
 
 /**
  * Validate Design Implementation Fidelity
@@ -28,6 +29,22 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
     console.log('   ✅ Section A exempt via gate2_exempt_sections (25/25)');
     return;
   }
+
+  // Centralized SD-type section enforcement policy (fallback after DB exemptions)
+  const sdType = validation.details.sd_type || '';
+  const enforcement = getSectionEnforcement(sdType, 'A');
+  if (enforcement === 'SKIP') {
+    validation.score += 25;
+    validation.gate_scores.design_fidelity = 25;
+    validation.details.design_fidelity = {
+      skipped: true,
+      reason: `Section A skipped for ${sdType} SD (policy: SKIP)`
+    };
+    console.log(`   ✅ Section A skipped for ${sdType} SD - full credit (25/25)`);
+    return;
+  }
+  const isAdvisory = enforcement === 'ADVISORY';
+  const issueCountBefore = validation.issues.length;
 
   // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI requirements (hardcoded fallback)
   try {
@@ -245,6 +262,14 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
   } catch (_error) {
     sectionScore += 3;
     console.log('   ⚠️  Cannot verify CRUD operations (3/5)');
+  }
+
+  // ADVISORY mode: convert issues to warnings, award full credit
+  if (isAdvisory) {
+    const newIssues = validation.issues.splice(issueCountBefore);
+    validation.warnings.push(...newIssues.map(i => `[ADVISORY] ${i}`));
+    sectionScore = 25;
+    console.log(`   ℹ️  Section A in ADVISORY mode for ${sdType} SD - full credit (25/25)`);
   }
 
   validation.score += sectionScore;

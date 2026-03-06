@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
+import { getSectionEnforcement } from '../sd-type-section-policy.js';
 
 /**
  * Validate Database Implementation Fidelity
@@ -34,6 +35,22 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
     console.log('   ✅ Section B fully exempt for this SD type (35/35)');
     return;
   }
+
+  // Centralized SD-type section enforcement policy (fallback after DB exemptions)
+  const sdType = validation.details.sd_type || '';
+  const enforcement = getSectionEnforcement(sdType, 'B');
+  if (enforcement === 'SKIP') {
+    validation.score += 35;
+    validation.gate_scores.database_fidelity = 35;
+    validation.details.database_fidelity = {
+      skipped: true,
+      reason: `Section B skipped for ${sdType} SD (policy: SKIP)`
+    };
+    console.log(`   ✅ Section B skipped for ${sdType} SD - full credit (35/35)`);
+    return;
+  }
+  const isAdvisory = enforcement === 'ADVISORY';
+  const issueCountBefore = validation.issues.length;
 
   if (!databaseAnalysis) {
     validation.warnings.push('[B] No DATABASE analysis found - skipping database fidelity check');
@@ -173,6 +190,14 @@ export async function validateDatabaseFidelity(sd_id, databaseAnalysis, validati
   } else {
     sectionScore += 3;
     console.log('   ⚠️  No migration to check complexity (3/5)');
+  }
+
+  // ADVISORY mode: convert issues to warnings, award full credit
+  if (isAdvisory) {
+    const newIssues = validation.issues.splice(issueCountBefore);
+    validation.warnings.push(...newIssues.map(i => `[ADVISORY] ${i}`));
+    sectionScore = 35;
+    console.log(`   ℹ️  Section B in ADVISORY mode for ${sdType} SD - full credit (35/35)`);
   }
 
   validation.score += sectionScore;

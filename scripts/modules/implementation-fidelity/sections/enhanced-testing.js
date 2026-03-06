@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { readdir } from 'fs/promises';
 import path from 'path';
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
+import { getSectionEnforcement } from '../sd-type-section-policy.js';
 
 /**
  * Validate Enhanced Testing
@@ -20,6 +21,22 @@ import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../uti
  * @param {Object} supabase - Supabase client
  */
 export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
+  // Centralized SD-type section enforcement policy
+  const sdType = validation.details.sd_type || '';
+  const enforcement = getSectionEnforcement(sdType, 'D');
+  if (enforcement === 'SKIP') {
+    validation.score += 25;
+    validation.gate_scores.enhanced_testing = 25;
+    validation.details.enhanced_testing = {
+      skipped: true,
+      reason: `Section D skipped for ${sdType} SD (policy: SKIP)`
+    };
+    console.log(`   ✅ Section D skipped for ${sdType} SD - full credit (25/25)`);
+    return;
+  }
+  const isAdvisory = enforcement === 'ADVISORY';
+  const issueCountBefore = validation.issues.length;
+
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -199,6 +216,14 @@ export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAna
   } else {
     sectionScore += 2;
     console.log('   ⚠️  No handoff metadata found (2/3)');
+  }
+
+  // ADVISORY mode: convert issues to warnings, award full credit
+  if (isAdvisory) {
+    const newIssues = validation.issues.splice(issueCountBefore);
+    validation.warnings.push(...newIssues.map(i => `[ADVISORY] ${i}`));
+    sectionScore = 25;
+    console.log(`   ℹ️  Section D in ADVISORY mode for ${sdType} SD - full credit (25/25)`);
   }
 
   validation.score += sectionScore;
