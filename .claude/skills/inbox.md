@@ -1,3 +1,7 @@
+---
+description: "/inbox - Unified Inbox Command"
+---
+
 # /inbox - Feedback Management Command
 
 Manage feedback items (issues and enhancements) directly from the CLI.

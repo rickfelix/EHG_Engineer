@@ -1,3 +1,7 @@
+---
+description: "Manage feature flags with lifecycle governance, approvals, and audit history"
+---
+
 # /flags - Feature Flag Governance Command
 
 Manage feature flags with lifecycle governance, approvals, and audit history.

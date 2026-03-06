@@ -151,6 +151,38 @@ async function createQuickFix(options = {}) {
     process.exit(1);
   }
 
+  // EVA Pre-Check: warn if vision/architecture docs exist for this topic
+  try {
+    const topicWords = (title + ' ' + description).toLowerCase();
+    const { data: visionDocs } = await supabase
+      .from('eva_vision_documents')
+      .select('vision_key, status')
+      .eq('status', 'active')
+      .limit(50);
+    const { data: archPlans } = await supabase
+      .from('eva_architecture_plans')
+      .select('plan_key, status')
+      .eq('status', 'active')
+      .limit(50);
+
+    const matchingVision = (visionDocs || []).filter(v =>
+      topicWords.includes(v.vision_key.toLowerCase().replace(/-/g, ' ').replace(/vision/i, '').trim())
+    );
+    const matchingArch = (archPlans || []).filter(a =>
+      topicWords.includes(a.plan_key.toLowerCase().replace(/-/g, ' ').replace(/arch/i, '').trim())
+    );
+
+    if (matchingVision.length > 0 || matchingArch.length > 0) {
+      console.log('⚠️  EVA PRE-CHECK WARNING:');
+      console.log('   Matching EVA documents found — scope may exceed Quick Fix limits:');
+      for (const v of matchingVision) console.log(`     Vision: ${v.vision_key}`);
+      for (const a of matchingArch) console.log(`     Arch:   ${a.plan_key}`);
+      console.log('   Consider creating a full SD instead.\n');
+    }
+  } catch {
+    // EVA pre-check is non-blocking — continue even if it fails
+  }
+
   // Generate ID
   const qfId = generateQuickFixId();
 

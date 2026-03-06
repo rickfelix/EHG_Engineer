@@ -1,3 +1,7 @@
+---
+description: "Identify and remediate barrel export anti-patterns that impact bundle size and tree-shaking"
+---
+
 # Barrel Import Remediation Protocol
 
 ## Overview

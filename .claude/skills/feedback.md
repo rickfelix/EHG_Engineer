@@ -1,3 +1,7 @@
+---
+description: "/feedback - Feedback Management (Alias)"
+---
+
 # /feedback - Feedback Management (Alias)
 
 **This is an alias for `/inbox`**

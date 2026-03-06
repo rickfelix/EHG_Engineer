@@ -1,3 +1,7 @@
+---
+description: "Create, version, and manage L1 portfolio and L2 venture-specific vision documents in EVA"
+---
+
 # /eva vision - EVA Vision Document Manager
 
 Create, version, and manage L1 (portfolio) and L2 (venture-specific) vision documents

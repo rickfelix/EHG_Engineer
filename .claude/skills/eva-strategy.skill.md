@@ -1,3 +1,7 @@
+---
+description: "Manage annual strategic themes derived from EVA vision documents"
+---
+
 # /eva strategy - Strategic Theme Management
 
 Manage annual strategic themes derived from vision documents.

@@ -1,3 +1,7 @@
+---
+description: "Score a Strategic Directive against active EVA Vision and Architecture documents for alignment validation"
+---
+
 # /eva score - EVA Vision Alignment Scorer
 
 Score a Strategic Directive or build scope against the active EVA Vision and Architecture

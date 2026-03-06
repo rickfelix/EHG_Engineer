@@ -1,3 +1,7 @@
+---
+description: "Manage monthly OKR lifecycle: generation, review, history, vision linkage, and archival"
+---
+
 # /eva okr - Monthly OKR Lifecycle Management
 
 Manage the monthly OKR lifecycle: generation, review, history, vision linkage, and archival.
