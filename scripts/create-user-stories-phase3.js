@@ -20,20 +20,20 @@ const stories = [
     story_key: 'US-001',
     title: 'Generate Python Code from Visual Workflow',
     user_role: 'workflow designer',
-    user_want: 'generate CrewAI Flows Python code from my visual workflow definition',
+    user_want: 'generate Python code from my visual workflow definition',
     user_benefit: 'I can execute my board meeting workflows programmatically',
     acceptance_criteria: [
       'User can click Generate Code button on workflow canvas',
-      'System generates Python code with CrewAI decorators (@start, @listen, @router)',
+      'System generates Python code with workflow decorators (@start, @listen, @router)',
       'Generated code includes all nodes (Start, Agent Task, Decision, Router, Parallel, Wait, End)',
       'Code is syntactically valid (AST validation)',
-      'Generated code is stored in crewai_flows.python_code column',
+      'Generated code is stored in workflow definitions',
       'User sees code preview in modal with syntax highlighting'
     ],
     priority: 'critical',
     story_points: 8,
     depends_on: [],
-    technical_notes: 'Use AST (Abstract Syntax Tree) validation for Python syntax checking. Support all CrewAI Flow decorators. Prerequisite: crewai_flows table from Phase 1.'
+    technical_notes: 'Use AST (Abstract Syntax Tree) validation for Python syntax checking. Support all workflow decorators. Prerequisite: workflow definitions table from Phase 1.'
   },
   {
     story_key: 'US-002',
@@ -45,7 +45,7 @@ const stories = [
       'User can click Execute Workflow button',
       'System creates Docker container with resource limits (2GB RAM, 2 CPUs, 5min timeout)',
       'Python code executes in isolated environment',
-      'Execution status tracked in crewai_flow_executions table',
+      'Execution status tracked in workflow executions table',
       'User sees real-time execution progress',
       'System handles timeouts gracefully (>5min = cancelled)',
       'Execution results stored with input/output state'
@@ -63,7 +63,7 @@ const stories = [
     user_benefit: 'I can review board meeting outcomes and decisions',
     acceptance_criteria: [
       'User navigates to Execution History tab',
-      'System displays list of past executions from crewai_flow_executions table',
+      'System displays list of past executions from workflow executions table',
       'Each execution shows: date, status (pending/running/completed/failed), duration',
       'User can click execution to see detailed results',
       'Detail view shows input state, output state, error messages (if failed)',
@@ -73,7 +73,7 @@ const stories = [
     priority: 'high',
     story_points: 5,
     depends_on: [],
-    technical_notes: 'Use existing execution tracking schema. Support JSON state visualization. Prerequisites: US-002, crewai_flow_executions table.'
+    technical_notes: 'Use existing execution tracking schema. Support JSON state visualization. Prerequisites: US-002, workflow executions table.'
   },
   {
     story_key: 'US-004',
@@ -84,7 +84,7 @@ const stories = [
     acceptance_criteria: [
       'System validates Python syntax (AST check) before saving',
       'System checks for restricted imports (os, subprocess, socket, etc.)',
-      'System enforces whitelist: crewai, anthropic, openai libraries only',
+      'System enforces whitelist: anthropic, openai libraries only',
       'Validation errors shown to user with line numbers',
       'Invalid code cannot be executed',
       'Validation results logged for audit'
@@ -102,7 +102,7 @@ const stories = [
     user_benefit: 'I can debug and fix my workflows',
     acceptance_criteria: [
       'System captures Python exceptions during execution',
-      'Error message, stack trace, error type stored in crewai_flow_executions',
+      'Error message, stack trace, error type stored in workflow executions',
       'User sees formatted error with line numbers',
       'System suggests common fixes for known errors',
       'Execution marked as failed in database',
@@ -129,7 +129,7 @@ const stories = [
     priority: 'medium',
     story_points: 3,
     depends_on: [],
-    technical_notes: 'Use existing board_meeting_id foreign key in crewai_flow_executions. Prerequisites: US-003, board_meetings table from SD-BOARD-GOVERNANCE-001.'
+    technical_notes: 'Use existing board_meeting_id foreign key in workflow executions. Prerequisites: US-003, board_meetings table from SD-BOARD-GOVERNANCE-001.'
   },
   {
     story_key: 'US-007',
@@ -148,7 +148,7 @@ const stories = [
     priority: 'medium',
     story_points: 5,
     depends_on: [],
-    technical_notes: 'Use token_count, cost_usd, duration_ms columns in crewai_flow_executions. Prerequisites: US-003.'
+    technical_notes: 'Use token_count, cost_usd, duration_ms columns in workflow executions. Prerequisites: US-003.'
   },
   {
     story_key: 'US-008',
@@ -161,7 +161,7 @@ const stories = [
       'System generates .py file with complete workflow code',
       'Exported code includes imports and boilerplate',
       'File download with workflow name (e.g., weekly-board-meeting.py)',
-      'Exported code runs standalone with crewai installed',
+      'Exported code runs standalone with workflow engine installed',
       'README included with setup instructions'
     ],
     priority: 'low',

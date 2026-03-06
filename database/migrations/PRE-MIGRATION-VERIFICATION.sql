@@ -13,10 +13,6 @@ FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN (
     'agent_departments',
-    'agent_tools',
-    'crewai_agents',
-    'crewai_crews',
-    'crew_members',
     'ab_test_results',
     'search_preferences',
     'agent_executions',
@@ -35,8 +31,6 @@ WHERE event_object_schema = 'public'
     trigger_name LIKE '%validate_sd_progress%' OR
     event_object_table IN (
       'agent_departments',
-      'agent_tools',
-      'crewai_agents',
       'ab_test_results',
       'search_preferences',
       'agent_executions',
@@ -55,8 +49,6 @@ FROM pg_policies
 WHERE schemaname = 'public'
   AND tablename IN (
     'agent_departments',
-    'agent_tools',
-    'crewai_agents',
     'ab_test_results',
     'search_preferences',
     'agent_executions',
@@ -72,15 +64,6 @@ BEGIN
     PERFORM COUNT(*) FROM agent_departments;
   END IF;
 
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'agent_tools') THEN
-    RAISE NOTICE 'agent_tools exists';
-    PERFORM COUNT(*) FROM agent_tools;
-  END IF;
-
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'crewai_agents') THEN
-    RAISE NOTICE 'crewai_agents exists';
-    PERFORM COUNT(*) FROM crewai_agents;
-  END IF;
 END $$;
 
 -- 5. Check if strategic_directives_v2 table exists and has trigger

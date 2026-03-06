@@ -42,7 +42,7 @@ const backlogItems = {
       phase: 'LEAD'
     },
     {
-      backlog_title: 'Establish CrewAI Agent Hierarchy',
+      backlog_title: 'Establish AI Agent Hierarchy',
       description_raw: 'Define Chairman→EVA→Board→CEO/VPs/Managers hierarchy for AI agents',
       item_description: 'Document the AI agent hierarchy from Chairman assistant (EVA) through Board of Directors to company-level AI executives',
       priority: 'High',
@@ -153,18 +153,9 @@ const backlogItems = {
   // ============================================================================
   'SD-IDEATION-AGENTS-001': [
     {
-      backlog_title: 'Install CrewAI Framework',
-      description_raw: 'Install and configure CrewAI Python framework',
-      item_description: 'pip install crewai crewai-tools, configure hierarchical crew process with manager delegation',
-      priority: 'High',
-      stage_number: 1,
-      phase: 'EXEC',
-      new_module: true
-    },
-    {
-      backlog_title: 'Create Agent Registry Table',
-      description_raw: 'Database table for agent configurations',
-      item_description: 'CREATE TABLE crewai_agents with role, goal, backstory, tools, llm_config, delegation_enabled',
+      backlog_title: 'Install Agent Orchestration Framework',
+      description_raw: 'Install and configure agent orchestration Python framework',
+      item_description: 'Install agent orchestration framework, configure hierarchical process with manager delegation',
       priority: 'High',
       stage_number: 1,
       phase: 'EXEC',
@@ -173,7 +164,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Market Sizing Analyst',
       description_raw: 'Build TAM/SAM/SOM calculation agent',
-      item_description: 'CrewAI agent for market sizing with market_data_api tool, gpt-4o-mini LLM, estimated cost $0.02-0.05',
+      item_description: 'AI agent for market sizing with market_data_api tool, gpt-4o-mini LLM, estimated cost $0.02-0.05',
       priority: 'High',
       stage_number: 2,
       phase: 'EXEC',
@@ -182,7 +173,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Pain Point Validator',
       description_raw: 'Build social data validation agent',
-      item_description: 'CrewAI agent for pain point validation using reddit_api and sentiment_analyzer tools',
+      item_description: 'AI agent for pain point validation using reddit_api and sentiment_analyzer tools',
       priority: 'High',
       stage_number: 2,
       phase: 'EXEC',
@@ -191,7 +182,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Competitive Intel Mapper',
       description_raw: 'Build competitive landscape mapping agent',
-      item_description: 'CrewAI agent for competitive intelligence using web_search and company_database tools, gpt-4o LLM',
+      item_description: 'AI agent for competitive intelligence using web_search and company_database tools, gpt-4o LLM',
       priority: 'High',
       stage_number: 2,
       phase: 'EXEC',
@@ -200,7 +191,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Strategic Fit Analyzer',
       description_raw: 'Build portfolio alignment assessment agent',
-      item_description: 'CrewAI agent for strategic fit using portfolio_analyzer and synergy_detector tools',
+      item_description: 'AI agent for strategic fit using portfolio_analyzer and synergy_detector tools',
       priority: 'High',
       stage_number: 2,
       phase: 'EXEC',
@@ -209,7 +200,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Financial Modeler',
       description_raw: 'Build unit economics and profitability agent',
-      item_description: 'CrewAI agent for financial modeling using financial_calculator and market_data_api tools, gpt-4o LLM',
+      item_description: 'AI agent for financial modeling using financial_calculator and market_data_api tools, gpt-4o LLM',
       priority: 'High',
       stage_number: 3,
       phase: 'EXEC',
@@ -218,7 +209,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Risk Assessor',
       description_raw: 'Build risk identification and quantification agent',
-      item_description: 'CrewAI agent for risk assessment using risk_framework and market_data_api tools',
+      item_description: 'AI agent for risk assessment using risk_framework and market_data_api tools',
       priority: 'High',
       stage_number: 3,
       phase: 'EXEC',
@@ -227,7 +218,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Technical Validator',
       description_raw: 'Build technical feasibility assessment agent',
-      item_description: 'CrewAI agent for technical validation using tech_stack_analyzer tool',
+      item_description: 'AI agent for technical validation using tech_stack_analyzer tool',
       priority: 'Medium',
       stage_number: 3,
       phase: 'EXEC',
@@ -236,7 +227,7 @@ const backlogItems = {
     {
       backlog_title: 'Implement Systems Thinker',
       description_raw: 'Build second-order effects analysis agent',
-      item_description: 'CrewAI agent for systems thinking using causal_loop_builder tool, gpt-4o LLM',
+      item_description: 'AI agent for systems thinking using causal_loop_builder tool, gpt-4o LLM',
       priority: 'Medium',
       stage_number: 3,
       phase: 'EXEC',

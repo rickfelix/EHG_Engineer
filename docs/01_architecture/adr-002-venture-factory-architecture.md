@@ -113,7 +113,7 @@ tags: [architecture, auto-generated]
 - [║  │  - Adopted conservative verdict: "Ready with minor gaps"     │  ║](#---adopted-conservative-verdict-ready-with-minor-gaps-)
 - [║  │  - All technical preconditions for Migration Phase A         │  ║](#---all-technical-preconditions-for-migration-phase-a-)
 - [║  │    have been satisfied (rollback scripts, quality_score,     │  ║](#-have-been-satisfied-rollback-scripts-quality_score-)
-- [║  │    CrewAI contracts created)                                 │  ║](#-crewai-contracts-created-)
+- [║  │    contracts created)                                 │  ║](#-crewai-contracts-created-)
 - [║  │                                                              │  ║](#-)
 - [║  │  Chairman Signature: Chairman, EHG                           │  ║](#-chairman-signature-chairman-ehg-)
 - [║  │  Date: 2025-12-09                                            │  ║](#-date-2025-12-09-)
@@ -361,8 +361,8 @@ The EHG Venture Factory is an **Application Incubator/Builder** - the output of 
 │                                                                             │
 │  SHARED SERVICES LAYER (All Ventures Consume)                               │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
-│  │ CrewAI      │  │ AI Model    │  │ Auth        │  │ Media Gen   │        │
-│  │ Agents (18) │  │ Gateway     │  │ Service     │  │ (MJ/Sora)   │        │
+│  │ AI Agent    │  │ AI Model    │  │ Auth        │  │ Media Gen   │        │
+│  │ Platform    │  │ Gateway     │  │ Service     │  │ (MJ/Sora)   │        │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
 │  │ Cost        │  │ Rate        │  │ Email       │  │ Billing     │        │
@@ -393,7 +393,7 @@ The EHG Venture Factory is an **Application Incubator/Builder** - the output of 
 
 | Service | Location | Status |
 |---------|----------|--------|
-| **CrewAI Agents** (18 crews, 28+ agents) | `/ehg/agent-platform/app/crews/` | ✅ Active |
+| **AI Agent Platform** | `/ehg/agent-platform/app/` | ✅ Active |
 | **AI Model Gateway** (OpenAI, Anthropic, Perplexity) | `/ehg/agent-platform/app/utils/llm_fallback.py` | ✅ Active |
 | **Auth Service** (Supabase + RBAC) | `/ehg/agent-platform/app/middleware/supabase_auth.py` | ✅ Active |
 | **Cost Tracker** (LLM usage) | `/ehg/agent-platform/app/services/cost_tracker.py` | ✅ Active |
@@ -535,36 +535,9 @@ ALTER TABLE ventures ADD COLUMN repo_url TEXT;                  -- GitHub repo (
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 0.9.7 CrewAI Agents Available to All Ventures
+#### 0.9.7 AI Agent Platform Available to All Ventures
 
-The agent platform provides 18 specialized crews:
-
-| Crew | Purpose | Example Usage |
-|------|---------|---------------|
-| `advertising_crew` | Ad campaigns, media planning | Stage 11 GTM |
-| `branding_crew` | Positioning, identity, messaging | Stage 10 Naming |
-| `finance_department_crew` | Burn rate, valuation, investment | Stage 5-6 |
-| `marketing_department_crew` | Segmentation, positioning | Stage 11 |
-| `product_management_crew` | Features, roadmap, PMF | Stage 15 |
-| `technical_crew` | Architecture decisions | Stage 13-14 |
-| `legal_department_crew` | Contracts, IP analysis | Stage 6 Risk |
-| `deep_research_crew` | Market research, validation | Stage 3-4 |
-| `board_review_crew` | Strategic review | Decision gates |
-
-**Agent Invocation Pattern:**
-```python
-# From any venture application
-result = await ehg_sdk.crews.invoke(
-    crew="branding_crew",
-    task="generate_brand_guidelines",
-    context={
-        "venture_id": "SOLARA",
-        "venture_name": "SolaraAI",
-        "target_market": "Solar panel owners",
-        "value_proposition": "AI-powered energy optimization"
-    }
-)
-```
+**Note**: The CrewAI agent/crew tables (`crewai_agents`, `crewai_crews`, etc.) have been dropped. The agent platform architecture has been superseded. AI agent capabilities are now provided through the AI Model Gateway and LEO sub-agent system.
 
 ### 0.10 Leo Dashboard Integration (UI Consolidation Vision)
 
@@ -2816,7 +2789,7 @@ These SDs may still be relevant but need evaluation against the new vision:
 
 | SD ID | Title | Current Status | Recommendation |
 |-------|-------|----------------|----------------|
-| SD-CREWAI-ARCHITECTURE-001 | CrewAI infrastructure consolidation | Deferred | **KEEP** - Still relevant to Shared Services |
+| SD-CREWAI-ARCHITECTURE-001 | CrewAI infrastructure consolidation | **DROPPED** | CrewAI tables dropped, SD no longer relevant |
 | SD-VIF-TIER-001 | Tiered ideation engine | Deferred | **ARCHIVE** - Replaced by Stage 1-3 in v2.0 |
 | SD-VIF-PARENT-001 | Venture Ideation Framework | Deferred | **ARCHIVE** - Replaced by Stage 1-3 in v2.0 |
 
@@ -2891,7 +2864,7 @@ cleanupLegacySDs();
 | **ADR-002-002** | **Database-Driven Ventures** | Single codebase with venture_id filtering vs. separate repos | 2025-12-06 |
 | **ADR-002-003** | **25-Stage Lifecycle** | Streamlined from 40 stages for solo entrepreneur efficiency | 2025-12-06 |
 | **ADR-002-004** | **Chairman Advisory over Hard Loops** | Soft gates with override capability instead of automated GOTO | 2025-12-06 |
-| **ADR-002-005** | **Platform-as-a-Factory Model** | Shared services (AI Gateway, Auth, CrewAI) consumed by ventures | 2025-12-06 |
+| **ADR-002-005** | **Platform-as-a-Factory Model** | Shared services (AI Gateway, Auth) consumed by ventures | 2025-12-06 |
 | **ADR-002-006** | **Hybrid Database Isolation** | Shared factory schema + per-venture schemas for customer data | 2025-12-06 |
 | **ADR-002-007** | **Kill Switch Governance** | ventures.status enum with decision_due_at dates and Kill Protocol | 2025-12-06 |
 | **ADR-002-008** | **Distribution Layer in GTM** | distribution_config artifact in marketing_manifest for growth | 2025-12-06 |
@@ -2946,7 +2919,7 @@ This addendum documents the architectural review of the **Kochel Integration** p
 | 1. Database-First Governance & Migrations | 5/5 | 4/5 | -1 |
 | 2. LEO Protocol & Workflow Alignment | 5/5 | 4/5 | -1 |
 | 3. Artifact Vocabulary & required_artifacts[] | 4/5 | 4/5 | 0 |
-| 4. CrewAI / Sub-Agent Contracts | 3/5 | 3/5 | 0 |
+| 4. Sub-Agent Contracts | 3/5 | 3/5 | 0 |
 | 5. EHG vs EHG_Engineer Boundary Integrity | 5/5 | 5/5 | 0 |
 | 6. Migration Phase A Readiness | 5/5 | 4/5 | -1 |
 | 7. Risk Profile & Missing Dependencies | 4/5 | 3/5 | -1 |
@@ -2974,7 +2947,7 @@ The following must be satisfied before executing Migration Phase A:
 | 1 | Rollback scripts created for `20251206_lifecycle_stage_config.sql` | **DONE** | Lead Architect |
 | 2 | Rollback scripts created for `20251206_vision_transition_parent_orchestrator.sql` | **DONE** | Lead Architect |
 | 3 | `quality_score` column added to `venture_artifacts` table | **DONE** | Lead Architect |
-| 4 | CrewAI contracts inserted into `leo_interfaces` table | **DONE** | Lead Architect |
+| 4 | Contracts inserted into `leo_interfaces` table | **DONE** | Lead Architect |
 | 5 | ADR-002 status formally approved by Chairman | **DONE** (2025-12-09) | Chairman |
 
 ### A.6 Related Documents
@@ -3004,7 +2977,7 @@ The following must be satisfied before executing Migration Phase A:
 ## ║  │  - Adopted conservative verdict: "Ready with minor gaps"     │  ║
 ## ║  │  - All technical preconditions for Migration Phase A         │  ║
 ## ║  │    have been satisfied (rollback scripts, quality_score,     │  ║
-## ║  │    CrewAI contracts created)                                 │  ║
+## ║  │    contracts created)                                 │  ║
 ## ║  │                                                              │  ║
 ## ║  │  Chairman Signature: Chairman, EHG                           │  ║
 ## ║  │  Date: 2025-12-09                                            │  ║

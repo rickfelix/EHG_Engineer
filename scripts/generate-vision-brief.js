@@ -66,7 +66,7 @@ const DEFAULT_PERSONAS = {
 // Keywords that indicate EVA/automation involvement
 const EVA_KEYWORDS = [
   'orchestration', 'automation', 'agent', 'eva', 'ai', 'autonomous',
-  'workflow', 'crew', 'crewai', 'pipeline', 'scheduled', 'recurring'
+  'workflow', 'crew', 'pipeline', 'scheduled', 'recurring'
 ];
 
 // ============================================================================

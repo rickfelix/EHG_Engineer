@@ -42,7 +42,7 @@ async function createRetroactiveHandoffs() {
    - Rationale: Prevent malicious code execution, resource isolation
    - Impact: Requires Docker setup, adds complexity but ensures safety
 
-2. **Python Code Generation**: Target CrewAI Flows framework
+2. **Python Code Generation**: Target workflow engine framework
    - Rationale: Aligns with existing agent infrastructure
    - Impact: Generates production-ready Python code
 
@@ -111,10 +111,10 @@ async function createRetroactiveHandoffs() {
         executive_summary: `PLAN completed technical design for SD-BOARD-VISUAL-BUILDER-003.
 
 **Technical Design Summary:**
-- Code Generation Engine: Convert React Flow JSON → CrewAI Flows Python
+- Code Generation Engine: Convert React Flow JSON → Python workflow code
 - Execution Service: Docker-based sandboxed runtime
 - Validation Layer: AST validation + import whitelist
-- Database Integration: Use existing crewai_flows tables
+- Database Integration: Use existing workflow tables
 
 **Deliverables**: 8 user stories defined, PRD approved, ready for implementation.
 
@@ -142,7 +142,6 @@ async function createRetroactiveHandoffs() {
 3. **Technical Architecture Defined**:
    - Server-side services in /src/server/services/
    - Client-side components in /src/client/src/components/
-   - Database tables: crewai_flows, crewai_flow_executions
    - Docker container orchestration pattern
 
 4. **Test Strategy Defined**:
@@ -160,7 +159,7 @@ async function createRetroactiveHandoffs() {
 2. **Execution Model**:
    - Decision: Asynchronous execution with job queue
    - Rationale: Long-running workflows shouldn't block UI
-   - Implementation: crewai_flow_executions table tracks status
+   - Implementation: Workflow executions table tracks status
 
 3. **Docker Container Strategy**:
    - Decision: Ephemeral containers (create, run, destroy)
@@ -174,7 +173,7 @@ async function createRetroactiveHandoffs() {
    - Client: /src/client/src/components/workflow-builder/ExecutionControlPanel.tsx
 
 5. **Import Whitelist**:
-   - Allowed: crewai, anthropic, openai, typing, dataclasses
+   - Allowed: anthropic, openai, typing, dataclasses
    - Blocked: os, subprocess, sys, file operations
    - Rationale: Security - prevent system access`,
 

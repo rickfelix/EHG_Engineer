@@ -263,27 +263,6 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 13: Harden crewai_flow_templates table
--- ============================================================================
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'crewai_flow_templates') THEN
-    DROP POLICY IF EXISTS "templates_read_all" ON crewai_flow_templates;
-    DROP POLICY IF EXISTS "templates_create_user" ON crewai_flow_templates;
-    DROP POLICY IF EXISTS "crewai_flow_templates_service_role_access" ON crewai_flow_templates;
-
-    CREATE POLICY "crewai_flow_templates_service_role_access" ON crewai_flow_templates
-      FOR ALL TO authenticated
-      USING (fn_is_service_role())
-      WITH CHECK (fn_is_service_role());
-
-    RAISE NOTICE 'Hardened crewai_flow_templates RLS policies';
-  ELSE
-    RAISE NOTICE 'Table crewai_flow_templates not found - skipping';
-  END IF;
-END $$;
-
--- ============================================================================
 -- SUMMARY
 -- ============================================================================
 DO $$

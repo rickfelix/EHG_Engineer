@@ -67,15 +67,11 @@ Successfully implemented AI Board of Directors governance system with 6 board me
 - **Statements Executed**: 47
 - **Seed Data**: 6 board members with voting weights (1.00-1.50)
 
-### Backend Files (Python - CrewAI)
+### Backend Files
 1. **../ehg/agent-platform/app/crews/board_directors_crew.py** (580 LOC)
    - BoardDirectorsCrew class with 3 hardcoded workflow templates
    - Workflows: Weekly Meeting, Emergency Session, Investment Approval
    - Weighted voting system implementation
-
-2. **../ehg/scripts/create-board-member-agents.mjs** (100 LOC)
-   - Script to create 6 board member agents in database
-   - Status: Executed successfully
 
 ### Frontend Files (TypeScript/React)
 1. **../ehg/src/components/board/BoardMeetingDashboard.tsx** (520 LOC)
@@ -113,7 +109,7 @@ Successfully implemented AI Board of Directors governance system with 6 board me
 
 ### 1. Workflows as Methods Within BoardDirectorsCrew Class
 **Decision**: Implemented workflows as methods within a single BoardDirectorsCrew class
-**Rationale**: Standard CrewAI pattern for workflow templates. Keeps workflows cohesive and maintainable.
+**Rationale**: Standard pattern for workflow templates. Keeps workflows cohesive and maintainable.
 **Alternatives Considered**: Separate workflow files for each template
 **Trade-offs**: Easier to maintain but slightly larger single file (580 LOC vs 3x200 LOC files)
 
@@ -123,8 +119,8 @@ Successfully implemented AI Board of Directors governance system with 6 board me
 **Alternatives Considered**: Supabase JS client only
 **Trade-offs**: More verbose but better control over transactions and error handling
 
-### 3. Board Member Agents in Database (crewai_agents table)
-**Decision**: Created board member agents in existing crewai_agents table
+### 3. Board Member Agents in Database
+**Decision**: Created board member agents in the database
 **Rationale**: Leverages existing agent infrastructure. Enables dynamic loading and future extensibility.
 **Alternatives Considered**: Hardcoded agent definitions in Python files
 **Trade-offs**: Requires database but provides flexibility for runtime modifications
@@ -149,8 +145,8 @@ Successfully implemented AI Board of Directors governance system with 6 board me
 ### 2. Board Member Agent Task Execution Uses Placeholder Responses (LOW)
 **Issue**: Workflows are structured but _execute_agent_task() returns placeholder responses
 **Impact**: Workflows demonstrate structure but don't call actual LLM yet
-**Workaround**: Framework in place for Phase 3 integration with CrewAI task execution
-**Fix Required**: Implement actual CrewAI Task execution in board_directors_crew.py
+**Workaround**: Framework in place for Phase 3 integration with task execution
+**Fix Required**: Implement actual task execution in board_directors_crew.py
 
 ### 3. UI Components Not Yet Added to Navigation/Routing (LOW)
 **Issue**: Components created but not accessible via app navigation
@@ -226,8 +222,8 @@ Successfully implemented AI Board of Directors governance system with 6 board me
    - Test edge cases: unanimous votes, split votes, abstentions, varying thresholds
    - **Acceptance Criteria**: All edge cases produce expected outcomes
 
-5. **Validate CrewAI Workflow Structure**
-   - Confirm 3 workflows follow CrewAI Flows patterns
+5. **Validate Workflow Structure**
+   - Confirm 3 workflows follow established patterns
    - Verify workflows can be integrated with actual LLM execution
    - **Acceptance Criteria**: Workflows executable with real agents (placeholder responses replaced)
 
@@ -298,7 +294,7 @@ Successfully implemented AI Board of Directors governance system with 6 board me
   key_decisions: [
     {
       decision: 'Implemented workflows as methods within BoardDirectorsCrew class',
-      rationale: 'Standard CrewAI pattern for workflow templates. Keeps workflows cohesive and maintainable.',
+      rationale: 'Standard pattern for workflow templates. Keeps workflows cohesive and maintainable.',
       alternatives_considered: 'Separate workflow files',
       trade_offs: 'Easier to maintain but slightly larger single file'
     },
@@ -309,7 +305,7 @@ Successfully implemented AI Board of Directors governance system with 6 board me
       trade_offs: 'More verbose but better control over transactions'
     },
     {
-      decision: 'Created board member agents in database (crewai_agents table)',
+      decision: 'Created board member agents in database',
       rationale: 'Leverages existing agent infrastructure. Enables dynamic loading and future extensibility.',
       alternatives_considered: 'Hardcoded agent definitions',
       trade_offs: 'Requires database but provides flexibility'
@@ -335,8 +331,8 @@ Successfully implemented AI Board of Directors governance system with 6 board me
       severity: 'LOW',
       issue: 'Board member agent task execution uses placeholder responses',
       impact: 'Workflows structured but don\'t call actual LLM yet',
-      workaround: 'Framework in place for Phase 3 integration with CrewAI task execution',
-      fix_required: 'Implement actual CrewAI Task execution in board_directors_crew.py'
+      workaround: 'Framework in place for Phase 3 integration with task execution',
+      fix_required: 'Implement actual task execution in board_directors_crew.py'
     },
     {
       severity: 'LOW',
@@ -404,8 +400,8 @@ Successfully implemented AI Board of Directors governance system with 6 board me
     },
     {
       priority: 'MEDIUM',
-      item: 'Validate CrewAI workflow structure',
-      details: 'Confirm 3 workflows follow CrewAI Flows patterns and can be integrated with actual LLM execution',
+      item: 'Validate workflow structure',
+      details: 'Confirm 3 workflows follow established patterns and can be integrated with actual LLM execution',
       acceptance_criteria: 'Workflows executable with real agents (placeholder responses replaced)'
     },
     {

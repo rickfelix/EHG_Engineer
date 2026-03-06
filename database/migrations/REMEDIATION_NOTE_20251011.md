@@ -12,10 +12,6 @@ During EXEC Phase Day 1, the following migrations were incorrectly applied to th
    - Created: board_members, board_meetings, board_meeting_attendance
    - Inserted: 7 board members seed data
 
-2. `20251011_crewai_flows_tables.sql`
-   - Created: crewai_flows, crewai_flow_executions, crewai_flow_templates
-   - Inserted: 3 workflow templates
-
 ## Root Cause
 
 The SD target_application field specifies "EHG" (business application) but implementation was done in "EHG_Engineer" (management dashboard).
@@ -28,7 +24,6 @@ The SD target_application field specifies "EHG" (business application) but imple
 - No need for rollback - just migrate correctly to EHG database
 
 **Correct Action**:
-- Applied crewai_flows migration to EHG database (liapbndqlqxdcgpwntbv)
 - EHG database already has board tables from SD-BOARD-GOVERNANCE-001
 - Visual workflow builder implemented in `/mnt/c/_EHG/EHG/`
 
@@ -37,9 +32,6 @@ The SD target_application field specifies "EHG" (business application) but imple
 - board_members (7 records)
 - board_meetings (0 records)
 - board_meeting_attendance (0 records)
-- crewai_flows (0 records)
-- crewai_flow_executions (0 records)
-- crewai_flow_templates (3 records)
 
 **Status**: Documented, no action needed
 
@@ -48,8 +40,5 @@ The SD target_application field specifies "EHG" (business application) but imple
 - board_members ✅ (already exists from SD-BOARD-GOVERNANCE-001, 6 records)
 - board_meetings ✅ (already exists from SD-BOARD-GOVERNANCE-001)
 - board_meeting_attendance ✅ (already exists from SD-BOARD-GOVERNANCE-001)
-- crewai_flows ❌ (needs migration)
-- crewai_flow_executions ❌ (needs migration)
-- crewai_flow_templates ❌ (needs migration)
 
-**Status**: Remediated by applying crewai_flows migration to EHG database
+**Status**: Remediated

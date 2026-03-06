@@ -35,7 +35,7 @@ async function backfillPRD() {
     id: 'PRD-BOARD-VISUAL-BUILDER-001',
     sd_id: 'SD-BOARD-VISUAL-BUILDER-001',
     directive_id: 'SD-BOARD-VISUAL-BUILDER-001',
-    title: 'Visual Workflow Orchestration Builder with CrewAI Flows - Phase 1',
+    title: 'Visual Workflow Orchestration Builder - Phase 1',
     version: '1.0.0',
     status: 'implemented',
     phase: 'EXEC_COMPLETE',
@@ -43,10 +43,10 @@ async function backfillPRD() {
     priority: 'critical',
 
     // Executive Summary
-    executive_summary: 'Full-page visual workflow builder powered by React Flow enabling drag-and-drop creation of AI agent workflows with automatic CrewAI Flows Python code generation. Phase 1 delivers core canvas, 5 node types, template system, and database integration.',
+    executive_summary: 'Full-page visual workflow builder powered by React Flow enabling drag-and-drop creation of AI agent workflows with automatic Python code generation. Phase 1 delivers core canvas, 5 node types, template system, and database integration.',
 
     // Business Context
-    business_context: `**Problem**: Board members need to create custom AI agent workflows but lack technical skills for coding CrewAI Flows.
+    business_context: `**Problem**: Board members need to create custom AI agent workflows but lack technical skills for coding workflows.
 
 **Solution**: Visual drag-and-drop builder that generates Python code automatically.
 
@@ -69,9 +69,9 @@ async function backfillPRD() {
 5. Decision - Board member decision points
 
 **Database Schema:**
-- crewai_flows: Workflow definitions (flow_key, flow_definition, status)
-- crewai_flow_executions: Runtime execution tracking
-- crewai_flow_templates: Pre-built workflow templates (3 seeded)
+- Workflow definitions (flow_key, flow_definition, status)
+- Runtime execution tracking
+- Pre-built workflow templates (3 seeded)
 
 **Integration Points:**
 - AI Agents page (/ai-agents) with Workflows tab
@@ -122,7 +122,7 @@ async function backfillPRD() {
       {
         id: 'F004',
         title: 'Save Workflow',
-        description: 'Persist workflow to crewai_flows table',
+        description: 'Persist workflow to database',
         acceptance_criteria: [
           'Save button visible in toolbar',
           'Clicking save stores flow_definition JSON',
@@ -223,7 +223,7 @@ async function backfillPRD() {
       ],
       external: [
         '@xyflow/react v11.x - React Flow library',
-        'crewai_flows tables in EHG database',
+        'Workflow tables in EHG database',
         'Supabase client for persistence'
       ]
     }),
@@ -257,7 +257,7 @@ async function backfillPRD() {
     metadata: {
       target_app: 'EHG',
       implementation_path: '../ehg/src/components/workflow-builder/',
-      database_tables: ['crewai_flows', 'crewai_flow_executions', 'crewai_flow_templates'],
+      database_tables: [],
       routes: ['/ai-agents (Workflows tab)'],
       components_created: ['FlowCanvas.tsx', 'NodePalette.tsx'],
       lines_of_code: 478,

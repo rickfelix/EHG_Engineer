@@ -15,14 +15,14 @@ tags: [guide, auto-generated]
 - [Metadata](#metadata)
 - [Purpose](#purpose)
 - [Core Policies](#core-policies)
-  - [1. CrewAI Compliance Policy](#1-crewai-compliance-policy)
+  - [1. Automation Compliance Policy](#1-automation-compliance-policy)
   - [2. Evidence Standards](#2-evidence-standards)
   - [3. Technical Debt Management](#3-technical-debt-management)
   - [4. Cross-Stage Pattern Reuse](#4-cross-stage-pattern-reuse)
 - [Living Documentation](#living-documentation)
   - [Stage Review Lessons Learned](#stage-review-lessons-learned)
 - [Validation Checklist](#validation-checklist)
-  - [CrewAI Compliance](#crewai-compliance)
+  - [Automation Compliance](#automation-compliance)
   - [Evidence Quality](#evidence-quality)
   - [Cross-Stage Reuse](#cross-stage-reuse)
   - [Technical Debt](#technical-debt)
@@ -70,13 +70,12 @@ This document serves as the central index for all stage review best practices, l
 
 ## Core Policies
 
-### 1. CrewAI Compliance Policy
-**Document**: crewai_compliance_policy.md
+### 1. Automation Compliance Policy
 **Status**: **MANDATORY** for all stages
-**Summary**: CrewAI is foundational to EHG's automation strategy. All stages must implement prescribed agents/crews or obtain explicit Chairman-approved exceptions.
+**Summary**: Automation is foundational to EHG's strategy. All stages must implement prescribed agents or obtain explicit Chairman-approved exceptions.
 
 **Key Points**:
-- CrewAI is no longer optional or "enhancement"
+- Automation is no longer optional or "enhancement"
 - Dossier prescriptions are binding specifications
 - Non-compliance requires either SD creation or exception
 - Exceptions require Chairman signature and sunset date
@@ -89,7 +88,7 @@ This document serves as the central index for all stage review best practices, l
 
 **All findings MUST include**:
 - File paths with line numbers (e.g., `agent-platform/app/agents/researcher.py:45-67`)
-- Database queries with results (e.g., `SELECT * FROM crewai_agents WHERE stage=4;`)
+- Database queries with results (where applicable)
 - Code snippets (10-20 lines demonstrating issue)
 - Dossier reference (section/page showing prescription)
 
@@ -123,7 +122,7 @@ This document serves as the central index for all stage review best practices, l
 - If no patterns found, must document search effort
 
 **Reusable Pattern Types**:
-- CrewAI agent configurations
+- Agent configurations
 - Research pipeline orchestrations
 - UI component patterns
 - Database schema patterns (RLS, service role keys)
@@ -152,7 +151,7 @@ This document serves as the central index for all stage review best practices, l
 
 Use this checklist before submitting any stage review:
 
-### CrewAI Compliance
+### Automation Compliance
 - [ ] Section 2.6 completed with dossier prescriptions
 - [ ] Database queries run and results documented
 - [ ] Code verification performed with file paths
@@ -181,7 +180,7 @@ Use this checklist before submitting any stage review:
 - [ ] Chairman acceptance obtained
 
 ### Outcome Log Completeness
-- [ ] Section 5.2: CrewAI Compliance Score completed
+- [ ] Section 5.2: Automation Compliance Score completed
 - [ ] Section 5.3: Technical Debt Summary completed
 - [ ] Section 5.4: Cross-Stage Patterns Applied completed
 - [ ] Section 5.9: Best Practices Validated checklist completed
@@ -230,7 +229,7 @@ Track these metrics across all stage reviews:
 
 | KPI | Target | Current | Trend |
 |-----|--------|---------|-------|
-| CrewAI compliance rate | ≥85% compliant without exception | [TBD] | [TBD] |
+| Automation compliance rate | ≥85% compliant without exception | [TBD] | [TBD] |
 | Avg review cycle time | ≤3 days from start to decision | [TBD] | [TBD] |
 | Cross-stage reuse rate | ≥30% of recommendations leverage reuse | [TBD] | [TBD] |
 | Evidence citation rate | 100% of findings with citations | [TBD] | [TBD] |
@@ -249,18 +248,18 @@ Track these metrics across all stage reviews:
 ```sql
 SELECT id, title, status,
        metadata->>'source_stage' as stage,
-       metadata->>'crewai_compliance_status' as crewai_status,
+       metadata->>'automation_compliance_status' as automation_status,
        metadata->>'review_date' as reviewed_on
 FROM strategic_directives_v2
 WHERE metadata->>'spawned_from_review' = 'true'
 ORDER BY (metadata->>'source_stage')::int;
 ```
 
-**Find stages with CrewAI non-compliance**:
+**Find stages with automation non-compliance**:
 ```sql
 SELECT id, title, metadata->>'source_stage' as stage
 FROM strategic_directives_v2
-WHERE metadata->>'crewai_compliance_status' = 'non_compliant';
+WHERE metadata->>'automation_compliance_status' = 'non_compliant';
 ```
 
 **Find SDs with technical debt**:
@@ -274,31 +273,11 @@ WHERE metadata->>'spawned_from_review' = 'true'
 ORDER BY debt_count DESC;
 ```
 
-**Check CrewAI agents for a stage**:
-```sql
-SELECT id, name, role, goal, stage, version
-FROM crewai_agents
-WHERE stage = [STAGE_NUMBER]
-ORDER BY name;
-```
-
-**Check CrewAI crews for a stage**:
-```sql
-SELECT id, name, orchestration_type, stage
-FROM crewai_crews
-WHERE stage = [STAGE_NUMBER];
-```
-
 ### File Search Patterns
 
 **Find stage review files**:
 ```bash
 ls /mnt/c/_EHG/EHG_Engineer/docs/workflow/stage_reviews/stage-*/
-```
-
-**Search for patterns in reviews**:
-```bash
-grep -r "CrewAI" /mnt/c/_EHG/EHG_Engineer/docs/workflow/stage_reviews/
 ```
 
 **Find reusable patterns in code**:

@@ -43,7 +43,7 @@ async function markComplete() {
             ],
             deliverables: {
               ui_components: 5,
-              database_tables: 4,
+              database_tables: 1,
               tests_written: 7,
               documentation_lines: 319,
               total_lines: 2680
@@ -85,7 +85,7 @@ async function markComplete() {
 
     console.log('\n🎯 Deliverables:');
     console.log('- 5 UI Components (ProgressStepper, VentureCreationPage, ResearchAgentsPanel, ResearchResultsView, ChairmanReviewEditor)');
-    console.log('- 4 Database Tables (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)');
+    console.log('- 1 Database Table (venture_drafts)');
     console.log('- 7 Smoke Tests (5 core + 2 bonus)');
     console.log('- 319 Lines Backend Requirements Documentation');
     console.log('- Total: 2,680 lines of production code');

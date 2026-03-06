@@ -3848,20 +3848,6 @@
           "linesOfCode": 123
         },
         {
-          "filename": "apply-crewai-flows-migration-to-ehg.mjs",
-          "description": "Script: apply-crewai-flows-migration-to-ehg.mjs",
-          "path": "scripts/apply-crewai-flows-migration-to-ehg.mjs",
-          "complexity": "medium",
-          "linesOfCode": 130
-        },
-        {
-          "filename": "apply-crewai-flows-migration.mjs",
-          "description": "Script: apply-crewai-flows-migration.mjs",
-          "path": "scripts/apply-crewai-flows-migration.mjs",
-          "complexity": "medium",
-          "linesOfCode": 130
-        },
-        {
           "filename": "apply-ehg-backlog-schema.js",
           "description": "Script: apply-ehg-backlog-schema.js",
           "path": "scripts/apply-ehg-backlog-schema.js",
@@ -7190,13 +7176,6 @@
           "linesOfCode": 66
         },
         {
-          "filename": "consolidate-agents-to-crewai.js",
-          "description": "Script: consolidate-agents-to-crewai.js",
-          "path": "scripts/consolidate-agents-to-crewai.js",
-          "complexity": "medium",
-          "linesOfCode": 267
-        },
-        {
           "filename": "database-architect-sd-agent-admin-003.cjs",
           "description": "Script: database-architect-sd-agent-admin-003.cjs",
           "path": "scripts/database-architect-sd-agent-admin-003.cjs",
@@ -7482,13 +7461,6 @@
           "path": "scripts/move-ai-agents-to-correct-database.js",
           "complexity": "medium",
           "linesOfCode": 214
-        },
-        {
-          "filename": "move-ai-agents-to-crewai-table.js",
-          "description": "Script: move-ai-agents-to-crewai-table.js",
-          "path": "scripts/move-ai-agents-to-crewai-table.js",
-          "complexity": "medium",
-          "linesOfCode": 241
         },
         {
           "filename": "orchestrate-phase-subagents.js",
@@ -8801,13 +8773,6 @@
           "path": "scripts/verify-context7-row.js",
           "complexity": "simple",
           "linesOfCode": 82
-        },
-        {
-          "filename": "verify-crewai-tables.js",
-          "description": "Script: verify-crewai-tables.js",
-          "path": "scripts/verify-crewai-tables.js",
-          "complexity": "simple",
-          "linesOfCode": 81
         },
         {
           "filename": "verify-customer-intel-migrations.js",
@@ -13607,46 +13572,6 @@
       "hasAsync": true,
       "lastModified": "2025-10-24T13:00:58.741Z",
       "size": 4557
-    },
-    {
-      "filename": "apply-crewai-flows-migration-to-ehg.mjs",
-      "path": "scripts/apply-crewai-flows-migration-to-ehg.mjs",
-      "extension": ".mjs",
-      "description": "Script: apply-crewai-flows-migration-to-ehg.mjs",
-      "usage": [],
-      "parameters": [],
-      "category": "migrations",
-      "hasDatabase": true,
-      "dependencies": [
-        "fs",
-        "path"
-      ],
-      "isExecutable": true,
-      "complexity": "medium",
-      "linesOfCode": 130,
-      "hasAsync": true,
-      "lastModified": "2025-10-24T13:00:58.746Z",
-      "size": 5351
-    },
-    {
-      "filename": "apply-crewai-flows-migration.mjs",
-      "path": "scripts/apply-crewai-flows-migration.mjs",
-      "extension": ".mjs",
-      "description": "Script: apply-crewai-flows-migration.mjs",
-      "usage": [],
-      "parameters": [],
-      "category": "migrations",
-      "hasDatabase": true,
-      "dependencies": [
-        "fs",
-        "path"
-      ],
-      "isExecutable": true,
-      "complexity": "medium",
-      "linesOfCode": 130,
-      "hasAsync": true,
-      "lastModified": "2025-10-24T13:00:58.748Z",
-      "size": 5140
     },
     {
       "filename": "apply-ehg-backlog-schema.js",
@@ -20242,25 +20167,6 @@
       "hasAsync": false,
       "lastModified": "2025-10-26T17:35:57.107Z",
       "size": 8332
-    },
-    {
-      "filename": "consolidate-agents-to-crewai.js",
-      "path": "scripts/consolidate-agents-to-crewai.js",
-      "extension": ".js",
-      "description": "Script: consolidate-agents-to-crewai.js",
-      "usage": [],
-      "parameters": [],
-      "category": "sub-agents",
-      "hasDatabase": true,
-      "dependencies": [
-        "dotenv"
-      ],
-      "isExecutable": true,
-      "complexity": "medium",
-      "linesOfCode": 267,
-      "hasAsync": true,
-      "lastModified": "2025-10-25T14:45:01.150Z",
-      "size": 9911
     },
     {
       "filename": "consolidate-migrations.cjs",
@@ -34685,26 +34591,6 @@
       "size": 6835
     },
     {
-      "filename": "move-ai-agents-to-crewai-table.js",
-      "path": "scripts/move-ai-agents-to-crewai-table.js",
-      "extension": ".js",
-      "description": "Script: move-ai-agents-to-crewai-table.js",
-      "usage": [],
-      "parameters": [],
-      "category": "sub-agents",
-      "hasDatabase": true,
-      "dependencies": [
-        "@supabase/supabase-js",
-        "dotenv"
-      ],
-      "isExecutable": true,
-      "complexity": "medium",
-      "linesOfCode": 241,
-      "hasAsync": true,
-      "lastModified": "2025-10-25T14:45:01.285Z",
-      "size": 8611
-    },
-    {
       "filename": "move-reviewed-migrations.cjs",
       "path": "scripts/move-reviewed-migrations.cjs",
       "extension": ".cjs",
@@ -44720,26 +44606,6 @@
       "hasAsync": true,
       "lastModified": "2025-10-24T13:01:02.750Z",
       "size": 3044
-    },
-    {
-      "filename": "verify-crewai-tables.js",
-      "path": "scripts/verify-crewai-tables.js",
-      "extension": ".js",
-      "description": "Script: verify-crewai-tables.js",
-      "usage": [],
-      "parameters": [],
-      "category": "verification",
-      "hasDatabase": true,
-      "dependencies": [
-        "@supabase/supabase-js",
-        "dotenv"
-      ],
-      "isExecutable": true,
-      "complexity": "simple",
-      "linesOfCode": 81,
-      "hasAsync": true,
-      "lastModified": "2025-10-24T13:01:02.752Z",
-      "size": 2506
     },
     {
       "filename": "verify-customer-intel-migrations.js",

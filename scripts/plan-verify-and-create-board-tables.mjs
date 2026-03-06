@@ -61,7 +61,7 @@ async function verifyAndCreateBoardTables() {
 -- 1. Board Members Table
 CREATE TABLE IF NOT EXISTS board_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id UUID, -- References crewai_agents(id) when that table exists
+  agent_id UUID, -- References agent registry when available
   board_role VARCHAR(100) NOT NULL,
   voting_weight DECIMAL(3,2) DEFAULT 1.0,
   expertise_domains TEXT[] NOT NULL,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS board_meetings (
   completed_at TIMESTAMPTZ,
   outcome JSONB,
   status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
-  workflow_id UUID, -- References crewai_flows(id) when that table exists
+  workflow_id UUID, -- References workflow table when available
   metadata JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

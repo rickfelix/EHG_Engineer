@@ -70,7 +70,7 @@ tags: [guide, auto-generated]
 1. ✅ Migration file `20251008000000_agent_platform_schema.sql` existed
 2. ✅ Migration was applied (tables created successfully)
 3. ❌ Seed data section failed silently
-4. ❌ Result: 0 records in all tables (ai_ceo_agents, agent_departments, crewai_agents, etc.)
+4. ❌ Result: 0 records in all tables (ai_ceo_agents, agent_departments, etc.)
 
 ### Why It Was Bad
 - UI showed "No Agents Deployed" (user assumed bug in UI)
@@ -233,7 +233,7 @@ Step 3: Validating migration files...
 
 Validating: 20251008000000_agent_platform_schema.sql
   ✅ Syntax valid (42 statements)
-  📋 Tables referenced: ai_ceo_agents, agent_departments, crewai_agents, crewai_crews, crew_members, agent_tools
+  📋 Tables referenced: ai_ceo_agents, agent_departments
   ⚠️  Warnings:
      - No SD reference in comments (makes tracking difficult)
 
@@ -250,10 +250,6 @@ Database verification complete:
 
   ✅ ai_ceo_agents - EXISTS and ACCESSIBLE
   ✅ agent_departments - EXISTS and ACCESSIBLE
-  ✅ crewai_agents - EXISTS and ACCESSIBLE
-  ✅ crewai_crews - EXISTS and ACCESSIBLE
-  ✅ crew_members - EXISTS and ACCESSIBLE
-  ✅ agent_tools - EXISTS and ACCESSIBLE
 
 Step 5: Checking seed data...
 
@@ -261,13 +257,9 @@ Seed data verification:
 
   ⚠️  ai_ceo_agents - 0 rows (EMPTY - seed data may have failed)
   ⚠️  agent_departments - 0 rows (EMPTY - seed data may have failed)
-  ⚠️  crewai_agents - 0 rows (EMPTY - seed data may have failed)
-  ⚠️  crewai_crews - 0 rows (EMPTY - seed data may have failed)
-  ⚠️  crew_members - 0 rows (EMPTY - seed data may have failed)
-  ⚠️  agent_tools - 0 rows (EMPTY - seed data may have failed)
 
-⚠️  WARNING: 6 table(s) have no data:
-   ai_ceo_agents, agent_departments, crewai_agents, crewai_crews, crew_members, agent_tools
+⚠️  WARNING: 2 table(s) have no data:
+   ai_ceo_agents, agent_departments
    This matches the SD-AGENT-PLATFORM-001 pattern:
    - Migration exists ✓
    - Tables created ✓
@@ -362,9 +354,9 @@ node scripts/validate-migration-files.js <SD-ID> --verify-db --check-seed-data
 
 ### 5. Document Expected Row Counts
 ```sql
--- Expected: 11 departments, 8 tools
+-- Expected: 11 departments, 5 config entries
 INSERT INTO agent_departments (...);  -- Should create 11 rows
-INSERT INTO agent_tools (...);        -- Should create 8 rows
+INSERT INTO system_config (...);      -- Should create 5 rows
 ```
 
 ---

@@ -31,7 +31,7 @@ async function generateSnapshot() {
     prd_status: null,
     user_stories_summary: null,
     handoffs_summary: null,
-    crewai_contracts: null
+    interface_contracts: null
   };
 
   // 1. Lifecycle stages (the core of 25-stage system)
@@ -125,17 +125,17 @@ async function generateSnapshot() {
   snapshot.handoffs_summary = handoffBySd;
   console.log(`   Found ${handoffs?.length || 0} handoff records`);
 
-  // 6. CrewAI contracts
+  // 6. Interface contracts
   console.log('6. Querying leo_interfaces...');
   const { data: contracts } = await supabase
     .from('leo_interfaces')
     .select('id, name, kind, version, validation_status');
 
-  snapshot.crewai_contracts = {
+  snapshot.interface_contracts = {
     count: contracts?.length || 0,
     data: contracts
   };
-  console.log(`   Found ${contracts?.length || 0} CrewAI contracts`);
+  console.log(`   Found ${contracts?.length || 0} interface contracts`);
 
   // Write to file
   const outputDir = path.join(process.cwd(), 'docs', 'audit');
@@ -154,7 +154,7 @@ async function generateSnapshot() {
   console.log(`  SDs in hierarchy: ${snapshot.sd_hierarchy.count}`);
   console.log(`  PRDs: ${snapshot.prd_status.count}`);
   console.log(`  User stories: ${stories?.length || 0}`);
-  console.log(`  CrewAI contracts: ${snapshot.crewai_contracts.count}`);
+  console.log(`  Interface contracts: ${snapshot.interface_contracts.count}`);
 
   return snapshot;
 }

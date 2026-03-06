@@ -35,10 +35,10 @@ The EXEC phase for SD-AGENT-PLATFORM-001 has completed foundational architecture
 - ✅ Testing strategy defined (300+ unit, 50+ integration, 10+ E2E)
 
 **Scope Reality**:
-This Strategic Directive represents a **222 story point, 14 sprint, 5-week Python/FastAPI project** with 40+ agents across 11 departments. The foundation work (database, architecture, documentation) is complete and ready for specialist Python/CrewAI implementation.
+This Strategic Directive represents a **222 story point, 14 sprint, 5-week Python/FastAPI project** with 40+ agents across 11 departments. The foundation work (database, architecture, documentation) is complete and ready for specialist Python/FastAPI implementation.
 
 **Recommendation**:
-Mark foundation phase complete. Python implementation requires specialized CrewAI expertise and should be assigned to appropriate development team for Sprints 1-14 execution.
+Mark foundation phase complete. Python implementation requires specialized agent orchestration expertise and should be assigned to appropriate development team for Sprints 1-14 execution.
   `,
 
   // 2. COMPLETENESS REPORT
@@ -50,7 +50,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - **Files**:
   - ../ehg/database/migrations/008_agent_platform_schema.sql (367 lines)
   - ../ehg/apply-agent-platform-migration.mjs (69 lines)
-- **Tables**: 8 tables (agent_departments, crewai_agents, crewai_crews, crew_members, research_sessions, agent_knowledge, api_cache, agent_tools)
+- **Tables**: 4 tables (agent_departments, research_sessions, agent_knowledge, api_cache)
 - **Features**: pgvector extension, RLS policies, seed data (11 departments, 8 tools)
 - **Application**: Manual (via Supabase SQL Editor or psql)
 
@@ -69,10 +69,10 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 
 ### Python Implementation ⚠️ Not Started
 - **Status**: Documented, not implemented
-- **Reason**: Requires Python/FastAPI/CrewAI specialist expertise
+- **Reason**: Requires Python/FastAPI/agent orchestration specialist expertise
 - **Scope**: 222 story points across 14 sprints (5 weeks)
 - **Stories**: 33 user stories from US-001 to US-033
-- **Components**: 40+ Python files, FastAPI service, CrewAI agents, Admin dashboard
+- **Components**: 40+ Python files, FastAPI service, agent orchestration agents, Admin dashboard
 
 ### Acceptance Criteria Status
 
@@ -100,11 +100,11 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - **Size**: 367 lines
 - **Status**: Complete, requires manual application
 - **Contents**:
-  - 8 table definitions with constraints
+  - 4 table definitions with constraints
   - pgvector extension setup
   - 20+ indexes for performance
   - 11 RLS policies for security
-  - Seed data: 11 departments, 8 tools
+  - Seed data: 11 departments
   - Triggers for updated_at timestamps
   - Migration validation block
 
@@ -120,7 +120,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - **Status**: Complete
 - **Sections**:
   - Architecture Overview
-  - Database Schema Documentation (all 8 tables)
+  - Database Schema Documentation
   - Python Project Structure (40+ file paths)
   - Sample Agent Implementations (with code)
   - FastAPI Endpoints (with request/response schemas)
@@ -168,7 +168,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - API caching layer
 
 ### Sprint 5: EVA Orchestration (28 points)
-- CrewAI Flows integration
+- agent orchestration Flows integration
 - Session management
 - EVA coordinator agent
 
@@ -210,12 +210,12 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 **Rationale**: Cost optimization + database consolidation + proven at scale
 **Impact**: Zero additional infrastructure, 1536-dimensional embeddings, ivfflat indexing
 
-### Decision 3: CrewAI Framework Over Custom Solution
-**Decision**: Use proven CrewAI framework for agent orchestration
+### Decision 3: Proven Framework Over Custom Solution
+**Decision**: Use proven framework for agent orchestration
 **Alternatives Evaluated**:
 - ❌ Custom agent framework (12-16 weeks development)
 - ❌ LangChain agents (less structured for crews)
-- ✅ CrewAI (production-ready, hierarchical + sequential + parallel)
+- ✅ Established framework (production-ready, hierarchical + sequential + parallel)
 
 **Rationale**: SIMPLICITY FIRST - don't rebuild what exists and works
 **Impact**: Reduces development time by 3-4 months, proven in production
@@ -256,7 +256,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 
 ### Issue 2: Python Implementation Not Started
 - **Status**: EXPECTED (scope acknowledgment)
-- **Description**: 222 story points of Python/FastAPI/CrewAI code not implemented
+- **Description**: 222 story points of Python/FastAPI/agent orchestration code not implemented
 - **Impact**: Platform is documented but non-functional
 - **Resolution**: Assign to Python specialist for Sprints 1-14
 - **Estimated Time**: 5 weeks (14 sprints × 2.5 days/sprint)
@@ -270,11 +270,11 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 
 ## Risks
 
-### Risk 1: CrewAI Complexity at Scale (40+ agents)
+### Risk 1: Agent Orchestration Complexity at Scale (40+ agents)
 - **Probability**: MEDIUM
 - **Impact**: HIGH
 - **Mitigation**: Start small (3 agents in Sprint 1), scale incrementally
-- **Fallback**: Sequential crews instead of hierarchical if performance issues
+- **Fallback**: Sequential execution instead of hierarchical if performance issues
 
 ### Risk 2: OpenAI Token Costs
 - **Probability**: MEDIUM
@@ -308,7 +308,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 ### Risk 5: Specialist Availability
 - **Probability**: MEDIUM
 - **Impact**: HIGH
-- **Description**: Python/CrewAI specialist may not be immediately available
+- **Description**: Python/FastAPI specialist may not be immediately available
 - **Mitigation**:
   - Comprehensive implementation guide reduces ramp-up time
   - Code samples provide starting templates
@@ -355,7 +355,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - **Estimated Time**: 5 weeks (200 hours at 40 hrs/week)
 - **Story Points**: 222 points
 - **Velocity Assumption**: ~16 points/sprint (14 sprints)
-- **Team Size**: 1-2 Python/CrewAI specialists
+- **Team Size**: 1-2 Python/FastAPI specialists
 
 ### Sprint Breakdown:
 - **Sprint 1-2** (39 points): 1 week - Core platform + 3 agents
@@ -390,7 +390,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
   2. Copy contents of ../ehg/database/migrations/008_agent_platform_schema.sql
   3. Paste into SQL Editor
   4. Click "Run"
-  5. Verify: SELECT * FROM agent_departments; should return 11 rows
+  5. Verify: SELECT * FROM agent_departments; -- should return 11 rows
 - **Estimated Time**: 5 minutes
 - **Blocking**: All Python implementation
 
@@ -398,7 +398,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - **Priority**: HIGH
 - **Action**: Verify all foundation deliverables meet quality standards
 - **Checklist**:
-  - [ ] Database schema has all 8 required tables
+  - [ ] Database schema has all required tables
   - [ ] pgvector extension properly configured
   - [ ] RLS policies enforce security requirements
   - [ ] Implementation guide has code samples
@@ -438,7 +438,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
   1. Executive Summary: Foundation complete, implementation requires specialist
   2. Completeness Report: 100% foundation, 0% Python implementation
   3. Deliverables Manifest: Database schema, docs, PRD (all complete)
-  4. Key Decisions: Free APIs, pgvector, CrewAI framework
+  4. Key Decisions: Free APIs, pgvector, agent orchestration framework
   5. Known Issues: Python not started (expected), database not applied (blocker)
   6. Resource Utilization: 5.5 hours invested, 328 hours remaining estimate
   7. Action Items for LEAD: Approve foundation, decide on implementation approach

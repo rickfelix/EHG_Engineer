@@ -60,9 +60,7 @@ All 8 user stories implemented with Docker orchestration, board meeting linking,
       'src/services/workflow-builder/DockerExecutor.ts (253 LOC)',
       'tests/e2e/workflow-builder-phase3.spec.ts (267 LOC)'
     ],
-    database_changes: [
-      'crewai_flow_executions.board_meeting_id (FK to board_meetings)'
-    ],
+    database_changes: [],
     test_results: {
       e2e_tests: '16/22 passed (72.7%)',
       failures: '6 (toast detection - same root cause)',

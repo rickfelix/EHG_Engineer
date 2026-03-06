@@ -23,8 +23,7 @@ tags: [reference, auto-generated]
   - [0.2.1 venture_inception_briefs (Stage 0 Primary Artifact)](#021-venture_inception_briefs-stage-0-primary-artifact)
   - [0.2.2 venture_stage_transitions (Authoritative History + Promotion Audit)](#022-venture_stage_transitions-authoritative-history-promotion-audit)
   - [0.2.3 Stage 0 → Stage 1 Promotion Function (Atomic + Idempotent)](#023-stage-0-stage-1-promotion-function-atomic-idempotent)
-  - [0.3 crewai_crews](#03-crewai_crews)
-  - [0.4 Opportunity Discovery (Deal Flow) Tables (AI-Generated Blueprints)](#04-opportunity-discovery-deal-flow-tables-ai-generated-blueprints)
+  - [0.3 Opportunity Discovery (Deal Flow) Tables (AI-Generated Blueprints)](#03-opportunity-discovery-deal-flow-tables-ai-generated-blueprints)
 - [1. Command Chain Tables](#1-command-chain-tables)
   - [1.1 chairman_directives](#11-chairman_directives)
   - [1.2 directive_delegations](#12-directive_delegations)
@@ -85,7 +84,7 @@ tags: [reference, auto-generated]
 
 ## Overview
 
-This specification defines the complete database schema for the Chairman's Operating System. All tables enforce the 25-stage venture lifecycle and support the Command Chain: Rick → EVA → crewAI.
+This specification defines the complete database schema for the Chairman's Operating System. All tables enforce the 25-stage venture lifecycle and support the Command Chain: Rick → EVA → Agents.
 
 ### RLS Posture (Prototype vs Production)
 
@@ -376,36 +375,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 > required tables exist, or immediately after in server-side orchestration code. The non-negotiable requirement
 > is that Stage progression itself is atomic and recorded exactly once.
 
-### 0.3 crewai_crews
-
-```sql
-CREATE TABLE IF NOT EXISTS crewai_crews (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  crew_name VARCHAR(200) NOT NULL,
-  crew_type VARCHAR(80) NOT NULL,
-  description TEXT,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_crewai_crews_unique ON crewai_crews(crew_type);
-
-ALTER TABLE crewai_crews ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "crewai_crews_select" ON crewai_crews
-  FOR SELECT TO authenticated USING (fn_is_chairman());
-
-CREATE POLICY "crewai_crews_manage" ON crewai_crews
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
-```
-
-### 0.4 Opportunity Discovery (Deal Flow) Tables (AI-Generated Blueprints)
+### 0.3 Opportunity Discovery (Deal Flow) Tables (AI-Generated Blueprints)
 
 Vision v2 supports **autonomous opportunity discovery** that produces **Opportunity Blueprints** without auto-creating ventures.
 This section adds the persistence layer required by PRDs such as:
 
-- `SD-BLUEPRINT-GEN-CORE-001` (CrewAI blueprint generation + board review + status tracking)
+- `SD-BLUEPRINT-GEN-CORE-001` (Blueprint generation + board review + status tracking)
 - `SD-BLUEPRINT-ENGINE-001` (Blueprint browser + scoring + selection signals)
 
 #### 0.4.1 opportunity_sources
@@ -719,7 +694,7 @@ CREATE TABLE IF NOT EXISTS directive_delegations (
   directive_id UUID NOT NULL REFERENCES chairman_directives(id) ON DELETE CASCADE,
   assigned_to_type VARCHAR(20) NOT NULL
     CHECK (assigned_to_type IN ('crew', 'agent', 'human', 'system')),
-  assigned_to_crew_id UUID REFERENCES crewai_crews(id),
+  assigned_to_crew_id UUID,  -- Previously referenced crewai_crews (dropped)
   task_contract_id UUID REFERENCES agent_task_contracts(id),
   venture_id UUID REFERENCES ventures(id),
   stage_number INT CHECK (stage_number BETWEEN 1 AND 25),
@@ -762,7 +737,7 @@ CREATE TABLE IF NOT EXISTS agent_task_contracts (
 
   -- Routing / ownership
   parent_agent VARCHAR(50) NOT NULL,          -- e.g. 'EVA'
-  target_agent VARCHAR(80) NOT NULL,          -- e.g. 'CREWAI_MARKET_VALIDATION'
+  target_agent VARCHAR(80) NOT NULL,          -- e.g. 'MARKET_VALIDATION'
   venture_id UUID REFERENCES ventures(id) ON DELETE CASCADE,
   stage_number INT CHECK (stage_number BETWEEN 1 AND 25),
 
@@ -1607,7 +1582,7 @@ CREATE TABLE IF NOT EXISTS agent_execution_traces (
   parent_trace_id UUID REFERENCES agent_execution_traces(id),  -- For nested calls
 
   -- Agent identification
-  agent_type VARCHAR(50) NOT NULL,        -- 'EVA', 'CREWAI_MARKET_VALIDATION', etc.
+  agent_type VARCHAR(50) NOT NULL,        -- 'EVA', 'MARKET_VALIDATION', etc.
   crew_type VARCHAR(50),                  -- Specific crew (if applicable)
 
   -- Context

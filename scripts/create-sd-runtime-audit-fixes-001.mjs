@@ -40,7 +40,7 @@ const TRIANGULATION_EVIDENCE = {
       role: 'Codebase exploration + database verification',
       findings: [
         'A-06: Migration exists at supabase/migrations/20251216000001_chairman_unified_decisions.sql but not applied',
-        'A-07: FALSE ALARM - table exists as crewai_crews (correct name)',
+        'A-07: FALSE ALARM - table existed at time of audit (since dropped)',
         'A-08: ventures table has current_lifecycle_stage, not stage',
         'A-09: Endpoint exists but routing returns HTML'
       ]
@@ -73,7 +73,7 @@ const TRIANGULATION_EVIDENCE = {
     agent: 'Claude Code Database Agent',
     confirmed: [
       'chairman_pending_decisions VIEW does NOT exist',
-      'crewai_crews table EXISTS (A-07 was false alarm)',
+      'A-07 was false alarm (table existed at audit time, since dropped)',
       'ventures.current_lifecycle_stage column EXISTS',
       'ventures.stage column does NOT exist',
       '23+ migrations pending application to remote DB'

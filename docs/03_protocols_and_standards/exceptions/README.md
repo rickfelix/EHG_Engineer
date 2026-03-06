@@ -1,9 +1,9 @@
 # Governance Exceptions Directory
 
-**Purpose**: This directory stores Chairman-approved exceptions to governance policies, particularly CrewAI compliance exceptions for stages.
+**Purpose**: This directory stores Chairman-approved exceptions to governance policies, particularly governance policy exceptions for stages.
 
 **Authority**: Chairman (sole approver)
-**Policy Reference**: CrewAI Compliance Policy
+**Policy Reference**: Governance Compliance Policy
 
 ---
 
@@ -12,7 +12,7 @@
 ```
 exceptions/
 ├── README.md (this file)
-├── stage-XX-crewai-exception.md (CrewAI compliance exceptions per stage)
+├── stage-XX-compliance-exception.md (governance policy exceptions per stage)
 ├── stage-XX-timeline-exception.md (Timeline/deadline exceptions)
 └── [other exception types as needed]
 ```
@@ -21,14 +21,14 @@ exceptions/
 
 ## Exception Types
 
-### 1. CrewAI Compliance Exceptions
-**Naming**: `stage-XX-crewai-exception.md` (where XX = stage number, zero-padded)
-**Purpose**: Document approved deviations from mandatory CrewAI implementation requirements
-**Template**: See CrewAI Compliance Policy Section 5
+### 1. Governance Compliance Exceptions
+**Naming**: `stage-XX-compliance-exception.md` (where XX = stage number, zero-padded)
+**Purpose**: Document approved deviations from mandatory governance implementation requirements
+**Template**: See Governance Compliance Policy Section 5
 
 **Example Filenames**:
-- `stage-04-crewai-exception.md` (Stage 4 exception)
-- `stage-38-crewai-exception.md` (Stage 38 exception)
+- `stage-04-compliance-exception.md` (Stage 4 exception)
+- `stage-38-compliance-exception.md` (Stage 38 exception)
 
 ### 2. Timeline Exceptions
 **Naming**: `stage-XX-timeline-exception.md`
@@ -57,10 +57,10 @@ As new exception types emerge, templates will be added to this directory.
 - Exception tracked in SD metadata:
   ```json
   {
-    "crewai_compliance_status": "exception",
-    "crewai_exception_id": "EX-STAGE-XX-CREWAI",
-    "crewai_exception_file": "/docs/governance/exceptions/stage-XX-crewai-exception.md",
-    "crewai_exception_sunset": "YYYY-MM-DD"
+    "compliance_status": "exception",
+    "exception_id": "EX-STAGE-XX-COMPLIANCE",
+    "exception_file": "/docs/governance/exceptions/stage-XX-compliance-exception.md",
+    "exception_sunset": "YYYY-MM-DD"
   }
   ```
 - Sunset date set for re-evaluation
@@ -84,12 +84,12 @@ As new exception types emerge, templates will be added to this directory.
 ```sql
 SELECT sd.id, sd.title,
        sd.metadata->>'source_stage' as stage,
-       sd.metadata->>'crewai_compliance_status' as status,
-       sd.metadata->>'crewai_exception_id' as exception_id,
-       (sd.metadata->>'crewai_exception_sunset')::date as expires
+       sd.metadata->>'compliance_status' as status,
+       sd.metadata->>'exception_id' as exception_id,
+       (sd.metadata->>'exception_sunset')::date as expires
 FROM strategic_directives_v2 sd
-WHERE sd.metadata->>'crewai_compliance_status' = 'exception'
-  AND sd.metadata->>'crewai_exception_status' = 'ACTIVE'
+WHERE sd.metadata->>'compliance_status' = 'exception'
+  AND sd.metadata->>'exception_status' = 'ACTIVE'
 ORDER BY expires ASC;
 ```
 
@@ -97,12 +97,12 @@ ORDER BY expires ASC;
 ```sql
 SELECT sd.id, sd.title,
        sd.metadata->>'source_stage' as stage,
-       (sd.metadata->>'crewai_exception_sunset')::date as expires,
-       (sd.metadata->>'crewai_exception_sunset')::date - CURRENT_DATE as days_remaining
+       (sd.metadata->>'exception_sunset')::date as expires,
+       (sd.metadata->>'exception_sunset')::date - CURRENT_DATE as days_remaining
 FROM strategic_directives_v2 sd
-WHERE sd.metadata->>'crewai_compliance_status' = 'exception'
-  AND sd.metadata->>'crewai_exception_status' = 'ACTIVE'
-  AND (sd.metadata->>'crewai_exception_sunset')::date <= CURRENT_DATE + INTERVAL '30 days'
+WHERE sd.metadata->>'compliance_status' = 'exception'
+  AND sd.metadata->>'exception_status' = 'ACTIVE'
+  AND (sd.metadata->>'exception_sunset')::date <= CURRENT_DATE + INTERVAL '30 days'
 ORDER BY expires ASC;
 ```
 
@@ -110,12 +110,12 @@ ORDER BY expires ASC;
 ```sql
 SELECT sd.id, sd.title,
        sd.metadata->>'source_stage' as stage,
-       (sd.metadata->>'crewai_exception_sunset')::date as expired_on,
-       CURRENT_DATE - (sd.metadata->>'crewai_exception_sunset')::date as days_overdue
+       (sd.metadata->>'exception_sunset')::date as expired_on,
+       CURRENT_DATE - (sd.metadata->>'exception_sunset')::date as days_overdue
 FROM strategic_directives_v2 sd
-WHERE sd.metadata->>'crewai_compliance_status' = 'exception'
-  AND sd.metadata->>'crewai_exception_status' = 'ACTIVE'
-  AND (sd.metadata->>'crewai_exception_sunset')::date < CURRENT_DATE
+WHERE sd.metadata->>'compliance_status' = 'exception'
+  AND sd.metadata->>'exception_status' = 'ACTIVE'
+  AND (sd.metadata->>'exception_sunset')::date < CURRENT_DATE
 ORDER BY days_overdue DESC;
 ```
 
@@ -137,13 +137,13 @@ ORDER BY days_overdue DESC;
 ## Guidelines for Exception Requests
 
 ### Strong Justifications (Likely to be Granted)
-- **Technical Blocker**: CrewAI library bug prevents implementation, workaround planned
+- **Technical Blocker**: Library bug prevents implementation, workaround planned
 - **Regulatory Constraint**: Legal requirement prohibits full automation
 - **Architectural Dependency**: Awaiting upstream stage completion or infrastructure upgrade
 - **Temporary**: Clear timeline for remediation with committed resources
 
 ### Weak Justifications (Likely to be Denied)
-- **Time Pressure**: "We need to ship fast" → CrewAI is mandatory, not optional
+- **Time Pressure**: "We need to ship fast" → Compliance is mandatory, not optional
 - **Complexity**: "It's too hard to implement" → SD should be created to address complexity
 - **Resource Constraint**: "No one available to do it" → Schedule/priority issue, not exception
 - **Preference**: "We prefer manual process" → Contradicts automation strategy
@@ -158,8 +158,8 @@ ORDER BY days_overdue DESC;
 
 ## Related Documentation
 
-- CrewAI Compliance Policy - Full policy and exception process
-- Stage Review Process - Step 2.5 (CrewAI Compliance Check)
+- Governance Compliance Policy - Full policy and exception process
+- Stage Review Process - Step 2.5 (Compliance Check)
 - Stage Review Template - Section 2.6 (Exception documentation)
 
 ---

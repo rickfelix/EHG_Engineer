@@ -36,7 +36,7 @@ async function systemsAnalystReview() {
         'Chairman feedback display'
       ],
       gaps: [
-        'No CrewAI framework integration',
+        'No agent orchestration framework integration',
         'No research agents (Market Sizing, Pain Point, Competitive, Strategic Fit)',
         'No full-page progressive workflow',
         'No AI research progress display',
@@ -52,7 +52,7 @@ async function systemsAnalystReview() {
         'Keep existing modal for quick venture creation (future)',
         'Reuse VoiceCapture and ChairmanFeedbackDisplay components',
         'Extend EVA validation to incorporate AI research results',
-        'Add CrewAI dependency (~150KB bundle increase)'
+        'Add agent orchestration dependency (~150KB bundle increase)'
       ]
     },
     verdict: 'APPROVED',
@@ -160,7 +160,7 @@ async function securityArchitectReview() {
         'Encrypt AI research results before storage (may contain sensitive market data)',
         'Sanitize external API responses (from market research, Reddit, competitors)',
         'Validate chairman input to prevent injection attacks',
-        'Secure CrewAI API keys in environment variables (not in client code)'
+        'Secure AI agent API keys in environment variables (not in client code)'
       ],
       api_security: [
         'Rate limit: 5 venture creations per hour per user',
@@ -175,7 +175,7 @@ async function securityArchitectReview() {
         'Third-party APIs: Ensure compliance with Reddit, market data ToS'
       ],
       recommendations: [
-        'Implement API key rotation for CrewAI/OpenAI',
+        'Implement API key rotation for AI agent/OpenAI',
         'Add audit logging for all AI research operations',
         'Encrypt sensitive research findings at rest',
         'Implement cost budget alerts (notify if research exceeds $X)',
@@ -324,27 +324,27 @@ async function researchAgentReview() {
     phase: 'LEAD',
     findings: {
       market_validation: [
-        'CrewAI framework: 50K+ GitHub stars, production-ready',
+        'Agent orchestration framework: production-ready',
         'Competitor analysis: Autogen (Microsoft), LangGraph, SuperAGI',
-        'CrewAI advantages: 5.76x performance, simpler API, better orchestration',
+        'Framework advantages: high performance, simpler API, better orchestration',
         'Market fit: Multi-agent systems are trending (Devin, AutoGPT, MetaGPT)'
       ],
       technical_feasibility: [
-        'CrewAI integrates with OpenAI, Anthropic, local models',
+        'Framework integrates with OpenAI, Anthropic, local models',
         'Supports sequential and parallel agent execution',
         'Built-in memory and context management',
         'Agent collaboration via shared context',
-        'Proven use cases: Market research, competitive analysis, content generation'
+        'Proven use cases: market research, competitive analysis, content generation'
       ],
       integration_complexity: [
-        'Complexity: Medium (CrewAI is well-documented)',
-        'Dependencies: crewai, langchain, openai libraries',
+        'Complexity: Medium (AI agent is well-documented)',
+        'Dependencies: langchain, openai libraries',
         'Bundle size: ~150KB (acceptable for this feature)',
-        'Backend required: Yes (Node.js with CrewAI Python bridge OR direct OpenAI)',
+        'Backend required: Yes (Node.js with Python bridge OR direct OpenAI)',
         'Estimated implementation: 13 points = 3-5 days'
       ],
       cost_analysis: [
-        'Per venture research: $0.50 - $2.00 (4 agents × GPT-4 calls)',
+        'Per venture research: $0.50 - $2.00 (4 agents x GPT-4 calls)',
         'Monthly at scale (100 ventures): $50 - $200',
         'Cost reduction strategies: Cache common research, use GPT-3.5 for drafts',
         'ROI: Saves chairman 2-4 hours manual research per venture'

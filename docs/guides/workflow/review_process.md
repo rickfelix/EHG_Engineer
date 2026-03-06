@@ -39,7 +39,7 @@ tags: [guide, auto-generated]
 - [Configuration](#configuration)
   - [Environment Variables](#environment-variables)
   - [Dependencies](#dependencies)
-  - [Step 2.5: CrewAI Compliance Check ⚠️ MANDATORY GATE](#step-25-crewai-compliance-check-mandatory-gate)
+  - [Step 2.5: Automation Compliance Check ⚠️ MANDATORY GATE](#step-25-automation-compliance-check-mandatory-gate)
   - [Step 2.75: Cross-Stage Pattern Reuse](#step-275-cross-stage-pattern-reuse)
   - [Step 3: Gap Assessment](#step-3-gap-assessment)
 - [Executive Summary](#executive-summary)
@@ -291,66 +291,44 @@ The Stage Review Framework provides a **Chairman-driven governance model** for e
 
 ---
 
-### Step 2.5: CrewAI Compliance Check ⚠️ MANDATORY GATE
+### Step 2.5: Automation Compliance Check ⚠️ MANDATORY GATE
 
-**Objective**: Verify prescribed CrewAI agents/crews from dossier are implemented. This is a **BLOCKING GATE**.
+**Objective**: Verify prescribed agents from dossier are implemented. This is a **BLOCKING GATE**.
 
-**Policy**: CrewAI is **MANDATORY** for all stages. This gate cannot be bypassed. See `/docs/workflow/crewai_compliance_policy.md` for full policy.
+**Policy**: Automation compliance is **MANDATORY** for all stages. This gate cannot be bypassed.
 
 **Actions**:
 
-1. **Extract CrewAI prescriptions from dossier:**
-   - Required agents (roles, goals, backstory, tools)
-   - Required crews (orchestration patterns: Sequential/Hierarchical/Parallel)
+1. **Extract agent prescriptions from dossier:**
+   - Required agents (roles, goals, tools)
+   - Required orchestration patterns (Sequential/Hierarchical/Parallel)
    - Required APIs/endpoints for agent invocation
-   - Success criteria specific to CrewAI implementation
+   - Success criteria specific to agent implementation
    - RAG/knowledge source requirements
 
 2. **Verify implementation in both repositories:**
 
-   **EHG app database queries:**
-   ```sql
-   -- Check for agents
-   SELECT id, name, role, goal, stage, version
-   FROM crewai_agents
-   WHERE stage = [STAGE_NUMBER];
-
-   -- Check for crews
-   SELECT id, name, orchestration_type, stage
-   FROM crewai_crews
-   WHERE stage = [STAGE_NUMBER];
-
-   -- Check agent-crew assignments
-   SELECT ca.name as agent_name, cc.name as crew_name, caa.agent_order
-   FROM crewai_agent_assignments caa
-   JOIN crewai_agents ca ON ca.id = caa.agent_id
-   JOIN crewai_crews cc ON cc.id = caa.crew_id
-   WHERE cc.stage = [STAGE_NUMBER]
-   ORDER BY caa.agent_order;
-   ```
-
    **EHG code verification:**
    - Agent definitions: `agent-platform/app/agents/`
-   - Crew orchestrations: `agent-platform/app/crews/`
+   - Orchestration flows: `agent-platform/app/crews/`
    - API endpoints: `agent-platform/app/api/` or FastAPI routes
-   - Configuration: Agent parameters matching CrewAI 1.3.0+ spec (67 parameters)
 
 3. **Classify compliance status:**
-   - ✅ **COMPLIANT**: All prescribed agents/crews implemented per dossier spec
-   - ❌ **NON_COMPLIANT**: Missing or incorrectly implemented agents/crews
+   - ✅ **COMPLIANT**: All prescribed agents implemented per dossier spec
+   - ❌ **NON_COMPLIANT**: Missing or incorrectly implemented agents
    - ⚠️ **EXCEPTION**: Chairman-approved deviation with documented rationale
 
 4. **Gate Decision:**
    - If **COMPLIANT** or **EXCEPTION** → Proceed to Step 2.75
    - If **NON_COMPLIANT** → **MUST** either:
-     - **Option A**: Spawn SD to implement missing CrewAI components
+     - **Option A**: Spawn SD to implement missing agent components
      - **Option B**: Obtain Chairman-approved exception with:
        - Written rationale (why deviation necessary)
        - Sunset date (when compliance required)
-       - Documentation in `/docs/governance/exceptions/stage-XX-crewai-exception.md`
-   - **NO BYPASS PERMITTED**: Reviews with non-compliant CrewAI and no exception are **REJECTED**
+       - Documentation in `/docs/governance/exceptions/stage-XX-automation-exception.md`
+   - **NO BYPASS PERMITTED**: Reviews with non-compliant automation and no exception are **REJECTED**
 
-**Output**: CrewAI Compliance section in `02_as_built_inventory.md` (Section 2.6 - see template)
+**Output**: Automation Compliance section in `02_as_built_inventory.md` (Section 2.6 - see template)
 
 **Quality Standard**:
 - All findings must cite specific file paths with line numbers
@@ -387,8 +365,8 @@ The Stage Review Framework provides a **Chairman-driven governance model** for e
    ```
 
 3. **Check for reusable patterns:**
-   - **CrewAI agent configurations** (can agent be reused with different parameters?)
-   - **Research pipeline orchestrations** (especially Stage 2's research crews)
+   - **Agent configurations** (can agent be reused with different parameters?)
+   - **Research pipeline orchestrations** (especially Stage 2's research pipelines)
    - **UI component patterns** (card layouts, forms, tables)
    - **Database schema patterns** (RLS policies, service role patterns)
    - **API endpoint patterns** (CRUD operations, error handling)
@@ -436,13 +414,12 @@ The Stage Review Framework provides a **Chairman-driven governance model** for e
    - **Medium (P2)**: Enhancement or optimization needed
    - **Low (P3)**: Nice-to-have, documentation gap
 
-4. **New Gap Category: CrewAI Compliance Gaps** ⚠️ MANDATORY
-   - Missing agent registrations in `crewai_agents` table
-   - Incorrect crew orchestration (doesn't match dossier pattern)
+4. **New Gap Category: Automation Compliance Gaps** ⚠️ MANDATORY
+   - Missing agent implementations
+   - Incorrect orchestration (doesn't match dossier pattern)
    - RAG/knowledge source gaps
    - Service role key violations (automation blockers)
    - RLS policy misconfigurations (app vs engineer separation)
-   - CrewAI 1.3.0+ parameter mismatches
 
 5. **Evidence Standards: ⚠️ NO EVIDENCE, NO CLAIM**
 
@@ -450,7 +427,8 @@ The Stage Review Framework provides a **Chairman-driven governance model** for e
    - **File paths with line numbers**: `agent-platform/app/agents/researcher.py:45-67`
    - **Database queries with results**:
      ```sql
-     SELECT * FROM crewai_agents WHERE stage=4;
+     -- Example: Check agent registrations for a stage
+     SELECT * FROM agents WHERE stage=4;
      -- Results: 0 rows (Expected: 2 agents per dossier)
      ```
    - **Code snippets**: 10-20 lines demonstrating the issue
@@ -617,8 +595,8 @@ For any SD spawned from this review, populate `strategic_directives_v2.metadata`
   "spawned_from_review": true,
   "review_date": "YYYY-MM-DD",
   "review_decision_file": "/docs/workflow/stage_reviews/stage-XX/04_decision_record.md",
-  "crewai_verified": true|false,
-  "crewai_compliance_status": "compliant" | "exception" | "non_compliant",
+  "automation_verified": true|false,
+  "automation_compliance_status": "compliant" | "exception" | "non_compliant",
   "technical_debt_items": ["TD-001", "TD-002"],
   "cross_stage_patterns_applied": ["stage-02-research-pipeline"],
   "chairman_notes": "[Optional notes]"
@@ -630,16 +608,16 @@ For any SD spawned from this review, populate `strategic_directives_v2.metadata`
 -- Find all SDs spawned by stage reviews
 SELECT id, title, status,
        metadata->>'source_stage' as stage,
-       metadata->>'crewai_compliance_status' as crewai_status,
+       metadata->>'automation_compliance_status' as automation_status,
        metadata->>'review_date' as reviewed_on
 FROM strategic_directives_v2
 WHERE metadata->>'spawned_from_review' = 'true'
 ORDER BY (metadata->>'source_stage')::int;
 
--- Find SDs with CrewAI non-compliance
+-- Find SDs with automation non-compliance
 SELECT id, title, metadata->>'source_stage' as stage
 FROM strategic_directives_v2
-WHERE metadata->>'crewai_compliance_status' = 'non_compliant';
+WHERE metadata->>'automation_compliance_status' = 'non_compliant';
 
 -- Find SDs with technical debt
 SELECT id, title,
@@ -772,7 +750,7 @@ WHERE id = 'SD-XXXX-XXXX-XXX';
 
 The outcome log must now include:
 - **Section 5.1**: Review Summary (existing)
-- **Section 5.2**: CrewAI Compliance Score (NEW - see template)
+- **Section 5.2**: Automation Compliance Score (NEW - see template)
 - **Section 5.3**: Technical Debt Summary (NEW - see template)
 - **Section 5.4**: Cross-Stage Patterns Applied (NEW - see template)
 - **Section 5.5**: Actions Taken (existing)
@@ -784,7 +762,7 @@ The outcome log must now include:
 - **Section 5.11**: Audit Confirmation (existing)
 
 **New KPIs to Track:**
-- CrewAI compliance rate (% compliant without exception)
+- Automation compliance rate (% compliant without exception)
 - Avg time from review start → decision (days)
 - % of recommendations leveraging cross-stage reuse
 - % of findings with evidence citations (target 100%)
@@ -1131,7 +1109,7 @@ Read file_path: "/mnt/c/_EHG/EHG/src/components/ventures/VentureCard.tsx"
 - [Source Stage Metadata Field](source_stage_metadata_field.md) - Database metadata specification
 
 **Policies & Best Practices:**
-- CrewAI Compliance Policy - Formal policy on mandatory CrewAI implementation
+- Automation Compliance Policy - Formal policy on mandatory agent implementation
 - [Stage Review Lessons](stage_review_lessons.md) - Living log of lessons learned
 - [Best Practices Index](best_practices.md) - Central index for all best practices
 
@@ -1146,7 +1124,7 @@ Read file_path: "/mnt/c/_EHG/EHG/src/components/ventures/VentureCard.tsx"
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2025-11-07 | Initial framework creation | Claude Code |
-| 1.1 | 2025-11-07 | Added CrewAI compliance gate, cross-stage pattern reuse, technical debt register, evidence standards, governance metadata | Claude Code |
+| 1.1 | 2025-11-07 | Added automation compliance gate, cross-stage pattern reuse, technical debt register, evidence standards, governance metadata | Claude Code |
 
 ---
 

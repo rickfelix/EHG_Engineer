@@ -60,7 +60,6 @@
         },
         "ideation_stage_results": {
           "exists": true,
-          "location": "020_crewai_ideation_infrastructure.sql",
           "notes": "Stage 1-6 ideation results with agent outputs"
         }
       }

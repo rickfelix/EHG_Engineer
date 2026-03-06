@@ -10,8 +10,7 @@ SET
       COALESCE(metadata, '{}'),
       '{shared_services}',
       '{
-        "crewai_crews": ["deep_research_crew", "finance_department_crew"],
-        "crew_location": "/ehg/agent-platform/app/crews/",
+        "crews": ["deep_research_crew", "finance_department_crew"],
         "api_access": "api.ehg.ventures/v1/agents/invoke",
         "ai_gateway": "OpenAI, Anthropic, Perplexity via llm_fallback.py"
       }'::jsonb
@@ -48,8 +47,7 @@ SET
       COALESCE(metadata, '{}'),
       '{shared_services}',
       '{
-        "crewai_crews": ["legal_department_crew", "finance_department_crew"],
-        "crew_location": "/ehg/agent-platform/app/crews/",
+        "crews": ["legal_department_crew", "finance_department_crew"],
         "api_access": "api.ehg.ventures/v1/agents/invoke",
         "ai_gateway": "OpenAI, Anthropic, Perplexity via llm_fallback.py"
       }'::jsonb
@@ -84,8 +82,7 @@ SET
       COALESCE(metadata, '{}'),
       '{shared_services}',
       '{
-        "crewai_crews": ["branding_crew", "advertising_crew", "marketing_department_crew"],
-        "crew_location": "/ehg/agent-platform/app/crews/",
+        "crews": ["branding_crew", "advertising_crew", "marketing_department_crew"],
         "api_access": "api.ehg.ventures/v1/agents/invoke",
         "media_gen": "Midjourney, Sora, Runway (infrastructure ready)",
         "ai_gateway": "OpenAI, Anthropic, Perplexity via llm_fallback.py"
@@ -121,8 +118,7 @@ SET
       COALESCE(metadata, '{}'),
       '{shared_services}',
       '{
-        "crewai_crews": ["technical_crew", "product_management_crew"],
-        "crew_location": "/ehg/agent-platform/app/crews/",
+        "crews": ["technical_crew", "product_management_crew"],
         "api_access": "api.ehg.ventures/v1/agents/invoke",
         "ai_gateway": "OpenAI, Anthropic, Perplexity via llm_fallback.py"
       }'::jsonb
@@ -158,8 +154,7 @@ SET
       COALESCE(metadata, '{}'),
       '{shared_services}',
       '{
-        "crewai_crews": ["technical_crew"],
-        "crew_location": "/ehg/agent-platform/app/crews/",
+        "crews": ["technical_crew"],
         "api_access": "api.ehg.ventures/v1/agents/invoke",
         "ai_gateway": "OpenAI, Anthropic, Perplexity via llm_fallback.py",
         "deployment_targets": ["Lovable", "Vercel", "Self-Hosted"]
@@ -196,8 +191,7 @@ SET
       COALESCE(metadata, '{}'),
       '{shared_services}',
       '{
-        "crewai_crews": ["advertising_crew", "marketing_department_crew"],
-        "crew_location": "/ehg/agent-platform/app/crews/",
+        "crews": ["advertising_crew", "marketing_department_crew"],
         "api_access": "api.ehg.ventures/v1/agents/invoke",
         "ai_gateway": "OpenAI, Anthropic, Perplexity via llm_fallback.py",
         "billing": "Stripe integration (needs implementation)",
@@ -231,7 +225,7 @@ SELECT
   dependencies,
   metadata->'vision_document'->>'document' as vision_doc,
   jsonb_array_length(metadata->'vision_document'->'relevant_sections') as section_count,
-  jsonb_array_length(metadata->'shared_services'->'crewai_crews') as crew_count
+  jsonb_array_length(metadata->'shared_services'->'crews') as crew_count
 FROM strategic_directives_v2
 WHERE id LIKE 'SD-VISION-TRANSITION-001D_'
 ORDER BY id;

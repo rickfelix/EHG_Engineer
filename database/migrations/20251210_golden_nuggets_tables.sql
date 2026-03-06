@@ -136,10 +136,9 @@ CREATE TABLE IF NOT EXISTS venture_token_ledger (
   phase TEXT CHECK (phase IN ('THE_TRUTH', 'THE_ENGINE', 'THE_IDENTITY', 'THE_BLUEPRINT', 'THE_BUILD_LOOP', 'LAUNCH_LEARN')),
 
   -- Agent/Model details
-  agent_type TEXT NOT NULL,  -- 'claude', 'gemini', 'openai', 'crewai_job', 'simulation'
+  agent_type TEXT NOT NULL,  -- 'claude', 'gemini', 'openai', 'simulation'
   model_id TEXT,  -- 'claude-3-sonnet', 'gpt-4', etc.
   job_id UUID,  -- Reference to specific AI job/execution
-  crew_id TEXT,  -- CrewAI crew name if applicable
 
   -- Token metrics
   tokens_input INTEGER NOT NULL DEFAULT 0,

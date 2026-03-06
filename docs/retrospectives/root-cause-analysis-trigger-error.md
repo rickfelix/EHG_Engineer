@@ -63,6 +63,7 @@ tags: [general, auto-generated]
 **Date**: 2025-10-30
 **Error**: `ERROR: 42710: trigger "update_crewai_agents_updated_at" for relation "crewai_agents" already exists`
 **Migration**: `sd-agent-admin-003-comprehensive-migration.sql`
+**Note**: The `crewai_agents`, `crewai_crews`, `crewai_flows`, `crew_members`, and `agent_tools` tables referenced in this RCA have since been dropped. This document is preserved for the idempotent migration lessons learned.
 
 ---
 
@@ -81,11 +82,11 @@ The migration failed due to **non-idempotent SQL statements** attempting to crea
 ### Error Code Analysis
 - **PostgreSQL Error Code**: 42710
 - **Meaning**: `duplicate_object` - Attempted to create an object that already exists
-- **Specific Object**: Trigger `update_crewai_agents_updated_at` on table `crewai_agents`
+- **Specific Object**: Trigger `update_crewai_agents_updated_at` on table `crewai_agents` (table since dropped)
 
 ### Error Context
 The error occurred during migration execution, indicating:
-1. Tables (`crewai_agents`) were created successfully (used `CREATE TABLE IF NOT EXISTS` - already safe)
+1. Tables were created successfully (used `CREATE TABLE IF NOT EXISTS` - already safe)
 2. Migration reached trigger creation phase
 3. Trigger already existed from a previous run, causing failure
 4. Migration halted, leaving database in partially migrated state
@@ -102,10 +103,10 @@ The error occurred during migration execution, indicating:
    - Contains trigger creation without existence checks
    - Contains policy creation without existence checks
 
-2. `/mnt/c/_EHG/EHG_Engineer/database/migrations/20251011_crewai_flows_tables.sql`
-   - Related CrewAI flows migration
-   - Also creates triggers without existence checks
-   - Uses `CREATE TRIGGER` directly (lines 219-243)
+2. `/mnt/c/_EHG/EHG_Engineer/database/migrations/20251011_crewai_flows_tables.sql` (tables since dropped)
+   - Related migration for now-dropped tables
+   - Also created triggers without existence checks
+   - Used `CREATE TRIGGER` directly (lines 219-243)
 
 3. `/mnt/c/_EHG/EHG_Engineer/database/migrations/20251011_board_infrastructure_tables.sql`
    - Board infrastructure migration
@@ -115,7 +116,7 @@ The error occurred during migration execution, indicating:
 
 **Primary Root Cause**: Non-idempotent trigger creation
 ```sql
--- PROBLEMATIC PATTERN (original migration)
+-- PROBLEMATIC PATTERN (original migration) — table since dropped
 CREATE TRIGGER flows_updated_at
   BEFORE UPDATE ON crewai_flows
   FOR EACH ROW
@@ -124,7 +125,7 @@ CREATE TRIGGER flows_updated_at
 
 **Secondary Root Cause**: Non-idempotent policy creation
 ```sql
--- PROBLEMATIC PATTERN (original migration)
+-- PROBLEMATIC PATTERN (original migration) — table since dropped
 CREATE POLICY "flows_read_active" ON crewai_flows
   FOR SELECT
   USING (status = 'active' OR status = 'draft');
@@ -152,12 +153,12 @@ CREATE POLICY "flows_read_active" ON crewai_flows
 
 **Idempotent Trigger Creation:**
 ```sql
--- DROP existing trigger first
-DROP TRIGGER IF EXISTS update_crewai_agents_updated_at ON crewai_agents;
+-- DROP existing trigger first (example uses generic table names — original used now-dropped tables)
+DROP TRIGGER IF EXISTS update_my_table_updated_at ON my_table;
 
 -- Then create (now safe)
-CREATE TRIGGER update_crewai_agents_updated_at
-  BEFORE UPDATE ON crewai_agents
+CREATE TRIGGER update_my_table_updated_at
+  BEFORE UPDATE ON my_table
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 ```
@@ -165,10 +166,10 @@ CREATE TRIGGER update_crewai_agents_updated_at
 **Idempotent Policy Creation:**
 ```sql
 -- DROP existing policy first
-DROP POLICY IF EXISTS "flows_read_active" ON crewai_flows;
+DROP POLICY IF EXISTS "my_read_policy" ON my_table;
 
 -- Then create (now safe)
-CREATE POLICY "flows_read_active" ON crewai_flows
+CREATE POLICY "my_read_policy" ON my_table
   FOR SELECT
   USING (status = 'active' OR status = 'draft');
 ```
@@ -252,51 +253,43 @@ psql <connection_string> -f PRE-MIGRATION-VERIFICATION.sql
 
 ### Before Running Migration
 ```sql
--- Check current trigger status
+-- Check current trigger status (adapt table names to your migration)
 SELECT trigger_name, event_object_table
 FROM information_schema.triggers
 WHERE event_object_schema = 'public'
-  AND event_object_table LIKE 'crewai_%'
+  AND event_object_table = 'your_table_name'
 ORDER BY event_object_table, trigger_name;
 
 -- Check current policy status
 SELECT tablename, policyname
 FROM pg_policies
 WHERE schemaname = 'public'
-  AND tablename IN ('agent_departments', 'agent_tools', 'crewai_agents')
+  AND tablename IN ('agent_departments')
 ORDER BY tablename, policyname;
 ```
 
 ### After Running Migration
 ```sql
--- Verify seed data
-SELECT 'agent_departments' as table_name, COUNT(*) as count FROM agent_departments
-UNION ALL
-SELECT 'agent_tools', COUNT(*) FROM agent_tools
-UNION ALL
-SELECT 'crewai_agents', COUNT(*) FROM crewai_agents
-UNION ALL
-SELECT 'crewai_crews', COUNT(*) FROM crewai_crews
-UNION ALL
-SELECT 'crew_members', COUNT(*) FROM crew_members;
+-- Verify seed data (adapt to your migration's tables)
+SELECT 'agent_departments' as table_name, COUNT(*) as count FROM agent_departments;
 
 -- Expected results:
 -- agent_departments: 11 records
--- agent_tools: 8 records
--- crewai_agents: 4 records
--- crewai_crews: 1 record
--- crew_members: 4 records
 ```
+
+> **Note**: The original verification queries referenced `agent_tools`, `crewai_agents`, `crewai_crews`, and `crew_members` tables which have since been dropped.
 
 ---
 
 ## Impact Assessment
 
 ### Affected Objects
-- **Tables**: 7 (agent_departments, agent_tools, crewai_agents, crewai_crews, crew_members, ab_test_results, search_preferences, agent_executions, performance_alerts)
+- **Tables**: 4 (agent_departments, ab_test_results, search_preferences, performance_alerts)
 - **Triggers**: 1 (validate_sd_progress on strategic_directives_v2)
-- **Policies**: 13 across 7 tables
-- **Seed Records**: 28 total
+- **Policies**: 13 across tables
+- **Seed Records**: 11 (agent_departments)
+
+> **Note**: The original migration also created `agent_tools`, `crewai_agents`, `crewai_crews`, and `crew_members` tables with seed data. Those tables have since been dropped.
 
 ### Risk Analysis
 **Original Migration**:
@@ -388,12 +381,8 @@ psql <connection_string> -f database/migrations/sd-agent-admin-003-comprehensive
 ### Step 3: Verify Success
 Check verification query output at end of migration:
 - agent_departments: 11 records
-- agent_tools: 8 records
-- crewai_agents: 4 records
-- crewai_crews: 1 record
-- crew_members: 4 records
-- 4 new tables exist
-- 13 policies exist
+- Remaining tables as defined in your migration
+- Policies exist as defined
 
 ### Step 4: Test Idempotency (Optional)
 ```bash
@@ -433,9 +422,9 @@ psql <connection_string> -f database/migrations/sd-agent-admin-003-comprehensive
 
 ### Success Criteria
 - [ ] Migration executes without errors
-- [ ] All 28 seed records inserted
-- [ ] All 4 new tables created
-- [ ] All 13 RLS policies active
+- [ ] Seed records inserted as expected
+- [ ] All new tables created
+- [ ] All RLS policies active
 - [ ] Trigger on strategic_directives_v2 working
 - [ ] Can re-run migration without errors
 

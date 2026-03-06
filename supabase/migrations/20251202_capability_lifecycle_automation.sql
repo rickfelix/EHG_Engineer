@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS sd_capabilities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sd_uuid UUID NOT NULL REFERENCES strategic_directives_v2(uuid_id) ON DELETE CASCADE,
     sd_id VARCHAR(100) NOT NULL, -- Human-readable SD ID for easier querying
-    capability_type VARCHAR(50) NOT NULL CHECK (capability_type IN ('agent', 'tool', 'crew', 'skill')),
-    capability_key VARCHAR(200) NOT NULL, -- Matches crewai_agents.agent_key or similar
+    capability_type VARCHAR(50) NOT NULL CHECK (capability_type IN ('agent', 'tool', 'skill')),
+    capability_key VARCHAR(200) NOT NULL, -- Matches capability registry key
     action VARCHAR(20) NOT NULL CHECK (action IN ('registered', 'updated', 'deprecated')),
     action_details JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -73,31 +73,6 @@ BEGIN
         IF NEW.delivers_capabilities IS NOT NULL AND jsonb_array_length(NEW.delivers_capabilities) > 0 THEN
             FOR cap_record IN SELECT * FROM jsonb_array_elements(NEW.delivers_capabilities)
             LOOP
-                -- Insert into crewai_agents if capability_type is 'agent'
-                IF cap_record->>'capability_type' = 'agent' THEN
-                    INSERT INTO crewai_agents (
-                        agent_key,
-                        name,
-                        role,
-                        goal,
-                        backstory,
-                        status,
-                        created_at
-                    ) VALUES (
-                        cap_record->>'capability_key',
-                        cap_record->>'name',
-                        COALESCE(cap_record->>'role', cap_record->>'name'),
-                        COALESCE(cap_record->>'goal', 'Automated agent from SD completion'),
-                        COALESCE(cap_record->>'backstory', 'Auto-registered by ' || NEW.id),
-                        'active',
-                        NOW()
-                    )
-                    ON CONFLICT (agent_key) DO UPDATE SET
-                        name = EXCLUDED.name,
-                        status = 'active',
-                        updated_at = NOW();
-                END IF;
-
                 -- Log to audit trail
                 INSERT INTO sd_capabilities (
                     sd_uuid,
@@ -122,16 +97,6 @@ BEGIN
         IF NEW.modifies_capabilities IS NOT NULL AND jsonb_array_length(NEW.modifies_capabilities) > 0 THEN
             FOR cap_record IN SELECT * FROM jsonb_array_elements(NEW.modifies_capabilities)
             LOOP
-                -- Update crewai_agents
-                UPDATE crewai_agents
-                SET
-                    name = COALESCE(cap_record->'updates'->>'name', name),
-                    role = COALESCE(cap_record->'updates'->>'role', role),
-                    goal = COALESCE(cap_record->'updates'->>'goal', goal),
-                    status = COALESCE(cap_record->'updates'->>'status', status),
-                    updated_at = NOW()
-                WHERE agent_key = cap_record->>'capability_key';
-
                 -- Log to audit trail
                 INSERT INTO sd_capabilities (
                     sd_uuid,
@@ -156,13 +121,6 @@ BEGIN
         IF NEW.deprecates_capabilities IS NOT NULL AND jsonb_array_length(NEW.deprecates_capabilities) > 0 THEN
             FOR cap_record IN SELECT * FROM jsonb_array_elements(NEW.deprecates_capabilities)
             LOOP
-                -- Update crewai_agents to deprecated status
-                UPDATE crewai_agents
-                SET
-                    status = 'deprecated',
-                    updated_at = NOW()
-                WHERE agent_key = cap_record->>'capability_key';
-
                 -- Log to audit trail
                 INSERT INTO sd_capabilities (
                     sd_uuid,
