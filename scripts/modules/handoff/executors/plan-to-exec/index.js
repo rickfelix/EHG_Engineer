@@ -115,6 +115,56 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Prerequisite handoff check (always first after protocol read)
     gates.push(createPrerequisiteCheckGate(this.supabase));
 
+    // Parent orchestrators get simplified gates
+    if (parentOrchestrator) {
+      console.log('\n   📋 PARENT ORCHESTRATOR GATE SET (simplified)');
+      return getParentOrchestratorGates(this.supabase, this.prdRepo, sd, options);
+    }
+
+    // Orchestrator CHILDREN get a reduced gate set — heavy gates like
+    // DESIGN/DATABASE sub-agents, integration section, and architectural
+    // pattern checklists run at the orchestrator level, not per-child.
+    // Children keep: protocol, prerequisites, PRD exists, architecture,
+    // BMAD, contract compliance, branch enforcement, planning completeness.
+    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
+    if (isOrchestratorChild) {
+      console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced — heavy gates run at parent level)');
+      console.log(`      Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);
+
+      // PRD existence check
+      gates.push(createPrdExistsGate(this.prdRepo));
+
+      // Architecture verification
+      gates.push(createArchitectureVerificationGate(this.prdRepo, this.determineTargetRepository.bind(this)));
+
+      // BMAD
+      gates.push({
+        name: 'BMAD_PLAN_TO_EXEC',
+        validator: async (ctx) => {
+          const bmadResult = await validateBMADForPlanToExec(ctx.sdId, this.supabase);
+          ctx._bmadResult = bmadResult;
+          return bmadResult;
+        },
+        required: true
+      });
+
+      // Contract Compliance
+      gates.push(createContractComplianceGate(this.prdRepo, sd));
+
+      // Planning Completeness
+      gates.push(createPlanningCompletenessGate(this.supabase, sd));
+
+      // Branch Enforcement
+      gates.push(createBranchEnforcementGate(sd, appPath));
+
+      // DFE Escalation
+      gates.push(createDFEEscalationGate(this.supabase, 'plan-to-exec-gate'));
+
+      return gates;
+    }
+
+    // --- Full gate set for standalone SDs ---
+
     // PRD existence check
     gates.push(createPrdExistsGate(this.prdRepo));
 
@@ -132,12 +182,6 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Migration Data Verification (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-A)
     // After migration executes, verifies data was inserted. BLOCKING for database SDs.
     gates.push(createMigrationDataVerificationGate(this.supabase));
-
-    // Parent orchestrators get simplified gates
-    if (parentOrchestrator) {
-      console.log('\n   📋 PARENT ORCHESTRATOR GATE SET (simplified)');
-      return getParentOrchestratorGates(this.supabase, this.prdRepo, sd, options);
-    }
 
     // BMAD Validation
     gates.push({
