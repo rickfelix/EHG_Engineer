@@ -24,6 +24,7 @@ import { execSync } from 'child_process';
 import { ShippingPreflightVerifier } from './modules/shipping/ShippingPreflightVerifier.js';
 import { SDGitStateReconciler } from './modules/shipping/SDGitStateReconciler.js';
 import { MultiRepoCoordinator } from './modules/shipping/MultiRepoCoordinator.js';
+import { TestExecutionVerifier } from './modules/shipping/TestExecutionVerifier.js';
 import { resolve as resolveWorkdir } from './resolve-sd-workdir.js';
 
 // Parse command line arguments
@@ -36,6 +37,7 @@ function parseArgs() {
     json: false,
     reconcileOnly: false,
     multiRepoOnly: false,
+    skipTests: false,
     verbose: false,
     help: false
   };
@@ -51,6 +53,8 @@ function parseArgs() {
       options.reconcileOnly = true;
     } else if (arg === '--multi-repo') {
       options.multiRepoOnly = true;
+    } else if (arg === '--skip-tests') {
+      options.skipTests = true;
     } else if (arg === '--verbose' || arg === '-v') {
       options.verbose = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -101,6 +105,7 @@ Options:
   --json                 Output results as JSON for automation
   --reconcile-only       Only run state reconciliation check
   --multi-repo           Only run multi-repo coordination check
+  --skip-tests           Skip test execution verification (logged as warning)
   --verbose, -v          Enable verbose output
   --help, -h             Show this help message
 
@@ -165,6 +170,7 @@ async function main() {
     branchVerification: null,
     stateReconciliation: null,
     multiRepoCoordination: null,
+    testExecution: null,
     overallPassed: true,
     hasWarnings: false
   };
@@ -226,6 +232,24 @@ async function main() {
       results.multiRepoCoordination = await coordinator.coordinate();
 
       if (!results.multiRepoCoordination.passed) {
+        results.hasWarnings = true;
+      }
+    }
+
+    // Step 4: Test Execution Verification (unless reconcile-only or multi-repo-only)
+    if (!options.reconcileOnly && !options.multiRepoOnly) {
+      const testVerifier = new TestExecutionVerifier({
+        skipTests: options.skipTests,
+        verbose: options.verbose,
+        cwd: worktreeResult?.cwd || process.cwd()
+      });
+
+      results.testExecution = await testVerifier.verify();
+
+      if (!results.testExecution.passed) {
+        results.overallPassed = false;
+      }
+      if (results.testExecution.skipped) {
         results.hasWarnings = true;
       }
     }
@@ -295,6 +319,15 @@ function printSummary(results) {
       details: results.multiRepoCoordination.passed
         ? `${results.multiRepoCoordination.branches.length} branch(es) coordinated`
         : `${results.multiRepoCoordination.coordinationPlan.length} action(s) needed`
+    });
+  }
+
+  if (results.testExecution) {
+    checks.push({
+      name: 'Test Execution',
+      passed: results.testExecution.passed,
+      warning: results.testExecution.skipped,
+      details: results.testExecution.details
     });
   }
 

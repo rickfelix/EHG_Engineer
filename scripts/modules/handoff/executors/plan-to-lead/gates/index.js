@@ -17,3 +17,4 @@ export { createAcceptanceCriteriaValidationGate } from './acceptance-criteria-va
 export { createSuccessMetricsAchievementGate } from './success-metrics-achievement.js';
 export { createVisionCompletionScoreGate } from './vision-completion-score.js';
 export { createArchitecturePlanValidationGate } from './architecture-plan-validation.js';
+export { createSuccessMetricsVerificationGate } from './success-metrics-verification.js';

@@ -14,6 +14,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { resolve, relative, extname } from 'path';
 import { execSync } from 'child_process';
+import { categorizeTestFiles } from '../../../../../lib/test-categorizer.js';
 
 /**
  * Valid integration test file extensions
@@ -358,6 +359,14 @@ export function createIntegrationTestRequirementGate(supabase) {
         }
       }
 
+      // Gap 1: Categorize test files — detect mock-only "integration" tests
+      const categorization = categorizeTestFiles(testFiles, repoRoot);
+      if (categorization.summary.mockOnlyIntegration) {
+        console.log(`   ⚠️  MOCK-ONLY DETECTION: All ${categorization.summary.integrationFileCount} integration test(s) use mocks with no real clients`);
+        console.log('      These are effectively unit tests in the integration directory.');
+        console.log('      Score penalty: -25 points');
+      }
+
       // Count test() calls
       const { totalTestCalls, perFile } = countTestCalls(testFiles);
       console.log(`   🧪 Total test() calls: ${totalTestCalls} (threshold: > ${MIN_TEST_CALL_COUNT})`);
@@ -427,16 +436,27 @@ export function createIntegrationTestRequirementGate(supabase) {
         }
       }
 
-      // All checks passed
-      console.log('   ✅ Integration tests meet requirements');
+      // All checks passed — apply mock-only penalty if detected
+      let finalScore = 100;
+      const finalWarnings = [];
+
+      if (categorization.summary.mockOnlyIntegration) {
+        finalScore = 75;
+        finalWarnings.push(
+          `All ${categorization.summary.integrationFileCount} integration test file(s) contain only mocks (vi.mock/mockResolvedValue) with no real client connections. ` +
+          'Consider adding tests that use real Supabase/API clients for true integration coverage. Score reduced to 75.'
+        );
+      }
+
+      console.log(`   ✅ Integration tests meet requirements${finalScore < 100 ? ` (score: ${finalScore}, mock-only penalty applied)` : ''}`);
       return {
         passed: true,
-        score: 100,
+        score: finalScore,
         max_score: 100,
         issues: [],
-        warnings: [],
+        warnings: finalWarnings,
         details: {
-          status: 'PASS',
+          status: finalScore === 100 ? 'PASS' : 'WARN',
           blocking: false,
           complexity,
           integration_dir_exists: true,
@@ -448,7 +468,9 @@ export function createIntegrationTestRequirementGate(supabase) {
           })),
           test_call_count: totalTestCalls,
           threshold: MIN_TEST_CALL_COUNT,
-          summary: `PASS: ${totalTestCalls} test() calls across ${testFiles.length} files (> ${MIN_TEST_CALL_COUNT} required)`
+          mock_only_integration: categorization.summary.mockOnlyIntegration,
+          categorization_summary: categorization.summary,
+          summary: `${finalScore === 100 ? 'PASS' : 'WARN'}: ${totalTestCalls} test() calls across ${testFiles.length} files (> ${MIN_TEST_CALL_COUNT} required)${categorization.summary.mockOnlyIntegration ? ' — mock-only penalty applied' : ''}`
         }
       };
     },

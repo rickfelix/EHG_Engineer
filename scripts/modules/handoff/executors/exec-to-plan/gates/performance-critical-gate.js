@@ -11,6 +11,8 @@
  * - infrastructure/documentation: SKIP
  */
 
+import { detectPerformanceCriteria, findBenchmarkEvidence, validateBenchmarkTargets } from '../../../../../lib/performance-evidence-checker.js';
+
 // External validator (lazy loaded)
 let getValidationRequirements;
 
@@ -102,7 +104,7 @@ export function createPerformanceCriticalGate(supabase) {
 
         const perfRequirements = prdData?.performance_requirements;
         if (perfRequirements && Object.keys(perfRequirements).length > 0) {
-          console.log(`   📊 PRD performance requirements loaded`);
+          console.log('   📊 PRD performance requirements loaded');
           result.prd_targets = perfRequirements;
         }
 
@@ -176,6 +178,48 @@ export function createPerformanceCriticalGate(supabase) {
             recommendation: 'Use Promise.all() for independent async operations'
           });
           result.score = Math.max(result.score - 10, 70);
+        }
+
+        // Gap 3: Performance benchmark evidence check
+        // If SD has performance-related success criteria, check for benchmark evidence
+        const sdSuccessMetrics = ctx.sd?.success_metrics || [];
+        const { hasPerformanceCriteria, performanceMetrics } = detectPerformanceCriteria(sdSuccessMetrics);
+
+        if (hasPerformanceCriteria) {
+          console.log(`\n   📊 Performance criteria detected (${performanceMetrics.length} metric(s))`);
+          const repoRoot = process.cwd();
+          const evidence = findBenchmarkEvidence(repoRoot);
+
+          if (!evidence.found) {
+            const evidenceWarning = `Performance criteria found (${performanceMetrics.map(m => m.metric || m.name).join(', ')}) but no benchmark evidence files detected. ` +
+              'Expected results in: benchmark-results/, .perf-results/, performance-report.json, or similar.';
+            console.log(`   ⚠️  ${evidenceWarning}`);
+            result.warnings.push({
+              severity: 'MEDIUM',
+              issue: evidenceWarning,
+              recommendation: 'Add benchmark results to verify performance claims'
+            });
+            result.score = Math.max(result.score - 15, 0);
+          } else {
+            console.log(`   ✅ Benchmark evidence found: ${evidence.files.map(f => f.path).join(', ')}`);
+
+            // Validate targets against evidence
+            const validation = validateBenchmarkTargets(evidence.files, performanceMetrics, repoRoot);
+            if (validation.targetsMissed.length > 0) {
+              for (const miss of validation.targetsMissed) {
+                const missWarning = `Performance target not met: ${miss.metric} target=${miss.target} but measured=${miss.measured}`;
+                console.log(`   ⚠️  ${missWarning}`);
+                result.warnings.push({
+                  severity: 'MEDIUM',
+                  issue: missWarning,
+                  recommendation: 'Optimize to meet performance target or adjust target'
+                });
+                result.score = Math.max(result.score - 10, 0);
+              }
+            } else if (validation.targetsChecked > 0) {
+              console.log(`   ✅ ${validation.targetsMet}/${validation.targetsChecked} performance target(s) met`);
+            }
+          }
         }
 
         // Summary

@@ -34,7 +34,8 @@ import {
   createAcceptanceCriteriaValidationGate,
   createSuccessMetricsAchievementGate,
   createVisionCompletionScoreGate,
-  createArchitecturePlanValidationGate
+  createArchitecturePlanValidationGate,
+  createSuccessMetricsVerificationGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -157,6 +158,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // Success metrics achievement (blocking — actuals must be recorded)
     gates.push(createSuccessMetricsAchievementGate(this.supabase));
+
+    // Success metrics verification (Gap 2 — independently measures verifiable metrics)
+    gates.push(createSuccessMetricsVerificationGate(this.supabase));
 
     // Documentation link validation gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-D)
     gates.push(createDocumentationLinkValidationGate(this.supabase));
