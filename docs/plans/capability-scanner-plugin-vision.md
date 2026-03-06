@@ -8,9 +8,9 @@ This vision establishes a unified capability intelligence layer: a federated vie
 The goal is to transform Stage 0 from "what's trending in the market" to "what's trending AND where EHG already has a head start."
 
 ## Problem Statement
-**What problem this addresses:** EHG's four opportunity scanners (Trend Scanner, Democratization Finder, Capability Overhang, Nursery Re-Eval) suggest ventures without awareness of EHG's internal capabilities. The Capability Overhang scanner is supposed to identify reuse opportunities but uses LLM-only analysis with no data access.
+**What problem this addresses:** EHG's four opportunity scanners (Trend Scanner, Democratization Finder, Capability Overhang, Nursery Re-Eval) suggest ventures without awareness of EHG's internal capabilities. The Capability Overhang scanner should identify reuse opportunities but uses LLM-only analysis with no data access.
 
-**Who is affected:**
+**Who this affects:**
 - **EVA/Stage 0** — Generates venture suggestions without internal context, leading to recommendations that ignore existing strengths
 - **Chairman** — Cannot see "what capabilities do we already have" when evaluating opportunities
 - **LEO Protocol** — Completed SDs produce capabilities that are never cataloged or surfaced for reuse
@@ -21,7 +21,7 @@ The goal is to transform Stage 0 from "what's trending in the market" to "what's
 ## Personas
 
 ### EVA Stage 0 Operator (Primary)
-- **Goals**: Generate high-quality venture suggestions that leverage EHG's existing strengths
+- **Goals**: Generate high-quality venture suggestions that use EHG's existing strengths
 - **Mindset**: Wants the system to say "you already have AI image processing from PortraitPro — this new venture would reuse 60% of that capability"
 - **Key Activities**: Running opportunity scanners, evaluating suggestions, feeding promising ideas to Chairman
 
@@ -31,7 +31,7 @@ The goal is to transform Stage 0 from "what's trending in the market" to "what's
 - **Key Activities**: Reviewing Stage 0 suggestions, approving venture exploration, portfolio capability assessment
 
 ### LEO Orchestrator (Capability Producer)
-- **Goals**: Ensure completed work is cataloged as reusable capabilities
+- **Goals**: Ensure the system catalogs completed work as reusable capabilities
 - **Mindset**: Expects that building "AI image classification" in one venture automatically registers it for cross-venture reuse
 - **Key Activities**: Completing SDs, harvesting capabilities from deliverables, maintaining capability metadata
 

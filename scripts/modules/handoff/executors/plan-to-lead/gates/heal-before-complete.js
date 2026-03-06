@@ -146,7 +146,7 @@ export function createHealBeforeCompleteGate(supabase) {
       let healScores = null;
 
       // First try: get the most recent sd-heal mode score
-      const { data: sdHealScores, error: sdHealErr } = await supabase
+      const { data: sdHealScores } = await supabase
         .from('eva_vision_scores')
         .select('id, sd_id, total_score, threshold_action, rubric_snapshot, scored_at')
         .eq('sd_id', sdKey)

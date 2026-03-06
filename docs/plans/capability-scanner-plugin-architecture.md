@@ -42,7 +42,7 @@ Each scanner in `discovery-mode.js` gets a capability injection step:
 1. Query `v_scanner_capabilities` for relevant capabilities
 2. Format as context block for LLM prompt
 3. Inject before the existing LLM call
-4. Scanner logic unchanged — only prompt is enriched
+4. Scanner logic unchanged — the system only enriches the prompt
 
 ## Data Layer
 
@@ -256,7 +256,7 @@ async function onSDCompletion(sdKey) {
 
 ### Risk 2: Anthropic plugin format changes break scanner
 - **Mitigation**: Format compatibility is the first gate in the fitness rubric. Unrecognizable formats are flagged `status: 'evaluating'` for manual review, not silently skipped.
-- **Monitoring**: Scanner logs format parse failures. If >50% of plugins fail format check, alert is raised.
+- **Monitoring**: Scanner logs format parse failures. If >50% of plugins fail format check, the system raises an alert.
 
 ### Risk 3: Federated view performance degrades with scale
 - **Mitigation**: `v_scanner_capabilities` excludes `skills_inventory` (largest table). Views use indexed columns only. For Phase 1, expected row count is <500 total — performance is not a concern.
