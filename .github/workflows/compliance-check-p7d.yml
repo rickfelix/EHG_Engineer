@@ -124,16 +124,13 @@ jobs:
 
           ## Compliance Rules Checked
 
-          - **CREWAI-001**: CrewAI Agent Registration (Critical)
-          - **CREWAI-002**: CrewAI Crew Configuration (Critical)
-          - **CREWAI-003**: CrewAI Agent-Crew Assignments (High)
           - **DOSSIER-001**: Stage Dossier Documentation (High)
           - **SESSION-001**: Session Routing Compliance (Medium)
           - **EXCEPTION-001**: Exception Documentation (Info)
 
           ## References
 
-          - [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md)
+          - [Governance Compliance Policy](/docs/03_protocols_and_standards/exceptions/README.md)
           - [Universal Stage Review Framework](/docs/workflow/review_process.md)
           - [Compliance Dashboard](#) (Coming Soon)
 
@@ -191,7 +188,7 @@ jobs:
               '',
               'Review the violations and take one of the following actions:',
               '',
-              '1. **Implement missing CrewAI components** - Create SD to implement agents/crews per dossier spec',
+              '1. **Implement missing compliance components** - Create SD to implement requirements per dossier spec',
               '2. **Document exception** - If compliance is not feasible, obtain Chairman-approved exception',
               '',
               '### Commands',
@@ -206,7 +203,7 @@ jobs:
               '',
               '### References',
               '',
-              '- [CrewAI Compliance Policy](docs/workflow/crewai_compliance_policy.md)',
+              '- [Governance Compliance Policy](docs/03_protocols_and_standards/exceptions/README.md)',
               '- [Exception Process](docs/governance/exceptions/README.md)',
               '',
               `[View Workflow Run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
@@ -227,7 +224,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'compliance,automated,crewai',
+              labels: 'compliance,automated',
               per_page: 5
             });
 
@@ -256,7 +253,7 @@ jobs:
                 repo: context.repo.repo,
                 title: `Compliance Check Failed - ${new Date().toISOString().split('T')[0]}`,
                 body: issueBody,
-                labels: ['compliance', 'automated', 'crewai', 'governance']
+                labels: ['compliance', 'automated', 'governance']
               });
 
               console.log('Created new compliance issue');

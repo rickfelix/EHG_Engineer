@@ -195,7 +195,7 @@ CREATE TABLE venture_token_ledger (
   id UUID PRIMARY KEY,
   venture_id UUID REFERENCES ventures(id),
   lifecycle_stage INT,
-  agent_type VARCHAR(50),  -- 'claude', 'gemini', 'crewai_job', etc.
+  agent_type VARCHAR(50),  -- 'claude', 'gemini', 'ai_job', etc.
   job_id UUID,             -- Reference to specific AI job
   tokens_input INT,
   tokens_output INT,
@@ -223,7 +223,7 @@ GROUP BY venture_id;
 
 ### 1.4 Open Questions / Risks
 
-- How do we attribute tokens from shared CrewAI jobs across ventures?
+- How do we attribute tokens from shared AI jobs across ventures?
 - Should token budgets be hard caps (venture stops) or soft limits (Chairman approval required)?
 - How do we handle token costs for simulation mode vs runtime mode?
 
@@ -267,7 +267,7 @@ interface VentureSimulation {
 
   // Venture Configuration
   token_budget_profile: TokenBudgetProfile;
-  crew_configuration: CrewConfig;
+  agent_configuration: AgentConfig;
 
   // Assumption Set (versioned)
   assumption_set_id: string;
@@ -562,7 +562,7 @@ For high-stakes stages (design, messaging, risk analysis), use a **tournament pa
 
 ### 6.2 Facts (Already True / Implemented)
 
-- CrewAI infrastructure exists (`leo_interfaces`, `crewai_job_runs`)
+- AI agent infrastructure exists (`leo_interfaces`) — note: `crewai_job_runs` table has been dropped
 - Current pattern is single-agent per task
 - No tournament/competition pattern
 - No meta-learning about optimal crew configurations
@@ -592,6 +592,7 @@ Stage 15: Epic & User Story Breakdown
 #### Crew Configuration Schema
 
 ```sql
+-- NOTE: CrewAI tables have been dropped. These schemas are aspirational for a future agent platform.
 CREATE TABLE crew_configurations (
   id UUID PRIMARY KEY,
   stage_number INT,
@@ -701,7 +702,7 @@ Map each golden nugget to its **home location** in the EHG architecture: runtime
 
 ### 7.2 Facts (Already True / Implemented)
 
-- EHG (runtime): 25-stage workflow, venture lifecycle, UI, CrewAI invocation
+- EHG (runtime): 25-stage workflow, venture lifecycle, UI, AI agent invocation
 - EHG_Engineer (governance): SDs, PRDs, LEO protocol, migrations, CLAUDE.md
 - Supabase (shared): ventures, strategic_directives_v2, venture_artifacts, leo_interfaces
 - ADR-002 defines the boundary between runtime and governance
@@ -987,9 +988,9 @@ A separate evaluator (Claude) has already created "Claude Rubric v0" and "Claude
 
 **Strengths**: Directly addresses the "tokens as capital" thesis. Schema additions are straightforward (new table + view). Enables portfolio-level analytics that don't exist today. High governance value - Chairman can see ROI per venture.
 
-**Concerns**: Attribution of shared CrewAI jobs needs careful design. Hard vs soft budget limits is a UX/governance decision, not a technical blocker.
+**Concerns**: Attribution of shared AI jobs needs careful design. Hard vs soft budget limits is a UX/governance decision, not a technical blocker.
 
-**Integration Points**: New `venture_token_ledger` table in Supabase. Tracking hooks in CrewAI job runner. Dashboard widget in Chairman Console.
+**Integration Points**: New `venture_token_ledger` table in Supabase. Tracking hooks in AI job runner. Dashboard widget in Chairman Console.
 
 **Risk Assessment**: Low-medium. Worst case is inaccurate attribution, which is recoverable.
 
@@ -1039,7 +1040,7 @@ A separate evaluator (Claude) has already created "Claude Rubric v0" and "Claude
 
 **Concerns**: Cold start problem - need initial data before learning works. Manager scoring rubric design is non-trivial.
 
-**Integration Points**: `crew_configurations` and `crew_run_logs` tables. CrewAI job runner modifications. Learning analysis as periodic job.
+**Integration Points**: `crew_configurations` and `crew_run_logs` tables (aspirational — CrewAI tables dropped). AI job runner modifications. Learning analysis as periodic job.
 
 **Risk Assessment**: Medium. Poorly calibrated rubrics could lead to wrong sweet spot conclusions.
 
@@ -1093,7 +1094,7 @@ Total estimated effort for Phase 2: **6-8 weeks** (Simulation Mode + Feature Hyp
 
 **What Changes**:
 - New `venture_token_ledger` table
-- Token tracking hooks in CrewAI job runner
+- Token tracking hooks in AI job runner
 - Budget profile JSONB in `ventures.metadata`
 - Dashboard widget showing token usage per venture/stage
 
@@ -1144,8 +1145,8 @@ Total estimated effort for Phase 2: **6-8 weeks** (Simulation Mode + Feature Hyp
 ### Priority 4: Crew Tournaments (Score: 4.00)
 
 **What Changes**:
-- `crew_configurations` and `crew_run_logs` tables
-- Tournament orchestration in CrewAI job runner
+- `crew_configurations` and `crew_run_logs` tables (aspirational — CrewAI tables dropped)
+- Tournament orchestration in AI job runner
 - Sweet spot learning analysis job (weekly)
 - Dashboard for crew configuration performance
 
@@ -1358,7 +1359,7 @@ Overall = (Strat × 0.2) + (Arch × 0.2) + (Gov × 0.15) + (Cap × 0.15) + (Rel 
 > - **Crew Tournaments** is elevated as a strategic experiment the Chairman wants to explore early, in a narrow pilot, to:
 >   1. Improve quality of stage outputs through competitive selection
 >   2. Generate early data on token cost vs quality for the tournament pattern
->   3. Expand the use of CrewAI agents in the venture workflow
+>   3. Expand the use of AI agents in the venture workflow
 >
 > The Crew Tournament pilot should begin as soon as Phase 1 foundations are *sketched out* (schemas designed, not necessarily fully implemented). This is a "fast-follow" that runs in parallel with Phase 1 completion.
 
@@ -1432,7 +1433,7 @@ See **PART 8: Crew Tournament Pilot Design** below.
 | 3, 5 (optional) | Simulation Mode "what-if" runs |
 
 **Anti-Gravity's Key Insight (Adopted)**:
-> "Do NOT build a separate service yet. Run 'Simulations' as just a special type of `crewai_job` that doesn't persist side effects."
+> "Do NOT build a separate service yet. Run 'Simulations' as just a special type of AI job that doesn't persist side effects."
 
 This avoids the "Sync Hell" risk both evaluators identified.
 
@@ -1547,7 +1548,7 @@ Workers and Manager use the same rubric:
 }
 ```
 
-**Note**: Full `crew_configurations` and `crew_run_logs` tables will be designed in Phase 2 based on pilot learnings.
+**Note**: Full `crew_configurations` and `crew_run_logs` tables (aspirational — CrewAI tables dropped) will be designed in Phase 2 based on pilot learnings.
 
 ---
 
@@ -1623,7 +1624,7 @@ Both Claude and Anti-Gravity independently evaluated the seven golden nuggets us
 
 ## Key Insight
 
-The Crew Tournament pilot can run *in parallel* with Phase 1 completion. It doesn't block on the full token ledger or assumption sets - it just needs to track its own token usage and report results. This satisfies the Chairman's interest in expanding CrewAI usage while maintaining the foundational priority order.
+The Crew Tournament pilot can run *in parallel* with Phase 1 completion. It doesn't block on the full token ledger or assumption sets - it just needs to track its own token usage and report results. This satisfies the Chairman's interest in expanding AI agent usage while maintaining the foundational priority order.
 
 ---
 

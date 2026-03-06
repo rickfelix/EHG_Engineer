@@ -13,7 +13,7 @@
 **OVERALL STATUS**: ⚠️ **CONDITIONAL PASS** (6/8 checks passed, 2 non-critical issues)
 
 Phase A migration successfully deployed **6 out of 7 critical components** to the DEV database. Two issues identified:
-1. **Kochel CrewAI Contracts**: Not migrated (0/4 contracts) - **BLOCKER for Phase B**
+1. **Kochel Contracts** [DROPPED]: Not migrated (0/4 contracts) - CrewAI tables have since been dropped
 2. **Quality Gate Function Test**: Function exists but test used wrong signature - **NOT A BLOCKER**
 
 ---
@@ -136,30 +136,12 @@ RETURNS TABLE(
 
 ---
 
-### ❌ CHECK 7: Kochel CrewAI Contracts
-**Status**: FAIL
-**Expected**: 4 contracts in `leo_interfaces` table
+### ❌ CHECK 7: Kochel Contracts [DROPPED]
+**Status**: N/A (CrewAI tables dropped)
+**Original Expected**: 4 contracts in `leo_interfaces` table
 **Found**: 0 contracts
 
-**Expected Contracts** (per migration file `004_crewai_contracts.sql`):
-1. `kochel-prd-writer` - PRD creation agent
-2. `kochel-qa-validator` - Quality validation agent
-3. `kochel-code-reviewer` - Code review agent
-4. `kochel-test-engineer` - Test engineering agent
-
-**Verification Query**:
-```sql
-SELECT id, name, kind, spec, version
-FROM leo_interfaces
-WHERE name ILIKE '%kochel%'
-```
-Result: 0 rows
-
-**Root Cause**: Migration file `004_crewai_contracts.sql` was **NOT APPLIED** to database.
-
-**Impact**: **BLOCKER for Phase B** - These contracts define the CrewAI agents that will orchestrate Stage 16 (Schema Firewall) workflows.
-
-**Remediation Required**: Apply `database/migrations/kochel-phase-a/004_crewai_contracts.sql` to DEV database.
+**Note**: CrewAI tables (`crewai_agents`, `crewai_crews`, etc.) have since been dropped from the database. The migration file `004_crewai_contracts.sql` is no longer applicable. This check is no longer a blocker.
 
 ---
 
@@ -186,24 +168,16 @@ Result: 0 rows
 | `000_vision_transition_sds.sql` | ✅ | ✅ |
 | `001_add_quality_columns.sql` | ✅ | ✅ |
 | `002_quality_helper_functions.sql` | ✅ | ✅ |
-| `004_crewai_contracts.sql` | ❌ | ❌ |
+| `004_crewai_contracts.sql` | N/A | N/A (CrewAI dropped) |
 
 ---
 
 ## Critical Issues
 
-### 1. Missing Kochel CrewAI Contracts (BLOCKER)
+### 1. ~~Missing Kochel CrewAI Contracts~~ [DROPPED]
 
-**Severity**: HIGH
-**Impact**: Phase B cannot proceed without CrewAI agent contracts
-**Affected Component**: `leo_interfaces` table
-**Migration File**: `database/migrations/kochel-phase-a/004_crewai_contracts.sql`
-
-**Resolution Path**:
-1. Verify migration file exists at specified path
-2. Apply migration to DEV database using authorized connection
-3. Re-run verification to confirm 4 contracts inserted
-4. Update Phase A status to COMPLETE
+**Severity**: N/A (no longer applicable)
+**Note**: CrewAI tables have been dropped. This issue is resolved by removal of the CrewAI architecture.
 
 ---
 
@@ -232,7 +206,7 @@ const testResult = await client.query(`
 ## Chairman Recommendations
 
 ### Immediate Actions (Before Phase B):
-1. ✅ **Apply missing Kochel contracts migration** - Required for Phase B
+1. ~~Apply missing Kochel contracts migration~~ - N/A (CrewAI tables dropped)
 2. ⚠️ **Update verification script** - Fix function test signature (optional)
 3. ✅ **Re-verify Phase A** - Confirm all 8 checks pass
 
@@ -240,7 +214,7 @@ const testResult = await client.query(`
 - **Lifecycle Configuration**: ✅ READY
 - **Vision Transition SDs**: ✅ READY
 - **Quality Infrastructure**: ✅ READY
-- **CrewAI Integration**: ❌ NOT READY (contracts missing)
+- **CrewAI Integration**: N/A (CrewAI tables dropped)
 
 **Overall Readiness**: 🟡 **75% READY** (3/4 components)
 
@@ -277,7 +251,7 @@ const testResult = await client.query(`
 **Verification Date**: 2025-12-10
 **Verification Status**: ⚠️ **CONDITIONAL PASS** (pending contract migration)
 
-**Recommended Next Step**: Apply `004_crewai_contracts.sql` and re-verify.
+**Recommended Next Step**: CrewAI contracts migration is no longer applicable (tables dropped). Re-verify remaining checks only.
 
 ---
 

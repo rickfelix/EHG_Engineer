@@ -274,11 +274,11 @@ WHERE table_name = 'venture_artifacts' AND column_name = 'quality_score';
 -- Expected: 1 row
 ```
 
-#### Step 4: Kochel CrewAI Contracts
+#### Step 4: Kochel Contracts [DROPPED]
 
 ```bash
 # Execute migration 4
-psql -f 20251209_kochel_crewai_contracts.sql 2>&1 | tee migration_4_output.log
+psql -f 20251209_kochel_contracts.sql 2>&1 | tee migration_4_output.log
 
 # Verify success
 grep -i "error" migration_4_output.log
@@ -408,7 +408,7 @@ SELECT * FROM check_venture_quality_gate('00000000-0000-0000-0000-000000000000',
 -- Expected: passes_gate=false, avg_quality_score=0, artifacts_reviewed=0
 ```
 
-### 4.4 CrewAI Contracts Verification
+### 4.4 Contracts Verification [DROPPED]
 
 ```sql
 -- 4.4.1: Contract count
@@ -470,7 +470,7 @@ WHERE prd_id = 'KOCHEL-INTEGRATION' AND name = 'journey-map-generator-v1';
 ```bash
 cd /mnt/c/_EHG/EHG_Engineer/database/migrations
 
-# Step 4 Rollback: Remove CrewAI contracts (inline rollback)
+# Step 4 Rollback: Remove contracts (inline rollback)
 psql -c "DELETE FROM leo_interfaces WHERE prd_id = 'KOCHEL-INTEGRATION';"
 psql -c "DROP INDEX IF EXISTS idx_leo_interfaces_prd_name;"
 
