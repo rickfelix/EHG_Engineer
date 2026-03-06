@@ -82,6 +82,18 @@ export function registerGate1Validators(registry) {
   registry.register('designSubAgentExecution', async (context) => {
     const { sd, sd_id, supabase } = context;
 
+    // Orchestrator children are tactical decompositions — DESIGN sub-agent
+    // is run at the orchestrator level, not per-child.
+    if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated) {
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: ['DESIGN sub-agent skipped for orchestrator child SD']
+      };
+    }
+
     // SD-LEO-001: Only 'feature' and 'database' SDs require DESIGN sub-agent
     const requiresDesignGate = ['feature', 'database'];
     const sdType = (sd?.sd_type || '').toLowerCase();
@@ -118,6 +130,17 @@ export function registerGate1Validators(registry) {
 
   registry.register('databaseSubAgentExecution', async (context) => {
     const { sd, sd_id, supabase } = context;
+
+    // Orchestrator children — DATABASE sub-agent runs at orchestrator level
+    if (sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated) {
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: ['DATABASE sub-agent skipped for orchestrator child SD']
+      };
+    }
 
     // SD-LEO-001: Only 'feature' and 'database' SDs require DATABASE sub-agent
     const requiresDatabaseGate = ['feature', 'database'];
