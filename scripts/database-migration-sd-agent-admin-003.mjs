@@ -157,7 +157,7 @@ This is a fresh start after SD-AGENT-ADMIN-002 was marked complete but had 57/57
 - Assigned: PLAN phase (database migration planning)
 
 **Issue 2**: RLS policies block anon access
-- Problem: ai_ceo_agents, agent_departments, crew_members tables require auth
+- Problem: ai_ceo_agents, agent_departments tables require auth
 - Impact: AI Agents page shows no data for public demo
 - Mitigation: Add anon SELECT policies for active records
 - Assigned: PLAN phase (RLS policy updates)
@@ -270,16 +270,6 @@ This is a fresh start after SD-AGENT-ADMIN-002 was marked complete but had 57/57
         USING (true);
       `
     },
-    {
-      table: 'crew_members',
-      policy: `
-        DROP POLICY IF EXISTS "Allow anon SELECT for crew composition" ON crew_members;
-        CREATE POLICY "Allow anon SELECT for crew composition"
-        ON crew_members FOR SELECT
-        TO anon
-        USING (true);
-      `
-    }
   ];
 
   for (const { table, policy } of rlsUpdates) {

@@ -37,7 +37,7 @@ const prd = {
     version: '1.0.0',
     status: 'approved',
 
-    executive_summary: `Phase 3 completes the Visual Workflow Builder by adding backend code generation and secure execution capabilities. Users can generate CrewAI Flows Python code from visual workflows and execute them in sandboxed Docker containers with comprehensive tracking.
+    executive_summary: `Phase 3 completes the Visual Workflow Builder by adding backend code generation and secure execution capabilities. Users can generate Python workflow code from visual workflows and execute them in sandboxed Docker containers with comprehensive tracking.
 
 **Key Capabilities:** Python code generation, secure sandboxed execution, execution history tracking, board meeting integration, resource usage monitoring.
 
@@ -45,14 +45,14 @@ const prd = {
 
     functional_requirements: `
 ## Code Generation (US-001)
-- Convert React Flow JSON to CrewAI Flows Python code
+- Convert React Flow JSON to Python workflow code
 - Support all node types (Start, Agent Task, Decision, Router, Parallel, Wait, End)
 - AST validation for syntax correctness
-- Store generated code in crewai_flows.python_code column
+- Store generated code in workflow storage
 
 ## Code Validation (US-004)
 - Python AST syntax validation
-- Import whitelist enforcement (crewai, anthropic, openai only)
+- Import whitelist enforcement (anthropic, openai only)
 - Validation error reporting with line numbers
 
 ## Sandboxed Execution (US-002)
@@ -94,7 +94,7 @@ const prd = {
         { name: 'ErrorHandlingSystem', lines: 200 }
       ],
       total_lines: 1800,
-      database: 'No migrations needed - crewai_flows schema ready',
+      database: 'No migrations needed - workflow schema ready',
       security_critical: true
     },
 
@@ -140,7 +140,7 @@ const prd = {
 
     dependencies: [
       'Phase 1 complete (visual workflow builder)',
-      'crewai_flows database schema',
+      'Workflow database schema',
       'Docker environment',
       'Python AST validation API'
     ],

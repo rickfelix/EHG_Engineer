@@ -50,13 +50,13 @@ const prd = {
     category: 'venture-platform',
     phase: 'PLAN',
 
-    executive_summary: `Transform venture ideation from a simple modal form into an AI-orchestrated intelligent process. Replace VentureCreationDialog modal with full-page progressive workflow, integrate CrewAI framework, and deploy 4 core research agents that conduct market analysis, pain point validation, competitive intelligence, and strategic fit assessment in 5-15 minutes.
+    executive_summary: `Transform venture ideation from a simple modal form into an AI-orchestrated intelligent process. Replace VentureCreationDialog modal with full-page progressive workflow, integrate AI agent framework, and deploy 4 core research agents that conduct market analysis, pain point validation, competitive intelligence, and strategic fit assessment in 5-15 minutes.
 
 This PRD establishes requirements for the foundational AI-driven venture intelligence platform based on comprehensive sub-agent review (5 agents, 88% avg confidence).`,
 
-    business_context: 'Current modal form provides no intelligence - just data capture. Chairman must conduct all research manually. This creates a 10x opportunity: AI agents can research market data, validate pain points via Reddit/forums, analyze competitors, and assess portfolio fit in minutes instead of hours/days. CrewAI framework provides enterprise-ready multi-agent orchestration with proven 5.76x performance advantages.',
+    business_context: 'Current modal form provides no intelligence - just data capture. Chairman must conduct all research manually. This creates a 10x opportunity: AI agents can research market data, validate pain points via Reddit/forums, analyze competitors, and assess portfolio fit in minutes instead of hours/days. AI agent framework provides enterprise-ready multi-agent orchestration with proven 5.76x performance advantages.',
 
-    technical_context: 'Existing infrastructure: VentureCreationDialog.tsx (365 lines), VoiceCapture component, EVA validation service. Gaps identified: No CrewAI framework, no research agents, no full-page workflow, no AI research progress display, no pause/resume functionality, no multi-agent orchestration infrastructure. Sub-agent review (5 agents, 88% avg confidence) confirms feasibility and provides detailed technical specifications.',
+    technical_context: 'Existing infrastructure: VentureCreationDialog.tsx (365 lines), VoiceCapture component, EVA validation service. Gaps identified: No AI agent framework, no research agents, no full-page workflow, no AI research progress display, no pause/resume functionality, no multi-agent orchestration infrastructure. Sub-agent review (5 agents, 88% avg confidence) confirms feasibility and provides detailed technical specifications.',
 
     functional_requirements: [
       {
@@ -65,9 +65,9 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         success_metric: 'Route /ventures/new loads successfully with 5-step progress indicator'
       },
       {
-        objective: 'Integrate CrewAI framework foundation with Python FastAPI backend',
+        objective: 'Integrate AI agent framework foundation with Python FastAPI backend',
         rationale: 'Proven 5.76x performance advantage, enterprise-ready multi-agent orchestration',
-        success_metric: 'CrewAI hierarchical crew process executes 4 agents in parallel within 15 minutes'
+        success_metric: 'AI agent hierarchical crew process executes 4 agents in parallel within 15 minutes'
       },
       {
         objective: 'Deploy 4 core research agents with specialized capabilities',
@@ -108,7 +108,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
           'Modal VentureCreationDialog deprecated but preserved for future quick-create',
           'Navigation integrates seamlessly with existing app structure'
         ],
-        technical_notes: 'Create VentureCreationPage.tsx (~600 lines) - Main orchestration component with step management, form state, and CrewAI integration'
+        technical_notes: 'Create VentureCreationPage.tsx (~600 lines) - Main orchestration component with step management, form state, and AI agent integration'
       },
       {
         feature_id: 'F-002',
@@ -129,22 +129,22 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       },
       {
         feature_id: 'F-003',
-        name: 'CrewAI Framework Integration',
-        description: 'Python FastAPI backend with CrewAI hierarchical crew orchestration',
+        name: 'AI agent Framework Integration',
+        description: 'Python FastAPI backend with AI agent hierarchical crew orchestration',
         // FIX: user_stories moved to separate table
     // user_stories: ['US-003'],
         priority: 'critical',
         complexity: 'high',
         acceptance_criteria: [
-          'CrewAI installed via pip (crewai crewai-tools)',
+          'AI agent framework installed via pip',
           'Python FastAPI service running and accessible',
           'Hierarchical crew process configured with auto-assigned manager',
-          'REST API endpoints: POST /api/crewai/execute, GET /api/crewai/status/:sessionId',
-          'Database schema: crewai_agents (agent registry), crewai_crews (crew configs), crewai_tasks (execution tracking)',
+          'REST API endpoints: POST /api/agents/execute, GET /api/agents/status/:sessionId',
+          'Database schema: venture_drafts (draft persistence)',
           'React frontend communicates with Python backend via REST API',
           'Error handling: retry logic, timeout (15 min max), fallback to manual entry'
         ],
-        technical_notes: 'Setup Python backend in /backend/crewai_service/, configure CrewAI hierarchical crews, create 3 database tables, implement API endpoints with error handling. Bundle size: ~150KB acceptable for this feature.'
+        technical_notes: 'Setup Python backend in /backend/agent_service/, configure AI agent hierarchical process, create database tables, implement API endpoints with error handling. Bundle size: ~150KB acceptable for this feature.'
       },
       {
         feature_id: 'F-004',
@@ -162,9 +162,9 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
           'Completes analysis within 2-4 minutes',
           'Returns structured results: {tam: number, sam: number, som: number, confidence: number, sources: string[]}',
           'Confidence score ≥85% on average',
-          'Stores results in crewai_tasks table with execution metrics'
+          'Stores results in agent_tasks table with execution metrics'
         ],
-        technical_notes: 'Create CrewAI agent with market data API tools (TBD: specific APIs), implement delegation, configure timeout and retry logic'
+        technical_notes: 'Create AI agent agent with market data API tools (TBD: specific APIs), implement delegation, configure timeout and retry logic'
       },
       {
         feature_id: 'F-005',
@@ -283,7 +283,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
           'Reject button allows manual override (keeps original input)',
           'Mixed mode: Accept some suggestions, reject others',
           'Chairman feedback is tracked for learning: {accepted: boolean, modified: boolean, feedback: string}',
-          'Feedback stored in crewai_tasks table for future agent improvement'
+          'Feedback stored in agent_tasks table for future agent improvement'
         ],
         technical_notes: 'Create review interface with diff view (react-diff-viewer or similar), accept/reject workflow with partial acceptance, feedback tracking in database. Target 85%+ chairman acceptance rate.'
       }
@@ -294,7 +294,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         {
           component: 'VentureCreationPage.tsx',
           estimated_lines: 600,
-          description: 'Main orchestration component with 5-step workflow, form state management, CrewAI integration',
+          description: 'Main orchestration component with 5-step workflow, form state management, AI agent integration',
           features: ['Multi-step form', 'Progress indicator', 'Step navigation', 'State persistence', 'Error handling']
         },
         {
@@ -353,57 +353,6 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         ],
         new_tables: [
           {
-            name: 'crewai_agents',
-            purpose: 'Agent registry with role, goal, backstory, tools, capabilities',
-            columns: [
-              'id UUID PRIMARY KEY',
-              'agent_role TEXT NOT NULL',
-              'goal TEXT NOT NULL',
-              'backstory TEXT',
-              'capabilities JSONB',
-              'llm_config JSONB',
-              'delegation_enabled BOOLEAN DEFAULT true',
-              'tools TEXT[]',
-              'is_active BOOLEAN DEFAULT true',
-              'created_at TIMESTAMP DEFAULT NOW()',
-              'updated_at TIMESTAMP DEFAULT NOW()'
-            ]
-          },
-          {
-            name: 'crewai_crews',
-            purpose: 'Crew configurations for hierarchical orchestration',
-            columns: [
-              'id UUID PRIMARY KEY',
-              'crew_name TEXT NOT NULL',
-              'process_type TEXT DEFAULT \'hierarchical\'',
-              'agent_ids UUID[]',
-              'config JSONB',
-              'is_active BOOLEAN DEFAULT true',
-              'created_at TIMESTAMP DEFAULT NOW()',
-              'updated_at TIMESTAMP DEFAULT NOW()'
-            ]
-          },
-          {
-            name: 'crewai_tasks',
-            purpose: 'Task execution tracking with results and performance',
-            columns: [
-              'id UUID PRIMARY KEY',
-              'venture_id UUID REFERENCES ventures(id)',
-              'crew_id UUID REFERENCES crewai_crews(id)',
-              'task_type TEXT',
-              'description TEXT',
-              'assigned_agent_id UUID REFERENCES crewai_agents(id)',
-              'status TEXT CHECK (status IN (\'pending\', \'running\', \'completed\', \'failed\'))',
-              'result JSONB',
-              'execution_time_ms INT',
-              'confidence_score DECIMAL(3,2)',
-              'chairman_accepted BOOLEAN',
-              'chairman_feedback TEXT',
-              'created_at TIMESTAMP DEFAULT NOW()',
-              'updated_at TIMESTAMP DEFAULT NOW()'
-            ]
-          },
-          {
             name: 'venture_drafts',
             purpose: 'Store incomplete ventures for pause/resume functionality',
             columns: [
@@ -420,32 +369,26 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
           }
         ],
         rls_policies: [
-          'crewai_agents: Read-only for all authenticated users',
-          'crewai_crews: Read-only for all authenticated users',
-          'crewai_tasks: Users can only view tasks for their company ventures',
           'venture_drafts: Users can only access their own drafts'
         ],
         indexes: [
-          'crewai_tasks(venture_id, status)',
-          'crewai_tasks(assigned_agent_id, status)',
-          'crewai_tasks(status, created_at) for pending operations',
           'venture_drafts(user_id, deleted_at) for active drafts'
         ]
       },
       backend_services: {
-        crewai_service: {
+        agent_service: {
           technology: 'Python FastAPI',
-          location: '/backend/crewai_service/',
+          location: '/backend/agent_service/',
           endpoints: [
-            'POST /api/crewai/execute - Execute CrewAI crew for venture research',
-            'GET /api/crewai/status/:sessionId - Get real-time agent status',
-            'POST /api/crewai/pause/:sessionId - Pause research session',
-            'POST /api/crewai/resume/:sessionId - Resume paused session',
-            'GET /api/crewai/agents - List available agents',
-            'GET /api/crewai/crews - List configured crews'
+            'POST /api/agents/execute - Execute agent crew for venture research',
+            'GET /api/agents/status/:sessionId - Get real-time agent status',
+            'POST /api/agents/pause/:sessionId - Pause research session',
+            'POST /api/agents/resume/:sessionId - Resume paused session',
+            'GET /api/agents/list - List available agents',
+            'GET /api/agents/crews - List configured crews'
           ],
-          dependencies: ['crewai', 'crewai-tools', 'fastapi', 'uvicorn', 'pydantic'],
-          installation: 'pip install crewai crewai-tools fastapi uvicorn pydantic',
+          dependencies: ['fastapi', 'uvicorn', 'pydantic'],
+          installation: 'pip install fastapi uvicorn pydantic',
           configuration: 'Hierarchical crew process with auto-assigned manager'
         },
         reddit_connector: {
@@ -487,7 +430,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       },
       {
         requirement: 'Encrypt AI research results before storage',
-        implementation: 'Encrypt sensitive fields in crewai_tasks.result JSONB column using Supabase encryption',
+        implementation: 'Encrypt sensitive fields in agent_tasks.result JSONB column using Supabase encryption',
         priority: 'critical',
         mandatory_condition: 'MUST encrypt AI research results'
       },
@@ -502,7 +445,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         priority: 'high'
       },
       {
-        requirement: 'Secure CrewAI API keys in environment variables',
+        requirement: 'Secure AI agent API keys in environment variables',
         implementation: 'Store OpenAI/Anthropic API keys in .env, never in client code',
         priority: 'critical'
       },
@@ -514,12 +457,12 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       },
       {
         requirement: 'Timeout: 15 minutes max for AI research',
-        implementation: 'Hard timeout on all CrewAI crew executions to prevent runaway costs',
+        implementation: 'Hard timeout on all AI agent crew executions to prevent runaway costs',
         priority: 'high'
       },
       {
         requirement: 'Audit logging for all AI research operations',
-        implementation: 'Log all CrewAI executions with user, venture, cost, duration in crewai_tasks',
+        implementation: 'Log all AI agent executions with user, venture, cost, duration in agent_tasks',
         priority: 'medium'
       },
       {
@@ -589,7 +532,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       ],
       smoke_tests: [
         'Route /ventures/new loads successfully',
-        'CrewAI backend service is responsive',
+        'AI agent backend service is responsive',
         'All 4 agents are registered and active',
         'Database tables exist and have correct schema'
       ],
@@ -617,11 +560,11 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         contingency: 'If cost exceeds $2, halt research and notify chairman'
       },
       {
-        risk: 'CrewAI API rate limits or downtime',
+        risk: 'AI agent API rate limits or downtime',
         severity: 'high',
         likelihood: 'low',
         mitigation: 'Implement retry logic, queuing, and fallback to manual entry',
-        contingency: 'If CrewAI unavailable, allow manual venture creation via modal fallback'
+        contingency: 'If AI agent unavailable, allow manual venture creation via modal fallback'
       },
       {
         risk: 'Third-party data sources (Reddit, market data) change APIs',
@@ -689,7 +632,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         condition: 'Must encrypt AI research results',
         source: 'Chief Security Architect',
         rationale: 'Protect sensitive market data from unauthorized access',
-        verification: 'Verify encryption on crewai_tasks.result JSONB column'
+        verification: 'Verify encryption on agent_tasks.result JSONB column'
       },
       {
         condition: 'Must add cost tracking and budget alerts',
@@ -703,14 +646,14 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       {
         phase: 'Week 1: Foundation',
         tasks: [
-          'Install CrewAI and configure Python FastAPI service',
+          'Install AI agent and configure Python FastAPI service',
           'Design and implement database schema (4 new tables)',
           'Create full-page route /ventures/new with basic layout',
           'Implement VentureCreationPage.tsx with 5-step structure',
-          'Set up REST API endpoints for CrewAI communication'
+          'Set up REST API endpoints for AI agent communication'
         ],
         deliverables: [
-          'CrewAI backend service running',
+          'AI agent backend service running',
           'Database tables created with RLS policies',
           'Basic full-page workflow accessible',
           'API endpoints operational'
@@ -719,7 +662,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       {
         phase: 'Week 2: Core Agents',
         tasks: [
-          'Build Market Sizing Analyst Agent with CrewAI',
+          'Build Market Sizing Analyst Agent with AI agent',
           'Build Pain Point Validator Agent with Reddit API integration',
           'Build Competitive Landscape Mapper Agent',
           'Build Strategic Fit Analyzer Agent',
@@ -728,7 +671,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         ],
         deliverables: [
           'All 4 agents deployed and active',
-          'CrewAI crew configuration complete',
+          'AI agent crew configuration complete',
           'Agent execution tested with sample ventures'
         ]
       },
@@ -792,7 +735,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         'Companies table for multi-tenancy'
       ],
       external_dependencies: [
-        'CrewAI framework (Python package)',
+        'AI agent framework (Python package)',
         'OpenAI or Anthropic API for LLM reasoning',
         'Reddit API for pain point validation',
         'Market data APIs for sizing analysis (TBD)',
@@ -800,7 +743,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
       ],
       integration_points: [
         'React frontend → Python FastAPI backend (REST API)',
-        'CrewAI agents → External APIs (Reddit, market data)',
+        'AI agent agents → External APIs (Reddit, market data)',
         'Python backend → Supabase database (PostgreSQL)',
         'Frontend → Supabase (existing auth and ventures queries)'
       ]
@@ -808,7 +751,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
 
     technology_stack: {
       frontend: ['React', 'Vite', 'Shadcn UI', 'TypeScript', 'React Context API or Zustand'],
-      backend: ['Python', 'FastAPI', 'CrewAI', 'OpenAI/Anthropic APIs'],
+      backend: ['Python', 'FastAPI', 'AI agent', 'OpenAI/Anthropic APIs'],
       database: ['Supabase (PostgreSQL)', 'JSONB for flexible data'],
       external_apis: ['Reddit API', 'Market data APIs (TBD)', 'Competitive tracking (TBD)'],
       deployment: ['Docker', 'GitHub Actions CI/CD']
@@ -822,12 +765,12 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         milestones: [
           {
             week: 1,
-            milestone: 'Foundation: CrewAI setup, database schema, full-page route',
+            milestone: 'Foundation: AI agent setup, database schema, full-page route',
             date: '2025-10-14'
           },
           {
             week: 2,
-            milestone: 'Core Agents: 4 agents deployed with CrewAI crew',
+            milestone: 'Core Agents: 4 agents deployed with AI agent crew',
             date: '2025-10-21'
           },
           {
