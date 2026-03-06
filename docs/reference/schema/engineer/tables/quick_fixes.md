@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T18:18:50.268Z
+**Generated**: 2026-03-06T19:33:00.185Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (33 total)
+## Columns (34 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -51,6 +51,7 @@
 | compliance_details | `jsonb` | YES | - | Full rubric results including category scores, criteria results, and evidence |
 | routing_tier | `integer(32)` | YES | - | - |
 | routing_threshold_id | `uuid` | YES | - | - |
+| claiming_session_id | `text` | YES | - | - |
 
 ## Constraints
 
