@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T17:06:49.668Z
-**Tables**: 517
+**Generated**: 2026-03-06T18:18:50.268Z
+**Tables**: 520
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -84,6 +84,7 @@ Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0) |
 | [brand_genome_submissions](tables/brand_genome_submissions.md) | N/A (RLS restricted) | ✅ | 5 | Brand identity genome for ventures ensuring marketing consistency |
 | [brand_variants](tables/brand_variants.md) | N/A (RLS restricted) | ✅ | 6 | - |
 | [campaign_content](tables/campaign_content.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [capability_reuse_log](tables/capability_reuse_log.md) | N/A (RLS restricted) | ✅ | 2 | Detailed log of capability reuse events. Tracks when, where, and how capabilities are reused across SDs. |
 | [capital_transactions](tables/capital_transactions.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [cascade_invalidation_flags](tables/cascade_invalidation_flags.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [cascade_invalidation_log](tables/cascade_invalidation_log.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -103,6 +104,7 @@ SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decision
 | [circuit_breaker_blocks](tables/circuit_breaker_blocks.md) | N/A (RLS restricted) | ✅ | 2 | Audit log for Circuit Breaker blocks (Law 3).
 Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
+| [claude_code_releases](tables/claude_code_releases.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [claude_sessions](tables/claude_sessions.md) | N/A (RLS restricted) | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
 | [companies](tables/companies.md) | N/A (RLS restricted) | ✅ | 6 | - |
 | [competitors](tables/competitors.md) | N/A (RLS restricted) | ✅ | 5 | - |
@@ -374,6 +376,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [quick_fixes](tables/quick_fixes.md) | N/A (RLS restricted) | ✅ | 2 | LEO Quick-Fix Workflow: Lightweight issue tracking for UAT-discovered bugs/polish (≤50 LOC).
    Auto-escalates to full SD if criteria not met.
    Part of LEO Protocol v4.2.1 |
+| [raid_log](tables/raid_log.md) | N/A (RLS restricted) | ✅ | 3 | RAID tracking for Strategic Directives (Risks, Assumptions, Issues, Dependencies, Actions, Decisions) |
 | [rca_auto_trigger_config](tables/rca_auto_trigger_config.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [rca_learning_records](tables/rca_learning_records.md) | N/A (RLS restricted) | ✅ | 3 | Normalized learning signals for EVA integration and pattern recognition |
 | [recursion_events](tables/recursion_events.md) | N/A (RLS restricted) | ✅ | 4 | - |
@@ -746,7 +749,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (391 tables)
+### Other (394 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -798,6 +801,7 @@ Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0)
 - [brand_genome_submissions](tables/brand_genome_submissions.md) - Brand identity genome for ventures ensuring marketing consistency
 - [brand_variants](tables/brand_variants.md)
 - [campaign_content](tables/campaign_content.md)
+- [capability_reuse_log](tables/capability_reuse_log.md) - Detailed log of capability reuse events. Tracks when, where, and how capabilities are reused across SDs.
 - [capital_transactions](tables/capital_transactions.md)
 - [cascade_invalidation_flags](tables/cascade_invalidation_flags.md)
 - [cascade_invalidation_log](tables/cascade_invalidation_log.md)
@@ -817,6 +821,7 @@ SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decision
 - [circuit_breaker_blocks](tables/circuit_breaker_blocks.md) - Audit log for Circuit Breaker blocks (Law 3).
 Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
+- [claude_code_releases](tables/claude_code_releases.md)
 - [claude_sessions](tables/claude_sessions.md) - Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim.
 - [companies](tables/companies.md)
 - [competitors](tables/competitors.md)
@@ -1018,6 +1023,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [quick_fixes](tables/quick_fixes.md) - LEO Quick-Fix Workflow: Lightweight issue tracking for UAT-discovered bugs/polish (≤50 LOC).
    Auto-escalates to full SD if criteria not met.
    Part of LEO Protocol v4.2.1
+- [raid_log](tables/raid_log.md) - RAID tracking for Strategic Directives (Risks, Assumptions, Issues, Dependencies, Actions, Decisions)
 - [rca_auto_trigger_config](tables/rca_auto_trigger_config.md)
 - [rca_learning_records](tables/rca_learning_records.md) - Normalized learning signals for EVA integration and pattern recognition
 - [recursion_events](tables/recursion_events.md)
@@ -1263,6 +1269,10 @@ _Key relationships between tables:_
 **campaign_content**:
 - `campaign_id` → `marketing_campaigns.id`
 - `content_id` → `marketing_content.id`
+
+**capability_reuse_log**:
+- `capability_id` → `sd_capabilities.id`
+- `reusing_sd_uuid` → `strategic_directives_v2.uuid_id`
 
 **capital_transactions**:
 - `stage_work_id` → `venture_stage_work.id`

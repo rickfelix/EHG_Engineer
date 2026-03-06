@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T17:06:49.668Z
-**Tables**: 517
+**Generated**: 2026-03-06T18:18:50.268Z
+**Tables**: 520
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (517)
+## All Tables (520)
 
 ### LEO Protocol
 
@@ -216,6 +216,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [brand_genome_submissions](tables/brand_genome_submissions.md)
 - [brand_variants](tables/brand_variants.md)
 - [campaign_content](tables/campaign_content.md)
+- [capability_reuse_log](tables/capability_reuse_log.md)
 - [capital_transactions](tables/capital_transactions.md)
 - [cascade_invalidation_flags](tables/cascade_invalidation_flags.md)
 - [cascade_invalidation_log](tables/cascade_invalidation_log.md)
@@ -231,6 +232,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [chairman_settings](tables/chairman_settings.md)
 - [channel_budgets](tables/channel_budgets.md)
 - [circuit_breaker_blocks](tables/circuit_breaker_blocks.md)
+- [claude_code_releases](tables/claude_code_releases.md)
 - [claude_sessions](tables/claude_sessions.md)
 - [companies](tables/companies.md)
 - [competitors](tables/competitors.md)
@@ -426,6 +428,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [protocol_improvement_queue](tables/protocol_improvement_queue.md)
 - [public_portfolio](tables/public_portfolio.md)
 - [quick_fixes](tables/quick_fixes.md)
+- [raid_log](tables/raid_log.md)
 - [rca_auto_trigger_config](tables/rca_auto_trigger_config.md)
 - [rca_learning_records](tables/rca_learning_records.md)
 - [recursion_events](tables/recursion_events.md)
