@@ -205,8 +205,8 @@ export async function runTriageGate(input, supabaseClient) {
 /**
  * Build AskUserQuestion payload for Tier 1/2 triage gate.
  */
-function buildAskUserQuestionPayload(routingDecision, locResult, title, type) {
-  const { tier, tier1MaxLoc, tier2MaxLoc, requiresComplianceRubric } = routingDecision;
+function buildAskUserQuestionPayload(routingDecision, locResult, _title, _type) {
+  const { tier, tier1MaxLoc, tier2MaxLoc } = routingDecision;
 
   let questionText;
   if (tier === 1) {
