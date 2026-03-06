@@ -25,21 +25,21 @@ const mockPoliciesToRules = vi.fn();
 const samplePolicies = [
   {
     id: 'test-uuid-1',
-    policy_id: 'CREWAI-001',
-    policy_name: 'CrewAI Agent Registration',
+    policy_id: 'GOVERNANCE-001',
+    policy_name: 'Governance Policy Registration',
     policy_version: 1,
-    category: 'crewai',
+    category: 'governance',
     severity: 'critical',
     is_active: true,
-    description: 'Stage must have registered CrewAI agents',
+    description: 'Stage must have registered governance policies',
     rule_config: {
       check_type: 'row_count',
-      target_table: 'crewai_agents',
+      target_table: 'compliance_policies',
       where_clause: 'stage = $1',
       expected_condition: 'count >= 1'
     },
     applicable_stages: [],
-    remediation_template: 'Register CrewAI agents for stage ${stage}'
+    remediation_template: 'Register governance policies for stage ${stage}'
   },
   {
     id: 'test-uuid-2',
@@ -99,7 +99,7 @@ describe('ComplianceEngine - Policy Registry', () => {
         .order('severity', { ascending: true });
 
       expect(result.data).toHaveLength(2);
-      expect(result.data[0].policy_id).toBe('CREWAI-001');
+      expect(result.data[0].policy_id).toBe('GOVERNANCE-001');
       expect(mockSupabase.from).toHaveBeenCalledWith('compliance_policies');
       expect(mockSupabase.eq).toHaveBeenCalledWith('is_active', true);
     });
@@ -146,9 +146,9 @@ describe('ComplianceEngine - Policy Registry', () => {
       const rules = policiesToRules(samplePolicies);
 
       expect(Object.keys(rules)).toHaveLength(2);
-      expect(rules['CREWAI_001']).toBeDefined();
-      expect(rules['CREWAI_001'].id).toBe('CREWAI-001');
-      expect(rules['CREWAI_001'].severity).toBe('critical');
+      expect(rules['GOVERNANCE_001']).toBeDefined();
+      expect(rules['GOVERNANCE_001'].id).toBe('GOVERNANCE-001');
+      expect(rules['GOVERNANCE_001'].severity).toBe('critical');
       expect(rules['DOSSIER_001']).toBeDefined();
       expect(rules['DOSSIER_001'].severity).toBe('high');
     });
@@ -197,11 +197,11 @@ describe('ComplianceEngine - Event Emission', () => {
         event_id: 'EVT-test-123',
         event_type: 'violation_detected',
         check_id: 'test-check-uuid',
-        policy_id: 'CREWAI-001',
+        policy_id: 'GOVERNANCE-001',
         stage_number: 5,
         severity: 'critical',
-        summary: 'Violation: CrewAI Agent Registration',
-        details: { policyId: 'CREWAI-001', stageNumber: 5 }
+        summary: 'Violation: Governance Policy Registration',
+        details: { policyId: 'GOVERNANCE-001', stageNumber: 5 }
       };
 
       await mockSupabase
@@ -324,7 +324,7 @@ describe('ComplianceEngine - Check Types', () => {
       };
 
       const result = await successMock
-        .from('crewai_agents')
+        .from('compliance_policies')
         .select('id')
         .eq('stage', 5);
 
@@ -344,7 +344,7 @@ describe('ComplianceEngine - Check Types', () => {
       };
 
       const result = await emptyMock
-        .from('crewai_agents')
+        .from('compliance_policies')
         .select('id')
         .eq('stage', 5);
 

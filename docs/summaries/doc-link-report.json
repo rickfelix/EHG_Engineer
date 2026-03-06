@@ -653,23 +653,6 @@
       ]
     },
     {
-      "file": "docs\\archive\\v1-40-stage-workflow\\crewai_compliance_policy.md",
-      "broken": [
-        {
-          "text": "EHG CrewAI Architecture",
-          "href": "/docs/architecture/crewai/",
-          "error": "File not found: /docs/architecture/crewai/",
-          "type": "file"
-        },
-        {
-          "text": "Stage Dossiers",
-          "href": "/docs/workflow/critique/stage-01.md through stage-40.md",
-          "error": "File not found: /docs/workflow/critique/stage-01.md through stage-40.md",
-          "type": "file"
-        }
-      ]
-    },
-    {
       "file": "docs\\governance\\protocol-constitution-guide.md",
       "broken": [
         {
@@ -1252,23 +1235,6 @@
           "text": "CLAUDE.md",
           "href": "/CLAUDE.md",
           "error": "File not found: /CLAUDE.md",
-          "type": "file"
-        }
-      ]
-    },
-    {
-      "file": "docs\\workflow\\crewai_compliance_policy.md",
-      "broken": [
-        {
-          "text": "EHG CrewAI Architecture",
-          "href": "/docs/architecture/crewai/",
-          "error": "File not found: /docs/architecture/crewai/",
-          "type": "file"
-        },
-        {
-          "text": "Stage Dossiers",
-          "href": "/docs/workflow/critique/stage-01.md through stage-40.md",
-          "error": "File not found: /docs/workflow/critique/stage-01.md through stage-40.md",
           "type": "file"
         }
       ]

@@ -34,7 +34,7 @@ tags: [general, auto-generated]
   - [Step 2: Regenerate CLAUDE.md Files](#step-2-regenerate-claudemd-files)
   - [Step 3: Create Utility Script (Optional)](#step-3-create-utility-script-optional)
   - [Step 4: Test with New SD](#step-4-test-with-new-sd)
-- [Learning from SD-CREWAI-ARCHITECTURE-001](#learning-from-sd-crewai-architecture-001)
+- [Learning from SD-CREWAI-ARCHITECTURE-001 [DROPPED]](#learning-from-sd-crewai-architecture-001)
   - [What Happened](#what-happened)
   - [What Would Have Been Different with Child SD Pattern](#what-would-have-been-different-with-child-sd-pattern)
   - [Benefits Demonstrated](#benefits-demonstrated)
@@ -53,14 +53,14 @@ tags: [general, auto-generated]
 - **Tags**: child-sd, orchestrator, pattern, implementation
 
 **Date**: 2025-11-07
-**Learning Source**: SD-CREWAI-ARCHITECTURE-001
+**Learning Source**: SD-CREWAI-ARCHITECTURE-001 [DROPPED]
 **Original Status**: DATABASE UPDATES COMPLETE - Ready for Next Steps
 
 ---
 
 ## Executive Summary
 
-Successfully enhanced the LEO Protocol with the **Child SD Pattern** to support hierarchical parent/child Strategic Directive relationships. This pattern solves the phased multi-session implementation challenge discovered during SD-CREWAI-ARCHITECTURE-001 completion.
+Successfully enhanced the LEO Protocol with the **Child SD Pattern** to support hierarchical parent/child Strategic Directive relationships. This pattern solves the phased multi-session implementation challenge discovered during SD-CREWAI-ARCHITECTURE-001 [DROPPED] completion.
 
 ### Key Achievement
 
@@ -239,7 +239,7 @@ Create a test Parent SD and Child SDs to validate:
 
 ---
 
-## Learning from SD-CREWAI-ARCHITECTURE-001
+## Learning from SD-CREWAI-ARCHITECTURE-001 [DROPPED]
 
 ### What Happened
 - Implemented in phases across multiple sessions:
@@ -254,7 +254,7 @@ Create a test Parent SD and Child SDs to validate:
 
 **Without Child SDs** (actual approach):
 ```
-SD-CREWAI-ARCHITECTURE-001
+SD-CREWAI-ARCHITECTURE-001 [DROPPED]
 ├── Progress: 55% (despite 100% implementation)
 ├── Retroactive handoff creation needed
 ├── Progress validation mismatch
@@ -263,7 +263,7 @@ SD-CREWAI-ARCHITECTURE-001
 
 **With Child SDs** (proposed approach):
 ```
-SD-CREWAI-ARCHITECTURE-001 (Parent - Orchestrator)
+SD-CREWAI-ARCHITECTURE-001 [DROPPED] (Parent - Orchestrator)
 ├── SD-CREWAI-ARCH-001-PHASE2 (Agent Migration)
 │   ├── Full LEAD→PLAN→EXEC→PLAN→LEAD cycle
 │   ├── Status: completed (100%)
@@ -323,7 +323,7 @@ Parent Retrospective: Orchestration and coordination lessons
 **User Insight That Triggered This**:
 > "In retrospective, do you think it would have made more sense to create children's strategic directives instead of phases?"
 
-**Answer**: Yes. The Child SD Pattern would have avoided all validation challenges and provided natural progress tracking for SD-CREWAI-ARCHITECTURE-001.
+**Answer**: Yes. The Child SD Pattern would have avoided all validation challenges and provided natural progress tracking for SD-CREWAI-ARCHITECTURE-001 [DROPPED].
 
 ---
 
@@ -342,4 +342,4 @@ Parent Retrospective: Orchestration and coordination lessons
 
 **Generated**: 2025-11-07
 **Author**: Claude Code (LEO Protocol Enhancement)
-**Learning Source**: SD-CREWAI-ARCHITECTURE-001 completion challenges
+**Learning Source**: SD-CREWAI-ARCHITECTURE-001 [DROPPED] completion challenges

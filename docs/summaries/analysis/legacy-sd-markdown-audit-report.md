@@ -13,8 +13,8 @@ tags: [general, auto-generated]
 - [Executive Summary](#executive-summary)
 - [Audit Statistics](#audit-statistics)
 - [Category 1: SD Implementation Documentation (MIGRATE TO ARCHIVE)](#category-1-sd-implementation-documentation-migrate-to-archive)
-  - [SD-CREWAI-ARCHITECTURE-001 (25 files, ~1.5MB)](#sd-crewai-architecture-001-25-files-15mb)
-  - [SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 (4 files, ~70KB)](#sd-crewai-competitive-intelligence-001-4-files-70kb)
+  - [SD-CREWAI-ARCHITECTURE-001 [DROPPED] (25 files, ~1.5MB)](#sd-crewai-architecture-001-25-files-15mb)
+  - [SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] (4 files, ~70KB)](#sd-crewai-competitive-intelligence-001-4-files-70kb)
 - [Category 2: Analysis Reports (KEEP - Active Reference)](#category-2-analysis-reports-keep---active-reference)
 - [Category 3: Lessons Learned (MIGRATE TO DATABASE)](#category-3-lessons-learned-migrate-to-database)
 - [Category 4: Schema Documentation (KEEP - Auto-generated)](#category-4-schema-documentation-keep---auto-generated)
@@ -22,8 +22,8 @@ tags: [general, auto-generated]
 - [Category 6: Implementation Summaries (ARCHIVE)](#category-6-implementation-summaries-archive)
 - [Category 7: Temp/Archive Files (ALREADY HANDLED)](#category-7-temparchive-files-already-handled)
 - [Recommended Actions](#recommended-actions)
-  - [Priority 1: Archive SD-CREWAI-ARCHITECTURE-001 (25 files, 1.5MB)](#priority-1-archive-sd-crewai-architecture-001-25-files-15mb)
-  - [Priority 2: Archive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 (4 files, 70KB)](#priority-2-archive-sd-crewai-competitive-intelligence-001-4-files-70kb)
+  - [Priority 1: Archive SD-CREWAI-ARCHITECTURE-001 [DROPPED] (25 files, 1.5MB)](#priority-1-archive-sd-crewai-architecture-001-25-files-15mb)
+  - [Priority 2: Archive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] (4 files, 70KB)](#priority-2-archive-sd-crewai-competitive-intelligence-001-4-files-70kb)
   - [Priority 3: Migrate Lessons Learned to Database (5 files, 55KB)](#priority-3-migrate-lessons-learned-to-database-5-files-55kb)
   - [Priority 4: Review Analysis Reports (3 files)](#priority-4-review-analysis-reports-3-files)
   - [Priority 5: Verify Schema Docs (10 files)](#priority-5-verify-schema-docs-10-files)
@@ -58,7 +58,7 @@ tags: [general, auto-generated]
 
 ## Executive Summary
 
-Audit identified **57+ SD-related markdown files** outside `.git/archived-markdown/`. The majority (33 files, ~1.6MB) are concentrated in the **SD-CREWAI-ARCHITECTURE-001** directory structure. Many files in `.git/archived-markdown/` were previously archived but these remaining files violate DOCMON database-first standards.
+Audit identified **57+ SD-related markdown files** outside `.git/archived-markdown/`. The majority (33 files, ~1.6MB) are concentrated in the **SD-CREWAI-ARCHITECTURE-001 [DROPPED]** directory structure. Many files in `.git/archived-markdown/` were previously archived but these remaining files violate DOCMON database-first standards.
 
 ---
 
@@ -66,8 +66,8 @@ Audit identified **57+ SD-related markdown files** outside `.git/archived-markdo
 
 | Category | Count | Total Size |
 |----------|-------|------------|
-| SD-CREWAI-ARCHITECTURE-001 files | 25 | ~1.5MB |
-| SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 files | 4 | ~70KB |
+| SD-CREWAI-ARCHITECTURE-001 [DROPPED] files | 25 | ~1.5MB |
+| SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] files | 4 | ~70KB |
 | Analysis/Reports | 8 | ~100KB |
 | Lessons Learned | 5 | ~55KB |
 | Reference/Schema docs | 10 | ~50KB |
@@ -80,8 +80,8 @@ Audit identified **57+ SD-related markdown files** outside `.git/archived-markdo
 
 These files document completed SDs and should be archived (content is historical reference, not active).
 
-### SD-CREWAI-ARCHITECTURE-001 (25 files, ~1.5MB)
-**Location**: `docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001/`
+### SD-CREWAI-ARCHITECTURE-001 [DROPPED] (25 files, ~1.5MB)
+**Location**: `docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001 [DROPPED]/`
 **Status**: SD completed - content is historical
 
 | File | Size | Content Type | Action |
@@ -113,8 +113,8 @@ These files document completed SDs and should be archived (content is historical
 | 00_overview.md | 5KB | Overview | ARCHIVE |
 | discovery/artifacts/python_platform_summary.md | 2KB | Artifact | ARCHIVE |
 
-### SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 (4 files, ~70KB)
-**Location**: `docs/strategic_directives/SD-CREWAI-COMPETITIVE-INTELLIGENCE-001/`
+### SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] (4 files, ~70KB)
+**Location**: `docs/strategic_directives/SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]/`
 
 | File | Size | Content Type | Action |
 |------|------|--------------|--------|
@@ -193,12 +193,12 @@ These are in `scripts/archive/` and are appropriately archived.
 
 ## Recommended Actions
 
-### Priority 1: Archive SD-CREWAI-ARCHITECTURE-001 (25 files, 1.5MB)
-- Move entire directory to `.git/archived-markdown/SD-CREWAI-ARCHITECTURE-001/`
+### Priority 1: Archive SD-CREWAI-ARCHITECTURE-001 [DROPPED] (25 files, 1.5MB)
+- Move entire directory to `.git/archived-markdown/SD-CREWAI-ARCHITECTURE-001 [DROPPED]/`
 - This SD is completed and all content is historical
 - Reduces active docs by 25 files
 
-### Priority 2: Archive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 (4 files, 70KB)
+### Priority 2: Archive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] (4 files, 70KB)
 - Move to archive directory
 - Content is testing documentation for completed work
 

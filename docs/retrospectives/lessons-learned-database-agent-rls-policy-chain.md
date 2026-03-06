@@ -74,7 +74,7 @@ tags: [general, auto-generated]
 - **Last Updated**: 2026-01-22
 - **Tags**: database, api, testing, e2e
 
-**Context**: SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 PLAN Phase
+**Context**: SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] PLAN Phase
 **Date**: 2025-11-07
 **Duration**: ~4 hours
 **Outcome**: ✅ SUCCESS - All RLS policies applied, automation unblocked
@@ -93,7 +93,7 @@ Successfully resolved cascading RLS policy blocks that prevented LEO Protocol au
 
 ### Initial Symptom
 ```
-❌ Strategic Directive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 not found in database
+❌ Strategic Directive SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED] not found in database
    Create SD first before creating PRD
 ```
 
@@ -129,14 +129,14 @@ const serviceClient = createClient(supabaseUrl, serviceKey);
 const { data: anonData, error: anonError } = await anonClient
   .from('strategic_directives_v2')
   .select('id, title, status')
-  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001')
+  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]')
   .single();
 
 // Test 2: SERVICE_ROLE_KEY query
 const { data: serviceData, error: serviceError } = await serviceClient
   .from('strategic_directives_v2')
   .select('id, title, status')
-  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001')
+  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]')
   .single();
 ```
 
@@ -441,7 +441,7 @@ ORDER BY tablename, policyname;
 const { data: selectData, error: selectError } = await anonClient
   .from('strategic_directives_v2')
   .select('id, title')
-  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001')
+  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]')
   .single();
 
 // Test 2: INSERT (for writable tables)
@@ -455,7 +455,7 @@ const { data: insertData, error: insertError } = await anonClient
 const { error: updateError } = await anonClient
   .from('strategic_directives_v2')
   .update({ title: 'Modified' })
-  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001');
+  .eq('id', 'SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]');
 
 // Expected: updateError.message contains "permission denied" or "policy"
 ```
@@ -465,7 +465,7 @@ const { error: updateError } = await anonClient
 ### 3. End-to-End Automation Testing
 ```bash
 # Test 1: PRD Creation
-node scripts/add-prd-to-database.js SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
+node scripts/add-prd-to-database.js SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]
 # Expected: ✅ PRD created successfully
 
 # Test 2: User Story Generation
@@ -473,7 +473,7 @@ node scripts/generate-user-stories-crewai-competitive-intel-001.mjs
 # Expected: ✅ Generated 3 user stories, Created: 3/3
 
 # Test 3: Handoff Creation
-node scripts/unified-handoff-system.js create PLAN-to-EXEC SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
+node scripts/unified-handoff-system.js create PLAN-to-EXEC SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 [DROPPED]
 # Expected: ✅ Handoff created (if not blocked by other issues)
 ```
 
