@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-03-06 12:32:00 AM
+**Generated**: 2026-03-06 12:46:45 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -471,6 +471,48 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 Skills are for **creative guidance** (how to build).
 Sub-agents are for **validation** (did you build it right).
 Use skills during EXEC, save sub-agents for PLAN_VERIFY.
+
+## Validation Rules (SD-LEARN-008)
+
+## PLAN-TO-EXEC Validation Gates
+
+### GATE_PRD_EXISTS
+**Purpose**: Block EXEC phase if no PRD exists for the SD
+
+**Trigger**: PLAN-TO-EXEC handoff
+**Behavior**:
+- Checks product_requirements_v2 table for matching sd_id
+- PRD status must be 'approved', 'ready_for_exec', or 'in_progress'
+- Blocks handoff with clear remediation steps if missing
+
+**Remediation**:
+```bash
+node scripts/create-prd-template.js <SD-ID>
+# Then approve the PRD and retry handoff
+```
+
+### Schema Keyword Detection for DATABASE Sub-Agent
+**Purpose**: Auto-invoke DATABASE sub-agent for SDs with schema-related content
+
+**Trigger**: PLAN_PRD phase sub-agent orchestration
+**Keywords Detected**:
+- schema, migration, table, column, constraint, index
+- foreign key, rls, row level security, trigger, function
+- alter table, create table, drop table, database
+
+**Behavior**:
+- Scans SD title, description, scope, and rationale
+- If schema keywords detected, DATABASE sub-agent is added to execution list
+- Works even if SD type is not 'database'
+
+**Example**:
+```
+SD Type: feature
+Title: "Add user preferences table"
+→ Schema keyword 'table' detected
+→ DATABASE sub-agent auto-invoked
+```
+
 
 ## Multi-Instance Coordination (MANDATORY)
 
@@ -1047,6 +1089,56 @@ gh pr create --title "feat(SD-XXX): title" --body "## Summary..."  --base main
 gh pr merge --auto --squash --delete-branch
 # Claude immediately continues to next SD
 ```
+
+## /batch Command Reference
+
+The /batch command provides unified batch operations across the SD fleet.
+
+### Usage
+```
+node scripts/batch-dispatcher.mjs <operation> [--apply] [flags]
+node scripts/batch-dispatcher.mjs --list
+```
+
+### Available Operations
+
+| Operation | Description | Key Flags |
+|-----------|-------------|-----------|
+| accept-handoffs | Accept valid pending handoffs | --type (lead-to-plan, plan-to-exec, etc.) |
+| rescore | Rescore vision scores by type | --type (manual, round1, round2) |
+| complete-children | Complete children of orchestrator SD | --parent <SD-KEY> |
+| update-refs | Find and update SD key references | --from <OLD-KEY> --to <NEW-KEY> |
+| test-sds | Verify smoke tests across SDs | --status (completed, in_progress) |
+| simplify-all | Codebase-wide simplification sweep | --path <root> |
+
+### Common Flags
+- **--apply**: Execute writes (default is dry-run preview)
+- **--concurrency N**: Process N items in parallel (default: 1, serial)
+- **--list**: Show all available operations
+
+### Examples
+```bash
+# Preview pending handoffs
+node scripts/batch-dispatcher.mjs accept-handoffs
+
+# Accept handoffs with concurrency
+node scripts/batch-dispatcher.mjs accept-handoffs --apply --concurrency 3
+
+# Preview SD reference updates
+node scripts/batch-dispatcher.mjs update-refs --from SD-OLD-001 --to SD-NEW-001
+
+# Check smoke tests across completed SDs
+node scripts/batch-dispatcher.mjs test-sds --status completed
+
+# Preview codebase simplifications
+node scripts/batch-dispatcher.mjs simplify-all
+```
+
+### Safety
+- All operations default to **dry-run** (preview only)
+- Use **--apply** to execute actual writes
+- Write verification (read-back) validates all mutations
+- All executions logged to batch_operation_log table
 
 ## E2E Testing: Dev Mode vs Preview Mode
 
