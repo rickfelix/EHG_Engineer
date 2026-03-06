@@ -130,7 +130,6 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     // Mirrors the same exemption already applied in Section A (design-fidelity.js)
     if (sd?.sd_type === 'feature' && !hasUIScope) {
       const hasBackendScope = /\b(script|cli|command|api[\s-]?route|backend|server|lib\/|node\s)/i.test(scopeToCheck);
-      const titleText = '';  // Title not fetched in this query - rely on scope and target_application
       if (hasBackendScope) {
         console.log('   ✅ Backend-only feature SD (scripts/CLI/API) - Section C not applicable (25/25)');
         validation.score += 25;
