@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T18:18:50.268Z
+**Generated**: 2026-03-06T19:33:00.185Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,7 @@
 | source_files | `jsonb` | YES | `'[]'::jsonb` | Array of file paths where this capability is implemented: ["lib/foo.js", "src/components/Bar.tsx"] |
 | depends_on | `jsonb` | YES | `'[]'::jsonb` | Array of capability_keys this capability depends on |
 | depended_by | `jsonb` | YES | `'[]'::jsonb` | Array of capability_keys that depend on this capability |
+| taxonomy_domain | `text` | YES | - | - |
 
 ## Constraints
 

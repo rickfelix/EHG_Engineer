@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T18:18:50.268Z
-**Tables**: 520
+**Generated**: 2026-03-06T19:33:00.185Z
+**Tables**: 521
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -58,6 +58,9 @@ Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0) |
 | [agentic_reviews](tables/agentic_reviews.md) | N/A (RLS restricted) | ✅ | 4 | - |
 | [agents](tables/agents.md) | N/A (RLS restricted) | ✅ | 2 | Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations. |
 | [ai_quality_assessments](tables/ai_quality_assessments.md) | N/A (RLS restricted) | ✅ | 3 | AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement. |
+| [anthropic_plugin_registry](tables/anthropic_plugin_registry.md) | N/A (RLS restricted) | ✅ | 1 | Registry of Anthropic-authored plugins discovered from GitHub repos.
+SD: SD-CAPABILITYAWARE-SCANNERS-AND-ANTHROPIC-ORCH-001-C
+Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [app_config](tables/app_config.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [app_rankings](tables/app_rankings.md) | N/A (RLS restricted) | ❌ | 0 | Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001) |
 | [archetype_benchmarks](tables/archetype_benchmarks.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -749,7 +752,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (394 tables)
+### Other (395 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -780,6 +783,9 @@ Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0)
 - [agentic_reviews](tables/agentic_reviews.md)
 - [agents](tables/agents.md) - Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations.
 - [ai_quality_assessments](tables/ai_quality_assessments.md) - AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement.
+- [anthropic_plugin_registry](tables/anthropic_plugin_registry.md) - Registry of Anthropic-authored plugins discovered from GitHub repos.
+SD: SD-CAPABILITYAWARE-SCANNERS-AND-ANTHROPIC-ORCH-001-C
+Lifecycle: discovered → evaluating → adapted/rejected → outdated
 - [app_config](tables/app_config.md)
 - [app_rankings](tables/app_rankings.md) - Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001)
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
@@ -1235,6 +1241,9 @@ _Key relationships between tables:_
 **agent_task_contracts**:
 - `output_artifact_id` → `agent_artifacts.id`
 - `sd_id` → `strategic_directives_v2.id`
+
+**anthropic_plugin_registry**:
+- `ehg_skill_id` → `agent_skills.id`
 
 **archetype_profile_interactions**:
 - `profile_id` → `evaluation_profiles.id`
