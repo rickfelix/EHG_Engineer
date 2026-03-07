@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-07T16:46:08.854Z
+**Generated**: 2026-03-07T18:57:47.952Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (78 total)
+## Columns (81 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -101,6 +101,9 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | architecture_plan_id | `uuid` | YES | - | FK to eva_architecture_plans. Links venture to its formal Architecture Plan. |
 | pipeline_mode | `text` | YES | `'building'::text` | Venture lifecycle mode including exit readiness states |
 | deleted_at | `timestamp with time zone` | YES | - | - |
+| orchestrator_state | `text` | YES | `'idle'::text` | - |
+| orchestrator_lock_id | `uuid` | YES | - | - |
+| orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -161,6 +164,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_lifecycle_stage`
   ```sql
   CREATE INDEX idx_ventures_lifecycle_stage ON public.ventures USING btree (current_lifecycle_stage)
+  ```
+- `idx_ventures_orchestrator_polling`
+  ```sql
+  CREATE INDEX idx_ventures_orchestrator_polling ON public.ventures USING btree (status, orchestrator_state, current_lifecycle_stage) WHERE ((status = 'active'::venture_status_enum) AND (orchestrator_state = 'idle'::text))
   ```
 - `idx_ventures_origin_type`
   ```sql
