@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-07T04:49:57.093Z
+**Generated**: 2026-03-07T16:46:08.854Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -78,17 +78,23 @@
 
 ## RLS Policies
 
-### 1. insert_own_stage_zero_requests (INSERT)
+### 1. dismiss_own_stage_zero_requests (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `((auth.uid() = requested_by) AND (status = ANY (ARRAY['completed'::stage_zero_status, 'failed'::stage_zero_status])))`
+- **With Check**: `((auth.uid() = requested_by) AND (status = 'dismissed'::stage_zero_status))`
+
+### 2. insert_own_stage_zero_requests (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `(auth.uid() = requested_by)`
 
-### 2. select_own_stage_zero_requests (SELECT)
+### 3. select_own_stage_zero_requests (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(auth.uid() = requested_by)`
 
-### 3. update_own_pending_stage_zero_requests (UPDATE)
+### 4. update_own_pending_stage_zero_requests (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `((auth.uid() = requested_by) AND (status = 'pending'::stage_zero_status))`
