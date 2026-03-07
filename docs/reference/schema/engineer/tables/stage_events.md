@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T22:22:38.605Z
+**Generated**: 2026-03-07T03:10:25.591Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (4 policies)
 
@@ -36,6 +36,9 @@
 
 ### Primary Key
 - `stage_events_pkey`: PRIMARY KEY (id)
+
+### Foreign Keys
+- `stage_events_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
 - `stage_events_eva_authority_level_check`: CHECK ((eva_authority_level = ANY (ARRAY['L0'::text, 'L1'::text, 'L2'::text, 'L3'::text, 'L4'::text])))

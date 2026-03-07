@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T22:22:38.605Z
+**Generated**: 2026-03-07T03:10:25.591Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (4 policies)
 
@@ -37,7 +37,6 @@
 - `financial_models_company_id_fkey`: company_id → companies(id)
 - `financial_models_venture_id_fkey`: venture_id → ventures(id)
 - `fk_company`: company_id → companies(id)
-- `fk_venture`: venture_id → ventures(id)
 
 ### Check Constraints
 - `valid_template`: CHECK (((template_type)::text = ANY ((ARRAY['saas'::character varying, 'marketplace'::character varying, 'hardware'::character varying, 'services'::character varying, 'ecommerce'::character varying, 'subscription'::character varying, 'custom'::character varying])::text[])))
