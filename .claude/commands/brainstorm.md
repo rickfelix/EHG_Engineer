@@ -857,6 +857,22 @@ supabase.from('brainstorm_sessions')
 
 ---
 
+## Step 9.6: Outcome Auto-Upgrade (SD-LEO-INFRA-BRAINSTORM-SD-PIPELINE-001)
+
+**After Step 9.5E validates both vision_key and plan_key exist**, check if the outcome_type should be upgraded:
+
+- If `outcome_type` is **"Needs Triage"** AND both vision_key and plan_key are captured:
+  - Auto-upgrade `outcome_type` to **"Ready for SD"**
+  - Set `outcome_auto_classified` to `true` in the brainstorm session record
+  - Log: `"Step 9.6: Auto-upgraded outcome from 'needs_triage' to 'ready_for_sd' — vision+arch artifacts exist"`
+  - **Rationale**: If the brainstorm produced complete vision and architecture documents, the outcome is substantive enough for SD creation regardless of the LLM classification.
+
+- If `outcome_type` is **"Potential Conflict"**: Do NOT auto-upgrade. Conflicts require human review even when artifacts exist.
+
+- All other outcome types: No change needed.
+
+---
+
 ## Step 10: Session Retrospective
 
 After saving the document, record the session for self-improvement:
@@ -941,7 +957,32 @@ This path should NOT occur under normal operation — Step 9.5 is mandatory for 
 If it does occur (e.g., EVA registration failed), prompt the user to fix the registration issue before creating SDs.
 Do NOT offer a "Create SD without vision/arch" option — that is an anti-pattern.
 
-**If outcome is "Needs Triage" or "Potential Conflict":**
+**If outcome is "Needs Triage" or "Potential Conflict" WITH vision/arch keys registered (Step 9.5E completed):**
+
+Step 9.6 may have auto-upgraded "Needs Triage" to "Ready for SD" — but if the outcome remains
+"Needs Triage" (e.g., Step 9.6 was skipped) or is "Potential Conflict" (never auto-upgraded),
+AND vision_key + plan_key exist from Step 9.5E, offer SD creation alongside triage options:
+
+```
+question: "This outcome has vision and architecture documents registered. What would you like to do?"
+header: "Next Steps"
+options:
+  - label: "Create SDs (Recommended)"
+    description: "Vision+arch artifacts exist — create Strategic Directives from this brainstorm"
+  - label: "Triangulate"
+    description: "Get external AI opinions on the unresolved questions"
+  - label: "Brainstorm again"
+    description: "Run another brainstorm with more specific scope"
+  - label: "Capture pattern"
+    description: "Record insights as learnings via /learn"
+  - label: "Done for now"
+    description: "End brainstorming session"
+```
+
+When "Create SDs (Recommended)" is selected, follow the same auto-chaining as "Ready for SD":
+invoke /eva review with the registered keys, then invoke /leo create with vision/arch traceability.
+
+**If outcome is "Needs Triage" or "Potential Conflict" WITHOUT vision/arch keys:**
 ```
 question: "This needs further analysis. What would you like to do?"
 header: "Next Steps"

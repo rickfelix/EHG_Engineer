@@ -1295,6 +1295,26 @@ async function createSD(options) {
     });
   } catch { /* CLI tracking is fire-and-forget */ }
 
+  // FR-005 (SD-LEO-INFRA-BRAINSTORM-SD-PIPELINE-001): Backfill brainstorm_sessions.created_sd_id
+  // When an SD is created with a vision_key from a brainstorm, link it back to the originating session
+  if (metadata?.vision_key) {
+    try {
+      const { data: visionDoc } = await supabase
+        .from('eva_vision_documents')
+        .select('source_brainstorm_id')
+        .eq('vision_key', metadata.vision_key)
+        .single();
+
+      if (visionDoc?.source_brainstorm_id) {
+        await supabase
+          .from('brainstorm_sessions')
+          .update({ created_sd_id: data.sd_key })
+          .eq('id', visionDoc.source_brainstorm_id)
+          .is('created_sd_id', null); // Only backfill if not already linked
+      }
+    } catch { /* Non-fatal: brainstorm backfill should not block SD creation */ }
+  }
+
   // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
   await scoreSDAtConception(data.sd_key, title, description, supabase, {
     visionKey: metadata?.vision_key,
