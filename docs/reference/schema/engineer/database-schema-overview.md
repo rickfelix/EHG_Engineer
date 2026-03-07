@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-06T22:22:38.605Z
+**Generated**: 2026-03-07T03:10:25.591Z
 **Tables**: 522
 **Source**: Supabase PostgreSQL introspection
 
@@ -1539,7 +1539,6 @@ _Key relationships between tables:_
 - `company_id` → `companies.id`
 - `venture_id` → `ventures.id`
 - `company_id` → `companies.id`
-- `venture_id` → `ventures.id`
 
 **financial_projections**:
 - `model_id` → `financial_models.id`
@@ -1989,6 +1988,9 @@ _Key relationships between tables:_
 - `venture_id` → `ventures.id`
 
 **stage13_valuations**:
+- `venture_id` → `ventures.id`
+
+**stage_events**:
 - `venture_id` → `ventures.id`
 
 **stage_of_death_predictions**:
