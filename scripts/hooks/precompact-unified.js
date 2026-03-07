@@ -35,11 +35,51 @@ function findCurrentSessionId() {
   return null;
 }
 
+/**
+ * Extend heartbeat TTL to prevent claim staleness during compaction.
+ * PAT-CLMCOMPACT-01: Compaction can take 30-60s; without extending,
+ * the claim may go stale and be released by another session.
+ */
+async function extendHeartbeat(sessionId) {
+  if (!sessionId) return;
+  try {
+    // Load env if not already set (parent process usually provides these)
+    if (!process.env.SUPABASE_URL) {
+      const envPath = path.resolve(new URL('.', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'), '../../.env');
+      const dotenv = await import('dotenv');
+      dotenv.config({ path: envPath });
+    }
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const { error } = await supabase
+      .from('claude_sessions')
+      .update({ heartbeat_at: new Date().toISOString() })
+      .eq('session_id', sessionId)
+      .in('status', ['active', 'idle']);
+    if (error) {
+      console.log(`[PRECOMPACT] Heartbeat extension failed: ${error.message}`);
+    } else {
+      console.log(`[PRECOMPACT] Heartbeat extended for session ${sessionId.substring(0, 24)}...`);
+    }
+  } catch (err) {
+    console.log(`[PRECOMPACT] Heartbeat extension error: ${err.message}`);
+  }
+}
+
 async function main() {
   const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const manager = new UnifiedStateManager(projectDir);
 
   try {
+    // PAT-CLMCOMPACT-01: Extend heartbeat BEFORE saving state
+    const sessionId = findCurrentSessionId();
+    if (sessionId) {
+      await extendHeartbeat(sessionId);
+    }
+
     // Save comprehensive state (getSDState now queries database)
     const state = await manager.saveState('precompact', {
       highlights: ['Pre-compaction state captured'],
@@ -47,13 +87,10 @@ async function main() {
     });
 
     // SD-LEO-INFRA-COMPACTION-CLAIM-001: Persist session_id for re-claim
-    if (state.sd?.id) {
-      const sessionId = findCurrentSessionId();
-      if (sessionId) {
-        state.sd.previousSessionId = sessionId;
-        state.sd.claimPreservedAt = new Date().toISOString();
-        manager.saveStateSync(state);
-      }
+    if (state.sd?.id && sessionId) {
+      state.sd.previousSessionId = sessionId;
+      state.sd.claimPreservedAt = new Date().toISOString();
+      manager.saveStateSync(state);
     }
 
     // Output formatted state for Claude to see
