@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-07T04:49:57.093Z
+**Generated**: 2026-03-07T16:46:08.854Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,7 @@
 | decided_by | `text` | YES | - | - |
 | blocking | `boolean` | YES | `false` | When true, this decision blocks downstream SD progression. Set by chairman-sla-enforcer.js when SLA is violated with blockOnViolation=true. Read by enforceDecisionSLAs() to skip further escalation on already-blocking decisions. SD-MAN-GEN-CORRECTIVE-VISION-GAP-014 |
 | decision_type | `text` | YES | - | - |
+| context | `jsonb` | YES | - | - |
 
 ## Constraints
 

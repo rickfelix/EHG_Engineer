@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-07T04:49:57.093Z
+**Generated**: 2026-03-07T16:46:08.854Z
 **Tables**: 522
 **Source**: Supabase PostgreSQL introspection
 
@@ -479,7 +479,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [stage_data_contracts](tables/stage_data_contracts.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [stage_events](tables/stage_events.md) | N/A (RLS restricted) | ✅ | 4 | - |
 | [stage_of_death_predictions](tables/stage_of_death_predictions.md) | N/A (RLS restricted) | ✅ | 1 | - |
-| [stage_zero_requests](tables/stage_zero_requests.md) | N/A (RLS restricted) | ✅ | 3 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
+| [stage_zero_requests](tables/stage_zero_requests.md) | N/A (RLS restricted) | ✅ | 4 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
 | [story_test_mappings](tables/story_test_mappings.md) | N/A (RLS restricted) | ✅ | 4 | Links user stories to test results with traceability |
 | [strategic_directives_v2](tables/strategic_directives_v2.md) | N/A (RLS restricted) | ✅ | 7 | RLS enabled: service_role full access, authenticated read-only |
 | [strategic_themes](tables/strategic_themes.md) | N/A (RLS restricted) | ✅ | 1 | Annual strategic themes derived from EVA vision dimensions, used to group and prioritize Strategic Directives |
