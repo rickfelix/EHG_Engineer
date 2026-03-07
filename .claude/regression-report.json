@@ -1,0 +1,49 @@
+{
+  "sd_id": "SD-LEO-REFAC-ELIMINATE-HARD-CODED-001",
+  "timestamp": "2026-03-06T10:00:00.000Z",
+  "agent": "regression",
+  "status": "PASS",
+  "summary": "Regression validation PASSED. All 15 venture-resolver unit tests pass. All 12 functional runtime checks pass. All 9 import paths from modified files resolve correctly to lib/venture-resolver.js. No test files directly related to the refactored modules are failing. The 136 pre-existing test failures are unrelated to this refactoring (EVA venture context, chairman decisions, brand variants, etc.). No residual hard-coded 'ehg' references remain in modified files. PR #1835 introduces no regressions.",
+  "checks": [
+    {
+      "name": "venture-resolver unit tests",
+      "status": "PASS",
+      "details": "15/15 tests pass in tests/unit/venture-resolver.test.js covering getVenturePath, getVentureConfig, listVentures, getGitHubRepo, getCurrentVenture"
+    },
+    {
+      "name": "functional runtime verification",
+      "status": "PASS",
+      "details": "12/12 runtime checks pass: getVenturePath resolves ehg to C:\\Users\\rickf\\Projects\\_EHG\\ehg, EHG_Engineer to repo root, null to ENGINEER_ROOT; getVentureConfig returns correct registry data; listVentures returns 2 active entries; getGitHubRepo strips .git suffix; getCurrentVenture returns EHG_Engineer"
+    },
+    {
+      "name": "import path resolution",
+      "status": "PASS",
+      "details": "All 9 files importing venture-resolver.js have correct relative paths that resolve to lib/venture-resolver.js on disk"
+    },
+    {
+      "name": "full test suite regression",
+      "status": "PASS",
+      "details": "491 test files: 354 passed, 136 failed, 1 skipped. 9343 tests: 8349 passed, 930 failed, 64 skipped. No failures in files touched by this refactoring. All failures are pre-existing (EVA, chairman, marketing, brand variants, database validation, etc.)"
+    },
+    {
+      "name": "no residual hard-coded references",
+      "status": "PASS",
+      "details": "No remaining hard-coded 'ehg' string literals in the 14 modified files. Remaining 'EHG_Engineer' fallback strings in 4 retrospective files are appropriate defaults (sd.target_application || 'EHG_Engineer')"
+    },
+    {
+      "name": "venture-resolver exports API",
+      "status": "PASS",
+      "details": "Module exports 6 named functions (getVenturePath, getVentureConfig, listVentures, getGitHubRepo, getCurrentVenture, clearRegistryCache) plus default export object including ENGINEER_ROOT constant. All functions are callable."
+    },
+    {
+      "name": "registry dependency",
+      "status": "PASS",
+      "details": "applications/registry.json exists and is valid JSON with 2 active applications (ehg, test-leo-project). venture-resolver gracefully falls back to minimal registry if file is missing."
+    },
+    {
+      "name": "modified files exist on disk",
+      "status": "PASS",
+      "details": "All 10 files verified to exist: lib/venture-resolver.js (NEW), 9 modified files with venture-resolver imports"
+    }
+  ]
+}

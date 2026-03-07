@@ -543,40 +543,21 @@ Present the classification to the user:
 
 ---
 
-## Step 8.5: Scope Assessment — Vision & Architecture Plan Needs
+## Step 8.5: Vision & Architecture Plan Creation (MANDATORY)
 
-After outcome classification, assess whether the brainstorm requires formal vision and/or architecture documents before SD creation.
+**ANTI-PATTERN**: Skipping vision and architecture documents to go straight to SD creation. Brainstorms that skip planning documents produce SDs with incomplete thinking — the exact problem the Universal Planning Completeness Framework addresses.
 
-**Auto-detect signals** (if 2+ match, recommend vision+arch):
+**ALWAYS proceed to Step 9.5** (Vision & Architecture Document Pipeline) after saving the brainstorm document. This is not conditional — every brainstorm that reaches "Ready for SD" classification gets a vision document and architecture plan.
 
-| Signal | Indicates |
-|--------|-----------|
-| Topic contains: "new UI", "new system", "platform", "redesign", "from scratch" | New build surface |
-| Pragmatist feasibility ≤ 5/10 OR 3+ implementation phases identified | Significant scope (complexity-based, not time-based) |
-| Multiple personas or user types identified | Needs UX vision |
-| Team analysis Pragmatist rated feasibility ≤ 5/10 | Complex enough for architecture |
-| Brainstorm domain is "architecture" | Architecture plan inherent |
-| Multiple phases or evolution path discussed | Vision needed for roadmap |
+**Why this is mandatory**:
+- Vision documents capture the *what* and *why* — without them, SDs drift from original intent
+- Architecture plans capture the *how* — without them, implementation decisions are made ad-hoc during EXEC
+- EVA/HEAL scoring requires registered vision documents to validate SD alignment
+- The brainstorm already contains all the raw material — synthesis into formal documents is low-cost, high-value
 
-**If 2+ signals detected**, ask using AskUserQuestion:
+**Exception**: Only "Consideration Only" and "Significant Departure" classifications may skip vision/arch creation, since those outcomes indicate the idea is not ready for implementation.
 
-```
-question: "This brainstorm has enough scope to warrant formal planning documents. What do you need?"
-header: "Planning Docs"
-options:
-  - label: "Vision + Architecture Plan (Recommended)"
-    description: "Create both — vision defines what/why, architecture defines how. Registered in EVA for HEAL scoring."
-  - label: "Vision document only"
-    description: "Strategic intent, personas, and success criteria. Architecture designed per-SD."
-  - label: "Architecture plan only"
-    description: "Technical decisions and component design. Link to existing L1 vision."
-  - label: "Skip — go straight to SD"
-    description: "Scope is clear enough from the brainstorm alone."
-```
-
-**If fewer than 2 signals**, skip this step and proceed to Step 9.
-
-Store the user's choice for use in Step 9.5.
+No AskUserQuestion needed — proceed directly to Step 9.5 after Step 9.
 
 ---
 
@@ -693,9 +674,9 @@ Brainstorm saved to: brainstorm/YYYY-MM-DD-<topic-slug>.md
 
 ---
 
-## Step 9.5: Vision & Architecture Document Pipeline
+## Step 9.5: Vision & Architecture Document Pipeline (MANDATORY)
 
-**Skip this step if Step 8.5 was skipped or user chose "Skip — go straight to SD".**
+**ALWAYS execute this step** for brainstorms classified as "Ready for SD", "Needs Triage", or "Potential Conflict". Only skip for "Consideration Only" or "Significant Departure" outcomes.
 
 This step creates formal planning documents and registers them in EVA's tracking system (eva_vision_documents, eva_architecture_plans) so they are scored by HEAL and referenced by downstream SDs.
 
@@ -956,17 +937,9 @@ options:
    - Do NOT ask the user for the keys — they are auto-populated from Step 9.5
 
 **If outcome is "Ready for SD" AND no vision/arch registered:**
-```
-question: "This brainstorm looks ready for implementation. What next?"
-header: "Next Steps"
-options:
-  - label: "Create an SD (Recommended)"
-    description: "Turn this brainstorm into a Strategic Directive via /leo create"
-  - label: "Triangulate first"
-    description: "Get external AI opinions on open questions via /triangulation-protocol"
-  - label: "Done for now"
-    description: "End brainstorming session"
-```
+This path should NOT occur under normal operation — Step 9.5 is mandatory for "Ready for SD" outcomes.
+If it does occur (e.g., EVA registration failed), prompt the user to fix the registration issue before creating SDs.
+Do NOT offer a "Create SD without vision/arch" option — that is an anti-pattern.
 
 **If outcome is "Needs Triage" or "Potential Conflict":**
 ```
