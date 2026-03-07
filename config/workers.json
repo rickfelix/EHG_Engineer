@@ -13,6 +13,17 @@
       "description": "Polls stage_zero_requests table every 30s for chairman discovery/teardown requests"
     },
     {
+      "name": "stage-execution-worker",
+      "display_name": "Stage Execution Worker",
+      "command": "node scripts/start-stage-worker.js",
+      "cwd": ".",
+      "health_check": { "type": "pid" },
+      "pid_file": "stage-execution-worker.pid",
+      "log_prefix": "stage-worker",
+      "enabled": true,
+      "description": "Polls eva_ventures for active ventures, executes stage templates via Gemini, creates artifacts. Pauses at gate stages for chairman decisions."
+    },
+    {
       "name": "eva-workers",
       "display_name": "EVA Workers",
       "command": "node lib/eva/workers/index.js",
