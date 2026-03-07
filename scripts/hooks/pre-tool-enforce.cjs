@@ -7,6 +7,8 @@
  * 2. Tool policy profile validation - LOG-ONLY (stdout warning, exit 0)
  * 3. Sub-agent routing advisory - SOFT HINT (stdout, exit 0)
  *
+ * 4. Worktree claim guard (PAT-CLMMULTI-001) - HARD BLOCK (exit 2)
+ *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
  *   Output: exit(0) = allow, exit(2) = block (stderr = rejection message)
@@ -15,6 +17,10 @@
 
 const TOOL_NAME = process.env.CLAUDE_TOOL_NAME || '';
 const TOOL_INPUT_RAW = process.env.CLAUDE_TOOL_INPUT || '';
+
+// --- WORKTREE CLAIM GUARD (PAT-CLMMULTI-001) ---
+// Regex to detect paths inside .worktrees/<SD-KEY>/
+const WORKTREE_PATH_RE = /[/\\]\.worktrees[/\\]([^/\\]+)/;
 
 // --- TOOL POLICY PROFILES (from lib/tool-policy.js) ---
 // Inline copy for CJS hook compatibility (lib/tool-policy.js is ESM).
@@ -58,6 +64,40 @@ function main() {
         'Run this command in the foreground. Background tasks break the autonomous chain of thought.\n'
       );
       process.exit(2); // Hard block
+    }
+  }
+
+  // --- ENFORCEMENT 4: Worktree Claim Guard (PAT-CLMMULTI-001) ---
+  // Blocks Edit/Write to worktree files when this session is working on a
+  // DIFFERENT SD. Prevents cross-worktree edits from parallel sessions.
+  // Uses local state file (no DB call) for speed. Fail-open on errors.
+  if (TOOL_NAME === 'Edit' || TOOL_NAME === 'Write') {
+    const filePath = input.file_path || '';
+    const match = filePath.match(WORKTREE_PATH_RE);
+    if (match) {
+      const worktreeSdKey = match[1];
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const stateFile = path.resolve(__dirname, '../../.claude/unified-session-state.json');
+        if (fs.existsSync(stateFile)) {
+          const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+          const claimedSd = state.sd?.id;
+          if (claimedSd && claimedSd !== worktreeSdKey) {
+            process.stderr.write(
+              `CLAIM GUARD (PAT-CLMMULTI-001): Edit/Write blocked.\n` +
+              `  Target worktree: ${worktreeSdKey}\n` +
+              `  Your claimed SD: ${claimedSd}\n` +
+              `  You are editing files for a different SD than you have claimed.\n` +
+              `  Switch to the correct worktree or release your claim.\n`
+            );
+            process.exit(2);
+          }
+        }
+        // No state file = no claim info = fail-open
+      } catch {
+        // Fail-open: file read errors don't block edits
+      }
     }
   }
 
