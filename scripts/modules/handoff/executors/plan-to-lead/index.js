@@ -35,7 +35,9 @@ import {
   createSuccessMetricsAchievementGate,
   createVisionCompletionScoreGate,
   createArchitecturePlanValidationGate,
-  createSuccessMetricsVerificationGate
+  createSuccessMetricsVerificationGate,
+  createSmokeTestEvidenceGate,
+  createFailureChainOrderingGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -181,6 +183,17 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
     // Architecture plan validation (advisory — checks dimension coverage)
     gates.push(createArchitecturePlanValidationGate(this.supabase));
+
+    // Smoke Test Evidence gate (blocking for pipeline SDs)
+    // Prevents architecture plans from missing runtime observation of the actual failure.
+    // RCA: SD-LEO-INFRA-EVA-STAGE-PIPELINE-002 fixed downstream symptoms while the
+    // root cause (loadStageTemplate queries non-existent table) was upstream and unfixed.
+    gates.push(createSmokeTestEvidenceGate(this.supabase));
+
+    // Failure Chain Ordering gate (blocking for pipeline orchestrators)
+    // Ensures orchestrator children are ordered from root cause to symptoms.
+    // Prevents fixing downstream layers while upstream layers remain broken.
+    gates.push(createFailureChainOrderingGate(this.supabase));
 
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
     // Routes ESCALATE decisions to chairman_decisions for governance

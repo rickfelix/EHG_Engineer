@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-03-06 12:46:45 AM
+**Generated**: 2026-03-07 2:26:45 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -456,6 +456,81 @@ node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 - **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`, `scripts/leo-create-sd.js`
 - **Plan-Aware Creation**: `docs/reference/sd-key-generator-guide.md` (--from-plan section)
 
+## Child SD Context Loading (MANDATORY)
+
+**CRITICAL**: When starting work on a child SD (any SD with a parent_sd_id), you MUST load context files before beginning work.
+
+### Why This Applies to Children
+
+Child SDs are **independent Strategic Directives** that require their own full LEAD→PLAN→EXEC workflow. Each child:
+- Has its own PRD
+- Has its own handoffs
+- Has its own retrospective
+- Must meet its own gate thresholds
+
+**Children are NOT sub-tasks.** They are first-class SDs that happen to be coordinated by a parent orchestrator.
+
+### Required Context Loading Sequence
+
+Before starting ANY work on a child SD:
+
+1. **Run child preflight validation**:
+   ```bash
+   node scripts/child-sd-preflight.js SD-XXX-001
+   ```
+
+2. **Read CLAUDE_CORE_DIGEST.md** (provides SD type requirements):
+   ```
+   Read tool: CLAUDE_CORE_DIGEST.md
+   ```
+
+3. **Read phase-specific file** based on current_phase:
+   | Phase | File |
+   |-------|------|
+   | LEAD_APPROVAL | CLAUDE_LEAD_DIGEST.md |
+   | PLAN_*, PRD_* | CLAUDE_PLAN_DIGEST.md |
+   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC_DIGEST.md |
+
+### What CLAUDE_CORE_DIGEST.md Provides
+
+- SD type definitions (feature, bugfix, infrastructure, etc.)
+- Gate pass thresholds per SD type
+- Required handoff counts
+- Required sub-agents per SD type
+- Global negative constraints
+
+### Consequences of Skipping Context Loading
+
+Without loading CLAUDE_CORE_DIGEST.md before child SD work:
+- **Unknown requirements**: May not know PRD is required
+- **Wrong thresholds**: May target 70% when 85% is required
+- **Missing sub-agents**: May skip TESTING, DESIGN, etc.
+- **Incomplete handoffs**: May not execute full chain
+
+### Enforcement
+
+The `child-sd-preflight.js` script now displays a reminder:
+```
+⚠️  CONTEXT LOADING REMINDER:
+   Before starting work, you MUST read:
+   1. CLAUDE_CORE_DIGEST.md (SD type requirements, gates, thresholds)
+   2. Phase-specific file (CLAUDE_LEAD_DIGEST.md, CLAUDE_PLAN_DIGEST.md, or CLAUDE_EXEC_DIGEST.md)
+```
+
+**This reminder is advisory.** The actual context loading must be performed by reading the files.
+
+### Quick Reference
+
+| Child SD Type | Gate Threshold | Min Handoffs | PRD Required |
+|---------------|----------------|--------------|--------------|
+| feature | 85% | 5 | YES |
+| bugfix | 85% | 5 | YES |
+| infrastructure | 80% | 4 | YES |
+| documentation | 60% | 4 | NO |
+| refactor | 75-90% | 5 | Brief |
+
+*Always verify current requirements from CLAUDE_CORE_DIGEST.md as they may be updated.*
+
 ## Common SD Creation Errors and Solutions
 
 ### Database Constraint Errors
@@ -728,81 +803,6 @@ const sdKey = await generateSDKey({ source, type, title });
 4. `scripts/create-sd.js`
 5. `scripts/modules/learning/executor.js`
 
-
-## Child SD Context Loading (MANDATORY)
-
-**CRITICAL**: When starting work on a child SD (any SD with a parent_sd_id), you MUST load context files before beginning work.
-
-### Why This Applies to Children
-
-Child SDs are **independent Strategic Directives** that require their own full LEAD→PLAN→EXEC workflow. Each child:
-- Has its own PRD
-- Has its own handoffs
-- Has its own retrospective
-- Must meet its own gate thresholds
-
-**Children are NOT sub-tasks.** They are first-class SDs that happen to be coordinated by a parent orchestrator.
-
-### Required Context Loading Sequence
-
-Before starting ANY work on a child SD:
-
-1. **Run child preflight validation**:
-   ```bash
-   node scripts/child-sd-preflight.js SD-XXX-001
-   ```
-
-2. **Read CLAUDE_CORE_DIGEST.md** (provides SD type requirements):
-   ```
-   Read tool: CLAUDE_CORE_DIGEST.md
-   ```
-
-3. **Read phase-specific file** based on current_phase:
-   | Phase | File |
-   |-------|------|
-   | LEAD_APPROVAL | CLAUDE_LEAD_DIGEST.md |
-   | PLAN_*, PRD_* | CLAUDE_PLAN_DIGEST.md |
-   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC_DIGEST.md |
-
-### What CLAUDE_CORE_DIGEST.md Provides
-
-- SD type definitions (feature, bugfix, infrastructure, etc.)
-- Gate pass thresholds per SD type
-- Required handoff counts
-- Required sub-agents per SD type
-- Global negative constraints
-
-### Consequences of Skipping Context Loading
-
-Without loading CLAUDE_CORE_DIGEST.md before child SD work:
-- **Unknown requirements**: May not know PRD is required
-- **Wrong thresholds**: May target 70% when 85% is required
-- **Missing sub-agents**: May skip TESTING, DESIGN, etc.
-- **Incomplete handoffs**: May not execute full chain
-
-### Enforcement
-
-The `child-sd-preflight.js` script now displays a reminder:
-```
-⚠️  CONTEXT LOADING REMINDER:
-   Before starting work, you MUST read:
-   1. CLAUDE_CORE_DIGEST.md (SD type requirements, gates, thresholds)
-   2. Phase-specific file (CLAUDE_LEAD_DIGEST.md, CLAUDE_PLAN_DIGEST.md, or CLAUDE_EXEC_DIGEST.md)
-```
-
-**This reminder is advisory.** The actual context loading must be performed by reading the files.
-
-### Quick Reference
-
-| Child SD Type | Gate Threshold | Min Handoffs | PRD Required |
-|---------------|----------------|--------------|--------------|
-| feature | 85% | 5 | YES |
-| bugfix | 85% | 5 | YES |
-| infrastructure | 80% | 4 | YES |
-| documentation | 60% | 4 | NO |
-| refactor | 75-90% | 5 | Brief |
-
-*Always verify current requirements from CLAUDE_CORE_DIGEST.md as they may be updated.*
 
 ## 📋 Directive Submission Review Process
 
@@ -1470,6 +1470,6 @@ Check `objectives` (active, current period) and `key_results` (status != 'achiev
 
 ---
 
-*Generated from database: 2026-03-06*
+*Generated from database: 2026-03-07*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

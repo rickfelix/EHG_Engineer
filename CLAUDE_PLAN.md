@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-03-06 12:46:45 AM
+**Generated**: 2026-03-07 2:26:45 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -412,23 +412,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 | "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
 | "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -499,6 +482,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC-TO-PLAN`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## PLAN Pre-EXEC Checklist
 
@@ -593,6 +593,54 @@ From retrospectives:
 > "Mock API configuration not planned upfront"
 
 **Time saved**: 2-4 hours per SD by catching infrastructure issues before implementation.
+
+## Smoke Test Evidence Requirement (Pipeline/Integration SDs)
+
+## Smoke Test Evidence Requirement
+
+**Applies to**: Pipeline, integration, and infrastructure SDs that modify runtime behavior of existing systems.
+
+**Gate**: SMOKE_TEST_EVIDENCE (BLOCKING at PLAN-TO-LEAD)
+
+Before writing an architecture plan for any pipeline or integration fix, the architect MUST:
+
+1. **Run the system** being fixed and capture actual runtime output
+2. **Identify the first point of failure** in the output (not just read code)
+3. **Include a "## Baseline Observation" section** in the architecture plan with:
+   - The command or script used to run the system
+   - The actual console output showing the failure
+   - The first error/unexpected behavior in the chain
+   - What the expected output should have been
+
+**Why**: Code reading reveals what code DOES. Runtime observation reveals what code DOESN'T DO. Missing tables, empty arrays, silently-swallowed errors, and non-existent function calls are invisible to static analysis but immediately obvious at runtime.
+
+**Example**: SD-LEO-INFRA-EVA-STAGE-PIPELINE-002 spent 6 children fixing artifact types, gates, and columns — all downstream of a  function that queries a table that does not exist. One runtime observation before architecture would have caught the root cause in 0.2 seconds.
+
+**Detection**: The gate scans architecture plan content for evidence patterns (section headers, log output blocks, runtime observation language). Plans without evidence are rejected.
+
+## First-Failure-First Ordering (Pipeline Orchestrator SDs)
+
+## First-Failure-First (FFF) Child Ordering
+
+**Applies to**: Orchestrator SDs with children that fix pipeline or integration issues.
+
+**Gate**: FAILURE_CHAIN_ORDERING (BLOCKING at PLAN-TO-LEAD)
+
+When a pipeline has cascading failures, the architecture plan MUST:
+
+1. **Include a "## Failure Chain" section** showing the cascade:
+   \
+2. **Order children from upstream (root cause) to downstream (symptoms)**:
+   - Child A must fix Layer 1 (the root cause)
+   - Child B fixes Layer 2
+   - Subsequent children fix progressively downstream layers
+   - The final child (validation/test) depends on all others
+
+3. **Each child must reference its position in the failure chain**
+
+**Why**: If Child A fixes Layer 4 (symptoms) while Layer 1 (root cause) remains broken, all downstream fixes are untestable. The root cause must be fixed first so subsequent children can verify their fixes against real output.
+
+**Detection**: The gate checks architecture plan content for failure chain diagrams and upstream-first child ordering language.
 
 ## Research Lookup Before PRD Creation
 
@@ -719,21 +767,6 @@ node scripts/add-prd-to-database.js {SD-ID}
 - ⚠️ Never create PRDs as markdown files
 - ⚠️ Never skip validation gates
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -785,6 +818,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -2282,6 +2330,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-03-06*
+*Generated from database: 2026-03-07*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

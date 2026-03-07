@@ -101,7 +101,9 @@
       "negative_constraints_plan",
       "prd_template_scaffold",
       "documentation_link_validation_gate",
-      "governance_kr_linkage_plan"
+      "governance_kr_linkage_plan",
+      "plan_smoke_test_requirement",
+      "plan_failure_chain_ordering"
     ],
     "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
   },

@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-06 12:46:45 AM
+**Generated**: 2026-03-07 2:26:45 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -181,6 +181,48 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
+
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -224,80 +266,6 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
 
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
-
-## Work Tracking Policy
-
-**ALL changes to main must be tracked** as either:
-
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>50 LOC)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
-
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (<=50 LOC)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
-
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
-
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
-
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
-
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -338,6 +306,38 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Updated: SD-EHG-ORCH-FOUNDATION-CLEANUP-001-G to add Google/Gemini provider awareness*
 
 > **Team Capabilities**: All sub-agents are universal leaders — any agent can spawn specialist teams when a task requires cross-domain expertise. See **Teams Protocol** in CLAUDE.md for templates, dynamic agent creation, and knowledge enrichment.
+
+## Work Tracking Policy
+
+**ALL changes to main must be tracked** as either:
+
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>50 LOC)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
+
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (<=50 LOC)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
+
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
+
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
+
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -454,38 +454,6 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
-
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -518,6 +486,38 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
+
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1091,6 +1091,22 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 
 
+## Hot Issue Patterns (Auto-Updated)
+
+**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
+
+| Pattern ID | Category | Severity | Count | Trend | Top Solution |
+|------------|----------|----------|-------|-------|--------------|
+| PAT-CLMMULTI-001 | process | [HIGH] high | 2 | [STABLE] | See details |
+
+### Prevention Checklists
+
+**process**:
+- [ ] Verify claim before editing files
+- [ ] Check terminal_id matches session
+
+
+*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
 
@@ -1218,7 +1234,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-06*
+*Generated from database: 2026-03-07*
 *Protocol Version: 4.3.3*
-*Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (1) + Lessons (5)*
 *Load this file first in all sessions*
