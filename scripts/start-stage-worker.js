@@ -92,6 +92,7 @@ async function main() {
     pollIntervalMs,
     dryRun: DRY_RUN,
     logger: {
+      log: (...args) => console.log('[stage-worker]', ...args),
       info: (...args) => console.log('[stage-worker]', ...args),
       warn: (...args) => console.warn('[stage-worker]', ...args),
       error: (...args) => console.error('[stage-worker]', ...args),
@@ -103,7 +104,7 @@ async function main() {
 
   writePid();
 
-  console.log(`[stage-worker] Starting Stage Execution Worker`);
+  console.log('[stage-worker] Starting Stage Execution Worker');
   console.log(`[stage-worker]   Poll interval: ${pollIntervalMs}ms`);
   console.log(`[stage-worker]   Dry run: ${DRY_RUN}`);
   console.log(`[stage-worker]   Once mode: ${ONCE_MODE}`);
