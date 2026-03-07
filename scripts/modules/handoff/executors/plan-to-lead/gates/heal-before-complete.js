@@ -336,6 +336,66 @@ export function createHealBeforeCompleteGate(supabase) {
         console.log('   Vision Heal (advisory): Query failed (non-blocking)');
       }
 
+      // Intent-vs-Outcome Advisory (PAT-HEAL-SCOPE-001)
+      // Checks whether SD scope addressed the original parent/vision intent.
+      // Advisory only — does not affect pass/fail score.
+      let intentAdvisory = null;
+      try {
+        const { data: sdRecord } = await supabase
+          .from('strategic_directives_v2')
+          .select('parent_sd_id, strategic_objectives, key_changes, title')
+          .eq('sd_key', sdKey)
+          .single();
+
+        if (sdRecord?.parent_sd_id) {
+          const { data: parentSD } = await supabase
+            .from('strategic_directives_v2')
+            .select('strategic_objectives, key_changes, title, description')
+            .eq('id', sdRecord.parent_sd_id)
+            .single();
+
+          if (parentSD) {
+            const parentObjectives = parentSD.strategic_objectives || [];
+            const childObjectives = sdRecord.strategic_objectives || [];
+            const parentChanges = parentSD.key_changes || [];
+            const childChanges = sdRecord.key_changes || [];
+
+            // Simple heuristic: count how many parent objectives/changes
+            // have at least a keyword overlap with child objectives/changes
+            const parentTerms = [...parentObjectives, ...parentChanges]
+              .map(o => (typeof o === 'string' ? o : o.description || o.title || JSON.stringify(o)).toLowerCase());
+            const childTerms = [...childObjectives, ...childChanges]
+              .map(o => (typeof o === 'string' ? o : o.description || o.title || JSON.stringify(o)).toLowerCase());
+
+            const coveredCount = parentTerms.filter(pt =>
+              childTerms.some(ct => {
+                const ptWords = pt.split(/\s+/).filter(w => w.length > 3);
+                return ptWords.filter(w => ct.includes(w)).length >= 2;
+              })
+            ).length;
+
+            const coverageRatio = parentTerms.length > 0 ? coveredCount / parentTerms.length : 1;
+
+            if (coverageRatio < 0.3 && parentTerms.length > 0) {
+              intentAdvisory = {
+                type: 'scope_gap',
+                coverage: Math.round(coverageRatio * 100),
+                parent_title: parentSD.title,
+                parent_objectives_count: parentObjectives.length,
+                child_objectives_count: childObjectives.length
+              };
+              console.log(`   ⚠️  Intent-vs-Outcome Advisory: SD scope covers ~${intentAdvisory.coverage}% of parent "${parentSD.title}" objectives`);
+              console.log(`      Parent has ${parentObjectives.length} objectives, child addresses ${childObjectives.length}`);
+              console.log('      This is advisory only — does not affect heal pass/fail');
+            } else {
+              console.log(`   ✅ Intent-vs-Outcome Advisory: scope coverage ${Math.round(coverageRatio * 100)}% of parent objectives (OK)`);
+            }
+          }
+        }
+      } catch {
+        // Graceful skip — advisory should never block
+      }
+
       // SD heal score within tolerance buffer — PASS with warning
       // (SD-LEARN-FIX-ADDRESS-PAT-AUTO-054: tolerance buffer for near-threshold scores)
       const effectiveThreshold = threshold - toleranceBuffer;
@@ -348,7 +408,8 @@ export function createHealBeforeCompleteGate(supabase) {
           issues: [],
           warnings: [
             `SD heal score ${sdHealScore}/100 within tolerance buffer of threshold ${threshold} (buffer: ${toleranceBuffer})`,
-            ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : [])
+            ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : []),
+            ...(intentAdvisory ? [`Intent-vs-Outcome advisory: ${intentAdvisory.coverage}% parent scope coverage (parent: "${intentAdvisory.parent_title}")`] : [])
           ],
           details: {
             sd_heal_score: sdHealScore,
@@ -359,7 +420,8 @@ export function createHealBeforeCompleteGate(supabase) {
               is_child_sd: isChildSD,
             score_id: latestScore.id,
             score_age_minutes: scoreAge,
-            vision_advisory: visionAdvisory
+            vision_advisory: visionAdvisory,
+            intent_advisory: intentAdvisory
           }
         };
       }
@@ -424,7 +486,8 @@ export function createHealBeforeCompleteGate(supabase) {
             warnings: [
               `Auto-re-heal improved score from ${sdHealScore} to ${reHealScore.total_score}`,
               ...(withinBuffer ? [`Score ${reHealScore.total_score} within tolerance buffer of threshold ${threshold} (buffer: ${toleranceBuffer})`] : []),
-              ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : [])
+              ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : []),
+              ...(intentAdvisory ? [`Intent-vs-Outcome advisory: ${intentAdvisory.coverage}% parent scope coverage (parent: "${intentAdvisory.parent_title}")`] : [])
             ],
             details: {
               sd_heal_score: reHealScore.total_score,
@@ -437,7 +500,8 @@ export function createHealBeforeCompleteGate(supabase) {
               is_child_sd: isChildSD,
               score_id: reHealScore.id,
               score_age_minutes: 0,
-              vision_advisory: visionAdvisory
+              vision_advisory: visionAdvisory,
+              intent_advisory: intentAdvisory
             }
           };
         }
@@ -466,7 +530,10 @@ export function createHealBeforeCompleteGate(supabase) {
             reHealNote,
             ...finalGaps.map(g => `Gap: ${g}`)
           ],
-          warnings: visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : [],
+          warnings: [
+            ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : []),
+            ...(intentAdvisory ? [`Intent-vs-Outcome advisory: ${intentAdvisory.coverage}% parent scope coverage (parent: "${intentAdvisory.parent_title}")`] : [])
+          ],
           remediation: `Fix identified gaps, re-ship, run /heal sd --sd-id ${sdKey}, then retry PLAN-TO-LEAD`,
           details: {
             sd_heal_score: finalScore,
@@ -480,7 +547,8 @@ export function createHealBeforeCompleteGate(supabase) {
             score_id: finalScoreId,
             score_age_minutes: reHealScore ? 0 : scoreAge,
             gaps: finalGaps,
-            vision_advisory: visionAdvisory
+            vision_advisory: visionAdvisory,
+            intent_advisory: intentAdvisory
           }
         };
       }
@@ -493,9 +561,10 @@ export function createHealBeforeCompleteGate(supabase) {
         score: sdHealScore,
         max_score: 100,
         issues: [],
-        warnings: visionAdvisory
-          ? [`Vision heal advisory: ${visionAdvisory.score}/100`]
-          : ['No vision heal score available — consider running /heal vision'],
+        warnings: [
+          ...(visionAdvisory ? [`Vision heal advisory: ${visionAdvisory.score}/100`] : ['No vision heal score available — consider running /heal vision']),
+          ...(intentAdvisory ? [`Intent-vs-Outcome advisory: ${intentAdvisory.coverage}% parent scope coverage (parent: "${intentAdvisory.parent_title}")`] : [])
+        ],
         details: {
           sd_heal_score: sdHealScore,
           threshold,
@@ -504,7 +573,8 @@ export function createHealBeforeCompleteGate(supabase) {
               is_child_sd: isChildSD,
           score_id: latestScore.id,
           score_age_minutes: scoreAge,
-          vision_advisory: visionAdvisory
+          vision_advisory: visionAdvisory,
+          intent_advisory: intentAdvisory
         }
       };
     },
