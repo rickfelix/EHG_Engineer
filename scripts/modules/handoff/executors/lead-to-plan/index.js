@@ -17,7 +17,8 @@ import {
   createSmokeTestSpecificationGate,
   createPlaceholderContentGate,
   createVisionScoreGate,
-  createLeadEvaluationGate
+  createLeadEvaluationGate,
+  createCrossRepoConsumerImpactGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -102,6 +103,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Lead Evaluation Check Gate (SD-MAN-ORCH-IMPROVE-STEP-LEAD-002-A)
     // Warning-only: checks for structured lead_evaluations record
     gates.push(createLeadEvaluationGate(this.supabase));
+
+    // Cross-Repo Consumer Impact Gate (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-048)
+    // Advisory-only: warns when SD may affect consumers in other repos
+    gates.push(createCrossRepoConsumerImpactGate());
 
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
     // Routes ESCALATE decisions to chairman_decisions for governance

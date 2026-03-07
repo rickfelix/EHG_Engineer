@@ -59,6 +59,7 @@ The score JSON from the LLM must have: total_score (0-100), action (one of: proc
 
 For the scoring system prompt, use this rubric:
 - Score 0-100 across 5 dimensions: innovation (20pts), strategic_alignment (25pts), feasibility (20pts), impact (25pts), sustainability (10pts)
+- IMPORTANT: feasibility measures implementation tractability — how achievable is this work given existing tools, codebase, and team capabilities? Well-defined bug fixes and infrastructure tasks with clear scope should score HIGH on feasibility (15-20). Do NOT conflate feasibility with ambition or innovation.
 - total_score = sum of all dimensions
 - action: proceed (>=85), minor_sd (70-84), corrective_sd (50-69), block (<50) — adjust thresholds for infrastructure SDs (proceed >= 80)
 

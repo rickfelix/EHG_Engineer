@@ -51,3 +51,9 @@ export {
   validateVisionScore,
   createVisionScoreGate
 } from './vision-score.js';
+
+// Cross-Repo Consumer Impact Gate (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-048)
+export {
+  validateCrossRepoConsumerImpact,
+  createCrossRepoConsumerImpactGate
+} from './cross-repo-consumer-impact.js';
