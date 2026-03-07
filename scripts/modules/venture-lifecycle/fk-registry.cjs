@@ -69,6 +69,7 @@ const VENTURE_FK_REGISTRY = [
   { table: 'stage_zero_requests', column: 'venture_id', policy: 'CASCADE', category: 'stage' },
   { table: 'venture_stage_transitions', column: 'venture_id', policy: 'CASCADE', category: 'stage' },
   { table: 'venture_stage_work', column: 'venture_id', policy: 'CASCADE', category: 'stage' },
+  { table: 'stage_events', column: 'venture_id', policy: 'CASCADE', category: 'stage' },
 
   // ─── Venture child data tables — CASCADE ───
   { table: 'venture_documents', column: 'venture_id', policy: 'CASCADE', category: 'venture_data' },
