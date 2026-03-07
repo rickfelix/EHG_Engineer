@@ -25,7 +25,7 @@ The Capability Registry page (`/chairman/capabilities`) now shows data from all 
 5. **Standalone page is wrong context**: Capabilities are informational reference data for the Chairman, not a primary navigation destination.
 
 ### What Already Works
-Stage 0 already integrates capability leverage:
+Stage 0 already uses capability data:
 - `discovery-mode.js` injects capability context from `v_capability_ledger` into 4 discovery strategies
 - `portfolio-evaluation.js` has explicit `capability_building` dimension (0-10)
 - `moat-architecture.js` has `agent_consumability` moat type

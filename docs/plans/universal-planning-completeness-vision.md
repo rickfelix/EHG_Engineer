@@ -17,7 +17,7 @@ The framework uses structural validation (existence + structure + anti-dummy det
 
 **Who is affected:** Every SD in the LEO system — standalones, orchestrator children, and venture-spawned SDs.
 
-**What the problem is:** The LEO protocol has robust process gates (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-LEAD) but no planning completeness gate. An SD can pass PLAN-TO-EXEC with just a PRD and no wireframes, no persona definition, no acceptance scenarios, no data model specification. The implementer guesses at intent. For orchestrator children, the problem compounds: each child's plan is reviewed in isolation, with no cross-child coherence validation. For ventures, SDs can be spawned before foundational planning (personas, market validation, business model) is complete.
+**What the problem is:** The LEO protocol has strong process gates (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-LEAD) but no planning completeness gate. An SD can pass PLAN-TO-EXEC with just a PRD and no wireframes, no persona definition, no acceptance scenarios, no data model specification. The implementer guesses at intent. For orchestrator children, the problem compounds: each child's plan is reviewed in isolation, with no cross-child coherence validation. For ventures, SDs can be spawned before foundational planning (personas, market validation, business model) is complete.
 
 **Current impact:**
 - 18.6% of orchestrator child retrospectives are "within scope but objectives not met" vs 6.0% standalone
