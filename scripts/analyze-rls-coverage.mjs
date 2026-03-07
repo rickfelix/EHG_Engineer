@@ -73,6 +73,7 @@ async function analyzeRLSCoverage() {
           WHEN policy_commands @> ARRAY['ALL']::text[] THEN 'FULL_CRUD'
           WHEN array_length(policy_commands, 1) = 4 THEN 'FULL_CRUD'
           WHEN 'SELECT' = ANY(policy_commands) AND array_length(policy_commands, 1) = 1 THEN 'READ_ONLY'
+          WHEN 'SELECT' = ANY(policy_commands) AND 'INSERT' = ANY(policy_commands) AND array_length(policy_commands, 1) = 2 THEN 'APPEND_ONLY'
           ELSE 'PARTIAL'
         END as coverage_type
       FROM table_policies
@@ -99,6 +100,7 @@ async function analyzeRLSCoverage() {
       NO_RLS: grouped.NO_RLS?.length || 0,
       NO_POLICIES: grouped.NO_POLICIES?.length || 0,
       READ_ONLY: grouped.READ_ONLY?.length || 0,
+      APPEND_ONLY: grouped.APPEND_ONLY?.length || 0,
       PARTIAL: grouped.PARTIAL?.length || 0,
       FULL_CRUD: grouped.FULL_CRUD?.length || 0
     };
@@ -110,6 +112,7 @@ async function analyzeRLSCoverage() {
     console.log(`  ❌ No RLS Enabled: ${totals.NO_RLS}`);
     console.log(`  ⚠️  RLS Enabled but No Policies: ${totals.NO_POLICIES}`);
     console.log(`  📖 Read-Only (SELECT only): ${totals.READ_ONLY}`);
+    console.log(`  📝 Append-Only (SELECT+INSERT): ${totals.APPEND_ONLY}`);
     console.log(`  ⚡ Partial Coverage: ${totals.PARTIAL}`);
     console.log(`  ✅ Full CRUD Coverage: ${totals.FULL_CRUD}`);
     console.log('');
@@ -142,6 +145,19 @@ async function analyzeRLSCoverage() {
       });
       if (totals.READ_ONLY > 10) {
         console.log(`  ... and ${totals.READ_ONLY - 10} more`);
+      }
+      console.log('');
+    }
+
+    if (totals.APPEND_ONLY > 0) {
+      console.log('📝 Append-Only Tables (' + totals.APPEND_ONLY + '):');
+      console.log('─'.repeat(70));
+      console.log('   (Intentionally SELECT+INSERT only — no UPDATE/DELETE needed)');
+      grouped.APPEND_ONLY.slice(0, 10).forEach(t => {
+        console.log(`  • ${t.tablename} (${t.policy_count} policies)`);
+      });
+      if (totals.APPEND_ONLY > 10) {
+        console.log(`  ... and ${totals.APPEND_ONLY - 10} more`);
       }
       console.log('');
     }
