@@ -245,7 +245,7 @@ async function validateArtifacts(riskMatrix) {
 
   // Now validate the full stage transition
   const artifacts = [riskMatrix];
-  const validationResults = await validateGoldenNuggets(GOVERNANCE.to_stage, artifacts);
+  const validationResults = await validateGoldenNuggets(GOVERNANCE.to_stage, artifacts, { supabase });
 
   console.log('   Stage Transition Validation:');
   console.log(`   Passed: ${validationResults.passed}`);
