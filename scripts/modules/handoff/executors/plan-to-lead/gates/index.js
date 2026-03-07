@@ -18,3 +18,5 @@ export { createSuccessMetricsAchievementGate } from './success-metrics-achieveme
 export { createVisionCompletionScoreGate } from './vision-completion-score.js';
 export { createArchitecturePlanValidationGate } from './architecture-plan-validation.js';
 export { createSuccessMetricsVerificationGate } from './success-metrics-verification.js';
+export { createSmokeTestEvidenceGate } from './smoke-test-evidence.js';
+export { createFailureChainOrderingGate } from './failure-chain-ordering.js';
