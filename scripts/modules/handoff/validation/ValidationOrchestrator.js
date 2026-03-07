@@ -639,6 +639,14 @@ export class ValidationOrchestrator {
    * @returns {Promise<Array>} Merged gates array ready for validateGates()
    */
   async buildGatesFromRules(hardcodedGates, handoffType, context = {}) {
+    // Orchestrator children use a reduced gate set defined by the executor.
+    // Skip database-driven rules to prevent heavy gates from being re-injected.
+    const isOrchestratorChild = context.sd?.metadata?.parent_orchestrator || context.sd?.metadata?.auto_generated;
+    if (isOrchestratorChild) {
+      console.log('   ⏭️  Orchestrator child: skipping database-driven gate rules');
+      return hardcodedGates;
+    }
+
     // Load rules from database
     const dbRules = await this.loadValidationRules(handoffType);
 

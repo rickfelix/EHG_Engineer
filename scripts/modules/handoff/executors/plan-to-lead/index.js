@@ -124,6 +124,20 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));
 
+    // Orchestrator children get a reduced gate set — they are tactical decompositions
+    // that should not face standalone SD requirements like heal scoring, retrospective
+    // quality, traceability, or architecture plan validation.
+    const isOrchestratorChild = sd?.metadata?.parent_orchestrator || sd?.metadata?.auto_generated;
+    if (isOrchestratorChild) {
+      console.log('\n   📋 ORCHESTRATOR CHILD GATE SET (reduced) for PLAN-TO-LEAD');
+      console.log(`   Parent: ${sd.metadata.parent_orchestrator || 'auto_generated'}`);
+
+      // Git commit enforcement
+      gates.push(createGitCommitEnforcementGate(this.supabase, sd, appPath));
+
+      return gates;
+    }
+
     // Heal-before-complete gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-007-03 FR-004)
     // SD heal score must meet threshold (93) before final approval
     gates.push(createHealBeforeCompleteGate(this.supabase));
