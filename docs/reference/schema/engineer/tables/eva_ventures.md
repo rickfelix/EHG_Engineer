@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-07T03:10:25.591Z
+**Generated**: 2026-03-07T04:49:57.093Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,7 @@
 | orchestrator_lock_id | `uuid` | YES | - | UUID of the processing lock holder (null when idle) |
 | orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | When the processing lock was acquired |
 | autonomy_level | `USER-DEFINED` | **NO** | `'L0'::eva_autonomy_level` | EVA autonomy level: L0=Manual, L1=Assisted, L2=Partial, L3=Conditional, L4=Full |
+| current_lifecycle_stage | `integer(32)` | YES | `1` | - |
 
 ## Constraints
 
@@ -50,6 +51,7 @@
 - `eva_ventures_venture_id_key`: UNIQUE (venture_id)
 
 ### Check Constraints
+- `chk_lifecycle_stage`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 25)))
 - `eva_ventures_decision_class_check`: CHECK ((decision_class = ANY (ARRAY['A'::text, 'B'::text, 'C'::text])))
 - `eva_ventures_health_status_check`: CHECK ((health_status = ANY (ARRAY['green'::text, 'yellow'::text, 'red'::text])))
 - `eva_ventures_orchestrator_state_check`: CHECK ((orchestrator_state = ANY (ARRAY['idle'::text, 'processing'::text, 'blocked'::text, 'failed'::text])))
@@ -80,6 +82,10 @@
 - `idx_eva_ventures_status`
   ```sql
   CREATE INDEX idx_eva_ventures_status ON public.eva_ventures USING btree (status)
+  ```
+- `idx_eva_ventures_worker_poll`
+  ```sql
+  CREATE INDEX idx_eva_ventures_worker_poll ON public.eva_ventures USING btree (current_lifecycle_stage) WHERE ((status = 'active'::text) AND (orchestrator_state = 'idle'::text))
   ```
 
 ## RLS Policies
