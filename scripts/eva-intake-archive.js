@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * EVA Intake Archive — Move processed items to their archive destinations
+ * EVA Intake Archive — Archive processed items at their source
  *
- * Todoist: Moves classified tasks from EVA/EVA Next Steps → "Processed" project
- * YouTube: Moves classified videos from "For Processing" → "Processed" playlist
+ * Todoist: Complete (check off) classified tasks via Sync API
+ * YouTube: Remove from "For Processing" + add to "Processed" playlist
  *
  * Only archives items that have been classified (classified_at IS NOT NULL)
  * and not yet processed (processed_at IS NULL).
@@ -19,7 +19,7 @@ async function main() {
 
   console.log('');
   console.log('  Archive summary:');
-  console.log(`    Todoist: ${result.todoist.processed} moved to Processed project`);
+  console.log(`    Todoist: ${result.todoist.processed} completed (checked off)`);
   console.log(`    YouTube: ${result.youtube.processed} moved to Processed playlist`);
 
   if (result.totalErrors > 0) {
