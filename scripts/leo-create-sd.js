@@ -1317,10 +1317,12 @@ async function createSD(options) {
   }
 
   // Vision pre-screen at SD conception (SD-LEO-INFRA-VISION-SD-CONCEPTION-GATE-001)
-  await scoreSDAtConception(data.sd_key, title, description, supabase, {
+  // Fire-and-forget: vision scoring is advisory and should not block SD creation.
+  // Blocking here caused duplicate SDs when the script timed out after DB insert.
+  scoreSDAtConception(data.sd_key, title, description, supabase, {
     visionKey: metadata?.vision_key,
     archKey: metadata?.arch_key
-  });
+  }).catch(err => console.log(`\n   ⚠️  Vision pre-screen failed (non-blocking): ${err.message}`));
 
   // OKR Auto-Mapping at SD creation (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070)
   // Automatically link new SDs to the most relevant active OKR objective
