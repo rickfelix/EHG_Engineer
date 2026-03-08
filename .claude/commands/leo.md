@@ -456,23 +456,38 @@ Show the SD queue to determine what to work on next:
 ### If argument starts with "create" or "c":
 Launch the SD creation wizard. Parse additional flags:
 
-**Step 0: Work Item Triage (runs before type inference)**
+**Step 0: Vision Readiness Rubric (unified routing — runs before type inference)**
 
-Before type inference, run the triage gate to check if this work item is better suited as a Quick Fix:
+Before type inference, run the Vision Readiness Rubric to determine routing:
 
 ```bash
-node scripts/modules/triage-gate.js --title "<title>" --type "<inferred-or-unknown>" --source "interactive" --output-json
+node scripts/modules/vision-readiness-rubric.js --title "<title>" --type "<inferred-or-unknown>" --source "interactive" --output-json
 ```
 
 Parse the JSON output and apply these rules:
-- **tier == 3 OR shouldGate == false** → Proceed to type inference (normal SD creation)
-- **tier <= 2 AND shouldGate == true** → Present `askUserQuestionPayload` from result to user:
+- **route == "EXEMPT"** → Source has upstream governance. Skip rubric, proceed to type inference.
+- **route == "QUICK_FIX"** → Present `askUserQuestionPayload` to user:
   - User picks **"Create Quick Fix"** → run `node scripts/create-quick-fix.js --title "<title>" --type <type>`, then stop
-  - User picks **"Create Full SD (Override)"** → proceed to type inference
+  - User picks **"Create Direct SD"** → proceed to type inference
+  - User picks **"Vision-First"** → launch `/brainstorm` pipeline, then stop
+- **route == "DIRECT_SD"** → Present `askUserQuestionPayload` to user:
+  - User picks **"Create SD"** → proceed to type inference (normal SD creation)
+  - User picks **"Start Vision Pipeline"** → launch `/brainstorm` pipeline, then stop
+- **route == "VISION_FIRST"** → Present `askUserQuestionPayload` to user:
+  - User picks **"Start Vision Pipeline"** → launch `/brainstorm` pipeline, then stop
+  - User picks **"Create Direct SD (Override)"** → proceed to type inference
 
-**Exemptions:**
-- `--from-plan`, `--child` flags → skip triage entirely (source is exempt)
-- `--from-uat`, `--from-feedback`, `--from-learn` → triage runs as soft recommendation only (logged, not gated)
+**Exemptions (loop-breaking):**
+- `--from-plan`, `--child`, `--vision-key`, `--arch-key` flags → EXEMPT (upstream governance provenance)
+- `--from-uat`, `--from-feedback`, `--from-learn` → EXEMPT (corrective/tactical sources)
+
+**Rubric Dimensions (scored 1-5 each, total 4-20):**
+- **Scope Breadth**: How many systems/components (keywords, LOC estimate)
+- **Novelty**: New capability vs. incremental (keywords, SD type)
+- **Vision Coverage**: Existing vision doc overlap (DB query against eva_vision_documents)
+- **Decomposition Likelihood**: Orchestrator probability (keywords, LOC, vision signals)
+
+**Thresholds:** ≤7 = Quick Fix | 8-12 = Direct SD | ≥13 = Vision-First
 
 **Context-Based Type Inference (MANDATORY FIRST STEP):**
 
