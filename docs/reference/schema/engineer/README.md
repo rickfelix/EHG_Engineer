@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-08T15:25:07.180Z
-**Tables**: 522
+**Generated**: 2026-03-08T17:25:25.947Z
+**Tables**: 526
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (522)
+## All Tables (526)
 
 ### LEO Protocol
 
@@ -442,6 +442,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [risk_escalation_log](tables/risk_escalation_log.md)
 - [risk_gate_passage_log](tables/risk_gate_passage_log.md)
 - [risk_recalibration_forms](tables/risk_recalibration_forms.md)
+- [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md)
+- [roadmap_wave_items](tables/roadmap_wave_items.md)
+- [roadmap_waves](tables/roadmap_waves.md)
 - [root_cause_reports](tables/root_cause_reports.md)
 - [runtime_audits](tables/runtime_audits.md)
 - [scaffold_patterns](tables/scaffold_patterns.md)
@@ -467,6 +470,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [stage_of_death_predictions](tables/stage_of_death_predictions.md)
 - [stage_zero_requests](tables/stage_zero_requests.md)
 - [story_test_mappings](tables/story_test_mappings.md)
+- [strategic_roadmaps](tables/strategic_roadmaps.md)
 - [strategic_themes](tables/strategic_themes.md)
 - [strategic_vision](tables/strategic_vision.md)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)

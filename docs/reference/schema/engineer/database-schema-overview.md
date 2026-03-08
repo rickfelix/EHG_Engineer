@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-08T15:25:07.180Z
-**Tables**: 522
+**Generated**: 2026-03-08T17:25:25.947Z
+**Tables**: 526
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -399,6 +399,9 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [risk_escalation_log](tables/risk_escalation_log.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Audit trail for risk escalations requiring chairman/EVA review |
 | [risk_gate_passage_log](tables/risk_gate_passage_log.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Tracks gate passage attempts and outcomes with risk summary |
 | [risk_recalibration_forms](tables/risk_recalibration_forms.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Risk re-calibration forms at phase boundary gates (Gates 3, 4, 5, 6) |
+| [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | Versioned snapshots of roadmap wave sequences. Supports Chairman approval audit trail. |
+| [roadmap_wave_items](tables/roadmap_wave_items.md) | N/A (RLS restricted) | ✅ | 2 | Links classified EVA intake items to roadmap waves. Tracks promotion to SDs. |
+| [roadmap_waves](tables/roadmap_waves.md) | N/A (RLS restricted) | ✅ | 2 | Ordered wave sequences within a roadmap. Each wave groups related intake items for phased execution. |
 | [root_cause_reports](tables/root_cause_reports.md) | N/A (RLS restricted) | ✅ | 4 | Root cause investigation records for failures, defects, and quality issues across LEO Protocol |
 | [runtime_audits](tables/runtime_audits.md) | N/A (RLS restricted) | ✅ | 4 | - |
 | [scaffold_patterns](tables/scaffold_patterns.md) | N/A (RLS restricted) | ✅ | 3 | Pattern library for AI-driven code generation in Genesis simulations |
@@ -482,6 +485,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [stage_zero_requests](tables/stage_zero_requests.md) | N/A (RLS restricted) | ✅ | 4 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
 | [story_test_mappings](tables/story_test_mappings.md) | N/A (RLS restricted) | ✅ | 4 | Links user stories to test results with traceability |
 | [strategic_directives_v2](tables/strategic_directives_v2.md) | N/A (RLS restricted) | ✅ | 7 | RLS enabled: service_role full access, authenticated read-only |
+| [strategic_roadmaps](tables/strategic_roadmaps.md) | N/A (RLS restricted) | ✅ | 2 | Top-level roadmap entities for wave-based planning. Linked to vision documents for strategic alignment. |
 | [strategic_themes](tables/strategic_themes.md) | N/A (RLS restricted) | ✅ | 1 | Annual strategic themes derived from EVA vision dimensions, used to group and prioritize Strategic Directives |
 | [strategic_vision](tables/strategic_vision.md) | N/A (RLS restricted) | ✅ | 2 | Top-level organizational vision (2-5 year horizon) |
 | [sub_agent_execution_batches](tables/sub_agent_execution_batches.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -753,7 +757,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (396 tables)
+### Other (400 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1043,6 +1047,9 @@ Reference: docs/workflow/stages_v2.yaml
 - [risk_escalation_log](tables/risk_escalation_log.md) - SD-LIFECYCLE-GAP-005: Audit trail for risk escalations requiring chairman/EVA review
 - [risk_gate_passage_log](tables/risk_gate_passage_log.md) - SD-LIFECYCLE-GAP-005: Tracks gate passage attempts and outcomes with risk summary
 - [risk_recalibration_forms](tables/risk_recalibration_forms.md) - SD-LIFECYCLE-GAP-005: Risk re-calibration forms at phase boundary gates (Gates 3, 4, 5, 6)
+- [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md) - Versioned snapshots of roadmap wave sequences. Supports Chairman approval audit trail.
+- [roadmap_wave_items](tables/roadmap_wave_items.md) - Links classified EVA intake items to roadmap waves. Tracks promotion to SDs.
+- [roadmap_waves](tables/roadmap_waves.md) - Ordered wave sequences within a roadmap. Each wave groups related intake items for phased execution.
 - [root_cause_reports](tables/root_cause_reports.md) - Root cause investigation records for failures, defects, and quality issues across LEO Protocol
 - [runtime_audits](tables/runtime_audits.md)
 - [scaffold_patterns](tables/scaffold_patterns.md) - Pattern library for AI-driven code generation in Genesis simulations
@@ -1068,6 +1075,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [stage_of_death_predictions](tables/stage_of_death_predictions.md)
 - [stage_zero_requests](tables/stage_zero_requests.md) - Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them.
 - [story_test_mappings](tables/story_test_mappings.md) - Links user stories to test results with traceability
+- [strategic_roadmaps](tables/strategic_roadmaps.md) - Top-level roadmap entities for wave-based planning. Linked to vision documents for strategic alignment.
 - [strategic_themes](tables/strategic_themes.md) - Annual strategic themes derived from EVA vision dimensions, used to group and prioritize Strategic Directives
 - [strategic_vision](tables/strategic_vision.md) - Top-level organizational vision (2-5 year horizon)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)
@@ -1865,6 +1873,15 @@ _Key relationships between tables:_
 - `previous_assessment_id` → `risk_recalibration_forms.id`
 - `venture_id` → `ventures.id`
 
+**roadmap_baseline_snapshots**:
+- `roadmap_id` → `strategic_roadmaps.id`
+
+**roadmap_wave_items**:
+- `wave_id` → `roadmap_waves.id`
+
+**roadmap_waves**:
+- `roadmap_id` → `strategic_roadmaps.id`
+
 **root_cause_reports**:
 - `prd_id` → `product_requirements_v2.id`
 - `sd_id` → `strategic_directives_v2.id`
@@ -2011,6 +2028,9 @@ _Key relationships between tables:_
 - `target_release_id` → `releases.id`
 - `venture_id` → `ventures.id`
 - `vision_origin_score_id` → `eva_vision_scores.id`
+
+**strategic_roadmaps**:
+- `vision_key` → `eva_vision_documents.vision_key`
 
 **strategic_themes**:
 - `vision_key` → `eva_vision_documents.vision_key`
