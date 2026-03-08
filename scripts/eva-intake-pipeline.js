@@ -11,9 +11,10 @@
  * Usage:
  *   npm run eva:intake:pipeline                    # Full pipeline
  *   npm run eva:intake:pipeline -- --dry-run       # Preview only, no DB writes
- *   npm run eva:intake:pipeline -- --from-step N   # Start from step N (1-4)
+ *   npm run eva:intake:pipeline -- --from-step N   # Start from step N (1-5)
  *   npm run eva:intake:pipeline -- --skip-sync     # Skip sync, start at classify
  *   npm run eva:intake:pipeline -- --app <app>     # Filter clustering by application
+ *   npm run eva:intake:pipeline -- --skip-archive  # Skip archiving processed items
  *
  * Post-pipeline (separate Chairman actions):
  *   npm run roadmap:approve -- --roadmap-id <id>   # Chairman reviews + approves waves
@@ -31,6 +32,7 @@ const root = join(__dirname, '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const skipSync = args.includes('--skip-sync');
+const skipArchive = args.includes('--skip-archive');
 const fromStepIdx = args.indexOf('--from-step');
 const fromStep = fromStepIdx >= 0 ? parseInt(args[fromStepIdx + 1], 10) || 1 : 1;
 const appIdx = args.indexOf('--app');
@@ -57,7 +59,7 @@ function header(step, title) {
 console.log('');
 console.log('══════════════════════════════════════════════════════');
 console.log('  EVA INTAKE PIPELINE');
-console.log('  Sync → Classify → Propose Waves → Status');
+console.log('  Sync → Classify → Propose Waves → Archive → Status');
 console.log('══════════════════════════════════════════════════════');
 
 // ─── Step 1: Sync ───────────────────────────────────────────
@@ -111,12 +113,27 @@ if (fromStep <= 3) {
   console.log('\n── Step 3: Propose ── SKIPPED\n');
 }
 
-// ─── Step 4: Status ─────────────────────────────────────────
-if (fromStep <= 4) {
-  header(4, 'Roadmap status');
+// ─── Step 4: Archive ────────────────────────────────────────
+if (fromStep <= 4 && !skipArchive) {
+  header(4, 'Archive processed items');
+  if (dryRun) {
+    console.log('  [DRY RUN] Would move classified items to Processed (Todoist project + YouTube playlist)\n');
+  } else {
+    const ok = run('node scripts/eva-intake-archive.js');
+    if (!ok) {
+      console.error('  ⚠ Archive had errors. Items remain in source. Check output above.\n');
+    }
+  }
+} else {
+  console.log('\n── Step 4: Archive ── SKIPPED\n');
+}
+
+// ─── Step 5: Status ─────────────────────────────────────────
+if (fromStep <= 5) {
+  header(5, 'Roadmap status');
   run('node scripts/roadmap-status.js');
 } else {
-  console.log('\n── Step 4: Status ── SKIPPED\n');
+  console.log('\n── Step 5: Status ── SKIPPED\n');
 }
 
 // ─── Summary ────────────────────────────────────────────────
