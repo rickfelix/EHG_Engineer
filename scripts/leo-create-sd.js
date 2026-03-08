@@ -43,7 +43,8 @@ import {
   readPlanFile,
   getDisplayPath
 } from './modules/plan-archiver.js';
-import { runTriageGate, formatTriageSummary } from './modules/triage-gate.js';
+import { runTriageGate } from './modules/triage-gate.js';
+import { evaluateVisionReadiness, formatRubricResult } from './modules/vision-readiness-rubric.js';
 import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 
@@ -1607,18 +1608,49 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         process.exit(0);
       }
 
-      // Triage Gate: Recommend QF for small work items (soft gate for CLI)
+      // Vision Readiness Rubric: Unified routing (QF / Direct SD / Vision-First)
+      // Subsumes triage gate — evaluates scope, novelty, vision coverage, decomposition
       try {
-        const triageResult = await runTriageGate({ title, description: title, type, source: 'interactive' }, supabase);
-        if (triageResult.tier <= 2) {
-          console.log('\n' + formatTriageSummary(triageResult));
-          console.log('\n   💡 Consider using Quick Fix instead:');
-          console.log(`      node scripts/create-quick-fix.js --title "${title}" --type ${type}`);
-          console.log('   Continuing with full SD creation...\n');
+        // Parse flags that trigger exemption
+        const visionKeyIdx = args.indexOf('--vision-key');
+        const rubricVisionKey = visionKeyIdx !== -1 ? args[visionKeyIdx + 1] : null;
+        const archKeyIdx = args.indexOf('--arch-key');
+        const rubricArchKey = archKeyIdx !== -1 ? args[archKeyIdx + 1] : null;
+
+        // Get LOC estimate from triage gate for dimension scoring
+        let locEstimate = 0;
+        try {
+          const triageResult = await runTriageGate({ title, description: title, type, source: 'interactive' }, supabase);
+          locEstimate = triageResult.estimatedLoc || 0;
+        } catch { /* LOC estimate is optional — rubric works without it */ }
+
+        const rubricResult = await evaluateVisionReadiness({
+          title,
+          description: title,
+          type,
+          source: 'interactive',
+          estimatedLoc: locEstimate,
+          visionKey: rubricVisionKey,
+          archKey: rubricArchKey,
+        });
+
+        if (rubricResult.route !== 'EXEMPT') {
+          console.log('\n' + formatRubricResult(rubricResult));
+
+          if (rubricResult.route === 'QUICK_FIX') {
+            console.log('\n   💡 Quick Fix recommended:');
+            console.log(`      node scripts/create-quick-fix.js --title "${title}" --type ${type}`);
+            console.log('   Continuing with full SD creation...\n');
+          } else if (rubricResult.route === 'VISION_FIRST') {
+            console.log('\n   💡 Vision-First pipeline recommended:');
+            console.log('      Start with /brainstorm to create a vision document,');
+            console.log('      then architecture plan, then orchestrator + children.');
+            console.log('   Continuing with direct SD creation...\n');
+          }
         }
-      } catch (triageErr) {
-        // Non-fatal: triage failure should not block SD creation
-        console.warn(`[triage-gate] Warning: ${triageErr.message}`);
+      } catch (rubricErr) {
+        // Non-fatal: rubric failure should not block SD creation
+        console.warn(`[vision-readiness] Warning: ${rubricErr.message}`);
       }
 
       // Phase 0 not required or complete - proceed with SD creation
