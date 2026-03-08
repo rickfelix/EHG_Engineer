@@ -13,39 +13,26 @@
  * The database is NOT used for keyword storage or retrieval.
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Path to the keyword scorer (source of truth)
-const SCORER_PATH = path.join(__dirname, '../../../lib/keyword-intent-scorer.js');
+// No longer needs fs/path — uses dynamic import() instead of file reading
 
 /**
  * Extract AGENT_KEYWORDS object from the scorer file
  * @returns {Object} Agent keywords by agent code
  */
-export function extractKeywordsFromScorer() {
+export async function extractKeywordsFromScorer() {
   try {
-    const content = fs.readFileSync(SCORER_PATH, 'utf-8');
+    // Safe alternative to new Function(): use dynamic import to load the module
+    const scorerModule = await import('../../../lib/keyword-intent-scorer.js');
+    const keywords = scorerModule.AGENT_KEYWORDS;
 
-    // Find the AGENT_KEYWORDS object using regex
-    // This matches from "const AGENT_KEYWORDS = {" to the closing "};"
-    const match = content.match(/const AGENT_KEYWORDS = \{[\s\S]*?\n\};/);
-
-    if (!match) {
-      console.warn('[keyword-extractor] Could not find AGENT_KEYWORDS in scorer file');
+    if (!keywords || typeof keywords !== 'object') {
+      console.warn('[keyword-extractor] AGENT_KEYWORDS not found in scorer module');
       return {};
     }
 
-    // Parse the object using Function constructor (safer than eval - no local scope access)
-    const keywords = new Function(`return (${match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '')})`)();
-
     return keywords;
   } catch (error) {
-    console.error('[keyword-extractor] Error reading scorer file:', error.message);
+    console.error('[keyword-extractor] Error loading scorer module:', error.message);
     return {};
   }
 }
@@ -69,8 +56,8 @@ export function flattenKeywords(agentKeywords, limit = 10) {
  * Generate trigger quick reference table from scorer keywords
  * @returns {string} Formatted markdown table
  */
-export function generateKeywordQuickReference() {
-  const keywords = extractKeywordsFromScorer();
+export async function generateKeywordQuickReference() {
+  const keywords = await extractKeywordsFromScorer();
 
   if (Object.keys(keywords).length === 0) {
     return '## Sub-Agent Trigger Keywords (Quick Reference)\n\n*Keywords not available*\n';
@@ -113,8 +100,8 @@ export function generateKeywordQuickReference() {
  * Get keyword statistics
  * @returns {Object} Stats about keywords
  */
-export function getKeywordStats() {
-  const keywords = extractKeywordsFromScorer();
+export async function getKeywordStats() {
+  const keywords = await extractKeywordsFromScorer();
   const agents = Object.keys(keywords);
 
   let totalPrimary = 0;

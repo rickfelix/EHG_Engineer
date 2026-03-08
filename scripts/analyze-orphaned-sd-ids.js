@@ -44,9 +44,10 @@ async function analyzeOrphanedRecords() {
       console.log('-'.repeat(80));
 
       // Get unique orphaned sd_id values
+      // Security: tableName is validated against allowlist + regex above
       const uniqueQuery = `
         SELECT DISTINCT t.sd_id, COUNT(*) as record_count
-        FROM ${tableName} t
+        FROM "${tableName}" t
         WHERE t.sd_id IS NOT NULL
           AND NOT EXISTS (
             SELECT 1 FROM strategic_directives_v2 sd
@@ -81,12 +82,13 @@ async function analyzeOrphanedRecords() {
       });
 
       // Get date range for orphaned records
+      // Security: tableName is validated against allowlist + regex above
       const dateQuery = `
         SELECT
-          MIN(created_at) as earliest,
-          MAX(created_at) as latest
-        FROM ${tableName}
-        WHERE sd_id IS NOT NULL
+          MIN(t.created_at) as earliest,
+          MAX(t.created_at) as latest
+        FROM "${tableName}" t
+        WHERE t.sd_id IS NOT NULL
           AND NOT EXISTS (
             SELECT 1 FROM strategic_directives_v2 sd
             WHERE sd.id = t.sd_id

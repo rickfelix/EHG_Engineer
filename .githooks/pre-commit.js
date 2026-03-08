@@ -115,7 +115,8 @@ function checkModuleBoundaries() {
 
   // Run ESLint on staged files
   try {
-    execSync(`npx eslint ${stagedFiles.join(' ')} --max-warnings 0`, { stdio: 'ignore' });
+    // Security: quote each filename to prevent command injection via crafted filenames
+    execSync(`npx eslint ${stagedFiles.map(f => '"' + f + '"').join(' ')} --max-warnings 0`, { stdio: 'ignore' });
     log.success('Module boundary check passed');
     return true;
   } catch {
@@ -175,7 +176,8 @@ function runFullDriftCheck() {
     log.info('🔍 Running full drift check...');
     
     try {
-      execSync(`node ${driftCheckPath}`, { stdio: 'inherit' });
+      // Security: quote path to prevent command injection via path traversal
+      execSync(`node "${driftCheckPath}"`, { stdio: 'inherit' });
       log.success('Full drift check passed');
       return true;
     } catch {
