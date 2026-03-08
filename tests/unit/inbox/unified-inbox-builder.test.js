@@ -9,10 +9,13 @@ import {
   mapPatternLifecycle,
   mapAuditLifecycle,
   mapSDLifecycle,
+  mapIntakeLifecycle,
   normalizeFeedback,
   normalizePattern,
   normalizeAudit,
   normalizeSD,
+  normalizeIntake,
+  normalizeAndDedupIntake,
   applyDeduplication,
   groupByLifecycle,
   sortItems,
@@ -52,6 +55,14 @@ describe('Lifecycle mapping', () => {
     it('maps "completed" to COMPLETED', () => expect(mapSDLifecycle('completed')).toBe('COMPLETED'));
     it('maps "cancelled" to COMPLETED', () => expect(mapSDLifecycle('cancelled')).toBe('COMPLETED'));
     it('defaults unknown to PENDING_SDS', () => expect(mapSDLifecycle('foo')).toBe('PENDING_SDS'));
+  });
+
+  describe('mapIntakeLifecycle', () => {
+    it('maps classified item (no feedback_id) to NEW', () => expect(mapIntakeLifecycle('active', null)).toBe('NEW'));
+    it('maps item with feedback_id to PENDING_SDS', () => expect(mapIntakeLifecycle('active', 'fb-123')).toBe('PENDING_SDS'));
+    it('maps archived to COMPLETED', () => expect(mapIntakeLifecycle('archived', null)).toBe('COMPLETED'));
+    it('maps archived with feedback_id to COMPLETED (archived takes precedence)', () => expect(mapIntakeLifecycle('archived', 'fb-123')).toBe('COMPLETED'));
+    it('defaults null status without feedback to NEW', () => expect(mapIntakeLifecycle(null, null)).toBe('NEW'));
   });
 });
 
@@ -158,6 +169,124 @@ describe('Normalizers', () => {
     expect(item.linked_items).toEqual([]);
     expect(item.metadata.sd_key).toBe('SD-TEST-001');
     expect(item.metadata.uuid).toBe('uuid-123');
+  });
+
+  it('normalizeIntake produces correct shape with classification metadata', () => {
+    const row = {
+      id: 'intake-uuid-1',
+      title: 'Research competitor pricing',
+      description: 'Look into competitor pricing models',
+      status: 'active',
+      feedback_id: null,
+      target_application: 'EHG',
+      target_aspects: ['pricing', 'competitive-analysis'],
+      chairman_intent: 'research',
+      classification_confidence: 0.92,
+      extracted_youtube_id: null,
+      created_at: '2026-03-01T00:00:00Z',
+      updated_at: '2026-03-02T00:00:00Z',
+      _source_table: 'eva_todoist_intake'
+    };
+    const item = normalizeIntake(row);
+
+    expect(item.item_id).toBe('intake-intake-uuid-1');
+    expect(item.item_type).toBe('intake');
+    expect(item.title).toBe('Research competitor pricing');
+    expect(item.lifecycle_status).toBe('NEW');
+    expect(item.source_ref).toEqual({ table: 'eva_todoist_intake', pk: 'intake-uuid-1' });
+    expect(item.metadata.target_application).toBe('EHG');
+    expect(item.metadata.target_aspects).toEqual(['pricing', 'competitive-analysis']);
+    expect(item.metadata.chairman_intent).toBe('research');
+    expect(item.metadata.classification_confidence).toBe(0.92);
+    expect(item.metadata.source_table).toBe('eva_todoist_intake');
+  });
+
+  it('normalizeIntake uses description when title is missing', () => {
+    const row = {
+      id: '1', title: null, description: 'A long description for intake',
+      status: 'active', feedback_id: null, target_application: 'LEO',
+      _source_table: 'eva_youtube_intake', created_at: '2026-03-01T00:00:00Z'
+    };
+    const item = normalizeIntake(row);
+    expect(item.title).toBe('A long description for intake');
+    expect(item.source_ref.table).toBe('eva_youtube_intake');
+  });
+
+  it('normalizeIntake handles null classification fields gracefully', () => {
+    const row = {
+      id: '2', title: 'Test', status: null, feedback_id: null,
+      target_application: 'EHG', target_aspects: null, chairman_intent: null,
+      classification_confidence: null, _source_table: 'eva_todoist_intake',
+      created_at: '2026-03-01T00:00:00Z'
+    };
+    const item = normalizeIntake(row);
+    expect(item.metadata.target_aspects).toBeNull();
+    expect(item.metadata.chairman_intent).toBeNull();
+    expect(item.metadata.classification_confidence).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// YouTube cross-link deduplication tests
+// ---------------------------------------------------------------------------
+
+describe('normalizeAndDedupIntake', () => {
+  const makeIntakeItem = (id, sourceTable, ytId = null) => ({
+    item_id: `intake-${id}`,
+    item_type: 'intake',
+    title: `Item ${id}`,
+    lifecycle_status: 'NEW',
+    created_at: '2026-03-01T00:00:00Z',
+    updated_at: '2026-03-01T00:00:00Z',
+    source_ref: { table: sourceTable, pk: id },
+    assigned_sd_id: null,
+    linked_items: null,
+    priority: null,
+    metadata: { extracted_youtube_id: ytId, source_table: sourceTable }
+  });
+
+  it('returns all items when no cross-links exist', () => {
+    const items = [
+      makeIntakeItem('t1', 'eva_todoist_intake'),
+      makeIntakeItem('y1', 'eva_youtube_intake')
+    ];
+    const result = normalizeAndDedupIntake(items);
+    expect(result).toHaveLength(2);
+  });
+
+  it('nests YouTube item under Todoist when extracted_youtube_id matches', () => {
+    const items = [
+      makeIntakeItem('t1', 'eva_todoist_intake', 'y1'),
+      makeIntakeItem('y1', 'eva_youtube_intake')
+    ];
+    const result = normalizeAndDedupIntake(items);
+    // Only Todoist should be top-level (YouTube nested)
+    expect(result).toHaveLength(1);
+    expect(result[0].source_ref.table).toBe('eva_todoist_intake');
+    expect(result[0].linked_items).toHaveLength(1);
+    expect(result[0].linked_items[0].item_id).toBe('intake-y1');
+  });
+
+  it('standalone YouTube items without cross-ref remain top-level', () => {
+    const items = [
+      makeIntakeItem('t1', 'eva_todoist_intake', 'y1'),
+      makeIntakeItem('y1', 'eva_youtube_intake'),
+      makeIntakeItem('y2', 'eva_youtube_intake')
+    ];
+    const result = normalizeAndDedupIntake(items);
+    expect(result).toHaveLength(2); // t1 (with y1 nested) + y2 standalone
+    const standalone = result.find(i => i.source_ref.pk === 'y2');
+    expect(standalone).toBeDefined();
+  });
+
+  it('handles empty input', () => {
+    expect(normalizeAndDedupIntake([])).toEqual([]);
+  });
+
+  it('handles Todoist-only input', () => {
+    const items = [makeIntakeItem('t1', 'eva_todoist_intake')];
+    const result = normalizeAndDedupIntake(items);
+    expect(result).toHaveLength(1);
   });
 });
 
