@@ -706,7 +706,7 @@ SDKeyGenerator - Centralized SD Key Generation
 
 Usage:
   node scripts/modules/sd-key-generator.js <source> <type> "<title>"
-  node scripts/modules/sd-key-generator.js --child <parentKey> <index>
+  node scripts/modules/sd-key-generator.js --child <parentKey> <index|letter>
   node scripts/modules/sd-key-generator.js --parse <sdKey>
   node scripts/modules/sd-key-generator.js --check-protocol
   node scripts/modules/sd-key-generator.js --check-core
@@ -730,7 +730,8 @@ Protocol Enforcement (SD-LEO-SDKEY-ENFORCE-LEAD-READ-001):
 Examples:
   node scripts/modules/sd-key-generator.js UAT fix "Navigation route not working"
   node scripts/modules/sd-key-generator.js LEO feature "Add dark mode toggle"
-  node scripts/modules/sd-key-generator.js --child SD-UAT-FIX-NAV-001 0
+  node scripts/modules/sd-key-generator.js --child SD-UAT-FIX-NAV-001 0     # numeric index
+  node scripts/modules/sd-key-generator.js --child SD-UAT-FIX-NAV-001 A     # letter suffix
   node scripts/modules/sd-key-generator.js --parse SD-UAT-FIX-NAV-001-A
   node scripts/modules/sd-key-generator.js --check-protocol
 `);
@@ -741,7 +742,19 @@ Examples:
     try {
       if (args[0] === '--child') {
         const parentKey = args[1];
-        const index = parseInt(args[2] || '0', 10);
+        const rawIndex = args[2] || '0';
+        // Accept both letter suffixes (A, B, C) and numeric indices (0, 1, 2)
+        let index;
+        if (/^[A-Z]$/i.test(rawIndex)) {
+          index = HIERARCHY_LETTERS.indexOf(rawIndex.toUpperCase());
+          if (index === -1) index = 0;
+        } else {
+          index = parseInt(rawIndex, 10);
+          if (isNaN(index)) {
+            console.error(`Invalid child index: "${rawIndex}". Use a letter (A-Z) or number (0-25).`);
+            process.exit(1);
+          }
+        }
         const childKey = generateChildKey(parentKey, index);
         console.log('Generated child key:', childKey);
       } else if (args[0] === '--parse') {
