@@ -69,7 +69,7 @@ export async function validateDeliverablesPlanning(supabase, sd) {
     // Check for existing deliverables
     const { data: deliverables } = await supabase
       .from('sd_scope_deliverables')
-      .select('id, name, completion_status')
+      .select('id, deliverable_name, completion_status')
       .eq('sd_id', sd.id);
 
     const deliverableCount = deliverables?.length || 0;
@@ -100,7 +100,7 @@ export async function validateDeliverablesPlanning(supabase, sd) {
     console.log('\n   📦 Deliverables:');
     deliverables.slice(0, 5).forEach((d, i) => {
       const status = d.completion_status === 'completed' ? '✓' : '○';
-      console.log(`      ${i + 1}. ${status} ${d.name || 'Unnamed'}`);
+      console.log(`      ${i + 1}. ${status} ${d.deliverable_name || 'Unnamed'}`);
     });
     if (deliverableCount > 5) {
       console.log(`      ... and ${deliverableCount - 5} more`);
@@ -116,7 +116,7 @@ export async function validateDeliverablesPlanning(supabase, sd) {
         deliverableCount,
         completed,
         pending,
-        deliverables: deliverables.map(d => ({ name: d.name, status: d.completion_status }))
+        deliverables: deliverables.map(d => ({ name: d.deliverable_name, status: d.completion_status }))
       }
     };
 

@@ -205,7 +205,7 @@ async function validateIndividualSD(supabase, sd, profile) {
   // --- Deliverables Check (L1: Existence) ---
   const { data: deliverables } = await supabase
     .from('sd_scope_deliverables')
-    .select('id, name')
+    .select('id, deliverable_name')
     .eq('sd_id', sd.id);
 
   const deliverableCount = deliverables?.length || 0;

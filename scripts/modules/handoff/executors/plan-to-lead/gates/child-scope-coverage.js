@@ -44,7 +44,7 @@ export function createChildScopeCoverageGate(supabase) {
         // Get parent SD deliverables
         const { data: parentDeliverables } = await supabase
           .from('sd_scope_deliverables')
-          .select('id, deliverable_name, category')
+          .select('id, deliverable_name, deliverable_type')
           .eq('sd_id', sdId);
 
         // Get children SDs
@@ -77,7 +77,7 @@ export function createChildScopeCoverageGate(supabase) {
         const childIds = children.map(c => c.id);
         const { data: childDeliverables } = await supabase
           .from('sd_scope_deliverables')
-          .select('sd_id, deliverable_name, category, completion_status')
+          .select('sd_id, deliverable_name, deliverable_type, completion_status')
           .in('sd_id', childIds);
 
         // Check parent deliverable coverage by children

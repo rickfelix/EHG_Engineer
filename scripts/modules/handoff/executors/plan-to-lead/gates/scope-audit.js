@@ -48,7 +48,7 @@ export function createScopeAuditGate(supabase) {
             .eq('id', sdId)
             .single(),
           supabase.from('sd_scope_deliverables')
-            .select('deliverable_name, completion_status, category')
+            .select('deliverable_name, completion_status, deliverable_type')
             .eq('sd_id', sdId),
           supabase.from('product_requirements_v2')
             .select('functional_requirements, acceptance_criteria')
