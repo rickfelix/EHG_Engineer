@@ -354,6 +354,11 @@ export class BaseExecutor {
       // Step 5: Build success result
       console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
 
+      // SD-LEO-INFRA-TYPE-AWARE-GATE-001: Progressive gate preflight advisory
+      try {
+        await this._displayProgressivePreflight(sd);
+      } catch { /* advisory is non-blocking */ }
+
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End root span and persist
       try { endSpan(rootSpan, { result: 'success' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
 
@@ -437,6 +442,45 @@ export class BaseExecutor {
   }
 
   // ============ Helper methods ============
+
+  /**
+   * SD-LEO-INFRA-TYPE-AWARE-GATE-001: Progressive gate preflight advisory.
+   * After a handoff succeeds, show what the NEXT handoff's gates will expect.
+   */
+  async _displayProgressivePreflight(sd) {
+    const HANDOFF_CHAIN = {
+      'LEAD-TO-PLAN': { next: 'PLAN-TO-EXEC', expectations: ['PRD record in product_requirements_v2 (status: approved)', 'System architecture defined', 'Implementation approach documented'] },
+      'PLAN-TO-EXEC': { next: 'EXEC-TO-PLAN', expectations: ['Code implementation complete', 'Tests passing', 'User stories marked completed with evidence'] },
+      'EXEC-TO-PLAN': { next: 'PLAN-TO-LEAD', expectations: ['Acceptance criteria validated per user story', 'Retrospective created (status: PUBLISHED)', 'All user stories in completed/validated status'] },
+      'PLAN-TO-LEAD': { next: 'LEAD-FINAL-APPROVAL', expectations: ['All user stories completed (100%)', 'Retrospective quality gate passes', 'SD completion score meets threshold'] }
+    };
+
+    const chain = HANDOFF_CHAIN[this.handoffType];
+    if (!chain) return;
+
+    // Check SD type profile for type-specific expectations
+    const sdType = sd?.sd_type || 'feature';
+    let typeNote = '';
+    try {
+      const { data: profile } = await this.supabase
+        .from('sd_type_validation_profiles')
+        .select('requires_prd, requires_user_stories, gate_threshold')
+        .eq('sd_type', sdType)
+        .single();
+      if (profile) {
+        const notes = [];
+        if (!profile.requires_prd) notes.push('PRD not required for this SD type');
+        if (!profile.requires_user_stories) notes.push('User stories not required for this SD type');
+        if (profile.gate_threshold) notes.push(`Gate threshold: ${profile.gate_threshold}%`);
+        if (notes.length > 0) typeNote = `\n   SD type '${sdType}': ${notes.join(', ')}`;
+      }
+    } catch { /* non-fatal */ }
+
+    console.log(`\n📋 NEXT HANDOFF: ${chain.next}`);
+    console.log('   The next gate will expect:');
+    chain.expectations.forEach(e => console.log(`   • ${e}`));
+    if (typeNote) console.log(typeNote);
+  }
 
   /**
    * Pre-handoff migration check

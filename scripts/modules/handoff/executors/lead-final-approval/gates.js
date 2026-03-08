@@ -96,6 +96,29 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
       console.log('\n🔒 GATE 2: User Stories Completion Check');
       console.log('-'.repeat(50));
 
+      // SD-LEO-INFRA-TYPE-AWARE-GATE-001: SD type check — does this type require user stories/PRD?
+      const sdType = ctx.sd.sd_type || 'feature';
+      const { data: typeProfile } = await supabase
+        .from('sd_type_validation_profiles')
+        .select('requires_prd, requires_user_stories')
+        .eq('sd_type', sdType)
+        .single();
+
+      const prdRequired = typeProfile?.requires_prd ?? true;
+      const storiesRequired = typeProfile?.requires_user_stories ?? true;
+
+      if (!storiesRequired) {
+        console.log(`   ℹ️  SD type '${sdType}' does not require user stories — auto-pass`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`SD type '${sdType}' does not require user stories`],
+          details: { sd_type: sdType, stories_required: false }
+        };
+      }
+
       // Use PRDRepository for resilient lookup
       const prd = await prdRepo?.getBySdUuid(ctx.sd.id);
 
@@ -114,6 +137,19 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
             max_score: 100,
             issues: [],
             warnings: ['Orchestrator SD - validated via children completion']
+          };
+        }
+
+        // SD type says PRD not required — auto-pass on missing PRD
+        if (!prdRequired) {
+          console.log(`   ℹ️  SD type '${sdType}' does not require PRD — auto-pass`);
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: [`SD type '${sdType}' does not require PRD`],
+            details: { sd_type: sdType, prd_required: false }
           };
         }
 
