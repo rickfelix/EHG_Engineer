@@ -119,4 +119,4 @@ Escalate to full files (e.g. `CLAUDE_CORE.md`) only when digest is insufficient.
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-03-07 2:26:45 PM | Protocol: LEO 4.3.3 | Source: Database*
+*Generated: 2026-03-08 11:19:08 AM | Protocol: LEO 4.3.3 | Source: Database*
