@@ -1,20 +1,20 @@
 ---
 category: protocol
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-02-28
-tags: [protocol, auto-generated]
+status: approved
+version: 1.5.0
+author: DOCMON Sub-Agent
+last_updated: 2026-03-08
+tags: [protocol, commands, ecosystem, eva-intake]
 ---
 # Command Ecosystem Reference
 
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.4.0
+- **Version**: 1.5.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-02-06
-- **Tags**: commands, workflow, ecosystem, slash-commands, quick-fix, routing, history
+- **Last Updated**: 2026-03-08
+- **Tags**: commands, workflow, ecosystem, slash-commands, quick-fix, routing, history, eva-intake, classification
 
 ## Table of Contents
 
@@ -218,6 +218,52 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /document → /ship → /learn →
 - **Script**: `scripts/leo-history.mjs`
 - **Receives from**: Manual invocation for project insights
 
+## EVA Intake Classification Commands (v1.5.0)
+
+The EVA intake pipeline includes interactive classification commands for routing items through the 3-dimension taxonomy (Application, Aspects, Intent).
+
+### `eva:intake:classify` - Interactive Classification
+
+```bash
+# Primary workflow: classify pending items interactively
+npm run eva:intake:classify
+
+# Resume interrupted classification session
+npm run eva:intake:classify -- --resume
+
+# Filter by source
+npm run eva:intake:classify -- --source todoist
+npm run eva:intake:classify -- --source youtube
+
+# Limit items per session
+npm run eva:intake:classify -- --limit 20
+
+# Show classification progress statistics
+npm run eva:intake:classify -- --stats
+```
+
+**Workflow Integration:**
+```
+npm run eva:ideas:sync        (existing — syncs Todoist/YouTube)
+        ↓
+npm run eva:intake:classify   (NEW — 3D interactive classification)
+        ↓
+/leo inbox                    (existing — view classified items)
+        ↓
+/leo create / /brainstorm     (existing — promote clusters to SDs)
+```
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--resume` | Continue from last checkpoint | Start fresh |
+| `--source todoist\|youtube` | Classify only one source | Both sources |
+| `--limit N` | Classify at most N items | All pending |
+| `--stats` | Show classification progress (no classification) | — |
+
+**Integration with `/leo inbox`:** Classified items appear in the Unified Inbox as `intake` source type with taxonomy badges (Application, Aspects, Intent).
+
 ## SD Type-Specific Flows
 
 ### Feature/UI SD Completion
@@ -411,6 +457,7 @@ Every suggestion set includes a "Done for now" option allowing users to:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5.0 | 2026-03-08 | Added EVA Intake Classification Commands section (eva:intake:classify with --resume, --source, --limit, --stats flags). Part of SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003. |
 | 1.4.0 | 2026-02-06 | Added /leo history command for AI-generated project evolution summaries |
 | 1.3.0 | 2026-01-30 | Added QF- prefix detection and intelligent routing to quick-fix workflow |
 | 1.2.0 | 2026-01-23 | Added /leo continue and /leo complete subcommands |

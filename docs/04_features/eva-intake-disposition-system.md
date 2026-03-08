@@ -1,10 +1,10 @@
 ---
 category: feature
-status: draft
-version: 1.0.0
-author: auto-fixer
-last_updated: 2026-02-28
-tags: [feature, auto-generated]
+status: approved
+version: 2.0.0
+author: Claude Opus 4.6
+last_updated: 2026-03-08
+tags: [feature, eva, intake, classification, 3d-taxonomy]
 ---
 # EVA Intake Disposition Classification System
 
@@ -806,17 +806,149 @@ The calibration test suite validates disposition accuracy using 13 real-world sa
 | Processing time | 45s | 18s | 60% faster |
 | Manual review time | 15 min/item | 3 min/item | 80% faster |
 
+## Interactive 3-Dimension Classification (v2.0)
+
+The intake system has been redesigned with a new 3-dimension taxonomy that replaces the legacy `venture_tag` / `business_function` classification. The Chairman interacts via `AskUserQuestion` to confirm, override, or skip AI-recommended classifications.
+
+### Taxonomy Dimensions
+
+#### Dimension 1: Application (pick one)
+
+| Value | Description |
+|-------|-------------|
+| `ehg_engineer` | Backend tooling, LEO protocol, scripts, infrastructure |
+| `ehg_app` | Frontend React/Vite application, Chairman UI, dashboards |
+| `new_venture` | New business ventures (ClarityStats, LocalizeAI, BrandForge AI) |
+
+#### Dimension 2: Aspects (multi-select, context-sensitive per application)
+
+Aspects change based on the selected Application:
+
+| Application | Available Aspects |
+|-------------|-------------------|
+| `ehg_engineer` | LEO Protocol, EVA Pipeline, Sub-Agents & AI, DevOps & Tooling, Database & Schema, Session Management, Documentation |
+| `ehg_app` | Chairman Dashboard, Venture Views, Stage Components, Data Visualization, Navigation & Layout, Settings & Config |
+| `new_venture` | Business Model, Market Research, Technical Feasibility, Competitive Analysis, Revenue Strategy |
+
+#### Dimension 3: Intent (capture-intent, pick one)
+
+| Value | Description |
+|-------|-------------|
+| `idea` | A new feature or capability to potentially build |
+| `insight` | A learning or observation to inform strategy |
+| `reference` | A resource to study or save for later |
+| `question` | Something that needs investigation or research |
+| `value` | A value proposition or strategic principle |
+
+### Classification Workflow
+
+```
+┌─────────────────────────────────────────────────┐
+│ Classify Item 14/199                            │
+│ ─────────────────────────────────────────────── │
+│ Title: "AI-powered translation for niche mkts"  │
+│ Source: Todoist                                  │
+│ Description: "Research LocalizeAI competitors..." │
+│                                                 │
+│ AI Recommendation: new_venture / business_model  │
+│                    / reference (92% confidence)  │
+│                                                 │
+│ ○ Accept AI recommendation                      │
+│ ○ Override (choose manually)                     │
+│ ○ Skip (come back later)                        │
+│ ○ Archive (not worth classifying)               │
+└─────────────────────────────────────────────────┘
+```
+
+**Flow per item:**
+1. AI pre-computes all 3 dimensions with confidence score
+2. If confidence ≥85%: Offer "Accept AI recommendation" as single action
+3. If confidence <85%: Present 3-step manual flow (Application → Aspects → Intent)
+4. Chairman confirms, overrides, or skips
+5. Progress checkpointed to database after each item
+
+### Database Schema (Additive Columns)
+
+```sql
+-- Added to both eva_todoist_intake and eva_youtube_intake
+ALTER TABLE eva_todoist_intake
+  ADD COLUMN target_application TEXT
+    CHECK (target_application IN ('ehg_engineer', 'ehg_app', 'new_venture')),
+  ADD COLUMN target_aspects JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN chairman_intent TEXT
+    CHECK (chairman_intent IN ('idea', 'insight', 'reference', 'question', 'value')),
+  ADD COLUMN chairman_notes TEXT,
+  ADD COLUMN classification_confidence NUMERIC(3,2),
+  ADD COLUMN classified_at TIMESTAMPTZ;
+```
+
+### Session Resume
+
+Classification progress survives context compaction and session interruptions:
+- Each classification writes immediately to DB (`classified_at` + column values)
+- Resume queries: `WHERE target_application IS NULL AND status != 'error'`
+- Partial classifications (started but interrupted) detected via: `WHERE target_application IS NOT NULL AND chairman_intent IS NULL`
+- No in-memory state required for continuity
+
+### CLI Commands
+
+```bash
+# Interactive classification (primary workflow)
+npm run eva:intake:classify
+
+# Resume interrupted session
+npm run eva:intake:classify -- --resume
+
+# Classify specific source only
+npm run eva:intake:classify -- --source todoist
+npm run eva:intake:classify -- --source youtube
+
+# Limit items per session
+npm run eva:intake:classify -- --limit 20
+
+# Show classification statistics
+npm run eva:intake:classify -- --stats
+```
+
+### Module Structure
+
+| Module | File | Purpose |
+|--------|------|---------|
+| Taxonomy | `lib/integrations/intake-taxonomy.js` | Enum definitions, aspect-per-app lookups, validation |
+| Classifier | `lib/integrations/intake-classifier.js` | AI recommendation + AskUserQuestion orchestration |
+| CLI | `scripts/eva-intake-classify.js` | Thin wrapper: parses flags, initializes Supabase, calls classifier |
+
+### Unified Inbox Integration
+
+Classified items flow into the Unified Inbox as a 5th source type (`intake`):
+- `unified-inbox-builder.js` includes an intake normalizer function
+- Items display Application badge, Aspect tags, and Intent icon
+- Cross-links Todoist items referencing YouTube videos via `extracted_youtube_id`
+- Lifecycle mapping: `NEW` (classified) → `IN_PROGRESS` (promoted to SD) → `COMPLETED` (archived)
+
+### Legacy Deprecation
+
+The old 2-dimension classification (`venture_tag` + `business_function`) is deprecated:
+1. Phase 1: New columns are additive; old columns remain populated by existing pipeline
+2. Phase 2: Evaluation bridge writes new taxonomy instead of old
+3. Phase 3: Old columns marked deprecated, stop populating
+4. Phase 4 (future): Drop old columns after confirming no downstream dependencies
+
 ## Related Documentation
 
 - [EVA Assistant & Orchestration](./eva_assistant_orchestration.md) - High-level orchestration architecture
+- [Command Ecosystem Reference](../leo/commands/command-ecosystem.md) - `eva:intake:classify` command integration
 - Triage Engine - Core triage engine patterns
 - Capability Taxonomy - Capability classification system
 - [Database Schema](../database/schema/) - Complete schema documentation
+- [EVA Intake Redesign Vision](../plans/eva-intake-redesign-vision.md) - Full design vision
+- [EVA Intake Redesign Architecture](../plans/eva-intake-redesign-architecture.md) - Implementation architecture
 
 ## Version History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 2.0.0 | 2026-03-08 | Claude Opus 4.6 | Added Interactive 3-Dimension Classification section (Application/Aspects/Intent taxonomy, AskUserQuestion workflow, session resume, CLI commands, Unified Inbox integration, legacy deprecation plan). Part of SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003. |
 | 1.1.0 | 2026-02-11 | Claude Opus 4.6 | Added interactive mode, deeper analysis router, and calibration test suite (completed SD-LEO-ENH-EVA-INTAKE-DISPOSITION-001) |
 | 1.0.0 | 2026-02-09 | Claude Opus 4.6 | Initial documentation for SD-LEO-ENH-EVA-INTAKE-DISPOSITION-001 |
 
