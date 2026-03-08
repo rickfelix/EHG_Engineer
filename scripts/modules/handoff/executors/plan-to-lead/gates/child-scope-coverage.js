@@ -44,7 +44,7 @@ export function createChildScopeCoverageGate(supabase) {
         // Get parent SD deliverables
         const { data: parentDeliverables } = await supabase
           .from('sd_scope_deliverables')
-          .select('id, title, category')
+          .select('id, deliverable_name, category')
           .eq('sd_id', sdId);
 
         // Get children SDs
@@ -77,16 +77,16 @@ export function createChildScopeCoverageGate(supabase) {
         const childIds = children.map(c => c.id);
         const { data: childDeliverables } = await supabase
           .from('sd_scope_deliverables')
-          .select('sd_id, title, category, completion_status')
+          .select('sd_id, deliverable_name, category, completion_status')
           .in('sd_id', childIds);
 
         // Check parent deliverable coverage by children
-        const childTitles = (childDeliverables || []).map(d => d.title.toLowerCase());
+        const childTitles = (childDeliverables || []).map(d => d.deliverable_name.toLowerCase());
         let covered = 0;
         const uncovered = [];
 
         for (const pd of parentDeliverables) {
-          const pdTitle = pd.title.toLowerCase();
+          const pdTitle = pd.deliverable_name.toLowerCase();
           // Simple keyword overlap check
           const isCovered = childTitles.some(ct =>
             ct.includes(pdTitle) || pdTitle.includes(ct) ||
@@ -96,7 +96,7 @@ export function createChildScopeCoverageGate(supabase) {
           if (isCovered) {
             covered++;
           } else {
-            uncovered.push(pd.title);
+            uncovered.push(pd.deliverable_name);
           }
         }
 

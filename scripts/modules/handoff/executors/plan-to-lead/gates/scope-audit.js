@@ -48,7 +48,7 @@ export function createScopeAuditGate(supabase) {
             .eq('id', sdId)
             .single(),
           supabase.from('sd_scope_deliverables')
-            .select('title, completion_status, category')
+            .select('deliverable_name, completion_status, category')
             .eq('sd_id', sdId),
           supabase.from('product_requirements_v2')
             .select('functional_requirements, acceptance_criteria')
@@ -114,7 +114,7 @@ export function createScopeAuditGate(supabase) {
 
         const incompleteDeliverables = deliverables
           .filter(d => d.completion_status !== 'completed' && d.completion_status !== 'done')
-          .map(d => `${d.title} (${d.completion_status || 'unknown'})`);
+          .map(d => `${d.deliverable_name} (${d.completion_status || 'unknown'})`);
 
         return buildSemanticResult({
           passed,
