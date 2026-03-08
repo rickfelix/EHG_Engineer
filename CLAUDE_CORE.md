@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-07 2:26:45 PM
+**Generated**: 2026-03-08 11:19:08 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -54,41 +54,6 @@ Task tool with subagent_type="database-agent":
 bash scripts/leo-stack.sh restart   # All 3 servers
 ```
 
-## 🔍 Session Start Verification (MANDATORY)
-
-**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
-
-### Before Starting ANY SD Work:
-```
-[ ] Query database to confirm SD exists
-[ ] Verify SD status and current_phase  
-[ ] Check for existing PRD if phase > LEAD
-[ ] Check for existing handoffs
-[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
-```
-
-### Verification Queries:
-```sql
--- Find SD by title
-SELECT legacy_id, title, status, current_phase, progress 
-FROM strategic_directives_v2 
-WHERE title ILIKE '%[keyword]%' AND is_active = true;
-
--- Check PRD exists
-SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
-
--- Check handoffs exist
-SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
-```
-
-### Why This Matters:
-- Session summaries describe *context*, not *state*
-- AI can hallucinate successful database operations
-- Database is the ONLY source of truth
-- If records don't exist, CREATE them before proceeding
-
-**Pattern Reference**: PAT-SESS-VER-001
-
 ## 🚀 Session Verification & Quick Start (MANDATORY)
 
 ## Session Start Checklist
@@ -128,6 +93,41 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 | `npm run prio:top3` | Top priority SDs |
 | `git status` | Working tree status |
 | `npm run handoff:latest` | Latest handoff |
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -1091,22 +1091,6 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 
 
-## Hot Issue Patterns (Auto-Updated)
-
-**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
-
-| Pattern ID | Category | Severity | Count | Trend | Top Solution |
-|------------|----------|----------|-------|-------|--------------|
-| PAT-CLMMULTI-001 | process | [HIGH] high | 2 | [STABLE] | See details |
-
-### Prevention Checklists
-
-**process**:
-- [ ] Verify claim before editing files
-- [ ] Check terminal_id matches session
-
-
-*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
 
@@ -1115,18 +1099,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001: Worktree Manager Re-keyed from Session to SD Isolation [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
-
-**Key Improvements**:
-- Node.js v24 libuv crash (Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)) in pre-commit hook ...
-- ESLint caught unused imports (removeWorktree, afterEach, symlinkNodeModules) during pre-commit that ...
-
-**Action Items**:
-- [ ] Investigate Node.js v24 libuv async handle crash on Windows (UV_HANDLE_CLOSING a...
-- [ ] Add ESLint --fix to IDE save hooks or incremental lint step in dev workflow to c...
-
-### 2. SD-LEO-INFRA-FIX-LEARNING-SYSTEM-001 Retrospective [QUALITY]
+### 1. SD-LEO-INFRA-FIX-LEARNING-SYSTEM-001 Retrospective [QUALITY]
 **Category**: USER_EXPERIENCE | **Date**: 2/7/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1137,7 +1110,29 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] Ship the 6-file fix via /ship - Owner: current session, Timeline: immediate
 - [ ] Audit remaining modules for bare dotenv.config() - Owner: next /learn cycle, Tim...
 
-### 3. SD-LEO-INFRA-STANDARDIZE-VITEST-MIGRATE-001: Jest to Vitest Migration [QUALITY]
+### 2. SD-LEO-INFRA-REALITY-GATES-001 Retrospective [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
+
+**Key Improvements**:
+- Boundary config artifact types need validation against actual venture_artifacts data - currently asp...
+- URL verification hardcoded timeouts need to be configurable per deployment environment
+
+**Action Items**:
+- [ ] Owner: Infra Eng, Due: 2026-02-14 - Add operational monitoring for DB_ERROR reas...
+- [ ] Owner: Infra Eng, Due: 2026-02-21 - Create integration test with real Supabase; ...
+
+### 3. SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001: Worktree Manager Re-keyed from Session to SD Isolation [QUALITY]
+**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
+
+**Key Improvements**:
+- Node.js v24 libuv crash (Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)) in pre-commit hook ...
+- ESLint caught unused imports (removeWorktree, afterEach, symlinkNodeModules) during pre-commit that ...
+
+**Action Items**:
+- [ ] Investigate Node.js v24 libuv async handle crash on Windows (UV_HANDLE_CLOSING a...
+- [ ] Add ESLint --fix to IDE save hooks or incremental lint step in dev workflow to c...
+
+### 4. SD-LEO-INFRA-STANDARDIZE-VITEST-MIGRATE-001: Jest to Vitest Migration [QUALITY]
 **Category**: TESTING_STRATEGY | **Date**: 2/6/2026 | **Score**: 100
 
 **Key Improvements**:
@@ -1148,27 +1143,16 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 - [ ] {"action":"Address 95 pre-existing test failures now visible under Vitest","owne...
 - [ ] {"action":"Improve bulk migration scripts to detect actual mock usage before add...
 
-### 4. Target-Application-Aware Persona Validation - Retrospective [QUALITY]
-**Category**: DATABASE_SCHEMA | **Date**: 2/5/2026 | **Score**: 100
-
-**Key Improvements**:
-- SD had 16 handoffs including 9 LEAD-TO-PLAN transitions, indicating excessive iteration during plann...
-- SD was initially misclassified as feature type during LEAD phase, requiring RCA and governance overr...
-
-**Action Items**:
-- [ ] Integrate test runner output with unified_test_evidence table to automatically r...
-- [ ] Update deliverable statuses and success metrics actuals for SD-LEO-ENH-TARGET-AP...
-
-### 5. SD-LEO-INFRA-REALITY-GATES-001 Retrospective [QUALITY]
+### 5. SD-LEO-INFRA-STAGE-GATES-EXT-001 Retrospective [QUALITY]
 **Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
 
 **Key Improvements**:
-- Boundary config artifact types need validation against actual venture_artifacts data - currently asp...
-- URL verification hardcoded timeouts need to be configurable per deployment environment
+- Auto-generated retrospectives lack SD-specific risk assessments - a state-machine gating change that...
+- Kill gate REQUIRES_CHAIRMAN_DECISION status creates a new state that downstream consumers (venture-s...
 
 **Action Items**:
-- [ ] Owner: Infra Eng, Due: 2026-02-14 - Add operational monitoring for DB_ERROR reas...
-- [ ] Owner: Infra Eng, Due: 2026-02-21 - Create integration test with real Supabase; ...
+- [ ] Create database table for per-venture gate configuration to replace hardcoded KI...
+- [ ] Add integration tests that verify kill gate -> Chairman decision -> venture term...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1234,7 +1218,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-07*
+*Generated from database: 2026-03-08*
 *Protocol Version: 4.3.3*
-*Includes: Proposals (0) + Hot Patterns (1) + Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*

@@ -120,6 +120,7 @@
     "eva:ideas:status": "node scripts/eva-idea-status.js",
     "eva:ideas:post-process": "node scripts/eva-idea-post-process.js",
     "eva:ideas:auth:youtube": "node scripts/eva-youtube-auth.js",
+    "eva:intake:classify": "node scripts/eva-intake-classify.js",
     "release:check": "node scripts/claude-code-release-check.js",
     "eva:scheduler:start": "node scripts/eva-scheduler.js start",
     "eva:scheduler:status": "node scripts/eva-scheduler.js status",
