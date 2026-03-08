@@ -37,7 +37,10 @@ import {
   createArchitecturePlanValidationGate,
   createSuccessMetricsVerificationGate,
   createSmokeTestEvidenceGate,
-  createFailureChainOrderingGate
+  createFailureChainOrderingGate,
+  // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+  createScopeAuditGate,
+  createChildScopeCoverageGate
 } from './gates/index.js';
 // Note: requiresTraceabilityGates is re-exported via 'export * from ./gates/index.js'
 
@@ -198,6 +201,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
     // Routes ESCALATE decisions to chairman_decisions for governance
     gates.push(createDFEEscalationGate(this.supabase, 'plan-to-lead-gate'));
+
+    // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+    gates.push(createScopeAuditGate(this.supabase));
+    gates.push(createChildScopeCoverageGate(this.supabase));
 
     return gates;
   }

@@ -57,3 +57,8 @@ export {
   validateCrossRepoConsumerImpact,
   createCrossRepoConsumerImpactGate
 } from './cross-repo-consumer-impact.js';
+
+// Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+export { createScopeReductionVerificationGate } from './scope-reduction-verification.js';
+export { createSdTypeCompatibilityGate } from './sd-type-compatibility.js';
+export { createOverlappingScopeDetectionGate } from './overlapping-scope-detection.js';

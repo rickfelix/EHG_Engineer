@@ -20,3 +20,7 @@ export { createArchitecturePlanValidationGate } from './architecture-plan-valida
 export { createSuccessMetricsVerificationGate } from './success-metrics-verification.js';
 export { createSmokeTestEvidenceGate } from './smoke-test-evidence.js';
 export { createFailureChainOrderingGate } from './failure-chain-ordering.js';
+
+// Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+export { createScopeAuditGate } from './scope-audit.js';
+export { createChildScopeCoverageGate } from './child-scope-coverage.js';

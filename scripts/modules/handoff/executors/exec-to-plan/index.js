@@ -26,7 +26,11 @@ import {
   createIntegrationContractGate,
   createStoryAutoValidationGate,
   createE2ETestMappingGate,
-  createDFEEscalationGate
+  createDFEEscalationGate,
+  // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+  createDeliverablesCompletenessGate,
+  createSmokeTestValidationGate,
+  createUserStoryCoverageGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -183,6 +187,11 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-001)
     // Routes ESCALATE decisions to chairman_decisions for governance
     gates.push(createDFEEscalationGate(this.supabase));
+
+    // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+    gates.push(createDeliverablesCompletenessGate(this.supabase));
+    gates.push(createSmokeTestValidationGate(this.supabase));
+    gates.push(createUserStoryCoverageGate(this.supabase));
 
     return gates;
   }
