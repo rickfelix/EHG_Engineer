@@ -3,13 +3,13 @@
  * roadmap-promote.js — Promote wave items to Strategic Directives
  * SD: SD-LEO-FEAT-STRATEGIC-ROADMAP-ARTIFACT-001-D
  *
- * Promotes all unpromoted items in a wave to SDs by creating entries
- * in strategic_directives_v2 and updating promoted_to_sd_key on each item.
+ * Creates SDs for unpromoted wave items, updates tracking fields,
+ * and transitions wave status. Also supports --approve for baseline snapshots.
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
+import { promoteWaveToSDs, approveSequence, getRoadmapStats } from '../lib/integrations/roadmap-manager.js';
 
 dotenv.config();
 
@@ -18,85 +18,34 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-function generateSDKey(title, index) {
-  const slug = (title || 'ITEM')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 30);
-  return `SD-LEO-ROADMAP-${slug}-${String(index).padStart(3, '0')}`;
-}
-
-async function promoteItem(item, index, roadmapTitle) {
-  const sdKey = generateSDKey(item.title, index);
-  const sdId = randomUUID();
-
-  const { error } = await supabase
-    .from('strategic_directives_v2')
-    .insert({
-      id: sdId,
-      sd_key: sdKey,
-      title: item.title || `Roadmap Item ${index}`,
-      summary: `Promoted from roadmap wave item. Source: ${item.source_type}. Roadmap: ${roadmapTitle}`,
-      status: 'draft',
-      current_phase: 'LEAD',
-      sd_type: 'feature',
-      priority: 'medium',
-      progress: 0,
-      strategic_objectives: [
-        { objective: `Implement: ${item.title || 'roadmap item'}`, measurable: true }
-      ],
-      success_metrics: [
-        { metric: 'Feature implemented and validated', target: '100%' }
-      ],
-      key_changes: [
-        { change: `Implementation of ${item.title || 'roadmap item'}`, area: 'feature' }
-      ],
-      success_criteria: [
-        { criterion: 'Feature works as specified in roadmap item', met: false }
-      ],
-      created_by: 'leo-roadmap-promote',
-      metadata: {
-        source: 'roadmap_promotion',
-        wave_item_id: item.id,
-        source_type: item.source_type,
-      },
-    });
-
-  if (error) {
-    return { success: false, item, error: error.message };
-  }
-
-  // Update wave item with promoted SD key
-  const { error: updateErr } = await supabase
-    .from('roadmap_wave_items')
-    .update({ promoted_to_sd_key: sdKey })
-    .eq('id', item.id);
-
-  if (updateErr) {
-    return { success: false, item, error: `SD created but failed to update wave item: ${updateErr.message}` };
-  }
-
-  return { success: true, item, sdKey, sdId };
-}
-
 async function main() {
   const args = process.argv.slice(2);
   const waveIdFlag = args.indexOf('--wave-id');
   const waveId = waveIdFlag >= 0 ? args[waveIdFlag + 1] : null;
+  const approveFlag = args.includes('--approve');
+  const roadmapIdFlag = args.indexOf('--roadmap-id');
+  const roadmapId = roadmapIdFlag >= 0 ? args[roadmapIdFlag + 1] : null;
+  const rationaleFlag = args.indexOf('--rationale');
+  const rationale = rationaleFlag >= 0 ? args[rationaleFlag + 1] : 'Approved via CLI';
   const dryRun = args.includes('--dry-run');
 
+  if (approveFlag && roadmapId) {
+    return handleApprove(roadmapId, rationale);
+  }
+
   if (!waveId) {
-    console.log('Usage: node scripts/roadmap-promote.js --wave-id <uuid> [--dry-run]');
-    console.log('\nPromotes all unassigned items in a wave to Strategic Directives.');
-    console.log('  --dry-run    Preview what would be promoted without creating SDs');
+    console.log('Usage:');
+    console.log('  node scripts/roadmap-promote.js --wave-id <uuid>              Promote wave items to SDs');
+    console.log('  node scripts/roadmap-promote.js --wave-id <uuid> --dry-run    Preview without creating');
+    console.log('  node scripts/roadmap-promote.js --approve --roadmap-id <uuid> Approve wave sequence');
+    console.log('    --rationale "reason"                                        (optional rationale)');
     process.exit(0);
   }
 
-  // Fetch wave
+  // Fetch wave and items for preview
   const { data: wave, error: wErr } = await supabase
     .from('roadmap_waves')
-    .select('id, title, status, roadmap_id')
+    .select('id, title, status')
     .eq('id', waveId)
     .single();
 
@@ -105,19 +54,9 @@ async function main() {
     process.exit(1);
   }
 
-  // Fetch roadmap title for context
-  const { data: roadmap } = await supabase
-    .from('strategic_roadmaps')
-    .select('title')
-    .eq('id', wave.roadmap_id)
-    .single();
-
-  const roadmapTitle = roadmap?.title || 'Unknown Roadmap';
-
-  // Fetch wave items
   const { data: items, error: iErr } = await supabase
     .from('roadmap_wave_items')
-    .select('id, title, source_type, source_id, promoted_to_sd_key, priority_rank')
+    .select('id, title, source_type, promoted_to_sd_key')
     .eq('wave_id', waveId)
     .order('priority_rank', { ascending: true });
 
@@ -126,57 +65,66 @@ async function main() {
   const unpromoted = (items || []).filter(i => !i.promoted_to_sd_key);
   const promoted = (items || []).filter(i => i.promoted_to_sd_key);
 
-  console.log('Roadmap Wave Promotion');
-  console.log('═'.repeat(50));
-  console.log(`  Roadmap: ${roadmapTitle}`);
-  console.log(`  Wave: ${wave.title} [${wave.status}]`);
+  console.log(`\nWave: ${wave.title} [${wave.status}]`);
+  console.log('═'.repeat(60));
   console.log(`  Total items: ${(items || []).length}`);
   console.log(`  Already promoted: ${promoted.length}`);
   console.log(`  Ready to promote: ${unpromoted.length}`);
 
-  if (unpromoted.length === 0) {
-    console.log('\n  All items already promoted. Nothing to do.');
-    return;
+  if (promoted.length > 0) {
+    console.log('\n  Already promoted:');
+    promoted.forEach((item, i) => {
+      console.log(`    ✓ ${item.title || '(untitled)'} → ${item.promoted_to_sd_key}`);
+    });
   }
 
+  if (unpromoted.length === 0) {
+    console.log('\n  All items already promoted. Nothing to do.');
+    process.exit(0);
+  }
+
+  console.log('\n  Items to promote:');
+  unpromoted.forEach((item, i) => {
+    console.log(`    ${i + 1}. ${item.title || '(untitled)'} [${item.source_type}]`);
+  });
+
   if (dryRun) {
-    console.log('\n  [DRY RUN] Items that would be promoted:');
-    unpromoted.forEach((item, i) => {
-      const sdKey = generateSDKey(item.title, i + 1);
-      console.log(`    ${i + 1}. ${item.title || '(untitled)'} [${item.source_type}] → ${sdKey}`);
-    });
-    console.log('\n  No changes written. Remove --dry-run to execute.');
-    return;
+    console.log('\n  [DRY RUN] No SDs created. Remove --dry-run to execute.');
+    process.exit(0);
   }
 
   // Execute promotion
-  console.log('\n  Promoting items...');
-  const results = [];
-  let succeeded = 0;
-  let failed = 0;
+  console.log('\n  Promoting...');
+  const result = await promoteWaveToSDs(supabase, waveId);
 
-  for (let i = 0; i < unpromoted.length; i++) {
-    const result = await promoteItem(unpromoted[i], i + 1, roadmapTitle);
-    results.push(result);
-
-    if (result.success) {
-      succeeded++;
-      console.log(`    ✓ ${result.item.title || '(untitled)'} → ${result.sdKey}`);
-    } else {
-      failed++;
-      console.log(`    ✗ ${result.item.title || '(untitled)'}: ${result.error}`);
-    }
+  console.log('\n  Results:');
+  console.log(`    Created: ${result.created.length} SDs`);
+  result.created.forEach(key => console.log(`      → ${key}`));
+  if (result.skipped > 0) {
+    console.log(`    Skipped: ${result.skipped} (already promoted)`);
   }
-
-  console.log('\n' + '═'.repeat(50));
-  console.log(`  Results: ${succeeded} promoted, ${failed} failed`);
-
-  if (failed > 0) {
-    console.log('  ⚠️  Some items failed. Review errors above.');
-    process.exit(1);
+  if (result.errors.length > 0) {
+    console.log(`    Errors: ${result.errors.length}`);
+    result.errors.forEach(e => console.log(`      ✗ ${e}`));
   }
+  console.log('═'.repeat(60));
+}
 
-  console.log('  Run `node scripts/roadmap-status.js` to verify.');
+async function handleApprove(roadmapId, rationale) {
+  console.log(`\nApproving wave sequence for roadmap: ${roadmapId}`);
+  console.log('═'.repeat(60));
+
+  const result = await approveSequence(supabase, roadmapId, rationale);
+
+  console.log(`  ✓ Baseline snapshot created (version ${result.version})`);
+  console.log(`  ✓ Snapshot ID: ${result.snapshotId}`);
+  console.log(`  ✓ Rationale: ${rationale}`);
+
+  const stats = await getRoadmapStats(supabase, roadmapId);
+  console.log('\n  Roadmap stats:');
+  console.log(`    Waves: ${stats.wave_count}`);
+  console.log(`    Items: ${stats.total_items} (${stats.promoted_items} promoted, ${stats.completion_pct}%)`);
+  console.log('═'.repeat(60));
 }
 
 main().catch(err => {
