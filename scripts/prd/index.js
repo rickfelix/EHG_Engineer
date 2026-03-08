@@ -435,7 +435,27 @@ async function generateAndValidatePRDContent(supabase, sdId, sdIdValue, sdData, 
       if (process.env.LLM_PRD_INLINE !== 'false') {
         console.log('\n   ℹ️  INLINE MODE: PRD prompt output complete.');
         console.log('   Claude Code should generate and insert the PRD content directly.');
-        console.log('   Exiting without creating PRD record (expected in inline mode).');
+
+        // SD-LEO-INFRA-TYPE-AWARE-GATE-001: Post-write verification
+        // Check if a PRD record already exists for this SD (may have been created by Claude inline)
+        const { data: existingPrd } = await supabase
+          .from('product_requirements_v2')
+          .select('id, status')
+          .eq('sd_id', sdIdValue)
+          .limit(1)
+          .single();
+
+        if (existingPrd) {
+          console.log(`   ✅ PRD record verified in database (id: ${existingPrd.id}, status: ${existingPrd.status})`);
+        } else {
+          console.log('\n   ⚠️  WARNING: No PRD record found in product_requirements_v2 for this SD.');
+          console.log('   The downstream PLAN-TO-EXEC handoff WILL FAIL without a PRD record.');
+          console.log(`   SD ID (uuid): ${sdIdValue}`);
+          console.log('\n   >>> PRD_VERIFICATION_FAILED=true');
+          console.log(`   >>> PRD_SD_ID=${sdIdValue}`);
+          console.log('   Claude Code: You MUST insert the PRD record into product_requirements_v2 before proceeding.');
+        }
+
         process.exit(0);
       }
       // HARD GATE: Exit when LLM generation fails in external API mode
