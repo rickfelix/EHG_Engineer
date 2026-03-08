@@ -618,15 +618,19 @@ export async function scoreSDAtConception(sdKey, title, description, supabase, {
     const scorerOpts = { sdKey, scope: visionScope, dryRun: false, supabase };
     if (visionKey) scorerOpts.visionKey = visionKey;
     if (archKey) scorerOpts.archKey = archKey;
+    let timeoutId;
     const scoreResult = await Promise.race([
       scoreSD(scorerOpts),
-      new Promise((_, reject) =>
-        setTimeout(
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(
           () => reject(new Error(`Vision scoring timeout (${VISION_PRESCREEN_TIMEOUT_MS / 1000}s)`)),
           VISION_PRESCREEN_TIMEOUT_MS
-        )
-      ),
+        );
+        // Unref so this timer doesn't keep Node alive after main work completes
+        if (timeoutId.unref) timeoutId.unref();
+      }),
     ]);
+    clearTimeout(timeoutId);
 
     const actionLabel = ACTION_LABELS[scoreResult.threshold_action]
       || scoreResult.threshold_action?.toUpperCase()
@@ -1719,6 +1723,10 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
         }
       });
     }
+    // Exit cleanly so fire-and-forget vision scoring doesn't block the process.
+    // Without this, Node waits for the detached scoreSDAtConception() HTTP request,
+    // causing the CLI to hang and users to retry — creating duplicate SDs.
+    process.exit(0);
   } catch (err) {
     console.error('Error:', err.message);
     process.exit(1);
