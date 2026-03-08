@@ -122,6 +122,7 @@
     "eva:ideas:auth:youtube": "node scripts/eva-youtube-auth.js",
     "eva:intake:classify": "node scripts/eva-intake-classify.js",
     "eva:intake:pipeline": "node scripts/eva-intake-pipeline.js",
+    "eva:distill": "node scripts/eva-intake-pipeline.js",
     "roadmap:generate": "node scripts/roadmap-generate.js",
     "roadmap:status": "node scripts/roadmap-status.js",
     "roadmap:approve": "node scripts/roadmap-promote.js --approve",
