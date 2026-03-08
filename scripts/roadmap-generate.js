@@ -1,23 +1,30 @@
 #!/usr/bin/env node
 /**
- * roadmap-generate.js — Generate a roadmap from classified intake items
+ * roadmap-generate.js — Generate or incrementally update a roadmap from classified intake items
  *
- * Reads classified items directly from eva_todoist_intake and eva_youtube_intake,
- * clusters them into waves via wave-clusterer, and persists results to
- * strategic_roadmaps + roadmap_waves + roadmap_wave_items.
+ * Two modes:
+ *   1. Full (no baselined roadmap): Cluster all classified items into new waves
+ *   2. Incremental (baselined roadmap exists): Assign only NEW items to existing waves
  *
- * Architecture ref: docs/plans/strategic-roadmap-artifact-architecture.md
+ * The baseline acts as a control mechanism — once approved, items are locked.
+ * New weekly distills only add to existing waves, never re-cluster.
  *
  * Usage:
- *   node scripts/roadmap-generate.js                              # Generate from all classified items
+ *   node scripts/roadmap-generate.js                              # Auto-detect mode
  *   node scripts/roadmap-generate.js --title "Q2 Roadmap"         # Custom roadmap title
  *   node scripts/roadmap-generate.js --app ehg_engineer            # Filter by application
  *   node scripts/roadmap-generate.js --dry-run                     # Preview without writing to DB
+ *   node scripts/roadmap-generate.js --full                        # Force full clustering (ignore baseline)
  */
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { clusterItems, loadClassifiedIntakeItems } from '../lib/integrations/wave-clusterer.js';
+import {
+  clusterItems,
+  loadClassifiedIntakeItems,
+  loadNewIntakeItems,
+  assignToExistingWaves,
+} from '../lib/integrations/wave-clusterer.js';
 
 dotenv.config();
 
@@ -25,6 +32,56 @@ const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+/**
+ * Find the active baselined roadmap (status='active', baseline_version > 0).
+ * Returns null if no baselined roadmap exists.
+ */
+async function getBaselinedRoadmap() {
+  const { data, error } = await supabase
+    .from('strategic_roadmaps')
+    .select('id, title, status, current_baseline_version')
+    .eq('status', 'active')
+    .gt('current_baseline_version', 0)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) return null;
+  return data[0];
+}
+
+/**
+ * Load existing waves with sample item titles for context.
+ */
+async function loadExistingWaves(roadmapId) {
+  const { data: waves, error } = await supabase
+    .from('roadmap_waves')
+    .select('id, title, description, sequence_rank')
+    .eq('roadmap_id', roadmapId)
+    .order('sequence_rank', { ascending: true });
+
+  if (error || !waves) return [];
+
+  // Fetch a few sample titles per wave for AI context
+  const result = [];
+  for (const wave of waves) {
+    const { data: items } = await supabase
+      .from('roadmap_wave_items')
+      .select('title')
+      .eq('wave_id', wave.id)
+      .limit(5);
+
+    result.push({
+      id: wave.id,
+      title: wave.title,
+      description: wave.description || '',
+      sequence_rank: wave.sequence_rank,
+      sample_titles: (items || []).map(i => i.title).filter(Boolean),
+    });
+  }
+
+  return result;
+}
 
 async function createRoadmap(title) {
   const { data, error } = await supabase
@@ -85,17 +142,108 @@ async function createWaves(roadmapId, waves, items) {
   return results;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const titleFlag = args.indexOf('--title');
-  const appFlag = args.indexOf('--app');
-  const dryRun = args.includes('--dry-run');
+/**
+ * Incremental mode: assign new items to existing baselined waves.
+ */
+async function runIncremental(roadmap, options) {
+  const { application, dryRun } = options;
 
-  const title = titleFlag >= 0 ? args[titleFlag + 1] : 'EVA Intake Roadmap';
-  const application = appFlag >= 0 ? args[appFlag + 1] : undefined;
+  console.log(`  Mode: INCREMENTAL (baseline v${roadmap.current_baseline_version})`);
+  console.log(`  Roadmap: ${roadmap.title} [${roadmap.id.substring(0, 8)}]`);
 
-  console.log('Roadmap Generator');
-  console.log('═'.repeat(50));
+  // Load only items not yet assigned to any wave
+  const newItems = await loadNewIntakeItems(supabase, { application, limit: 500 });
+  console.log(`  New items (not in any wave): ${newItems.length}`);
+
+  if (newItems.length === 0) {
+    console.log('  No new items to assign. Roadmap is up to date.');
+    return;
+  }
+
+  // Show distribution of new items
+  const byApp = {};
+  const byIntent = {};
+  for (const item of newItems) {
+    byApp[item.target_application] = (byApp[item.target_application] || 0) + 1;
+    byIntent[item.chairman_intent] = (byIntent[item.chairman_intent] || 0) + 1;
+  }
+  console.log('  By application:', Object.entries(byApp).map(([k, v]) => `${k}(${v})`).join(', '));
+  console.log('  By intent:', Object.entries(byIntent).map(([k, v]) => `${k}(${v})`).join(', '));
+
+  // Load existing waves for assignment context
+  const existingWaves = await loadExistingWaves(roadmap.id);
+  console.log(`  Existing waves: ${existingWaves.length}`);
+  existingWaves.forEach(w => console.log(`    [${w.sequence_rank}] ${w.title}`));
+
+  // AI assigns new items to existing waves
+  console.log('\n  Assigning new items to existing waves...');
+  const result = await assignToExistingWaves(newItems, existingWaves);
+  console.log(`  Method: ${result.method}`);
+
+  // Summarize assignments per wave
+  const waveCounts = {};
+  for (const a of result.assignments) {
+    const waveTitle = a.wave_index > 0 ? existingWaves[a.wave_index - 1].title : 'UNMATCHED';
+    waveCounts[waveTitle] = (waveCounts[waveTitle] || 0) + 1;
+  }
+
+  console.log('\n  Assignment summary:');
+  for (const [title, count] of Object.entries(waveCounts)) {
+    console.log(`    ${title}: +${count} items`);
+  }
+
+  if (result.unmatched.length > 0) {
+    console.log(`\n  Unmatched items (${result.unmatched.length}):`);
+    result.unmatched.forEach(idx => {
+      const item = newItems[idx - 1];
+      if (item) console.log(`    - [${item.target_application}] ${(item.title || '').slice(0, 70)}`);
+    });
+    console.log('  These items need manual wave assignment or a roadmap restructure.');
+  }
+
+  if (dryRun) {
+    console.log('\n  [DRY RUN] No changes written to database.');
+    return;
+  }
+
+  // Persist: insert new wave items into existing waves
+  let inserted = 0;
+  for (const a of result.assignments) {
+    if (a.wave_index === 0) continue; // Skip unmatched
+
+    const item = newItems[a.item_index - 1];
+    const wave = existingWaves[a.wave_index - 1];
+    if (!item || !wave) continue;
+
+    const { error } = await supabase
+      .from('roadmap_wave_items')
+      .insert({
+        wave_id: wave.id,
+        source_type: item.source_type,
+        source_id: item.id,
+      });
+
+    if (error) {
+      console.warn(`  Warning: Could not insert item ${item.id} into wave ${wave.title}: ${error.message}`);
+    } else {
+      inserted++;
+    }
+  }
+
+  console.log(`\n  Inserted ${inserted} items into existing waves.`);
+  if (result.unmatched.length > 0) {
+    console.log(`  ${result.unmatched.length} unmatched items not inserted.`);
+  }
+  console.log('  Done. Review with: node scripts/roadmap-status.js');
+}
+
+/**
+ * Full mode: cluster all items into new waves (original behavior).
+ */
+async function runFull(options) {
+  const { title, application, dryRun } = options;
+
+  console.log('  Mode: FULL CLUSTERING');
 
   // Load classified intake items directly from intake tables
   const items = await loadClassifiedIntakeItems(supabase, { application, limit: 500 });
@@ -157,6 +305,31 @@ async function main() {
 
   console.log('\n  Done. Review waves with: node scripts/roadmap-status.js');
   console.log(`  Approve waves with:      node scripts/roadmap-promote.js --approve --roadmap-id ${roadmapId}`);
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const titleFlag = args.indexOf('--title');
+  const appFlag = args.indexOf('--app');
+  const dryRun = args.includes('--dry-run');
+  const forceFull = args.includes('--full');
+
+  const title = titleFlag >= 0 ? args[titleFlag + 1] : 'EVA Intake Roadmap';
+  const application = appFlag >= 0 ? args[appFlag + 1] : undefined;
+
+  console.log('Roadmap Generator');
+  console.log('═'.repeat(50));
+
+  // Auto-detect mode: if a baselined roadmap exists, use incremental
+  if (!forceFull) {
+    const baselinedRoadmap = await getBaselinedRoadmap();
+    if (baselinedRoadmap) {
+      await runIncremental(baselinedRoadmap, { application, dryRun });
+      return;
+    }
+  }
+
+  await runFull({ title, application, dryRun });
 }
 
 main().catch(err => {
