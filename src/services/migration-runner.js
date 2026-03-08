@@ -174,9 +174,10 @@ export async function getMigrationStatus(pool, migrationsTable = 'pgmigrations')
     }
 
     // Get applied migrations
+    // Security: migrationsTable validated via $1 parameterized check above (line 168)
     const result = await client.query(`
       SELECT id, name, run_on
-      FROM ${migrationsTable}
+      FROM "${migrationsTable}"
       ORDER BY run_on DESC
     `);
 

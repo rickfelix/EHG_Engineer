@@ -38,14 +38,13 @@ const EVENT_TRIGGERS = new Set([
 async function main() {
   console.log('=== KEYWORD CONSOLIDATION ===\n');
 
-  // Step 1: Read current scorer file
-  console.log('1. Reading current scorer file...');
-  const scorerContent = fs.readFileSync(SCORER_PATH, 'utf-8');
-  const match = scorerContent.match(/const AGENT_KEYWORDS = \{[\s\S]*?\n\};/);
-  if (!match) {
-    throw new Error('Could not find AGENT_KEYWORDS in scorer file');
+  // Step 1: Load current scorer module via dynamic import (safe alternative to new Function)
+  console.log('1. Loading scorer module...');
+  const scorerModule = await import('../lib/keyword-intent-scorer.js');
+  const currentKeywords = scorerModule.AGENT_KEYWORDS;
+  if (!currentKeywords || typeof currentKeywords !== 'object') {
+    throw new Error('Could not load AGENT_KEYWORDS from scorer module');
   }
-  const currentKeywords = new Function('return (' + match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '') + ')')();
   console.log(`   Found ${Object.keys(currentKeywords).length} agents in scorer file`);
 
   // Step 2: Get triggers from database table

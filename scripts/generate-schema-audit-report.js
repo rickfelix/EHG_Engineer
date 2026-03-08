@@ -75,7 +75,8 @@ async function generateSchemaAuditReport() {
         continue;
       }
       try {
-        const countResult = await client.query(`SELECT COUNT(*) as count FROM ${table.name}`);
+        // Security: table.name is validated against allowedTableNames allowlist + regex above
+        const countResult = await client.query(`SELECT COUNT(*) as count FROM "${table.name}"`);
         report.push(`| ${table.name} | ${countResult.rows[0].count.toLocaleString()} | ${table.purpose} |`);
       } catch (err) {
         report.push(`| ${table.name} | ERROR | ${err.message} |`);
