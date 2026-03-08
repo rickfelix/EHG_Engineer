@@ -10,7 +10,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const DEFAULT_AGE_THRESHOLD_DAYS = 28;
+const DEFAULT_AGE_THRESHOLD_DAYS = 21;
 
 /**
  * Load the SD age block threshold from leo_config.
@@ -158,7 +158,7 @@ export function formatBlockMessage({ sdKey, ageDays, threshold }) {
     `  ${'═'.repeat(50)}`,
     `  Age:       ${ageDays} days`,
     `  Threshold: ${threshold} days`,
-    `  Status:    BLOCKED — SD exceeds maximum age`,
+    '  Status:    BLOCKED — SD exceeds maximum age',
     '',
     '  Recommended Actions:',
     '    1. Complete the SD if work is near-done',
