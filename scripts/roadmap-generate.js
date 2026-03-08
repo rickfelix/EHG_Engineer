@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 /**
- * roadmap-generate.js — Generate a roadmap from SD backlog items
- * SD: SD-LEO-FEAT-STRATEGIC-ROADMAP-ARTIFACT-001-C
+ * roadmap-generate.js — Generate a roadmap from classified intake items
  *
- * Reads from sd_backlog_map, clusters items into waves via wave-clusterer,
- * and persists results to strategic_roadmaps + roadmap_waves + roadmap_wave_items.
+ * Reads classified items directly from eva_todoist_intake and eva_youtube_intake,
+ * clusters them into waves via wave-clusterer, and persists results to
+ * strategic_roadmaps + roadmap_waves + roadmap_wave_items.
+ *
+ * Architecture ref: docs/plans/strategic-roadmap-artifact-architecture.md
+ *
+ * Usage:
+ *   node scripts/roadmap-generate.js                              # Generate from all classified items
+ *   node scripts/roadmap-generate.js --title "Q2 Roadmap"         # Custom roadmap title
+ *   node scripts/roadmap-generate.js --app ehg_engineer            # Filter by application
+ *   node scripts/roadmap-generate.js --dry-run                     # Preview without writing to DB
  */
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { clusterItems } from '../lib/integrations/wave-clusterer.js';
+import { clusterItems, loadClassifiedIntakeItems } from '../lib/integrations/wave-clusterer.js';
 
 dotenv.config();
 
@@ -18,27 +26,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-async function fetchBacklogItems(visionKey) {
-  const query = supabase
-    .from('sd_backlog_map')
-    .select('id, backlog_title, item_description, priority, category, source_type, source_id')
-    .order('priority', { ascending: true });
-
-  if (visionKey) {
-    query.eq('vision_key', visionKey);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`Failed to fetch backlog: ${error.message}`);
-  return data || [];
-}
-
-async function createRoadmap(title, visionKey) {
+async function createRoadmap(title) {
   const { data, error } = await supabase
     .from('strategic_roadmaps')
     .insert({
       title,
-      vision_key: visionKey || null,
       status: 'draft',
       created_by: 'leo-roadmap-generate',
     })
@@ -70,16 +62,14 @@ async function createWaves(roadmapId, waves, items) {
 
     if (waveErr) throw new Error(`Failed to create wave ${i}: ${waveErr.message}`);
 
-    // Insert wave items
+    // Insert wave items — reference intake source directly
     const waveItems = wave.item_indices
       .map(idx => items[idx - 1])
       .filter(Boolean)
-      .map((item, rank) => ({
+      .map(item => ({
         wave_id: waveRow.id,
-        source_type: item.source_type || 'todoist',
+        source_type: item.source_type,
         source_id: item.id,
-        title: item.backlog_title || item.title,
-        priority_rank: rank,
       }));
 
     if (waveItems.length > 0) {
@@ -98,56 +88,75 @@ async function createWaves(roadmapId, waves, items) {
 async function main() {
   const args = process.argv.slice(2);
   const titleFlag = args.indexOf('--title');
-  const visionFlag = args.indexOf('--vision-key');
+  const appFlag = args.indexOf('--app');
   const dryRun = args.includes('--dry-run');
 
-  const title = titleFlag >= 0 ? args[titleFlag + 1] : 'Auto-Generated Roadmap';
-  const visionKey = visionFlag >= 0 ? args[visionFlag + 1] : null;
+  const title = titleFlag >= 0 ? args[titleFlag + 1] : 'EVA Intake Roadmap';
+  const application = appFlag >= 0 ? args[appFlag + 1] : undefined;
 
   console.log('Roadmap Generator');
   console.log('═'.repeat(50));
 
-  // Fetch backlog items
-  const items = await fetchBacklogItems(visionKey);
-  console.log(`  Backlog items found: ${items.length}`);
+  // Load classified intake items directly from intake tables
+  const items = await loadClassifiedIntakeItems(supabase, { application, limit: 500 });
+  console.log(`  Classified intake items: ${items.length}`);
+
+  if (application) {
+    console.log(`  Filtered by application: ${application}`);
+  }
 
   if (items.length === 0) {
-    console.log('  No backlog items found. Populate sd_backlog_map first.');
+    console.log('  No classified items found. Run classification first:');
+    console.log('    npm run eva:intake:classify -- --batch');
     process.exit(0);
   }
 
-  // Cluster into waves
-  const clusterInput = items.map(item => ({
-    id: item.id,
-    title: item.backlog_title || '',
-    description: item.item_description || '',
-    priority: item.priority || 'medium',
-    category: item.category || '',
-  }));
+  // Show distribution
+  const byApp = {};
+  const byIntent = {};
+  for (const item of items) {
+    byApp[item.target_application] = (byApp[item.target_application] || 0) + 1;
+    byIntent[item.chairman_intent] = (byIntent[item.chairman_intent] || 0) + 1;
+  }
+  console.log('  By application:', Object.entries(byApp).map(([k, v]) => `${k}(${v})`).join(', '));
+  console.log('  By intent:', Object.entries(byIntent).map(([k, v]) => `${k}(${v})`).join(', '));
 
-  const result = await clusterItems(clusterInput);
-  console.log(`  Clustering method: ${result.method}`);
-  console.log(`  Waves proposed: ${result.waves.length}`);
+  // Cluster into waves
+  console.log('\n  Clustering into waves...');
+  const result = await clusterItems(items);
+  console.log(`  Method: ${result.method}`);
+  console.log(`  Waves proposed: ${result.waves.length}\n`);
 
   result.waves.forEach((wave, i) => {
-    console.log(`    Wave ${i + 1}: ${wave.title} (${wave.item_indices.length} items)`);
+    console.log(`  Wave ${i + 1}: ${wave.title} (${wave.item_indices.length} items)`);
+    console.log(`    ${wave.description}`);
+    // Show first 3 items as preview
+    wave.item_indices.slice(0, 3).forEach(idx => {
+      const item = items[idx - 1];
+      if (item) console.log(`      - [${item.source_type}] ${(item.title || '').slice(0, 60)}`);
+    });
+    if (wave.item_indices.length > 3) {
+      console.log(`      ... and ${wave.item_indices.length - 3} more`);
+    }
+    console.log('');
   });
 
   if (dryRun) {
-    console.log('\n  [DRY RUN] No changes written to database.');
+    console.log('  [DRY RUN] No changes written to database.');
     return;
   }
 
   // Persist to database
-  const roadmapId = await createRoadmap(title, visionKey);
-  console.log(`\n  Roadmap created: ${roadmapId}`);
+  const roadmapId = await createRoadmap(title);
+  console.log(`  Roadmap created: ${roadmapId}`);
 
   const waveResults = await createWaves(roadmapId, result.waves, items);
   waveResults.forEach(w => {
     console.log(`  Wave: ${w.title} → ${w.itemCount} items`);
   });
 
-  console.log('\n  Done. Run `node scripts/roadmap-status.js` to view.');
+  console.log('\n  Done. Review waves with: node scripts/roadmap-status.js');
+  console.log(`  Approve waves with:      node scripts/roadmap-promote.js --approve --roadmap-id ${roadmapId}`);
 }
 
 main().catch(err => {
