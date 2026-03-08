@@ -13,15 +13,7 @@
  * The database is NOT used for keyword storage or retrieval.
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Path to the keyword scorer (source of truth)
-const SCORER_PATH = path.join(__dirname, '../../../lib/keyword-intent-scorer.js');
+// No longer needs fs/path — uses dynamic import() instead of file reading
 
 /**
  * Extract AGENT_KEYWORDS object from the scorer file

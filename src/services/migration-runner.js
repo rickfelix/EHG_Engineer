@@ -55,7 +55,7 @@ async function loadPgMigrate() {
     const module = await import('node-pg-migrate');
     pgMigrate = module.default || module;
     return pgMigrate;
-  } catch (error) {
+  } catch (_error) {
     console.log('⚠️ node-pg-migrate not available, skipping migration functionality');
     return null;
   }
