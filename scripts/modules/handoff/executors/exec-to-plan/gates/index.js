@@ -23,3 +23,8 @@ export { createStoryAutoValidationGate } from './story-auto-validation.js';
 export { createE2ETestMappingGate } from './e2e-test-mapping.js';
 export { createDFEEscalationGate } from './dfe-escalation-gate.js';
 export { createCascadeAlignmentGate } from './cascade-alignment-gate.js';
+
+// Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+export { createDeliverablesCompletenessGate } from './deliverables-completeness.js';
+export { createSmokeTestValidationGate } from './smoke-test-validation.js';
+export { createUserStoryCoverageGate } from './user-story-coverage.js';

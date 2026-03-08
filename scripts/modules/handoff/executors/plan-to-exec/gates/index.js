@@ -17,3 +17,7 @@ export { createIntegrationSectionValidationGate, REQUIRED_SUBSECTIONS, SUBSECTIO
 export { createMigrationDataVerificationGate } from './migration-data-verification.js';
 export { createArchitecturalPatternChecklistGate } from './architectural-pattern-checklist.js';
 export { createPlanningCompletenessGate, validatePlanningCompleteness, BLOCKING_SD_TYPES as PLANNING_BLOCKING_SD_TYPES, ADVISORY_SD_TYPES } from './planning-completeness.js';
+
+// Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+export { createVisionDimensionCompletenessGate } from './vision-dimension-completeness.js';
+export { createArchitectureRequirementTraceGate } from './architecture-requirement-trace.js';

@@ -18,7 +18,11 @@ import {
   createPlaceholderContentGate,
   createVisionScoreGate,
   createLeadEvaluationGate,
-  createCrossRepoConsumerImpactGate
+  createCrossRepoConsumerImpactGate,
+  // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+  createScopeReductionVerificationGate,
+  createSdTypeCompatibilityGate,
+  createOverlappingScopeDetectionGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -111,6 +115,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // DFE Escalation advisory gate (SD-MAN-GEN-CORRECTIVE-VISION-GAP-003)
     // Routes ESCALATE decisions to chairman_decisions for governance
     gates.push(createDFEEscalationGate(this.supabase, 'lead-to-plan-gate'));
+
+    // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
+    gates.push(createScopeReductionVerificationGate(this.supabase));
+    gates.push(createSdTypeCompatibilityGate(this.supabase));
+    gates.push(createOverlappingScopeDetectionGate(this.supabase));
 
     return gates;
   }
