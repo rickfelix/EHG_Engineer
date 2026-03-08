@@ -28,6 +28,7 @@ import {
   askUserQuestions,
   mapSelectionToValue,
 } from '../lib/integrations/intake-classifier.js';
+import { validateClassification } from '../lib/integrations/intake-taxonomy.js';
 
 dotenv.config();
 
@@ -253,6 +254,17 @@ async function saveItemClassification(itemId, classificationJson, source) {
     classification = JSON.parse(classificationJson);
   } catch {
     console.error('Invalid classification JSON');
+    process.exit(1);
+  }
+
+  const { valid, errors } = validateClassification(
+    classification.target_application,
+    classification.target_aspects,
+    classification.chairman_intent
+  );
+  if (!valid) {
+    console.error('Classification validation failed:');
+    errors.forEach(e => console.error(`  - ${e}`));
     process.exit(1);
   }
 
