@@ -586,8 +586,8 @@ describe('Semantic Validation Gates — Mock Supabase Integration', () => {
       const { createDeliverablesCompletenessGate } = await import('../../scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js');
       const mockSb = createMockSupabase({
         sd_scope_deliverables: [
-          { id: 1, title: 'Real deliverable', completion_status: 'completed', metadata: {}, created_by: 'human' },
-          { id: 2, title: 'Auto deliverable', completion_status: 'completed', metadata: {}, created_by: 'auto-fix-guardian' },
+          { id: 1, deliverable_name: 'Real deliverable', completion_status: 'completed', metadata: {}, created_by: 'human' },
+          { id: 2, deliverable_name: 'Auto deliverable', completion_status: 'completed', metadata: {}, created_by: 'auto-fix-guardian' },
         ]
       });
       const gate = createDeliverablesCompletenessGate(mockSb);

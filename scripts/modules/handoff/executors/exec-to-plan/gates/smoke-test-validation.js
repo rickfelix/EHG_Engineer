@@ -77,7 +77,7 @@ export function createSmokeTestValidationGate(supabase) {
         const issues = [];
 
         for (const scenario of scenarios) {
-          const desc = typeof scenario === 'string' ? scenario : scenario?.description || scenario?.title || '';
+          const desc = typeof scenario === 'string' ? scenario : scenario?.scenario || scenario?.description || scenario?.title || '';
           if (desc.length > 20) {
             validScenarios++;
           } else {
