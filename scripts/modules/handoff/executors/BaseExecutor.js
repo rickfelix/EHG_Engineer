@@ -353,6 +353,7 @@ export class BaseExecutor {
 
       // Step 5: Build success result
       console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
+      console.log('   ⚠️  IMPORTANT: Follow the LEO protocol diligently.');
 
       // SD-LEO-INFRA-TYPE-AWARE-GATE-001: Progressive gate preflight advisory
       try {

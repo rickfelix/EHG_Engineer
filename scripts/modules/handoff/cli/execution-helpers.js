@@ -221,6 +221,8 @@ export async function displayExecutionResult(result, handoffType, sdId) {
 
     const displayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 'N/A';
     console.log(`   Score: ${displayScore}%`);
+    console.log('');
+    console.log('   ⚠️  IMPORTANT: Follow the LEO protocol diligently.');
 
     if (result.gateResults && Object.keys(result.gateResults).length > 0) {
       console.log(`   Gates: ${Object.keys(result.gateResults).length} evaluated`);
@@ -291,6 +293,9 @@ export async function displayExecutionResult(result, handoffType, sdId) {
     console.log('');
     console.log('❌ HANDOFF FAILED');
     console.log('='.repeat(50));
+    console.log('');
+    console.log('   ⚠️  IMPORTANT: Follow the LEO protocol diligently.');
+    console.log('');
     console.log(`   Reason: ${result.reasonCode || 'VALIDATION_FAILED'}`);
     console.log(`   Message: ${result.message || 'See details above'}`);
     if (result.remediation) {
