@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-08T00:37:19.773Z
+**Generated**: 2026-03-08T15:25:07.180Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (29 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,12 @@
 | raw_data | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| target_application | `text` | YES | - | Classification dimension 1: Which application this item targets (ehg_engineer, ehg_app, new_venture) |
+| target_aspects | `jsonb` | YES | `'[]'::jsonb` | Classification dimension 2: JSON array of aspect tags, context-sensitive per application |
+| chairman_intent | `text` | YES | - | Classification dimension 3: Why the Chairman captured this item (idea, insight, reference, question, value) |
+| chairman_notes | `text` | YES | - | Free-text notes the Chairman adds during classification for context preservation |
+| classification_confidence | `numeric(3,2)` | YES | - | AI confidence score (0.00-1.00) for the recommended classification |
+| classified_at | `timestamp with time zone` | YES | - | Timestamp when classification was completed (serves as checkpoint for session resume) |
 
 ## Constraints
 
@@ -51,8 +57,10 @@
 - `eva_youtube_intake_youtube_video_id_key`: UNIQUE (youtube_video_id)
 
 ### Check Constraints
+- `eva_youtube_intake_chairman_intent_check`: CHECK ((chairman_intent = ANY (ARRAY['idea'::text, 'insight'::text, 'reference'::text, 'question'::text, 'value'::text])))
 - `eva_youtube_intake_confidence_score_check`: CHECK (((confidence_score >= (0)::numeric) AND (confidence_score <= (1)::numeric)))
 - `eva_youtube_intake_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'evaluating'::text, 'approved'::text, 'rejected'::text, 'needs_revision'::text, 'processed'::text, 'error'::text])))
+- `eva_youtube_intake_target_application_check`: CHECK ((target_application = ANY (ARRAY['ehg_engineer'::text, 'ehg_app'::text, 'new_venture'::text])))
 
 ## Indexes
 
@@ -79,6 +87,14 @@
 - `idx_eva_youtube_intake_venture`
   ```sql
   CREATE INDEX idx_eva_youtube_intake_venture ON public.eva_youtube_intake USING btree (venture_tag)
+  ```
+- `idx_youtube_intake_classified`
+  ```sql
+  CREATE INDEX idx_youtube_intake_classified ON public.eva_youtube_intake USING btree (target_application, classified_at DESC) WHERE (target_application IS NOT NULL)
+  ```
+- `idx_youtube_intake_unclassified`
+  ```sql
+  CREATE INDEX idx_youtube_intake_unclassified ON public.eva_youtube_intake USING btree (created_at) WHERE (target_application IS NULL)
   ```
 
 ## RLS Policies

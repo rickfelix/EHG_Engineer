@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-08T00:37:19.773Z
+**Generated**: 2026-03-08T15:25:07.180Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (26 total)
+## Columns (32 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -44,6 +44,12 @@
 | extracted_youtube_id | `text` | YES | - | - |
 | extracted_youtube_url | `text` | YES | - | - |
 | youtube_intake_id | `uuid` | YES | - | - |
+| target_application | `text` | YES | - | Classification dimension 1: Which application this item targets (ehg_engineer, ehg_app, new_venture) |
+| target_aspects | `jsonb` | YES | `'[]'::jsonb` | Classification dimension 2: JSON array of aspect tags, context-sensitive per application |
+| chairman_intent | `text` | YES | - | Classification dimension 3: Why the Chairman captured this item (idea, insight, reference, question, value) |
+| chairman_notes | `text` | YES | - | Free-text notes the Chairman adds during classification for context preservation |
+| classification_confidence | `numeric(3,2)` | YES | - | AI confidence score (0.00-1.00) for the recommended classification |
+| classified_at | `timestamp with time zone` | YES | - | Timestamp when classification was completed (serves as checkpoint for session resume) |
 
 ## Constraints
 
@@ -57,8 +63,10 @@
 - `eva_todoist_intake_todoist_task_id_key`: UNIQUE (todoist_task_id)
 
 ### Check Constraints
+- `eva_todoist_intake_chairman_intent_check`: CHECK ((chairman_intent = ANY (ARRAY['idea'::text, 'insight'::text, 'reference'::text, 'question'::text, 'value'::text])))
 - `eva_todoist_intake_confidence_score_check`: CHECK (((confidence_score >= (0)::numeric) AND (confidence_score <= (1)::numeric)))
 - `eva_todoist_intake_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'evaluating'::text, 'approved'::text, 'rejected'::text, 'needs_revision'::text, 'processed'::text, 'error'::text])))
+- `eva_todoist_intake_target_application_check`: CHECK ((target_application = ANY (ARRAY['ehg_engineer'::text, 'ehg_app'::text, 'new_venture'::text])))
 - `eva_todoist_intake_todoist_priority_check`: CHECK (((todoist_priority >= 1) AND (todoist_priority <= 4)))
 
 ## Indexes
@@ -98,6 +106,14 @@
 - `idx_eva_todoist_intake_youtube_id`
   ```sql
   CREATE INDEX idx_eva_todoist_intake_youtube_id ON public.eva_todoist_intake USING btree (extracted_youtube_id) WHERE (extracted_youtube_id IS NOT NULL)
+  ```
+- `idx_todoist_intake_classified`
+  ```sql
+  CREATE INDEX idx_todoist_intake_classified ON public.eva_todoist_intake USING btree (target_application, classified_at DESC) WHERE (target_application IS NOT NULL)
+  ```
+- `idx_todoist_intake_unclassified`
+  ```sql
+  CREATE INDEX idx_todoist_intake_unclassified ON public.eva_todoist_intake USING btree (created_at) WHERE ((target_application IS NULL) AND (status <> 'error'::text))
   ```
 
 ## RLS Policies
