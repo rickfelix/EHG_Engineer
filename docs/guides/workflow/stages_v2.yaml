@@ -344,7 +344,7 @@ stages:
 
   - id: 7
     title: "Revenue Architecture"
-    design_spec_title: "Pricing Strategy"
+    design_spec_title: "Revenue Architecture"
     description: "Pricing model development, tier structure, and value-based pricing analysis."
     phase_number: 2
     phase_name: "THE ENGINE"
@@ -368,6 +368,7 @@ stages:
 
   - id: 8
     title: "Business Model Canvas"
+    design_spec_title: "Business Model Canvas"
     description: "Complete business model documentation using BMC framework."
     phase_number: 2
     phase_name: "THE ENGINE"
@@ -391,7 +392,7 @@ stages:
 
   - id: 9
     title: "Exit Strategy"
-    design_spec_title: "Exit-Oriented Design"
+    design_spec_title: "Exit Strategy"
     description: "Strategic exit planning, valuation targets, and acquisition-friendly architecture."
     phase_number: 2
     phase_name: "THE ENGINE"
@@ -418,7 +419,7 @@ stages:
   # ============================================================================
   - id: 10
     title: "Customer & Brand Foundation"
-    design_spec_title: "Strategic Naming"
+    design_spec_title: "Customer & Brand Foundation"
     description: "Customer personas, brand genome grounded in persona insights, naming, and Chairman governance gate."
     phase_number: 3
     phase_name: "THE IDENTITY"
