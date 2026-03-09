@@ -780,10 +780,19 @@ export function createPhaseCoverageExitGate(supabase) {
         const uncovered = [];
         const incomplete = [];
 
+        // The SD currently being approved should count as covered (avoid circular dependency)
+        const currentSdKey = ctx.sd?.sd_key || ctx.sd?.id;
+
         for (const phase of phases) {
           const assignedKey = phase.covered_by_sd_key;
           if (!assignedKey) {
             uncovered.push(phase);
+            continue;
+          }
+
+          // Self-exclusion: the SD being approved right now counts as covered
+          if (assignedKey === currentSdKey) {
+            covered.push({ phase, sd_key: assignedKey, status: 'pending_approval (current)' });
             continue;
           }
 
