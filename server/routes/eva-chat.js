@@ -86,4 +86,57 @@ router.post('/message', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/eva/chat/stream
+ * SSE streaming endpoint — streams EVA response tokens in real-time.
+ * SD: SD-LEO-INFRA-EVA-CHAT-CANVAS-004 (Phase 3)
+ */
+router.post('/stream', async (req, res) => {
+  const { conversation_id, content, user_id } = req.body;
+  const userId = req.user?.id || user_id;
+
+  if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
+  if (!content) return res.status(400).json({ error: 'content required' });
+  if (!userId) return res.status(400).json({ error: 'user_id required' });
+
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+
+  try {
+    const { streamMessage } = await import('../../lib/integrations/eva-chat-service.js');
+    await streamMessage(conversation_id, content, userId, {
+      onToken(token) {
+        if (!aborted) {
+          res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+        }
+      },
+      onComplete(message) {
+        if (!aborted) {
+          res.write(`data: ${JSON.stringify({ type: 'done', message })}\n\n`);
+          res.end();
+        }
+      },
+      onError(error) {
+        if (!aborted) {
+          res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+          res.end();
+        }
+      }
+    });
+  } catch (err) {
+    if (!aborted) {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+      res.end();
+    }
+  }
+});
+
 export default router;
