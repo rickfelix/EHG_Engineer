@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Branding Artifact",
+  "description": "Output schema for the EHG Branding Service — confidence-scored brand identity artifacts",
+  "type": "object",
+  "required": ["venture_id", "brand_name", "color_palette", "typography", "brand_voice"],
+  "properties": {
+    "venture_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the venture this branding is for"
+    },
+    "brand_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "The venture's brand name"
+    },
+    "tagline": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Brand tagline or slogan"
+    },
+    "color_palette": {
+      "type": "object",
+      "required": ["primary", "secondary", "accent"],
+      "properties": {
+        "primary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "secondary": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "background": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "text": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+      },
+      "additionalProperties": false
+    },
+    "typography": {
+      "type": "object",
+      "required": ["heading_font", "body_font"],
+      "properties": {
+        "heading_font": { "type": "string" },
+        "body_font": { "type": "string" },
+        "mono_font": { "type": "string" },
+        "base_size_px": { "type": "integer", "minimum": 12, "maximum": 24, "default": 16 }
+      },
+      "additionalProperties": false
+    },
+    "brand_voice": {
+      "type": "object",
+      "required": ["tone", "personality_traits"],
+      "properties": {
+        "tone": {
+          "type": "string",
+          "enum": ["professional", "friendly", "authoritative", "playful", "technical", "warm"]
+        },
+        "personality_traits": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 5
+        },
+        "writing_style": {
+          "type": "string",
+          "enum": ["concise", "detailed", "conversational", "formal"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "logo_spec": {
+      "type": "object",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["wordmark", "lettermark", "icon", "combination", "emblem"]
+        },
+        "shape": {
+          "type": "string",
+          "enum": ["circle", "square", "rounded", "abstract", "geometric"]
+        },
+        "description": { "type": "string", "maxLength": 500 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
