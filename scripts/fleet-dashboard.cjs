@@ -35,8 +35,7 @@ async function loadData() {
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('v_active_sessions')
-      .select('session_id, sd_id, computed_status, tty, heartbeat_age_seconds')
-      .lt('heartbeat_age_seconds', STALE_THRESHOLD)
+      .select('session_id, sd_id, computed_status, tty, heartbeat_age_seconds, heartbeat_age_human')
       .order('heartbeat_age_seconds', { ascending: true }),
     supabase
       .from('strategic_directives_v2')
@@ -73,7 +72,8 @@ async function loadData() {
   const claimedSdIds = new Set(sessions.map(s => s.sd_id));
   const activeSessions = sessions.filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD);
   const staleSessions = sessions.filter(s => s.heartbeat_age_seconds >= STALE_THRESHOLD);
-  const idleSessions = allSessions.filter(s => !s.sd_id);
+  const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
+  const idleSessions = allSessions.filter(s => !s.sd_id && s.heartbeat_age_seconds < DEAD_THRESHOLD);
 
   const completedChildren = children.filter(c => c.status === 'completed').length;
   const totalChildren = children.length;
@@ -149,7 +149,12 @@ function printWorkers(d) {
 
   if (d.idleSessions.length > 0) {
     console.log('');
-    console.log('  Unclaimed (' + d.idleSessions.length + '): ' + d.idleSessions.map(s => s.tty).join(', '));
+    console.log('  Idle — No Claim (' + d.idleSessions.length + '):');
+    for (const s of d.idleSessions) {
+      const age = s.heartbeat_age_human || (s.heartbeat_age_seconds < 60 ? s.heartbeat_age_seconds + 's ago' : Math.round(s.heartbeat_age_seconds / 60) + 'm ago');
+      const staleTag = s.heartbeat_age_seconds >= STALE_THRESHOLD ? ' [STALE]' : '';
+      console.log('  ' + pad(s.tty, 12) + pad('—', 10) + pad('', 26) + pad('idle', 14) + age + staleTag);
+    }
   }
 
   console.log('');
@@ -456,6 +461,119 @@ async function printForecast(d) {
   console.log('');
 }
 
+// ── Section: Predictions ──
+async function printPredictions(d) {
+  const signals = [];
+
+  // 1. Capacity — estimate real fleet size using heartbeat freshness
+  // Sessions with heartbeat < 3min are likely real; >= 3min are likely ghosts (exited without cleanup)
+  const ALIVE_THRESHOLD = 180; // 3 minutes
+  const aliveIdle = d.idleSessions.filter(s => s.heartbeat_age_seconds < ALIVE_THRESHOLD);
+  const ghostIdle = d.idleSessions.filter(s => s.heartbeat_age_seconds >= ALIVE_THRESHOLD);
+  const availableCount = d.unclaimedStandalone.length + d.unclaimedChildren.length;
+  // +1 for coordinator session (this session — not in fleet data since it has no SD claim)
+  const estimatedFleet = d.activeSessions.length + aliveIdle.length + 1;
+  const claimedCount = d.activeSessions.length;
+  const utilPct = estimatedFleet > 0 ? Math.round((claimedCount / estimatedFleet) * 100) : 0;
+
+  if (aliveIdle.length > 0 && availableCount > 0) {
+    signals.push({
+      icon: '!!',
+      label: 'CAPACITY',
+      msg: aliveIdle.length + ' idle / ' + availableCount + ' available — fleet ~' + estimatedFleet + ' sessions at ' + utilPct + '% utilization'
+        + (ghostIdle.length > 0 ? ' (' + ghostIdle.length + ' ghost sessions excluded)' : '')
+    });
+  } else if (aliveIdle.length > 0 && availableCount === 0) {
+    signals.push({
+      icon: 'OK',
+      label: 'CAPACITY',
+      msg: 'Fleet ~' + estimatedFleet + ' sessions — ' + aliveIdle.length + ' idle but 0 SDs available, waiting on completions/unblocks'
+    });
+  } else if (aliveIdle.length === 0 && availableCount > 0 && claimedCount > 0) {
+    signals.push({
+      icon: 'OK',
+      label: 'CAPACITY',
+      msg: 'Fleet ~' + estimatedFleet + ' sessions, all claimed — ' + availableCount + ' SDs queued for next free worker'
+        + (ghostIdle.length > 0 ? ' (' + ghostIdle.length + ' ghost sessions excluded)' : '')
+    });
+  } else if (aliveIdle.length === 0 && claimedCount > 0) {
+    signals.push({
+      icon: 'OK',
+      label: 'CAPACITY',
+      msg: 'Fleet ~' + estimatedFleet + ' sessions, fully utilized'
+    });
+  }
+
+  // 2. Dependency unlock forecast — what SDs will completing current work unblock?
+  const completedKeys = new Set(d.children.filter(c => c.status === 'completed').map(c => c.sd_key));
+  const claimedSdKeys = [...d.claimedSdIds];
+  // Get all blocked SDs with their dependencies
+  const { data: allBlockedRaw } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, dependencies, status')
+    .in('status', ['draft', 'in_progress', 'ready', 'planning'])
+    .not('dependencies', 'is', null);
+
+  const blocked = (allBlockedRaw || []).filter(sd => {
+    const deps = parseDeps(sd.dependencies);
+    return deps.length > 0 && deps.some(dep => !completedKeys.has(dep));
+  });
+
+  // For each currently claimed SD, count how many blocked SDs it would unblock
+  for (const claimedKey of claimedSdKeys) {
+    const wouldUnblock = blocked.filter(sd => {
+      const deps = parseDeps(sd.dependencies);
+      const unresolvedDeps = deps.filter(dep => !completedKeys.has(dep));
+      return unresolvedDeps.length === 1 && unresolvedDeps[0] === claimedKey;
+    });
+    if (wouldUnblock.length > 0) {
+      const shortKey = claimedKey.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*?-/, '');
+      const names = wouldUnblock.slice(0, 3).map(s => s.sd_key.replace('SD-LEO-ORCH-', '').replace(/^SD-.*?-/, '').substring(0, 20));
+      signals.push({
+        icon: '>>',
+        label: 'UNLOCK',
+        msg: 'When ' + shortKey + ' completes → unblocks ' + wouldUnblock.length + ' SD(s): ' + names.join(', ')
+      });
+    }
+  }
+
+  // 3. Heartbeat aging — workers approaching stale threshold
+  const STALE_WARNING = STALE_THRESHOLD * 0.6; // 60% of 5min = 3min
+  for (const s of d.activeSessions) {
+    if (s.heartbeat_age_seconds >= STALE_WARNING) {
+      const remaining = Math.round(STALE_THRESHOLD - s.heartbeat_age_seconds);
+      const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      signals.push({
+        icon: '~~',
+        label: 'AGING',
+        msg: s.tty + ' on ' + shortSd + ' — heartbeat aging (' + s.heartbeat_age_human + '), stale in ~' + remaining + 's'
+      });
+    }
+  }
+
+  // Print
+  console.log('PREDICTIONS');
+  console.log('─'.repeat(72));
+  if (signals.length === 0) {
+    console.log('  Fleet nominal — no predictive signals.');
+  } else {
+    for (const sig of signals) {
+      console.log('  ' + sig.icon + ' [' + pad(sig.label, 10) + '] ' + sig.msg);
+    }
+  }
+  console.log('');
+}
+
+// Helper: parse dependencies from various formats (string, array, JSONB)
+function parseDeps(deps) {
+  if (!deps) return [];
+  if (Array.isArray(deps)) return deps.map(d => typeof d === 'string' ? d : (d.sd_key || d.id || '')).filter(Boolean);
+  if (typeof deps === 'string') {
+    try { return parseDeps(JSON.parse(deps)); } catch (e) { return deps.split(',').map(s => s.trim()).filter(Boolean); }
+  }
+  return [];
+}
+
 // ── Main ──
 
 async function main() {
@@ -470,6 +588,7 @@ async function main() {
     health:        () => printHealth(d),
     qa:            () => printQA(d),
     forecast:      async () => await printForecast(d),
+    predictions:   async () => await printPredictions(d),
     all:           async () => {
       printWorkers(d);
       printOrchestrator(d);
@@ -478,13 +597,14 @@ async function main() {
       printHealth(d);
       printQA(d);
       await printForecast(d);
+      await printPredictions(d);
     }
   };
 
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, coordination, health, qa, forecast, all');
+    console.log('Sections: workers, orchestrator, available, coordination, health, qa, forecast, predictions, all');
     process.exit(1);
   }
 
