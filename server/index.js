@@ -54,6 +54,7 @@ import evaOperationsRoutes from './routes/eva-operations.js';
 import evaLaunchRoutes from './routes/eva-launch.js';
 import evaPipelineRoutes from './routes/eva-pipeline.js';
 import evaExitRoutes from './routes/eva-exit.js';
+import evaChatRoutes from './routes/eva-chat.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
 
 // Import Story API
@@ -150,6 +151,7 @@ app.use('/api/eva/operations', optionalAuth, evaOperationsRoutes);
 app.use('/api/eva/launch', optionalAuth, evaLaunchRoutes);
 app.use('/api/eva/pipeline', optionalAuth, evaPipelineRoutes);
 app.use('/api/eva/exit', optionalAuth, evaExitRoutes);
+app.use('/api/eva/chat', optionalAuth, evaChatRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 
