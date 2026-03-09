@@ -389,6 +389,7 @@
     "find-process": "^2.0.0",
     "formdata-node": "^4.4.1",
     "google-auth-library": "^10.5.0",
+    "google-play-scraper": "^10.1.2",
     "googleapis": "^171.4.0",
     "helmet": "^8.1.0",
     "inquirer": "^12.9.6",
