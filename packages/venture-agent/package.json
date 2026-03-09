@@ -1,0 +1,29 @@
+{
+  "name": "@ehg/venture-agent",
+  "version": "1.0.0",
+  "description": "CLI tool for ventures to interact with the EHG Shared Service Platform",
+  "type": "module",
+  "bin": {
+    "venture-agent": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "commander": "^12.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/"
+  ],
+  "keywords": [
+    "ehg",
+    "venture",
+    "service-tasks",
+    "cli"
+  ],
+  "license": "UNLICENSED"
+}
