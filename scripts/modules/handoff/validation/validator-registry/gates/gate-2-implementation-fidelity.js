@@ -5,6 +5,7 @@
 
 import { validateGate2ExecToPlan } from '../../../../implementation-fidelity-validation.js';
 import { shouldSkipCodeValidation } from '../../../../../../lib/utils/sd-type-validation.js';
+import { validateWireframeQA } from '../../../validators/wireframe-qa-validator.js';
 
 /**
  * Register Gate 2 validators
@@ -243,4 +244,10 @@ export function registerGate2Validators(registry) {
       warnings: isRefactor ? [`Validated via ${agentLabel}`] : []
     };
   }, 'TESTING/REGRESSION sub-agent verification');
+
+  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001: Wireframe QA validation
+  registry.register('wireframeQAValidation', async (context) => {
+    const result = await validateWireframeQA(context);
+    return registry.normalizeResult(result);
+  }, 'Wireframe-implementation alignment QA for UI-producing SDs');
 }

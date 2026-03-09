@@ -21,3 +21,6 @@ export { createPlanningCompletenessGate, validatePlanningCompleteness, BLOCKING_
 // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
 export { createVisionDimensionCompletenessGate } from './vision-dimension-completeness.js';
 export { createArchitectureRequirementTraceGate } from './architecture-requirement-trace.js';
+
+// Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
+export { createWireframeRequiredGate } from './wireframe-required.js';

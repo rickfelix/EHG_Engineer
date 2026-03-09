@@ -26,7 +26,9 @@ import {
   createPlanningCompletenessGate,
   // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
   createVisionDimensionCompletenessGate,
-  createArchitectureRequirementTraceGate
+  createArchitectureRequirementTraceGate,
+  // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
+  createWireframeRequiredGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -234,6 +236,9 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
     gates.push(createVisionDimensionCompletenessGate(this.supabase));
     gates.push(createArchitectureRequirementTraceGate(this.supabase));
+
+    // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
+    gates.push(createWireframeRequiredGate(this.prdRepo, this.supabase));
 
     return gates;
   }

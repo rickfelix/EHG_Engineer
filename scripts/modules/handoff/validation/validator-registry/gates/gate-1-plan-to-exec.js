@@ -8,6 +8,7 @@ import { validateUserStoriesForHandoff } from '../../../../user-story-quality-va
 import { validateBMADForPlanToExec } from '../../../../bmad-validation.js';
 import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
 import { getStoryMinimumScoreByCategory } from '../../../verifiers/plan-to-exec/story-quality.js';
+import { validateWireframeArtifact } from '../../../validators/wireframe-artifact-validator.js';
 
 /**
  * Register Gate 1 validators
@@ -426,4 +427,10 @@ export function registerGate1Validators(registry) {
       details: { populated_fields: consumed, populated_count: consumed.length, total_tracked: totalTracked }
     };
   }, 'PRD field completeness audit - verifies Category B/D fields are populated');
+
+  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001: Wireframe artifact validation
+  registry.register('wireframeArtifactValidation', async (context) => {
+    const result = await validateWireframeArtifact(context);
+    return registry.normalizeResult(result);
+  }, 'Wireframe artifact validation for UI-producing SDs');
 }

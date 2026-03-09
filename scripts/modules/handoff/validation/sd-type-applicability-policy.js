@@ -16,7 +16,7 @@
  */
 
 // Policy version for traceability and debugging
-export const POLICY_VERSION = '1.1.0';
+export const POLICY_VERSION = '1.2.0';
 
 /**
  * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Shared list of SD types that skip
@@ -106,6 +106,7 @@ export const SkipReasonCode = {
  * - REGRESSION: Behavior preservation validation (critical for refactors)
  * - DOCMON: Documentation validation
  * - STORIES: User story quality validation
+ * - WIREFRAME: Wireframe artifact and QA validation (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
  */
 const SD_TYPE_POLICY = {
   // ============================================================================
@@ -119,7 +120,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   documentation: {
@@ -129,7 +131,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.NON_APPLICABLE,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   docs: {  // Alias for documentation
@@ -139,7 +142,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.NON_APPLICABLE,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   process: {
@@ -149,7 +153,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.NON_APPLICABLE,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   uat: {
@@ -160,7 +165,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.NON_APPLICABLE,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   orchestrator: {
@@ -171,7 +177,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.NON_APPLICABLE,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.NON_APPLICABLE
+    STORIES: RequirementLevel.NON_APPLICABLE,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   // ============================================================================
@@ -187,7 +194,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE, // No schema changes
     REGRESSION: RequirementLevel.REQUIRED,     // CRITICAL: Must verify no behavior change
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.NON_APPLICABLE   // No new user stories
+    STORIES: RequirementLevel.NON_APPLICABLE,  // No new user stories
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   bugfix: {
@@ -197,7 +205,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-022: 'fix' is the database sd_type equivalent of bugfix
@@ -208,7 +217,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   // Root Cause 2 fix: Corrective SDs from heal system — targeted gap closure
@@ -220,7 +230,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL           // Gap-closure scope is pre-defined
+    STORIES: RequirementLevel.OPTIONAL,          // Gap-closure scope is pre-defined
+    WIREFRAME: RequirementLevel.NON_APPLICABLE  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   feature: {
@@ -231,7 +242,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,  // Only if DB changes
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.REQUIRED
+    STORIES: RequirementLevel.REQUIRED,
+    WIREFRAME: RequirementLevel.REQUIRED  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   enhancement: {
@@ -242,7 +254,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.REQUIRED
+    STORIES: RequirementLevel.REQUIRED,
+    WIREFRAME: RequirementLevel.OPTIONAL  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   database: {
@@ -252,7 +265,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.REQUIRED,    // CRITICAL
     REGRESSION: RequirementLevel.REQUIRED,  // Must verify no breakage
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   security: {
@@ -263,7 +277,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.REQUIRED,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.REQUIRED
+    STORIES: RequirementLevel.REQUIRED,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   performance: {
@@ -273,7 +288,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.REQUIRED,  // Must not break existing behavior
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   // API/backend - no E2E but needs unit/integration tests
@@ -284,7 +300,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   backend: {
@@ -294,7 +311,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.REQUIRED,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   // ============================================================================
@@ -309,7 +327,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.NON_APPLICABLE,
     DOCMON: RequirementLevel.REQUIRED,  // Document findings
-    STORIES: RequirementLevel.NON_APPLICABLE
+    STORIES: RequirementLevel.NON_APPLICABLE,
+    WIREFRAME: RequirementLevel.NON_APPLICABLE // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   implementation: {
@@ -320,7 +339,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.OPTIONAL  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   },
 
   ux_debt: {
@@ -331,7 +351,8 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.NON_APPLICABLE,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.OPTIONAL,
-    STORIES: RequirementLevel.OPTIONAL
+    STORIES: RequirementLevel.OPTIONAL,
+    WIREFRAME: RequirementLevel.OPTIONAL  // SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001
   }
 };
 
@@ -667,7 +688,7 @@ export function checkSkipConditionsBatch(validatorNames, context) {
  * @returns {Object} Full skip condition analysis
  */
 export function getSkipConditionsForType(sdType) {
-  const allValidators = ['TESTING', 'DESIGN', 'GITHUB', 'DATABASE', 'REGRESSION', 'DOCMON', 'STORIES'];
+  const allValidators = ['TESTING', 'DESIGN', 'GITHUB', 'DATABASE', 'REGRESSION', 'DOCMON', 'STORIES', 'WIREFRAME'];
   const mockContext = { sd: { sd_type: sdType } };
 
   const conditions = {};
