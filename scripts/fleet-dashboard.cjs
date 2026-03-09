@@ -1,0 +1,498 @@
+// Fleet Dashboard — Modular status display for the coordinator session
+// Usage: node scripts/fleet-dashboard.cjs [workers|orchestrator|available|coordination|health|qa|forecast|all]
+
+const os = require('os');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
+
+// ── Helpers ──
+
+function bar(pct, width = 20) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  const filled = Math.round((p / 100) * width);
+  return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+}
+
+function pad(str, len) {
+  return (str || '').substring(0, len).padEnd(len);
+}
+
+// ── Data Loading ──
+
+async function loadData() {
+  const [sessRes, allSessRes, childRes, workRes, coordRes, rawSessRes] = await Promise.all([
+    supabase
+      .from('v_active_sessions')
+      .select('session_id, sd_id, sd_title, heartbeat_age_seconds, heartbeat_age_human, computed_status, hostname, tty, pid, track')
+      .not('sd_id', 'is', null)
+      .order('heartbeat_age_seconds', { ascending: true }),
+    supabase
+      .from('v_active_sessions')
+      .select('session_id, sd_id, computed_status, tty, heartbeat_age_seconds')
+      .lt('heartbeat_age_seconds', STALE_THRESHOLD)
+      .order('heartbeat_age_seconds', { ascending: true }),
+    supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, status, current_phase, progress_percentage, completion_date, created_at, dependencies')
+      .like('sd_key', 'SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-%')
+      .order('sd_key', { ascending: true }),
+    supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, status, current_phase, progress_percentage, priority')
+      .in('status', ['draft', 'in_progress', 'ready', 'pending_approval'])
+      .not('sd_key', 'like', 'SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001%')
+      .limit(15),
+    supabase
+      .from('session_coordination')
+      .select('id, target_session, target_sd, message_type, subject, read_at, acknowledged_at, created_at')
+      .is('acknowledged_at', null)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('claude_sessions')
+      .select('session_id, sd_id, tty, status, heartbeat_at, pid')
+      .not('sd_id', 'is', null)
+      .order('heartbeat_at', { ascending: false })
+      .limit(30)
+  ]);
+
+  const sessions = sessRes.data || [];
+  const allSessions = allSessRes.data || [];
+  const children = childRes.data || [];
+  const workable = workRes.data || [];
+  const coordMessages = coordRes.data || [];
+  const rawSessions = rawSessRes.data || [];
+
+  const claimedSdIds = new Set(sessions.map(s => s.sd_id));
+  const activeSessions = sessions.filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD);
+  const staleSessions = sessions.filter(s => s.heartbeat_age_seconds >= STALE_THRESHOLD);
+  const idleSessions = allSessions.filter(s => !s.sd_id);
+
+  const completedChildren = children.filter(c => c.status === 'completed').length;
+  const totalChildren = children.length;
+  const orchPct = totalChildren > 0 ? Math.round((completedChildren / totalChildren) * 100) : 0;
+
+  const unclaimedChildren = children.filter(c => c.status !== 'completed' && !claimedSdIds.has(c.sd_key));
+  const unclaimedStandalone = workable.filter(sd => !claimedSdIds.has(sd.sd_key));
+
+  // Build SD status map for QA checks (includes all SDs, not just orchestrator children)
+  const allSdKeys = [...new Set(rawSessions.map(s => s.sd_id).filter(Boolean))];
+  let sdStatusMap = {};
+  children.forEach(c => { sdStatusMap[c.sd_key] = c; });
+  // Fetch any non-child SDs that workers are claiming
+  const missingKeys = allSdKeys.filter(k => !sdStatusMap[k]);
+  if (missingKeys.length > 0) {
+    const { data: extraSds } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, title, status, progress_percentage, completion_date')
+      .in('sd_key', missingKeys);
+    (extraSds || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
+  }
+
+  return {
+    sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
+    claimedSdIds, activeSessions, staleSessions, idleSessions,
+    completedChildren, totalChildren, orchPct,
+    unclaimedChildren, unclaimedStandalone
+  };
+}
+
+// ── Section: Workers ──
+
+function printWorkers(d) {
+  const now = new Date();
+  console.log('');
+  console.log('WORKERS [' + now.toLocaleTimeString() + ']');
+  console.log('─'.repeat(72));
+
+  if (d.activeSessions.length === 0) {
+    console.log('  (no active workers)');
+  } else {
+    console.log('  ' + pad('Terminal', 12) + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 14) + 'Heartbeat');
+    console.log('  ' + '─'.repeat(68));
+    for (const s of d.activeSessions) {
+      const child = d.children.find(c => c.sd_key === s.sd_id);
+      const pct = child ? child.progress_percentage : 0;
+      const phase = child ? child.current_phase : '?';
+      const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 14) + s.heartbeat_age_human);
+    }
+  }
+
+  if (d.staleSessions.length > 0) {
+    console.log('');
+    console.log('  Stale (' + d.staleSessions.length + '):');
+    for (const s of d.staleSessions) {
+      const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+      console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + s.heartbeat_age_human);
+    }
+  }
+
+  if (d.idleSessions.length > 0) {
+    console.log('');
+    console.log('  Unclaimed (' + d.idleSessions.length + '): ' + d.idleSessions.map(s => s.tty).join(', '));
+  }
+
+  console.log('');
+}
+
+// ── Section: Orchestrator ──
+
+function printOrchestrator(d) {
+  console.log('ORCHESTRATOR ' + bar(d.orchPct, 25) + ' ' + d.completedChildren + '/' + d.totalChildren + ' (' + d.orchPct + '%)');
+  console.log('─'.repeat(72));
+
+  for (const c of d.children) {
+    const letter = c.sd_key.slice(-1);
+    const pct = c.progress_percentage || 0;
+    const isClaimed = d.claimedSdIds.has(c.sd_key);
+    const icon = c.status === 'completed' ? '\u2705' : isClaimed ? '\uD83D\uDD12' : '\uD83D\uDCCB';
+    const phase = c.status === 'completed' ? 'DONE' : c.current_phase;
+    console.log('  ' + letter + '  ' + bar(pct, 15) + ' ' + pad(pct + '%', 5) + ' ' + icon + ' ' + pad(phase, 12) + c.title.substring(0, 38));
+  }
+
+  console.log('');
+}
+
+// ── Section: Available ──
+
+function printAvailable(d) {
+  const total = d.unclaimedChildren.length + d.unclaimedStandalone.length;
+  console.log('AVAILABLE FOR CLAIM (' + total + ')');
+  console.log('─'.repeat(72));
+
+  if (total === 0) {
+    console.log('  (all SDs claimed or completed)');
+    console.log('');
+    return;
+  }
+
+  if (d.unclaimedChildren.length > 0) {
+    console.log('  Orchestrator Children:');
+    for (const c of d.unclaimedChildren) {
+      const letter = c.sd_key.slice(-1);
+      console.log('    Child ' + letter + '  ' + pad(c.title, 48) + c.status);
+    }
+  }
+
+  if (d.unclaimedStandalone.length > 0) {
+    console.log('  Standalone SDs:');
+    for (const sd of d.unclaimedStandalone) {
+      const shortKey = sd.sd_key.replace('SD-LEO-', '').replace('SD-', '').substring(0, 22);
+      const prio = sd.priority === 'high' ? 'HIGH' : 'MED';
+      console.log('    ' + pad(shortKey, 24) + pad(sd.title.substring(0, 38), 40) + prio);
+    }
+  }
+
+  console.log('');
+}
+
+// ── Section: Coordination ──
+
+function printCoordination(d) {
+  console.log('COORDINATION MESSAGES');
+  console.log('─'.repeat(72));
+
+  if (d.coordMessages.length === 0) {
+    console.log('  (no pending messages)');
+    console.log('');
+    return;
+  }
+
+  const unread = d.coordMessages.filter(m => !m.read_at).length;
+  const pending = d.coordMessages.filter(m => m.read_at && !m.acknowledged_at).length;
+  console.log('  ' + unread + ' unread, ' + pending + ' pending acknowledgment');
+  console.log('');
+
+  console.log('  ' + pad('Type', 20) + pad('Target', 16) + pad('Status', 10) + 'Subject');
+  console.log('  ' + '─'.repeat(68));
+  for (const m of d.coordMessages.slice(0, 10)) {
+    const status = m.acknowledged_at ? 'ACKED' : m.read_at ? 'READ' : 'UNREAD';
+    const target = (m.target_session || '').replace('session_', '').substring(0, 14);
+    console.log('  ' + pad(m.message_type, 20) + pad(target, 16) + pad(status, 10) + (m.subject || '').substring(0, 30));
+  }
+
+  console.log('');
+}
+
+// ── Section: Health ──
+
+function printHealth(d) {
+  const health = d.activeSessions.length >= 3 ? 'HEALTHY' : d.activeSessions.length >= 1 ? 'DEGRADED' : 'DOWN';
+  const icon = health === 'HEALTHY' ? '[OK]' : health === 'DEGRADED' ? '[!!]' : '[XX]';
+
+  console.log('FLEET HEALTH ' + icon);
+  console.log('─'.repeat(72));
+  console.log('  Active:  ' + d.activeSessions.length + ' workers');
+  console.log('  Unclaimed: ' + d.idleSessions.length + ' sessions (no SD claim)');
+  console.log('  Stale:   ' + d.staleSessions.length + ' sessions');
+  console.log('  Orch:    ' + d.completedChildren + '/' + d.totalChildren + ' children complete (' + d.orchPct + '%)');
+  console.log('  Status:  ' + health);
+  console.log('');
+}
+
+// ── Section: QA ──
+
+function printQA(d) {
+  const now = Date.now();
+  const issues = [];
+
+  // Filter raw sessions to recent (< 10 min heartbeat)
+  const recentRaw = d.rawSessions.filter(s => {
+    const age = (now - new Date(s.heartbeat_at).getTime()) / 1000;
+    return age < 600;
+  });
+
+  // QA 1: Working on completed SD
+  const onCompleted = recentRaw.filter(s => {
+    const sd = d.sdStatusMap[s.sd_id];
+    return sd && sd.status === 'completed';
+  });
+  onCompleted.forEach(s => {
+    const sd = d.sdStatusMap[s.sd_id];
+    const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    issues.push({
+      severity: 'HIGH',
+      check: 'COMPLETED_SD',
+      msg: s.tty + ' working on ' + shortSd + ' — already completed' + (sd.completion_date ? ' at ' + new Date(sd.completion_date).toLocaleTimeString() : '')
+    });
+  });
+
+  // QA 2: Duplicate claims
+  const bySd = {};
+  recentRaw.forEach(s => {
+    if (!bySd[s.sd_id]) bySd[s.sd_id] = [];
+    bySd[s.sd_id].push(s);
+  });
+  Object.entries(bySd).filter(([, arr]) => arr.length > 1).forEach(([sdId, claimants]) => {
+    const shortSd = sdId.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    issues.push({
+      severity: 'HIGH',
+      check: 'DUPLICATE',
+      msg: shortSd + ' claimed by ' + claimants.length + ' sessions: ' + claimants.map(s => s.tty).join(', ')
+    });
+  });
+
+  // QA 3: Orphaned claims (SD not in DB)
+  recentRaw.filter(s => !d.sdStatusMap[s.sd_id]).forEach(s => {
+    issues.push({
+      severity: 'MED',
+      check: 'ORPHAN',
+      msg: s.tty + ' claims ' + s.sd_id.substring(0, 30) + '… — SD not found in DB'
+    });
+  });
+
+  // QA 4: Claim with bad session status
+  recentRaw.filter(s => s.sd_id && !['active', 'idle'].includes(s.status)).forEach(s => {
+    const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    issues.push({
+      severity: 'LOW',
+      check: 'BAD_STATUS',
+      msg: s.tty + ' status=' + s.status + ' but claims ' + shortSd
+    });
+  });
+
+  // QA 5: Progress 100% but not completed
+  Object.values(d.sdStatusMap).filter(sd => sd.progress_percentage >= 100 && sd.status !== 'completed').forEach(sd => {
+    const shortSd = sd.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    issues.push({
+      severity: 'MED',
+      check: 'STUCK_100',
+      msg: shortSd + ' at 100% but status=' + sd.status + ' — not marked completed'
+    });
+  });
+
+  // Print
+  const icon = issues.length === 0 ? '[PASS]' : '[' + issues.length + ' ISSUES]';
+  console.log('QA CHECKS ' + icon);
+  console.log('─'.repeat(72));
+
+  if (issues.length === 0) {
+    console.log('  All checks passed. Fleet is clean.');
+  } else {
+    const severityIcon = { HIGH: '!!', MED: '! ', LOW: '- ' };
+    for (const issue of issues) {
+      console.log('  ' + severityIcon[issue.severity] + ' [' + pad(issue.check, 12) + '] ' + issue.msg);
+    }
+  }
+
+  console.log('');
+}
+
+// ── Section: Forecast ──
+
+async function printForecast(d) {
+  const now = new Date();
+  console.log('FORECAST');
+  console.log('─'.repeat(72));
+
+  // ── Orchestrator Forecast ──
+  const orchCompleted = d.children.filter(c => c.status === 'completed' && c.completion_date);
+  const orchRemaining = d.children.filter(c => c.status !== 'completed');
+
+  if (orchCompleted.length >= 2) {
+    const sorted = orchCompleted
+      .map(c => ({ ...c, completedAt: new Date(c.completion_date) }))
+      .sort((a, b) => a.completedAt - b.completedAt);
+
+    const firstCompletion = sorted[0].completedAt;
+    const lastCompletion = sorted[sorted.length - 1].completedAt;
+    const elapsedHours = (lastCompletion - firstCompletion) / (1000 * 60 * 60);
+    const velocity = elapsedHours > 0 ? (sorted.length - 1) / elapsedHours : 0;
+
+    let recentVelocity = velocity;
+    if (sorted.length >= 3) {
+      const recent = sorted.slice(-3);
+      const recentElapsed = (recent[recent.length - 1].completedAt - recent[0].completedAt) / (1000 * 60 * 60);
+      if (recentElapsed > 0) recentVelocity = (recent.length - 1) / recentElapsed;
+    }
+
+    const timeSinceLast = (now - lastCompletion) / (1000 * 60);
+    const timeSinceStr = timeSinceLast < 60
+      ? Math.round(timeSinceLast) + 'min ago'
+      : Math.round(timeSinceLast / 60 * 10) / 10 + 'h ago';
+
+    const effectiveVelocity = recentVelocity > 0 ? recentVelocity : velocity;
+    const orchEtaHours = effectiveVelocity > 0 ? orchRemaining.length / effectiveVelocity : null;
+
+    console.log('  ORCHESTRATOR (Stage Venture Workflow)');
+    console.log('  ' + bar(d.orchPct, 25) + ' ' + orchCompleted.length + '/' + d.totalChildren + ' (' + d.orchPct + '%)');
+    console.log('  Velocity:   ' + velocity.toFixed(1) + ' SDs/hr (overall)  ' + recentVelocity.toFixed(1) + ' SDs/hr (recent)');
+    console.log('  Last finish: ' + timeSinceStr);
+
+    if (orchRemaining.length === 0) {
+      console.log('  Status:     COMPLETE');
+    } else if (orchEtaHours !== null) {
+      const etaTime = new Date(now.getTime() + orchEtaHours * 60 * 60 * 1000);
+      const etaStr = orchEtaHours < 1
+        ? Math.round(orchEtaHours * 60) + ' minutes'
+        : Math.round(orchEtaHours * 10) / 10 + ' hours';
+      console.log('  Remaining:  ' + orchRemaining.length + ' child(ren)  ETA: ~' + etaStr + ' (around ' + etaTime.toLocaleTimeString() + ')');
+    }
+  } else if (orchRemaining.length === 0) {
+    console.log('  ORCHESTRATOR: COMPLETE (' + d.totalChildren + '/' + d.totalChildren + ')');
+  } else {
+    console.log('  ORCHESTRATOR: ' + orchCompleted.length + '/' + d.totalChildren + ' (need more data for velocity)');
+  }
+
+  console.log('');
+
+  // ── Full Queue Forecast ──
+  // Get ALL pending SDs across the entire queue (not just orchestrator)
+  const { data: allPending } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, status, priority, current_phase, progress_percentage, dependencies')
+    .in('status', ['draft', 'in_progress', 'ready', 'planning', 'pending_approval'])
+    .order('priority', { ascending: true });
+
+  const pending = allPending || [];
+  const activeWorkers = d.activeSessions.length;
+
+  // Categorize pending SDs
+  const inProgress = pending.filter(sd => sd.status === 'in_progress' || (sd.progress_percentage || 0) > 0);
+  const notStarted = pending.filter(sd => sd.status !== 'in_progress' && (sd.progress_percentage || 0) === 0);
+  const highPrio = pending.filter(sd => sd.priority === 'high' || sd.priority === 'critical');
+
+  console.log('  FULL QUEUE');
+  console.log('  Pending SDs:   ' + pending.length + ' total');
+  console.log('  In progress:   ' + inProgress.length);
+  console.log('  Not started:   ' + notStarted.length);
+  if (highPrio.length > 0) {
+    console.log('  High priority:  ' + highPrio.length);
+  }
+  console.log('  Active workers: ' + activeWorkers);
+
+  // Estimate full queue ETA using orchestrator velocity as baseline
+  if (orchCompleted.length >= 2) {
+    const sorted = orchCompleted
+      .map(c => ({ ...c, completedAt: new Date(c.completion_date) }))
+      .sort((a, b) => a.completedAt - b.completedAt);
+    const elapsedHours = (sorted[sorted.length - 1].completedAt - sorted[0].completedAt) / (1000 * 60 * 60);
+    const velocity = elapsedHours > 0 ? (sorted.length - 1) / elapsedHours : 0;
+
+    if (velocity > 0 && pending.length > 0) {
+      const queueEtaHours = pending.length / velocity;
+      const queueEtaTime = new Date(now.getTime() + queueEtaHours * 60 * 60 * 1000);
+
+      const etaStr = queueEtaHours < 1
+        ? Math.round(queueEtaHours * 60) + ' minutes'
+        : queueEtaHours < 24
+          ? Math.round(queueEtaHours * 10) / 10 + ' hours'
+          : Math.round(queueEtaHours / 24 * 10) / 10 + ' days';
+
+      console.log('  Queue ETA:     ~' + etaStr + ' at current velocity (' + velocity.toFixed(1) + ' SDs/hr)');
+    }
+  }
+
+  // Personalized summary
+  console.log('');
+  console.log('  ' + '─'.repeat(66));
+
+  if (orchRemaining.length === 0 && pending.length === 0) {
+    console.log('  Queue is clear. All SDs complete. Nice work.');
+  } else if (orchRemaining.length === 0 && pending.length > 0) {
+    console.log('  Orchestrator is done! ' + pending.length + ' standalone SDs remain in the queue.');
+    if (activeWorkers > 0) {
+      console.log('  ' + activeWorkers + ' worker(s) can roll into the next priority items.');
+    } else {
+      console.log('  Spin up workers to start burning through the backlog.');
+    }
+  } else if (orchRemaining.length <= 2) {
+    console.log('  Orchestrator almost done — ' + orchRemaining.length + ' child(ren) left.');
+    console.log('  Then ' + pending.length + ' more SDs in the queue after that.');
+  } else {
+    console.log('  ' + activeWorkers + ' workers active across ' + pending.length + ' pending SDs.');
+    if (highPrio.length > 0) {
+      console.log('  ' + highPrio.length + ' high-priority items need attention.');
+    }
+  }
+
+  console.log('');
+}
+
+// ── Main ──
+
+async function main() {
+  const section = (process.argv[2] || 'all').toLowerCase();
+  const d = await loadData();
+
+  const sections = {
+    workers:       () => printWorkers(d),
+    orchestrator:  () => printOrchestrator(d),
+    available:     () => printAvailable(d),
+    coordination:  () => printCoordination(d),
+    health:        () => printHealth(d),
+    qa:            () => printQA(d),
+    forecast:      async () => await printForecast(d),
+    all:           async () => {
+      printWorkers(d);
+      printOrchestrator(d);
+      printAvailable(d);
+      printCoordination(d);
+      printHealth(d);
+      printQA(d);
+      await printForecast(d);
+    }
+  };
+
+  const fn = sections[section];
+  if (!fn) {
+    console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
+    console.log('Sections: workers, orchestrator, available, coordination, health, qa, forecast, all');
+    process.exit(1);
+  }
+
+  await fn();
+}
+
+main().catch(err => {
+  console.error('DASHBOARD ERROR:', err.message);
+  process.exit(1);
+});
