@@ -28,3 +28,6 @@ export { createCascadeAlignmentGate } from './cascade-alignment-gate.js';
 export { createDeliverablesCompletenessGate } from './deliverables-completeness.js';
 export { createSmokeTestValidationGate } from './smoke-test-validation.js';
 export { createUserStoryCoverageGate } from './user-story-coverage.js';
+
+// Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
+export { createWireframeQaValidationGate } from './wireframe-qa-validation.js';
