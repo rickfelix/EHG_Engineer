@@ -32,7 +32,8 @@ import {
   loadVisionScores,
   countActionableBaselineItems,
   loadOpenQuickFixes,
-  triageQuickFixes
+  triageQuickFixes,
+  loadUnscheduledRoadmapItems
 } from './data-loaders.js';
 import {
   displayOKRScorecard,
@@ -49,7 +50,8 @@ import {
   displayBlockedStateBanner,
   isOrchestratorBlocked,
   displayTelemetryFindings,
-  displayQuickFixes
+  displayQuickFixes,
+  displayRoadmapAwareness
 } from './display/index.js';
 import {
   detectAllBlockedState,
@@ -102,6 +104,7 @@ export class SDNextSelector {
     this.localSignals = new Map(); // Local filesystem signals (worktrees, auto-proceed-state) SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001
     this.openQuickFixes = [];
     this.qfTriageResults = new Map();
+    this.unscheduledRoadmapItems = [];
   }
 
   /**
@@ -158,6 +161,7 @@ export class SDNextSelector {
     if (this.openQuickFixes.length > 0) {
       this.qfTriageResults = await triageQuickFixes(this.openQuickFixes, this.supabase);
     }
+    this.unscheduledRoadmapItems = await loadUnscheduledRoadmapItems(this.supabase);
     this.loadMultiRepoStatus();
 
     // SD-LEO-INFRA-SESSION-COMPACTION-CLAIM-001: Detect local signals
@@ -216,6 +220,9 @@ export class SDNextSelector {
 
     // Display recommendations and get structured action data
     const recommendation = await displayRecommendations(this.supabase, this.baselineItems, this.conflicts, this.getSessionContext(), qfSummary);
+
+    // Display roadmap awareness (unscheduled architecture phases)
+    displayRoadmapAwareness(this.unscheduledRoadmapItems);
 
     // Display proactive proposals (LEO v4.4)
     displayProposals(this.pendingProposals);
