@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T13:51:53.342Z
-**Tables**: 534
+**Generated**: 2026-03-09T18:38:32.674Z
+**Tables**: 540
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (534)
+## All Tables (540)
 
 ### LEO Protocol
 
@@ -285,6 +285,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [ehg_design_decisions](tables/ehg_design_decisions.md)
 - [ehg_feature_areas](tables/ehg_feature_areas.md)
 - [ehg_page_routes](tables/ehg_page_routes.md)
+- [ehg_services](tables/ehg_services.md)
 - [ehg_user_workflows](tables/ehg_user_workflows.md)
 - [enhancement_proposal_audit](tables/enhancement_proposal_audit.md)
 - [enhancement_proposals](tables/enhancement_proposals.md)
@@ -465,6 +466,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sensemaking_analyses](tables/sensemaking_analyses.md)
 - [sensemaking_personas](tables/sensemaking_personas.md)
 - [sensemaking_telegram_sessions](tables/sensemaking_telegram_sessions.md)
+- [service_tasks](tables/service_tasks.md)
+- [service_telemetry](tables/service_telemetry.md)
+- [session_coordination](tables/session_coordination.md)
 - [session_lifecycle_events](tables/session_lifecycle_events.md)
 - [shipping_decisions](tables/shipping_decisions.md)
 - [simulation_sessions](tables/simulation_sessions.md)
@@ -557,10 +561,12 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
 - [venture_exit_profiles](tables/venture_exit_profiles.md)
+- [venture_exit_readiness](tables/venture_exit_readiness.md)
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_separability_scores](tables/venture_separability_scores.md)
+- [venture_service_bindings](tables/venture_service_bindings.md)
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
 - [venture_templates](tables/venture_templates.md)

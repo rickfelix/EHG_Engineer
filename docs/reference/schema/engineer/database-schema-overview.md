@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T13:51:53.342Z
-**Tables**: 534
+**Generated**: 2026-03-09T18:38:32.674Z
+**Tables**: 540
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -163,6 +163,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [ehg_design_decisions](tables/ehg_design_decisions.md) | N/A (RLS restricted) | ✅ | 4 | Historical design decisions for learning and consistency |
 | [ehg_feature_areas](tables/ehg_feature_areas.md) | N/A (RLS restricted) | ✅ | 2 | Major feature domains in the EHG application (Ventures, Analytics, etc.) |
 | [ehg_page_routes](tables/ehg_page_routes.md) | N/A (RLS restricted) | ✅ | 2 | All page routes with their purposes and relationships |
+| [ehg_services](tables/ehg_services.md) | N/A (RLS restricted) | ✅ | 3 | Service registry for EHG shared business services. Each service defines a typed artifact schema. |
 | [ehg_user_workflows](tables/ehg_user_workflows.md) | N/A (RLS restricted) | ✅ | 2 | Documented user journeys through the application |
 | [enhancement_proposal_audit](tables/enhancement_proposal_audit.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [enhancement_proposals](tables/enhancement_proposals.md) | N/A (RLS restricted) | ✅ | 2 | Stores LEO-generated enhancement proposals for protocol improvements |
@@ -479,6 +480,9 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [sensemaking_personas](tables/sensemaking_personas.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [sensemaking_telegram_sessions](tables/sensemaking_telegram_sessions.md) | N/A (RLS restricted) | ✅ | 1 | - |
+| [service_tasks](tables/service_tasks.md) | N/A (RLS restricted) | ✅ | 4 | Task queue for poll-based service delivery. Ventures pull pending tasks. |
+| [service_telemetry](tables/service_telemetry.md) | N/A (RLS restricted) | ✅ | 5 | Outcome feedback from ventures. Feeds cross-venture intelligence. |
+| [session_coordination](tables/session_coordination.md) | N/A (RLS restricted) | ✅ | 1 | Cross-session messaging for fleet coordination. Written by orchestrator/sweep, read by worker hooks. |
 | [session_lifecycle_events](tables/session_lifecycle_events.md) | N/A (RLS restricted) | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
 | [shipping_decisions](tables/shipping_decisions.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
@@ -574,11 +578,13 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_documents](tables/venture_documents.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_drafts](tables/venture_drafts.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_exit_profiles](tables/venture_exit_profiles.md) | N/A (RLS restricted) | ✅ | 4 | Per-venture exit model selection with version history |
+| [venture_exit_readiness](tables/venture_exit_readiness.md) | N/A (RLS restricted) | ✅ | 3 | 30-day clean-break exit tracking per venture. |
 | [venture_financial_contract](tables/venture_financial_contract.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [venture_nursery](tables/venture_nursery.md) | N/A (RLS restricted) | ✅ | 1 | Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation |
 | [venture_phase_budgets](tables/venture_phase_budgets.md) | N/A (RLS restricted) | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Phase-level token budget tracking. Enables granular budget allocation across venture lifecycle stages. Default 20k tokens per phase. |
 | [venture_raid_summary](tables/venture_raid_summary.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [venture_separability_scores](tables/venture_separability_scores.md) | N/A (RLS restricted) | ✅ | 3 | - |
+| [venture_service_bindings](tables/venture_service_bindings.md) | N/A (RLS restricted) | ✅ | 3 | Which ventures consume which services, with pinned API version per binding. |
 | [venture_stage_transitions](tables/venture_stage_transitions.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_stage_work](tables/venture_stage_work.md) | N/A (RLS restricted) | ✅ | 5 | - |
 | [venture_templates](tables/venture_templates.md) | N/A (RLS restricted) | ✅ | 2 | Reusable patterns extracted from ventures completing Stage 25 |
@@ -765,7 +771,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (408 tables)
+### Other (414 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -894,6 +900,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [ehg_design_decisions](tables/ehg_design_decisions.md) - Historical design decisions for learning and consistency
 - [ehg_feature_areas](tables/ehg_feature_areas.md) - Major feature domains in the EHG application (Ventures, Analytics, etc.)
 - [ehg_page_routes](tables/ehg_page_routes.md) - All page routes with their purposes and relationships
+- [ehg_services](tables/ehg_services.md) - Service registry for EHG shared business services. Each service defines a typed artifact schema.
 - [ehg_user_workflows](tables/ehg_user_workflows.md) - Documented user journeys through the application
 - [enhancement_proposal_audit](tables/enhancement_proposal_audit.md)
 - [enhancement_proposals](tables/enhancement_proposals.md) - Stores LEO-generated enhancement proposals for protocol improvements
@@ -1078,6 +1085,9 @@ Reference: docs/workflow/stages_v2.yaml
 - [sensemaking_analyses](tables/sensemaking_analyses.md)
 - [sensemaking_personas](tables/sensemaking_personas.md)
 - [sensemaking_telegram_sessions](tables/sensemaking_telegram_sessions.md)
+- [service_tasks](tables/service_tasks.md) - Task queue for poll-based service delivery. Ventures pull pending tasks.
+- [service_telemetry](tables/service_telemetry.md) - Outcome feedback from ventures. Feeds cross-venture intelligence.
+- [session_coordination](tables/session_coordination.md) - Cross-session messaging for fleet coordination. Written by orchestrator/sweep, read by worker hooks.
 - [session_lifecycle_events](tables/session_lifecycle_events.md) - Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5.
 - [shipping_decisions](tables/shipping_decisions.md)
 - [simulation_sessions](tables/simulation_sessions.md) - Tracks Genesis simulation lifecycle including ephemeral deployments and incineration
@@ -1172,10 +1182,12 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
 - [venture_exit_profiles](tables/venture_exit_profiles.md) - Per-venture exit model selection with version history
+- [venture_exit_readiness](tables/venture_exit_readiness.md) - 30-day clean-break exit tracking per venture.
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md) - Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_separability_scores](tables/venture_separability_scores.md)
+- [venture_service_bindings](tables/venture_service_bindings.md) - Which ventures consume which services, with pinned API version per binding.
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
 - [venture_templates](tables/venture_templates.md) - Reusable patterns extracted from ventures completing Stage 25
@@ -2024,6 +2036,15 @@ _Key relationships between tables:_
 **sensemaking_telegram_sessions**:
 - `analysis_id` → `sensemaking_analyses.id`
 
+**service_tasks**:
+- `service_id` → `ehg_services.id`
+- `venture_id` → `ventures.id`
+
+**service_telemetry**:
+- `service_id` → `ehg_services.id`
+- `task_id` → `service_tasks.id`
+- `venture_id` → `ventures.id`
+
 **soul_extractions**:
 - `simulation_session_id` → `simulation_sessions.id`
 
@@ -2220,6 +2241,9 @@ _Key relationships between tables:_
 - `created_by` → `users.id`
 - `venture_id` → `ventures.id`
 
+**venture_exit_readiness**:
+- `venture_id` → `ventures.id`
+
 **venture_financial_contract**:
 - `venture_id` → `ventures.id`
 
@@ -2232,6 +2256,10 @@ _Key relationships between tables:_
 
 **venture_separability_scores**:
 - `venture_id` → `eva_ventures.id`
+
+**venture_service_bindings**:
+- `service_id` → `ehg_services.id`
+- `venture_id` → `ventures.id`
 
 **venture_stage_transitions**:
 - `venture_id` → `ventures.id`
