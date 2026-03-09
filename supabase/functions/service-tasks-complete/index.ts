@@ -99,8 +99,31 @@ serve(async (req: Request) => {
         );
       }
 
+      // FR-004: Compute confidence_score aggregation for the venture
+      // Calculates weighted average confidence across all completed tasks for this venture
+      let aggregated_confidence = null;
+      if (data?.venture_id) {
+        const { data: completedTasks } = await supabase
+          .from('service_tasks')
+          .select('confidence_score')
+          .eq('venture_id', data.venture_id)
+          .eq('status', 'completed')
+          .not('confidence_score', 'is', null);
+
+        if (completedTasks && completedTasks.length > 0) {
+          const scores = completedTasks
+            .map((t: { confidence_score: number | null }) => Number(t.confidence_score))
+            .filter((s: number) => !isNaN(s));
+          if (scores.length > 0) {
+            aggregated_confidence = Math.round(
+              (scores.reduce((sum: number, s: number) => sum + s, 0) / scores.length) * 100
+            ) / 100;
+          }
+        }
+      }
+
       return new Response(
-        JSON.stringify({ task: data }),
+        JSON.stringify({ task: data, aggregated_confidence }),
         { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       );
     }
