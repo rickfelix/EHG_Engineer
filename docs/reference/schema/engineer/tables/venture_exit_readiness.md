@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T20:57:38.795Z
+**Generated**: 2026-03-09T21:04:15.997Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (3 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (11 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -29,6 +29,7 @@
 | estimated_separation_days | `integer(32)` | YES | - | - |
 | notes | `text` | YES | - | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| separation_test_results | `jsonb` | YES | `'{}'::jsonb` | Structured per-dimension pass/fail separation test results with blocking items |
 
 ## Constraints
 
