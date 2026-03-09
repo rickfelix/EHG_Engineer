@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T12:09:04.548Z
-**Tables**: 533
+**Generated**: 2026-03-09T13:20:41.154Z
+**Tables**: 534
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -144,6 +144,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [department_capabilities](tables/department_capabilities.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [department_messages](tables/department_messages.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [departments](tables/departments.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [design_quality_scores](tables/design_quality_scores.md) | N/A (RLS restricted) | ✅ | 3 | Aggregated per-SD design quality scores from design-agent results. Composite formula: 35% accessibility + 25% token compliance + 20% component reuse + 20% visual polish. |
 | [directive_submissions](tables/directive_submissions.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [discovery_strategies](tables/discovery_strategies.md) | N/A (RLS restricted) | ✅ | 1 | Configuration for the Find Me Opportunities discovery mode entry path in Stage 0 |
 | [distribution_channels](tables/distribution_channels.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -764,7 +765,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (407 tables)
+### Other (408 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -875,6 +876,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [department_capabilities](tables/department_capabilities.md)
 - [department_messages](tables/department_messages.md)
 - [departments](tables/departments.md)
+- [design_quality_scores](tables/design_quality_scores.md) - Aggregated per-SD design quality scores from design-agent results. Composite formula: 35% accessibility + 25% token compliance + 20% component reuse + 20% visual polish.
 - [directive_submissions](tables/directive_submissions.md)
 - [discovery_strategies](tables/discovery_strategies.md) - Configuration for the Find Me Opportunities discovery mode entry path in Stage 0
 - [distribution_channels](tables/distribution_channels.md)
@@ -1406,6 +1408,10 @@ _Key relationships between tables:_
 
 **departments**:
 - `parent_department_id` → `departments.id`
+
+**design_quality_scores**:
+- `sd_id` → `strategic_directives_v2.id`
+- `source_result_id` → `sub_agent_execution_results.id`
 
 **distribution_history**:
 - `channel_id` → `distribution_channels.id`
