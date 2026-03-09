@@ -114,7 +114,7 @@ async function main() {
   if (archKey) {
     const { data, error } = await supabase
       .from('eva_architecture_plans')
-      .select('plan_key, content, extracted_dimensions')
+      .select('plan_key, content, sections, extracted_dimensions')
       .eq('plan_key', archKey)
       .single();
 
@@ -123,8 +123,16 @@ async function main() {
       process.exit(1);
     }
     archPlan = data;
-    phases = parsePhases(data.content);
-    console.log(`   📋 Found ${phases.length} implementation phase(s) in architecture plan`);
+    // Prefer structured phases from JSONB sections (used by phase coverage gate)
+    // Fall back to markdown parsing for legacy plans without structured sections
+    const structuredPhases = data.sections?.implementation_phases;
+    if (structuredPhases && Array.isArray(structuredPhases) && structuredPhases.length > 0) {
+      phases = structuredPhases;
+      console.log(`   📋 Found ${phases.length} structured phase(s) in sections.implementation_phases`);
+    } else {
+      phases = parsePhases(data.content);
+      console.log(`   📋 Found ${phases.length} phase(s) parsed from architecture plan content`);
+    }
   }
 
   // Load vision document
@@ -228,11 +236,28 @@ async function main() {
     const dimensionMap = mapDimensionsToPhases(allDimensions, phases);
 
     for (const phase of phases) {
+      // FR-002: Skip phases that already have an existing SD
+      if (phase.covered_by_sd_key) {
+        const { data: existingSd } = await supabase
+          .from('strategic_directives_v2')
+          .select('sd_key, status')
+          .eq('sd_key', phase.covered_by_sd_key)
+          .single();
+
+        if (existingSd) {
+          console.log(`   ⏭️  Skip Phase ${phase.number}: ${phase.title} — covered by ${existingSd.sd_key} (${existingSd.status})`);
+          continue;
+        }
+        console.log(`   ⚠️  Phase ${phase.number}: covered_by_sd_key=${phase.covered_by_sd_key} not found — creating new SD`);
+      }
+
       const childId = randomUUID();
       const suffix = `-${String.fromCharCode(64 + phase.number)}`; // -A, -B, -C...
       const childKey = `${orchestratorKey}${suffix}`;
+      // FR-004: Handle separate_orchestrator phases (no parent, orchestrator type)
+      const isSeparateOrchestrator = phase.child_designation === 'separate_orchestrator';
       const typeResult = inferSDType(phase.title, phase.description || '', phase.content || '');
-      const childType = typeof typeResult === 'string' ? typeResult : (typeResult?.sdType || 'feature');
+      const childType = isSeparateOrchestrator ? 'orchestrator' : (typeof typeResult === 'string' ? typeResult : (typeResult?.sdType || 'feature'));
 
       // Inherit strategic fields from orchestrator
       const inherited = inheritStrategicFields(orchestratorSD, {
@@ -261,7 +286,7 @@ async function main() {
         status: 'draft',
         current_phase: 'LEAD_APPROVAL',
         priority: orchestratorSD.priority,
-        parent_sd_id: orchestratorId,
+        parent_sd_id: isSeparateOrchestrator ? null : orchestratorId,
         scope: phase.content?.trim().slice(0, 2000) || phase.description || '',
         rationale: `Phase ${phase.number} of ${title}`,
         success_metrics: phaseMetrics.length > 0 ? phaseMetrics : inherited.success_metrics || [],
@@ -296,7 +321,25 @@ async function main() {
         if (childError) {
           console.error(`   ❌ Error creating child ${childKey}: ${childError.message}`);
         } else {
-          console.log(`   ✅ Child ${childKey}: ${phase.title} (type: ${childType})`);
+          console.log(`   ✅ Child ${childKey}: ${phase.title} (type: ${childType}${isSeparateOrchestrator ? ', separate orchestrator' : ''})`);
+
+          // FR-001: Update covered_by_sd_key in architecture plan sections
+          if (archKey && archPlan?.sections?.implementation_phases) {
+            try {
+              const updatedPhases = [...archPlan.sections.implementation_phases];
+              const phaseIdx = updatedPhases.findIndex(p => p.number === phase.number);
+              if (phaseIdx !== -1) {
+                updatedPhases[phaseIdx] = { ...updatedPhases[phaseIdx], covered_by_sd_key: childKey };
+                archPlan.sections = { ...archPlan.sections, implementation_phases: updatedPhases };
+                await supabase
+                  .from('eva_architecture_plans')
+                  .update({ sections: archPlan.sections })
+                  .eq('plan_key', archKey);
+              }
+            } catch (linkErr) {
+              console.warn(`   ⚠️  Failed to link Phase ${phase.number} → ${childKey}: ${linkErr.message}`);
+            }
+          }
         }
       }
     }

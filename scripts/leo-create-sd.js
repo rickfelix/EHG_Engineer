@@ -1690,21 +1690,27 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       const archKeyIdx = args.indexOf('--arch-key');
       const archKey = archKeyIdx !== -1 ? args[archKeyIdx + 1] : null;
 
-      // Advisory: suggest orchestrator creation when both vision and arch keys provided
+      // FR-003: Auto-route to orchestrator creator when arch key has phases
       if (visionKey && archKey) {
         try {
           const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
           const { data: archPlan } = await sb
             .from('eva_architecture_plans')
-            .select('content')
+            .select('content, sections')
             .eq('plan_key', archKey)
             .single();
-          if (archPlan?.content && /^##?\s*(Phase|Implementation Phase|Step)\s+\d/im.test(archPlan.content)) {
-            console.log('\n💡 Advisory: Architecture plan has implementation phases.');
-            console.log('   Consider using the orchestrator creator for multi-phase work:');
-            console.log(`   node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children\n`);
+          const hasStructuredPhases = archPlan?.sections?.implementation_phases?.length > 0;
+          const hasContentPhases = archPlan?.content && /^##?\s*(Phase|Implementation Phase|Step)\s+\d/im.test(archPlan.content);
+          if (hasStructuredPhases || hasContentPhases) {
+            console.log('\n🔄 Auto-routing to orchestrator creator (architecture plan has phases)...');
+            const { execSync } = await import('child_process');
+            const cmd = `node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children`;
+            execSync(cmd, { stdio: 'inherit', cwd: process.cwd() });
+            process.exit(0);
           }
-        } catch { /* Advisory only — continue regardless */ }
+        } catch (routeErr) {
+          console.warn(`\n⚠️  Auto-routing failed, continuing with single SD creation: ${routeErr.message}`);
+        }
 
         // Advisory: warn about uncovered architecture phases (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
         try {
