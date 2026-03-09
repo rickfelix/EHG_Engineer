@@ -537,8 +537,9 @@ async function printPredictions(d) {
     }
   }
 
-  // 3. Heartbeat aging — workers approaching stale threshold
+  // 3. Heartbeat aging — workers approaching stale threshold (FIX #5: with coordination messages)
   const STALE_WARNING = STALE_THRESHOLD * 0.6; // 60% of 5min = 3min
+  const agingWorkers = [];
   for (const s of d.activeSessions) {
     if (s.heartbeat_age_seconds >= STALE_WARNING) {
       const remaining = Math.round(STALE_THRESHOLD - s.heartbeat_age_seconds);
@@ -548,7 +549,34 @@ async function printPredictions(d) {
         label: 'AGING',
         msg: s.tty + ' on ' + shortSd + ' — heartbeat aging (' + s.heartbeat_age_human + '), stale in ~' + remaining + 's'
       });
+      agingWorkers.push(s);
     }
+  }
+
+  // Send STALE_WARNING coordination messages for aging workers
+  for (const s of agingWorkers) {
+    // Check if we already sent a stale warning recently (avoid spam)
+    const { data: existingWarn } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', s.session_id)
+      .eq('message_type', 'STALE_WARNING')
+      .is('acknowledged_at', null)
+      .limit(1);
+
+    if (existingWarn && existingWarn.length > 0) continue;
+
+    await supabase
+      .from('session_coordination')
+      .insert({
+        target_session: s.session_id,
+        target_sd: s.sd_id,
+        message_type: 'STALE_WARNING',
+        subject: 'Heartbeat aging on ' + s.sd_id.split('-').pop() + ' — approaching stale threshold',
+        body: 'Your session on ' + s.sd_id + ' has not heartbeated in ' + s.heartbeat_age_human + '. If you are still working, send a heartbeat. If stuck, consider releasing the claim.',
+        payload: { session_id: s.session_id, heartbeat_age: s.heartbeat_age_seconds, stale_threshold: STALE_THRESHOLD },
+        sender_type: 'dashboard'
+      }).then(() => {}).catch(() => {}); // Non-blocking
   }
 
   // Print
