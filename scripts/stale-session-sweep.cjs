@@ -396,8 +396,8 @@ async function main() {
   const claimIntegrityIssues = [];
 
   for (const s of aliveIdle) {
-    // Only nudge if idle for >60s (give time for normal claim flow after session start)
-    if (s.heartbeat_age_seconds < 60) continue;
+    // Only nudge if idle for >5min (give time for post-completion transitions: /learn, protocol reads, context compaction)
+    if (s.heartbeat_age_seconds < 300) continue;
 
     // Check if we already sent a CLAIM_REMINDER recently (avoid spam)
     const { data: existingReminder } = await supabase
