@@ -599,13 +599,32 @@ describe('Semantic Validation Gates — Mock Supabase Integration', () => {
       expect(result.passed).toBe(true);
     });
 
-    it('returns no-deliverables result when table is empty', async () => {
+    it('falls back to success_criteria when no deliverables and no PRD', async () => {
       const { createDeliverablesCompletenessGate } = await import('../../scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js');
-      const mockSb = createMockSupabase({ sd_scope_deliverables: [] });
+      const mockSb = createMockSupabase({
+        sd_scope_deliverables: [],
+        product_requirements_v2: null,
+        strategic_directives_v2: { success_criteria: ['Criteria 1', 'Criteria 2', 'Criteria 3'] }
+      });
       const gate = createDeliverablesCompletenessGate(mockSb);
       const result = await gate.validator({ sd: { id: 'test-id', sd_type: 'feature' } });
       assertValidResult(result);
-      expect(result.passed).toBe(false); // REQ level + no deliverables
+      expect(result.details.source).toBe('success_criteria_fallback');
+      expect(result.details.criteriaCount).toBe(3);
+      expect(result.score).toBe(55); // 40 + (3 * 5)
+    });
+
+    it('returns final fallback (score 0) when nothing available', async () => {
+      const { createDeliverablesCompletenessGate } = await import('../../scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js');
+      const mockSb = createMockSupabase({
+        sd_scope_deliverables: [],
+        product_requirements_v2: null,
+        strategic_directives_v2: { success_criteria: [], success_metrics: [] }
+      });
+      const gate = createDeliverablesCompletenessGate(mockSb);
+      const result = await gate.validator({ sd: { id: 'test-id', sd_type: 'feature' } });
+      assertValidResult(result);
+      expect(result.passed).toBe(false); // REQ level + no data
       expect(result.issues.length).toBeGreaterThan(0);
     });
   });
