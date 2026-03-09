@@ -12,19 +12,26 @@
  * Pipeline order: /distill → /distill refine → /distill approve → /distill promote
  *
  * Usage:
- *   node scripts/eva-intake-refine.js                      # Full pipeline
+ *   node scripts/eva-intake-refine.js                      # Full pipeline (token reconcile)
  *   node scripts/eva-intake-refine.js --dry-run             # Preview without DB writes
  *   node scripts/eva-intake-refine.js --roadmap-id <uuid>   # Specific roadmap
  *   node scripts/eva-intake-refine.js --wave-id <uuid>      # Specific wave only
  *   node scripts/eva-intake-refine.js --from-step N         # Start from step N (1-4)
  *   node scripts/eva-intake-refine.js --skip-promote        # Run steps 1-3 only
+ *   node scripts/eva-intake-refine.js --extract-dedup        # Output dedup context for Claude Code inline, then stop
+ *   node scripts/eva-intake-refine.js --dedup-file <f>      # Load dedup results from file, continue from step 2
+ *   node scripts/eva-intake-refine.js --extract-reconcile   # Run step 1 + output reconcile context, then stop
+ *   node scripts/eva-intake-refine.js --reconcile-file <f>  # Load reconcile results from file, run steps 3-4
  */
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { dedup } from '../lib/integrations/refine-dedup.js';
-import { reconcile } from '../lib/integrations/refine-reconcile.js';
-import { score, SCORE_CONFIG } from '../lib/integrations/refine-score.js';
+import { readFileSync, writeFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { dedup, extractDedupContext } from '../lib/integrations/refine-dedup.js';
+import { reconcile, extractReconcileContext } from '../lib/integrations/refine-reconcile.js';
+import { score, extractScoringContext } from '../lib/integrations/refine-score.js';
 import { promote, groupForPromotion } from '../lib/integrations/refine-promote.js';
 
 dotenv.config();
@@ -42,6 +49,9 @@ const supabase = createClient(
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const skipPromote = args.includes('--skip-promote');
+const extractReconcile = args.includes('--extract-reconcile');
+const extractDedup = args.includes('--extract-dedup');
+const extractScoring = args.includes('--extract-scoring');
 
 function getFlag(name) {
   const idx = args.indexOf(name);
@@ -50,6 +60,9 @@ function getFlag(name) {
 
 const roadmapId = getFlag('--roadmap-id');
 const waveId = getFlag('--wave-id');
+const reconcileFile = getFlag('--reconcile-file');
+const dedupFile = getFlag('--dedup-file');
+const scoringFile = getFlag('--scoring-file');
 const fromStep = parseInt(getFlag('--from-step') || '1', 10);
 
 // ─── Data Loading ──────────────────────────────────────────
@@ -217,7 +230,7 @@ async function runReconcile(waves) {
     counts[r.status] = (counts[r.status] || 0) + 1;
   }
 
-  console.log(`  Results:`);
+  console.log('  Results:');
   console.log(`    Novel (new):      ${counts.novel}`);
   console.log(`    Already done:     ${counts.already_done}`);
   console.log(`    In progress:      ${counts.in_progress}`);
@@ -226,7 +239,7 @@ async function runReconcile(waves) {
   // Show non-novel items
   const nonNovel = results.filter(r => r.status !== 'novel');
   if (nonNovel.length > 0) {
-    console.log(`\n  Non-novel items:`);
+    console.log('\n  Non-novel items:');
     for (const r of nonNovel) {
       const item = allItems[r.item_index - 1];
       console.log(`    [${r.status}] "${(item?.title || '').slice(0, 60)}" → ${r.matched_sd_key} (${r.confidence}%)`);
@@ -266,7 +279,7 @@ async function runScoring(waves) {
 
     // Top 5 scores
     const sorted = [...result.item_scores].sort((a, b) => b.composite - a.composite);
-    console.log(`\n    Top items:`);
+    console.log('\n    Top items:');
     sorted.slice(0, 5).forEach(s => {
       const item = wave.items[s.item_index - 1];
       console.log(`      [${s.composite}] ${s.recommendation.toUpperCase()} — "${(item?.title || '').slice(0, 60)}"`);
@@ -381,22 +394,204 @@ async function main() {
   // Execute pipeline steps
   let dedupResults, reconcileResults, scoringResults, promotionResults;
 
-  if (fromStep <= 1) {
+  // --extract-dedup: output dedup context for Claude Code inline analysis, then stop
+  if (extractDedup) {
+    header(1, 'AI Deduplication (Extracting Context)');
+    const allContexts = [];
+    for (const wave of waves) {
+      if (wave.items.length < 2) {
+        console.log(`  Wave "${wave.title}": ${wave.items.length} item(s) — skipping dedup`);
+        continue;
+      }
+      console.log(`  Wave "${wave.title}": ${wave.items.length} items — extracting context`);
+      const ctx = extractDedupContext(wave.items, { title: wave.title, description: wave.description });
+      allContexts.push({ wave_id: wave.id, wave_title: wave.title, ...ctx });
+    }
+    console.log('');
+    console.log('===DEDUP_CONTEXT===');
+    console.log(JSON.stringify(allContexts, null, 2));
+    console.log('===END_DEDUP_CONTEXT===');
+    console.log('');
+    console.log('  Context extracted. Claude Code will perform semantic deduplication inline.');
+    console.log('  Results should be written to: scripts/temp/dedup-results.json');
+    console.log('  Then resume with: node scripts/eva-intake-refine.js --from-step 2 --dedup-file scripts/temp/dedup-results.json');
+    process.exit(0);
+  }
+
+  // --dedup-file: load pre-computed dedup results from Claude Code inline analysis
+  if (dedupFile) {
+    header(1, 'AI Deduplication (Inline Results)');
+    try {
+      const raw = readFileSync(dedupFile, 'utf8');
+      const parsed = JSON.parse(raw);
+      dedupResults = Array.isArray(parsed) ? parsed : (parsed.results || [parsed]);
+      console.log(`  Loaded dedup results from ${dedupFile}`);
+      console.log('  Method: Claude Code inline (semantic)');
+      const totalGroups = dedupResults.reduce((sum, r) => sum + (r.groups?.length || 0), 0);
+      console.log(`  Duplicate groups found: ${totalGroups}`);
+      for (const waveResult of dedupResults) {
+        if (waveResult.groups) {
+          for (const group of waveResult.groups) {
+            const wave = waves.find(w => w.id === waveResult.wave_id);
+            const titles = group.item_indices.map(idx => {
+              const item = wave?.items[idx - 1];
+              return item ? `"${(item.title || '').slice(0, 50)}"` : `#${idx}`;
+            });
+            console.log(`      Group (${group.item_indices.length}): ${titles.join(' + ')}`);
+            console.log(`        Reason: ${group.reason}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`  Warning: Could not load dedup file: ${err.message}`);
+      console.warn('  Falling back to keyword-based deduplication.');
+      dedupResults = await runDedup(waves);
+    }
+  } else if (fromStep <= 1) {
     dedupResults = await runDedup(waves);
   } else {
     console.log('\n── Step 1: Dedup ── SKIPPED\n');
   }
 
-  if (fromStep <= 2) {
+  // --extract-reconcile: output context for Claude Code inline analysis, then stop
+  if (extractReconcile) {
+    header(2, 'SD + Codebase Reconciliation (Extracting Context)');
+    const allItems = waves.flatMap(w => w.items);
+    console.log(`  Extracting context for ${allItems.length} items...`);
+    const context = await extractReconcileContext(allItems, { supabase });
+    console.log(`  SDs loaded: ${context.sd_count}`);
+    console.log(`  Items to reconcile: ${context.item_count}`);
+    console.log('');
+    console.log('===RECONCILE_CONTEXT===');
+    console.log(JSON.stringify(context, null, 2));
+    console.log('===END_RECONCILE_CONTEXT===');
+    console.log('');
+    console.log('  Context extracted. Claude Code will perform semantic reconciliation inline.');
+    console.log('  Results should be written to: scripts/temp/reconcile-results.json');
+    console.log('  Then resume with: node scripts/eva-intake-refine.js --from-step 3 --reconcile-file scripts/temp/reconcile-results.json');
+    process.exit(0);
+  }
+
+  // --reconcile-file: load pre-computed reconcile results from Claude Code inline analysis
+  if (reconcileFile) {
+    header(2, 'SD + Codebase Reconciliation (Inline Results)');
+    try {
+      const raw = readFileSync(reconcileFile, 'utf8');
+      const parsed = JSON.parse(raw);
+      reconcileResults = parsed.results || parsed;
+      console.log(`  Loaded ${reconcileResults.length} reconcile results from ${reconcileFile}`);
+      console.log('  Method: Claude Code inline (semantic)');
+
+      const counts = { novel: 0, already_done: 0, in_progress: 0, partially_done: 0 };
+      for (const r of reconcileResults) {
+        counts[r.status] = (counts[r.status] || 0) + 1;
+      }
+
+      console.log('  Results:');
+      console.log(`    Novel (new):      ${counts.novel}`);
+      console.log(`    Already done:     ${counts.already_done}`);
+      console.log(`    In progress:      ${counts.in_progress}`);
+      console.log(`    Partially done:   ${counts.partially_done}`);
+
+      const nonNovel = reconcileResults.filter(r => r.status !== 'novel');
+      if (nonNovel.length > 0) {
+        const allItems = waves.flatMap(w => w.items);
+        console.log('\n  Non-novel items:');
+        for (const r of nonNovel) {
+          const item = allItems[r.item_index - 1];
+          console.log(`    [${r.status}] "${(item?.title || '').slice(0, 60)}" → ${r.matched_sd_key} (${r.confidence}%)`);
+        }
+      }
+    } catch (err) {
+      console.warn(`  Warning: Could not load reconcile file: ${err.message}`);
+      console.warn('  Falling back to token-based reconciliation.');
+      reconcileResults = await runReconcile(waves);
+    }
+  } else if (fromStep <= 2 && !extractReconcile) {
     reconcileResults = await runReconcile(waves);
-  } else {
+  } else if (!reconcileFile) {
     console.log('\n── Step 2: Reconcile ── SKIPPED\n');
   }
 
-  if (fromStep <= 3) {
+  // --extract-scoring: output scoring context for Claude Code inline analysis, then stop
+  if (extractScoring) {
+    header(3, 'Multi-Persona Scoring (Extracting Context)');
+    const allContexts = [];
+    for (const wave of waves) {
+      if (wave.items.length === 0) continue;
+      console.log(`  Wave "${wave.title}": ${wave.items.length} items — extracting context`);
+      const ctx = extractScoringContext(wave.items, { title: wave.title, description: wave.description });
+      allContexts.push({ wave_id: wave.id, ...ctx });
+    }
+    console.log('');
+    console.log('===SCORING_CONTEXT===');
+    console.log(JSON.stringify(allContexts, null, 2));
+    console.log('===END_SCORING_CONTEXT===');
+    console.log('');
+    console.log('  Context extracted. Claude Code will perform multi-persona scoring inline.');
+    console.log('  Results should be written to: scripts/temp/scoring-results.json');
+    console.log('  Then resume with: node scripts/eva-intake-refine.js --from-step 4 --scoring-file scripts/temp/scoring-results.json');
+    process.exit(0);
+  }
+
+  // --scoring-file: load pre-computed scoring results from Claude Code inline analysis
+  if (scoringFile) {
+    header(3, 'Multi-Persona Scoring (Inline Results)');
+    try {
+      const raw = readFileSync(scoringFile, 'utf8');
+      scoringResults = JSON.parse(raw);
+      if (!Array.isArray(scoringResults)) scoringResults = [scoringResults];
+      console.log(`  Loaded scoring results from ${scoringFile}`);
+      console.log('  Method: Claude Code inline (semantic)');
+
+      for (const waveResult of scoringResults) {
+        const promote = waveResult.item_scores.filter(s => s.recommendation === 'promote').length;
+        const review = waveResult.item_scores.filter(s => s.recommendation === 'review').length;
+        const defer = waveResult.item_scores.filter(s => s.recommendation === 'defer').length;
+        console.log(`  Wave "${waveResult.wave_title || waveResult.wave_id}": ${promote} promote, ${review} review, ${defer} defer`);
+      }
+    } catch (err) {
+      console.warn(`  Warning: Could not load scoring file: ${err.message}`);
+      console.warn('  Falling back to AI-based scoring.');
+      scoringResults = await runScoring(waves);
+    }
+  } else if (fromStep <= 3) {
     scoringResults = await runScoring(waves);
   } else {
     console.log('\n── Step 3: Score ── SKIPPED\n');
+  }
+
+  // Persist scoring results to temp file and DB
+  if (scoringResults && scoringResults.length > 0) {
+    const scorePath = resolve(dirname(fileURLToPath(import.meta.url)), 'temp', 'scoring-results.json');
+    writeFileSync(scorePath, JSON.stringify(scoringResults, null, 2));
+    console.log('\n  Scoring results saved to scripts/temp/scoring-results.json');
+
+    // Persist scores into metadata JSONB column
+    let persisted = 0;
+    for (const waveResult of scoringResults) {
+      const wave = waves.find(w => w.id === waveResult.wave_id);
+      if (!wave) continue;
+      for (const s of waveResult.item_scores) {
+        const item = wave.items[s.item_index - 1];
+        if (!item || !item.id) continue;
+        const existingMeta = item.metadata || {};
+        const newMeta = {
+          ...existingMeta,
+          refine_composite_score: s.composite,
+          refine_recommendation: s.recommendation,
+          refine_persona_scores: s.persona_scores,
+          refine_method: waveResult.method || 'claude_inline',
+          refine_scored_at: new Date().toISOString(),
+        };
+        const { error } = await supabase
+          .from('roadmap_wave_items')
+          .update({ metadata: newMeta })
+          .eq('id', item.id);
+        if (!error) persisted++;
+      }
+    }
+    console.log(`  Persisted ${persisted} scores to DB (metadata column)`);
   }
 
   if (fromStep <= 4 && scoringResults) {
