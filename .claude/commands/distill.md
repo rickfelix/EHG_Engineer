@@ -38,21 +38,163 @@ Display the output showing all roadmaps with their waves, item counts, and progr
 
 Run the pre-promote refinement pipeline. This runs AFTER `/distill` creates waves and BEFORE `/distill approve`.
 
-**Pipeline**: Dedup → Reconcile → Score → Promote
+**Pipeline**: **Dedup (Claude Code inline)** → **Reconcile (Claude Code inline)** → **Score (Claude Code inline)** → Promote
+
+All three analysis steps use Claude Code inline for semantic analysis (not an external API). This is a 7-phase orchestration:
+
+**Phase A: Extract Dedup Context**
 
 ```bash
-node scripts/eva-intake-refine.js [flags]
+node scripts/eva-intake-refine.js --extract-dedup [flags]
 ```
 
-Pass through any flags the user provided (`--dry-run`, `--roadmap-id <id>`, `--wave-id <id>`, `--skip-promote`, `--from-step N`).
+Pass through user flags (`--dry-run`, `--roadmap-id <id>`, `--wave-id <id>`).
+Use `timeout: 600000` (10 minutes).
 
-Use `timeout: 600000` (10 minutes) — AI scoring across 4 personas can take time.
+This outputs `===DEDUP_CONTEXT===` JSON containing per-wave item summaries (title, description, source_type, target_application, chairman_intent).
 
-After the pipeline completes, summarize:
-- Duplicate groups found
-- Reconciliation results (novel vs already-done items)
-- Scoring distribution (promote / review / defer)
-- Research SDs created (if promotion ran)
+**Phase B: Claude Code Inline Deduplication**
+
+Read the `===DEDUP_CONTEXT===` JSON from Phase A output. For each wave, semantically identify duplicate/near-duplicate items:
+
+1. Parse the context JSON (between `===DEDUP_CONTEXT===` and `===END_DEDUP_CONTEXT===`)
+2. For each wave's items, find groups of duplicates or near-duplicates — same idea expressed differently
+3. Rules:
+   - Match on MEANING, not just keywords. "Add dark mode" and "Implement theme switching" are duplicates.
+   - Items from different sources (todoist vs youtube) can still be duplicates if about the same topic.
+   - YouTube videos about the same tool/topic (e.g., multiple OpenClaw tutorials) should be grouped.
+   - Items with the same chairman_intent AND overlapping scope are likely duplicates.
+   - Short/vague items (single words like "script") should NOT be grouped unless clearly identical.
+   - Each item should appear in at most ONE group.
+   - Groups must have at least 2 items.
+   - item_indices are 1-based (per wave, not global).
+4. Produce results per wave.
+
+Write results to `scripts/temp/dedup-results.json` using the Write tool:
+```json
+[
+  {
+    "wave_id": "<uuid>",
+    "wave_title": "Wave 1 Title",
+    "groups": [
+      {"item_indices": [1, 3], "reason": "Both about implementing dark mode"},
+      {"item_indices": [5, 8, 12], "reason": "All OpenClaw integration tutorials"}
+    ]
+  }
+]
+```
+
+For efficiency with 400+ items: process each wave separately, batch items in groups of ~30-50.
+
+**Phase C: Extract Reconcile Context**
+
+```bash
+node scripts/eva-intake-refine.js --from-step 2 --dedup-file scripts/temp/dedup-results.json --extract-reconcile [flags]
+```
+
+Pass through user flags. Use `timeout: 600000`.
+
+This loads dedup results, then outputs `===RECONCILE_CONTEXT===` JSON containing:
+- All existing SDs (sd_key, status, title, key_changes)
+- All wave items (title, description, target_application, chairman_intent)
+
+**Phase D: Claude Code Inline Reconciliation**
+
+Read the `===RECONCILE_CONTEXT===` JSON from Phase C output. For each wave item, semantically match against existing SDs:
+
+1. Parse the context JSON (between `===RECONCILE_CONTEXT===` and `===END_RECONCILE_CONTEXT===`)
+2. For each item, determine status:
+   - `novel` — No existing SD covers this idea
+   - `already_done` — A completed SD already delivered this capability
+   - `in_progress` — An active SD is working on this
+   - `partially_done` — An SD partially covers this
+3. Match on MEANING, not keywords. "Add dark mode" should match "Implement theme switching".
+4. Only flag non-novel if confidence >= 60.
+5. Short/vague items with no clear semantic match → `novel`.
+
+Write results to `scripts/temp/reconcile-results.json` using the Write tool:
+```json
+{
+  "results": [
+    {"item_index": 1, "status": "novel", "matched_sd_key": null, "matched_sd_title": null, "confidence": 0},
+    {"item_index": 2, "status": "already_done", "matched_sd_key": "SD-XXX-001", "matched_sd_title": "...", "confidence": 85}
+  ]
+}
+```
+
+For efficiency with 400+ items: batch analysis by wave, process items in groups of ~30-50, use an Explore agent if needed to parallelize.
+
+**Phase E: Extract Scoring Context**
+
+```bash
+node scripts/eva-intake-refine.js --from-step 3 --reconcile-file scripts/temp/reconcile-results.json --extract-scoring [flags]
+```
+
+Pass through user flags. Use `timeout: 600000`.
+
+This loads the inline reconcile results, then outputs `===SCORING_CONTEXT===` JSON containing per-wave items with the 4-persona rubric (Optimist 15%, Pragmatist 35%, Devil's Advocate 25%, Strategist 25%).
+
+**Phase F: Claude Code Inline Scoring**
+
+Read the `===SCORING_CONTEXT===` JSON from Phase E output. For each wave's items, score using the 4-persona rubric:
+
+1. Parse the context JSON (between `===SCORING_CONTEXT===` and `===END_SCORING_CONTEXT===`)
+2. For each item in each wave, evaluate through all 4 personas:
+   - **Optimist** (15%): Potential upside, innovation value, opportunity
+   - **Pragmatist** (35%): Feasibility, effort-to-value ratio, achievability
+   - **Devil's Advocate** (25%): Risk level (INVERTED: 100 = low risk, 0 = extremely risky)
+   - **Strategist** (25%): Vision alignment, strategic importance, timing
+3. Compute composite: `(optimist × 0.15) + (pragmatist × 0.35) + (devils_advocate × 0.25) + (strategist × 0.25)`
+4. Assign recommendation: `promote` if ≥70, `review` if 40-69, `defer` if <40
+5. Rules:
+   - Score based on the item's MEANING and strategic value, not just keywords.
+   - Consider the wave context (title/description) when scoring strategic alignment.
+   - YouTube reference videos score high on pragmatist (actionable) and strategist (informative).
+   - Vague/short items without clear scope score lower on pragmatist.
+   - Items about core infrastructure (security, protocols) score high on strategist.
+   - Keep reasoning to 1 sentence per persona.
+
+Write results to `scripts/temp/scoring-results.json` using the Write tool:
+```json
+[
+  {
+    "wave_id": "<uuid>",
+    "wave_title": "Wave 1 Title",
+    "item_scores": [
+      {
+        "item_index": 1,
+        "composite": 75,
+        "persona_scores": {
+          "optimist": {"score": 80, "reasoning": "High potential..."},
+          "pragmatist": {"score": 70, "reasoning": "Feasible..."},
+          "devils_advocate": {"score": 75, "reasoning": "Low risk..."},
+          "strategist": {"score": 78, "reasoning": "Aligns with..."}
+        },
+        "recommendation": "promote"
+      }
+    ],
+    "method": "claude_inline"
+  }
+]
+```
+
+For efficiency with 400+ items: use parallel Explore agents (one per wave or batch of ~30-50 items).
+
+**Phase G: Promote with Inline Scoring Results**
+
+```bash
+node scripts/eva-intake-refine.js --from-step 4 --scoring-file scripts/temp/scoring-results.json [flags]
+```
+
+Pass through user flags. Use `timeout: 600000`.
+
+This loads the inline scoring results, persists scores to DB, then runs Step 4 (promotion).
+
+**After all 7 phases complete**, summarize:
+- Duplicate groups found (Phase B, semantic)
+- Reconciliation results — novel vs already-done items (Phase D, semantic)
+- Scoring distribution — promote / review / defer (Phase F, semantic)
+- Research SDs created if promotion ran (Phase G)
 
 If this was a live run, show:
 ```
@@ -60,6 +202,11 @@ Next steps:
   /distill approve --roadmap-id <id>    Approve refined waves
   /distill promote --wave-id <id>       Promote approved wave to SDs
   /distill status                       View current roadmap
+```
+
+**Fallback**: If inline flags are NOT used (e.g., running the script directly from CLI), the pipeline uses keyword dedup + Gemini scoring as a fast fallback:
+```bash
+node scripts/eva-intake-refine.js [flags]
 ```
 
 ---
