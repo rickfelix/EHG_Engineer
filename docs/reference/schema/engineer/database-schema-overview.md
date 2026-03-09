@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T20:57:38.795Z
-**Tables**: 540
+**Generated**: 2026-03-09T21:04:15.997Z
+**Tables**: 541
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -588,6 +588,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_stage_transitions](tables/venture_stage_transitions.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [venture_stage_work](tables/venture_stage_work.md) | N/A (RLS restricted) | ✅ | 5 | - |
 | [venture_templates](tables/venture_templates.md) | N/A (RLS restricted) | ✅ | 2 | Reusable patterns extracted from ventures completing Stage 25 |
+| [venture_tiers](tables/venture_tiers.md) | N/A (RLS restricted) | ✅ | 3 | Business maturity tier tracking (seed/growth/scale/exit). Distinct from ventures.tier integer. |
 | [venture_token_budgets](tables/venture_token_budgets.md) | N/A (RLS restricted) | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Venture-level token budget tracking. Enforces Economic Circuit Breaker policy. Default 100k tokens per venture. |
 | [venture_token_ledger](tables/venture_token_ledger.md) | N/A (RLS restricted) | ✅ | 4 | Golden Nugget: Token/compute investment tracking per venture |
 | [venture_tool_quotas](tables/venture_tool_quotas.md) | N/A (RLS restricted) | ✅ | 1 | - |
@@ -771,7 +772,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (414 tables)
+### Other (415 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1191,6 +1192,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
 - [venture_templates](tables/venture_templates.md) - Reusable patterns extracted from ventures completing Stage 25
+- [venture_tiers](tables/venture_tiers.md) - Business maturity tier tracking (seed/growth/scale/exit). Distinct from ventures.tier integer.
 - [venture_token_budgets](tables/venture_token_budgets.md) - INDUSTRIAL-HARDENING-v3.0: Venture-level token budget tracking. Enforces Economic Circuit Breaker policy. Default 100k tokens per venture.
 - [venture_token_ledger](tables/venture_token_ledger.md) - Golden Nugget: Token/compute investment tracking per venture
 - [venture_tool_quotas](tables/venture_tool_quotas.md)
@@ -2270,6 +2272,9 @@ _Key relationships between tables:_
 
 **venture_templates**:
 - `source_venture_id` → `ventures.id`
+
+**venture_tiers**:
+- `venture_id` → `ventures.id`
 
 **venture_token_budgets**:
 - `venture_id` → `ventures.id`
