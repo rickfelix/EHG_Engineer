@@ -139,10 +139,10 @@ export function inheritStrategicFields(parentSD, childContext = {}) {
   // Reason: Parent metrics like "all children complete" don't apply to individual children
   // Each child has unique deliverables that require specific, measurable targets
   inherited.success_metrics = [
-    { metric: `${phaseTitle} implementation complete`, target: '100%', measurement: 'Deliverables checklist' },
-    { metric: 'Quality gate pass rate', target: '≥85%', measurement: 'Handoff validation score' },
-    { metric: 'Test coverage for new code', target: '≥80%', measurement: 'Jest/Playwright coverage' },
-    { metric: 'Regressions introduced', target: '0', measurement: 'CI test results' }
+    { metric: `${phaseTitle} implementation complete`, target: '100%', actual: null, measurement: 'Deliverables checklist' },
+    { metric: 'Quality gate pass rate', target: '≥85%', actual: null, measurement: 'Handoff validation score' },
+    { metric: 'Test coverage for new code', target: '≥80%', actual: null, measurement: 'Jest/Playwright coverage' },
+    { metric: 'Regressions introduced', target: '0', actual: null, measurement: 'CI test results' }
   ];
 
   // Inherit key_principles - contextualize for phase

@@ -120,10 +120,10 @@ export function createSuccessMetricsAchievementGate(supabase) {
         };
       }
 
-      const metrics = sdRecord?.success_metrics;
+      const rawMetrics = sdRecord?.success_metrics;
 
       // No metrics defined — pass with warning (some SDs may legitimately lack them)
-      if (!metrics || !Array.isArray(metrics) || metrics.length === 0) {
+      if (!rawMetrics || !Array.isArray(rawMetrics) || rawMetrics.length === 0) {
         console.log('   ⚠️  No success metrics defined on this SD');
         return {
           passed: true, score: 100, max_score: 100,
@@ -132,6 +132,14 @@ export function createSuccessMetricsAchievementGate(supabase) {
           details: { metrics_count: 0 }
         };
       }
+
+      // Normalize metrics: plain strings → objects with {name, target, actual}
+      const metrics = rawMetrics.map(m => {
+        if (typeof m === 'string') {
+          return { name: m, target: 'N/A', actual: null };
+        }
+        return m;
+      });
 
       console.log(`   Found ${metrics.length} success metric(s)\n`);
 
