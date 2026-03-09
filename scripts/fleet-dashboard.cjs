@@ -105,7 +105,6 @@ async function loadData() {
 }
 
 // ── Section: Workers ──
-
 function printWorkers(d) {
   const now = new Date();
   console.log('');
@@ -162,7 +161,6 @@ function printOrchestrator(d) {
 }
 
 // ── Section: Available ──
-
 function printAvailable(d) {
   const total = d.unclaimedChildren.length + d.unclaimedStandalone.length;
   console.log('AVAILABLE FOR CLAIM (' + total + ')');
@@ -195,7 +193,6 @@ function printAvailable(d) {
 }
 
 // ── Section: Coordination ──
-
 function printCoordination(d) {
   console.log('COORDINATION MESSAGES');
   console.log('─'.repeat(72));
@@ -223,7 +220,6 @@ function printCoordination(d) {
 }
 
 // ── Section: Health ──
-
 function printHealth(d) {
   const health = d.activeSessions.length >= 3 ? 'HEALTHY' : d.activeSessions.length >= 1 ? 'DEGRADED' : 'DOWN';
   const icon = health === 'HEALTHY' ? '[OK]' : health === 'DEGRADED' ? '[!!]' : '[XX]';
@@ -239,7 +235,6 @@ function printHealth(d) {
 }
 
 // ── Section: QA ──
-
 function printQA(d) {
   const now = Date.now();
   const issues = [];
@@ -309,6 +304,18 @@ function printQA(d) {
     });
   });
 
+  // QA 6: SDs stuck in pending_approval with no active claiming session
+  const pendingApproval = Object.values(d.sdStatusMap).filter(sd => sd.status === 'pending_approval');
+  const activeClaimSdIds = new Set(recentRaw.map(s => s.sd_id).filter(Boolean));
+  pendingApproval.filter(sd => !activeClaimSdIds.has(sd.sd_key)).forEach(sd => {
+    const shortSd = sd.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    issues.push({
+      severity: 'HIGH',
+      check: 'STUCK_APPROVAL',
+      msg: shortSd + ' stuck in pending_approval — no session working on it (sweep will auto-reset to draft)'
+    });
+  });
+
   // Print
   const icon = issues.length === 0 ? '[PASS]' : '[' + issues.length + ' ISSUES]';
   console.log('QA CHECKS ' + icon);
@@ -327,13 +334,10 @@ function printQA(d) {
 }
 
 // ── Section: Forecast ──
-
 async function printForecast(d) {
   const now = new Date();
   console.log('FORECAST');
   console.log('─'.repeat(72));
-
-  // ── Orchestrator Forecast ──
   const orchCompleted = d.children.filter(c => c.status === 'completed' && c.completion_date);
   const orchRemaining = d.children.filter(c => c.status !== 'completed');
 
@@ -383,9 +387,7 @@ async function printForecast(d) {
   }
 
   console.log('');
-
-  // ── Full Queue Forecast ──
-  // Get ALL pending SDs across the entire queue (not just orchestrator)
+  // Full Queue Forecast — all pending SDs across the entire queue
   const { data: allPending } = await supabase
     .from('strategic_directives_v2')
     .select('sd_key, title, status, priority, current_phase, progress_percentage, dependencies')
