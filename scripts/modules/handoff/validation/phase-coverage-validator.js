@@ -18,21 +18,28 @@ export function validatePhaseCoverage(phases, sds) {
     return { covered: [], uncovered: [], coveragePercent: 100, totalPhases: 0, coveredCount: 0, passed: true };
   }
 
-  const sdKeys = new Set((sds || []).map(sd => sd.sd_key));
+  const sdList = sds || [];
+  const sdKeys = new Set(sdList.map(sd => sd.sd_key));
   const covered = [];
   const uncovered = [];
 
   for (const phase of phases) {
     const assignedSd = phase.covered_by_sd_key;
     if (assignedSd && sdKeys.has(assignedSd)) {
-      const sd = sds.find(s => s.sd_key === assignedSd);
+      const sd = sdList.find(s => s.sd_key === assignedSd);
       covered.push({ phase, sd_key: assignedSd, sd_title: sd?.title || assignedSd });
     } else if (assignedSd) {
       // covered_by_sd_key is set but the SD doesn't exist in the linked SDs list
       // Still count as covered if the key is populated (SD may exist outside this arch plan)
       covered.push({ phase, sd_key: assignedSd, sd_title: assignedSd });
     } else {
-      uncovered.push({ phase });
+      // No explicit covered_by_sd_key — try auto-matching to a child SD
+      const match = autoMatchPhaseToSd(phase, sdList);
+      if (match) {
+        covered.push({ phase, sd_key: match.sd_key, sd_title: match.title || match.sd_key, auto_matched: true });
+      } else {
+        uncovered.push({ phase });
+      }
     }
   }
 
@@ -51,6 +58,83 @@ export function validatePhaseCoverage(phases, sds) {
 }
 
 /**
+ * Auto-match a phase to an SD when covered_by_sd_key is not set.
+ * Uses child designation suffix matching (e.g., phase.child_designation or phase number → "-A", "-B")
+ * and title similarity as fallback.
+ * @param {Object} phase - Architecture plan phase
+ * @param {Object[]} sds - Available SDs
+ * @returns {Object|null} Matched SD or null
+ */
+function autoMatchPhaseToSd(phase, sds) {
+  if (!sds || sds.length === 0) return null;
+
+  // Strategy 1: Match by child_designation field on the phase
+  // e.g., phase.child_designation = "A" matches SD key ending in "-A" or "-001-A"
+  if (phase.child_designation) {
+    const suffix = `-${phase.child_designation.toUpperCase()}`;
+    const match = sds.find(sd => sd.sd_key && sd.sd_key.toUpperCase().endsWith(suffix));
+    if (match) return match;
+  }
+
+  // Strategy 2: Match by phase number → child letter (Phase 1 → A, Phase 2 → B, etc.)
+  if (phase.number && typeof phase.number === 'number' && phase.number >= 1 && phase.number <= 26) {
+    const letter = String.fromCharCode(64 + phase.number); // 1→A, 2→B, etc.
+    const suffix = `-${letter}`;
+    const match = sds.find(sd => sd.sd_key && sd.sd_key.toUpperCase().endsWith(suffix));
+    if (match) return match;
+  }
+
+  // Strategy 3: Fuzzy title matching — normalize and check overlap
+  if (phase.title) {
+    const phaseWords = normalizeForMatch(phase.title);
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const sd of sds) {
+      if (!sd.title) continue;
+      const sdWords = normalizeForMatch(sd.title);
+      const score = wordOverlapScore(phaseWords, sdWords);
+      if (score > bestScore && score >= 0.4) { // 40% word overlap threshold
+        bestScore = score;
+        bestMatch = sd;
+      }
+    }
+
+    if (bestMatch) return bestMatch;
+  }
+
+  return null;
+}
+
+/**
+ * Normalize a string for fuzzy matching: lowercase, split into significant words.
+ */
+function normalizeForMatch(text) {
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'with', 'on', 'at', 'by', 'sd', 'phase']);
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w));
+}
+
+/**
+ * Calculate word overlap score between two word arrays.
+ * Returns 0.0-1.0 based on Jaccard-like similarity.
+ */
+function wordOverlapScore(wordsA, wordsB) {
+  if (wordsA.length === 0 || wordsB.length === 0) return 0;
+  const setA = new Set(wordsA);
+  const setB = new Set(wordsB);
+  let overlap = 0;
+  for (const w of setA) {
+    if (setB.has(w)) overlap++;
+  }
+  const minSize = Math.min(setA.size, setB.size);
+  return minSize > 0 ? overlap / minSize : 0;
+}
+
+/**
  * Formats coverage report for terminal display.
  * @param {Object} report - From validatePhaseCoverage()
  * @returns {string} Formatted output
@@ -65,9 +149,10 @@ export function formatCoverageReport(report) {
 
   lines.push('   📋 Architecture Phase Coverage:');
 
-  for (const { phase, sd_key, sd_title } of report.covered) {
+  for (const { phase, sd_key, sd_title, auto_matched } of report.covered) {
     const designation = phase.child_designation === 'separate_orchestrator' ? ' (separate orchestrator)' : '';
-    lines.push(`   ✅ Phase ${phase.number}: ${phase.title} → ${sd_key}${designation}`);
+    const matchType = auto_matched ? ' (auto-matched)' : '';
+    lines.push(`   ✅ Phase ${phase.number}: ${phase.title} → ${sd_key}${designation}${matchType}`);
   }
 
   for (const { phase } of report.uncovered) {
