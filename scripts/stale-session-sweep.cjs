@@ -163,30 +163,66 @@ async function main() {
   const claimedKeys = new Set((claimedSdStatus || []).map(sd => sd.sd_key));
   const { data: allPendingApproval } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, status, current_phase, progress_percentage')
+    .select('sd_key, status, current_phase, progress_percentage, completion_date')
     .eq('status', 'pending_approval');
 
   const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_id));
   const stuckApproval = (allPendingApproval || []).filter(sd => !activeClaimSdIds.has(sd.sd_key));
 
   for (const sd of stuckApproval) {
-    const { error } = await supabase
-      .from('strategic_directives_v2')
-      .update({
-        status: 'draft',
-        current_phase: 'LEAD',
-        progress_percentage: 0,
-        claiming_session_id: null,
-        is_working_on: false
-      })
-      .eq('sd_key', sd.sd_key);
+    // FIX #1: STUCK_100 — if at 100% with completion_date, mark completed instead of resetting
+    if (sd.progress_percentage >= 100 && sd.completion_date) {
+      const { error } = await supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'completed',
+          claiming_session_id: null,
+          is_working_on: false
+        })
+        .eq('sd_key', sd.sd_key)
+        .select();
 
-    if (!error) {
-      actions.push('QA: reset ' + sd.sd_key + ' from pending_approval → draft/LEAD/0% (no session working on it)');
+      if (!error) {
+        actions.push('QA: completed ' + sd.sd_key + ' — was stuck at 100%/pending_approval with completion_date');
+      }
+    } else {
+      const { error } = await supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'draft',
+          current_phase: 'LEAD',
+          progress_percentage: 0,
+          claiming_session_id: null,
+          is_working_on: false
+        })
+        .eq('sd_key', sd.sd_key);
+
+      if (!error) {
+        actions.push('QA: reset ' + sd.sd_key + ' from pending_approval → draft/LEAD/0% (no session working on it)');
+      }
     }
   }
 
-  // 3e. QA — detect bare-shell SDs (title == description, no real scope)
+  // FIX #2: Proactively clear stale claiming_session_id on completed SDs to prevent churn
+  const { data: completedWithClaims } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, claiming_session_id, is_working_on')
+    .eq('status', 'completed')
+    .not('claiming_session_id', 'is', null);
+
+  for (const sd of (completedWithClaims || [])) {
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      .update({ claiming_session_id: null, is_working_on: false })
+      .eq('sd_key', sd.sd_key)
+      .select();
+
+    if (!error) {
+      actions.push('QA: cleared stale claiming_session_id on completed ' + sd.sd_key);
+    }
+  }
+
+  // 3e. QA — detect and auto-enrich bare-shell SDs (FIX #6)
   const { data: pendingSDs } = await supabase
     .from('strategic_directives_v2')
     .select('sd_key, title, description, scope')
@@ -197,8 +233,57 @@ async function main() {
     return !sd.description || sd.description === sd.title || (sd.description.length < 100 && sd.scope === sd.title);
   });
   if (bareShellSDs.length > 0) {
+    const fs = require('fs');
+    const path = require('path');
+    const repoRoot = path.resolve(__dirname, '..');
+    const searchDirs = ['docs/audits', 'docs/plans', 'brainstorm'].map(d => path.join(repoRoot, d));
+
     for (const sd of bareShellSDs) {
-      warnings.push('BARE_SHELL: ' + sd.sd_key + ' has no real description — workers will waste cycles');
+      // Try to find matching content in docs/audits, docs/plans, brainstorm
+      const keywords = sd.title.toLowerCase().split(/[\s\-_]+/).filter(w => w.length > 3);
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const dir of searchDirs) {
+        if (!fs.existsSync(dir)) continue;
+        const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+        for (const file of files) {
+          const nameLower = file.toLowerCase();
+          const score = keywords.filter(kw => nameLower.includes(kw)).length;
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = path.join(dir, file);
+          }
+        }
+      }
+
+      if (bestMatch && bestScore >= 2) {
+        // Read up to 2000 chars from the matching file for description enrichment
+        const content = fs.readFileSync(bestMatch, 'utf8').substring(0, 2000);
+        // Extract first paragraph or summary section
+        const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+        const summary = lines.slice(0, 10).join('\n').substring(0, 500);
+
+        if (summary.length > 50) {
+          const { error } = await supabase
+            .from('strategic_directives_v2')
+            .update({
+              description: sd.title + '\n\n' + summary + '\n\n[Auto-enriched by sweep from ' + path.basename(bestMatch) + ']'
+            })
+            .eq('sd_key', sd.sd_key)
+            .select();
+
+          if (!error) {
+            actions.push('ENRICH: ' + sd.sd_key + ' — description populated from ' + path.basename(bestMatch));
+          } else {
+            warnings.push('BARE_SHELL: ' + sd.sd_key + ' — enrichment failed: ' + error.message);
+          }
+        } else {
+          warnings.push('BARE_SHELL: ' + sd.sd_key + ' — found ' + path.basename(bestMatch) + ' but content too short');
+        }
+      } else {
+        warnings.push('BARE_SHELL: ' + sd.sd_key + ' has no real description — no matching docs found');
+      }
     }
   }
 
@@ -302,6 +387,35 @@ async function main() {
 
   // Clean up expired messages first
   try { await supabase.rpc('cleanup_expired_coordination'); } catch { /* ignore */ }
+
+  // FIX #3: Clean up coordination messages targeting dead/stale sessions
+  // These accumulate because target sessions exit without reading them
+  const allSessionIds = new Set(classified.map(s => s.session_id));
+  const { data: unreadMsgs } = await supabase
+    .from('session_coordination')
+    .select('id, target_session')
+    .is('acknowledged_at', null)
+    .is('read_at', null);
+
+  const deadMsgIds = (unreadMsgs || [])
+    .filter(m => !allSessionIds.has(m.target_session))
+    .map(m => m.id);
+
+  // Also include messages targeting sessions classified as DEAD or stale
+  const deadOrStaleIds = new Set(classified.filter(s => s.status !== 'ACTIVE').map(s => s.session_id));
+  const staleMsgIds = (unreadMsgs || [])
+    .filter(m => deadOrStaleIds.has(m.target_session))
+    .map(m => m.id);
+
+  const allDeadMsgIds = [...new Set([...deadMsgIds, ...staleMsgIds])];
+  if (allDeadMsgIds.length > 0) {
+    // Delete in batches of 50
+    for (let i = 0; i < allDeadMsgIds.length; i += 50) {
+      const batch = allDeadMsgIds.slice(i, i + 50);
+      await supabase.from('session_coordination').delete().in('id', batch);
+    }
+    actions.push('CLEANUP: deleted ' + allDeadMsgIds.length + ' unread coordination messages targeting dead/gone sessions');
+  }
 
   for (const s of activeSessions) {
     // Check if we already have an unacknowledged message for this session
@@ -431,12 +545,16 @@ async function main() {
   }
 
   // QA summary
-  const qaIssues = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length;
+  const stuckCompleted = stuckApproval.filter(sd => sd.progress_percentage >= 100 && sd.completion_date);
+  const stuckReset = stuckApproval.filter(sd => !(sd.progress_percentage >= 100 && sd.completion_date));
+  const qaIssues = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length + (completedWithClaims || []).length;
   if (qaIssues > 0) {
     console.log('QA FIXES (' + qaIssues + '):');
     if (workingOnCompleted.length > 0) console.log('  Released ' + workingOnCompleted.length + ' session(s) working on completed SDs');
     if (orphanedClaims.length > 0) console.log('  Released ' + orphanedClaims.length + ' session(s) with orphaned claims');
-    if (stuckApproval.length > 0) console.log('  Reset ' + stuckApproval.length + ' SD(s) from pending_approval → draft (no session working on them)');
+    if (stuckCompleted.length > 0) console.log('  Completed ' + stuckCompleted.length + ' SD(s) stuck at 100%/pending_approval');
+    if (stuckReset.length > 0) console.log('  Reset ' + stuckReset.length + ' SD(s) from pending_approval → draft (no session working on them)');
+    if ((completedWithClaims || []).length > 0) console.log('  Cleared ' + (completedWithClaims || []).length + ' stale claiming_session_id on completed SDs');
     console.log('');
   }
 
