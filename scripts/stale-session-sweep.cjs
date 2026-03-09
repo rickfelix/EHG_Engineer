@@ -176,6 +176,22 @@ async function main() {
     }
   }
 
+  // 3e. QA — detect bare-shell SDs (title == description, no real scope)
+  const { data: pendingSDs } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, description, scope')
+    .in('status', ['draft', 'ready'])
+    .not('sd_key', 'like', '%ORCH-STAGE-VENTURE-WORKFLOW-001-%');
+  const bareShellSDs = (pendingSDs || []).filter(sd => {
+    if (sd.description && sd.description.startsWith('Child SD of')) return false;
+    return !sd.description || sd.description === sd.title || (sd.description.length < 100 && sd.scope === sd.title);
+  });
+  if (bareShellSDs.length > 0) {
+    for (const sd of bareShellSDs) {
+      warnings.push('BARE_SHELL: ' + sd.sd_key + ' has no real description — workers will waste cycles');
+    }
+  }
+
   // 4. Auto-release dead sessions
   const dead = classified.filter(s => s.status === 'DEAD');
   for (const s of dead) {

@@ -96,11 +96,24 @@ async function loadData() {
     (extraSds || []).forEach(sd => { sdStatusMap[sd.sd_key] = sd; });
   }
 
+  // Detect bare-shell SDs: title == description, no real scope, not child stubs
+  const pendingKeys = workable.map(sd => sd.sd_key);
+  let bareShells = [];
+  if (pendingKeys.length > 0) {
+    const { data: descData } = await supabase.from('strategic_directives_v2')
+      .select('sd_key, title, description, scope').in('sd_key', pendingKeys);
+    bareShells = (descData || []).filter(sd => {
+      if (sd.description && sd.description.startsWith('Child SD of')) return false;
+      const thin = !sd.description || sd.description === sd.title || (sd.description.length < 100 && sd.scope === sd.title);
+      return thin;
+    });
+  }
+
   return {
     sessions, allSessions, children, workable, coordMessages, rawSessions, sdStatusMap,
     claimedSdIds, activeSessions, staleSessions, idleSessions,
     completedChildren, totalChildren, orchPct,
-    unclaimedChildren, unclaimedStandalone
+    unclaimedChildren, unclaimedStandalone, bareShellSDs: bareShells
   };
 }
 
@@ -315,7 +328,11 @@ function printQA(d) {
       msg: shortSd + ' stuck in pending_approval — no session working on it (sweep will auto-reset to draft)'
     });
   });
-
+  // QA 7: Bare-shell SDs — title repeated as description, no real scope
+  (d.bareShellSDs || []).forEach(sd => {
+    const shortSd = sd.sd_key.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
+    issues.push({ severity: 'MED', check: 'BARE_SHELL', msg: shortSd + ' has no real description — workers will waste cycles on LEAD setup' });
+  });
   // Print
   const icon = issues.length === 0 ? '[PASS]' : '[' + issues.length + ' ISSUES]';
   console.log('QA CHECKS ' + icon);
@@ -411,49 +428,29 @@ async function printForecast(d) {
   }
   console.log('  Active workers: ' + activeWorkers);
 
-  // Estimate full queue ETA using orchestrator velocity as baseline
-  if (orchCompleted.length >= 2) {
-    const sorted = orchCompleted
-      .map(c => ({ ...c, completedAt: new Date(c.completion_date) }))
-      .sort((a, b) => a.completedAt - b.completedAt);
-    const elapsedHours = (sorted[sorted.length - 1].completedAt - sorted[0].completedAt) / (1000 * 60 * 60);
-    const velocity = elapsedHours > 0 ? (sorted.length - 1) / elapsedHours : 0;
-
-    if (velocity > 0 && pending.length > 0) {
-      const queueEtaHours = pending.length / velocity;
-      const queueEtaTime = new Date(now.getTime() + queueEtaHours * 60 * 60 * 1000);
-
-      const etaStr = queueEtaHours < 1
-        ? Math.round(queueEtaHours * 60) + ' minutes'
-        : queueEtaHours < 24
-          ? Math.round(queueEtaHours * 10) / 10 + ' hours'
-          : Math.round(queueEtaHours / 24 * 10) / 10 + ' days';
-
-      console.log('  Queue ETA:     ~' + etaStr + ' at current velocity (' + velocity.toFixed(1) + ' SDs/hr)');
+  // Estimate full queue ETA reusing velocity from above
+  if (orchCompleted.length >= 2 && pending.length > 0) {
+    const s2 = orchCompleted.map(c => ({ ...c, completedAt: new Date(c.completion_date) })).sort((a, b) => a.completedAt - b.completedAt);
+    const vel = ((s2[s2.length - 1].completedAt - s2[0].completedAt) / 3600000);
+    const v = vel > 0 ? (s2.length - 1) / vel : 0;
+    if (v > 0) {
+      const h = pending.length / v;
+      const etaStr = h < 1 ? Math.round(h * 60) + ' minutes' : h < 24 ? Math.round(h * 10) / 10 + ' hours' : Math.round(h / 24 * 10) / 10 + ' days';
+      console.log('  Queue ETA:     ~' + etaStr + ' at current velocity (' + v.toFixed(1) + ' SDs/hr)');
     }
   }
-
-  // Personalized summary
   console.log('');
   console.log('  ' + '─'.repeat(66));
 
   if (orchRemaining.length === 0 && pending.length === 0) {
     console.log('  Queue is clear. All SDs complete. Nice work.');
-  } else if (orchRemaining.length === 0 && pending.length > 0) {
+  } else if (orchRemaining.length === 0) {
     console.log('  Orchestrator is done! ' + pending.length + ' standalone SDs remain in the queue.');
-    if (activeWorkers > 0) {
-      console.log('  ' + activeWorkers + ' worker(s) can roll into the next priority items.');
-    } else {
-      console.log('  Spin up workers to start burning through the backlog.');
-    }
+    console.log('  ' + (activeWorkers > 0 ? activeWorkers + ' worker(s) can roll into the next priority items.' : 'Spin up workers to start burning through the backlog.'));
   } else if (orchRemaining.length <= 2) {
-    console.log('  Orchestrator almost done — ' + orchRemaining.length + ' child(ren) left.');
-    console.log('  Then ' + pending.length + ' more SDs in the queue after that.');
+    console.log('  Orchestrator almost done — ' + orchRemaining.length + ' child(ren) left. Then ' + pending.length + ' more.');
   } else {
-    console.log('  ' + activeWorkers + ' workers active across ' + pending.length + ' pending SDs.');
-    if (highPrio.length > 0) {
-      console.log('  ' + highPrio.length + ' high-priority items need attention.');
-    }
+    console.log('  ' + activeWorkers + ' workers active across ' + pending.length + ' pending SDs.' + (highPrio.length > 0 ? ' ' + highPrio.length + ' high-priority.' : ''));
   }
 
   console.log('');
