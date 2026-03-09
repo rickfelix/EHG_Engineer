@@ -1,0 +1,173 @@
+/**
+ * EVA Recommendation Feedback Processor — Phase 2 Feedback Loop
+ * SD: SD-LEO-INFRA-CONSULTANT-AGENT-PHASE-003
+ *
+ * Processes chairman accept/defer/reject decisions on recommendations.
+ * Updates recommendation status and feeds back into trend confidence
+ * scoring for future runs.
+ *
+ * Usage:
+ *   node scripts/eva/recommendation-feedback.mjs list          # Show pending recommendations
+ *   node scripts/eva/recommendation-feedback.mjs accept <id>   # Accept a recommendation
+ *   node scripts/eva/recommendation-feedback.mjs defer <id>    # Defer a recommendation
+ *   node scripts/eva/recommendation-feedback.mjs reject <id>   # Reject a recommendation
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+const CONFIDENCE_BOOST = 0.05; // Per accepted recommendation
+const CONFIDENCE_CAP = 1.5; // Max feedback_weight
+
+// ─── List Pending ──────────────────────────────────────────
+
+async function listPending() {
+  const { data, error } = await supabase
+    .from('eva_consultant_recommendations')
+    .select('id, recommendation_date, recommendation_type, title, description, priority_score, action_type, application_domain, status')
+    .eq('status', 'pending')
+    .order('priority_score', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching recommendations:', error.message);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    console.log('No pending recommendations. Run recommendation-engine.mjs to generate new ones.');
+    return;
+  }
+
+  console.log(`\n📋 Pending Recommendations (${data.length}):\n`);
+  for (const rec of data) {
+    const prio = (rec.priority_score * 100).toFixed(0);
+    console.log(`  ID: ${rec.id}`);
+    console.log(`  [${prio}%] ${rec.recommendation_type}: ${rec.title}`);
+    console.log(`  Action: ${rec.action_type} | Domain: ${rec.application_domain}`);
+    console.log(`  ${rec.description}`);
+    console.log();
+  }
+
+  console.log('Commands:');
+  console.log('  node scripts/eva/recommendation-feedback.mjs accept <id>');
+  console.log('  node scripts/eva/recommendation-feedback.mjs defer <id>');
+  console.log('  node scripts/eva/recommendation-feedback.mjs reject <id>');
+}
+
+// ─── Process Feedback ──────────────────────────────────────
+
+async function processFeedback(action, recId, notes) {
+  // Validate action
+  if (!['accepted', 'deferred', 'rejected'].includes(action)) {
+    console.error(`Invalid action: ${action}. Use accept, defer, or reject.`);
+    return;
+  }
+
+  // Fetch recommendation
+  const { data: rec, error: fetchErr } = await supabase
+    .from('eva_consultant_recommendations')
+    .select('id, title, trend_id, application_domain, status')
+    .eq('id', recId)
+    .single();
+
+  if (fetchErr || !rec) {
+    console.error(`Recommendation not found: ${recId}`);
+    return;
+  }
+
+  if (rec.status !== 'pending') {
+    console.log(`Recommendation already ${rec.status}. Skipping.`);
+    return;
+  }
+
+  // Update recommendation
+  const { error: updateErr } = await supabase
+    .from('eva_consultant_recommendations')
+    .update({
+      status: action,
+      chairman_feedback: notes || null,
+      feedback_at: new Date().toISOString()
+    })
+    .eq('id', recId);
+
+  if (updateErr) {
+    console.error(`Error updating recommendation: ${updateErr.message}`);
+    return;
+  }
+
+  console.log(`✅ Recommendation "${rec.title}" marked as ${action}`);
+
+  // Feedback loop: adjust trend confidence for accepted recommendations
+  if (action === 'accepted' && rec.trend_id) {
+    await boostTrendConfidence(rec.trend_id);
+  }
+}
+
+async function boostTrendConfidence(trendId) {
+  const { data: trend, error: fetchErr } = await supabase
+    .from('eva_consultant_trends')
+    .select('id, title, feedback_weight')
+    .eq('id', trendId)
+    .single();
+
+  if (fetchErr || !trend) {
+    console.log('   Could not find linked trend for feedback loop');
+    return;
+  }
+
+  const currentWeight = trend.feedback_weight || 1.0;
+  const newWeight = Math.min(CONFIDENCE_CAP, currentWeight + CONFIDENCE_BOOST);
+
+  const { error: updateErr } = await supabase
+    .from('eva_consultant_trends')
+    .update({ feedback_weight: newWeight })
+    .eq('id', trendId);
+
+  if (updateErr) {
+    console.error(`   Error updating trend weight: ${updateErr.message}`);
+  } else {
+    console.log(`   📈 Trend "${trend.title}" feedback_weight: ${currentWeight} → ${newWeight}`);
+  }
+}
+
+// ─── Main ──────────────────────────────────────────────────
+
+async function main() {
+  const args = process.argv.slice(2);
+  const command = args[0];
+
+  if (!command || command === 'list') {
+    await listPending();
+    return;
+  }
+
+  const actionMap = { accept: 'accepted', defer: 'deferred', reject: 'rejected' };
+  const action = actionMap[command];
+
+  if (!action) {
+    console.error(`Unknown command: ${command}`);
+    console.log('Usage: list | accept <id> | defer <id> | reject <id>');
+    return;
+  }
+
+  const recId = args[1];
+  if (!recId) {
+    console.error(`Missing recommendation ID. Usage: ${command} <id>`);
+    return;
+  }
+
+  const notes = args.slice(2).join(' ') || null;
+  await processFeedback(action, recId, notes);
+}
+
+main().catch(err => {
+  console.error('Fatal error:', err);
+  process.exit(1);
+});
