@@ -54,11 +54,12 @@ async function extendHeartbeat(sessionId) {
       process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
+    // Include 'released' so sessions that were swept while between SDs can recover
     const { error } = await supabase
       .from('claude_sessions')
-      .update({ heartbeat_at: new Date().toISOString() })
+      .update({ heartbeat_at: new Date().toISOString(), status: 'active' })
       .eq('session_id', sessionId)
-      .in('status', ['active', 'idle']);
+      .in('status', ['active', 'idle', 'released']);
     if (error) {
       console.log(`[PRECOMPACT] Heartbeat extension failed: ${error.message}`);
     } else {
