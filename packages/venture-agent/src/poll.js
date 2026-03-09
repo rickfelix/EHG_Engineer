@@ -19,7 +19,7 @@ export async function pollTasks(supabase, options = {}) {
 
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  const apiKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const apiKey = process.env.VENTURE_AGENT_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   const response = await fetch(fullUrl, {
     method: 'GET',
