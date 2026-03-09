@@ -287,6 +287,79 @@ async function main() {
     }
   }
 
+  // 3f. QA — Claim Integrity: detect idle sessions with no SD claim and nudge them
+  const { data: idleSessions } = await supabase
+    .from('v_active_sessions')
+    .select('session_id, sd_id, heartbeat_age_seconds, heartbeat_age_human, computed_status, tty')
+    .is('sd_id', null)
+    .order('heartbeat_age_seconds', { ascending: true });
+
+  const aliveIdle = (idleSessions || []).filter(s => s.heartbeat_age_seconds < STALE_THRESHOLD_SECONDS);
+  const claimIntegrityIssues = [];
+
+  for (const s of aliveIdle) {
+    // Only nudge if idle for >60s (give time for normal claim flow after session start)
+    if (s.heartbeat_age_seconds < 60) continue;
+
+    // Check if we already sent a CLAIM_REMINDER recently (avoid spam)
+    const { data: existingReminder } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', s.session_id)
+      .eq('message_type', 'CLAIM_REMINDER')
+      .is('acknowledged_at', null)
+      .limit(1);
+
+    if (existingReminder && existingReminder.length > 0) continue;
+
+    // Send CLAIM_REMINDER
+    const topSD = available.length > 0 ? available[0] : null;
+    const suggestion = topSD ? 'Suggested: ' + topSD + ' (highest priority unclaimed)' : 'Run /leo next for the SD queue.';
+    await supabase.from('session_coordination').insert({
+      target_session: s.session_id,
+      message_type: 'CLAIM_REMINDER',
+      subject: 'No SD claimed — ' + available.length + ' SDs available for work',
+      body: 'You have been idle for ' + s.heartbeat_age_human + ' with no SD claim. ' + suggestion + '\n\nRun: /claim or /leo next',
+      payload: { available_sds: available, idle_seconds: s.heartbeat_age_seconds },
+      sender_type: 'sweep'
+    }).then(() => {}).catch(() => {});
+
+    claimIntegrityIssues.push(s.session_id.substring(0, 20) + ' (' + s.tty + ')');
+  }
+
+  // Also check: sessions with sd_id but SD's claiming_session_id doesn't match (broken claim)
+  for (const s of classified.filter(c => c.status === 'ACTIVE' && c.sd_id)) {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_key, claiming_session_id, is_working_on')
+      .eq('sd_key', s.sd_id)
+      .single();
+
+    if (!sd) continue;
+
+    // Fix broken claim: session thinks it owns SD but SD doesn't know
+    if (sd.claiming_session_id !== s.session_id) {
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ claiming_session_id: s.session_id, is_working_on: true })
+        .eq('sd_key', s.sd_id)
+        .select();
+      actions.push('CLAIM_FIX: set claiming_session_id on ' + s.sd_id + ' → ' + s.session_id.substring(0, 20));
+    } else if (!sd.is_working_on) {
+      // Fix incomplete claim: claiming_session_id matches but is_working_on is false
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ is_working_on: true })
+        .eq('sd_key', s.sd_id)
+        .select();
+      actions.push('CLAIM_FIX: set is_working_on=true on ' + s.sd_id);
+    }
+  }
+
+  if (claimIntegrityIssues.length > 0) {
+    actions.push('CLAIM_REMINDER: nudged ' + claimIntegrityIssues.length + ' idle session(s) — ' + claimIntegrityIssues.join(', '));
+  }
+
   // 4. Auto-release dead sessions
   const dead = classified.filter(s => s.status === 'DEAD');
   for (const s of dead) {
@@ -555,6 +628,7 @@ async function main() {
     if (stuckCompleted.length > 0) console.log('  Completed ' + stuckCompleted.length + ' SD(s) stuck at 100%/pending_approval');
     if (stuckReset.length > 0) console.log('  Reset ' + stuckReset.length + ' SD(s) from pending_approval → draft (no session working on them)');
     if ((completedWithClaims || []).length > 0) console.log('  Cleared ' + (completedWithClaims || []).length + ' stale claiming_session_id on completed SDs');
+    if (claimIntegrityIssues.length > 0) console.log('  Nudged ' + claimIntegrityIssues.length + ' idle session(s) with CLAIM_REMINDER');
     console.log('');
   }
 
