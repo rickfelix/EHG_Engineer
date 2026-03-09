@@ -81,7 +81,34 @@ export function createPhaseCoverageGate(supabase) {
           });
         }
 
-        const report = validatePhaseCoverage(phases, sds || []);
+        // Also fetch children of any orchestrator SDs linked to this plan
+        let allSds = sds || [];
+        const orchestratorIds = allSds
+          .map(sd => sd.sd_key)
+          .filter(Boolean);
+
+        if (orchestratorIds.length > 0) {
+          // Get UUIDs for orchestrators to query children by parent_sd_id
+          const { data: orchUuids } = await supabase
+            .from('strategic_directives_v2')
+            .select('id, sd_key')
+            .in('sd_key', orchestratorIds);
+
+          if (orchUuids && orchUuids.length > 0) {
+            const uuids = orchUuids.map(o => o.id);
+            const { data: children } = await supabase
+              .from('strategic_directives_v2')
+              .select('sd_key, title, status, parent_sd_id')
+              .in('parent_sd_id', uuids);
+
+            if (children && children.length > 0) {
+              console.log(`   📋 Found ${children.length} child SD(s) of orchestrator(s)`);
+              allSds = [...allSds, ...children];
+            }
+          }
+        }
+
+        const report = validatePhaseCoverage(phases, allSds);
         console.log(formatCoverageReport(report));
 
         if (!report.passed) {
