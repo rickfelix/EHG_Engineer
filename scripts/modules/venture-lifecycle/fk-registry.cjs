@@ -106,6 +106,13 @@ const VENTURE_FK_REGISTRY = [
   { table: 'public_portfolio', column: 'venture_id', policy: 'CASCADE', category: 'other' },
   // stage_of_death_predictions — not in live DB (phantom migration artifact)
   { table: 'tool_usage_ledger', column: 'venture_id', policy: 'CASCADE', category: 'other' },
+
+  // ─── Venture Factory tables — CASCADE (SD-001-A + SD-001-G) ───
+  { table: 'service_tasks', column: 'venture_id', policy: 'CASCADE', category: 'venture_factory' },
+  { table: 'venture_service_bindings', column: 'venture_id', policy: 'CASCADE', category: 'venture_factory' },
+  { table: 'service_telemetry', column: 'venture_id', policy: 'CASCADE', category: 'venture_factory' },
+  { table: 'venture_exit_readiness', column: 'venture_id', policy: 'CASCADE', category: 'venture_factory' },
+  { table: 'venture_tiers', column: 'venture_id', policy: 'CASCADE', category: 'venture_factory' },
 ];
 
 // Self-referencing FK columns on ventures table that must be nulled before delete
