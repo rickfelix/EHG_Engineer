@@ -147,6 +147,35 @@ async function main() {
     }
   }
 
+  // 3d. QA — detect SDs stuck in pending_approval with no claiming session
+  const pendingApproval = (claimedSdStatus || []).filter(sd => sd.status === 'pending_approval');
+  // Also check standalone SDs not already in claimedSdStatus
+  const claimedKeys = new Set((claimedSdStatus || []).map(sd => sd.sd_key));
+  const { data: allPendingApproval } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, status, current_phase, progress_percentage')
+    .eq('status', 'pending_approval');
+
+  const activeClaimSdIds = new Set(classified.filter(s => s.status === 'ACTIVE').map(s => s.sd_id));
+  const stuckApproval = (allPendingApproval || []).filter(sd => !activeClaimSdIds.has(sd.sd_key));
+
+  for (const sd of stuckApproval) {
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      .update({
+        status: 'draft',
+        current_phase: 'LEAD',
+        progress_percentage: 0,
+        claiming_session_id: null,
+        is_working_on: false
+      })
+      .eq('sd_key', sd.sd_key);
+
+    if (!error) {
+      actions.push('QA: reset ' + sd.sd_key + ' from pending_approval → draft/LEAD/0% (no session working on it)');
+    }
+  }
+
   // 4. Auto-release dead sessions
   const dead = classified.filter(s => s.status === 'DEAD');
   for (const s of dead) {
@@ -375,11 +404,12 @@ async function main() {
   }
 
   // QA summary
-  const qaIssues = workingOnCompleted.length + orphanedClaims.length;
+  const qaIssues = workingOnCompleted.length + orphanedClaims.length + stuckApproval.length;
   if (qaIssues > 0) {
     console.log('QA FIXES (' + qaIssues + '):');
     if (workingOnCompleted.length > 0) console.log('  Released ' + workingOnCompleted.length + ' session(s) working on completed SDs');
     if (orphanedClaims.length > 0) console.log('  Released ' + orphanedClaims.length + ' session(s) with orphaned claims');
+    if (stuckApproval.length > 0) console.log('  Reset ' + stuckApproval.length + ' SD(s) from pending_approval → draft (no session working on them)');
     console.log('');
   }
 
