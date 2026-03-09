@@ -249,6 +249,32 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
 
   const version = existing ? existing.version + 1 : 1;
 
+  // Extract structured sections from content (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
+  let sections = null;
+  try {
+    const { parsePhases } = await import('../create-orchestrator-from-plan.js');
+    const phases = parsePhases(content);
+    if (phases.length > 0) {
+      sections = {
+        implementation_phases: phases.map(p => ({
+          number: p.number,
+          title: p.title,
+          description: p.description || '',
+          child_designation: 'child',
+          covered_by_sd_key: null,
+          deliverables: [],
+          estimate_loc: null
+        })),
+        extracted_at: new Date().toISOString(),
+        extraction_source: 'content_parse'
+      };
+      console.log(`\n   📋 Extracted ${phases.length} implementation phase(s) into sections`);
+    }
+  } catch (e) {
+    // Non-blocking: sections population is best-effort
+    console.warn(`   ⚠️  Could not extract sections: ${e.message}`);
+  }
+
   const record = {
     plan_key: planKey,
     vision_id: visionDoc.id,
@@ -260,6 +286,7 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
     created_by: 'eva-archplan-command',
     source_file_path: source,
     ...(brainstormId ? { source_brainstorm_id: brainstormId } : {}),
+    ...(sections ? { sections } : {}),
   };
 
   const { data, error } = await supabase

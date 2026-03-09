@@ -62,3 +62,6 @@ export {
 export { createScopeReductionVerificationGate } from './scope-reduction-verification.js';
 export { createSdTypeCompatibilityGate } from './sd-type-compatibility.js';
 export { createOverlappingScopeDetectionGate } from './overlapping-scope-detection.js';
+
+// Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
+export { createPhaseCoverageGate } from './phase-coverage.js';
