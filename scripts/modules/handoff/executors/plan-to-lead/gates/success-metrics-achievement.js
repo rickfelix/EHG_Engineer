@@ -9,6 +9,17 @@
  */
 
 /**
+ * Detect if a value is an explicit "not applicable" marker.
+ * Matches: "N/A", "n/a", "NA", "Not applicable", "not measured", "deferred"
+ */
+const NA_PATTERN = /^(n\/?a|not\s*applicable|not\s*measured|deferred|skipped)$/i;
+
+function isNotApplicable(value) {
+  if (value == null) return false;
+  return NA_PATTERN.test(String(value).trim());
+}
+
+/**
  * Parse a numeric value from a metric string.
  * Handles: "95%", ">=90%", "95", "3/5", "100ms"
  * Returns null if not parseable.
@@ -154,6 +165,14 @@ export function createSuccessMetricsAchievementGate(supabase) {
         if (!hasActual) {
           metricScores.push({ name, score: 0, reason: 'No actual value recorded', target, actual });
           console.log(`   ❌ ${name}: No actual value (target: ${target || 'N/A'})`);
+          continue;
+        }
+
+        // N/A detection — explicit "not applicable" markers get a passing score
+        // without triggering the hasEmptyActual block
+        if (isNotApplicable(actual)) {
+          metricScores.push({ name, score: 75, reason: 'Metric marked N/A', target, actual });
+          console.log(`   ℹ️  ${name}: marked "${actual}" (N/A — accepted)`);
           continue;
         }
 

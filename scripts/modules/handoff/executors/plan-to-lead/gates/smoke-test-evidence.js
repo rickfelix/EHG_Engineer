@@ -136,13 +136,24 @@ export function createSmokeTestEvidenceGate(supabase) {
         };
       }
 
-      // Check content for runtime observation evidence
-      const evidence = hasRuntimeEvidence(archPlan.content);
+      // Normalize content — JSONB objects stored as objects need stringification
+      let contentStr = archPlan.content;
+      if (contentStr && typeof contentStr === 'object') {
+        contentStr = JSON.stringify(contentStr);
+      }
 
-      // Also check sections if available
+      // Check content for runtime observation evidence
+      const evidence = hasRuntimeEvidence(contentStr);
+
+      // Also check sections if available (normalize non-array values)
       let sectionEvidence = false;
-      if (archPlan.sections && Array.isArray(archPlan.sections)) {
-        sectionEvidence = archPlan.sections.some(s =>
+      const sections = Array.isArray(archPlan.sections)
+        ? archPlan.sections
+        : (typeof archPlan.sections === 'object' && archPlan.sections !== null)
+          ? Object.values(archPlan.sections)
+          : [];
+      if (sections.length > 0) {
+        sectionEvidence = sections.some(s =>
           /smoke.?test|baseline.?observation|runtime|observed/i.test(s.title || s.heading || '')
         );
       }
