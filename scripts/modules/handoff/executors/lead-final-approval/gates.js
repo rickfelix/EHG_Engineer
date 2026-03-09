@@ -721,6 +721,138 @@ export function createFRDeliveryVerificationGate(supabase, prdRepo) {
 }
 
 /**
+ * Create Gate: Architecture Phase Coverage Exit Gate
+ * SD-LEO-ORCH-ARCHITECTURE-PHASE-COVERAGE-001-C
+ *
+ * Validates that all architecture phases have COMPLETED SDs before
+ * an orchestrator can finish. This is the exit counterpart to the
+ * ARCHITECTURE_PHASE_COVERAGE entry gate at LEAD-TO-PLAN.
+ *
+ * @param {Object} supabase - Supabase client
+ * @returns {Object} Gate definition
+ */
+export function createPhaseCoverageExitGate(supabase) {
+  return {
+    name: 'ARCHITECTURE_PHASE_COVERAGE_EXIT',
+    validator: async (ctx) => {
+      console.log('\n🏗️  GATE: Architecture Phase Coverage (Exit)');
+      console.log('-'.repeat(50));
+
+      const archKey = ctx.sd?.metadata?.arch_key || ctx.sd?.metadata?.architecture_plan_key;
+
+      if (!archKey) {
+        console.log('   ℹ️  No architecture plan linked — gate not applicable');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No arch_key — gate skipped'] };
+      }
+
+      try {
+        // Get architecture plan with structured phases
+        const { data: plan, error: planError } = await supabase
+          .from('eva_architecture_plans')
+          .select('sections')
+          .eq('plan_key', archKey)
+          .single();
+
+        if (planError || !plan) {
+          console.log(`   ⚠️  Architecture plan '${archKey}' not found`);
+          return { passed: true, score: 50, max_score: 100, issues: [], warnings: [`Architecture plan '${archKey}' not found`] };
+        }
+
+        const phases = plan.sections?.implementation_phases;
+        if (!phases || !Array.isArray(phases) || phases.length === 0) {
+          console.log('   ℹ️  No structured phases — gate not applicable');
+          return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No structured phases in architecture plan'] };
+        }
+
+        // Get all SDs linked to this architecture plan
+        const { data: sds, error: sdsError } = await supabase
+          .from('strategic_directives_v2')
+          .select('sd_key, title, status')
+          .or(`metadata->>arch_key.eq.${archKey},metadata->>architecture_plan_key.eq.${archKey}`);
+
+        if (sdsError) {
+          console.log(`   ⚠️  Error querying SDs: ${sdsError.message}`);
+          return { passed: true, score: 50, max_score: 100, issues: [], warnings: [`SD query error: ${sdsError.message}`] };
+        }
+
+        const sdMap = new Map((sds || []).map(sd => [sd.sd_key, sd]));
+        const covered = [];
+        const uncovered = [];
+        const incomplete = [];
+
+        for (const phase of phases) {
+          const assignedKey = phase.covered_by_sd_key;
+          if (!assignedKey) {
+            uncovered.push(phase);
+            continue;
+          }
+
+          const sd = sdMap.get(assignedKey);
+          if (!sd) {
+            // SD key referenced but not found in linked SDs — check if it exists at all
+            const { data: anySD } = await supabase
+              .from('strategic_directives_v2')
+              .select('sd_key, status')
+              .eq('sd_key', assignedKey)
+              .single();
+
+            if (anySD && ['completed', 'released'].includes(anySD.status)) {
+              covered.push({ phase, sd_key: assignedKey, status: anySD.status });
+            } else if (anySD) {
+              incomplete.push({ phase, sd_key: assignedKey, status: anySD.status });
+            } else {
+              uncovered.push(phase);
+            }
+            continue;
+          }
+
+          if (['completed', 'released'].includes(sd.status)) {
+            covered.push({ phase, sd_key: assignedKey, status: sd.status });
+          } else {
+            incomplete.push({ phase, sd_key: assignedKey, status: sd.status });
+          }
+        }
+
+        // Display coverage report
+        console.log('   📋 Architecture Phase Coverage (Exit):');
+        for (const { phase, sd_key, status } of covered) {
+          console.log(`   ✅ Phase ${phase.number}: ${phase.title} → ${sd_key} (${status})`);
+        }
+        for (const { phase, sd_key, status } of incomplete) {
+          console.log(`   ⏳ Phase ${phase.number}: ${phase.title} → ${sd_key} (${status}) — NOT COMPLETE`);
+        }
+        for (const phase of uncovered) {
+          console.log(`   ❌ Phase ${phase.number}: ${phase.title} → NO SD ASSIGNED`);
+        }
+
+        const totalPhases = phases.length;
+        const coveredCount = covered.length;
+        const coveragePct = totalPhases > 0 ? Math.round((coveredCount / totalPhases) * 100) : 100;
+        console.log(`\n   Coverage: ${coveredCount}/${totalPhases} completed (${coveragePct}%)`);
+
+        if (incomplete.length > 0 || uncovered.length > 0) {
+          const issues = [];
+          if (incomplete.length > 0) {
+            issues.push(`${incomplete.length} phase(s) have SDs that are not completed: ${incomplete.map(i => `${i.sd_key} (${i.status})`).join(', ')}`);
+          }
+          if (uncovered.length > 0) {
+            issues.push(`${uncovered.length} phase(s) have no SD assigned: ${uncovered.map(u => u.title).join(', ')}`);
+          }
+          return { passed: false, score: coveragePct, max_score: 100, issues, warnings: [] };
+        }
+
+        console.log('   ✅ All architecture phases have completed SDs');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [] };
+      } catch (err) {
+        console.log(`   ⚠️  Error: ${err.message}`);
+        return { passed: true, score: 50, max_score: 100, issues: [], warnings: [`Phase coverage exit error: ${err.message}`] };
+      }
+    },
+    required: true
+  };
+}
+
+/**
  * Get all required gates for LEAD-FINAL-APPROVAL
  * @param {Object} supabase - Supabase client
  * @param {Object} prdRepo - PRD repository
@@ -744,6 +876,9 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // FR Delivery Verification (CONST-012 — SD-MAN-ORCH-SCOPE-INTEGRITY-CONSTITUTIONAL-001-C)
   gates.push(createFRDeliveryVerificationGate(supabase, prdRepo));
 
+  // Architecture Phase Coverage Exit Gate (SD-LEO-ORCH-ARCHITECTURE-PHASE-COVERAGE-001-C)
+  gates.push(createPhaseCoverageExitGate(supabase));
+
   return gates;
 }
 
@@ -755,5 +890,6 @@ export default {
   createPRMergeVerificationGate,
   createPipelineFlowGate,
   createFRDeliveryVerificationGate,
+  createPhaseCoverageExitGate,
   getRequiredGates
 };
