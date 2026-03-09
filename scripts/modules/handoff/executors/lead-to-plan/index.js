@@ -22,7 +22,9 @@ import {
   // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
   createScopeReductionVerificationGate,
   createSdTypeCompatibilityGate,
-  createOverlappingScopeDetectionGate
+  createOverlappingScopeDetectionGate,
+  // Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
+  createPhaseCoverageGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -120,6 +122,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     gates.push(createScopeReductionVerificationGate(this.supabase));
     gates.push(createSdTypeCompatibilityGate(this.supabase));
     gates.push(createOverlappingScopeDetectionGate(this.supabase));
+
+    // Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
+    // Blocks when an architecture plan has uncovered phases
+    gates.push(createPhaseCoverageGate(this.supabase));
 
     return gates;
   }

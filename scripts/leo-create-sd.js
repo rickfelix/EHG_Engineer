@@ -1705,6 +1705,28 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
             console.log(`   node scripts/create-orchestrator-from-plan.js --vision-key ${visionKey} --arch-key ${archKey} --title "${title}" --auto-children\n`);
           }
         } catch { /* Advisory only — continue regardless */ }
+
+        // Advisory: warn about uncovered architecture phases (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
+        try {
+          const sb2 = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const { data: archPlanSections } = await sb2
+            .from('eva_architecture_plans')
+            .select('sections')
+            .eq('plan_key', archKey)
+            .single();
+          const phases = archPlanSections?.sections?.implementation_phases;
+          if (phases && Array.isArray(phases)) {
+            const uncovered = phases.filter(p => !p.covered_by_sd_key);
+            if (uncovered.length > 0) {
+              console.log(`\n⚠️  Architecture Phase Coverage Warning:`);
+              console.log(`   ${uncovered.length}/${phases.length} phase(s) have no assigned SD:`);
+              for (const p of uncovered) {
+                console.log(`   ❌ Phase ${p.number}: ${p.title}`);
+              }
+              console.log(`   Assign SDs before LEAD-TO-PLAN to pass the phase coverage gate.\n`);
+            }
+          }
+        } catch { /* Advisory only — continue regardless */ }
       }
 
       const sdKey = await generateSDKey({ source, type, title, venturePrefix });
