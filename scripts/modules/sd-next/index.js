@@ -38,7 +38,8 @@ export {
   loadSDHierarchy,
   loadOKRScorecard,
   loadVisionScores,
-  countActionableBaselineItems
+  countActionableBaselineItems,
+  loadUnscheduledRoadmapItems
 } from './data-loaders.js';
 
 // Display modules
@@ -58,7 +59,8 @@ export {
   displayBlockedStateBanner,
   getBlockedStateIndicator,
   isOrchestratorBlocked,
-  displayTelemetryFindings
+  displayTelemetryFindings,
+  displayRoadmapAwareness
 } from './display/index.js';
 
 // Blocked state detection (SD-LEO-ENH-AUTO-PROCEED-001-12)

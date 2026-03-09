@@ -380,6 +380,36 @@ export async function triageQuickFixes(quickFixes, supabase) {
 }
 
 /**
+ * Load unscheduled roadmap items (architecture phases without a scheduled SD).
+ * Queries roadmap_wave_items where source_type='architecture_phase' and
+ * promoted_to_sd_key IS NULL.
+ *
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Array>} Array of unscheduled roadmap item objects
+ */
+export async function loadUnscheduledRoadmapItems(supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('roadmap_wave_items')
+      .select('id, title, source_type, source_id, promoted_to_sd_key, metadata, created_at')
+      .eq('source_type', 'architecture_phase')
+      .is('promoted_to_sd_key', null)
+      .order('created_at', { ascending: true })
+      .limit(20);
+
+    if (error) {
+      logQueryFailure('loadUnscheduledRoadmapItems', error, { table: 'roadmap_wave_items' });
+      return [];
+    }
+
+    return data || [];
+  } catch {
+    // Non-fatal — roadmap awareness is optional
+    return [];
+  }
+}
+
+/**
  * Count how many baseline items have non-completed SDs
  *
  * @param {Object} supabase - Supabase client
