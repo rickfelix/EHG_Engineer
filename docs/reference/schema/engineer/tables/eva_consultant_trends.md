@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T11:25:47.658Z
+**Generated**: 2026-03-09T11:42:49.980Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (11 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -29,6 +29,7 @@
 | application_domain | `text` | YES | - | Target application domain (application_domain value) |
 | detected_by | `text` | YES | `'trend-detector.mjs'::text` | Script or agent that detected this trend |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| feedback_weight | `numeric(3,2)` | YES | `1.0` | Weight multiplier for trend confidence based on chairman feedback history (0.00-9.99) |
 
 ## Constraints
 
