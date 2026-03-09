@@ -114,17 +114,26 @@ async function main() {
   });
 
   for (const s of workingOnCompleted) {
+    // Use 'released' not 'idle' — stale sessions can't become 'idle' due to
+    // idx_claude_sessions_unique_terminal_active (one active/idle per terminal).
+    // Using 'idle' silently fails when another session on the same terminal exists.
+    const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     const { error } = await supabase
       .from('claude_sessions')
       .update({
         sd_id: null,
-        status: 'idle',
+        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_SD_ALREADY_COMPLETED'
       })
       .eq('session_id', s.session_id);
 
     if (!error) {
+      // Also clear claiming_session_id on the SD to break the churn loop
+      await supabase
+        .from('strategic_directives_v2')
+        .update({ claiming_session_id: null, is_working_on: false })
+        .eq('sd_key', s.sd_id);
       actions.push('QA: released ' + s.session_id + ' (' + s.tty + ') — ' + s.sd_id + ' already completed');
     }
   }
@@ -132,11 +141,12 @@ async function main() {
   // 3c. QA — detect sessions claiming SDs that don't exist
   const orphanedClaims = classified.filter(s => !sdStatusMap[s.sd_id]);
   for (const s of orphanedClaims) {
+    const targetStatus = s.status === 'ACTIVE' ? 'idle' : 'released';
     const { error } = await supabase
       .from('claude_sessions')
       .update({
         sd_id: null,
-        status: 'idle',
+        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_ORPHANED_CLAIM'
       })
@@ -199,7 +209,7 @@ async function main() {
       .from('claude_sessions')
       .update({
         sd_id: null,
-        status: 'idle',
+        status: 'released',
         released_at: now.toISOString(),
         released_reason: 'SWEEP_PID_DEAD'
       })
@@ -222,11 +232,12 @@ async function main() {
       // Skip if already released in step 4
       if (dead.find(d => d.session_id === evict.session_id)) continue;
 
+      const targetStatus = evict.status === 'ACTIVE' ? 'idle' : 'released';
       const { error } = await supabase
         .from('claude_sessions')
         .update({
           sd_id: null,
-          status: 'idle',
+          status: targetStatus,
           released_at: now.toISOString(),
           released_reason: 'SWEEP_CONFLICT_RESOLUTION'
         })
