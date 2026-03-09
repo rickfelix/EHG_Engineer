@@ -40,12 +40,102 @@ function isTypeLocked(sd) {
 }
 
 /**
+ * Analyze PRD structural signals to cross-check SD type classification.
+ * Advisory only — emits warnings but never blocks.
+ *
+ * SD-MAN-FIX-STAGE-KILL-GATE-001: Preventative measure for type misclassification
+ *
+ * @param {Object} sd - Strategic Directive
+ * @param {Object} supabase - Supabase client
+ * @returns {Object|null} { suggestedType, confidence, signals } or null
+ */
+async function analyzePrdSignals(sd, supabase) {
+  try {
+    const { data: prd } = await supabase
+      .from('product_requirements_v2')
+      .select('functional_requirements, executive_summary, category, implementation_approach, system_architecture')
+      .eq('sd_id', sd.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!prd) return null;
+
+    const signals = [];
+    let enhancementScore = 0;
+    let bugfixScore = 0;
+
+    // Signal 1: Functional requirements count (>5 FRs suggest enhancement/feature, not bugfix)
+    const frCount = Array.isArray(prd.functional_requirements) ? prd.functional_requirements.length : 0;
+    if (frCount >= 5) {
+      enhancementScore += 2;
+      signals.push(`${frCount} functional requirements (enhancement signal)`);
+    } else if (frCount <= 2) {
+      bugfixScore += 1;
+      signals.push(`${frCount} functional requirements (bugfix signal)`);
+    }
+
+    // Signal 2: Estimated LOC (>100 LOC suggests enhancement, not bugfix)
+    const estimatedLoc = prd.implementation_approach?.estimated_loc;
+    if (estimatedLoc > 100) {
+      enhancementScore += 2;
+      signals.push(`${estimatedLoc} estimated LOC (enhancement signal)`);
+    } else if (estimatedLoc && estimatedLoc <= 30) {
+      bugfixScore += 1;
+      signals.push(`${estimatedLoc} estimated LOC (bugfix signal)`);
+    }
+
+    // Signal 3: Action verbs in executive summary
+    const summary = (prd.executive_summary || '').toLowerCase();
+    const enhancementVerbs = ['enrich', 'implement', 'add', 'surface', 'render', 'display', 'create'];
+    const bugfixVerbs = ['fix', 'resolve', 'repair', 'correct', 'patch'];
+    const matchedEnhancement = enhancementVerbs.filter(v => summary.includes(v));
+    const matchedBugfix = bugfixVerbs.filter(v => summary.includes(v));
+    if (matchedEnhancement.length > matchedBugfix.length) {
+      enhancementScore += matchedEnhancement.length;
+      signals.push(`Enhancement verbs in summary: ${matchedEnhancement.join(', ')}`);
+    } else if (matchedBugfix.length > matchedEnhancement.length) {
+      bugfixScore += matchedBugfix.length;
+      signals.push(`Bugfix verbs in summary: ${matchedBugfix.join(', ')}`);
+    }
+
+    // Signal 4: PRD category cross-check
+    const category = (prd.category || '').toLowerCase();
+    if (category === 'enhancement' || category === 'feature') {
+      enhancementScore += 2;
+      signals.push(`PRD category: ${prd.category}`);
+    } else if (category === 'bugfix' || category === 'bug fix') {
+      bugfixScore += 2;
+      signals.push(`PRD category: ${prd.category}`);
+    }
+
+    // Signal 5: Architecture/wireframe references
+    const arch = prd.system_architecture;
+    if (arch?.overview && (arch.overview.toLowerCase().includes('wireframe') || arch.overview.toLowerCase().includes('enrichment'))) {
+      enhancementScore += 1;
+      signals.push('Architecture references wireframe/enrichment');
+    }
+
+    if (signals.length === 0) return null;
+
+    const suggestedType = enhancementScore > bugfixScore ? 'enhancement' : 'bugfix';
+    const totalScore = Math.max(enhancementScore, bugfixScore);
+    const confidence = Math.min(totalScore / 6, 1);
+
+    return { suggestedType, confidence, signals };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validate SD type - ensures sd_type is explicitly set and matches scope
  *
  * IMPROVEMENTS (SD-LEO-INFRA-RENAME-COLUMNS-SELF-001):
  * 1. Uses GPT 5.2 classifier (sdTypeClassifier) instead of primitive keywords
  * 2. Respects type_locked flag - never auto-corrects locked types
  * 3. Falls back to keyword matching only when GPT fails
+ * 4. PRD structural signal cross-check (SD-MAN-FIX-STAGE-KILL-GATE-001)
  *
  * @param {Object} sd - Strategic Directive
  * @param {Object} supabase - Supabase client
@@ -210,6 +300,17 @@ export async function validateSdType(sd, supabase) {
       warnings.push(`Potential type mismatch: current '${currentType}', detected '${classification.recommendedType}' (${Math.round(classification.confidence * 100)}% via ${classification.source}). Review and correct if needed.`);
       console.log(`   ℹ️  Mismatch detected but not auto-correcting (confidence ${Math.round(classification.confidence * 100)}% < ${AUTO_CORRECT_THRESHOLD * 100}% threshold)`);
     }
+  }
+
+  // PRD structural signal cross-check (advisory only, never blocks)
+  const prdSignals = await analyzePrdSignals(sd, supabase);
+  if (prdSignals && prdSignals.suggestedType !== currentType.toLowerCase() && prdSignals.confidence >= 0.5) {
+    const pctConf = Math.round(prdSignals.confidence * 100);
+    console.log('\n   📊 PRD STRUCTURAL SIGNAL CROSS-CHECK');
+    console.log(`   Current type: ${currentType}`);
+    console.log(`   PRD signals suggest: ${prdSignals.suggestedType} (${pctConf}% confidence)`);
+    prdSignals.signals.forEach(s => console.log(`      • ${s}`));
+    warnings.push(`PRD structural signals suggest '${prdSignals.suggestedType}' (${pctConf}%), current type is '${currentType}'. Signals: ${prdSignals.signals.join('; ')}`);
   }
 
   console.log(`   ✅ sd_type validated: ${currentType}`);

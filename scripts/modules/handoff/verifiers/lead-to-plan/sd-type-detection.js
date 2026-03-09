@@ -42,8 +42,15 @@ export const TYPE_PATTERNS = {
                'manual test', 'test execution', 'test scenarios', 'test plan'],
     weight: 1.1  // Renamed from qa: UAT-specific keywords
   },
+  enhancement: {
+    keywords: ['enrich', 'implement wireframe', 'implement spec', 'add section',
+               'add rendering', 'surface data', 'expose data', 'enhance component',
+               'wireframe spec', 'full spec', 'enrichment', 'advisory data'],
+    weight: 1.1 // Higher weight - specific enhancement signals
+  },
   bugfix: {
-    keywords: ['bug', 'fix', 'error', 'issue', 'broken', 'crash', 'regression',
+    keywords: ['bug', 'bugfix', 'fix bug', 'fix error', 'fix crash', 'fix regression',
+               'error', 'issue', 'broken', 'crash', 'regression',
                'hotfix', 'patch', 'resolve', 'repair'],
     weight: 1.0
   },
