@@ -214,7 +214,7 @@ async function main() {
   const successCount = sources.filter(s => pollerResults[s].success).length;
   const totalRecords = sources.reduce((sum, s) => sum + (pollerResults[s].count || 0), 0);
 
-  const overallPass = allNormalizersValid && successCount >= 1; // At least 1 of 3 pollers must succeed (others may need config)
+  const overallPass = allNormalizersValid && successCount >= 2; // At least 2 of 3 pollers must succeed
 
   log('========================================');
   log('  SUMMARY');
