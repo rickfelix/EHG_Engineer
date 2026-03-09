@@ -36,6 +36,9 @@ function validateAgainstSchema(
     const propSchema = properties[key];
     if (!propSchema) continue; // Extra fields are allowed
 
+    // M-2 fix: Skip null values for optional fields (null is valid for non-required fields)
+    if (value === null && !required.includes(key)) continue;
+
     // Type checking
     if (propSchema.type === 'string' && typeof value !== 'string') {
       errors.push(`Field '${key}' must be a string, got ${typeof value}`);
@@ -71,10 +74,23 @@ function validateAgainstSchema(
       }
     }
 
-    // Array min items validation
-    if (Array.isArray(value) && propSchema.minItems !== undefined) {
-      if (value.length < (propSchema.minItems as number)) {
+    // Array validation: min items + M-1 fix: recurse into array item schemas
+    if (Array.isArray(value)) {
+      if (propSchema.minItems !== undefined && value.length < (propSchema.minItems as number)) {
         errors.push(`Field '${key}' must have at least ${propSchema.minItems} items`);
+      }
+      // Validate array items against items schema if defined
+      if (propSchema.items && typeof propSchema.items === 'object') {
+        const itemSchema = propSchema.items as Record<string, unknown>;
+        for (let i = 0; i < value.length; i++) {
+          const item = value[i];
+          if (itemSchema.type === 'object' && typeof item === 'object' && item !== null) {
+            const itemResult = validateAgainstSchema(item as Record<string, unknown>, itemSchema);
+            for (const err of itemResult.errors) {
+              errors.push(`${key}[${i}]: ${err}`);
+            }
+          }
+        }
       }
     }
   }
