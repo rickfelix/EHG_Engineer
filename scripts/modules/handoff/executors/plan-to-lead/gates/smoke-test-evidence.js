@@ -34,8 +34,15 @@ const SMOKE_TEST_EVIDENCE_PATTERNS = [
 
 /**
  * Detect if an SD is pipeline/integration work based on title, key, and tags.
+ * Excludes /learn SDs (SD-LEARN-*) that merely reference pipeline patterns
+ * in their description but are process-improvement SDs, not pipeline implementations.
  */
 function isPipelineSD(sd) {
+  const sdKey = (sd.sd_key || '').toUpperCase();
+
+  // /learn SDs address process patterns, not pipeline implementation
+  if (sdKey.startsWith('SD-LEARN-')) return false;
+
   const searchText = [
     sd.sd_key || '',
     sd.title || '',
