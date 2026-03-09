@@ -23,7 +23,7 @@ const PHASE_SUBAGENT_MAP = {
 
 // LEO Protocol v4.4.1: SD type-aware PLAN_PRD mapping
 const PLAN_PRD_BY_SD_TYPE = {
-  feature: ['DATABASE', 'STORIES', 'RISK', 'TESTING', 'API'],
+  feature: ['DATABASE', 'STORIES', 'RISK', 'TESTING', 'API', 'DESIGN'],
   api: ['DATABASE', 'STORIES', 'RISK', 'TESTING', 'API'],
   database: ['DATABASE', 'STORIES', 'RISK'],
   security: ['DATABASE', 'STORIES', 'RISK', 'SECURITY'],
@@ -65,8 +65,8 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     default: ['DATABASE', 'STORIES']
   },
   PLAN_VERIFY: {
-    feature: ['TESTING', 'SECURITY', 'PERFORMANCE', 'UAT'],
-    enhancement: ['TESTING', 'SECURITY', 'PERFORMANCE'],
+    feature: ['TESTING', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'UAT'],
+    enhancement: ['TESTING', 'SECURITY', 'PERFORMANCE', 'DESIGN'],
     database: ['DATABASE', 'SECURITY'],  // PERFORMANCE removed - not applicable for schema/migration work
     security: ['TESTING', 'SECURITY'],
     api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],

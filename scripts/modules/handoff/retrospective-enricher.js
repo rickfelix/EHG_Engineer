@@ -451,7 +451,7 @@ export async function enrichRetrospectivePreGate(supabase, sdId, sd) {
   // 1. Get the newest retrospective for this SD
   const { data: retro } = await supabase
     .from('retrospectives')
-    .select('id, generated_by, key_learnings, action_items, improvement_areas, what_went_well, what_needs_improvement')
+    .select('id, generated_by, key_learnings, action_items, improvement_areas, what_went_well, what_needs_improvement, metadata')
     .eq('sd_id', sdId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -560,6 +560,9 @@ export async function enrichRetrospectivePreGate(supabase, sdId, sd) {
   const enrichedWentWell = buildWhatWentWell(sd, gitFiles, handoffScores);
   const enrichedNeedsImprovement = buildWhatNeedsImprovement(sd, patterns, handoffScores);
 
+  // 6b. Design quality score integration (FR-5, SD-LEO-INFRA-DESIGN-COMPETITIVE-ADVANTAGE-001)
+  const designScore = await getDesignQualityScore(supabase, sdId);
+
   // 7. Merge: prefer enriched content over existing if it has more specificity
   const updates = {};
 
@@ -582,6 +585,23 @@ export async function enrichRetrospectivePreGate(supabase, sdId, sd) {
   if (enrichedNeedsImprovement.length > 0) {
     updates.what_needs_improvement = enrichedNeedsImprovement;
     result.fieldsUpdated.push('what_needs_improvement');
+  }
+
+  // 7b. Include design quality score in metadata if available
+  if (designScore) {
+    const existingMetadata = retro.metadata || {};
+    updates.metadata = {
+      ...existingMetadata,
+      design_quality_score: designScore.composite_score,
+      design_quality_dimensions: {
+        accessibility: designScore.accessibility_score,
+        token_compliance: designScore.token_compliance_score,
+        component_reuse: designScore.component_reuse_score,
+        visual_polish: designScore.visual_polish_score
+      },
+      design_quality_calculated_at: designScore.calculated_at
+    };
+    result.fieldsUpdated.push('metadata.design_quality_score');
   }
 
   if (result.fieldsUpdated.length === 0) return result;
@@ -639,6 +659,21 @@ async function getHandoffScores(supabase, sdId) {
     .order('created_at', { ascending: false })
     .limit(3);
   return data || [];
+}
+
+/**
+ * Get design quality score for this SD (FR-5, SD-LEO-INFRA-DESIGN-COMPETITIVE-ADVANTAGE-001).
+ * Returns null if no design score exists — does not block enrichment.
+ */
+async function getDesignQualityScore(supabase, sdId) {
+  const { data } = await supabase
+    .from('design_quality_scores')
+    .select('composite_score, accessibility_score, token_compliance_score, component_reuse_score, visual_polish_score, calculated_at')
+    .eq('sd_id', sdId)
+    .order('calculated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
 }
 
 /**
