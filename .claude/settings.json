@@ -71,6 +71,11 @@
             "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/context-compact-nudge.js --time-only --interval 10",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/coordination-inbox.cjs",
+            "timeout": 5
           }
         ]
       },
