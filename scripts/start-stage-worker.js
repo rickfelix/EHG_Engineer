@@ -260,6 +260,10 @@ async function runDirect() {
     process.exit(0);
   } else {
     worker.start();
+    // Start health check endpoint
+    await worker.startHealthServer().catch(err =>
+      console.warn(`[stage-worker] Health server failed: ${err.message}`)
+    );
     console.log('[stage-worker] Worker running. Press Ctrl+C to stop.');
   }
 }
