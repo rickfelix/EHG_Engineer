@@ -129,3 +129,45 @@ VALUES (
   }'::jsonb
 )
 ON CONFLICT (service_key) DO NOTHING;
+
+-- ============================================================
+-- 4. Extend ehg_services with version, sla_tier, config_schema
+-- ============================================================
+ALTER TABLE ehg_services
+  ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '1.0.0',
+  ADD COLUMN IF NOT EXISTS sla_tier TEXT NOT NULL DEFAULT 'standard',
+  ADD COLUMN IF NOT EXISTS config_schema JSONB;
+
+-- Add check constraint for sla_tier
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'ehg_services_sla_tier_check'
+  ) THEN
+    ALTER TABLE ehg_services ADD CONSTRAINT ehg_services_sla_tier_check
+      CHECK (sla_tier IN ('free', 'standard', 'premium', 'enterprise'));
+  END IF;
+END $$;
+
+-- ============================================================
+-- 5. Create service_versions table for versioned service contracts
+-- ============================================================
+CREATE TABLE IF NOT EXISTS service_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_id UUID NOT NULL REFERENCES ehg_services(id) ON DELETE CASCADE,
+  version TEXT NOT NULL,
+  artifact_schema JSONB NOT NULL,
+  changelog TEXT,
+  deprecated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(service_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_versions_service_id ON service_versions(service_id);
+
+-- ============================================================
+-- 6. Add SLA priority index for task queuing performance
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_service_tasks_priority_sla
+  ON service_tasks(status, priority ASC, created_at ASC)
+  WHERE status = 'pending';
