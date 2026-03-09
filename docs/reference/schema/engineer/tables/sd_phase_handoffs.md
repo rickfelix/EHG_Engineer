@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T21:14:03.579Z
+**Generated**: 2026-03-09T21:58:27.768Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (11 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (27 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -45,6 +45,7 @@
 | resolution_type | `text` | YES | - | - |
 | resolution_notes | `text` | YES | - | - |
 | venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this handoff to a specific venture. Should match the parent SD venture_id. |
+| scope_snapshot | `jsonb` | YES | - | - |
 
 ## Constraints
 
