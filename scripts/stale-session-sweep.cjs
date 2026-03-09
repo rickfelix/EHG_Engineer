@@ -410,14 +410,17 @@ async function main() {
 
     if (existingReminder && existingReminder.length > 0) continue;
 
-    // Send CLAIM_REMINDER
+    // Send CLAIM_REMINDER (includes worktree reminder)
     const topSD = available.length > 0 ? available[0] : null;
     const suggestion = topSD ? 'Suggested: ' + topSD + ' (highest priority unclaimed)' : 'Run /leo next for the SD queue.';
+    const worktreeReminder = '\n\nIMPORTANT: Before starting work, ensure you are in your own isolated worktree. ' +
+      'Run: node scripts/resolve-sd-workdir.js <SD-ID> — this creates a dedicated worktree so parallel workers ' +
+      'do not corrupt each other\'s node_modules or git state.';
     await supabase.from('session_coordination').insert({
       target_session: s.session_id,
       message_type: 'CLAIM_REMINDER',
       subject: 'No SD claimed — ' + available.length + ' SDs available for work',
-      body: 'You have been idle for ' + s.heartbeat_age_human + ' with no SD claim. ' + suggestion + '\n\nRun: /claim or /leo next',
+      body: 'You have been idle for ' + s.heartbeat_age_human + ' with no SD claim. ' + suggestion + worktreeReminder + '\n\nRun: /claim or /leo next',
       payload: { available_sds: available, idle_seconds: s.heartbeat_age_seconds },
       sender_type: 'sweep'
     }).then(() => {}).catch(() => {});
@@ -509,7 +512,7 @@ async function main() {
         target_sd: s.sd_id,
         message_type: 'WORK_ASSIGNMENT',
         subject: 'Next work available when ' + s.sd_id.split('-').pop() + ' completes',
-        body: 'When you complete ' + s.sd_id + ', pick up the next unclaimed child.',
+        body: 'When you complete ' + s.sd_id + ', pick up the next unclaimed child.\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
         payload: { available_sds: available, current_sd: s.sd_id },
         sender_type: 'sweep'
       });
@@ -540,7 +543,7 @@ async function main() {
         target_sd: evict.sd_id,
         message_type: 'CLAIM_RELEASED',
         subject: 'Duplicate claim on ' + evict.sd_id.split('-').pop() + ' resolved — pick next SD',
-        body: 'Another session is already working on ' + evict.sd_id + '. Your claim was released to avoid duplicate work. Please claim one of: ' + (otherAvailable.length > 0 ? otherAvailable.join(', ') : 'run /leo next for available SDs'),
+        body: 'Another session is already working on ' + evict.sd_id + '. Your claim was released to avoid duplicate work. Please claim one of: ' + (otherAvailable.length > 0 ? otherAvailable.join(', ') : 'run /leo next for available SDs') + '\n\nREMINDER: Ensure you are in your own isolated worktree before starting new work. Run: node scripts/resolve-sd-workdir.js <SD-ID>',
         payload: { released_sd: evict.sd_id, reason: 'CONFLICT_RESOLUTION', available_sds: otherAvailable },
         sender_type: 'sweep'
       });
