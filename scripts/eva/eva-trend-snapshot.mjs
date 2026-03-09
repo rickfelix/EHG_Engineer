@@ -125,65 +125,107 @@ function aggregateItems(items) {
 
 // ─── Velocity Calculation ──────────────────────────────────
 
-function calculateVelocity(weeklyTotals) {
+/** Calculate velocity ratio and trend for a set of weekly totals */
+function computeVelocity(weeklyTotals) {
   const weeks = Object.keys(weeklyTotals).sort();
-  if (weeks.length === 0) {
-    return { current_week: null, rolling_4wk_avg: 0, change_pct: 0, trend: 'no_data' };
-  }
-
   const currentWeekKey = getWeekKey(new Date());
   const currentCount = weeklyTotals[currentWeekKey] || 0;
 
-  // Get prior 4 weeks (excluding current)
-  const priorWeeks = weeks
-    .filter(w => w < currentWeekKey)
-    .slice(-4);
-
+  const priorWeeks = weeks.filter(w => w < currentWeekKey).slice(-4);
   const priorSum = priorWeeks.reduce((sum, w) => sum + (weeklyTotals[w] || 0), 0);
   const priorAvg = priorWeeks.length > 0 ? priorSum / priorWeeks.length : 0;
 
-  const changePct = priorAvg > 0
-    ? Math.round(((currentCount - priorAvg) / priorAvg) * 100)
-    : 0;
+  const ratio = priorAvg > 0 ? Math.round((currentCount / priorAvg) * 100) / 100 : 0;
 
   let trend = 'stable';
-  if (changePct > 20) trend = 'accelerating';
-  else if (changePct < -20) trend = 'decelerating';
+  if (priorAvg === 0 && currentCount === 0) trend = 'no_data';
+  else if (priorAvg === 0 && currentCount > 0) trend = 'new_activity';
+  else if (ratio >= 2) trend = 'accelerating';
+  else if (ratio <= 0.5) trend = 'decelerating';
+
+  return { current_count: currentCount, rolling_4wk_avg: Math.round(priorAvg * 10) / 10, ratio, trend };
+}
+
+function calculateVelocity(items) {
+  const currentWeekKey = getWeekKey(new Date());
+
+  // Global weekly totals
+  const globalWeekly = {};
+  // Per-source weekly totals
+  const sourceWeekly = {};
+  // Per-app weekly totals
+  const appWeekly = {};
+
+  for (const item of items) {
+    const week = getWeekKey(item.classified_at);
+    globalWeekly[week] = (globalWeekly[week] || 0) + 1;
+
+    if (!sourceWeekly[item.source]) sourceWeekly[item.source] = {};
+    sourceWeekly[item.source][week] = (sourceWeekly[item.source][week] || 0) + 1;
+
+    const app = item.target_application || 'unclassified';
+    if (!appWeekly[app]) appWeekly[app] = {};
+    appWeekly[app][week] = (appWeekly[app][week] || 0) + 1;
+  }
+
+  // Compute per-source velocity
+  const bySource = {};
+  for (const [source, weekly] of Object.entries(sourceWeekly)) {
+    bySource[source] = computeVelocity(weekly);
+  }
+
+  // Compute per-app velocity
+  const byApp = {};
+  for (const [app, weekly] of Object.entries(appWeekly)) {
+    byApp[app] = computeVelocity(weekly);
+  }
+
+  const global = computeVelocity(globalWeekly);
 
   return {
     current_week: currentWeekKey,
-    current_count: currentCount,
-    rolling_4wk_avg: Math.round(priorAvg * 10) / 10,
-    prior_weeks: priorWeeks.length,
-    change_pct: changePct,
-    trend,
-    weekly_breakdown: weeklyTotals
+    ...global,
+    by_source: bySource,
+    by_app: byApp
   };
 }
 
 // ─── Source Health ──────────────────────────────────────────
 
+const DEGRADED_THRESHOLD_HOURS = 72;
+const STALE_THRESHOLD_HOURS = 168;
+
 async function updateSourceHealth() {
-  const STALE_THRESHOLD_HOURS = 72;
-
-  // Query eva_sync_state for known sources
-  const { data: syncStates, error } = await supabase
-    .from('eva_sync_state')
-    .select('source_type, source_identifier, last_sync_at, total_synced, consecutive_failures');
-
-  if (error) {
-    console.error('Error querying eva_sync_state:', error.message);
-    return [];
-  }
+  // Check freshness from the intake tables directly
+  const intakeSources = [
+    { name: 'todoist', table: 'eva_todoist_intake', dateCol: 'classified_at' },
+    { name: 'youtube', table: 'eva_youtube_intake', dateCol: 'classified_at' }
+  ];
 
   const healthRecords = [];
   const now = new Date();
 
-  for (const sync of syncStates || []) {
-    const lastSync = sync.last_sync_at ? new Date(sync.last_sync_at) : null;
-    const hoursSinceSync = lastSync
-      ? (now - lastSync) / (1000 * 60 * 60)
-      : Infinity;
+  for (const { name, table, dateCol } of intakeSources) {
+    // Get most recent item and total count
+    const { data: latest, error: latestErr } = await supabase
+      .from(table)
+      .select(dateCol)
+      .not(dateCol, 'is', null)
+      .order(dateCol, { ascending: false })
+      .limit(1);
+
+    const { count, error: countErr } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true });
+
+    if (latestErr) {
+      console.error(`Error querying ${table}:`, latestErr.message);
+      continue;
+    }
+
+    const lastSyncAt = latest?.[0]?.[dateCol] || null;
+    const lastSync = lastSyncAt ? new Date(lastSyncAt) : null;
+    const hoursSinceSync = lastSync ? (now - lastSync) / (1000 * 60 * 60) : Infinity;
 
     let status = 'healthy';
     let degradedSince = null;
@@ -191,17 +233,17 @@ async function updateSourceHealth() {
     if (!lastSync || hoursSinceSync > STALE_THRESHOLD_HOURS) {
       status = 'stale';
       degradedSince = lastSync
-        ? new Date(lastSync.getTime() + STALE_THRESHOLD_HOURS * 60 * 60 * 1000).toISOString()
+        ? new Date(lastSync.getTime() + DEGRADED_THRESHOLD_HOURS * 60 * 60 * 1000).toISOString()
         : now.toISOString();
-    } else if (sync.consecutive_failures > 0) {
+    } else if (hoursSinceSync > DEGRADED_THRESHOLD_HOURS) {
       status = 'degraded';
-      degradedSince = now.toISOString();
+      degradedSince = new Date(lastSync.getTime() + DEGRADED_THRESHOLD_HOURS * 60 * 60 * 1000).toISOString();
     }
 
     healthRecords.push({
-      source_name: `${sync.source_type}:${sync.source_identifier}`,
-      last_sync_at: sync.last_sync_at,
-      last_item_count: sync.total_synced || 0,
+      source_name: name,
+      last_sync_at: lastSyncAt,
+      last_item_count: count || 0,
       status,
       degraded_since: degradedSince
     });
@@ -274,19 +316,22 @@ async function main() {
 
   // 2. Aggregate
   console.log('\n📊 Aggregating by application, aspects, intent, week...');
-  const { sourceCounts, topAspectsByApp, topIntents, weeklyTotals } = aggregateItems(items);
+  const { sourceCounts, topAspectsByApp, topIntents } = aggregateItems(items);
 
-  const weekCount = Object.keys(weeklyTotals).length;
   const appCount = Object.keys(topAspectsByApp).length;
-  console.log(`   ${weekCount} weeks of data across ${appCount} applications`);
+  console.log(`   ${appCount} applications found`);
 
-  // 3. Calculate velocity
+  // 3. Calculate velocity (per-source, per-app, and global)
   console.log('\n📈 Calculating item velocity...');
-  const velocity = calculateVelocity(weeklyTotals);
+  const velocity = calculateVelocity(items);
   console.log(`   Current week (${velocity.current_week}): ${velocity.current_count} items`);
   console.log(`   Rolling 4-week avg: ${velocity.rolling_4wk_avg} items`);
-  console.log(`   Trend: ${velocity.trend} (${velocity.change_pct > 0 ? '+' : ''}${velocity.change_pct}%)`);
-
+  console.log(`   Trend: ${velocity.trend} (ratio: ${velocity.ratio}x)`);
+  if (velocity.by_source) {
+    for (const [src, v] of Object.entries(velocity.by_source)) {
+      console.log(`   ${src}: ${v.current_count} items, ${v.trend} (${v.ratio}x)`);
+    }
+  }
   // 4. Update source health
   console.log('\n🏥 Updating source health...');
   const healthRecords = await updateSourceHealth();
