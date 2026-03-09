@@ -1,6 +1,7 @@
 // Service Tasks Complete Edge Function
 // Venture Factory: Marks a claimed task as completed or failed
 // SD: SD-LEO-ORCH-EHG-VENTURE-FACTORY-001-B
+// Extended: SD-LEO-ORCH-EHG-VENTURE-FACTORY-001-F (confidence aggregation with time-weighted decay)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -99,8 +100,46 @@ serve(async (req: Request) => {
         );
       }
 
+      // FR-004: Compute confidence_score aggregation for the venture
+      // Time-weighted average: recent tasks weigh more than older ones
+      // Decay factor: tasks lose 10% weight per day of age
+      let aggregated_confidence = null;
+      if (data?.venture_id) {
+        const { data: completedTasks } = await supabase
+          .from('service_tasks')
+          .select('confidence_score, completed_at')
+          .eq('venture_id', data.venture_id)
+          .eq('status', 'completed')
+          .not('confidence_score', 'is', null);
+
+        if (completedTasks && completedTasks.length > 0) {
+          const now = Date.now();
+          const DAY_MS = 86400000;
+          const DECAY_RATE = 0.1; // 10% weight loss per day
+
+          let weightedSum = 0;
+          let totalWeight = 0;
+
+          for (const t of completedTasks) {
+            const score = Number(t.confidence_score);
+            if (isNaN(score)) continue;
+
+            const completedAt = t.completed_at ? new Date(t.completed_at).getTime() : now;
+            const ageDays = Math.max(0, (now - completedAt) / DAY_MS);
+            const weight = Math.max(0.1, 1 - ageDays * DECAY_RATE); // Floor at 10% weight
+
+            weightedSum += score * weight;
+            totalWeight += weight;
+          }
+
+          if (totalWeight > 0) {
+            aggregated_confidence = Math.round((weightedSum / totalWeight) * 100) / 100;
+          }
+        }
+      }
+
       return new Response(
-        JSON.stringify({ task: data }),
+        JSON.stringify({ task: data, aggregated_confidence }),
         { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       );
     }

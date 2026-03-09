@@ -1,9 +1,102 @@
 // Service Tasks Claim Edge Function
 // Venture Factory: Atomically claims a pending task with optimistic locking
 // SD: SD-LEO-ORCH-EHG-VENTURE-FACTORY-001-B
+// Extended: SD-LEO-ORCH-EHG-VENTURE-FACTORY-001-F (input validation against artifact_schema)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+/**
+ * Validates input_params against a JSON Schema definition from ehg_services.artifact_schema.
+ * Uses basic validation (type checking, required fields, enum matching) without external deps.
+ * Returns { valid: true } or { valid: false, errors: string[] }.
+ */
+function validateAgainstSchema(
+  data: Record<string, unknown>,
+  schema: Record<string, unknown>
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (schema.type !== 'object') {
+    return { valid: true, errors: [] }; // Only validate object schemas
+  }
+
+  const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+  const required = (schema.required ?? []) as string[];
+
+  // Check required fields
+  for (const field of required) {
+    if (data[field] === undefined || data[field] === null) {
+      errors.push(`Missing required field: ${field}`);
+    }
+  }
+
+  // Validate each provided field against its schema
+  for (const [key, value] of Object.entries(data)) {
+    const propSchema = properties[key];
+    if (!propSchema) continue; // Extra fields are allowed
+
+    // M-2 fix: Skip null values for optional fields (null is valid for non-required fields)
+    if (value === null && !required.includes(key)) continue;
+
+    // Type checking
+    if (propSchema.type === 'string' && typeof value !== 'string') {
+      errors.push(`Field '${key}' must be a string, got ${typeof value}`);
+    } else if (propSchema.type === 'integer' && (typeof value !== 'number' || !Number.isInteger(value))) {
+      errors.push(`Field '${key}' must be an integer`);
+    } else if (propSchema.type === 'number' && typeof value !== 'number') {
+      errors.push(`Field '${key}' must be a number, got ${typeof value}`);
+    } else if (propSchema.type === 'array' && !Array.isArray(value)) {
+      errors.push(`Field '${key}' must be an array, got ${typeof value}`);
+    }
+
+    // Enum validation
+    if (propSchema.enum && Array.isArray(propSchema.enum)) {
+      if (!propSchema.enum.includes(value)) {
+        errors.push(`Field '${key}' must be one of: ${(propSchema.enum as string[]).join(', ')}`);
+      }
+    }
+
+    // Numeric range validation
+    if (typeof value === 'number') {
+      if (propSchema.minimum !== undefined && value < (propSchema.minimum as number)) {
+        errors.push(`Field '${key}' must be >= ${propSchema.minimum}`);
+      }
+      if (propSchema.maximum !== undefined && value > (propSchema.maximum as number)) {
+        errors.push(`Field '${key}' must be <= ${propSchema.maximum}`);
+      }
+    }
+
+    // String length validation
+    if (typeof value === 'string' && propSchema.maxLength !== undefined) {
+      if (value.length > (propSchema.maxLength as number)) {
+        errors.push(`Field '${key}' exceeds max length of ${propSchema.maxLength}`);
+      }
+    }
+
+    // Array validation: min items + M-1 fix: recurse into array item schemas
+    if (Array.isArray(value)) {
+      if (propSchema.minItems !== undefined && value.length < (propSchema.minItems as number)) {
+        errors.push(`Field '${key}' must have at least ${propSchema.minItems} items`);
+      }
+      // Validate array items against items schema if defined
+      if (propSchema.items && typeof propSchema.items === 'object') {
+        const itemSchema = propSchema.items as Record<string, unknown>;
+        for (let i = 0; i < value.length; i++) {
+          const item = value[i];
+          if (itemSchema.type === 'object' && typeof item === 'object' && item !== null) {
+            const itemResult = validateAgainstSchema(item as Record<string, unknown>, itemSchema);
+            for (const err of itemResult.errors) {
+              errors.push(`${key}[${i}]: ${err}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -47,6 +140,45 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
+
+    // FR-003: Validate input_params against artifact_schema from ehg_services
+    // Look up the task to get its service_id, then fetch the schema
+    const { input_params } = body;
+    if (input_params !== undefined) {
+      // Fetch the task to get service_id
+      const { data: taskInfo } = await supabase
+        .from('service_tasks')
+        .select('service_id')
+        .eq('id', task_id)
+        .eq('status', 'pending')
+        .single();
+
+      if (taskInfo?.service_id) {
+        // Fetch artifact_schema from ehg_services
+        const { data: serviceInfo } = await supabase
+          .from('ehg_services')
+          .select('artifact_schema')
+          .eq('id', taskInfo.service_id)
+          .single();
+
+        if (serviceInfo?.artifact_schema) {
+          const validation = validateAgainstSchema(
+            input_params as Record<string, unknown>,
+            serviceInfo.artifact_schema as Record<string, unknown>
+          );
+
+          if (!validation.valid) {
+            return new Response(
+              JSON.stringify({
+                error: 'Input validation failed against service artifact_schema',
+                validation_errors: validation.errors,
+              }),
+              { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+      }
+    }
 
     // Optimistic locking: conditional UPDATE where status = 'pending'
     // If another agent claimed it first, this returns 0 rows
