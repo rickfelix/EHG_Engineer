@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T21:14:03.579Z
+**Generated**: 2026-03-09T21:58:27.768Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (7 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (86 total)
+## Columns (87 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -108,6 +108,7 @@ Use the id column instead - it is the canonical identifier. |
 | vision_origin_score_id | `uuid` | YES | - | If this SD was generated as a corrective action, links back to the eva_vision_scores record that triggered its creation. |
 | vision_alignment_score | `numeric` | YES | - | Vision alignment score (0-100), populated by SD-MAN-INFRA-DYNAMIC-VISION-ALIGNMENT-001 scoring engine |
 | venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this SD to a specific venture for multi-venture isolation. NULL = unscoped (legacy/infrastructure SDs). |
+| scope_keywords | `ARRAY` | YES | - | - |
 
 ## Constraints
 
@@ -231,6 +232,10 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_working_on`
   ```sql
   CREATE INDEX idx_sd_working_on ON public.strategic_directives_v2 USING btree (is_working_on) WHERE (is_working_on = true)
+  ```
+- `idx_sdv2_scope_keywords_gin`
+  ```sql
+  CREATE INDEX idx_sdv2_scope_keywords_gin ON public.strategic_directives_v2 USING gin (scope_keywords)
   ```
 - `idx_strategic_directives_current_phase`
   ```sql
