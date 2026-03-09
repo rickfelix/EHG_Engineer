@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-08T17:25:25.947Z
-**Tables**: 526
+**Generated**: 2026-03-09T10:52:00.670Z
+**Tables**: 528
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -176,6 +176,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_circuit_state_transitions](tables/eva_circuit_state_transitions.md) | N/A (RLS restricted) | ✅ | 2 | Audit log of all EVA circuit breaker state transitions |
 | [eva_claude_code_intake](tables/eva_claude_code_intake.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Claude Code GitHub releases for automated monitoring and chairman approval pipeline |
 | [eva_config](tables/eva_config.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [eva_consultant_snapshots](tables/eva_consultant_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | Weekly trend snapshot aggregations for EVA Consultant Agent Phase 0. No LLM dependency. |
 | [eva_decisions](tables/eva_decisions.md) | N/A (RLS restricted) | ✅ | 2 | EVA Decision Router - Chairman decision tracking |
 | [eva_event_ledger](tables/eva_event_ledger.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_event_log](tables/eva_event_log.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -190,6 +191,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_scheduler_heartbeat](tables/eva_scheduler_heartbeat.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_scheduler_metrics](tables/eva_scheduler_metrics.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_scheduler_queue](tables/eva_scheduler_queue.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [eva_source_health](tables/eva_source_health.md) | N/A (RLS restricted) | ✅ | 2 | Data freshness tracking per EVA input source. Monitors sync status and health. |
 | [eva_stage_gate_results](tables/eva_stage_gate_results.md) | N/A (RLS restricted) | ✅ | 2 | Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score) |
 | [eva_sync_state](tables/eva_sync_state.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_todoist_intake](tables/eva_todoist_intake.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -757,7 +759,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (400 tables)
+### Other (402 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -899,6 +901,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_circuit_state_transitions](tables/eva_circuit_state_transitions.md) - Audit log of all EVA circuit breaker state transitions
 - [eva_claude_code_intake](tables/eva_claude_code_intake.md) - Tracks Claude Code GitHub releases for automated monitoring and chairman approval pipeline
 - [eva_config](tables/eva_config.md)
+- [eva_consultant_snapshots](tables/eva_consultant_snapshots.md) - Weekly trend snapshot aggregations for EVA Consultant Agent Phase 0. No LLM dependency.
 - [eva_decisions](tables/eva_decisions.md) - EVA Decision Router - Chairman decision tracking
 - [eva_event_ledger](tables/eva_event_ledger.md)
 - [eva_event_log](tables/eva_event_log.md)
@@ -913,6 +916,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_scheduler_heartbeat](tables/eva_scheduler_heartbeat.md)
 - [eva_scheduler_metrics](tables/eva_scheduler_metrics.md)
 - [eva_scheduler_queue](tables/eva_scheduler_queue.md)
+- [eva_source_health](tables/eva_source_health.md) - Data freshness tracking per EVA input source. Monitors sync status and health.
 - [eva_stage_gate_results](tables/eva_stage_gate_results.md) - Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score)
 - [eva_sync_state](tables/eva_sync_state.md)
 - [eva_todoist_intake](tables/eva_todoist_intake.md)

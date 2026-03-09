@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-08T17:25:25.947Z
-**Tables**: 526
+**Generated**: 2026-03-09T10:52:00.670Z
+**Tables**: 528
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (526)
+## All Tables (528)
 
 ### LEO Protocol
 
@@ -298,6 +298,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_circuit_state_transitions](tables/eva_circuit_state_transitions.md)
 - [eva_claude_code_intake](tables/eva_claude_code_intake.md)
 - [eva_config](tables/eva_config.md)
+- [eva_consultant_snapshots](tables/eva_consultant_snapshots.md)
 - [eva_decisions](tables/eva_decisions.md)
 - [eva_event_ledger](tables/eva_event_ledger.md)
 - [eva_event_log](tables/eva_event_log.md)
@@ -312,6 +313,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_scheduler_heartbeat](tables/eva_scheduler_heartbeat.md)
 - [eva_scheduler_metrics](tables/eva_scheduler_metrics.md)
 - [eva_scheduler_queue](tables/eva_scheduler_queue.md)
+- [eva_source_health](tables/eva_source_health.md)
 - [eva_stage_gate_results](tables/eva_stage_gate_results.md)
 - [eva_sync_state](tables/eva_sync_state.md)
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
