@@ -61,6 +61,28 @@ export function createSubAgentOrchestrationGate(supabase) {
         };
       }
 
+      // Cross-repo SD detection: SDs targeting external repos (e.g. ehg frontend)
+      // cannot have sub-agents invoked inline from this handoff context
+      const targetRepo = ctx.sd?.metadata?.target_repo ||
+        ctx.sd?.metadata?.implementation_notes?.target_repo;
+      if (targetRepo && targetRepo !== 'EHG_Engineer' && targetRepo !== 'rickfelix/EHG_Engineer') {
+        console.log(`   ⚠️  Cross-repo SD detected: target_repo=${targetRepo}`);
+        console.log('   → Sub-agent orchestration skipped (agents cannot validate external repo inline)');
+        console.log('   → Verify implementation manually or via cached sub-agent results');
+        ctx._orchestrationResult = { can_proceed: true, passed: 0, total_agents: 0, skipped: true, cross_repo: true };
+        return {
+          passed: true,
+          score: 80,
+          max_score: 100,
+          issues: [],
+          warnings: [
+            `Sub-agent orchestration skipped for cross-repo SD (target: ${targetRepo})`,
+            'Manual verification or cached sub-agent results required'
+          ],
+          details: { skipped: true, reason: `cross-repo target: ${targetRepo}`, cross_repo: true }
+        };
+      }
+
       // Get security baseline for retrospective mode
       const securityBaseline = await getSecurityBaseline(supabase);
 
