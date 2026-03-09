@@ -55,6 +55,86 @@ import { validatePlanVerification } from './plan-verification.js';
 import { getRemediation } from './remediation.js';
 
 /**
+ * Pre-validate success_metrics format before gates run.
+ * PAT-AUTO-41b51e4d
+ * @param {Object} sd
+ * @returns {string[]} issues
+ */
+function validateSuccessMetricsFormat(sd) {
+  const issues = [];
+  const metrics = sd?.success_metrics;
+  if (!metrics || !Array.isArray(metrics) || metrics.length === 0) return issues;
+  for (let i = 0; i < metrics.length; i++) {
+    const m = metrics[i];
+    if (typeof m === 'string') {
+      issues.push(`   ❌ [${i}] Plain string metric: "${m.substring(0, 60)}${m.length > 60 ? '...' : ''}"`);
+      issues.push('      Expected: { name: "...", target: "...", actual: "...", met: true/false }');
+    } else if (typeof m === 'object' && m !== null) {
+      const name = m.name || m.metric;
+      if (!name) {
+        issues.push(`   ⚠️  [${i}] Missing 'name' field in metric object`);
+      }
+      if (!m.actual && m.actual !== 0 && m.actual !== false) {
+        issues.push(`   ℹ️  [${i}] Empty 'actual' in "${name || 'unknown'}" — gate will score 0`);
+      }
+    }
+  }
+  return issues;
+}
+
+/**
+ * Pre-check smoke test readiness for pipeline SDs.
+ * PAT-AUTO-77fe50e3
+ * @param {Object} supabase
+ * @param {Object} sd
+ * @param {string} sdId
+ */
+const PIPELINE_KEYWORDS = [
+  'pipeline', 'orchestrat', 'stage-execution', 'stage_execution',
+  'eva-orchestrator', 'reality-gate', 'lifecycle',
+  'venture_artifact', 'venture-artifact', 'stage-template',
+  'handoff-system',
+];
+
+async function preCheckSmokeTestReadiness(supabase, sd, sdId) {
+  const sdKey = (sd.sd_key || '').toUpperCase();
+  if (sdKey.startsWith('SD-LEARN-')) return;
+
+  const searchText = [sd.sd_key || '', sd.title || '', sd.description || ''].join(' ').toLowerCase();
+  const isPipeline = PIPELINE_KEYWORDS.some(kw => searchText.includes(kw));
+  if (!isPipeline) return;
+
+  const archKey = sd.metadata?.architecture_key || sd.metadata?.arch_key;
+  if (!archKey) {
+    console.log('\n   ⚠️  SMOKE TEST READINESS PRE-CHECK');
+    console.log('   Pipeline SD detected but no architecture plan linked (metadata.arch_key)');
+    return;
+  }
+
+  try {
+    const { data: plan } = await supabase
+      .from('eva_architecture_plans')
+      .select('content, sections')
+      .eq('plan_key', archKey)
+      .single();
+
+    if (!plan) return;
+
+    const contentStr = typeof plan.content === 'string' ? plan.content : JSON.stringify(plan.content || '');
+    const sectionsStr = JSON.stringify(plan.sections || {});
+    const hasBaseline = /baseline.?observation/i.test(contentStr + sectionsStr);
+
+    if (!hasBaseline) {
+      console.log('\n   ⚠️  SMOKE TEST READINESS PRE-CHECK');
+      console.log(`   Architecture plan "${archKey}" missing "Baseline Observation" section.`);
+      console.log('   Add: ## Baseline Observation with actual runtime output.');
+    }
+  } catch (_err) {
+    // Non-fatal — gate handles actual validation
+  }
+}
+
+/**
  * PlanToLeadExecutor - Executes PLAN → LEAD handoffs
  *
  * Validates that PLAN verification is complete and ready for LEAD final approval.
@@ -110,6 +190,18 @@ export class PlanToLeadExecutor extends BaseExecutor {
     } catch (enrichErr) {
       console.warn(`   ⚠️  Pre-gate enrichment failed (non-fatal): ${enrichErr.message}`);
     }
+
+    // PAT-AUTO-41b51e4d: Pre-validate success_metrics format before gates run
+    const metricsIssues = validateSuccessMetricsFormat(sd);
+    if (metricsIssues.length > 0) {
+      console.log('\n   ⚠️  SUCCESS_METRICS FORMAT PRE-VALIDATION');
+      for (const issue of metricsIssues) {
+        console.log(`   ${issue}`);
+      }
+    }
+
+    // PAT-AUTO-77fe50e3: Pre-check smoke test readiness for pipeline SDs
+    await preCheckSmokeTestReadiness(this.supabase, sd, sdId);
 
     return null;
   }
