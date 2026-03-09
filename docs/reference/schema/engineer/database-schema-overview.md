@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T10:52:00.670Z
-**Tables**: 528
+**Generated**: 2026-03-09T11:25:47.658Z
+**Tables**: 529
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -177,6 +177,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_claude_code_intake](tables/eva_claude_code_intake.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Claude Code GitHub releases for automated monitoring and chairman approval pipeline |
 | [eva_config](tables/eva_config.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_consultant_snapshots](tables/eva_consultant_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | Weekly trend snapshot aggregations for EVA Consultant Agent Phase 0. No LLM dependency. |
+| [eva_consultant_trends](tables/eva_consultant_trends.md) | N/A (RLS restricted) | ✅ | 2 | Detected trends from EVA Consultant cross-source analysis. One row per trend per date. |
 | [eva_decisions](tables/eva_decisions.md) | N/A (RLS restricted) | ✅ | 2 | EVA Decision Router - Chairman decision tracking |
 | [eva_event_ledger](tables/eva_event_ledger.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_event_log](tables/eva_event_log.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -759,7 +760,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (402 tables)
+### Other (403 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -902,6 +903,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_claude_code_intake](tables/eva_claude_code_intake.md) - Tracks Claude Code GitHub releases for automated monitoring and chairman approval pipeline
 - [eva_config](tables/eva_config.md)
 - [eva_consultant_snapshots](tables/eva_consultant_snapshots.md) - Weekly trend snapshot aggregations for EVA Consultant Agent Phase 0. No LLM dependency.
+- [eva_consultant_trends](tables/eva_consultant_trends.md) - Detected trends from EVA Consultant cross-source analysis. One row per trend per date.
 - [eva_decisions](tables/eva_decisions.md) - EVA Decision Router - Chairman decision tracking
 - [eva_event_ledger](tables/eva_event_ledger.md)
 - [eva_event_log](tables/eva_event_log.md)
