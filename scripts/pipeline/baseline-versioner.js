@@ -46,7 +46,7 @@ async function createVersion(baselineId, createdBy = 'manual') {
     process.exit(1);
   }
 
-  console.log(`✅ Baseline version created`);
+  console.log('✅ Baseline version created');
   console.log(`   Version: v${data.version}`);
   console.log(`   Items:   ${data.item_count}`);
   console.log(`   By:      ${data.created_by}`);
