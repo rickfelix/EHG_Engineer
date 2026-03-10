@@ -65,6 +65,15 @@ const WEIGHTS = {
     default: 5,
   },
 
+  // Time horizon urgency multipliers (for strategy_weight computation)
+  timeHorizon: {
+    now: 3.0,
+    next: 2.0,
+    later: 1.0,
+    eventually: 0.5,
+    default: 1.0,
+  },
+
   // Max points per category
   maxPoints: {
     priority: 40,
@@ -72,6 +81,7 @@ const WEIGHTS = {
     okrImpact: 50,
     sdType: 20,
     readiness: 10,
+    strategyWeight: 150,  // Max strategy weight (matches max of other dimensions combined)
   },
 };
 
@@ -81,15 +91,18 @@ const WEIGHTS = {
  * @param {Object} sd - Strategic Directive object
  * @param {Array} okrAlignments - Array of alignment objects for this SD
  * @param {Map|Object} keyResults - Map or object of KR ID -> KR object
+ * @param {Object} [options] - Optional parameters
+ * @param {number} [options.strategyWeight] - Pre-computed strategy weight (0-150)
  * @returns {Object} Score breakdown with total and component scores
  */
-export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}) {
+export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}, options = {}) {
   const breakdown = {
     priority: 0,
     triage: 0,
     okrImpact: 0,
     sdType: 0,
     readiness: 0,
+    strategyWeight: 0,
     total: 0,
     details: {},
   };
@@ -144,16 +157,68 @@ export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}) 
   breakdown.readiness = Math.min(readiness / 10, WEIGHTS.maxPoints.readiness);
   breakdown.details.readiness = `${readiness}% → ${breakdown.readiness.toFixed(1)} pts`;
 
-  // Calculate total
-  breakdown.total = Math.round(
-    breakdown.priority +
-    breakdown.triage +
-    breakdown.okrImpact +
-    breakdown.sdType +
-    breakdown.readiness
-  );
+  // 6. Strategy weight integration
+  // When strategy_weight > 0, it becomes 50% of total score.
+  // Existing dimensions are scaled to the remaining 50%.
+  const rawStrategyWeight = options.strategyWeight || 0;
+  const dimensionTotal = breakdown.priority + breakdown.triage + breakdown.okrImpact + breakdown.sdType + breakdown.readiness;
+
+  if (rawStrategyWeight > 0) {
+    // Cap strategy weight at max
+    breakdown.strategyWeight = Math.min(rawStrategyWeight, WEIGHTS.maxPoints.strategyWeight);
+
+    // Normalize strategy weight to 0-150 range → scale to half of combined max
+    const maxDimensions = WEIGHTS.maxPoints.priority + WEIGHTS.maxPoints.triage +
+      WEIGHTS.maxPoints.okrImpact + WEIGHTS.maxPoints.sdType + WEIGHTS.maxPoints.readiness;
+
+    // Strategy weight is 50% of total; existing dimensions are 50%
+    const strategyPortion = (breakdown.strategyWeight / WEIGHTS.maxPoints.strategyWeight) * maxDimensions;
+    const dimensionPortion = dimensionTotal;
+
+    breakdown.total = Math.round((strategyPortion + dimensionPortion) / 2);
+    breakdown.details.strategyWeight = `${breakdown.strategyWeight.toFixed(1)} → 50% blend (${breakdown.total} pts)`;
+  } else {
+    // No strategy weight: scoring unchanged from legacy behavior
+    breakdown.total = Math.round(dimensionTotal);
+    breakdown.details.strategyWeight = 'none (legacy scoring)';
+  }
 
   return breakdown;
+}
+
+/**
+ * Compute strategy_weight from OKR alignment + time_horizon urgency.
+ *
+ * Formula: sum of (10 × KR_urgency × contribution_mult × weight × time_horizon_mult)
+ * Capped at WEIGHTS.maxPoints.strategyWeight (150).
+ *
+ * @param {Array} okrAlignments - Alignments for this SD
+ * @param {Map|Object} keyResults - KR lookup
+ * @param {string} timeHorizon - Time horizon of the linked strategy objective (now/next/later/eventually)
+ * @returns {number} Strategy weight 0-150
+ */
+export function calculateStrategyWeight(okrAlignments = [], keyResults = {}, timeHorizon = '') {
+  if (!okrAlignments || okrAlignments.length === 0) return 0;
+
+  const horizonMult = WEIGHTS.timeHorizon[timeHorizon] || WEIGHTS.timeHorizon.default;
+  let total = 0;
+
+  for (const alignment of okrAlignments) {
+    const krId = alignment.key_result_id;
+    const kr = keyResults instanceof Map
+      ? keyResults.get(krId)
+      : keyResults[krId];
+
+    if (!kr) continue;
+
+    const urgencyMult = WEIGHTS.krUrgency[kr.status] || WEIGHTS.krUrgency.default;
+    const contribMult = WEIGHTS.contribution[alignment.contribution_type] || WEIGHTS.contribution.default;
+    const weight = alignment.contribution_weight || 1.0;
+
+    total += 10 * urgencyMult * contribMult * weight * horizonMult;
+  }
+
+  return Math.min(Math.round(total * 10) / 10, WEIGHTS.maxPoints.strategyWeight);
 }
 
 /**
@@ -223,10 +288,11 @@ export function calculateOKRImpact(okrAlignments, keyResults) {
  * @param {Map|Object} keyResults - KR lookup
  * @returns {Array} SDs sorted by priority with scores
  */
-export function rankSDs(sds, alignmentsBySd = {}, keyResults = {}) {
+export function rankSDs(sds, alignmentsBySd = {}, keyResults = {}, strategyWeights = {}) {
   const ranked = sds.map(sd => {
     const alignments = alignmentsBySd[sd.sd_key] || [];
-    const score = calculatePriorityScore(sd, alignments, keyResults);
+    const sw = strategyWeights[sd.sd_key] || 0;
+    const score = calculatePriorityScore(sd, alignments, keyResults, { strategyWeight: sw });
 
     return {
       sd,
@@ -352,12 +418,16 @@ if (process.argv[1]?.endsWith('priority-scorer.js')) {
   console.log('  SD Type (security/infra/feature): 20/15/5 pts');
   console.log('  Readiness: up to 10 pts');
   console.log('');
-  console.log('Max Total Score: ~150 pts');
+  console.log('  Strategy Weight: up to 150 pts (50% blend when present)');
+  console.log('    - Time horizon: now=3x, next=2x, later=1x, eventually=0.5x');
+  console.log('');
+  console.log('Max Total Score: ~150 pts (legacy) or blended when strategy active');
 }
 
 export default {
   calculatePriorityScore,
   calculateOKRImpact,
+  calculateStrategyWeight,
   rankSDs,
   assignTrack,
   printScoreSummary,

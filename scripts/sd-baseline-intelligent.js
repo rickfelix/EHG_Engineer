@@ -35,6 +35,10 @@ import {
   _printScoreSummary,
 } from './lib/priority-scorer.js';
 
+import {
+  calculateStrategyWeight,
+} from './lib/strategy-weight-calculator.js';
+
 dotenv.config();
 
 // Initialize clients
@@ -197,6 +201,15 @@ class IntelligentBaselineGenerator {
       this.objectives.set(obj.id, obj);
     }
     console.log(`  Loaded ${this.objectives.size} Objectives`);
+
+    // Load Strategy Objectives (for strategy_weight calculation)
+    const { data: stratObjs } = await supabase
+      .from('strategy_objectives')
+      .select('id, title, description, time_horizon, status, health_indicator, linked_okr_ids')
+      .eq('status', 'active');
+
+    this.strategyObjectives = stratObjs || [];
+    console.log(`  Loaded ${this.strategyObjectives.length} Strategy Objectives`);
   }
 
   async analyzeDependencies() {
@@ -483,6 +496,14 @@ Important: Output ONLY valid JSON, no additional text.`;
       const node = this.graph.nodes.get(sdId);
       const blockedBy = node?.inEdges || [];
 
+      // Calculate strategy_weight for this SD
+      const stratWeight = calculateStrategyWeight({
+        sdKey: sdId,
+        okrAlignments: this.alignments[sdId] || [],
+        keyResults: this.keyResults,
+        strategyObjectives: this.strategyObjectives,
+      });
+
       // Baseline item
       items.push({
         baseline_id: baseline.id,
@@ -493,6 +514,7 @@ Important: Output ONLY valid JSON, no additional text.`;
         dependencies_snapshot: sd?.dependencies,
         dependency_health_score: blockedBy.length === 0 ? 1.0 : 0.0,
         is_ready: blockedBy.length === 0,
+        strategy_weight: stratWeight.weight || 0,
         notes: gptItem.rationale?.substring(0, 200),
       });
 
