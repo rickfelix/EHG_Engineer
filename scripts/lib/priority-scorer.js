@@ -69,7 +69,7 @@ const WEIGHTS = {
   maxPoints: {
     priority: 40,
     triage: 30,
-    okrImpact: 50,
+    okrImpact: 90,
     sdType: 20,
     readiness: 10,
   },
@@ -104,7 +104,7 @@ export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}) 
   breakdown.triage = WEIGHTS.triage[triageKey] || WEIGHTS.triage.default;
   breakdown.details.triage = `${triageKey || 'none'} → ${breakdown.triage} pts`;
 
-  // 3. OKR impact (0-50 points)
+  // 3. OKR impact (0-90 points) — dominant factor ~47% of max 190
   if (okrAlignments && okrAlignments.length > 0) {
     let okrTotal = 0;
     const okrDetails = [];
@@ -346,13 +346,13 @@ if (process.argv[1]?.endsWith('priority-scorer.js')) {
   console.log('Score Weights:');
   console.log('  Priority (critical/high/medium/low): 40/30/20/10 pts');
   console.log('  Triage (High/Medium/Low/Future): 30/20/10/0 pts');
-  console.log('  OKR Impact: up to 50 pts');
+  console.log('  OKR Impact: up to 90 pts (~47% of max)');
   console.log('    - KR urgency: off_track=3x, at_risk=2x, on_track=1x');
   console.log('    - Contribution: direct=1.5x, enabling=1x, supporting=0.5x');
   console.log('  SD Type (security/infra/feature): 20/15/5 pts');
   console.log('  Readiness: up to 10 pts');
   console.log('');
-  console.log('Max Total Score: ~150 pts');
+  console.log('Max Total Score: ~190 pts');
 }
 
 export default {

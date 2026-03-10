@@ -132,6 +132,30 @@ async function gatherOKRData() {
   };
 }
 
+async function gatherRiskData() {
+  const { data: forecasts } = await supabase
+    .from('risk_forecasts')
+    .select('venture_id, risk_category, predicted_score, confidence, forecast_date')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (!forecasts || forecasts.length === 0) return { hasForecasts: false, forecasts: [] };
+
+  // Group by venture
+  const byVenture = {};
+  for (const f of forecasts) {
+    if (!byVenture[f.venture_id]) byVenture[f.venture_id] = [];
+    byVenture[f.venture_id].push(f);
+  }
+
+  return {
+    hasForecasts: true,
+    ventureCount: Object.keys(byVenture).length,
+    totalForecasts: forecasts.length,
+    forecasts: forecasts.slice(0, 20),
+  };
+}
+
 async function gatherVentureData() {
   const { data: ventures } = await supabase
     .from('ventures')
@@ -223,11 +247,12 @@ async function generateReview() {
   }
 
   // Gather all data in parallel
-  const [baselineData, sdData, okrData, ventureData] = await Promise.all([
+  const [baselineData, sdData, okrData, ventureData, riskData] = await Promise.all([
     gatherBaselineData(),
     gatherSDData(),
     gatherOKRData(),
     gatherVentureData(),
+    gatherRiskData(),
   ]);
 
   const pipelineData = await gatherPipelineData(baselineData, sdData);
@@ -238,6 +263,7 @@ async function generateReview() {
   console.log(`  OKRs: ${okrData.objectiveCount} objectives, ${okrData.keyResultCount} key results`);
   console.log(`  Ventures: ${ventureData.activeCount} active`);
   console.log(`  Baseline: v${baselineData.version || 1} (${baselineData.totalItems || 0} items)`);
+  console.log(`  Risk forecasts: ${riskData.hasForecasts ? riskData.totalForecasts + ' across ' + riskData.ventureCount + ' ventures' : 'none'}`);
 
   if (isDryRun) {
     console.log('\n[DRY RUN] Would insert review artifact. Narrative:');
@@ -256,7 +282,7 @@ async function generateReview() {
     planned_ventures: ventureData.activeCount,
     actual_ventures: ventureData.ventures.filter(v => v.stage >= 5).length,
     okr_snapshot: okrData.snapshot,
-    risk_snapshot: null,
+    risk_snapshot: riskData.hasForecasts ? riskData : null,
     strategy_health: null,
     pipeline_snapshot: pipelineData,
     eva_narrative: narrative,
