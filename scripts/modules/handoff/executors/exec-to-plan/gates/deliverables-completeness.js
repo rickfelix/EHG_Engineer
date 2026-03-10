@@ -262,7 +262,7 @@ export function createDeliverablesCompletenessGate(supabase) {
         }
 
         // Reconcile incomplete deliverables against available evidence
-        const { reconciled, evidence } = await reconcileDeliverables(deliverables, sdId, supabase);
+        const { reconciled } = await reconcileDeliverables(deliverables, sdId, supabase);
         if (reconciled > 0) {
           console.log(`   📊 Reconciled ${reconciled} deliverable(s) with evidence`);
         }
