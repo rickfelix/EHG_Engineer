@@ -5,18 +5,21 @@ function mockSupabase(objectives, capabilities) {
   return {
     from: vi.fn((table) => {
       if (table === 'strategy_objectives') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockResolvedValue({ data: objectives, error: null }),
-        };
+        const chain = {};
+        chain.select = vi.fn().mockReturnValue(chain);
+        chain.eq = vi.fn().mockResolvedValue({ data: objectives, error: null });
+        return chain;
       }
       if (table === 'venture_capabilities') {
-        return {
-          select: vi.fn().mockReturnThis(),
-          in: vi.fn().mockResolvedValue({ data: capabilities, error: null }),
-        };
+        const chain = {};
+        chain.select = vi.fn().mockReturnValue(chain);
+        chain.in = vi.fn().mockResolvedValue({ data: capabilities, error: null });
+        return chain;
       }
-      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ data: null, error: null }) };
+      const chain = {};
+      chain.select = vi.fn().mockReturnValue(chain);
+      chain.eq = vi.fn().mockResolvedValue({ data: null, error: null });
+      return chain;
     }),
   };
 }
@@ -27,8 +30,8 @@ describe('capability-gap-analyzer', () => {
       { id: 'obj-1', title: 'Auth Platform', time_horizon: 'now', target_capabilities: ['auth', 'payments', 'notifications'], status: 'active' },
     ];
     const capabilities = [
-      { capability_key: 'auth', status: 'delivered' },
-      { capability_key: 'payments', status: 'delivered' },
+      { name: 'auth', maturity_level: 'production' },
+      { name: 'payments', maturity_level: 'stable' },
     ];
 
     const client = mockSupabase(objectives, capabilities);
@@ -45,8 +48,8 @@ describe('capability-gap-analyzer', () => {
       { id: 'obj-1', title: 'Full Coverage', time_horizon: 'now', target_capabilities: ['auth', 'payments'], status: 'active' },
     ];
     const capabilities = [
-      { capability_key: 'auth', status: 'delivered' },
-      { capability_key: 'payments', status: 'verified' },
+      { name: 'auth', maturity_level: 'production' },
+      { name: 'payments', maturity_level: 'stable' },
     ];
 
     const client = mockSupabase(objectives, capabilities);
