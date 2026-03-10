@@ -24,10 +24,9 @@ import {
   topologicalSortByPriority,
   getDependencyDepths,
 } from '../lib/dependency-graph.js';
-import {
-  calculatePriorityScore,
-  assignTrack,
-} from '../lib/priority-scorer.js';
+// eslint-disable-next-line import/no-named-as-default-member
+import priorityScorer from '../lib/priority-scorer.js';
+const { calculatePriorityScore, calculateStrategyWeight, assignTrack } = priorityScorer;
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -110,7 +109,30 @@ async function loadBaselineContext(baselineId) {
     keyResults.set(kr.id, kr);
   }
 
-  return { items: items || [], sds: sds || [], alignmentsBySd, keyResults };
+  // Load strategy objectives for strategy_weight computation
+  const { data: stratObjs } = await supabase
+    .from('strategy_objectives')
+    .select('id, time_horizon, status')
+    .in('status', ['active', 'paused']);
+
+  const strategyObjectives = new Map();
+  for (const obj of stratObjs || []) {
+    strategyObjectives.set(obj.id, obj);
+  }
+
+  // Load baseline items' strategy_objective_id for existing linkages
+  const { data: baselineStratLinks } = await supabase
+    .from('sd_baseline_items')
+    .select('sd_id, strategy_objective_id, strategy_weight, time_horizon')
+    .eq('baseline_id', baselineId)
+    .not('strategy_objective_id', 'is', null);
+
+  const strategyLinks = {};
+  for (const link of baselineStratLinks || []) {
+    strategyLinks[link.sd_id] = link;
+  }
+
+  return { items: items || [], sds: sds || [], alignmentsBySd, keyResults, strategyObjectives, strategyLinks };
 }
 
 /**
@@ -247,10 +269,31 @@ async function cascadeReorder(baselineId, fromRank) {
 
 /**
  * Insert the new SD into the baseline.
+ * Computes strategy_weight from OKR alignment + strategy objective time_horizon.
  */
-async function insertIntoBaseline(baselineId, sdKey, sd, position) {
+async function insertIntoBaseline(baselineId, sdKey, sd, position, ctx) {
   const track = assignTrack(sd);
   const node = position.depth || 0;
+
+  // Compute strategy_weight from OKR alignments + strategy objective linkage
+  const sdAlignments = ctx.alignmentsBySd[sdKey] || [];
+  let strategyWeight = 0;
+  let strategyObjectiveId = null;
+  let timeHorizon = null;
+
+  // Find strategy objective linked to this SD (via existing baseline linkage)
+  const existingLink = ctx.strategyLinks[sdKey];
+  if (existingLink && existingLink.strategy_objective_id) {
+    strategyObjectiveId = existingLink.strategy_objective_id;
+    const obj = ctx.strategyObjectives.get(strategyObjectiveId);
+    if (obj) {
+      timeHorizon = obj.time_horizon;
+      strategyWeight = calculateStrategyWeight(sdAlignments, ctx.keyResults, timeHorizon);
+    }
+  } else if (sdAlignments.length > 0) {
+    // No explicit link but has OKR alignments — compute with default time_horizon
+    strategyWeight = calculateStrategyWeight(sdAlignments, ctx.keyResults, '');
+  }
 
   const item = {
     baseline_id: baselineId,
@@ -260,7 +303,10 @@ async function insertIntoBaseline(baselineId, sdKey, sd, position) {
     track_name: track.trackName,
     dependency_health_score: 1.0,
     is_ready: true,
-    notes: `Auto-inserted by baseline-insertion-hook. Score: ${position.score}, depth: ${node}.`,
+    strategy_weight: strategyWeight,
+    strategy_objective_id: strategyObjectiveId,
+    time_horizon: timeHorizon,
+    notes: `Auto-inserted by baseline-insertion-hook. Score: ${position.score}, depth: ${node}, strategy_weight: ${strategyWeight}.`,
   };
 
   const { error } = await supabase
@@ -335,9 +381,9 @@ async function insertSD(sdKey) {
     console.log(`Cascade: shifted ${shifted} items`);
   }
 
-  // 7. Insert
-  const item = await insertIntoBaseline(baseline.id, sdKey, newSd, position);
-  console.log(`Inserted: ${sdKey} at rank ${position.rank}, track ${item.track}`);
+  // 7. Insert (with strategy_weight computation)
+  const item = await insertIntoBaseline(baseline.id, sdKey, newSd, position, ctx);
+  console.log(`Inserted: ${sdKey} at rank ${position.rank}, track ${item.track}, strategy_weight: ${item.strategy_weight}`);
 
   return {
     success: true,
