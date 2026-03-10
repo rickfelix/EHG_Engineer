@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T21:58:27.768Z
+**Generated**: 2026-03-10T17:05:24.988Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -117,6 +117,11 @@
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 3. authenticated_read_sd_capabilities (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
 
 ## Triggers
 

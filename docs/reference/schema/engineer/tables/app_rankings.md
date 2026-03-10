@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T21:58:27.768Z
+**Generated**: 2026-03-10T17:05:24.988Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -65,6 +65,14 @@
   ```sql
   CREATE INDEX idx_app_rankings_source_category ON public.app_rankings USING btree (source, category)
   ```
+
+## RLS Policies
+
+### 1. service_role_full_access_app_rankings (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 
