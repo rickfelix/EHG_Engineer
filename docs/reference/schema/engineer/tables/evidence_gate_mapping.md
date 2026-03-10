@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T21:58:27.768Z
+**Generated**: 2026-03-10T17:05:24.988Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -44,6 +44,14 @@
   ```sql
   CREATE UNIQUE INDEX evidence_gate_mapping_pkey ON public.evidence_gate_mapping USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. service_role_full_access_evidence_gate_mapping (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

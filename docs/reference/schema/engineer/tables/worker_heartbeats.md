@@ -1,4 +1,4 @@
-# sensemaking_personas Table
+# worker_heartbeats Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
@@ -14,50 +14,51 @@
 
 ---
 
-## Columns (9 total)
+## Columns (11 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| name | `text` | **NO** | - | - |
-| description | `text` | **NO** | - | - |
-| system_prompt | `text` | **NO** | - | - |
-| trigger_keywords | `ARRAY` | **NO** | - | - |
-| priority | `integer(32)` | **NO** | - | - |
-| is_active | `boolean` | **NO** | `true` | - |
+| worker_id | `text` | **NO** | - | - |
+| worker_type | `text` | **NO** | `'stage-execution-worker'::text` | - |
+| last_heartbeat_at | `timestamp with time zone` | **NO** | `now()` | - |
+| status | `text` | **NO** | `'online'::text` | - |
+| pid | `integer(32)` | YES | - | - |
+| hostname | `text` | YES | - | - |
+| started_at | `timestamp with time zone` | **NO** | `now()` | - |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `sensemaking_personas_pkey`: PRIMARY KEY (id)
+- `worker_heartbeats_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `sensemaking_personas_name_key`: UNIQUE (name)
+- `worker_heartbeats_worker_id_unique`: UNIQUE (worker_id)
 
 ### Check Constraints
-- `sensemaking_personas_priority_check`: CHECK (((priority >= 1) AND (priority <= 9)))
-- `sensemaking_personas_trigger_keywords_check`: CHECK ((array_length(trigger_keywords, 1) > 0))
+- `worker_heartbeats_status_check`: CHECK ((status = ANY (ARRAY['online'::text, 'stopped'::text, 'crashed'::text])))
 
 ## Indexes
 
-- `idx_sensemaking_personas_active_priority`
+- `idx_worker_heartbeats_type_status`
   ```sql
-  CREATE INDEX idx_sensemaking_personas_active_priority ON public.sensemaking_personas USING btree (priority) WHERE (is_active = true)
+  CREATE INDEX idx_worker_heartbeats_type_status ON public.worker_heartbeats USING btree (worker_type, status)
   ```
-- `sensemaking_personas_name_key`
+- `worker_heartbeats_pkey`
   ```sql
-  CREATE UNIQUE INDEX sensemaking_personas_name_key ON public.sensemaking_personas USING btree (name)
+  CREATE UNIQUE INDEX worker_heartbeats_pkey ON public.worker_heartbeats USING btree (id)
   ```
-- `sensemaking_personas_pkey`
+- `worker_heartbeats_worker_id_unique`
   ```sql
-  CREATE UNIQUE INDEX sensemaking_personas_pkey ON public.sensemaking_personas USING btree (id)
+  CREATE UNIQUE INDEX worker_heartbeats_worker_id_unique ON public.worker_heartbeats USING btree (worker_id)
   ```
 
 ## RLS Policies
 
-### 1. service_role_all (ALL)
+### 1. service_role_full_access (ALL)
 
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'service_role'::text)`

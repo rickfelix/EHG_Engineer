@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-09T21:58:27.768Z
-**Tables**: 541
+**Generated**: 2026-03-10T17:05:24.988Z
+**Tables**: 542
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -48,9 +48,9 @@ CRITICAL: All queries MUST include venture_id filter.
 Example: SELECT * FROM agent_memory_stores WHERE agent_id = ? AND venture_id = ? |
 | [agent_messages](tables/agent_messages.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [agent_performance_metrics](tables/agent_performance_metrics.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Agent performance metrics (from context learning schema) |
-| [agent_registry](tables/agent_registry.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [agent_registry](tables/agent_registry.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [agent_relationships](tables/agent_relationships.md) | N/A (RLS restricted) | ✅ | 1 | - |
-| [agent_skills](tables/agent_skills.md) | N/A (RLS restricted) | ✅ | 1 | Skill metadata for context-based injection into agent prompts (SD-EVA-FEAT-SKILL-PACKAGING-001) |
+| [agent_skills](tables/agent_skills.md) | N/A (RLS restricted) | ✅ | 2 | Skill metadata for context-based injection into agent prompts (SD-EVA-FEAT-SKILL-PACKAGING-001) |
 | [agent_task_contracts](tables/agent_task_contracts.md) | N/A (RLS restricted) | ✅ | 4 | Task contracts for sub-agent handoffs. Sub-agents read their contract from this table
 instead of inheriting parent agent context, reducing context overhead by 50-70%.
 Pattern: Extends sd_data_contracts for agent-to-agent communication.
@@ -62,7 +62,7 @@ Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0) |
 SD: SD-CAPABILITYAWARE-SCANNERS-AND-ANTHROPIC-ORCH-001-C
 Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [app_config](tables/app_config.md) | N/A (RLS restricted) | ✅ | 3 | - |
-| [app_rankings](tables/app_rankings.md) | N/A (RLS restricted) | ❌ | 0 | Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001) |
+| [app_rankings](tables/app_rankings.md) | N/A (RLS restricted) | ✅ | 1 | Scraped app ranking data from Apple App Store, Google Play, and Product Hunt (SD-LEO-FEAT-AUTOMATED-RANKING-DATA-001) |
 | [archetype_benchmarks](tables/archetype_benchmarks.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [archetype_profile_interactions](tables/archetype_profile_interactions.md) | N/A (RLS restricted) | ✅ | 2 | Interaction matrix between 6 EHG venture archetypes and evaluation profiles, defining weight adjustments and execution guidance |
 | [assumption_sets](tables/assumption_sets.md) | N/A (RLS restricted) | ✅ | 4 | Golden Nugget: Versioned assumption sets for Assumptions vs Reality calibration |
@@ -191,7 +191,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_events](tables/eva_events.md) | N/A (RLS restricted) | ✅ | 2 | EVA Event Bus - All venture-related events |
 | [eva_events_dlq](tables/eva_events_dlq.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_idea_categories](tables/eva_idea_categories.md) | N/A (RLS restricted) | ✅ | 2 | - |
-| [eva_interactions](tables/eva_interactions.md) | N/A (RLS restricted) | ❌ | 0 | Core table capturing all EVA chairman-system interactions for closed-loop learning (SD-LEO-FEAT-DATA-FLYWHEEL-001) |
+| [eva_interactions](tables/eva_interactions.md) | N/A (RLS restricted) | ✅ | 1 | Core table capturing all EVA chairman-system interactions for closed-loop learning (SD-LEO-FEAT-DATA-FLYWHEEL-001) |
 | [eva_orchestration_events](tables/eva_orchestration_events.md) | N/A (RLS restricted) | ✅ | 1 | EVA orchestration lifecycle events for Chairman Dashboard Event Feed. Real-time enabled. |
 | [eva_orchestration_sessions](tables/eva_orchestration_sessions.md) | N/A (RLS restricted) | ✅ | 2 | EVA orchestration sessions - tracks multi-agent coordination for ventures and strategic initiatives |
 | [eva_saga_log](tables/eva_saga_log.md) | N/A (RLS restricted) | ✅ | 1 | Saga execution logs for Eva Orchestrator compensation pattern |
@@ -212,7 +212,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_youtube_intake](tables/eva_youtube_intake.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [evaluation_profile_outcomes](tables/evaluation_profile_outcomes.md) | N/A (RLS restricted) | ✅ | 2 | Per-gate survival signals linking evaluation profile+version to venture outcomes at tracked boundaries |
 | [evaluation_profiles](tables/evaluation_profiles.md) | N/A (RLS restricted) | ✅ | 2 | Configurable evaluation weight profiles for EVA Stage 0 synthesis scoring |
-| [evidence_gate_mapping](tables/evidence_gate_mapping.md) | N/A (RLS restricted) | ❌ | 0 | - |
+| [evidence_gate_mapping](tables/evidence_gate_mapping.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [exec_authorizations](tables/exec_authorizations.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [exec_handoff_preparations](tables/exec_handoff_preparations.md) | N/A (RLS restricted) | ✅ | 2 | Tracks EXEC→PLAN handoff preparation and delivery |
 | [exec_implementation_sessions](tables/exec_implementation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Stores results from EXEC Implementation Excellence Orchestrator - systematic implementation tracking and quality assurance |
@@ -295,7 +295,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [leo_protocol_file_audit](tables/leo_protocol_file_audit.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [leo_protocol_references](tables/leo_protocol_references.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [leo_protocol_sections](tables/leo_protocol_sections.md) | N/A (RLS restricted) | ✅ | 4 | - |
-| [leo_protocol_state](tables/leo_protocol_state.md) | N/A (RLS restricted) | ❌ | 0 | - |
+| [leo_protocol_state](tables/leo_protocol_state.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [leo_protocols](tables/leo_protocols.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [leo_reasoning_sessions](tables/leo_reasoning_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks automatic chain-of-thought reasoning sessions with complexity-based depth selection |
 | [leo_reasoning_triggers](tables/leo_reasoning_triggers.md) | N/A (RLS restricted) | ✅ | 2 | Rules for automatically triggering different reasoning depths based on content analysis |
@@ -315,7 +315,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [leo_vetting_rubrics](tables/leo_vetting_rubrics.md) | N/A (RLS restricted) | ✅ | 2 | Versioned rubrics for evaluating proposals |
 | [leo_workflow_phases](tables/leo_workflow_phases.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [lifecycle_phases](tables/lifecycle_phases.md) | N/A (RLS restricted) | ✅ | 4 | Venture Vision v2.0 - 6 Phase Definitions |
-| [lifecycle_stage_config](tables/lifecycle_stage_config.md) | N/A (RLS restricted) | ✅ | 4 | 25-stage venture lifecycle configuration. Stage 10 (Strategic Narrative & Positioning)
+| [lifecycle_stage_config](tables/lifecycle_stage_config.md) | N/A (RLS restricted) | ✅ | 5 | 25-stage venture lifecycle configuration. Stage 10 (Strategic Narrative & Positioning)
 includes cultural_design_config artifact for venture-based design style selection.
 Reference: docs/workflow/stages_v2.yaml |
 | [llm_canary_metrics](tables/llm_canary_metrics.md) | N/A (RLS restricted) | ✅ | 1 | Rolling window metrics. Consider BRIN index or partitioning for high volume. |
@@ -422,7 +422,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [sd_baseline_rationale](tables/sd_baseline_rationale.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [sd_burn_rate_snapshots](tables/sd_burn_rate_snapshots.md) | N/A (RLS restricted) | ✅ | 1 | Periodic snapshots of velocity metrics for trending and forecasting. |
 | [sd_business_evaluations](tables/sd_business_evaluations.md) | N/A (RLS restricted) | ✅ | 2 | - |
-| [sd_capabilities](tables/sd_capabilities.md) | N/A (RLS restricted) | ✅ | 2 | Junction table tracking which capabilities were registered/updated/deprecated by which Strategic Directives. Provides full audit trail. |
+| [sd_capabilities](tables/sd_capabilities.md) | N/A (RLS restricted) | ✅ | 3 | Junction table tracking which capabilities were registered/updated/deprecated by which Strategic Directives. Provides full audit trail. |
 | [sd_checkpoint_history](tables/sd_checkpoint_history.md) | N/A (RLS restricted) | ✅ | 3 | RLS: Append-only for authenticated |
 | [sd_conflict_matrix](tables/sd_conflict_matrix.md) | N/A (RLS restricted) | ✅ | 1 | Potential conflicts between SDs that should not run in parallel. |
 | [sd_contract_exceptions](tables/sd_contract_exceptions.md) | N/A (RLS restricted) | ✅ | 4 | Tracks all contract exceptions with full audit trail and automatic scrutiny assessment.
@@ -486,7 +486,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [session_lifecycle_events](tables/session_lifecycle_events.md) | N/A (RLS restricted) | ✅ | 2 | Audit log for session lifecycle events: create, heartbeat, stale, release. Part of FR-5. |
 | [shipping_decisions](tables/shipping_decisions.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
-| [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ❌ | 0 | - |
+| [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [soul_extractions](tables/soul_extractions.md) | N/A (RLS restricted) | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
 | [stage13_assessments](tables/stage13_assessments.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated exit readiness assessments. SD-STAGE-13-001. |
 | [stage13_substage_states](tables/stage13_substage_states.md) | N/A (RLS restricted) | ✅ | 1 | Tracks current Stage 13 substage position per venture. SD-STAGE-13-001. |
@@ -569,7 +569,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_asset_registry](tables/venture_asset_registry.md) | N/A (RLS restricted) | ✅ | 5 | Tracks assets owned by each venture for acquisition readiness assessment |
 | [venture_blueprints](tables/venture_blueprints.md) | N/A (RLS restricted) | ✅ | 1 | Pre-made venture templates for the Blueprint Browse entry path in Stage 0 |
 | [venture_briefs](tables/venture_briefs.md) | N/A (RLS restricted) | ✅ | 1 | Stage 0 output contract - structured brief produced by the synthesis engine that becomes Stage 1 input |
-| [venture_capabilities](tables/venture_capabilities.md) | N/A (RLS restricted) | ✅ | 2 | Tracks reusable capabilities across ventures for the Capability Lattice (SD-LEO-FEAT-CAPABILITY-LATTICE-001) |
+| [venture_capabilities](tables/venture_capabilities.md) | N/A (RLS restricted) | ✅ | 3 | Tracks reusable capabilities across ventures for the Capability Lattice (SD-LEO-FEAT-CAPABILITY-LATTICE-001) |
 | [venture_compliance_artifacts](tables/venture_compliance_artifacts.md) | N/A (RLS restricted) | ✅ | 4 | SD-LIFECYCLE-GAP-002: Venture-owned generated artifacts |
 | [venture_compliance_progress](tables/venture_compliance_progress.md) | N/A (RLS restricted) | ✅ | 4 | SD-LIFECYCLE-GAP-002: Per-venture compliance item completion tracking |
 | [venture_data_room_artifacts](tables/venture_data_room_artifacts.md) | N/A (RLS restricted) | ✅ | 3 | - |
@@ -600,6 +600,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [voice_usage_metrics](tables/voice_usage_metrics.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [wizard_analytics](tables/wizard_analytics.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [work_item_thresholds](tables/work_item_thresholds.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [worker_heartbeats](tables/worker_heartbeats.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [workflow_checkpoints](tables/workflow_checkpoints.md) | N/A (RLS restricted) | ✅ | 2 | Stores workflow state checkpoints for recovery |
 | [workflow_executions](tables/workflow_executions.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [workflow_recovery_state](tables/workflow_recovery_state.md) | N/A (RLS restricted) | ✅ | 2 | Tracks recovery attempts and status |
@@ -772,7 +773,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (415 tables)
+### Other (416 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1204,6 +1205,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [voice_usage_metrics](tables/voice_usage_metrics.md)
 - [wizard_analytics](tables/wizard_analytics.md)
 - [work_item_thresholds](tables/work_item_thresholds.md)
+- [worker_heartbeats](tables/worker_heartbeats.md)
 - [workflow_checkpoints](tables/workflow_checkpoints.md) - Stores workflow state checkpoints for recovery
 - [workflow_executions](tables/workflow_executions.md)
 - [workflow_recovery_state](tables/workflow_recovery_state.md) - Tracks recovery attempts and status
