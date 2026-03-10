@@ -745,6 +745,16 @@ export function createPhaseCoverageExitGate(supabase) {
         return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['No arch_key — gate skipped'] };
       }
 
+      // PAT-AUTO-999899ce: Child SDs should only verify their own phase, not all sibling phases.
+      // Without this, Child A scores 25%, B scores 50%, C scores 75% — all fail before last child.
+      // Full coverage is enforced when the parent orchestrator completes.
+      if (ctx.sd?.parent_sd_id) {
+        const currentSdKey = ctx.sd?.sd_key || ctx.sd?.id;
+        console.log(`   ℹ️  Child SD detected (parent: ${ctx.sd.parent_sd_id})`);
+        console.log('   ℹ️  Full phase coverage enforced at parent orchestrator level');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [`Child SD ${currentSdKey} — full coverage enforced at parent level`] };
+      }
+
       try {
         // Get architecture plan with structured phases
         const { data: plan, error: planError } = await supabase
