@@ -156,6 +156,51 @@ async function gatherRiskData() {
   };
 }
 
+async function gatherGapData() {
+  // Capability gap analysis: strategy objectives vs delivered capabilities
+  const { data: objectives } = await supabase
+    .from('strategy_objectives')
+    .select('id, title, time_horizon, target_capabilities')
+    .eq('status', 'active');
+
+  if (!objectives || objectives.length === 0) {
+    return { hasGaps: false, gaps_by_objective: [], pending_proposals_count: 0 };
+  }
+
+  const { data: capabilities } = await supabase
+    .from('venture_capabilities')
+    .select('capability_key')
+    .in('status', ['delivered', 'verified', 'active']);
+
+  const deliveredKeys = new Set((capabilities || []).map(c => c.capability_key));
+
+  const gapsByObjective = objectives.map(obj => {
+    const targets = obj.target_capabilities || [];
+    const gaps = targets.filter(t => !deliveredKeys.has(t));
+    return {
+      objective: obj.title,
+      time_horizon: obj.time_horizon,
+      target_count: targets.length,
+      delivered_count: targets.length - gaps.length,
+      gap_count: gaps.length,
+      gap_capabilities: gaps,
+    };
+  }).filter(o => o.gap_count > 0);
+
+  // Count pending proposals
+  const { count } = await supabase
+    .from('sd_proposals')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending');
+
+  return {
+    hasGaps: gapsByObjective.length > 0,
+    gaps_by_objective: gapsByObjective,
+    total_gaps: gapsByObjective.reduce((s, o) => s + o.gap_count, 0),
+    pending_proposals_count: count || 0,
+  };
+}
+
 async function gatherVentureData() {
   const { data: ventures } = await supabase
     .from('ventures')
@@ -188,7 +233,7 @@ async function gatherPipelineData(baselineData, sdData) {
   };
 }
 
-function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData) {
+function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData, gapData) {
   const staleWarnings = freshnessChecks.filter(f => !f.fresh);
   const lines = [];
 
@@ -225,6 +270,16 @@ function buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureD
     lines.push(`- ${v.name}: Stage ${v.stage}`);
   }
 
+  if (gapData && gapData.hasGaps) {
+    lines.push('');
+    lines.push('## Capability Gaps');
+    lines.push(`- ${gapData.total_gaps} total gaps across ${gapData.gaps_by_objective.length} objectives`);
+    lines.push(`- Pending SD proposals: ${gapData.pending_proposals_count}`);
+    for (const obj of gapData.gaps_by_objective) {
+      lines.push(`  - ${obj.objective} (${obj.time_horizon}): ${obj.gap_count} gaps — ${obj.gap_capabilities.join(', ')}`);
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -247,16 +302,17 @@ async function generateReview() {
   }
 
   // Gather all data in parallel
-  const [baselineData, sdData, okrData, ventureData, riskData] = await Promise.all([
+  const [baselineData, sdData, okrData, ventureData, riskData, gapData] = await Promise.all([
     gatherBaselineData(),
     gatherSDData(),
     gatherOKRData(),
     gatherVentureData(),
     gatherRiskData(),
+    gatherGapData(),
   ]);
 
   const pipelineData = await gatherPipelineData(baselineData, sdData);
-  const narrative = buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData);
+  const narrative = buildNarrative(freshnessChecks, baselineData, sdData, okrData, ventureData, pipelineData, gapData);
 
   console.log('\nReview Summary:');
   console.log(`  SDs: ${sdData.total} total, ${sdData.completed} completed, ${sdData.inProgress + sdData.active} in-flight`);
@@ -264,6 +320,8 @@ async function generateReview() {
   console.log(`  Ventures: ${ventureData.activeCount} active`);
   console.log(`  Baseline: v${baselineData.version || 1} (${baselineData.totalItems || 0} items)`);
   console.log(`  Risk forecasts: ${riskData.hasForecasts ? riskData.totalForecasts + ' across ' + riskData.ventureCount + ' ventures' : 'none'}`);
+  console.log(`  Capability gaps: ${gapData.hasGaps ? gapData.total_gaps + ' gaps across ' + gapData.gaps_by_objective.length + ' objectives' : 'none'}`);
+  console.log(`  Pending proposals: ${gapData.pending_proposals_count}`);
 
   if (isDryRun) {
     console.log('\n[DRY RUN] Would insert review artifact. Narrative:');
@@ -283,6 +341,7 @@ async function generateReview() {
     actual_ventures: ventureData.ventures.filter(v => v.stage >= 5).length,
     okr_snapshot: okrData.snapshot,
     risk_snapshot: riskData.hasForecasts ? riskData : null,
+    capability_gaps: gapData.hasGaps ? gapData : null,
     strategy_health: null,
     pipeline_snapshot: pipelineData,
     eva_narrative: narrative,
