@@ -57,10 +57,14 @@ The dashboard's heartbeat-based status can be misleading. Sessions doing active 
 
 **Determining active worker count (do NOT rely on user telling you):**
 - Count all sessions that heartbeated within the last **15 minutes** as "likely active" — this includes sessions the dashboard labels "stale" (which uses a shorter 5-min threshold).
-- Sessions labeled "idle" with a heartbeat within 15 minutes are alive but between tasks — count them as available capacity.
+- **Ghost filter**: A session must have **ever claimed an SD** (currently or previously) to count as a real worker. Sessions that appear idle with no history of SD claims are likely ghosts (e.g., coordinator sessions, stale terminals, automated processes). Indicators of ghost sessions:
+  - Listed as "idle" with no SD claim across multiple consecutive dashboard cycles
+  - Never appeared in sweep output as an active worker
+  - Terminal ID doesn't match any known worker from sweep history
+- Sessions labeled "idle" with a heartbeat within 15 minutes **AND a history of SD claims** are alive but between tasks — count them as available capacity.
 - Only consider a session truly dead if: heartbeat is 15+ minutes old AND it appeared in a previous sweep as stale AND has since been released.
-- The coordinator session itself (this session) is NOT a worker — exclude it from worker counts.
-- **Derived worker count** = sessions with heartbeat < 15 min old (active + idle with recent heartbeat). Use this for ETA calculations.
+- The coordinator session itself (this session) is NOT a worker — exclude it from worker counts. It typically appears as an idle session with no SD claim.
+- **Derived worker count** = sessions with heartbeat < 15 min that have claimed an SD (currently or historically), minus the coordinator session. Use this for ETA calculations.
 
 **Status language:**
 - **NEVER declare "Fleet DOWN"** based solely on aged heartbeats.
@@ -254,56 +258,95 @@ Render the estimated completion time using figlet-style block digits. Format: `H
 
 ### Smart Estimation Process
 
-Do NOT use the naive `remaining SDs / velocity` formula. Instead, compute the ETA as follows:
+Do NOT use the naive `remaining SDs / velocity` formula. The dashboard's aggregate velocity (e.g., 7.4 SDs/hr) reflects past conditions (different SD types, different worker counts) and is misleading for forward-looking estimates.
+
+**Primary method: Phase-based estimation.** Velocity is only used as a sanity check.
 
 **Step 1: Determine worker count**
-Use the derived worker count from the Assessment Rules (sessions with heartbeat < 15 min). Exclude the coordinator session.
+Use the derived worker count from the Assessment Rules (ghost filter + 15-min heartbeat window). Exclude the coordinator session.
 
-**Step 2: Classify remaining SDs by phase**
-From the dashboard output, categorize each remaining SD:
-- **DRAFT** — needs LEAD + PLAN + EXEC → estimate ~50 min each
-- **READY / PLANNING** — needs PLAN + EXEC → estimate ~35 min each
-- **EXEC (with %)** — in progress → estimate `remaining% × 25 min` (avg EXEC phase is ~25 min)
-- **IN_PROGRESS (no %)** — assume halfway → estimate ~20 min each
+**Step 2: Classify remaining SDs by type and phase**
+Not all SDs are equal. Categorize each remaining SD and apply type-specific estimates:
+
+| SD Type | Phase | Estimate | Rationale |
+|---------|-------|----------|-----------|
+| **Orchestrator child** (in progress) | EXEC with % | `remaining% × 25 min` | Children are pre-planned, focused scope |
+| **Orchestrator child** (not started) | Full LEAD→EXEC | ~30 min | Smaller scope, parent already planned |
+| **Standalone SD (DRAFT)** | Full LEAD→PLAN→EXEC | ~50-70 min | Needs vision, PRD, implementation |
+| **Standalone SD (READY)** | PLAN→EXEC | ~35-45 min | LEAD done, needs PRD + implementation |
+| **Standalone SD (PLANNING)** | Continue PLAN→EXEC | ~30-40 min | Partially planned |
+| **Standalone SD (EXEC with %)** | Remaining EXEC | `remaining% × 30 min` | Standalone EXEC is longer than child EXEC |
+
+**Important**: The dashboard's "recent velocity" was likely measured during orchestrator child execution. Children are faster (~20 min) than standalone DRAFTs (~60 min). Do NOT apply child velocity to standalone SD estimates.
 
 **Step 3: Map dependency chains**
-Check the dashboard's available/orchestrator sections and the SD statuses for dependency constraints:
-- **BLOCKED SDs**: Cannot start until their blocker completes. Their start time = blocker's estimated finish time.
-- **Orchestrator children with ordering**: If children must run sequentially (A before B before C), they form a chain — only one runs at a time per chain.
-- **Parent-child dependencies**: A child SD that depends on a sibling's output cannot be parallelized with that sibling.
-- **Cross-orchestrator dependencies**: If a standalone SD depends on an orchestrator completing, it can't start until that orchestrator is done.
+Check the dashboard for dependency constraints:
+- **BLOCKED SDs**: Cannot start until blocker completes. Start time = blocker's finish time.
+- **Sequential children**: If children must run in order, they form a chain — sum their times.
+- **Parent-child deps**: Siblings that depend on each other cannot be parallelized.
+- **Cross-orchestrator deps**: Standalone SDs depending on an orchestrator must wait.
 
-Build a simple dependency graph:
-- **Independent SDs**: No dependencies — can be scheduled freely in parallel rounds.
-- **Chain SDs**: Must run sequentially — sum their times to get the chain's total duration.
-- **Blocked SDs**: Add wait time (blocker's remaining time) before their own estimated duration.
+Build a dependency graph:
+- **Independent SDs**: Schedule freely in parallel rounds.
+- **Chain SDs**: Sum times for total chain duration.
+- **Blocked SDs**: Add blocker's remaining time before their own duration.
 
 **Step 4: Calculate parallel schedule with constraints**
-Using the dependency graph from Step 3:
+Using the dependency graph:
 1. Identify all **immediately runnable** SDs (no unmet dependencies).
 2. Assign to workers (N = worker count), longest-first. Round time = longest SD in the round.
-3. When an SD finishes, check if it **unblocks** any dependent SDs. Add newly unblocked SDs to the runnable pool.
-4. Continue assigning rounds until all SDs are scheduled.
-5. **Critical path** = the longest chain of sequential dependencies. The ETA can never be shorter than the critical path, regardless of worker count.
+3. When an SD finishes, check if it **unblocks** dependent SDs. Add newly runnable SDs to the pool.
+4. Continue until all SDs scheduled.
+5. **Critical path** = longest chain of sequential dependencies. ETA can never be shorter than critical path.
 6. Total time = max(sum of parallel rounds, critical path duration).
 
-**Step 5: Apply velocity adjustment**
-Compare the phase-based estimate against the dashboard's recent velocity (prefer recent over overall). If they differ by more than 30%, average them — the velocity captures real-world variance the phase estimates miss.
+**Step 5: Sanity check against per-worker velocity**
+Only as a sanity check — NOT as the primary estimate:
+- Compute **per-worker velocity**: `total recent completions / (active workers × hours)`. This normalizes for worker count.
+- If the phase-based estimate and per-worker velocity estimate differ by **more than 50%**, flag it:
+  ```
+  ⚠ Velocity sanity check: phase estimate (~2h 30m) vs velocity estimate (~1h 10m) —
+     velocity may reflect faster child SDs, trusting phase estimate
+  ```
+- If they're within 50%, the phase estimate is credible — use it as-is.
+- **Never average** phase and velocity estimates. Phase is primary. Velocity is a smell test.
 
-**Step 6: Compute finish time**
-`Estimated finish = current time + total estimated duration`
+**Step 6: Apply rolling average (last 3 cycles)**
 
-If blocked SDs exist with no clear unblock time (e.g., waiting on external input), note this in the stats line:
+Maintain a mental log of the last 3 dashboard cycles' values:
+- **Worker count** from each cycle (derived per Step 1)
+- **ETA duration** from each cycle (computed per Steps 2-5)
+
+Apply a rolling average to smooth out noise from session churn:
+- **Averaged workers** = mean of last 3 worker counts, rounded to nearest integer
+- **Averaged ETA duration** = mean of last 3 ETA durations in minutes
+
+Use the averaged values for the displayed estimate. This prevents:
+- A single cycle with ghost inflation from spiking the worker count
+- A single stale sweep from crashing the ETA to unrealistic levels
+- Jitter between cycles from making the display feel unreliable
+
+**Bootstrap**: For the first 1-2 cycles (before 3 data points exist), use whatever data is available. Label the estimate with `(1 sample)` or `(2 samples)` until 3 cycles have accumulated.
+
+**Reset the rolling window** when:
+- An SD completes (the remaining work fundamentally changed)
+- A new orchestrator starts (different SD mix)
+- Worker count changes by more than 2 in a single cycle (fleet restructured)
+
+**Step 7: Compute finish time**
+`Estimated finish = current time + averaged ETA duration`
+
+If blocked SDs exist with no clear unblock time, note in stats:
 ```
-  5 SDs left  |  3 workers  |  7.4/hr  |  1 blocked (awaiting SD-X)
+  5 SDs left  |  3 workers  |  ~50m/SD  |  1 blocked (awaiting SD-X)
 ```
 
 ### Dynamic values to render
 - **Big ASCII time**: The estimated finish time (hour, minutes, AM/PM) in figlet-style block letters
 - **Progress bar**: Proportional fill based on completed / total SDs
 - **Percentage**: completed / total as percent
-- **Time left**: human-readable duration (e.g., `~1h 20m`, `~35m`)
-- **Stats line**: SDs remaining, derived worker count, effective velocity used
+- **Time left**: human-readable duration (e.g., `~2h 10m`, `~35m`)
+- **Stats line**: SDs remaining, averaged worker count, estimation method (e.g., `phase-based, 3-cycle avg`)
 
 **Only display when**: the forecast section has pending SDs > 0. Do NOT display alongside the Queue Cleared Celebration banner.
 
