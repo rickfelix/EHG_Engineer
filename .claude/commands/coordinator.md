@@ -209,15 +209,48 @@ This banner signals the fleet has finished all work. Display it once per dashboa
 When the dashboard shows SDs still remaining in the queue (not yet complete), display this ETA block AFTER the dashboard output.
 
 ```
-        ___    ____  _  _     ____  __  __
-       / _ \  |___ \| || |   |  _ \|  \/  |
-      | (_) |   __) | || |_  | |_) | |\/| |
-       \__, |  / __/|__   _| |  __/| |  | |
-         /_/  |_____|  |_|   |_|   |_|  |_|
+       _  ___    _ _  _     ____  __  __
+      / |/ _ \  / | || |   |  _ \|  \/  |
+      | | | | |/ /| || |_  | |_) | |\/| |
+      | | |_| / / |__   _| |  __/| |  | |
+      |_|\___/_/     |_|   |_|   |_|  |_|
 
   █████████████████████████░░░░░░░░░░░░░  72%  ~1h 24m
   5 SDs left  |  3 workers  |  7.4/hr
 ```
+
+### ASCII Time Formatting Rules
+
+Render the estimated completion time using figlet-style block digits. Format: `H:MM AM/PM` or `HH:MM AM/PM`.
+
+**Digit reference** — use these exact patterns for each digit:
+```
+0:  ___      1:  _     2:  ____    3:  _____   4:  _  _
+   / _ \       / |       |___ \      |___ /      | || |
+  | | | |      | |         __) |      |_ \       | || |_
+  | |_| |      | |        / __/      ___) |      |__   _|
+   \___/       |_|       |_____|     |____/         |_|
+
+5:  ____    6:   __     7:  _____   8:  ___     9:  ___
+   | ___|      / /_       |___  |     ( _ )       / _ \
+   |___ \     | '_ \         / /      / _ \      | (_) |
+    ___) |    | (_) |       / /      | (_) |      \__, |
+   |____/     \___/        /_/       \___/          /_/
+```
+
+**Colon separator** — place between hour and minutes:
+```
+   _
+  (_)
+   _
+  (_)
+```
+
+**Rules:**
+- **Hour**: Use 1-2 digits (no leading zero). `9` not `09`. `10` is two digits.
+- **Minutes**: Always 2 digits with leading zero. `04` not `4`.
+- **AM/PM**: Render as standard text after the digit block, same style as the example.
+- Spacing: One space between each digit, colon is narrow (2 chars wide).
 
 ### Smart Estimation Process
 
