@@ -212,22 +212,39 @@ This banner signals the fleet has finished all work. Display it once per dashboa
 
 When the dashboard shows SDs still remaining in the queue (not yet complete), display this ETA block AFTER the dashboard output.
 
+### ETA Block Format
+
+Render the estimated finish time as a **single code block** with the ASCII time, progress bar, and stats line together. This prevents line-wrapping and alignment issues across terminals.
+
+**Example (5:08 PM with 0% progress):**
 ```
-       _  ___    _ _  _     ____  __  __
-      / |/ _ \  / | || |   |  _ \|  \/  |
-      | | | | |/ /| || |_  | |_) | |\/| |
-      | | |_| / / |__   _| |  __/| |  | |
-      |_|\___/_/     |_|   |_|   |_|  |_|
+  ____              ___      ___
+ | ___|      _     / _ \   ( _ )   ____  __  __
+ |___ \     (_)   | | | |  / _ \  |  _ \|  \/  |
+  ___) |     _    | |_| | | (_) | | |_) | |\/| |
+ |____/     (_)    \___/   \___/  |  __/| |  | |
+                                   |_|   |_|  |_|
 
-  █████████████████████████░░░░░░░░░░░░░  72%  ~1h 24m
-  5 SDs left  |  3 workers  |  7.4/hr
+  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  0%   ~10h 11m remaining
+  8 SDs left  |  2 workers  |  ETA 5:08 PM EST
 ```
 
-### ASCII Time Formatting Rules
+**Example (10:14 PM with 72% progress):**
+```
+  _  ___              _  _  _
+ / |/ _ \      _     / || || |   ____  __  __
+ | | | | |    (_)   | || || |_  |  _ \|  \/  |
+ | | |_| |     _    | ||__   _| | |_) | |\/| |
+ |_|\___/     (_)   |_|   |_|   |  __/| |  | |
+                                  |_|   |_|  |_|
 
-Render the estimated completion time using figlet-style block digits. Format: `H:MM AM/PM` or `HH:MM AM/PM`.
+  ████████████████████████████░░░░░░░░░░░  72%   ~1h 24m remaining
+  5 SDs left  |  3 workers  |  ETA 10:14 PM EST
+```
 
-**Digit reference** — use these exact patterns for each digit:
+### ASCII Time Construction Rules
+
+**Digit reference** — use these exact 5-line patterns:
 ```
 0:  ___      1:  _     2:  ____    3:  _____   4:  _  _
    / _ \       / |       |___ \      |___ /      | || |
@@ -242,19 +259,22 @@ Render the estimated completion time using figlet-style block digits. Format: `H
    |____/     \___/        /_/       \___/          /_/
 ```
 
-**Colon separator** — place between hour and minutes:
+**Colon separator** (5 lines, padded to match digit height):
 ```
-   _
-  (_)
-   _
-  (_)
+line 1:  (empty)
+line 2:    _
+line 3:   (_)
+line 4:    _
+line 5:   (_)
 ```
 
-**Rules:**
-- **Hour**: Use 1-2 digits (no leading zero). `9` not `09`. `10` is two digits.
+**Assembly rules:**
+- **Hour**: 1-2 digits, no leading zero. `9` not `09`.
 - **Minutes**: Always 2 digits with leading zero. `04` not `4`.
-- **AM/PM**: Render as standard text after the digit block, same style as the example.
-- Spacing: One space between each digit, colon is narrow (2 chars wide).
+- **AM/PM**: Render `____  __  __` block on same lines as digits, right-aligned with generous spacing.
+- **Spacing**: 6+ spaces between digit groups (hour, colon, minutes, AM/PM) to prevent visual crowding.
+- **Single code block**: All 5 lines of digits + blank line + progress bar + stats line in ONE fenced code block.
+- **Plaintext fallback**: Always include `ETA H:MM AM/PM EST` on the stats line so the time is readable even if ASCII art wraps.
 
 ### Smart Estimation Process
 
