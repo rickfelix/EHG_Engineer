@@ -26,7 +26,9 @@ import {
   // Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
   createPhaseCoverageGate,
   // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
-  createSdQualityGate
+  createSdQualityGate,
+  // Translation Fidelity Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
+  createTranslationFidelityGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -132,6 +134,11 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
     // Blocks when an architecture plan has uncovered phases
     gates.push(createPhaseCoverageGate(this.supabase));
+
+    // Translation Fidelity Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
+    // LLM-powered: verifies SD captures architecture plan and vision intent
+    // Skips when no arch plan linked; caches results for 1 hour
+    gates.push(createTranslationFidelityGate(this.supabase));
 
     return gates;
   }
