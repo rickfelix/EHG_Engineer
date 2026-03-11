@@ -140,7 +140,7 @@ async function cmdSDQuery(opts) {
 
   let query = supabase
     .from('strategic_directives_v2')
-    .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status');
+    .select('sd_key, title, key_changes, success_criteria, success_metrics, strategic_objectives, smoke_test_steps, delivers_capabilities, completion_date, status, metadata');
 
   // SD-LEO-INFRA-ALIGN-HEAL-GATE-001 (FR-4): --in-progress includes non-completed SDs
   if (opts.inProgress) {
@@ -190,6 +190,25 @@ async function cmdSDQuery(opts) {
     console.log(`    Completed: ${sd.completion_date || 'unknown'}`);
   }
 
+  // Load architecture plan deliverables for SDs that have arch_key in metadata
+  const archDeliverablesBySD = {};
+  for (const sd of sds) {
+    const archKey = sd.metadata?.arch_key;
+    if (archKey) {
+      const { data: archPlan } = await supabase
+        .from('eva_architecture_plans')
+        .select('extracted_dimensions')
+        .eq('plan_key', archKey)
+        .single();
+      if (archPlan?.extracted_dimensions?.length > 0) {
+        archDeliverablesBySD[sd.sd_key] = archPlan.extracted_dimensions.map(d => ({
+          name: d.key || d.name,
+          description: d.description || '',
+        }));
+      }
+    }
+  }
+
   // Build inline scoring context
   const scoringContext = {
     mode: 'SD_HEAL_SCORE',
@@ -216,6 +235,10 @@ async function cmdSDQuery(opts) {
       '  - smoke_tests_pass (0-100): Would the smoke_test_steps pass if executed?',
       '    NOTE: If smoke_test_steps is empty/null/[], score 100 with reasoning "N/A: no smoke test steps defined".',
       '  - capabilities_present (0-100): Are delivers_capabilities actually functional?',
+      '  - planning_traceability (0-100, OPTIONAL): Were architecture plan deliverables actually implemented?',
+      '    NOTE: Only include this dimension if the SD has an arch_key in metadata AND architecture_deliverables are provided below.',
+      '    If no architecture plan is linked, OMIT this dimension entirely (do not score it).',
+      '    Score = (deliverables_found / total_deliverables * 100). Search codebase for each deliverable by keyword.',
       '',
       'Include the classification in each dimension\'s reasoning field (e.g., "DESCOPED: zero callers in codebase").',
       'The gaps array should ONLY contain items classified as MISSING — not DESCOPED, RELOCATED, or SUPERSEDED.',
@@ -223,19 +246,27 @@ async function cmdSDQuery(opts) {
       'After scoring, write JSON to a file and run:',
       '  node scripts/eva/heal-command.mjs sd persist --file <path-to-json>',
     ].join('\n'),
-    sds: sds.map(sd => ({
-      sd_key: sd.sd_key,
-      title: sd.title,
-      completion_date: sd.completion_date,
-      promises: {
-        key_changes: sd.key_changes,
-        success_criteria: sd.success_criteria,
-        success_metrics: sd.success_metrics,
-        strategic_objectives: sd.strategic_objectives,
-        smoke_test_steps: sd.smoke_test_steps,
-        delivers_capabilities: sd.delivers_capabilities,
-      },
-    })),
+    sds: sds.map(sd => {
+      const sdData = {
+        sd_key: sd.sd_key,
+        title: sd.title,
+        completion_date: sd.completion_date,
+        promises: {
+          key_changes: sd.key_changes,
+          success_criteria: sd.success_criteria,
+          success_metrics: sd.success_metrics,
+          strategic_objectives: sd.strategic_objectives,
+          smoke_test_steps: sd.smoke_test_steps,
+          delivers_capabilities: sd.delivers_capabilities,
+        },
+      };
+      // Include architecture deliverables when SD has linked architecture plan
+      if (archDeliverablesBySD[sd.sd_key]) {
+        sdData.architecture_deliverables = archDeliverablesBySD[sd.sd_key];
+        sdData.has_architecture_plan = true;
+      }
+      return sdData;
+    }),
     responseFormat: {
       sd_scores: [
         {
@@ -246,6 +277,8 @@ async function cmdSDQuery(opts) {
             { id: 'success_metrics_achieved', score: 0, reasoning: '...' },
             { id: 'smoke_tests_pass', score: 0, reasoning: '...' },
             { id: 'capabilities_present', score: 0, reasoning: '...' },
+            // Include planning_traceability ONLY when SD has architecture_deliverables
+            // { id: 'planning_traceability', score: 0, reasoning: 'N of M deliverables found...', gaps: ['missing deliverable names'] },
           ],
           item_classifications: [
             { item: 'exampleFunction', classification: 'DESCOPED|MISSING|RELOCATED|SUPERSEDED', evidence: 'brief evidence' },
@@ -393,6 +426,11 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
     'smoke_tests_pass',
     'capabilities_present',
   ];
+  // KNOWN_DIMENSIONS includes optional dimensions that are accepted but not required
+  const KNOWN_DIMENSIONS = [
+    ...REQUIRED_DIMENSIONS,
+    'planning_traceability',
+  ];
   const MIN_RATIONALE_LENGTH = 20;
 
   const validationErrors = [];
@@ -411,14 +449,14 @@ async function cmdSDPersist(scoreJson, filePath, { inProgress = false } = {}) {
       });
     }
 
-    // Check for unknown dimension keys
-    const unknown = dimIds.filter(d => !REQUIRED_DIMENSIONS.includes(d));
+    // Check for unknown dimension keys (accepts both required and optional known dimensions)
+    const unknown = dimIds.filter(d => !KNOWN_DIMENSIONS.includes(d));
     if (unknown.length > 0) {
       validationErrors.push({
         sdKey: sdScore.sd_key,
         rule: 'UNKNOWN_DIMENSIONS',
         details: `Unknown dimension keys: ${unknown.join(', ')}`,
-        fix: 'Use only: ' + REQUIRED_DIMENSIONS.join(', '),
+        fix: 'Use only: ' + KNOWN_DIMENSIONS.join(', '),
       });
     }
 
