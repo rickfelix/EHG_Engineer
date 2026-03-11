@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
+**Generated**: 2026-03-11T21:43:15.198Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (17 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,9 @@
 | is_ready | `boolean` | YES | `false` | - |
 | notes | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
+| strategy_objective_id | `uuid` | YES | - | - |
+| strategy_weight | `numeric` | YES | `0` | - |
+| time_horizon | `text` | YES | - | - |
 
 ## Constraints
 
@@ -40,11 +43,13 @@
 
 ### Foreign Keys
 - `sd_baseline_items_baseline_id_fkey`: baseline_id → sd_execution_baselines(id)
+- `sd_baseline_items_strategy_objective_id_fkey`: strategy_objective_id → strategy_objectives(id)
 
 ### Unique Constraints
 - `sd_baseline_items_baseline_id_sd_id_key`: UNIQUE (baseline_id, sd_id)
 
 ### Check Constraints
+- `sd_baseline_items_time_horizon_check`: CHECK ((time_horizon = ANY (ARRAY['now'::text, 'next'::text, 'later'::text, 'eventually'::text])))
 - `sd_baseline_items_track_check`: CHECK ((track = ANY (ARRAY['A'::text, 'B'::text, 'C'::text, 'STANDALONE'::text, 'DEFERRED'::text])))
 
 ## Indexes

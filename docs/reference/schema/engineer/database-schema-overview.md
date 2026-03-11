@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
-**Tables**: 542
+**Generated**: 2026-03-11T21:43:15.198Z
+**Tables**: 549
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -203,6 +203,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_sync_state](tables/eva_sync_state.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_todoist_intake](tables/eva_todoist_intake.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_trace_log](tables/eva_trace_log.md) | N/A (RLS restricted) | ✅ | 1 | - |
+| [eva_translation_gates](tables/eva_translation_gates.md) | N/A (RLS restricted) | ✅ | 3 | Translation fidelity gate results for the EVA pipeline. Each gate checks upstream artifacts against downstream artifacts to detect translation gaps. |
 | [eva_ventures](tables/eva_ventures.md) | N/A (RLS restricted) | ✅ | 2 | EVA Operating System - Venture tracking with health metrics |
 | [eva_vision_documents](tables/eva_vision_documents.md) | N/A (RLS restricted) | ✅ | 2 | Stores EHG portfolio (L1) and venture-specific (L2) vision documents for the EVA Vision Governance System. L2 visions link to L1 via parent_vision_id. |
 | [eva_vision_gaps](tables/eva_vision_gaps.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -219,6 +220,9 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [exec_quality_checkpoints](tables/exec_quality_checkpoints.md) | N/A (RLS restricted) | ✅ | 2 | Tracks completion of quality checkpoints during EXEC implementation |
 | [exec_sub_agent_activations](tables/exec_sub_agent_activations.md) | N/A (RLS restricted) | ✅ | 2 | Detailed results from sub-agent activations during EXEC implementation |
 | [execution_sequences_v2](tables/execution_sequences_v2.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [experiment_assignments](tables/experiment_assignments.md) | N/A (RLS restricted) | ✅ | 1 | Maps ventures to experiment variants - one assignment per venture per experiment |
+| [experiment_outcomes](tables/experiment_outcomes.md) | N/A (RLS restricted) | ✅ | 1 | Recorded outcome scores for each experiment assignment evaluation |
+| [experiments](tables/experiments.md) | N/A (RLS restricted) | ✅ | 1 | Stage Zero Experiment Engine - experiment definitions with hypothesis, variants, and lifecycle status |
 | [feedback](tables/feedback.md) | N/A (RLS restricted) | ✅ | 6 | - |
 | [feedback_events](tables/feedback_events.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 020) - User feedback events for continuous learning |
 | [feedback_quality_config](tables/feedback_quality_config.md) | N/A (RLS restricted) | ✅ | 2 | Configuration for Feedback Quality Layer. SD: SD-LEO-SELF-IMPROVE-001C |
@@ -323,6 +327,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [llm_canary_transitions](tables/llm_canary_transitions.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [llm_models](tables/llm_models.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [llm_providers](tables/llm_providers.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [management_reviews](tables/management_reviews.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [market_segments](tables/market_segments.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [marketing_attribution](tables/marketing_attribution.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [marketing_campaigns](tables/marketing_campaigns.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -406,6 +411,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [retrospectives](tables/retrospectives.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [risk_assessments](tables/risk_assessments.md) | N/A (RLS restricted) | ✅ | 2 | BMAD Enhancement: Multi-domain risk assessment for Strategic Directives |
 | [risk_escalation_log](tables/risk_escalation_log.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Audit trail for risk escalations requiring chairman/EVA review |
+| [risk_forecasts](tables/risk_forecasts.md) | N/A (RLS restricted) | ✅ | 1 | Stores risk forecast predictions per venture, including category scores, confidence levels, and contributing factors. |
 | [risk_gate_passage_log](tables/risk_gate_passage_log.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Tracks gate passage attempts and outcomes with risk summary |
 | [risk_recalibration_forms](tables/risk_recalibration_forms.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Risk re-calibration forms at phase boundary gates (Gates 3, 4, 5, 6) |
 | [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | Versioned snapshots of roadmap wave sequences. Supports Chairman approval audit trail. |
@@ -500,6 +506,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [strategic_roadmaps](tables/strategic_roadmaps.md) | N/A (RLS restricted) | ✅ | 2 | Top-level roadmap entities for wave-based planning. Linked to vision documents for strategic alignment. |
 | [strategic_themes](tables/strategic_themes.md) | N/A (RLS restricted) | ✅ | 1 | Annual strategic themes derived from EVA vision dimensions, used to group and prioritize Strategic Directives |
 | [strategic_vision](tables/strategic_vision.md) | N/A (RLS restricted) | ✅ | 2 | Top-level organizational vision (2-5 year horizon) |
+| [strategy_objectives](tables/strategy_objectives.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [sub_agent_execution_batches](tables/sub_agent_execution_batches.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [sub_agent_execution_results](tables/sub_agent_execution_results.md) | N/A (RLS restricted) | ✅ | 4 | LEO 5.0 Sub-agent execution results - tracks individual sub-agent runs and outputs |
 | [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md) | N/A (RLS restricted) | ✅ | 4 | - |
@@ -773,7 +780,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (416 tables)
+### Other (423 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -942,6 +949,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_sync_state](tables/eva_sync_state.md)
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)
+- [eva_translation_gates](tables/eva_translation_gates.md) - Translation fidelity gate results for the EVA pipeline. Each gate checks upstream artifacts against downstream artifacts to detect translation gaps.
 - [eva_ventures](tables/eva_ventures.md) - EVA Operating System - Venture tracking with health metrics
 - [eva_vision_documents](tables/eva_vision_documents.md) - Stores EHG portfolio (L1) and venture-specific (L2) vision documents for the EVA Vision Governance System. L2 visions link to L1 via parent_vision_id.
 - [eva_vision_gaps](tables/eva_vision_gaps.md)
@@ -957,6 +965,9 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [exec_quality_checkpoints](tables/exec_quality_checkpoints.md) - Tracks completion of quality checkpoints during EXEC implementation
 - [exec_sub_agent_activations](tables/exec_sub_agent_activations.md) - Detailed results from sub-agent activations during EXEC implementation
 - [execution_sequences_v2](tables/execution_sequences_v2.md)
+- [experiment_assignments](tables/experiment_assignments.md) - Maps ventures to experiment variants - one assignment per venture per experiment
+- [experiment_outcomes](tables/experiment_outcomes.md) - Recorded outcome scores for each experiment assignment evaluation
+- [experiments](tables/experiments.md) - Stage Zero Experiment Engine - experiment definitions with hypothesis, variants, and lifecycle status
 - [feedback](tables/feedback.md)
 - [feedback_events](tables/feedback_events.md) - RLS enabled 2025-10-26 (migration 020) - User feedback events for continuous learning
 - [feedback_quality_config](tables/feedback_quality_config.md) - Configuration for Feedback Quality Layer. SD: SD-LEO-SELF-IMPROVE-001C
@@ -996,6 +1007,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [llm_canary_transitions](tables/llm_canary_transitions.md)
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
+- [management_reviews](tables/management_reviews.md)
 - [market_segments](tables/market_segments.md)
 - [marketing_attribution](tables/marketing_attribution.md)
 - [marketing_campaigns](tables/marketing_campaigns.md)
@@ -1070,6 +1082,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [retro_notifications](tables/retro_notifications.md)
 - [risk_assessments](tables/risk_assessments.md) - BMAD Enhancement: Multi-domain risk assessment for Strategic Directives
 - [risk_escalation_log](tables/risk_escalation_log.md) - SD-LIFECYCLE-GAP-005: Audit trail for risk escalations requiring chairman/EVA review
+- [risk_forecasts](tables/risk_forecasts.md) - Stores risk forecast predictions per venture, including category scores, confidence levels, and contributing factors.
 - [risk_gate_passage_log](tables/risk_gate_passage_log.md) - SD-LIFECYCLE-GAP-005: Tracks gate passage attempts and outcomes with risk summary
 - [risk_recalibration_forms](tables/risk_recalibration_forms.md) - SD-LIFECYCLE-GAP-005: Risk re-calibration forms at phase boundary gates (Gates 3, 4, 5, 6)
 - [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md) - Versioned snapshots of roadmap wave sequences. Supports Chairman approval audit trail.
@@ -1106,6 +1119,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [strategic_roadmaps](tables/strategic_roadmaps.md) - Top-level roadmap entities for wave-based planning. Linked to vision documents for strategic alignment.
 - [strategic_themes](tables/strategic_themes.md) - Annual strategic themes derived from EVA vision dimensions, used to group and prioritize Strategic Directives
 - [strategic_vision](tables/strategic_vision.md) - Top-level organizational vision (2-5 year horizon)
+- [strategy_objectives](tables/strategy_objectives.md)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)
 - [sub_agent_execution_results](tables/sub_agent_execution_results.md) - LEO 5.0 Sub-agent execution results - tracks individual sub-agent runs and outputs
 - [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md)
@@ -1574,6 +1588,13 @@ _Key relationships between tables:_
 **execution_sequences_v2**:
 - `directive_id` → `strategic_directives_v2.id`
 
+**experiment_assignments**:
+- `experiment_id` → `experiments.id`
+
+**experiment_outcomes**:
+- `assignment_id` → `experiment_assignments.id`
+- `experiment_id` → `experiments.id`
+
 **feedback**:
 - `duplicate_of_id` → `feedback.id`
 - `duplicate_of_id` → `feedback.id`
@@ -1908,6 +1929,9 @@ _Key relationships between tables:_
 - `risk_form_id` → `risk_recalibration_forms.id`
 - `venture_id` → `ventures.id`
 
+**risk_forecasts**:
+- `venture_id` → `ventures.id`
+
 **risk_gate_passage_log**:
 - `risk_form_id` → `risk_recalibration_forms.id`
 - `venture_id` → `ventures.id`
@@ -1942,6 +1966,7 @@ _Key relationships between tables:_
 
 **sd_baseline_items**:
 - `baseline_id` → `sd_execution_baselines.id`
+- `strategy_objective_id` → `strategy_objectives.id`
 
 **sd_baseline_rationale**:
 - `baseline_id` → `sd_execution_baselines.id`
@@ -1982,6 +2007,7 @@ _Key relationships between tables:_
 - `baseline_id` → `sd_execution_baselines.id`
 
 **sd_execution_baselines**:
+- `parent_version_id` → `sd_execution_baselines.id`
 - `superseded_by` → `sd_execution_baselines.id`
 
 **sd_gate_results**:

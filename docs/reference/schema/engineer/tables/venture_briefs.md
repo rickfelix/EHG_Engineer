@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
+**Generated**: 2026-03-11T21:43:15.198Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (26 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -43,6 +43,7 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | profile_id | `uuid` | YES | - | Evaluation profile active when this brief was created (nullable for pre-profile briefs) |
+| chairman_day_zero_confidence | `integer(32)` | YES | - | Chairman immediate gut-check confidence rating at Stage 0 intake. Primary proxy metric for experiment framework. |
 
 ## Constraints
 
@@ -54,6 +55,7 @@
 - `venture_briefs_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
+- `venture_briefs_chairman_day_zero_confidence_check`: CHECK (((chairman_day_zero_confidence >= 0) AND (chairman_day_zero_confidence <= 100)))
 - `venture_briefs_maturity_check`: CHECK ((maturity = ANY (ARRAY['seed'::text, 'sprout'::text, 'ready'::text])))
 - `venture_briefs_origin_type_check`: CHECK ((origin_type = ANY (ARRAY['competitor_teardown'::text, 'competitor_clone'::text, 'blueprint'::text, 'discovery'::text, 'manual'::text])))
 - `venture_briefs_portfolio_synergy_score_check`: CHECK (((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric)))

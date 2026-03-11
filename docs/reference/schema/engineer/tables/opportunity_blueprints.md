@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
+**Generated**: 2026-03-11T21:43:15.198Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (38 total)
+## Columns (39 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -56,6 +56,7 @@
 | ai_metadata | `jsonb` | YES | `'{}'::jsonb` | AI generation metadata: { model, confidence, scan_id, generated_at, four_buckets } |
 | confidence_score | `integer(32)` | YES | - | AI confidence score (0-100). >=85 auto-approved, 70-84 pending review, <70 rejected |
 | scan_id | `uuid` | YES | - | - |
+| component_scores | `jsonb` | YES | `'{}'::jsonb` | Per-component scores from Stage 0 synthesis (14 dimensions). Structure: {"acquirability": {"score": 72, "rationale": "..."}, ..., "_metadata": {"prompt_version": "v1.0", "model": "...", "run_id": "uuid", "experiment_id": "uuid|null", "variant_key": "control|null"}} |
 
 ## Constraints
 

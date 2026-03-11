@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
+**Generated**: 2026-03-11T21:43:15.198Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (16 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,7 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 | created_by | `text` | YES | - | - |
+| time_horizon | `text` | YES | - | - |
 
 ## Constraints
 
@@ -47,6 +48,7 @@
 
 ### Check Constraints
 - `roadmap_waves_status_check`: CHECK (((status)::text = ANY ((ARRAY['proposed'::character varying, 'approved'::character varying, 'active'::character varying, 'completed'::character varying, 'archived'::character varying])::text[])))
+- `roadmap_waves_time_horizon_check`: CHECK ((time_horizon = ANY (ARRAY['now'::text, 'next'::text, 'later'::text, 'eventually'::text])))
 
 ## Indexes
 
