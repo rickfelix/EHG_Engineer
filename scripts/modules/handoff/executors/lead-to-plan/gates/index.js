@@ -65,3 +65,6 @@ export { createOverlappingScopeDetectionGate } from './overlapping-scope-detecti
 
 // Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
 export { createPhaseCoverageGate } from './phase-coverage.js';
+
+// SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
+export { validateSdQuality, createSdQualityGate } from './sd-quality-gate.js';

@@ -24,7 +24,9 @@ import {
   createSdTypeCompatibilityGate,
   createOverlappingScopeDetectionGate,
   // Architecture Phase Coverage Gate (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
-  createPhaseCoverageGate
+  createPhaseCoverageGate,
+  // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
+  createSdQualityGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -96,6 +98,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Placeholder Content Detection Gate (SD-LEO-INFRA-PROTOCOL-FILE-STATE-001)
     // Warning-only: detects default template text from leo-create-sd.js
     gates.push(createPlaceholderContentGate());
+
+    // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
+    // BLOCKING: validates field completeness, content depth, structural correctness
+    gates.push(createSdQualityGate());
 
     // LEO v4.4.1: Proactive Branch Creation Gate (DISABLED)
     // See: ./gates/branch-preparation.js for code preserved for reference
