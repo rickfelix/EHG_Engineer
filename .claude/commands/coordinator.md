@@ -260,26 +260,65 @@ Render the estimated completion time using figlet-style block digits. Format: `H
 
 Do NOT use the naive `remaining SDs / velocity` formula. The dashboard's aggregate velocity (e.g., 7.4 SDs/hr) reflects past conditions (different SD types, different worker counts) and is misleading for forward-looking estimates.
 
-**Primary method: Phase-based estimation.** Velocity is only used as a sanity check.
+**Primary method: Data-driven estimation from historical handoff durations.** Velocity is only used as a sanity check.
 
 **Step 1: Determine worker count**
 Use the derived worker count from the Assessment Rules (ghost filter + 15-min heartbeat window). Exclude the coordinator session.
 
-**Step 2: Classify remaining SDs by type and phase**
-Not all SDs are equal. Categorize each remaining SD and apply type-specific estimates:
+**Step 2: Query historical completion data (once per coordinator session)**
 
-| SD Type | Phase | Estimate | Rationale |
-|---------|-------|----------|-----------|
-| **Orchestrator child** (in progress) | EXEC with % | `remaining% × 25 min` | Children are pre-planned, focused scope |
-| **Orchestrator child** (not started) | Full LEAD→EXEC | ~30 min | Smaller scope, parent already planned |
-| **Standalone SD (DRAFT)** | Full LEAD→PLAN→EXEC | ~50-70 min | Needs vision, PRD, implementation |
-| **Standalone SD (READY)** | PLAN→EXEC | ~35-45 min | LEAD done, needs PRD + implementation |
-| **Standalone SD (PLANNING)** | Continue PLAN→EXEC | ~30-40 min | Partially planned |
-| **Standalone SD (EXEC with %)** | Remaining EXEC | `remaining% × 30 min` | Standalone EXEC is longer than child EXEC |
+On the **first dashboard cycle** (or after `/coordinator start`), run `node scripts/fleet-eta-stats.cjs` to get data-driven baselines. This script queries `sd_phase_handoffs` grouped by SD, cross-referenced with `strategic_directives_v2` metadata, and returns median/p25/p75 durations by type bucket.
 
-**Important**: The dashboard's "recent velocity" was likely measured during orchestrator child execution. Children are faster (~20 min) than standalone DRAFTs (~60 min). Do NOT apply child velocity to standalone SD estimates.
+If the script is unavailable, query manually:
+```bash
+node -e "require('dotenv').config(); /* ... query sd_phase_handoffs + strategic_directives_v2 ... */"
+```
 
-**Step 3: Map dependency chains**
+The key query: group handoffs by `sd_id`, compute first→last handoff timestamp as total duration, then join with `strategic_directives_v2` to get `sd_type` and `parent_sd_id` (child vs standalone).
+
+**Cache the results** for subsequent cycles — no need to re-query every 5 minutes.
+
+**Step 3: Classify remaining SDs using data-driven baselines**
+
+Use the queried historical data to estimate each remaining SD. The table below shows **data-backed reference values** (as of early 2026, n=30 SDs with handoff data). These are fallbacks if the query is unavailable — always prefer live query results.
+
+| Type Bucket | n | Median | p25 | p75 | Use For |
+|-------------|---|--------|-----|-----|---------|
+| child/infrastructure | 41 | 47m | 27m | 69m | Orchestrator children (most common) |
+| child/feature | 6 | 181m | 84m | 400m | Feature-type children |
+| child/database | 5 | 115m | 100m | 607m | Database migration children |
+| child/documentation | 4 | 7m | 5m | 67m | Documentation children (fast) |
+| child/uat | 2 | 85m | 62m | 85m | UAT children |
+| standalone/infrastructure | 2 | 103m | 3m | 103m | Standalone infra/learn-fix SDs |
+| standalone/feature | 1 | 218m | — | — | Standalone feature SDs (thin data!) |
+| standalone/orchestrator | 9 | 80m | 5m | 367m | Orchestrator parent SDs |
+
+**Per-phase reference values** (median total time in phase, from `fleet-eta-stats.cjs`):
+| Phase | child/infrastructure (n=41) | child/feature (n=6) | standalone/feature (n=1) | standalone/infra (n=2) |
+|-------|---------------------------|--------------------|-----------------------|---------------------|
+| LEAD | 2m | 25m | 98m | 16m |
+| PLAN | 10m | 79m | 51m | 64m |
+| EXEC | 28m | 67m | 71m | 24m |
+
+Note: SDs go through **multiple handoff attempts** per phase (retries, gate failures). A typical SD has 8-15 total handoff events. The per-phase values above are per-attempt, not total time in phase.
+
+**To estimate remaining time for a specific SD:**
+1. Look up its `sd_type` + child/standalone bucket → get median total duration
+2. Check its `current_phase` and `progress_percentage`
+3. Estimate remaining = `median × (1 - progress/100)`, adjusted for phase position:
+   - If past LEAD → subtract ~10-15% from total estimate
+   - If in PLAN (partially complete) → subtract LEAD time + completed PLAN portion
+   - If in EXEC → use only remaining EXEC estimate
+
+**Important data caveats:**
+- `complexity_level` is uniformly "moderate" across all SDs — it does NOT differentiate difficulty
+- `story_count` (must_have + h + m + l counts) is zero for nearly all SDs — not a useful signal
+- `intensity_level` is mostly null — not populated
+- `created_at` vs `completion_date` on the SD table is **unreliable** (bulk imports cause negative durations) — always use handoff timestamps instead
+- Small sample sizes per bucket mean wide confidence intervals — flag uncertainty when n < 5
+- Durations include idle gaps between work sessions, so they overestimate active work time
+
+**Step 4: Map dependency chains**
 Check the dashboard for dependency constraints:
 - **BLOCKED SDs**: Cannot start until blocker completes. Start time = blocker's finish time.
 - **Sequential children**: If children must run in order, they form a chain — sum their times.
@@ -291,7 +330,7 @@ Build a dependency graph:
 - **Chain SDs**: Sum times for total chain duration.
 - **Blocked SDs**: Add blocker's remaining time before their own duration.
 
-**Step 4: Calculate parallel schedule with constraints**
+**Step 5: Calculate parallel schedule with constraints**
 Using the dependency graph:
 1. Identify all **immediately runnable** SDs (no unmet dependencies).
 2. Assign to workers (N = worker count), longest-first. Round time = longest SD in the round.
@@ -300,22 +339,22 @@ Using the dependency graph:
 5. **Critical path** = longest chain of sequential dependencies. ETA can never be shorter than critical path.
 6. Total time = max(sum of parallel rounds, critical path duration).
 
-**Step 5: Sanity check against per-worker velocity**
+**Step 6: Sanity check against per-worker velocity**
 Only as a sanity check — NOT as the primary estimate:
 - Compute **per-worker velocity**: `total recent completions / (active workers × hours)`. This normalizes for worker count.
-- If the phase-based estimate and per-worker velocity estimate differ by **more than 50%**, flag it:
+- If the data-driven estimate and per-worker velocity estimate differ by **more than 50%**, flag it:
   ```
-  ⚠ Velocity sanity check: phase estimate (~2h 30m) vs velocity estimate (~1h 10m) —
-     velocity may reflect faster child SDs, trusting phase estimate
+  ⚠ Velocity sanity check: data estimate (~2h 30m) vs velocity estimate (~1h 10m) —
+     velocity may reflect faster child SDs, trusting data estimate
   ```
-- If they're within 50%, the phase estimate is credible — use it as-is.
-- **Never average** phase and velocity estimates. Phase is primary. Velocity is a smell test.
+- If they're within 50%, the data estimate is credible — use it as-is.
+- **Never average** data and velocity estimates. Data is primary. Velocity is a smell test.
 
-**Step 6: Apply rolling average (last 3 cycles)**
+**Step 7: Apply rolling average (last 3 cycles)**
 
 Maintain a mental log of the last 3 dashboard cycles' values:
 - **Worker count** from each cycle (derived per Step 1)
-- **ETA duration** from each cycle (computed per Steps 2-5)
+- **ETA duration** from each cycle (computed per Steps 3-6)
 
 Apply a rolling average to smooth out noise from session churn:
 - **Averaged workers** = mean of last 3 worker counts, rounded to nearest integer
@@ -333,12 +372,18 @@ Use the averaged values for the displayed estimate. This prevents:
 - A new orchestrator starts (different SD mix)
 - Worker count changes by more than 2 in a single cycle (fleet restructured)
 
-**Step 7: Compute finish time**
+**Step 8: Compute finish time**
 `Estimated finish = current time + averaged ETA duration`
+
+Display confidence based on data quality:
+- n ≥ 5 for the SD's type bucket → show estimate without qualifier
+- n = 2-4 → append `(±30%)`
+- n = 1 → append `(±50%, thin data)`
+- n = 0 (no historical match) → fall back to reference table above, append `(no historical match)`
 
 If blocked SDs exist with no clear unblock time, note in stats:
 ```
-  5 SDs left  |  3 workers  |  ~50m/SD  |  1 blocked (awaiting SD-X)
+  5 SDs left  |  3 workers  |  data-driven (n=19 infra)  |  1 blocked (awaiting SD-X)
 ```
 
 ### Dynamic values to render
