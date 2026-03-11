@@ -68,3 +68,7 @@ export { createPhaseCoverageGate } from './phase-coverage.js';
 
 // SD Quality Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001-A)
 export { validateSdQuality, createSdQualityGate } from './sd-quality-gate.js';
+
+// Translation Fidelity Gate (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
+// LLM-powered comparison of architecture plan → SD to detect translation gaps
+export { createTranslationFidelityGate } from './translation-fidelity.js';
