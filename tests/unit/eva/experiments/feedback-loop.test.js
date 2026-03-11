@@ -638,3 +638,179 @@ describe('baseline-accuracy', () => {
     expect(typeof result.interpretation).toBe('string');
   });
 });
+
+// ─── Gate Signal Service Bridge Wiring ─────────────────────────────
+
+describe('gate-signal-service experiment bridge', () => {
+  it('calls recordGateOutcome after recording gate signal', async () => {
+    vi.resetModules();
+
+    // Mock gate-outcome-bridge before importing gate-signal-service
+    const mockRecordGateOutcome = vi.fn().mockResolvedValue({ success: true });
+    vi.doMock('../../../../lib/eva/experiments/gate-outcome-bridge.js', () => ({
+      recordGateOutcome: mockRecordGateOutcome,
+    }));
+
+    const { recordGateSignal } = await import('../../../../lib/eva/stage-zero/gate-signal-service.js');
+
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        insert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: 'sig-1', profile_id: null, venture_id: 'v-1', gate_boundary: 'stage_3', signal_type: 'pass' },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const deps = { supabase: mockSupabase, logger: { log: vi.fn(), warn: vi.fn() } };
+
+    await recordGateSignal(deps, {
+      ventureId: 'venture-uuid-1234-5678',
+      gateBoundary: 'stage_3',
+      signalType: 'pass',
+      outcome: { score: 85 },
+    });
+
+    // Bridge should have been called with correct arguments
+    expect(mockRecordGateOutcome).toHaveBeenCalledWith(deps, expect.objectContaining({
+      ventureId: 'venture-uuid-1234-5678',
+      gateBoundary: 'stage_3',
+      passed: true,
+      score: 85,
+    }));
+  });
+});
+
+// ─── Thompson Sampling (Adaptive Assignment) ──────────────────────
+
+describe('Thompson Sampling assignment', () => {
+  let thompsonSample;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    const mod = await import('../../../../lib/eva/experiments/experiment-assignment.js');
+    thompsonSample = mod.thompsonSample;
+  });
+
+  it('returns a valid variant key', () => {
+    const variants = [
+      { key: 'champion', prior: { alpha: 10, beta: 2 } },
+      { key: 'challenger', prior: { alpha: 2, beta: 10 } },
+    ];
+    const result = thompsonSample(variants, { log: vi.fn() });
+    expect(['champion', 'challenger']).toContain(result);
+  });
+
+  it('favors the variant with better posterior over many samples', () => {
+    const variants = [
+      { key: 'strong', prior: { alpha: 50, beta: 5 } },    // ~91% success rate
+      { key: 'weak', prior: { alpha: 5, beta: 50 } },      // ~9% success rate
+    ];
+
+    const counts = { strong: 0, weak: 0 };
+    for (let i = 0; i < 200; i++) {
+      const result = thompsonSample(variants, { log: () => {} });
+      counts[result]++;
+    }
+
+    // Strong variant should be picked >80% of the time
+    expect(counts.strong).toBeGreaterThan(160);
+  });
+
+  it('uses uniform prior (alpha=2, beta=2) when no priors provided', () => {
+    const variants = [
+      { key: 'a' },
+      { key: 'b' },
+    ];
+
+    // Should not throw
+    const result = thompsonSample(variants, { log: vi.fn() });
+    expect(['a', 'b']).toContain(result);
+  });
+
+  it('explores both variants when priors are equal', () => {
+    const variants = [
+      { key: 'a', prior: { alpha: 10, beta: 10 } },
+      { key: 'b', prior: { alpha: 10, beta: 10 } },
+    ];
+
+    const counts = { a: 0, b: 0 };
+    for (let i = 0; i < 200; i++) {
+      const result = thompsonSample(variants, { log: () => {} });
+      counts[result]++;
+    }
+
+    // Both should get meaningful allocation (within 30/70 range)
+    expect(counts.a).toBeGreaterThan(40);
+    expect(counts.b).toBeGreaterThan(40);
+  });
+});
+
+// ─── Prompt Promotion Survival Mode ───────────────────────────────
+
+describe('prompt-promotion survival mode', () => {
+  let createPromotionRecord;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.doUnmock('../../../../lib/eva/experiments/prompt-promotion.js');
+    const mod = await import('../../../../lib/eva/experiments/prompt-promotion.js');
+    createPromotionRecord = mod.createPromotionRecord;
+  });
+
+  it('includes survival rates in effect_summary when mode is survival', () => {
+    const analysis = {
+      mode: 'survival',
+      total_samples: 50,
+      per_variant: {
+        champion: { count: 25, mean_score: 0.8, posterior: { alpha: 20, beta: 5 } },
+        challenger: { count: 25, mean_score: 0.6, posterior: { alpha: 15, beta: 10 } },
+      },
+      comparisons: [{ variantA: 'champion', variantB: 'challenger', probABetterThanB: 0.92, probBBetterThanA: 0.08 }],
+    };
+
+    const record = createPromotionRecord({
+      experimentId: 'exp-1',
+      winner: 'champion',
+      promptName: 'prompt-v1',
+      confidence: 0.92,
+      analysis,
+      config: { confidenceThreshold: 0.90 },
+    });
+
+    expect(record.analysis_mode).toBe('survival');
+    expect(record.effect_summary.mode).toBe('survival');
+    expect(record.effect_summary.winner_survival_rate).toBe(0.8);
+    expect(record.effect_summary.loser_survival_rate).toBe(0.6);
+    expect(record.effect_summary.absolute_diff).toBe(0.2);
+  });
+
+  it('uses synthesis mode when analysis.mode is not survival', () => {
+    const analysis = {
+      mode: 'synthesis',
+      total_samples: 50,
+      per_variant: {
+        champion: { count: 25, mean_score: 85, posterior: { alpha: 20, beta: 5 } },
+        challenger: { count: 25, mean_score: 75, posterior: { alpha: 15, beta: 10 } },
+      },
+    };
+
+    const record = createPromotionRecord({
+      experimentId: 'exp-1',
+      winner: 'champion',
+      promptName: 'prompt-v1',
+      confidence: 0.92,
+      analysis,
+      config: { confidenceThreshold: 0.90 },
+    });
+
+    expect(record.analysis_mode).toBe('synthesis');
+    expect(record.effect_summary.mode).toBe('synthesis');
+    expect(record.effect_summary.winner_mean).toBe(85);
+    expect(record.effect_summary.loser_mean).toBe(75);
+  });
+});
