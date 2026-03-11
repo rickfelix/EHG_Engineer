@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
-**Tables**: 542
+**Generated**: 2026-03-11T21:43:15.198Z
+**Tables**: 549
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (542)
+## All Tables (549)
 
 ### LEO Protocol
 
@@ -325,6 +325,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_sync_state](tables/eva_sync_state.md)
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)
+- [eva_translation_gates](tables/eva_translation_gates.md)
 - [eva_ventures](tables/eva_ventures.md)
 - [eva_vision_documents](tables/eva_vision_documents.md)
 - [eva_vision_gaps](tables/eva_vision_gaps.md)
@@ -340,6 +341,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [exec_quality_checkpoints](tables/exec_quality_checkpoints.md)
 - [exec_sub_agent_activations](tables/exec_sub_agent_activations.md)
 - [execution_sequences_v2](tables/execution_sequences_v2.md)
+- [experiment_assignments](tables/experiment_assignments.md)
+- [experiment_outcomes](tables/experiment_outcomes.md)
+- [experiments](tables/experiments.md)
 - [feedback](tables/feedback.md)
 - [feedback_events](tables/feedback_events.md)
 - [feedback_quality_config](tables/feedback_quality_config.md)
@@ -377,6 +381,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [llm_canary_transitions](tables/llm_canary_transitions.md)
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
+- [management_reviews](tables/management_reviews.md)
 - [market_segments](tables/market_segments.md)
 - [marketing_attribution](tables/marketing_attribution.md)
 - [marketing_campaigns](tables/marketing_campaigns.md)
@@ -449,6 +454,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [retro_notifications](tables/retro_notifications.md)
 - [risk_assessments](tables/risk_assessments.md)
 - [risk_escalation_log](tables/risk_escalation_log.md)
+- [risk_forecasts](tables/risk_forecasts.md)
 - [risk_gate_passage_log](tables/risk_gate_passage_log.md)
 - [risk_recalibration_forms](tables/risk_recalibration_forms.md)
 - [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md)
@@ -485,6 +491,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [strategic_roadmaps](tables/strategic_roadmaps.md)
 - [strategic_themes](tables/strategic_themes.md)
 - [strategic_vision](tables/strategic_vision.md)
+- [strategy_objectives](tables/strategy_objectives.md)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)
 - [sub_agent_execution_results](tables/sub_agent_execution_results.md)
 - [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md)

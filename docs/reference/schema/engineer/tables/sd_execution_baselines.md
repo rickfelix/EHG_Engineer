@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
+**Generated**: 2026-03-11T21:43:15.198Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,9 @@
 | generated_by | `text` | YES | - | - |
 | algorithm_version | `text` | YES | - | - |
 | generation_metadata | `jsonb` | YES | - | - |
+| version | `integer(32)` | YES | `1` | - |
+| parent_version_id | `uuid` | YES | - | - |
+| snapshot | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -40,6 +43,7 @@
 - `sd_execution_baselines_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `sd_execution_baselines_parent_version_id_fkey`: parent_version_id → sd_execution_baselines(id)
 - `sd_execution_baselines_superseded_by_fkey`: superseded_by → sd_execution_baselines(id)
 
 ## Indexes

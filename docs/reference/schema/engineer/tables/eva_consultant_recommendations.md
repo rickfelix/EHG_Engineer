@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-10T17:05:24.988Z
+**Generated**: 2026-03-11T21:43:15.198Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,10 @@
 | application_domain | `text` | YES | - | - |
 | detected_by | `text` | YES | `'recommendation-engine.mjs'::text` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| analysis_domain | `text` | YES | - | Business domain: market, product, operations, finance, technology, talent, competitive |
+| data_points | `integer(32)` | YES | `0` | Number of data points supporting this finding |
+| graduation_date | `timestamp with time zone` | YES | - | Timestamp when a medium-confidence finding graduated to high confidence |
+| confidence_tier | `text` | YES | `'medium'::text` | Confidence classification tier: low, medium, or high |
 
 ## Constraints
 
@@ -46,6 +50,7 @@
 
 ### Check Constraints
 - `eva_consultant_recommendations_action_type_check`: CHECK ((action_type = ANY (ARRAY['create_sd'::text, 'research'::text, 'review'::text, 'defer'::text, 'discuss'::text])))
+- `eva_consultant_recommendations_confidence_tier_check`: CHECK ((confidence_tier = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])))
 - `eva_consultant_recommendations_priority_score_check`: CHECK (((priority_score >= (0)::numeric) AND (priority_score <= (1)::numeric)))
 - `eva_consultant_recommendations_recommendation_type_check`: CHECK ((recommendation_type = ANY (ARRAY['strategic'::text, 'tactical'::text, 'research'::text, 'operational'::text])))
 - `eva_consultant_recommendations_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'deferred'::text, 'rejected'::text])))
@@ -59,6 +64,10 @@
 - `eva_consultant_recommendations_recommendation_date_title_key`
   ```sql
   CREATE UNIQUE INDEX eva_consultant_recommendations_recommendation_date_title_key ON public.eva_consultant_recommendations USING btree (recommendation_date, title)
+  ```
+- `idx_ecr_domain_type`
+  ```sql
+  CREATE INDEX idx_ecr_domain_type ON public.eva_consultant_recommendations USING btree (analysis_domain, recommendation_type)
   ```
 - `idx_eva_consultant_recommendations_date`
   ```sql
