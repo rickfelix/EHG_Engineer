@@ -66,6 +66,57 @@ const supabase = createClient(
  * @param {string|null} cliVenture - Venture name from --venture flag
  * @returns {Promise<string|null>} Normalized venture prefix or null
  */
+// Quick-fix QF-20260312-516: Extract SD fields from registered vision/arch documents
+async function enrichFromVisionArch(visionKey, archKey, sb) {
+  if (!visionKey && !archKey) return null;
+  const result = {};
+  try {
+    if (visionKey) {
+      const { data: vision } = await sb
+        .from('eva_vision_documents')
+        .select('sections')
+        .eq('vision_key', visionKey)
+        .single();
+      if (vision?.sections) {
+        const s = vision.sections;
+        if (s.executive_summary) result.description = s.executive_summary;
+        if (s.problem_statement) result.rationale = s.problem_statement;
+        if (s.success_criteria) {
+          result.success_criteria = (Array.isArray(s.success_criteria)
+            ? s.success_criteria
+            : s.success_criteria.split(/\n/).filter(l => l.trim())
+          ).map(c => typeof c === 'string' ? { criterion: c.replace(/^[-•*]\s*/, ''), target: 'See vision doc' } : c);
+        }
+      }
+    }
+    if (archKey) {
+      const { data: arch } = await sb
+        .from('eva_architecture_plans')
+        .select('sections')
+        .eq('plan_key', archKey)
+        .single();
+      if (arch?.sections) {
+        const s = arch.sections;
+        if (s.route_component_structure || s.route_and_component_structure) {
+          const routes = s.route_component_structure || s.route_and_component_structure;
+          result.key_changes = (Array.isArray(routes)
+            ? routes
+            : (typeof routes === 'string' ? routes.split(/\n/).filter(l => l.trim()) : [])
+          ).map(c => typeof c === 'string' ? { file: '', change: c.replace(/^[-•*]\s*/, '') } : c);
+        }
+        if (s.implementation_phases) {
+          result.scope = Array.isArray(s.implementation_phases)
+            ? s.implementation_phases.map(p => p.title || p).join('; ')
+            : String(s.implementation_phases);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[enrichFromVisionArch] Non-fatal: ${err.message}`);
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 async function resolveVenturePrefix(cliVenture = null) {
   // 1. CLI flag (highest priority)
   if (cliVenture) {
@@ -1737,17 +1788,26 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
 
       const sdKey = await generateSDKey({ source, type, title, venturePrefix });
 
+      // Quick-fix QF-20260312-516: Enrich SD fields from vision/arch documents
+      const enriched = await enrichFromVisionArch(visionKey, archKey, supabase);
+      if (enriched) {
+        console.log('✓ SD fields enriched from vision/architecture documents');
+      }
+
       await createSD({
         sdKey,
         title,
-        description: title,
+        description: enriched?.description || title,
         type,
-        rationale: 'Created via /leo create',
+        rationale: enriched?.rationale || 'Created via /leo create',
+        success_criteria: enriched?.success_criteria || null,
+        key_changes: enriched?.key_changes || null,
         metadata: {
           source: source.toLowerCase(),
           ...phase0Metadata,
           ...(visionKey && { vision_key: visionKey }),
-          ...(archKey && { arch_key: archKey })
+          ...(archKey && { arch_key: archKey }),
+          ...(enriched?.scope && { scope: enriched.scope })
         }
       });
     }
