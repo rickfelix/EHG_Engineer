@@ -24,3 +24,7 @@ export { createArchitectureRequirementTraceGate } from './architecture-requireme
 
 // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
 export { createWireframeRequiredGate } from './wireframe-required.js';
+
+// Translation Fidelity Gate — PLAN-TO-EXEC (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
+// Second invocation: catches drift after PRD/planning work
+export { createTranslationFidelityGate } from './translation-fidelity.js';

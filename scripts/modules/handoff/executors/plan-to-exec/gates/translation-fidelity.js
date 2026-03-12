@@ -1,16 +1,17 @@
 /**
- * TRANSLATION_FIDELITY Gate for LEAD-TO-PLAN
+ * TRANSLATION_FIDELITY Gate for PLAN-TO-EXEC
  *
- * Runs the architecture_to_sd translation fidelity check to verify that
- * the SD faithfully captures the intent from its upstream vision and
- * architecture plan documents. Uses LLM comparison to detect translation
- * gaps — ideas, constraints, or decisions present upstream but lost or
- * diluted in the SD.
+ * Second invocation of the architecture→SD translation fidelity check.
+ * By PLAN-TO-EXEC, the SD has been through PRD creation and planning work,
+ * so this re-evaluation catches any drift or scope changes that may have
+ * diluted the original architecture intent.
+ *
+ * Always runs a fresh LLM comparison (no caching).
  *
  * Requires: SD metadata.arch_key or metadata.architecture_plan_key
  * Skips gracefully when no architecture plan is linked.
  *
- * Phase: LEAD-TO-PLAN (blocking when arch plan exists, skip otherwise)
+ * Phase: PLAN-TO-EXEC (blocking when arch plan exists, skip otherwise)
  */
 
 import {
@@ -25,8 +26,8 @@ export function createTranslationFidelityGate(supabase) {
   return {
     name: GATE_NAME,
     validator: async (ctx) => {
-      console.log('\n🔍 GATE: Translation Fidelity (Architecture → SD)');
-      console.log('-'.repeat(50));
+      console.log('\n🔍 GATE: Translation Fidelity — PLAN-TO-EXEC (Architecture → SD)');
+      console.log('-'.repeat(55));
 
       const sd = ctx.sd;
       const sdKey = sd?.sd_key || sd?.id;
@@ -56,14 +57,11 @@ export function createTranslationFidelityGate(supabase) {
       }
 
       try {
-        // Always re-run the LLM comparison — no caching.
-        // The SD may have been updated between creation and handoff,
-        // so a fresh evaluation is required every time.
-
-        // Run the translation fidelity gate via the engine
+        // Always run a fresh LLM comparison — no caching.
+        // This is the second evaluation (first was at LEAD-TO-PLAN).
+        // The SD may have changed during planning work.
         const { runArchitectureToSDGate } = await import('../../../../../eva/translation-fidelity-gate.js');
 
-        // Build SD data payload for the gate
         const sdData = {
           id: sd.id,
           sd_key: sdKey,
@@ -83,7 +81,6 @@ export function createTranslationFidelityGate(supabase) {
           });
         }
 
-        // Map engine result to semantic gate result
         const gapCount = result.gaps?.length || 0;
         const criticalGaps = result.gaps?.filter(g => g.severity === 'critical') || [];
         const score = result.score ?? 0;
@@ -119,15 +116,16 @@ export function createTranslationFidelityGate(supabase) {
           details: {
             arch_key: archKey,
             gate_type: 'architecture_to_sd',
+            phase: 'PLAN-TO-EXEC',
             gap_count: gapCount,
             critical_gap_count: criticalGaps.length,
             model_used: result.details?.model_used,
             duration_ms: result.details?.duration_ms,
           },
           remediation: passed ? undefined :
-            `SD does not fully capture the architecture plan (${archKey}). ` +
-            'Review the gaps above and update the SD description, key_changes, and success_criteria ' +
-            'to address the missing items. Then retry the handoff.'
+            `SD has drifted from its architecture plan (${archKey}) during planning. ` +
+            'Review the gaps above and update the SD or PRD to re-align with the architecture intent. ' +
+            'Then retry the handoff.'
         });
       } catch (err) {
         console.log(`   ⚠️  Translation fidelity gate error: ${err.message}`);
@@ -141,4 +139,3 @@ export function createTranslationFidelityGate(supabase) {
     weight: 0.9
   };
 }
-

@@ -28,7 +28,9 @@ import {
   createVisionDimensionCompletenessGate,
   createArchitectureRequirementTraceGate,
   // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
-  createWireframeRequiredGate
+  createWireframeRequiredGate,
+  // Translation Fidelity Gate — second invocation (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
+  createTranslationFidelityGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -239,6 +241,10 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     // Wireframe Gates (SD-LEO-INFRA-LEO-PROTOCOL-WIREFRAME-001)
     gates.push(createWireframeRequiredGate(this.prdRepo, this.supabase));
+
+    // Translation Fidelity Gate — second invocation (SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001)
+    // Re-evaluates architecture→SD alignment after PRD/planning work to catch drift
+    gates.push(createTranslationFidelityGate(this.supabase));
 
     return gates;
   }
