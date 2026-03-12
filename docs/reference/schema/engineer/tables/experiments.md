@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-12T00:17:04.580Z
+**Generated**: 2026-03-12T11:52:15.801Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (14 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,10 @@
 | started_at | `timestamp with time zone` | YES | - | - |
 | ended_at | `timestamp with time zone` | YES | - | - |
 | created_by | `text` | YES | `'system'::text` | - |
+| min_observations_per_variant | `integer(32)` | YES | `20` | Minimum gate outcomes per variant before declaring a winner |
+| convergence_threshold | `numeric` | YES | `0.85` | P(variant > control) threshold for stopping (default 0.85) |
+| maturity_hours | `integer(32)` | YES | `48` | Minimum hours after experiment creation before stopping allowed |
+| survival_metric | `text` | YES | `'binary_per_gate'::text` | How survival is measured: binary_per_gate (pass/fail), composite (2-of-3), weighted (stage-weighted) |
 
 ## Constraints
 
@@ -36,6 +40,7 @@
 
 ### Check Constraints
 - `experiments_status_check`: CHECK ((status = ANY (ARRAY['draft'::text, 'running'::text, 'stopped'::text, 'archived'::text])))
+- `experiments_survival_metric_check`: CHECK ((survival_metric = ANY (ARRAY['binary_per_gate'::text, 'composite'::text, 'weighted'::text])))
 
 ## Indexes
 

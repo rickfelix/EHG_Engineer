@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-12T00:17:04.580Z
+**Generated**: 2026-03-12T11:52:15.801Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -73,6 +73,13 @@
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+## Triggers
+
+### trg_experiment_advancement
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION trigger_experiment_advancement()`
 
 ---
 
