@@ -19,9 +19,9 @@ import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../.
 import { createSmokeTestGate } from './gates/smoke-test-gate.js';
 export { createSmokeTestGate };
 
-// Wire Check Gate — AST Call Graph (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-C)
-import { createWireCheckGate } from './gates/wire-check-gate.js';
-export { createWireCheckGate };
+// Automated UAT Gate (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-D)
+import { createAutomatedUatGate } from './gates/automated-uat-gate.js';
+export { createAutomatedUatGate };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -909,8 +909,8 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // Smoke Test Gate (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-A)
   gates.push(createSmokeTestGate(supabase, prdRepo));
 
-  // Wire Check Gate — AST Call Graph (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-C)
-  gates.push(createWireCheckGate(supabase));
+  // Automated UAT Gate (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-D)
+  gates.push(createAutomatedUatGate(supabase));
 
   return gates;
 }
@@ -925,6 +925,6 @@ export default {
   createFRDeliveryVerificationGate,
   createPhaseCoverageExitGate,
   createSmokeTestGate,
-  createWireCheckGate,
+  createAutomatedUatGate,
   getRequiredGates
 };
