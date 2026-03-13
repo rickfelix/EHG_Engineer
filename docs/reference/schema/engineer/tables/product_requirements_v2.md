@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-13T21:41:39.951Z
+**Generated**: 2026-03-13T22:17:42.364Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (6 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (59 total)
+## Columns (60 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -86,6 +86,7 @@
 Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integration requirements. |
 | goal_summary | `character varying(300)` | YES | - | - |
 | venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this PRD to a specific venture. Should match the parent SD venture_id. |
+| smoke_test_cmd | `text` | YES | - | Optional shell command executed by SMOKE_TEST_GATE during LEAD-FINAL-APPROVAL. Exit 0 = pass. |
 
 ## Constraints
 
