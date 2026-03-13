@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-13T15:36:44.336Z
+**Generated**: 2026-03-13T19:33:25.298Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -65,6 +65,10 @@
   ```sql
   CREATE INDEX idx_rd_proposals_dedup ON public.rd_proposals USING btree (dedup_key)
   ```
+- `idx_rd_proposals_priority`
+  ```sql
+  CREATE INDEX idx_rd_proposals_priority ON public.rd_proposals USING btree (priority_score DESC)
+  ```
 - `idx_rd_proposals_signal_source`
   ```sql
   CREATE INDEX idx_rd_proposals_signal_source ON public.rd_proposals USING btree (signal_source)
@@ -84,23 +88,34 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_rd_proposals (SELECT)
+### 1. authenticated_read (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. rd_proposals_authenticated_read (SELECT)
+### 2. authenticated_read_rd_proposals (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. rd_proposals_service_all (ALL)
+### 3. rd_proposals_authenticated_read (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 4. rd_proposals_service_all (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 4. service_role_all_rd_proposals (ALL)
+### 5. service_role_all (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 6. service_role_all_rd_proposals (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

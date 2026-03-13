@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-13T15:36:44.336Z
+**Generated**: 2026-03-13T19:33:25.298Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (7 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (87 total)
+## Columns (90 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -109,6 +109,9 @@ Use the id column instead - it is the canonical identifier. |
 | vision_alignment_score | `numeric` | YES | - | Vision alignment score (0-100), populated by SD-MAN-INFRA-DYNAMIC-VISION-ALIGNMENT-001 scoring engine |
 | venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this SD to a specific venture for multi-venture isolation. NULL = unscoped (legacy/infrastructure SDs). |
 | scope_keywords | `ARRAY` | YES | - | - |
+| cancellation_reason | `text` | YES | - | Required reason when SD is cancelled — enforced by trigger |
+| cancelled_by | `text` | YES | - | Who cancelled the SD (chairman, lead, system, session_id) |
+| scope_authority | `text` | YES | - | Who authorized the current scope (chairman, lead, system) |
 
 ## Constraints
 
@@ -564,6 +567,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_record_sd_completion_signal()`
+
+### trg_require_cancellation_reason
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION trg_require_cancellation_reason()`
 
 ### trg_sync_sd_code_user_facing
 
