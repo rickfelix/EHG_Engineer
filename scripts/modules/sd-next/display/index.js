@@ -28,3 +28,4 @@ export { displayTelemetryFindings } from './telemetry-findings.js';
 export { displayVisionPortfolioHeader, formatVisionBadge } from './vision-scorecard.js';
 export { displayQuickFixes } from './quick-fixes.js';
 export { displayRoadmapAwareness } from './roadmap-awareness.js';
+export { displayHealthFreshness } from './health-freshness.js';
