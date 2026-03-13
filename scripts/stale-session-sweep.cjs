@@ -6,9 +6,14 @@
  * What it does:
  * 1. Scans all sessions with active SD claims
  * 2. Detects stale sessions (heartbeat > threshold)
+ * 2b. IDENTITY COLLISION DETECTION — reads .claude/session-identity/ marker files
+ *     to detect multiple live Claude Code PIDs sharing one session_id. Splits
+ *     colliding sessions into separate DB records with unique terminal_ids.
+ * 2c. NPM INSTALL LOCK — checks/cleans stale npm install locks to prevent
+ *     concurrent installs from corrupting node_modules.
  * 3. Checks PID liveness for same-host sessions
  * 4. Auto-releases dead claims (stale + PID dead)
- * 5. Detects duplicate claims on the same SD (conflicts)
+ * 5. Detects and AUTO-RESOLVES duplicate claims on the same SD
  * 6. Writes coordination messages for active sessions
  * 7. Outputs a summary to stdout
  *
@@ -16,7 +21,10 @@
  */
 
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
+const { randomUUID } = require('crypto');
 require('dotenv').config();
 
 const supabase = createClient(
@@ -42,6 +50,161 @@ function isProcessRunning(pid) {
 function bar(pct, width = 20) {
   const filled = Math.round((pct / 100) * width);
   return '\u2588'.repeat(filled) + '\u2591'.repeat(width - filled);
+}
+
+// --- Layer 1: Terminal Identity Collision Detection ---
+// Reads .claude/session-identity/pid-*.json marker files to detect when multiple
+// live Claude Code processes share the same session_id (identity collision).
+// Returns: [{ pid, session_id, marker_path, cc_pid, sse_port }]
+function detectIdentityCollisions() {
+  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
+  if (!fs.existsSync(markerDir)) return { collisions: [], aliveMarkers: [] };
+
+  const markers = fs.readdirSync(markerDir)
+    .filter(f => /^pid-\d+\.json$/.test(f))
+    .map(f => {
+      const filePath = path.resolve(markerDir, f);
+      const pid = Number(f.match(/^pid-(\d+)\.json$/)[1]);
+      try {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        return { pid, session_id: data.session_id, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
+      } catch { return null; }
+    })
+    .filter(Boolean);
+
+  // Check which PIDs are alive
+  const aliveMarkers = markers.filter(m => isProcessRunning(m.pid));
+
+  // Group alive markers by session_id
+  const bySession = {};
+  for (const m of aliveMarkers) {
+    if (!m.session_id) continue;
+    if (!bySession[m.session_id]) bySession[m.session_id] = [];
+    bySession[m.session_id].push(m);
+  }
+
+  // Collisions: same session_id claimed by multiple live PIDs
+  const collisions = Object.entries(bySession)
+    .filter(([, arr]) => arr.length > 1)
+    .map(([sessionId, markers]) => ({
+      session_id: sessionId,
+      markers: markers.sort((a, b) => a.mtime - b.mtime) // oldest first
+    }));
+
+  return { collisions, aliveMarkers };
+}
+
+// --- Layer 2: Session Splitting ---
+// When identity collision is detected, create new DB sessions for duplicate PIDs
+// so each Claude Code process has its own identity.
+async function splitCollidingSessions(supabase, collisions, actions, warnings) {
+  for (const collision of collisions) {
+    const keeper = collision.markers[0]; // oldest marker keeps the session
+    const extras = collision.markers.slice(1); // newer markers get split
+
+    actions.push('IDENTITY_COLLISION: session ' + collision.session_id.substring(0, 12) + '... shared by PIDs ' +
+      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid);
+
+    for (const extra of extras) {
+      const newTerminalId = 'win-' + extra.pid;
+      const newSessionId = 'session_' + randomUUID().substring(0, 8) + '_' + newTerminalId + '_' + extra.pid;
+
+      // Check if a session with this terminal_id already exists (idempotent)
+      const { data: existing } = await supabase
+        .from('claude_sessions')
+        .select('session_id')
+        .eq('terminal_id', newTerminalId)
+        .in('status', ['active', 'idle'])
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        actions.push('IDENTITY_SPLIT: PID ' + extra.pid + ' already has session ' + existing[0].session_id.substring(0, 20) + ' — skipped');
+        continue;
+      }
+
+      // Create a new session record for this PID
+      const { error: insertErr } = await supabase
+        .from('claude_sessions')
+        .insert({
+          session_id: newSessionId,
+          terminal_id: newTerminalId,
+          tty: newTerminalId,
+          pid: extra.pid,
+          hostname: LOCAL_HOSTNAME,
+          codebase: path.resolve(__dirname, '..'),
+          status: 'idle',
+          heartbeat_at: new Date().toISOString(),
+          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid }
+        });
+
+      if (insertErr) {
+        warnings.push('IDENTITY_SPLIT: failed to create session for PID ' + extra.pid + ' — ' + insertErr.message);
+        continue;
+      }
+
+      // Update the marker file to point to the new session
+      try {
+        const markerData = JSON.parse(fs.readFileSync(extra.marker_path, 'utf8'));
+        markerData.session_id = newSessionId;
+        markerData.split_from = collision.session_id;
+        markerData.split_at = new Date().toISOString();
+        fs.writeFileSync(extra.marker_path, JSON.stringify(markerData, null, 2));
+      } catch (e) {
+        warnings.push('IDENTITY_SPLIT: failed to update marker for PID ' + extra.pid + ' — ' + e.message);
+      }
+
+      // Send IDENTITY_COLLISION coordination message to the original session
+      // so the affected process knows to re-register on next heartbeat
+      await supabase.from('session_coordination').insert({
+        target_session: collision.session_id,
+        message_type: 'IDENTITY_COLLISION',
+        subject: 'Session identity collision detected — PID ' + extra.pid + ' split off',
+        body: 'Multiple Claude Code processes were sharing session ' + collision.session_id.substring(0, 12) + '...\n\n' +
+          'PID ' + extra.pid + ' has been assigned new session: ' + newSessionId + '\n' +
+          'PID ' + keeper.pid + ' keeps the original session.\n\n' +
+          'If you have an active SD claim, run /claim to verify your claim is intact.\n' +
+          'If your claim was lost, run /claim to re-claim your SD.',
+        payload: {
+          collision_pids: collision.markers.map(m => m.pid),
+          keeper_pid: keeper.pid,
+          split_pid: extra.pid,
+          new_session_id: newSessionId,
+          original_session_id: collision.session_id
+        },
+        sender_type: 'sweep'
+      }).catch(() => {});
+
+      actions.push('IDENTITY_SPLIT: PID ' + extra.pid + ' → new session ' + newSessionId.substring(0, 20) + ' (terminal_id=' + newTerminalId + ')');
+    }
+  }
+}
+
+// --- Layer 3: npm Install Mutex ---
+// File-based lock to prevent concurrent npm install from corrupting node_modules.
+const NPM_LOCK_PATH = path.resolve(__dirname, '../node_modules/.npm-install.lock');
+const NPM_LOCK_MAX_AGE_MS = 5 * 60 * 1000; // 5min max lock age (auto-expire stale locks)
+
+function checkNpmInstallLock() {
+  if (!fs.existsSync(NPM_LOCK_PATH)) return { locked: false };
+  try {
+    const data = JSON.parse(fs.readFileSync(NPM_LOCK_PATH, 'utf8'));
+    const age = Date.now() - data.timestamp;
+    if (age > NPM_LOCK_MAX_AGE_MS) {
+      // Stale lock — remove it
+      fs.unlinkSync(NPM_LOCK_PATH);
+      return { locked: false, stale_removed: true, stale_pid: data.pid };
+    }
+    // Check if lock holder is still alive
+    if (data.pid && !isProcessRunning(data.pid)) {
+      fs.unlinkSync(NPM_LOCK_PATH);
+      return { locked: false, dead_removed: true, dead_pid: data.pid };
+    }
+    return { locked: true, holder_pid: data.pid, age_seconds: Math.round(age / 1000) };
+  } catch {
+    // Corrupt lock file — remove
+    try { fs.unlinkSync(NPM_LOCK_PATH); } catch {}
+    return { locked: false };
+  }
 }
 
 async function main() {
@@ -88,6 +251,24 @@ async function main() {
 
     return { ...s, isStale, status };
   });
+
+  // 2b. Identity collision detection (Layer 1)
+  const { collisions, aliveMarkers } = detectIdentityCollisions();
+  if (collisions.length > 0) {
+    await splitCollidingSessions(supabase, collisions, actions, warnings);
+  }
+
+  // 2c. npm install lock cleanup (Layer 3)
+  const npmLock = checkNpmInstallLock();
+  if (npmLock.stale_removed) {
+    actions.push('NPM_LOCK: removed stale install lock (PID ' + npmLock.stale_pid + ' — expired)');
+  }
+  if (npmLock.dead_removed) {
+    actions.push('NPM_LOCK: removed dead install lock (PID ' + npmLock.dead_pid + ' — process gone)');
+  }
+  if (npmLock.locked) {
+    warnings.push('NPM_LOCK: active install lock held by PID ' + npmLock.holder_pid + ' (' + npmLock.age_seconds + 's)');
+  }
 
   // 3. Detect conflicts (multiple sessions claiming same SD)
   const bySD = {};
@@ -233,8 +414,6 @@ async function main() {
     return !sd.description || sd.description === sd.title || (sd.description.length < 100 && sd.scope === sd.title);
   });
   if (bareShellSDs.length > 0) {
-    const fs = require('fs');
-    const path = require('path');
     const repoRoot = path.resolve(__dirname, '..');
     const searchDirs = ['docs/audits', 'docs/plans', 'brainstorm'].map(d => path.join(repoRoot, d));
 
@@ -579,7 +758,7 @@ async function main() {
   activeSessions.forEach(s => {
     const child = (children || []).find(c => c.sd_key === s.sd_id);
     const pct = child ? child.progress_percentage : '?';
-    console.log('  ' + s.tty.padEnd(12) + s.sd_id.padEnd(50) + bar(pct) + ' ' + pct + '%');
+    console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(50) + bar(pct) + ' ' + pct + '%');
   });
   console.log('');
 
@@ -589,7 +768,7 @@ async function main() {
     console.log('STALE/DEAD (' + stale.length + '):');
     stale.forEach(s => {
       const tag = s.status === 'DEAD' ? 'RELEASED' : s.status;
-      console.log('  ' + s.tty.padEnd(12) + s.sd_id.padEnd(50) + tag + ' (' + s.heartbeat_age_human + ')');
+      console.log('  ' + (s.tty || '?').padEnd(12) + (s.sd_id || '?').padEnd(50) + tag + ' (' + s.heartbeat_age_human + ')');
     });
     console.log('');
   }
@@ -632,6 +811,33 @@ async function main() {
     if (stuckReset.length > 0) console.log('  Reset ' + stuckReset.length + ' SD(s) from pending_approval → draft (no session working on them)');
     if ((completedWithClaims || []).length > 0) console.log('  Cleared ' + (completedWithClaims || []).length + ' stale claiming_session_id on completed SDs');
     if (claimIntegrityIssues.length > 0) console.log('  Nudged ' + claimIntegrityIssues.length + ' idle session(s) with CLAIM_REMINDER');
+    console.log('');
+  }
+
+  // Identity collision summary
+  if (collisions.length > 0) {
+    console.log('IDENTITY COLLISIONS (' + collisions.length + '):');
+    for (const c of collisions) {
+      console.log('  Session ' + c.session_id.substring(0, 12) + '... shared by PIDs: ' + c.markers.map(m => m.pid).join(', '));
+    }
+    console.log('');
+  }
+
+  // Alive markers summary (useful for debugging)
+  if (aliveMarkers.length > 0) {
+    console.log('MARKER FILES (' + aliveMarkers.length + ' alive):');
+    for (const m of aliveMarkers) {
+      console.log('  PID=' + String(m.pid).padEnd(8) + 'session=' + (m.session_id || '?').substring(0, 12) + '...' + '  port=' + (m.sse_port || '?'));
+    }
+    console.log('');
+  }
+
+  // npm lock status
+  if (npmLock.locked || npmLock.stale_removed || npmLock.dead_removed) {
+    console.log('NPM INSTALL LOCK:');
+    if (npmLock.locked) console.log('  ACTIVE — held by PID ' + npmLock.holder_pid + ' for ' + npmLock.age_seconds + 's');
+    if (npmLock.stale_removed) console.log('  CLEARED — stale lock from PID ' + npmLock.stale_pid + ' (expired)');
+    if (npmLock.dead_removed) console.log('  CLEARED — dead lock from PID ' + npmLock.dead_pid + ' (process gone)');
     console.log('');
   }
 
