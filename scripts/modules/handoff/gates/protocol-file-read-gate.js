@@ -7,20 +7,19 @@
  * before a handoff can proceed. This gate converts the "Protocol Familiarization"
  * directive from text guidance into an enforced validation gate.
  *
- * DUAL GENERATION (v2.0):
- *   - Defaults to DIGEST files (e.g., CLAUDE_PLAN_DIGEST.md)
- *   - Use CLAUDE_PROTOCOL_MODE=full to use FULL files instead
- *   - Fails fast with actionable error if DIGEST files are missing
+ * DUAL GENERATION (v3.0 - Opus 4.6 1M context):
+ *   - Defaults to FULL files (e.g., CLAUDE_PLAN.md)
+ *   - Use CLAUDE_PROTOCOL_MODE=digest for compact mode (smaller models)
  *
- * Mapping (DIGEST mode - default):
- *   LEAD-TO-PLAN → requires CLAUDE_PLAN_DIGEST.md
- *   PLAN-TO-EXEC → requires CLAUDE_EXEC_DIGEST.md
- *   EXEC-TO-PLAN → requires CLAUDE_PLAN_DIGEST.md
- *
- * Mapping (FULL mode - env override):
+ * Mapping (FULL mode - default):
  *   LEAD-TO-PLAN → requires CLAUDE_PLAN.md
  *   PLAN-TO-EXEC → requires CLAUDE_EXEC.md
  *   EXEC-TO-PLAN → requires CLAUDE_PLAN.md
+ *
+ * Mapping (DIGEST mode - env override):
+ *   LEAD-TO-PLAN → requires CLAUDE_PLAN_DIGEST.md
+ *   PLAN-TO-EXEC → requires CLAUDE_EXEC_DIGEST.md
+ *   EXEC-TO-PLAN → requires CLAUDE_PLAN_DIGEST.md
  */
 
 import fs from 'fs';
@@ -36,7 +35,7 @@ const SESSION_STATE_FILE = path.join(PROJECT_DIR, '.claude', 'unified-session-st
  */
 function getProtocolMode() {
   const mode = process.env.CLAUDE_PROTOCOL_MODE?.toLowerCase();
-  return mode === 'full' ? 'full' : 'digest';
+  return mode === 'digest' ? 'digest' : 'full';
 }
 
 /**
@@ -253,7 +252,7 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
   const requiredFile = requirements[handoffType];
 
   console.log(`   Protocol Mode: ${protocolMode.toUpperCase()}`);
-  console.log('   Mode Override: Set CLAUDE_PROTOCOL_MODE=full to use FULL files');
+  console.log('   Mode Override: Set CLAUDE_PROTOCOL_MODE=digest for compact mode');
 
   if (!requiredFile) {
     // No requirement for this handoff type

@@ -42,10 +42,12 @@ Display the output directly.
 
 **Step 1: Select source file**
 
-If `--source` not provided, ask:
+If neither `--source` nor `--content` provided, ask:
 ```
-"What is the path to the architecture source document? (e.g. docs/plans/eva-platform-architecture.md)"
+"What is the path to the architecture source document? (e.g. docs/plans/archived/eva-platform-architecture.md) — NOTE: New architecture plans should be registered directly via DB using --content flag, not from markdown files."
 ```
+
+**Preferred workflow (DB-only):** Generate architecture content in-memory and pass via `--content` flag to avoid creating intermediary files.
 
 **Step 1.5: Brainstorm tradeoff linkage**
 
