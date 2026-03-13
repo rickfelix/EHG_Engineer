@@ -135,6 +135,62 @@ function wordOverlapScore(wordsA, wordsB) {
 }
 
 /**
+ * Backward reconciliation: detect child SDs that claim to implement a phase
+ * not present in the architecture plan. These are "orphan" children created
+ * from phantom phases (e.g., phases that were removed after plan amendment).
+ *
+ * SD-LEO-INFRA-ORCHESTRATOR-SCOPE-GOVERNANCE-001 (FR-003)
+ *
+ * @param {Object[]} phases - From eva_architecture_plans.sections.implementation_phases
+ * @param {Object[]} childSds - Child SDs of the orchestrator
+ * @returns {Object} Reconciliation report with orphans array
+ */
+export function detectOrphanChildren(phases, childSds) {
+  if (!childSds || childSds.length === 0) {
+    return { orphans: [], checkedCount: 0 };
+  }
+
+  const phaseNumbers = new Set((phases || []).map(p => p.number));
+  const phaseTitles = new Set((phases || []).map(p => normalizeForMatch(p.title).join(' ')));
+  const orphans = [];
+
+  for (const sd of childSds) {
+    // Extract phase reference from SD title or metadata
+    const phaseMatch = sd.title?.match(/Phase\s+(\d+)/i);
+    if (phaseMatch) {
+      const refNum = parseInt(phaseMatch[1], 10);
+      if (!phaseNumbers.has(refNum)) {
+        orphans.push({
+          sd_key: sd.sd_key,
+          title: sd.title,
+          status: sd.status,
+          referenced_phase: refNum,
+          reason: `References Phase ${refNum} which does not exist in the architecture plan`
+        });
+        continue;
+      }
+    }
+
+    // Check letter-suffix children (e.g., SD-XXX-001-C for Phase 3)
+    const letterMatch = sd.sd_key?.match(/-([A-Z])$/);
+    if (letterMatch) {
+      const letterIndex = letterMatch[1].charCodeAt(0) - 64; // A=1, B=2, etc.
+      if (letterIndex > 0 && !phaseNumbers.has(letterIndex) && phases && phases.length > 0) {
+        orphans.push({
+          sd_key: sd.sd_key,
+          title: sd.title,
+          status: sd.status,
+          referenced_phase: letterIndex,
+          reason: `Suffix -${letterMatch[1]} implies Phase ${letterIndex} which does not exist in the architecture plan`
+        });
+      }
+    }
+  }
+
+  return { orphans, checkedCount: childSds.length };
+}
+
+/**
  * Formats coverage report for terminal display.
  * @param {Object} report - From validatePhaseCoverage()
  * @returns {string} Formatted output

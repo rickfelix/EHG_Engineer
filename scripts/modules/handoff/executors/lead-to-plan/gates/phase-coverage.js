@@ -10,7 +10,8 @@
 
 import {
   validatePhaseCoverage,
-  formatCoverageReport
+  formatCoverageReport,
+  detectOrphanChildren
 } from '../../../validation/phase-coverage-validator.js';
 
 import {
@@ -111,6 +112,20 @@ export function createPhaseCoverageGate(supabase) {
         const report = validatePhaseCoverage(phases, allSds);
         console.log(formatCoverageReport(report));
 
+        // Backward reconciliation: detect orphan children referencing non-existent phases
+        // SD-LEO-INFRA-ORCHESTRATOR-SCOPE-GOVERNANCE-001 (FR-003)
+        const childSds = allSds.filter(sd => sd.parent_sd_id);
+        const orphanReport = detectOrphanChildren(phases, childSds);
+        const warnings = [];
+
+        if (orphanReport.orphans.length > 0) {
+          console.log(`\n   ⚠️  Backward Reconciliation: ${orphanReport.orphans.length} orphan child(ren) detected`);
+          for (const orphan of orphanReport.orphans) {
+            console.log(`   🔸 ${orphan.sd_key}: ${orphan.reason}`);
+            warnings.push(`Orphan child ${orphan.sd_key}: ${orphan.reason}`);
+          }
+        }
+
         if (!report.passed) {
           const missingTitles = report.uncovered.map(u => u.phase.title).join(', ');
           return buildSemanticResult({
@@ -118,6 +133,7 @@ export function createPhaseCoverageGate(supabase) {
             score: Math.round(report.coveragePercent),
             confidence: 1,
             issues: [`Architecture phase coverage incomplete: ${report.coveredCount}/${report.totalPhases} phases covered. Missing: ${missingTitles}`],
+            warnings,
             details: {
               archKey,
               totalPhases: report.totalPhases,
@@ -127,7 +143,8 @@ export function createPhaseCoverageGate(supabase) {
                 number: u.phase.number,
                 title: u.phase.title,
                 designation: u.phase.child_designation
-              }))
+              })),
+              orphanChildren: orphanReport.orphans
             },
             remediation: `Create SDs for uncovered phases: ${missingTitles}. Then link them via metadata.arch_key = '${archKey}'.`
           });
@@ -135,13 +152,15 @@ export function createPhaseCoverageGate(supabase) {
 
         return buildSemanticResult({
           passed: true,
-          score: 100,
+          score: orphanReport.orphans.length > 0 ? 80 : 100,
           confidence: 1,
+          warnings,
           details: {
             archKey,
             totalPhases: report.totalPhases,
             coveredCount: report.coveredCount,
-            coveragePercent: report.coveragePercent
+            coveragePercent: report.coveragePercent,
+            orphanChildren: orphanReport.orphans
           }
         });
       } catch (err) {
