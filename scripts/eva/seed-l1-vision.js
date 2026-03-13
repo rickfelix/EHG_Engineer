@@ -35,8 +35,8 @@ const REPO_ROOT = resolve(__dirname, '../../');
 // ============================================================================
 
 const SOURCE_FILES = {
-  vision: 'docs/plans/eva-venture-lifecycle-vision.md',
-  architecture: 'docs/plans/eva-platform-architecture.md',
+  vision: 'docs/plans/archived/eva-venture-lifecycle-vision.md',
+  architecture: 'docs/plans/archived/eva-platform-architecture.md',
   doctrine: 'brainstorm/topic-5-ehg-vision.md',
 };
 
