@@ -543,6 +543,81 @@ Present the classification to the user:
 
 ---
 
+## Step 8.7: Chairman Sanity Check (MANDATORY)
+
+**BLOCKING GATE** — Do NOT proceed to vision/architecture generation until the chairman reviews flagged items.
+
+After outcome classification (Step 8), but BEFORE vision and architecture creation (Step 8.5/9.5), present a structured review checkpoint. This catches over-optimistic claims, unvalidated assumptions, and vague assertions before they propagate into planning documents.
+
+**When to fire**: Every brainstorm classified as "Ready for SD", "Needs Triage", or "Potential Conflict". Skip only for "Consideration Only" or "Significant Departure".
+
+### 8.7A: Extract Flagged Items
+
+Review the brainstorm discussion and extract items that fall into these 8 rubric categories. For each category, identify the specific claim or assumption from the brainstorm that warrants review:
+
+| Category | What to Flag |
+|----------|-------------|
+| **Market Size** | Any TAM/SAM/SOM estimates, market growth claims, or addressable audience assertions |
+| **Competitive Moat** | Claims about defensibility, unique advantages, or barriers to entry |
+| **Technical Feasibility** | Assumptions about what can be built, integration complexity, or timeline estimates |
+| **Revenue Model** | Pricing assumptions, monetization claims, or unit economics |
+| **Team Fit** | Whether EHG (solo entrepreneur) has the skills/bandwidth for this |
+| **Timing** | Claims about market readiness, urgency, or window of opportunity |
+| **Regulatory Risk** | Any compliance, legal, or regulatory assumptions (or absence of consideration) |
+| **Capital Requirements** | Estimates of cost, infrastructure needs, or resource commitments |
+
+For each category where the brainstorm made a notable claim or assumption, create a flagged item with:
+- The specific claim/quote from the discussion
+- A recommended action (Accept as-is, Flag for deeper analysis, or Needs more research)
+
+**Skip categories** where the brainstorm did not make any relevant claims (e.g., a protocol brainstorm may have no Market Size claims).
+
+### 8.7B: Present Chairman Review
+
+For each flagged item, use AskUserQuestion:
+
+```
+question: "[Category]: [Specific claim from brainstorm]"
+header: "Chairman Review — [Category]"
+options:
+  - label: "Accept as-is"
+    description: "This claim is reasonable — proceed to vision generation"
+  - label: "Flag for deeper analysis"
+    description: "Include a risk note in the vision document for this item"
+  - label: "Needs more research"
+    description: "HALT pipeline — this needs a follow-up brainstorm before proceeding"
+```
+
+Present items one at a time so the chairman can make individual decisions.
+
+### 8.7C: Process Decisions
+
+After all items are reviewed:
+
+- **If ANY item received "Needs more research"**: HALT the pipeline. Do NOT proceed to Step 8.5 or Step 9.5. Instead:
+  ```
+  ⛔ Pipeline Halted — Research Needed
+
+  The following items need more research before this brainstorm can proceed to vision/architecture:
+  - [Category]: [Claim] — Chairman decision: Needs more research
+
+  Suggested follow-up: Run `/brainstorm --domain <same-domain> "<specific research topic>"`
+  ```
+  Save the brainstorm document (Step 9) with outcome reclassified to "Needs Triage" and skip Steps 9.5+.
+
+- **If items received "Flag for deeper analysis"**: Record the flags. These will be injected as risk notes into the vision document (Step 9.5A) under a new `## Chairman Review Flags` section.
+
+- **If all items "Accept as-is"**: Proceed normally to Step 8.5.
+
+### 8.7D: Record Decisions
+
+Store the chairman review decisions in the brainstorm document metadata section:
+```markdown
+- **Chairman Review**: [N items reviewed, M accepted, F flagged, R research-needed]
+```
+
+---
+
 ## Step 8.5: Vision & Architecture Plan Creation (MANDATORY)
 
 **ANTI-PATTERN**: Skipping vision and architecture documents to go straight to SD creation. Brainstorms that skip planning documents produce SDs with incomplete thinking — the exact problem the Universal Planning Completeness Framework addresses.
@@ -719,6 +794,9 @@ Use the brainstorm discovery answers, team perspectives (Challenger, Visionary, 
 
 ## Success Criteria
 [Measurable outcomes — derived from brainstorm evaluation criteria and team consensus]
+
+## Chairman Review Flags
+[Include ONLY if Step 8.7 produced flagged items. List each flagged category with the specific concern and recommended mitigation. Omit this section entirely if all items were accepted as-is.]
 ```
 
 **After writing the file**, verify it exists and has all 10 required sections before proceeding to 9.5B.
@@ -788,7 +866,36 @@ Use the Pragmatist's feasibility analysis, the Challenger's risk assessment, and
 [Technical risks with specific mitigation strategies — from Challenger risk analysis]
 ```
 
-**After writing the file**, verify it exists and has all 8 required sections before proceeding to 9.5D.
+**No-Deferral Enforcement (BLOCKING)**:
+
+Before saving the architecture plan, scan ALL sections for deferral language. The following phrases (and variations) are PROHIBITED:
+
+- "deferred to future work"
+- "to be determined later"
+- "TBD", "TBC" (when used as a placeholder for missing decisions)
+- "will be addressed in a future phase" (without specifying WHICH phase)
+- "out of scope for now" (without a specific phase reference)
+- "details to follow"
+
+**If deferral language is detected**: Rewrite the offending section to either:
+1. Make a concrete decision now (preferred), OR
+2. Assign to a specific numbered phase with explicit deliverables (e.g., "Phase 2 deliverable: implement caching layer with Redis — estimated 3 days")
+
+**Allowed phasing language** (these are NOT deferrals):
+- "Phase 2: [specific deliverable with timeline]"
+- "Deferred to Phase N with [explicit scope and acceptance criteria]"
+- "Not included in MVP; Phase 2 adds [specific feature]"
+
+**Conversation Context Referencing (MANDATORY)**:
+
+Architecture plans MUST reference specific details from the brainstorm conversation, not just the summary document. For each major architectural decision:
+- Cite the specific brainstorm discussion point that informed it (e.g., "Per the Challenger's concern about vendor lock-in, we use...")
+- Reference team perspective insights by name (Challenger, Visionary, Pragmatist)
+- Include specific data points or examples discussed during the brainstorm, not generic statements
+
+**If Chairman Review flags exist** (from Step 8.7): Include a `## Chairman Review Flags` section listing each flagged item and how the architecture addresses or mitigates the concern.
+
+**After writing the file**, verify it exists and has all 8 required sections (plus Chairman Review Flags if applicable) before proceeding to 9.5D.
 
 ### 9.5D: Register Architecture Plan in EVA (with Key Capture)
 
