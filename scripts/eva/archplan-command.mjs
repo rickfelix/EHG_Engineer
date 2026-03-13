@@ -170,12 +170,17 @@ ${combined}`;
 // Subcommands
 // ============================================================================
 
-async function cmdExtract({ source }) {
-  if (!source) { console.error('--source is required'); process.exit(1); }
-  const fullPath = resolve(REPO_ROOT, source);
-  if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
+async function cmdExtract({ source, content: contentArg }) {
+  if (!source && !contentArg) { console.error('--source or --content is required'); process.exit(1); }
 
-  const content = readFileSync(fullPath, 'utf8');
+  let content;
+  if (contentArg) {
+    content = contentArg;
+  } else {
+    const fullPath = resolve(REPO_ROOT, source);
+    if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
+    content = readFileSync(fullPath, 'utf8');
+  }
   console.error(`\n🤖 Extracting architecture dimensions from: ${source} (${content.length.toLocaleString()} chars)...`);
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -196,15 +201,19 @@ async function cmdExtract({ source }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId }) {
+async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId, content: contentArg }) {
   if (!planKey) { console.error('--plan-key is required'); process.exit(1); }
   if (!visionKey) { console.error('--vision-key is required (link to parent vision document)'); process.exit(1); }
-  if (!source) { console.error('--source is required'); process.exit(1); }
+  if (!source && !contentArg) { console.error('--source or --content is required'); process.exit(1); }
 
-  const fullPath = resolve(REPO_ROOT, source);
-  if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
-
-  const content = readFileSync(fullPath, 'utf8');
+  let content;
+  if (contentArg) {
+    content = contentArg;
+  } else {
+    const fullPath = resolve(REPO_ROOT, source);
+    if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
+    content = readFileSync(fullPath, 'utf8');
+  }
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   // Resolve vision_id from vision_key

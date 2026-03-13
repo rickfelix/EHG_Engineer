@@ -121,13 +121,17 @@ ${truncated}`;
 // Subcommands
 // ============================================================================
 
-async function cmdExtract({ source }) {
-  if (!source) { console.error('--source is required for extract'); process.exit(1); }
+async function cmdExtract({ source, content: contentArg }) {
+  if (!source && !contentArg) { console.error('--source or --content is required for extract'); process.exit(1); }
 
-  const fullPath = resolve(REPO_ROOT, source);
-  if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
-
-  const content = readFileSync(fullPath, 'utf8');
+  let content;
+  if (contentArg) {
+    content = contentArg;
+  } else {
+    const fullPath = resolve(REPO_ROOT, source);
+    if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
+    content = readFileSync(fullPath, 'utf8');
+  }
   console.error(`\n🤖 Extracting vision dimensions from: ${source} (${content.length.toLocaleString()} chars)...`);
 
   const dimensions = await extractDimensions(content);
@@ -138,10 +142,10 @@ async function cmdExtract({ source }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson }) {
+async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dimensionsJson, brainstormId, sections: sectionsJson, content: contentArg }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
-  if (!source && !sectionsJson) { console.error('--source or --sections is required'); process.exit(1); }
+  if (!source && !sectionsJson && !contentArg) { console.error('--source, --sections, or --content is required'); process.exit(1); }
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -173,8 +177,24 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
     content = renderSectionsToMarkdown(sections, visionKey, schema);
   }
 
+  // Inline content path: --content flag provides content directly (DB-only workflow)
+  if (contentArg && !sections) {
+    content = contentArg;
+    let mapping;
+    try {
+      mapping = await buildSectionKeyMapping('vision', { supabase });
+    } catch {
+      mapping = buildDefaultMapping();
+    }
+    sections = parseMarkdownToSections(content, mapping);
+    const sectionCount = Object.keys(sections).length;
+    if (sectionCount > 0) {
+      console.log(`   Auto-parsed ${sectionCount} sections from --content`);
+    }
+  }
+
   // Source file path: backward-compatible (auto-parse sections from markdown)
-  if (source) {
+  if (source && !contentArg) {
     const fullPath = resolve(REPO_ROOT, source);
     if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
     content = readFileSync(fullPath, 'utf8');

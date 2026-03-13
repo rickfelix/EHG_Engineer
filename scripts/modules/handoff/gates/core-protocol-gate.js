@@ -11,10 +11,9 @@
  * 4. Queryable gate state for auditing
  * 5. DIGEST mode support with on-demand FULL loading (v2.0)
  *
- * DUAL GENERATION (v2.0):
- *   - Defaults to DIGEST files (e.g., CLAUDE_CORE_DIGEST.md)
- *   - Use CLAUDE_PROTOCOL_MODE=full to use FULL files instead
- *   - On-demand FULL loading when needs_full_protocol=true flag is set
+ * DUAL GENERATION (v3.0 - Opus 4.6 1M context):
+ *   - Defaults to FULL files (e.g., CLAUDE_CORE.md)
+ *   - Use CLAUDE_PROTOCOL_MODE=digest for compact mode (smaller models)
  *   - Output includes full_loaded: boolean and full_files_loaded: string[]
  *
  * Trigger Points:
@@ -43,7 +42,7 @@ const SYNC_MARKER_POLL_INTERVAL = 50;
  */
 function getProtocolMode() {
   const mode = process.env.CLAUDE_PROTOCOL_MODE?.toLowerCase();
-  return mode === 'full' ? 'full' : 'digest';
+  return mode === 'digest' ? 'digest' : 'full';
 }
 
 /**
@@ -855,7 +854,7 @@ export function createPostCompactionGate(currentPhase) {
     },
     required: true,
     blocking: true,
-    remediation: 'Re-read CLAUDE.md, CLAUDE_CORE_DIGEST.md, and phase digest file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE_DIGEST.md"'
+    remediation: 'Re-read CLAUDE.md, CLAUDE_CORE.md, and phase protocol file after context compaction. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
   };
 }
 
@@ -1018,7 +1017,7 @@ export function createSessionStartGate(sessionId) {
     },
     required: true,
     blocking: true,
-    remediation: 'Read CLAUDE.md and CLAUDE_CORE_DIGEST.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE_DIGEST.md"'
+    remediation: 'Read CLAUDE.md and CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE.md" then file_path="CLAUDE_CORE.md"'
   };
 }
 

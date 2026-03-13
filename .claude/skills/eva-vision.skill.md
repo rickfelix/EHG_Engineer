@@ -58,10 +58,12 @@ If `--level` not provided, ask:
 }
 ```
 
-If `--source` not provided, ask:
+If neither `--source` nor `--content` provided, ask:
 ```
-"What is the path to the source document? (e.g. docs/plans/eva-venture-lifecycle-vision.md)"
+"What is the path to the source document? (e.g. docs/plans/archived/eva-venture-lifecycle-vision.md) — NOTE: New vision documents should be registered directly via DB using --content flag, not from markdown files."
 ```
+
+**Preferred workflow (DB-only):** Generate vision content in-memory and pass via `--content` flag to avoid creating intermediary files.
 
 **Step 1.5: Scope disambiguation**
 

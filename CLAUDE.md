@@ -79,7 +79,7 @@ This command provides:
 ### SD Status Badge Legend
 | Badge | Meaning | Workable? |
 |-------|---------|-----------|
-| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD_DIGEST.md and run LEAD-TO-PLAN. |
+| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD.md and run LEAD-TO-PLAN. |
 | **READY** | Past LEAD phase, dependencies resolved | **YES** - Proceed to next handoff in workflow |
 | **PLANNING** | In PLAN phase (PRD creation) | **YES** - Continue planning work |
 | **EXEC N%** | In EXEC phase with progress | **YES** - Continue implementation |
@@ -89,7 +89,7 @@ This command provides:
 ### After Running sd:next
 1. If SD marked "CONTINUE" (is_working_on=true) and not CLAIMED by another session → Resume that SD
 2. If no active SD → Pick the highest-ranked **workable** SD (any status except BLOCKED or CLAIMED)
-3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD_DIGEST.md.
+3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
 4. READY SDs have already been approved — proceed to the next handoff in their workflow.
 5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
 
@@ -103,11 +103,11 @@ This command provides:
 
 ## Context Loading
 Load the authoritative rules for your current phase:
-- **Starting Work**: Read `CLAUDE_CORE_DIGEST.md`
-- **LEAD Phase**: Read `CLAUDE_LEAD_DIGEST.md`
-- **PLAN Phase**: Read `CLAUDE_PLAN_DIGEST.md`
-- **EXEC Phase**: Read `CLAUDE_EXEC_DIGEST.md`
-Escalate to full files (e.g. `CLAUDE_CORE.md`) only when digest is insufficient.
+- **Starting Work**: Read `CLAUDE_CORE.md`
+- **LEAD Phase**: Read `CLAUDE_LEAD.md`
+- **PLAN Phase**: Read `CLAUDE_PLAN.md`
+- **EXEC Phase**: Read `CLAUDE_EXEC.md`
+Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models, near token limits).
 
 ## Essential Commands
 - **Pick Work**: `npm run sd:next`

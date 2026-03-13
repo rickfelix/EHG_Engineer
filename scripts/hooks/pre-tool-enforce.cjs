@@ -8,6 +8,7 @@
  * 3. Sub-agent routing advisory - SOFT HINT (stdout, exit 0)
  *
  * 4. Worktree claim guard (PAT-CLMMULTI-001) - HARD BLOCK (exit 2)
+ * 5. DB-only strategic artifacts (SD-LEO-INFRA-ONLY-ENFORCEMENT-STRATEGIC-002) - HARD BLOCK (exit 2)
  *
  * Hook API:
  *   Input:  CLAUDE_TOOL_INPUT (JSON), CLAUDE_TOOL_NAME (string)
@@ -97,6 +98,40 @@ function main() {
         // No state file = no claim info = fail-open
       } catch {
         // Fail-open: file read errors don't block edits
+      }
+    }
+  }
+
+  // --- ENFORCEMENT 5: DB-Only Strategic Artifacts ---
+  // Blocks creation of NEW markdown files in docs/plans/ (excluding archived/)
+  // and brainstorm/. Vision/architecture/brainstorm content must go to database.
+  // Allows edits to existing files (needed for migration/archival).
+  if (TOOL_NAME === 'Write') {
+    const filePath = (input.file_path || '').replace(/\\/g, '/');
+    const fs = require('fs');
+
+    // Block new file creation in docs/plans/ (excluding archived/)
+    if (/docs\/plans\/(?!archived\/)/.test(filePath) && filePath.endsWith('.md')) {
+      if (!fs.existsSync(input.file_path)) {
+        process.stderr.write(
+          'DB-ONLY ENFORCEMENT: Blocked new markdown file in docs/plans/.\n' +
+          'Vision/architecture documents must be stored in the database.\n' +
+          'Use: node scripts/eva/vision-command.mjs upsert --content "..."\n' +
+          'Or:  node scripts/eva/archplan-command.mjs upsert --content "..."\n'
+        );
+        process.exit(2);
+      }
+    }
+
+    // Block new file creation in brainstorm/
+    if (/brainstorm\/[^/]+\.md$/.test(filePath)) {
+      if (!fs.existsSync(input.file_path)) {
+        process.stderr.write(
+          'DB-ONLY ENFORCEMENT: Blocked new markdown file in brainstorm/.\n' +
+          'Brainstorm content must be stored in brainstorm_sessions.content column.\n' +
+          'Store via Supabase upsert to brainstorm_sessions table.\n'
+        );
+        process.exit(2);
       }
     }
   }

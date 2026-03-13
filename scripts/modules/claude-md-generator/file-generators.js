@@ -112,11 +112,11 @@ ${sessionInit ? formatSection(sessionInit) : ''}
 
 ## Context Loading
 Load the authoritative rules for your current phase:
-- **Starting Work**: Read \`CLAUDE_CORE_DIGEST.md\`
-- **LEAD Phase**: Read \`CLAUDE_LEAD_DIGEST.md\`
-- **PLAN Phase**: Read \`CLAUDE_PLAN_DIGEST.md\`
-- **EXEC Phase**: Read \`CLAUDE_EXEC_DIGEST.md\`
-Escalate to full files (e.g. \`CLAUDE_CORE.md\`) only when digest is insufficient.
+- **Starting Work**: Read \`CLAUDE_CORE.md\`
+- **LEAD Phase**: Read \`CLAUDE_LEAD.md\`
+- **PLAN Phase**: Read \`CLAUDE_PLAN.md\`
+- **EXEC Phase**: Read \`CLAUDE_EXEC.md\`
+Use \`*_DIGEST.md\` variants only when context is constrained (e.g. smaller models, near token limits).
 
 ## Essential Commands
 - **Pick Work**: \`npm run sd:next\`
