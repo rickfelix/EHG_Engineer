@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-13T15:36:44.336Z
+**Generated**: 2026-03-13T19:33:25.298Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (14 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -32,6 +32,12 @@
 | is_active | `boolean` | YES | `true` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| is_baseline | `boolean` | YES | `false` | - |
+| parent_strategies | `jsonb` | YES | `'[]'::jsonb` | - |
+| generation | `integer(32)` | YES | `0` | - |
+| performance_data | `jsonb` | YES | `'{}'::jsonb` | - |
+| created_by | `text` | YES | `'manual'::text` | - |
+| deactivated_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -50,6 +56,10 @@
 - `discovery_strategies_strategy_key_key`
   ```sql
   CREATE UNIQUE INDEX discovery_strategies_strategy_key_key ON public.discovery_strategies USING btree (strategy_key)
+  ```
+- `idx_discovery_strategies_active`
+  ```sql
+  CREATE INDEX idx_discovery_strategies_active ON public.discovery_strategies USING btree (is_active) WHERE (is_active = true)
   ```
 
 ## RLS Policies
