@@ -15,6 +15,7 @@
  *   node scripts/roadmap-generate.js --app ehg_engineer            # Filter by application
  *   node scripts/roadmap-generate.js --dry-run                     # Preview without writing to DB
  *   node scripts/roadmap-generate.js --full                        # Force full clustering (ignore baseline)
+ *   node scripts/roadmap-generate.js --force-reassign              # Ignore wave locks (assign to any wave)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -52,13 +53,22 @@ async function getBaselinedRoadmap() {
 
 /**
  * Load existing waves with sample item titles for context.
+ * @param {string} roadmapId
+ * @param {object} options
+ * @param {boolean} options.respectLocks - When true, only return waves with status IN (proposed, draft)
  */
-async function loadExistingWaves(roadmapId) {
-  const { data: waves, error } = await supabase
+async function loadExistingWaves(roadmapId, options = {}) {
+  let query = supabase
     .from('roadmap_waves')
-    .select('id, title, description, sequence_rank')
+    .select('id, title, description, sequence_rank, status')
     .eq('roadmap_id', roadmapId)
     .order('sequence_rank', { ascending: true });
+
+  if (options.respectLocks) {
+    query = query.in('status', ['proposed', 'draft']);
+  }
+
+  const { data: waves, error } = await query;
 
   if (error || !waves) return [];
 
@@ -143,13 +153,63 @@ async function createWaves(roadmapId, waves, items) {
 }
 
 /**
+ * Create a new wave in an existing roadmap for overflow items.
+ */
+async function createOverflowWave(roadmapId, nextRank) {
+  const { data, error } = await supabase
+    .from('roadmap_waves')
+    .insert({
+      roadmap_id: roadmapId,
+      sequence_rank: nextRank,
+      title: `Wave ${nextRank + 1}: New Items`,
+      description: 'Auto-created wave for items that could not be assigned to locked/approved waves.',
+      status: 'proposed',
+      confidence_score: 0,
+      created_by: 'leo-roadmap-generate',
+    })
+    .select('id, title, description, sequence_rank, status')
+    .single();
+
+  if (error) throw new Error(`Failed to create overflow wave: ${error.message}`);
+  return data;
+}
+
+/**
+ * Validate post-clustering integrity: no orphans, no duplicates.
+ */
+function validateAssignmentIntegrity(newItems, assignments, existingWaves) {
+  const issues = [];
+
+  // Check for orphaned items (not assigned to any wave)
+  const assignedIndices = new Set(assignments.filter(a => a.wave_index > 0).map(a => a.item_index));
+  const orphaned = newItems.filter((_, i) => !assignedIndices.has(i + 1));
+  if (orphaned.length > 0) {
+    issues.push({ type: 'orphaned', count: orphaned.length, items: orphaned.map(i => i.title || i.id) });
+  }
+
+  // Check for duplicates (same item assigned to multiple waves)
+  const seenItems = new Map();
+  for (const a of assignments) {
+    if (a.wave_index === 0) continue;
+    const key = a.item_index;
+    if (seenItems.has(key)) {
+      issues.push({ type: 'duplicate', itemIndex: key, waves: [seenItems.get(key), a.wave_index] });
+    }
+    seenItems.set(key, a.wave_index);
+  }
+
+  return { valid: issues.length === 0, issues };
+}
+
+/**
  * Incremental mode: assign new items to existing baselined waves.
  */
 async function runIncremental(roadmap, options) {
-  const { application, dryRun } = options;
+  const { application, dryRun, respectLocks = true } = options;
 
   console.log(`  Mode: INCREMENTAL (baseline v${roadmap.current_baseline_version})`);
   console.log(`  Roadmap: ${roadmap.title} [${roadmap.id.substring(0, 8)}]`);
+  if (respectLocks) console.log('  Wave locking: ENABLED (only proposed/draft waves eligible)');
 
   // Load only items not yet assigned to any wave
   const newItems = await loadNewIntakeItems(supabase, { application, limit: 500 });
@@ -170,15 +230,47 @@ async function runIncremental(roadmap, options) {
   console.log('  By application:', Object.entries(byApp).map(([k, v]) => `${k}(${v})`).join(', '));
   console.log('  By intent:', Object.entries(byIntent).map(([k, v]) => `${k}(${v})`).join(', '));
 
-  // Load existing waves for assignment context
-  const existingWaves = await loadExistingWaves(roadmap.id);
-  console.log(`  Existing waves: ${existingWaves.length}`);
-  existingWaves.forEach(w => console.log(`    [${w.sequence_rank}] ${w.title}`));
+  // Load existing waves — filtered by status when respectLocks is true
+  const existingWaves = await loadExistingWaves(roadmap.id, { respectLocks });
+  console.log(`  Eligible waves: ${existingWaves.length}`);
+
+  // If no eligible waves exist (all locked/approved), create a new one
+  if (existingWaves.length === 0) {
+    console.log('  No eligible waves (all locked/approved). Creating new wave...');
+    // Get total wave count for sequencing
+    const { data: allWaves } = await supabase
+      .from('roadmap_waves')
+      .select('sequence_rank')
+      .eq('roadmap_id', roadmap.id)
+      .order('sequence_rank', { ascending: false })
+      .limit(1);
+    const nextRank = allWaves && allWaves.length > 0 ? allWaves[0].sequence_rank + 1 : 0;
+    const newWave = await createOverflowWave(roadmap.id, nextRank);
+    existingWaves.push(newWave);
+    console.log(`  Created: ${newWave.title} (rank ${newWave.sequence_rank})`);
+  }
+
+  existingWaves.forEach(w => console.log(`    [${w.sequence_rank}] ${w.title} (${w.status})`));
 
   // AI assigns new items to existing waves
-  console.log('\n  Assigning new items to existing waves...');
+  console.log('\n  Assigning new items to eligible waves...');
   const result = await assignToExistingWaves(newItems, existingWaves);
   console.log(`  Method: ${result.method}`);
+
+  // Post-clustering integrity validation
+  const integrity = validateAssignmentIntegrity(newItems, result.assignments, existingWaves);
+  if (!integrity.valid) {
+    console.log('\n  Integrity validation:');
+    for (const issue of integrity.issues) {
+      if (issue.type === 'orphaned') {
+        console.log(`    WARNING: ${issue.count} orphaned item(s) not assigned to any wave`);
+      } else if (issue.type === 'duplicate') {
+        console.log(`    WARNING: Item ${issue.itemIndex} assigned to multiple waves: ${issue.waves.join(', ')}`);
+      }
+    }
+  } else {
+    console.log('  Integrity validation: PASSED');
+  }
 
   // Summarize assignments per wave
   const waveCounts = {};
@@ -313,6 +405,9 @@ async function main() {
   const appFlag = args.indexOf('--app');
   const dryRun = args.includes('--dry-run');
   const forceFull = args.includes('--full');
+  const forceReassign = args.includes('--force-reassign');
+  // --respect-locks is ON by default; --force-reassign disables it
+  const respectLocks = !forceReassign;
 
   const title = titleFlag >= 0 ? args[titleFlag + 1] : 'EVA Intake Roadmap';
   const application = appFlag >= 0 ? args[appFlag + 1] : undefined;
@@ -324,7 +419,7 @@ async function main() {
   if (!forceFull) {
     const baselinedRoadmap = await getBaselinedRoadmap();
     if (baselinedRoadmap) {
-      await runIncremental(baselinedRoadmap, { application, dryRun });
+      await runIncremental(baselinedRoadmap, { application, dryRun, respectLocks });
       return;
     }
   }

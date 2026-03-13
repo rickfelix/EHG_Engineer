@@ -115,6 +115,7 @@ if (fromStep <= 3 && !skipReview) {
 if (fromStep <= 4) {
   header(4, 'Propose roadmap waves (AI clustering)');
 
+  // --respect-locks is on by default in roadmap-generate.js; pipeline does not pass --force-reassign
   const generateCmd = appFilter
     ? `node scripts/roadmap-generate.js --app ${appFilter}${dryRun ? ' --dry-run' : ''}`
     : `node scripts/roadmap-generate.js${dryRun ? ' --dry-run' : ''}`;
