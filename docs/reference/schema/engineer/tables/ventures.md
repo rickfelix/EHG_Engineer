@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-13T19:41:15.618Z
+**Generated**: 2026-03-13T20:00:24.706Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (81 total)
+## Columns (82 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -104,6 +104,7 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | orchestrator_state | `text` | YES | `'idle'::text` | - |
 | orchestrator_lock_id | `uuid` | YES | - | - |
 | orchestrator_lock_acquired_at | `timestamp with time zone` | YES | - | - |
+| growth_strategy | `USER-DEFINED` | YES | - | Portfolio growth strategy classification: cash_engine (proven revenue), capability_builder (reusable tech/business capabilities), moonshot (high risk/high ceiling) |
 
 ## Constraints
 
@@ -156,6 +157,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_deleted_at`
   ```sql
   CREATE INDEX idx_ventures_deleted_at ON public.ventures USING btree (deleted_at) WHERE (deleted_at IS NOT NULL)
+  ```
+- `idx_ventures_growth_strategy`
+  ```sql
+  CREATE INDEX idx_ventures_growth_strategy ON public.ventures USING btree (growth_strategy) WHERE ((status = 'active'::venture_status_enum) AND (deleted_at IS NULL))
   ```
 - `idx_ventures_health_score`
   ```sql
