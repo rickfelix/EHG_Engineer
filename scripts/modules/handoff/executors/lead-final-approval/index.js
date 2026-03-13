@@ -601,7 +601,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 }
 
 // Re-exports for external use
-export { getRequiredGates } from './gates.js';
+export { getRequiredGates, createSmokeTestGate } from './gates.js';
 export {
   checkAndCompleteParentSD,
   recordFailedCompletion,
