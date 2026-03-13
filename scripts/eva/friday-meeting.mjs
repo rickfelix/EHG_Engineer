@@ -12,6 +12,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { getLLMClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -302,19 +303,23 @@ async function getFleetRollup() {
 
 // ─── Persistence: Meeting Log ────────────────────────────────
 
-async function persistMeetingLog(results, coordinator = {}) {
+async function persistMeetingLog(results, coordinator = {}, { digest = null, chairmanNotes = null } = {}) {
   try {
     const meetingDate = new Date().toISOString().slice(0, 10);
 
+    const record = {
+      meeting_date: meetingDate,
+      sections: results.sections || {},
+      coordinator,
+      decisions: results.decisions || {},
+      completed_at: new Date().toISOString(),
+    };
+    if (digest) record.digest = digest;
+    if (chairmanNotes) record.chairman_notes = chairmanNotes;
+
     const { error } = await supabase
       .from('eva_updates')
-      .upsert({
-        meeting_date: meetingDate,
-        sections: results.sections || {},
-        coordinator,
-        decisions: results.decisions || {},
-        completed_at: new Date().toISOString(),
-      }, { onConflict: 'meeting_date' });
+      .upsert(record, { onConflict: 'meeting_date' });
 
     if (error) {
       logger.warn(`  Meeting persist failed (non-blocking): ${error.message}`);
@@ -325,6 +330,70 @@ async function persistMeetingLog(results, coordinator = {}) {
   } catch (err) {
     logger.warn(`  Meeting persist error (non-blocking): ${err.message}`);
     return false;
+  }
+}
+
+// ─── Digest Generation ──────────────────────────────────────
+
+/**
+ * Generate a template-based digest from meeting sections data.
+ * Used as fallback when LLM is unavailable.
+ */
+function templateDigest(sections, coordinator) {
+  const parts = [];
+  const cap = sections.capability?.completedSDs ?? 0;
+  const findings = sections.consultant?.totalFindings ?? 0;
+  const intake = sections.intake?.pendingItems ?? 0;
+  const velocity = coordinator?.fleet_velocity ?? 0;
+  const active = coordinator?.active_claims ?? 0;
+
+  parts.push(`Week of ${new Date().toISOString().slice(0, 10)}: ${cap} SD(s) completed, ${velocity} fleet velocity.`);
+  if (findings > 0) parts.push(`${findings} consultant finding(s) pending review.`);
+  if (intake > 0) parts.push(`${intake} intake item(s) awaiting triage.`);
+  if (active > 0) parts.push(`${active} SD(s) actively claimed.`);
+
+  return parts.join(' ');
+}
+
+/**
+ * Generate a condensed 2-3 sentence digest of the meeting using local LLM.
+ * Falls back to template-based digest on any error.
+ *
+ * @param {Object} sections - Meeting sections summary
+ * @param {Object} coordinator - Fleet rollup metrics
+ * @returns {string} Condensed meeting digest
+ */
+async function generateDigest(sections, coordinator) {
+  try {
+    const client = getLLMClient({ purpose: 'digest-generation', allowLocal: true });
+
+    const systemPrompt = 'You are a concise executive briefing writer. Produce a 2-3 sentence digest of a weekly strategic meeting. Focus on outcomes, key metrics, and action items. No preamble or formatting — just the digest text.';
+
+    const userPrompt = `Meeting data for ${new Date().toISOString().slice(0, 10)}:
+- Completed SDs this week: ${sections.capability?.completedSDs ?? 0}
+- Consultant findings pending: ${sections.consultant?.totalFindings ?? 0} across ${sections.consultant?.domains ?? 0} domain(s)
+- Intake items pending: ${sections.intake?.pendingItems ?? 0}
+- OKR objectives tracked: ${sections.performance?.okrCount ?? 0}
+- Fleet velocity: ${coordinator?.fleet_velocity ?? 0} completed, ${coordinator?.active_claims ?? 0} active, ${coordinator?.pending_sds ?? 0} pending, ${coordinator?.blocked_sds ?? 0} blocked
+
+Write a 2-3 sentence executive digest.`;
+
+    const result = await Promise.race([
+      client.complete(systemPrompt, userPrompt),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), 30000))
+    ]);
+
+    const text = typeof result === 'string' ? result : result?.text || result?.content || '';
+    if (text.trim().length > 10) {
+      logger.log('  ✓ Digest generated via LLM');
+      return text.trim();
+    }
+
+    logger.warn('  ⚠ LLM returned empty digest, using template fallback');
+    return templateDigest(sections, coordinator);
+  } catch (err) {
+    logger.warn(`  ⚠ Digest LLM failed (${err.message}), using template fallback`);
+    return templateDigest(sections, coordinator);
   }
 }
 
@@ -391,9 +460,27 @@ export async function fridayMeetingHandler(options = {}) {
     }
   }
 
-  // Persist meeting data (non-blocking)
+  // Generate digest and gather fleet rollup
   const coordinator = await getFleetRollup();
-  await persistMeetingLog(results, coordinator);
+  const digest = await generateDigest(results.sections, coordinator);
+
+  // Chairman notes prompt (for /friday skill handler to intercept)
+  if (options.interactive !== false) {
+    logger.log('');
+    logger.log('FRIDAY_MEETING_NOTES_PROMPT=' + JSON.stringify({
+      question: 'Any observations or notes for this week\'s meeting record?',
+      header: 'Chairman Notes (optional)',
+      options: [
+        { label: 'Skip', description: 'No notes this week' },
+      ],
+      freeText: true,
+    }));
+  }
+
+  // Persist meeting data with digest (non-blocking)
+  await persistMeetingLog(results, coordinator, { digest });
+
+  results.digest = digest;
 
   logger.log('');
   logger.log('═'.repeat(55));
@@ -408,9 +495,10 @@ export async function fridayMeetingHandler(options = {}) {
  * Called by the /friday skill after AskUserQuestion responses are collected.
  *
  * @param {Array<{findingId: string, decision: string}>} decisions
+ * @param {Object} options - { chairmanNotes?: string }
  * @returns {Object} Summary of decisions made
  */
-export async function processMeetingDecisions(decisions) {
+export async function processMeetingDecisions(decisions, { chairmanNotes = null } = {}) {
   const summary = { accepted: 0, dismissed: 0, deferred: 0 };
 
   for (const { findingId, decision } of decisions) {
@@ -425,11 +513,14 @@ export async function processMeetingDecisions(decisions) {
   logger.log(`  Deferred:  ${summary.deferred}`);
   logger.log('  ' + '─'.repeat(45) + '\n');
 
-  // Update persisted record with decision outcomes
+  // Update persisted record with decision outcomes and chairman notes
   const meetingDate = new Date().toISOString().slice(0, 10);
+  const updatePayload = { decisions: summary };
+  if (chairmanNotes) updatePayload.chairman_notes = chairmanNotes;
+
   await supabase
     .from('eva_updates')
-    .update({ decisions: summary })
+    .update(updatePayload)
     .eq('meeting_date', meetingDate)
     .then(({ error }) => {
       if (error) logger.warn(`  Decision persist failed: ${error.message}`);
