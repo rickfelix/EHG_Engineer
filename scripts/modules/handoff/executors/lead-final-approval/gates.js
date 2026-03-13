@@ -15,6 +15,10 @@ import { createSdStartGate } from '../../gates/core-protocol-gate.js';
 // Pipeline Flow Verifier (SD-LEO-INFRA-INTEGRATION-AWARE-PRD-001 FR-5)
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../../../lib/pipeline-flow-verifier.js';
 
+// Orchestrator Completion Validation Gates (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001)
+import { createSmokeTestGate } from './gates/smoke-test-gate.js';
+export { createSmokeTestGate };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -898,6 +902,9 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // Architecture Phase Coverage Exit Gate (SD-LEO-ORCH-ARCHITECTURE-PHASE-COVERAGE-001-C)
   gates.push(createPhaseCoverageExitGate(supabase));
 
+  // Smoke Test Gate (SD-ORCHESTRATOR-COMPLETION-VALIDATION-GATES-ORCH-001-A)
+  gates.push(createSmokeTestGate(supabase, prdRepo));
+
   return gates;
 }
 
@@ -910,5 +917,6 @@ export default {
   createPipelineFlowGate,
   createFRDeliveryVerificationGate,
   createPhaseCoverageExitGate,
+  createSmokeTestGate,
   getRequiredGates
 };
