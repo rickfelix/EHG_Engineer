@@ -18,6 +18,8 @@ import { generateAndEmitSummary, createCollector } from '../session-summary/inde
 import { execSync } from 'child_process';
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../lib/pipeline-flow-verifier.js';
 import { runGapAnalysis } from '../../../lib/gap-detection/index.js';
+// SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Auto-claim during orchestrator chaining
+import { claimGuard } from '../../../lib/claim-guard.mjs';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -145,6 +147,21 @@ export async function invokeLearnSkill(supabase, orchestratorId, correlationId) 
  */
 export async function findNextAvailableOrchestrator(supabase, excludeOrchestratorId = null) {
   try {
+    // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Query actively claimed SD keys
+    // so we can exclude them from the candidate list. This prevents recommending
+    // SDs that another session is already working on.
+    let claimedSdKeys = [];
+    try {
+      const { data: claimedSessions } = await supabase
+        .from('claude_sessions')
+        .select('sd_id')
+        .not('sd_id', 'is', null)
+        .in('status', ['active', 'idle']);
+      claimedSdKeys = (claimedSessions || []).map(s => s.sd_id).filter(Boolean);
+    } catch {
+      // Fail-open: if claim query fails, proceed without filtering
+    }
+
     let query = supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, priority, parent_sd_id')
@@ -152,7 +169,7 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
       .is('parent_sd_id', null) // Only top-level SDs (orchestrators)
       .order('priority', { ascending: false })
       .order('created_at', { ascending: true })
-      .limit(5);
+      .limit(10); // Fetch more candidates to account for claim filtering
 
     if (excludeOrchestratorId) {
       query = query.neq('id', excludeOrchestratorId);
@@ -169,7 +186,13 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
       return { orchestrator: null, reason: 'No orchestrators in queue' };
     }
 
-    return { orchestrator: data[0], reason: 'Next orchestrator found' };
+    // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Filter out claimed SDs
+    const unclaimed = data.filter(sd => !claimedSdKeys.includes(sd.sd_key));
+    if (unclaimed.length === 0) {
+      return { orchestrator: null, reason: `All ${data.length} candidate(s) are claimed by other sessions` };
+    }
+
+    return { orchestrator: unclaimed[0], reason: 'Next orchestrator found' };
   } catch (err) {
     console.warn(`   ⚠️  findNextOrchestrator exception: ${err.message}`);
     return { orchestrator: null, reason: `Exception: ${err.message}` };
@@ -939,22 +962,71 @@ export async function executeOrchestratorCompletionHook(
     hookDetails.chainOrchestratorsEnabled = chainingResult.chainOrchestrators;
 
     if (chainingResult.chainOrchestrators) {
-      // Find next available orchestrator
-      const { orchestrator: nextOrchestrator, reason } = await findNextAvailableOrchestrator(supabase, orchestratorId);
+      // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Find next available orchestrator and auto-claim it.
+      // Uses a fallback loop (max 3 candidates) to gracefully handle claim conflicts.
+      const MAX_CLAIM_ATTEMPTS = 3;
+      let claimed = false;
+      let claimedOrchestrator = null;
 
-      if (nextOrchestrator) {
-        console.log(`\n   🔗 ORCHESTRATOR CHAINING: Auto-continuing to ${nextOrchestrator.sd_key}`);
-        console.log(`   📍 Next: ${nextOrchestrator.title}`);
+      // Resolve our session ID for claimGuard
+      let sessionId = null;
+      try {
+        const { getTerminalId } = await import('../../../lib/terminal-identity.js');
+        const termId = getTerminalId();
+        const { data: sessionData } = await supabase
+          .from('claude_sessions')
+          .select('session_id')
+          .eq('terminal_id', termId)
+          .in('status', ['active', 'idle'])
+          .order('heartbeat_at', { ascending: false })
+          .limit(1)
+          .single();
+        sessionId = sessionData?.session_id;
+      } catch { /* fallback: proceed without claiming */ }
 
+      for (let attempt = 1; attempt <= MAX_CLAIM_ATTEMPTS; attempt++) {
+        const { orchestrator: nextOrchestrator, reason } = await findNextAvailableOrchestrator(supabase, orchestratorId);
+
+        if (!nextOrchestrator) {
+          console.log('\n   🔗 ORCHESTRATOR CHAINING: No next orchestrator available');
+          console.log(`   📍 Reason: ${reason}`);
+          await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_no_orchestrator', correlationId);
+          break;
+        }
+
+        // Attempt to claim the next orchestrator
+        if (sessionId) {
+          const claimResult = await claimGuard(nextOrchestrator.sd_key, sessionId, { autoFallback: true });
+          if (claimResult.success) {
+            claimed = true;
+            claimedOrchestrator = nextOrchestrator;
+            console.log(`\n   🔗 ORCHESTRATOR CHAINING: Auto-continuing to ${nextOrchestrator.sd_key}`);
+            console.log(`   📍 Next: ${nextOrchestrator.title}`);
+            console.log(`   🔒 Claimed: ${nextOrchestrator.sd_key} (auto-claim via chaining)`);
+            break;
+          } else if (claimResult.fallback) {
+            console.log(`   ⚠️  Claim attempt ${attempt}/${MAX_CLAIM_ATTEMPTS}: ${nextOrchestrator.sd_key} claimed by ${claimResult.owner?.session_id?.substring(0, 20) || 'another session'} — trying next`);
+            continue;
+          }
+        } else {
+          // No session ID available — proceed without claiming (legacy behavior)
+          claimedOrchestrator = nextOrchestrator;
+          console.log(`\n   🔗 ORCHESTRATOR CHAINING: Auto-continuing to ${nextOrchestrator.sd_key}`);
+          console.log(`   📍 Next: ${nextOrchestrator.title}`);
+          break;
+        }
+      }
+
+      if (claimedOrchestrator) {
         // Record the chaining decision
-        hookDetails.chainedToOrchestrator = nextOrchestrator.id;
-        hookDetails.chainedToSdKey = nextOrchestrator.sd_key;
+        hookDetails.chainedToOrchestrator = claimedOrchestrator.id;
+        hookDetails.chainedToSdKey = claimedOrchestrator.sd_key;
 
         // Record hook event before returning
         await recordHookEvent(supabase, orchestratorId, correlationId, hookDetails);
 
         // Emit telemetry event for chaining
-        await emitChainingTelemetry(supabase, orchestratorId, nextOrchestrator.id, 'chain', correlationId);
+        await emitChainingTelemetry(supabase, orchestratorId, claimedOrchestrator.id, 'chain', correlationId);
 
         console.log('═'.repeat(60));
 
@@ -962,16 +1034,15 @@ export async function executeOrchestratorCompletionHook(
           fired: true,
           autoProceed: true,
           chainContinue: true,
-          nextOrchestrator: nextOrchestrator.id,
-          nextOrchestratorSdKey: nextOrchestrator.sd_key,
+          nextOrchestrator: claimedOrchestrator.id,
+          nextOrchestratorSdKey: claimedOrchestrator.sd_key,
+          claimed,
           correlationId
         };
       } else {
-        console.log('\n   🔗 ORCHESTRATOR CHAINING: No next orchestrator available');
-        console.log(`   📍 Reason: ${reason}`);
-
-        // Emit telemetry for no-chain decision
-        await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_no_orchestrator', correlationId);
+        // All candidates exhausted or no candidates available
+        console.log('\n   🔗 ORCHESTRATOR CHAINING: All candidates claimed or unavailable');
+        await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_all_claimed', correlationId);
       }
     } else {
       // Emit telemetry for pause decision (chaining disabled)
