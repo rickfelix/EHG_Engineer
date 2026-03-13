@@ -97,7 +97,7 @@ async function main() {
       methodology: p.methodology || '',
       priority_score: Math.max(0, Math.min(100, Number(p.priority_score) || 50)),
       status: 'pending_review',
-      signal_sources: [p.signal_source || 'unknown'],
+      signal_source: p.signal_source || 'composite',
       batch_run_id: batchRunId,
       target_application: 'EHG_Engineer',
     }));
