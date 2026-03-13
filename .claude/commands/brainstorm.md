@@ -757,7 +757,7 @@ This step creates formal planning documents and registers them in EVA's tracking
 
 ### 9.5A: Auto-Generate Vision Document
 
-**AUTOMATED**: Synthesize a vision document from brainstorm content. Write to `docs/plans/<topic-slug>-vision.md`.
+**AUTOMATED**: Synthesize a vision document from brainstorm content. Generate the content in-memory — do NOT write to the filesystem. The content will be passed directly to EVA registration via `--content` flag.
 
 Use the brainstorm discovery answers, team perspectives (Challenger, Visionary, Pragmatist), and evaluation results to generate **all** of the following sections. Every section is **required** — EVA registration will fail if any are missing.
 
@@ -799,7 +799,7 @@ Use the brainstorm discovery answers, team perspectives (Challenger, Visionary, 
 [Include ONLY if Step 8.7 produced flagged items. List each flagged category with the specific concern and recommended mitigation. Omit this section entirely if all items were accepted as-is.]
 ```
 
-**After writing the file**, verify it exists and has all 10 required sections before proceeding to 9.5B.
+**After generating the content in-memory**, verify it has all 10 required sections before proceeding to 9.5B. Do NOT write this content to the filesystem — it will be passed directly to the registration command.
 
 ### 9.5B: Register Vision in EVA (with Key Capture)
 
@@ -809,10 +809,12 @@ Run the vision command with dimensions derived from the vision doc's success cri
 node scripts/eva/vision-command.mjs upsert \
   --vision-key VISION-<TOPIC-KEY>-L2-001 \
   --level L2 \
-  --source docs/plans/<topic-slug>-vision.md \
+  --content '<VISION_CONTENT_FROM_STEP_9.5A>' \
   --brainstorm-id <SESSION_ID> \
   --dimensions '<JSON_ARRAY>'
 ```
+
+**IMPORTANT**: Use `--content` to pass the in-memory vision content directly. Do NOT use `--source` with a file path — that would create a markdown file, violating the DB-only policy.
 
 **Dimension derivation** (no LLM needed):
 - Extract 6-10 dimensions from the vision doc's success criteria and key sections
@@ -828,12 +830,12 @@ node scripts/eva/vision-command.mjs upsert \
 3. **If the command fails** (non-zero exit code or error in output):
    - Report the specific error to the user (e.g., "Missing required section: Problem Statement")
    - **HALT** — do NOT proceed to Step 9.5C
-   - Suggest fixing the vision document and retrying: "Fix the issue in docs/plans/<slug>-vision.md, then re-run Step 9.5B"
+   - Suggest fixing the in-memory vision content and retrying Step 9.5B
 4. **If the command succeeds**, confirm: `✅ Vision registered: VISION-<KEY> (L2, N dimensions)`
 
 ### 9.5C: Auto-Generate Architecture Plan
 
-**AUTOMATED**: Synthesize an architecture plan from brainstorm content. Write to `docs/plans/<topic-slug>-architecture.md`.
+**AUTOMATED**: Synthesize an architecture plan from brainstorm content. Generate the content in-memory — do NOT write to the filesystem. The content will be passed directly to EVA registration via `--content` flag.
 
 Use the Pragmatist's feasibility analysis, the Challenger's risk assessment, and the brainstorm's technical discussion to generate **all** of the following sections. Every section is **required**.
 
@@ -895,7 +897,7 @@ Architecture plans MUST reference specific details from the brainstorm conversat
 
 **If Chairman Review flags exist** (from Step 8.7): Include a `## Chairman Review Flags` section listing each flagged item and how the architecture addresses or mitigates the concern.
 
-**After writing the file**, verify it exists and has all 8 required sections (plus Chairman Review Flags if applicable) before proceeding to the quality gate.
+**After generating the content in-memory**, verify it has all 8 required sections (plus Chairman Review Flags if applicable) before proceeding to the quality gate. Do NOT write this content to the filesystem.
 
 ### 9.5C-GATE: Architecture Plan Quality Gate (BLOCKING)
 
@@ -913,7 +915,7 @@ Architecture plans MUST reference specific details from the brainstorm conversat
 
 **Scoring Procedure:**
 
-1. Read the architecture plan file (`docs/plans/<topic-slug>-architecture.md`)
+1. Review the in-memory architecture plan content
 2. For each dimension, assign a score 0-100 based on the criteria above
 3. Compute weighted total: `total = (completeness * 0.25) + (depth * 0.20) + (deferral * 0.20) + (phasing * 0.15) + (chairman * 0.20)`
 4. Record the scores in the brainstorm session context for metadata capture at Step 11
@@ -936,9 +938,11 @@ Architecture plans MUST reference specific details from the brainstorm conversat
 node scripts/eva/archplan-command.mjs upsert \
   --plan-key ARCH-<TOPIC-KEY>-001 \
   --vision-key VISION-<TOPIC-KEY>-L2-001 \
-  --source docs/plans/<topic-slug>-architecture.md \
+  --content '<ARCHITECTURE_CONTENT_FROM_STEP_9.5C>' \
   --dimensions '<JSON_ARRAY>'
 ```
+
+**IMPORTANT**: Use `--content` to pass the in-memory architecture content directly. Do NOT use `--source` with a file path — that would require creating a markdown file, violating the DB-only policy. The `--sections` flag is also available as an alternative for structured JSON input.
 
 Architecture dimensions focus on structural/implementation aspects (6-8 dimensions).
 Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).

@@ -14,7 +14,9 @@
  *   extract  --source <path>              Extract dimensions (includes ADR/capability context)
  *   upsert   --plan-key <key>             Upsert architecture plan after chairman approval
  *            --vision-key <key>           Link to parent vision document
- *            --source <path>
+ *            --source <path>              Read content from file
+ *            [--content <text>]           Inline content (DB-only workflow)
+ *            [--sections <json>]          Structured sections JSON (DB-only workflow, mirrors vision-command)
  *            [--dimensions <json>]
  *            [--brainstorm-id <uuid>]
  *   addendum --plan-key <key>             Append addendum section to existing plan
@@ -34,6 +36,8 @@ import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
+import { getSectionSchema, validateSections } from './document-section-registry.mjs';
+import { renderSectionsToMarkdown } from './sections-to-markdown-renderer.mjs';
 
 dotenv.config();
 
@@ -201,20 +205,46 @@ async function cmdExtract({ source, content: contentArg }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId, content: contentArg }) {
+async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId, content: contentArg, sections: sectionsJson }) {
   if (!planKey) { console.error('--plan-key is required'); process.exit(1); }
   if (!visionKey) { console.error('--vision-key is required (link to parent vision document)'); process.exit(1); }
-  if (!source && !contentArg) { console.error('--source or --content is required'); process.exit(1); }
+  if (!source && !contentArg && !sectionsJson) { console.error('--source, --content, or --sections is required'); process.exit(1); }
 
-  let content;
-  if (contentArg) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+  let content = '';
+
+  // Sections-first path: --sections flag provides structured sections directly (DB-only workflow)
+  if (sectionsJson) {
+    let parsedSections;
+    try {
+      parsedSections = JSON.parse(sectionsJson);
+    } catch (e) {
+      console.error('Invalid --sections JSON:', e.message);
+      process.exit(1);
+    }
+
+    // Validate against schema
+    const validation = await validateSections(parsedSections, 'architecture', { supabase });
+    if (!validation.valid) {
+      console.error('Section validation errors:');
+      validation.errors.forEach(e => console.error(`  - ${e}`));
+      process.exit(1);
+    }
+    if (validation.warnings.length > 0) {
+      validation.warnings.forEach(w => console.warn(`  ⚠️  ${w}`));
+    }
+
+    // Render content from sections
+    const schema = await getSectionSchema('architecture', { supabase });
+    content = renderSectionsToMarkdown(parsedSections, planKey, schema);
+  } else if (contentArg) {
     content = contentArg;
   } else {
     const fullPath = resolve(REPO_ROOT, source);
     if (!existsSync(fullPath)) { console.error(`File not found: ${fullPath}`); process.exit(1); }
     content = readFileSync(fullPath, 'utf8');
   }
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   // Resolve vision_id from vision_key
   const { data: visionDoc, error: visionErr } = await supabase
