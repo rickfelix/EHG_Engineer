@@ -236,6 +236,9 @@ export class SDNextSelector {
     // Display telemetry findings (SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001C)
     await this.displayTelemetryFindings();
 
+    // Display health snapshot freshness advisory (SD-LEO-INFRA-PRIORITY-SCORER-HEALTH-001)
+    await this.displayHealthFreshness();
+
     console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
     return recommendation || { action: 'none', sd_id: null, reason: 'No recommendation available' };
@@ -408,6 +411,48 @@ export class SDNextSelector {
       displayTelemetryFindings(findings, { verbose });
     } catch {
       // Non-critical - silently skip if telemetry module unavailable
+    }
+  }
+
+  async displayHealthFreshness() {
+    try {
+      const { data: snapshots } = await this.supabase
+        .from('codebase_health_snapshots')
+        .select('dimension, scanned_at, score')
+        .order('scanned_at', { ascending: false })
+        .limit(10);
+
+      if (!snapshots || snapshots.length === 0) {
+        console.log(`\n${colors.yellow}⚠️  Health: No codebase health snapshots found. Run: npm run health:scan${colors.reset}`);
+        return;
+      }
+
+      // Get latest per dimension
+      const latest = {};
+      for (const snap of snapshots) {
+        if (!latest[snap.dimension]) latest[snap.dimension] = snap;
+      }
+
+      const now = new Date();
+      const staleThreshold = 24 * 60 * 60 * 1000; // 24 hours
+      const staleDimensions = [];
+
+      for (const [dim, snap] of Object.entries(latest)) {
+        const age = now - new Date(snap.scanned_at);
+        if (age > staleThreshold) {
+          staleDimensions.push({ dimension: dim, hoursAgo: Math.round(age / 3600000) });
+        }
+      }
+
+      if (staleDimensions.length > 0) {
+        console.log(`\n${colors.yellow}⚠️  Health Snapshots Stale (>${Math.round(staleThreshold / 3600000)}h):${colors.reset}`);
+        for (const s of staleDimensions) {
+          console.log(`${colors.dim}   ${s.dimension}: last scan ${s.hoursAgo}h ago${colors.reset}`);
+        }
+        console.log(`${colors.dim}   Run: npm run health:scan${colors.reset}`);
+      }
+    } catch {
+      // Non-critical - silently skip
     }
   }
 
