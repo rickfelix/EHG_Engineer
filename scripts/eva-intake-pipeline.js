@@ -3,16 +3,17 @@
  * EVA Intake Pipeline — Single command for the full intake-to-roadmap flow
  *
  * Aligns with the EVA Intake Redesign Vision + Strategic Roadmap Architecture:
- *   Sync → Classify → Propose Waves → Status (Chairman reviews)
+ *   Sync → Classify → Chairman Review → Propose Waves → Status
  *
  * Vision principle: "Build-ready doesn't mean build now"
- *   Classify → Inbox → Group/Cluster → Research SDs → THEN build decisions
+ *   Classify → Chairman Review → Group/Cluster → Research SDs → THEN build decisions
  *
  * Usage:
  *   npm run eva:intake:pipeline                    # Full pipeline
  *   npm run eva:intake:pipeline -- --dry-run       # Preview only, no DB writes
- *   npm run eva:intake:pipeline -- --from-step N   # Start from step N (1-5)
+ *   npm run eva:intake:pipeline -- --from-step N   # Start from step N (1-6)
  *   npm run eva:intake:pipeline -- --skip-sync     # Skip sync, start at classify
+ *   npm run eva:intake:pipeline -- --skip-review   # Skip chairman review step
  *   npm run eva:intake:pipeline -- --app <app>     # Filter clustering by application
  *   npm run eva:intake:pipeline -- --skip-archive  # Skip archiving processed items
  *
@@ -33,6 +34,7 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const skipSync = args.includes('--skip-sync');
 const skipArchive = args.includes('--skip-archive');
+const skipReview = args.includes('--skip-review');
 const fromStepIdx = args.indexOf('--from-step');
 const fromStep = fromStepIdx >= 0 ? parseInt(args[fromStepIdx + 1], 10) || 1 : 1;
 const appIdx = args.indexOf('--app');
@@ -59,7 +61,7 @@ function header(step, title) {
 console.log('');
 console.log('══════════════════════════════════════════════════════');
 console.log('  EVA INTAKE PIPELINE');
-console.log('  Sync → Classify → Propose Waves → Archive → Status');
+console.log('  Sync → Classify → Chairman Review → Propose Waves → Archive → Status');
 console.log('══════════════════════════════════════════════════════');
 
 // ─── Step 1: Sync ───────────────────────────────────────────
@@ -97,9 +99,21 @@ if (fromStep <= 2) {
   console.log('\n── Step 2: Classify ── SKIPPED\n');
 }
 
-// ─── Step 3: Propose waves ──────────────────────────────────
-if (fromStep <= 3) {
-  header(3, 'Propose roadmap waves (AI clustering)');
+// ─── Step 3: Chairman Review ─────────────────────────────────
+if (fromStep <= 3 && !skipReview) {
+  header(3, 'Chairman intake review');
+  const reviewFlags = dryRun ? ' --dry-run' : '';
+  const ok = run(`node scripts/eva/chairman-intake-review.js${reviewFlags}`);
+  if (!ok) {
+    console.error('  ⚠ Chairman review had errors. Check output above.\n');
+  }
+} else {
+  console.log('\n── Step 3: Chairman Review ── SKIPPED\n');
+}
+
+// ─── Step 4: Propose waves ──────────────────────────────────
+if (fromStep <= 4) {
+  header(4, 'Propose roadmap waves (AI clustering)');
 
   const generateCmd = appFilter
     ? `node scripts/roadmap-generate.js --app ${appFilter}${dryRun ? ' --dry-run' : ''}`
@@ -110,12 +124,12 @@ if (fromStep <= 3) {
     console.error('  ⚠ Wave clustering failed. Check output above.\n');
   }
 } else {
-  console.log('\n── Step 3: Propose ── SKIPPED\n');
+  console.log('\n── Step 4: Propose ── SKIPPED\n');
 }
 
-// ─── Step 4: Archive ────────────────────────────────────────
-if (fromStep <= 4 && !skipArchive) {
-  header(4, 'Archive processed items');
+// ─── Step 5: Archive ────────────────────────────────────────
+if (fromStep <= 5 && !skipArchive) {
+  header(5, 'Archive processed items');
   if (dryRun) {
     console.log('  [DRY RUN] Would move classified items to Processed (Todoist project + YouTube playlist)\n');
   } else {
@@ -125,15 +139,15 @@ if (fromStep <= 4 && !skipArchive) {
     }
   }
 } else {
-  console.log('\n── Step 4: Archive ── SKIPPED\n');
+  console.log('\n── Step 5: Archive ── SKIPPED\n');
 }
 
-// ─── Step 5: Status ─────────────────────────────────────────
-if (fromStep <= 5) {
-  header(5, 'Roadmap status');
+// ─── Step 6: Status ─────────────────────────────────────────
+if (fromStep <= 6) {
+  header(6, 'Roadmap status');
   run('node scripts/roadmap-status.js');
 } else {
-  console.log('\n── Step 5: Status ── SKIPPED\n');
+  console.log('\n── Step 6: Status ── SKIPPED\n');
 }
 
 // ─── Summary ────────────────────────────────────────────────
