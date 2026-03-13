@@ -15,25 +15,26 @@ function buildEnrichedDescription(waveTitle, sourceType, enrichment, brainstormR
     descParts.push(`**Chairman Notes:** ${enrichment.chairman_notes}`);
   }
   if (brainstormResults) {
-    const rec = (brainstormResults.item_recommendations || []).find(r => r.item_index === itemIndex);
+    const rec = (brainstormResults.recommendations || []).find(r => r.item_index === itemIndex);
     if (rec) {
       descParts.push(`\n## Wave Brainstorm Assessment\n**Wave Theme:** ${brainstormResults.wave_theme || 'N/A'}`);
-      descParts.push(`**Priority:** ${rec.priority}`);
-      descParts.push(`**Recommendation:** ${rec.recommendation}`);
+      descParts.push(`**Action:** ${rec.action}`);
+      descParts.push(`**Rationale:** ${rec.rationale}`);
     }
   }
   return descParts.join('\n');
 }
 
-function buildSDMetadata(enrichment, brainstormResults) {
-  const sdMetadata = {};
+function buildSDMetadata(waveId, enrichment, brainstormResults) {
+  const sdMetadata = { source_wave_id: waveId };
   if (enrichment.enrichment_summary) sdMetadata.enrichment_summary = enrichment.enrichment_summary;
   if (enrichment.chairman_intent) sdMetadata.chairman_intent = enrichment.chairman_intent;
   if (enrichment.chairman_notes) sdMetadata.chairman_notes = enrichment.chairman_notes;
   if (brainstormResults) {
     sdMetadata.wave_brainstorm_context = {
       wave_theme: brainstormResults.wave_theme,
-      wave_assessment: brainstormResults.wave_assessment,
+      strategic_summary: brainstormResults.strategic_summary,
+      risk_flags: brainstormResults.risk_flags,
     };
   }
   return sdMetadata;
@@ -68,23 +69,23 @@ describe('wave brainstorm and enhanced promotion', () => {
     it('includes brainstorm recommendation for matching item', () => {
       const brainstorm = {
         wave_theme: 'Infrastructure automation',
-        wave_assessment: 'High value wave',
-        item_recommendations: [
-          { item_index: 1, priority: 'high', recommendation: 'Implement first due to dependencies' },
-          { item_index: 2, priority: 'low', recommendation: 'Can wait' },
+        strategic_summary: 'High value wave',
+        recommendations: [
+          { item_index: 1, action: 'promote', rationale: 'Implement first due to dependencies' },
+          { item_index: 2, action: 'defer', rationale: 'Can wait' },
         ],
       };
       const result = buildEnrichedDescription('Wave 1', 'todoist', {}, brainstorm, 1);
       expect(result).toContain('## Wave Brainstorm Assessment');
       expect(result).toContain('**Wave Theme:** Infrastructure automation');
-      expect(result).toContain('**Priority:** high');
+      expect(result).toContain('**Action:** promote');
       expect(result).toContain('Implement first due to dependencies');
     });
 
     it('omits brainstorm section when no matching recommendation', () => {
       const brainstorm = {
         wave_theme: 'Theme',
-        item_recommendations: [{ item_index: 5, priority: 'low', recommendation: 'Unrelated' }],
+        recommendations: [{ item_index: 5, action: 'defer', rationale: 'Unrelated' }],
       };
       const result = buildEnrichedDescription('Wave 1', 'todoist', {}, brainstorm, 1);
       expect(result).not.toContain('Wave Brainstorm Assessment');
@@ -98,8 +99,8 @@ describe('wave brainstorm and enhanced promotion', () => {
       };
       const brainstorm = {
         wave_theme: 'Research wave',
-        item_recommendations: [
-          { item_index: 1, priority: 'medium', recommendation: 'Start with literature review' },
+        recommendations: [
+          { item_index: 1, action: 'promote', rationale: 'Start with literature review' },
         ],
       };
       const result = buildEnrichedDescription('Research Wave', 'youtube', enrichment, brainstorm, 1);
@@ -111,13 +112,13 @@ describe('wave brainstorm and enhanced promotion', () => {
   });
 
   describe('buildSDMetadata', () => {
-    it('returns empty object when no enrichment or brainstorm', () => {
-      const result = buildSDMetadata({}, null);
-      expect(Object.keys(result)).toHaveLength(0);
+    it('always includes source_wave_id', () => {
+      const result = buildSDMetadata('wave-123', {}, null);
+      expect(result.source_wave_id).toBe('wave-123');
     });
 
     it('includes enrichment fields when present', () => {
-      const result = buildSDMetadata({
+      const result = buildSDMetadata('wave-123', {
         enrichment_summary: 'Summary',
         chairman_intent: 'Build',
         chairman_notes: 'Notes',
@@ -131,20 +132,22 @@ describe('wave brainstorm and enhanced promotion', () => {
     it('includes brainstorm context when present', () => {
       const brainstorm = {
         wave_theme: 'Automation',
-        wave_assessment: 'High priority',
-        item_recommendations: [],
+        strategic_summary: 'High priority',
+        risk_flags: ['dependency risk'],
+        recommendations: [],
       };
-      const result = buildSDMetadata({}, brainstorm);
+      const result = buildSDMetadata('wave-123', {}, brainstorm);
       expect(result.wave_brainstorm_context).toEqual({
         wave_theme: 'Automation',
-        wave_assessment: 'High priority',
+        strategic_summary: 'High priority',
+        risk_flags: ['dependency risk'],
       });
     });
 
     it('includes both enrichment and brainstorm', () => {
-      const result = buildSDMetadata(
+      const result = buildSDMetadata('wave-123',
         { enrichment_summary: 'Sum', chairman_intent: 'Build' },
-        { wave_theme: 'Theme', wave_assessment: 'Assessment' }
+        { wave_theme: 'Theme', strategic_summary: 'Summary', risk_flags: [] }
       );
       expect(result.enrichment_summary).toBe('Sum');
       expect(result.chairman_intent).toBe('Build');
