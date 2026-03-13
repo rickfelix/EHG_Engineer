@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-12T11:52:15.801Z
-**Tables**: 549
+**Generated**: 2026-03-13T14:33:04.219Z
+**Tables**: 553
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (549)
+## All Tables (553)
 
 ### LEO Protocol
 
@@ -235,6 +235,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [circuit_breaker_blocks](tables/circuit_breaker_blocks.md)
 - [claude_code_releases](tables/claude_code_releases.md)
 - [claude_sessions](tables/claude_sessions.md)
+- [codebase_health_config](tables/codebase_health_config.md)
+- [codebase_health_snapshots](tables/codebase_health_snapshots.md)
 - [companies](tables/companies.md)
 - [competitors](tables/competitors.md)
 - [compliance_alerts](tables/compliance_alerts.md)
@@ -291,6 +293,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [enhancement_proposals](tables/enhancement_proposals.md)
 - [eva_actions](tables/eva_actions.md)
 - [eva_agent_communications](tables/eva_agent_communications.md)
+- [eva_architecture_decisions](tables/eva_architecture_decisions.md)
 - [eva_architecture_plans](tables/eva_architecture_plans.md)
 - [eva_artifact_dependencies](tables/eva_artifact_dependencies.md)
 - [eva_audit_log](tables/eva_audit_log.md)
@@ -326,6 +329,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)
 - [eva_translation_gates](tables/eva_translation_gates.md)
+- [eva_updates](tables/eva_updates.md)
 - [eva_ventures](tables/eva_ventures.md)
 - [eva_vision_documents](tables/eva_vision_documents.md)
 - [eva_vision_gaps](tables/eva_vision_gaps.md)
