@@ -1,18 +1,21 @@
 /**
- * Friday Meeting Interactive Format - Structured 5-Section Agenda
+ * Friday Meeting Interactive Format - Structured 6-Section Agenda
  *
  * Presents a structured Friday meeting to the chairman:
  * 1. Performance Review — baseline vs actual, OKR progress
  * 2. Capability Report — capabilities delivered this week
  * 3. Consultant Findings — high-confidence recommendations by domain
  * 4. Intake Review — pending intake items
- * 5. Decisions — interactive accept/dismiss via AskUserQuestion
+ * 5. R&D Proposals — skunkworks batch proposals for chairman review
+ * 6. Decisions — interactive accept/dismiss via AskUserQuestion
  *
  * SD-MAN-ORCH-FRIDAY-EVA-AUTONOMOUS-001-B
+ * SD-AUTONOMOUS-SKUNKWORKS-RD-DEPARTMENT-ORCH-001-B
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
+import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -224,7 +227,17 @@ function renderIntakeReview(data) {
   return lines.join('\n');
 }
 
-// ─── Section 5: Decisions ────────────────────────────────────
+// ─── Section 5: R&D Proposals (delegated to lib/skunkworks/friday-rd-section.js)
+
+function gatherRdProposals() {
+  return _gatherRdProposals({ supabase, logger });
+}
+
+function renderRdProposals(data) {
+  return _renderRdProposals(data);
+}
+
+// ─── Section 6: Decisions ────────────────────────────────────
 
 function buildDecisionPayload(findings) {
   if (findings.length === 0) return null;
@@ -241,6 +254,10 @@ function buildDecisionPayload(findings) {
       ],
     })),
   };
+}
+
+function buildCombinedDecisionPayload(findings, proposals) {
+  return _buildCombinedDecisionPayload(findings, proposals);
 }
 
 async function processDecision(finding, decision) {
@@ -263,6 +280,10 @@ async function processDecision(finding, decision) {
   }
   // Defer — leave as pending
   return 'deferred';
+}
+
+function processRdProposalDecision(proposalId, decision, notes) {
+  return _processRdProposalDecision({ supabase, logger }, proposalId, decision, notes);
 }
 
 // ─── Persistence: Fleet Rollup ───────────────────────────────
@@ -413,24 +434,27 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, rdData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
     gatherIntakeReview(),
+    gatherRdProposals(),
   ]);
 
-  // Render sections 1-4
+  // Render sections 1-5
   logger.log(renderPerformanceReview(perfData));
   logger.log(renderCapabilityReport(capData));
   logger.log(renderConsultantFindings(consultData));
   logger.log(renderIntakeReview(intakeData));
+  logger.log(renderRdProposals(rdData));
 
-  // Section 5: Decisions
+  // Section 6: Decisions
   logger.log('');
-  logger.log('  SECTION 5: DECISIONS');
+  logger.log('  SECTION 6: DECISIONS');
   logger.log('  ' + '─'.repeat(45));
 
+  const totalDecisionItems = consultData.findings.length + rdData.proposals.length;
   const results = {
     meeting_date: new Date().toISOString(),
     sections: {
@@ -438,25 +462,28 @@ export async function fridayMeetingHandler(options = {}) {
       capability: { completedSDs: capData.completedSDs.length },
       consultant: { totalFindings: consultData.findings.length, domains: Object.keys(consultData.grouped).length },
       intake: { pendingItems: intakeData.pending.length },
+      rd_proposals: { pendingProposals: rdData.proposals.length, sources: Object.keys(rdData.grouped).length },
     },
-    decisions: { accepted: 0, dismissed: 0, deferred: 0, total: consultData.findings.length },
+    decisions: { accepted: 0, dismissed: 0, deferred: 0, total: totalDecisionItems },
   };
 
-  if (consultData.findings.length === 0) {
-    logger.log('  No findings require decisions this week.');
+  if (totalDecisionItems === 0) {
+    logger.log('  No findings or proposals require decisions this week.');
   } else {
-    logger.log(`  ${consultData.findings.length} finding(s) require your decision.`);
+    logger.log(`  ${totalDecisionItems} item(s) require your decision:`);
+    if (consultData.findings.length > 0) logger.log(`    - ${consultData.findings.length} consultant finding(s)`);
+    if (rdData.proposals.length > 0) logger.log(`    - ${rdData.proposals.length} R&D proposal(s)`);
     logger.log('');
 
-    // Build the AskUserQuestion payload for interactive mode
-    const payload = buildDecisionPayload(consultData.findings);
+    // Build combined AskUserQuestion payload
+    const payload = buildCombinedDecisionPayload(consultData.findings, rdData.proposals);
 
     if (options.interactive !== false && payload) {
       // Output the payload for Claude Code to pick up
       logger.log('FRIDAY_MEETING_DECISIONS_PAYLOAD=' + JSON.stringify(payload));
       logger.log('');
       logger.log('  Awaiting chairman decisions via AskUserQuestion...');
-      logger.log('  (If running non-interactively, all findings will be deferred)');
+      logger.log('  (If running non-interactively, all items will be deferred)');
     }
   }
 
@@ -501,8 +528,13 @@ export async function fridayMeetingHandler(options = {}) {
 export async function processMeetingDecisions(decisions, { chairmanNotes = null } = {}) {
   const summary = { accepted: 0, dismissed: 0, deferred: 0 };
 
-  for (const { findingId, decision } of decisions) {
-    const result = await processDecision({ id: findingId }, decision);
+  for (const { findingId, decision, itemType, notes } of decisions) {
+    let result;
+    if (itemType === 'rd_proposal') {
+      result = await processRdProposalDecision(findingId, decision, notes);
+    } else {
+      result = await processDecision({ id: findingId }, decision);
+    }
     summary[result]++;
   }
 
