@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-12T11:52:15.801Z
-**Tables**: 549
+**Generated**: 2026-03-13T14:33:04.219Z
+**Tables**: 553
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -109,6 +109,8 @@ Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [claude_code_releases](tables/claude_code_releases.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [claude_sessions](tables/claude_sessions.md) | N/A (RLS restricted) | ✅ | 4 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
+| [codebase_health_config](tables/codebase_health_config.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [codebase_health_snapshots](tables/codebase_health_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [companies](tables/companies.md) | N/A (RLS restricted) | ✅ | 6 | - |
 | [competitors](tables/competitors.md) | N/A (RLS restricted) | ✅ | 5 | - |
 | [compliance_alerts](tables/compliance_alerts.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Compliance alerts and violations |
@@ -169,6 +171,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [enhancement_proposals](tables/enhancement_proposals.md) | N/A (RLS restricted) | ✅ | 2 | Stores LEO-generated enhancement proposals for protocol improvements |
 | [eva_actions](tables/eva_actions.md) | N/A (RLS restricted) | ✅ | 2 | EVA orchestration actions - tracks all automated and manual actions executed during sessions |
 | [eva_agent_communications](tables/eva_agent_communications.md) | N/A (RLS restricted) | ✅ | 2 | Inter-agent messaging for EVA orchestration - tracks all agent-to-agent communications |
+| [eva_architecture_decisions](tables/eva_architecture_decisions.md) | N/A (RLS restricted) | ✅ | 1 | Stores EVA architecture decisions (go/no-go, calibration outcomes, experiment conclusions) |
 | [eva_architecture_plans](tables/eva_architecture_plans.md) | N/A (RLS restricted) | ✅ | 2 | Architecture Plans linked to Vision documents. ON DELETE RESTRICT on vision_id prevents deleting a vision that has architecture plans. |
 | [eva_artifact_dependencies](tables/eva_artifact_dependencies.md) | N/A (RLS restricted) | ✅ | 2 | Cross-stage data contracts ensuring artifacts from earlier stages are validated before later stages proceed |
 | [eva_audit_log](tables/eva_audit_log.md) | N/A (RLS restricted) | ✅ | 3 | EVA Audit Trail - All actions logged |
@@ -204,6 +207,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_todoist_intake](tables/eva_todoist_intake.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [eva_trace_log](tables/eva_trace_log.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [eva_translation_gates](tables/eva_translation_gates.md) | N/A (RLS restricted) | ✅ | 3 | Translation fidelity gate results for the EVA pipeline. Each gate checks upstream artifacts against downstream artifacts to detect translation gaps. |
+| [eva_updates](tables/eva_updates.md) | N/A (RLS restricted) | ✅ | 1 | Stores EVA weekly meeting updates including section reports, coordinator status, decisions, and chairman notes |
 | [eva_ventures](tables/eva_ventures.md) | N/A (RLS restricted) | ✅ | 2 | EVA Operating System - Venture tracking with health metrics |
 | [eva_vision_documents](tables/eva_vision_documents.md) | N/A (RLS restricted) | ✅ | 2 | Stores EHG portfolio (L1) and venture-specific (L2) vision documents for the EVA Vision Governance System. L2 visions link to L1 via parent_vision_id. |
 | [eva_vision_gaps](tables/eva_vision_gaps.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -780,7 +784,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (423 tables)
+### Other (427 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -857,6 +861,8 @@ Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [claude_code_releases](tables/claude_code_releases.md)
 - [claude_sessions](tables/claude_sessions.md) - Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim.
+- [codebase_health_config](tables/codebase_health_config.md)
+- [codebase_health_snapshots](tables/codebase_health_snapshots.md)
 - [companies](tables/companies.md)
 - [competitors](tables/competitors.md)
 - [compliance_alerts](tables/compliance_alerts.md) - RLS enabled 2025-10-26 (migration 021) - Compliance alerts and violations
@@ -915,6 +921,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [enhancement_proposals](tables/enhancement_proposals.md) - Stores LEO-generated enhancement proposals for protocol improvements
 - [eva_actions](tables/eva_actions.md) - EVA orchestration actions - tracks all automated and manual actions executed during sessions
 - [eva_agent_communications](tables/eva_agent_communications.md) - Inter-agent messaging for EVA orchestration - tracks all agent-to-agent communications
+- [eva_architecture_decisions](tables/eva_architecture_decisions.md) - Stores EVA architecture decisions (go/no-go, calibration outcomes, experiment conclusions)
 - [eva_architecture_plans](tables/eva_architecture_plans.md) - Architecture Plans linked to Vision documents. ON DELETE RESTRICT on vision_id prevents deleting a vision that has architecture plans.
 - [eva_artifact_dependencies](tables/eva_artifact_dependencies.md) - Cross-stage data contracts ensuring artifacts from earlier stages are validated before later stages proceed
 - [eva_audit_log](tables/eva_audit_log.md) - EVA Audit Trail - All actions logged
@@ -950,6 +957,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_todoist_intake](tables/eva_todoist_intake.md)
 - [eva_trace_log](tables/eva_trace_log.md)
 - [eva_translation_gates](tables/eva_translation_gates.md) - Translation fidelity gate results for the EVA pipeline. Each gate checks upstream artifacts against downstream artifacts to detect translation gaps.
+- [eva_updates](tables/eva_updates.md) - Stores EVA weekly meeting updates including section reports, coordinator status, decisions, and chairman notes
 - [eva_ventures](tables/eva_ventures.md) - EVA Operating System - Venture tracking with health metrics
 - [eva_vision_documents](tables/eva_vision_documents.md) - Stores EHG portfolio (L1) and venture-specific (L2) vision documents for the EVA Vision Governance System. L2 visions link to L1 via parent_vision_id.
 - [eva_vision_gaps](tables/eva_vision_gaps.md)
