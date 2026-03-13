@@ -1,6 +1,7 @@
 {
-  "sdKey": "SD-LEO-INFRA-COVERAGE-TREND-TRACKER-001",
-  "expectedBranch": "feat/SD-LEO-INFRA-COVERAGE-TREND-TRACKER-001",
-  "createdAt": "2026-03-13T12:26:49.869Z",
+  "sdKey": "SD-CHAIRMAN-REVIEW-CHECKPOINT-FOR-ORCH-001-C",
+  "expectedBranch": "feat/SD-CHAIRMAN-REVIEW-CHECKPOINT-FOR-ORCH-001-C-phase-3-architecture-plan-quality-gate-s",
+  "createdAt": "2026-03-13T16:27:36.711Z",
+  "hostname": "Legion-Laptop",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }

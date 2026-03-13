@@ -895,7 +895,40 @@ Architecture plans MUST reference specific details from the brainstorm conversat
 
 **If Chairman Review flags exist** (from Step 8.7): Include a `## Chairman Review Flags` section listing each flagged item and how the architecture addresses or mitigates the concern.
 
-**After writing the file**, verify it exists and has all 8 required sections (plus Chairman Review Flags if applicable) before proceeding to 9.5D.
+**After writing the file**, verify it exists and has all 8 required sections (plus Chairman Review Flags if applicable) before proceeding to the quality gate.
+
+### 9.5C-GATE: Architecture Plan Quality Gate (BLOCKING)
+
+**MANDATORY** — Score the architecture plan before registration. Plans below threshold are rewritten automatically.
+
+**Scoring Dimensions** (each scored 0-100, weighted):
+
+| Dimension | Weight | What to Check |
+|-----------|--------|---------------|
+| Section Completeness | 0.25 | All 8 required sections present with substantive content (>3 sentences each). Empty or stub sections score 0. |
+| Technical Depth | 0.20 | Specific technology names, table schemas, endpoint signatures, config details — not vague descriptions. |
+| Deferral-Free Language | 0.20 | No prohibited deferral phrases (from 9.5C enforcement list). Each instance deducts 20 points. |
+| Phasing Specificity | 0.15 | Implementation phases have time estimates, deliverables, and dependencies — not just labels. |
+| Chairman Flag Coverage | 0.20 | If chairman flags exist (Step 8.7): each flag addressed with mitigation. If no flags: score 100 for this dimension. |
+
+**Scoring Procedure:**
+
+1. Read the architecture plan file (`docs/plans/<topic-slug>-architecture.md`)
+2. For each dimension, assign a score 0-100 based on the criteria above
+3. Compute weighted total: `total = (completeness * 0.25) + (depth * 0.20) + (deferral * 0.20) + (phasing * 0.15) + (chairman * 0.20)`
+4. Record the scores in the brainstorm session context for metadata capture at Step 11
+
+**Threshold: 70% minimum**
+
+- **If total >= 70**: `✅ Architecture plan quality: <score>/100 — proceeding to registration`
+- **If total < 70**:
+  1. Report: `⚠️ Architecture plan quality: <score>/100 — below 70% threshold`
+  2. List the lowest-scoring dimensions with specific deficiencies
+  3. **Rewrite** the deficient sections in the architecture plan file (do NOT ask — auto-fix)
+  4. **Re-score** after rewrite (max 2 rewrite attempts)
+  5. If still below 70% after 2 rewrites: `❌ Architecture plan failed quality gate after 2 rewrites. HALT — report to user for manual review.`
+
+**No user interaction** — this gate runs automatically. Only halt on persistent failure.
 
 ### 9.5D: Register Architecture Plan in EVA (with Key Capture)
 
@@ -941,6 +974,7 @@ Verify both registrations succeeded:
 ✅ Vision & Architecture Pipeline Complete
    Vision:    VISION-<KEY> (L2, N dimensions) — tracked by HEAL
    Arch Plan: ARCH-<KEY> (linked to VISION-<KEY>) — tracked by HEAL
+   Quality:   <SCORE>/100 (from 9.5C-GATE)
    Brainstorm: <SESSION_ID>
 
    These keys will be passed to /eva review and /leo create in Step 11.
@@ -953,7 +987,7 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 supabase.from('brainstorm_sessions')
-  .update({ metadata: { vision_key: '<VISION_KEY>', plan_key: '<PLAN_KEY>' } })
+  .update({ metadata: { vision_key: '<VISION_KEY>', plan_key: '<PLAN_KEY>', arch_quality_score: <SCORE> } })
   .eq('id', '<SESSION_ID>')
   .then(({error}) => {
     if (error) console.error('Failed to store keys:', error.message);
