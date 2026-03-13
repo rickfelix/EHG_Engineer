@@ -81,7 +81,21 @@ const WEIGHTS = {
     okrImpact: 90,
     sdType: 20,
     readiness: 10,
+    healthUrgency: 20,   // Health urgency (~10% of max base score)
     strategyWeight: 150,  // Max strategy weight (matches max of other dimensions combined)
+  },
+
+  // Health urgency scoring
+  healthUrgency: {
+    severityWeights: {
+      critical: 10,
+      high: 6,
+      medium: 3,
+      info: 1,
+    },
+    stalenessPenaltyPerDay: 0.5,  // Extra points per day findings remain unresolved
+    maxStalenessBonus: 5,          // Cap staleness bonus
+    defaultWeight: 20,             // Default max points when no config
   },
 };
 
@@ -93,6 +107,7 @@ const WEIGHTS = {
  * @param {Map|Object} keyResults - Map or object of KR ID -> KR object
  * @param {Object} [options] - Optional parameters
  * @param {number} [options.strategyWeight] - Pre-computed strategy weight (0-150)
+ * @param {number} [options.healthUrgency] - Pre-computed health urgency score (0-20)
  * @returns {Object} Score breakdown with total and component scores
  */
 export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}, options = {}) {
@@ -102,6 +117,7 @@ export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}, 
     okrImpact: 0,
     sdType: 0,
     readiness: 0,
+    healthUrgency: 0,
     strategyWeight: 0,
     total: 0,
     details: {},
@@ -157,11 +173,18 @@ export function calculatePriorityScore(sd, okrAlignments = [], keyResults = {}, 
   breakdown.readiness = Math.min(readiness / 10, WEIGHTS.maxPoints.readiness);
   breakdown.details.readiness = `${readiness}% → ${breakdown.readiness.toFixed(1)} pts`;
 
-  // 6. Strategy weight integration
+  // 6. Health urgency (0-20 points, ~10% of base score)
+  const rawHealthUrgency = options.healthUrgency || 0;
+  breakdown.healthUrgency = Math.min(rawHealthUrgency, WEIGHTS.maxPoints.healthUrgency);
+  breakdown.details.healthUrgency = rawHealthUrgency > 0
+    ? `${breakdown.healthUrgency.toFixed(1)} pts (health findings)`
+    : 'none';
+
+  // 7. Strategy weight integration
   // When strategy_weight > 0, it becomes 50% of total score.
   // Existing dimensions are scaled to the remaining 50%.
   const rawStrategyWeight = options.strategyWeight || 0;
-  const dimensionTotal = breakdown.priority + breakdown.triage + breakdown.okrImpact + breakdown.sdType + breakdown.readiness;
+  const dimensionTotal = breakdown.priority + breakdown.triage + breakdown.okrImpact + breakdown.sdType + breakdown.readiness + breakdown.healthUrgency;
 
   if (rawStrategyWeight > 0) {
     // Cap strategy weight at max
@@ -219,6 +242,59 @@ export function calculateStrategyWeight(okrAlignments = [], keyResults = {}, tim
   }
 
   return Math.min(Math.round(total * 10) / 10, WEIGHTS.maxPoints.strategyWeight);
+}
+
+/**
+ * Calculate health urgency score from codebase health snapshot data.
+ *
+ * Inputs:
+ *   - Finding count and severity distribution
+ *   - Age of oldest unresolved findings (staleness)
+ *   - Configurable max weight
+ *
+ * @param {Object} healthData - Health snapshot data
+ * @param {number} [healthData.finding_count] - Total findings
+ * @param {Object} [healthData.severity_distribution] - { critical, high, medium, info }
+ * @param {number} [healthData.oldest_finding_days] - Age of oldest finding in days
+ * @param {number} [healthData.dimension_score] - Overall dimension score (0-100)
+ * @param {Object} [config] - Configuration overrides
+ * @param {number} [config.max_points] - Max health urgency points (default: 20)
+ * @returns {number} Health urgency score (0 to max_points)
+ */
+export function calculateHealthUrgency(healthData = {}, config = {}) {
+  if (!healthData || !healthData.finding_count) return 0;
+
+  const maxPoints = config.max_points || WEIGHTS.healthUrgency.defaultWeight;
+  const sw = WEIGHTS.healthUrgency.severityWeights;
+
+  // Severity-weighted finding score
+  const dist = healthData.severity_distribution || {};
+  const severityScore =
+    (dist.critical || 0) * sw.critical +
+    (dist.high || 0) * sw.high +
+    (dist.medium || 0) * sw.medium +
+    (dist.info || 0) * sw.info;
+
+  // Staleness bonus: older unresolved findings increase urgency
+  const ageDays = healthData.oldest_finding_days || 0;
+  const stalenessBonus = Math.min(
+    ageDays * WEIGHTS.healthUrgency.stalenessPenaltyPerDay,
+    WEIGHTS.healthUrgency.maxStalenessBonus
+  );
+
+  // Dimension score penalty: lower health score = higher urgency
+  const dimensionPenalty = healthData.dimension_score != null
+    ? (100 - healthData.dimension_score) / 100 * 5  // Up to 5 points for low score
+    : 0;
+
+  const raw = severityScore + stalenessBonus + dimensionPenalty;
+
+  // Normalize to max_points range
+  // Ceiling: 100 severity points (10 critical findings) + 5 staleness + 5 penalty = 110
+  const ceiling = 110;
+  const normalized = (raw / ceiling) * maxPoints;
+
+  return Math.round(Math.min(normalized, maxPoints) * 10) / 10;
 }
 
 /**
@@ -417,6 +493,7 @@ if (process.argv[1]?.endsWith('priority-scorer.js')) {
   console.log('    - Contribution: direct=1.5x, enabling=1x, supporting=0.5x');
   console.log('  SD Type (security/infra/feature): 20/15/5 pts');
   console.log('  Readiness: up to 10 pts');
+  console.log('  Health Urgency: up to 20 pts (~10% of base)');
   console.log('');
   console.log('  Strategy Weight: up to 150 pts (50% blend when present)');
   console.log('    - Time horizon: now=3x, next=2x, later=1x, eventually=0.5x');
@@ -428,6 +505,7 @@ export default {
   calculatePriorityScore,
   calculateOKRImpact,
   calculateStrategyWeight,
+  calculateHealthUrgency,
   rankSDs,
   assignTrack,
   printScoreSummary,
