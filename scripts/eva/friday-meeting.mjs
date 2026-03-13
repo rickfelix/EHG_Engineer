@@ -264,6 +264,70 @@ async function processDecision(finding, decision) {
   return 'deferred';
 }
 
+// ─── Persistence: Fleet Rollup ───────────────────────────────
+
+async function getFleetRollup() {
+  try {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [completedRes, activeRes, pendingRes, blockedRes] = await Promise.all([
+      supabase.from('strategic_directives_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('completion_date', oneWeekAgo),
+      supabase.from('strategic_directives_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_working_on', true),
+      supabase.from('strategic_directives_v2')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['draft', 'ready', 'in_progress'])
+        .eq('is_working_on', false),
+      supabase.from('strategic_directives_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'blocked'),
+    ]);
+
+    return {
+      fleet_velocity: completedRes.count || 0,
+      active_claims: activeRes.count || 0,
+      pending_sds: pendingRes.count || 0,
+      blocked_sds: blockedRes.count || 0,
+      captured_at: new Date().toISOString(),
+    };
+  } catch (err) {
+    logger.warn(`  Fleet rollup failed (non-blocking): ${err.message}`);
+    return {};
+  }
+}
+
+// ─── Persistence: Meeting Log ────────────────────────────────
+
+async function persistMeetingLog(results, coordinator = {}) {
+  try {
+    const meetingDate = new Date().toISOString().slice(0, 10);
+
+    const { error } = await supabase
+      .from('eva_updates')
+      .upsert({
+        meeting_date: meetingDate,
+        sections: results.sections || {},
+        coordinator,
+        decisions: results.decisions || {},
+        completed_at: new Date().toISOString(),
+      }, { onConflict: 'meeting_date' });
+
+    if (error) {
+      logger.warn(`  Meeting persist failed (non-blocking): ${error.message}`);
+      return false;
+    }
+    logger.log('  ✓ Meeting data persisted to eva_updates');
+    return true;
+  } catch (err) {
+    logger.warn(`  Meeting persist error (non-blocking): ${err.message}`);
+    return false;
+  }
+}
+
 // ─── Main Handler ────────────────────────────────────────────
 
 /**
@@ -327,6 +391,10 @@ export async function fridayMeetingHandler(options = {}) {
     }
   }
 
+  // Persist meeting data (non-blocking)
+  const coordinator = await getFleetRollup();
+  await persistMeetingLog(results, coordinator);
+
   logger.log('');
   logger.log('═'.repeat(55));
   logger.log('   Meeting data gathered. Decisions pending.');
@@ -356,6 +424,17 @@ export async function processMeetingDecisions(decisions) {
   logger.log(`  Dismissed: ${summary.dismissed}`);
   logger.log(`  Deferred:  ${summary.deferred}`);
   logger.log('  ' + '─'.repeat(45) + '\n');
+
+  // Update persisted record with decision outcomes
+  const meetingDate = new Date().toISOString().slice(0, 10);
+  await supabase
+    .from('eva_updates')
+    .update({ decisions: summary })
+    .eq('meeting_date', meetingDate)
+    .then(({ error }) => {
+      if (error) logger.warn(`  Decision persist failed: ${error.message}`);
+      else logger.log('  ✓ Decisions updated in eva_updates');
+    });
 
   return summary;
 }
