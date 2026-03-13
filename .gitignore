@@ -25,6 +25,10 @@ applications/*/.env.encrypted
 applications/*/.env.decrypted
 applications/*/.leo-sync/supabase/.temp/
 
+# Vision/Architecture documents are DB-only — never commit markdown versions
+docs/plans/*-vision.md
+docs/plans/*-architecture.md
+
 # Auto-generated database optimization files
 database-optimization.sql
 migrations/*_optimize_database.sql
