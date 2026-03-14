@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-03-08T15:19:08.842Z -->
-<!-- git_commit: 18092db2 -->
-<!-- db_snapshot_hash: 7553bf4ddc5099fa -->
+<!-- generated_at: 2026-03-14T12:36:22.370Z -->
+<!-- git_commit: 05ee2881 -->
+<!-- db_snapshot_hash: cf3e5ecf7c7ae5c7 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
@@ -29,8 +29,8 @@
 
 ## CLAUDE.md Router (Context Loading)
 
-### Loading Strategy (Digest-First)
-1. **ALWAYS**: Read CLAUDE_CORE_DIGEST.md first (~10k) - compact enforcement rules
+### Loading Strategy (Full-File)
+1. **ALWAYS**: Read CLAUDE_CORE.md first (~10k) - compact enforcement rules
 2. **Phase Detection**: Load phase-specific DIGEST file based on keywords
 3. **Escalation**: Load FULL file only when digest is insufficient
 4. **On-Demand**: Load reference docs only when issues arise
@@ -40,13 +40,13 @@
 - Existing SDs being resumed
 - **Child SDs of orchestrators** (each child requires fresh context loading)
 
-Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate thresholds, skipped sub-agents.
+Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresholds, skipped sub-agents.
 
 ### Digest vs Full File
 
 | Situation | Load |
 |-----------|------|
-| Starting any SD work | CLAUDE_CORE_DIGEST.md (default) |
+| Starting any SD work | CLAUDE_CORE.md (default) |
 | Need detailed sub-agent config | CLAUDE_CORE.md (full) |
 | Need detailed handoff procedures | CLAUDE_PLAN.md (full) |
 | Complex debugging or unknown errors | Full phase file |
@@ -62,9 +62,9 @@ Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate
 ### Phase Keywords -> File
 | Keywords | Digest (Default) | Full (Escalation) |
 |----------|-------------------|-------------------|
-| "approve", "LEAD", "directive" | CLAUDE_LEAD_DIGEST.md | CLAUDE_LEAD.md |
-| "PRD", "PLAN", "validation" | CLAUDE_PLAN_DIGEST.md | CLAUDE_PLAN.md |
-| "implement", "EXEC", "code" | CLAUDE_EXEC_DIGEST.md | CLAUDE_EXEC.md |
+| "approve", "LEAD", "directive" | CLAUDE_LEAD.md | CLAUDE_LEAD.md |
+| "PRD", "PLAN", "validation" | CLAUDE_PLAN.md | CLAUDE_PLAN.md |
+| "implement", "EXEC", "code" | CLAUDE_EXEC.md | CLAUDE_EXEC.md |
 
 ### Issue -> Reference Doc
 | Issue | Load |
@@ -75,7 +75,7 @@ Skipping CLAUDE_CORE_DIGEST.md causes: unknown SD type requirements, missed gate
 | Test/E2E issues | docs/reference/qa-director-guide.md |
 | ... | *(see full file for complete table)* |
 
-### Context Budget (Digest-First)
+### Context Budget (Full-File)
 - Router + Core Digest: ~12k (6% of 200k budget)
 - + Phase Digest: ~17k (9%)
 - + Full file (if escalated): ~55k (28%)
@@ -121,7 +121,7 @@ This command provides:
 ### SD Status Badge Legend
 | Badge | Meaning | Workable? |
 |-------|---------|-----------|
-| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD_DIGEST.md and run LEAD-TO-PLAN. |
+| **DRAFT** | New SD, needs LEAD approval to begin | **YES** - This is the normal starting point. Load CLAUDE_LEAD.md and run LEAD-TO-PLAN. |
 | **READY** | Past LEAD phase, dependencies resolved | **YES** - Proceed to next handoff in workflow |
 | **PLANNING** | In PLAN phase (PRD creation) | **YES** - Continue planning work |
 | **EXEC N%** | In EXEC phase with progress | **YES** - Continue implementation |
@@ -130,7 +130,7 @@ This command provides:
 ### After Running sd:next
 1. If SD marked "CONTINUE" (is_working_on=true) and not CLAIMED by another session → Resume that SD
 2. If no active SD → Pick the highest-ranked **workable** SD (any status except BLOCKED or CLAIMED)
-3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD_DIGEST.md.
+3. **DRAFT SDs are the normal starting point** — they need LEAD approval. Load CLAUDE_LEAD.md.
 4. READY SDs have already been approved — proceed to the next handoff in their workflow.
 5. Prioritize: READY > EXEC > PLANNING > DRAFT (prefer SDs with existing momentum)
 
@@ -152,5 +152,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-03-08 11:19:08 AM*
+*DIGEST generated: 2026-03-14 8:36:22 AM*
 *Protocol: 4.3.3*

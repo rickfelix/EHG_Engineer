@@ -1,77 +1,77 @@
 {
-  "generated_at": "2026-03-08T15:19:08.842Z",
-  "git_commit": "18092db2",
-  "db_snapshot_hash": "7553bf4ddc5099fa",
+  "generated_at": "2026-03-14T12:36:22.370Z",
+  "git_commit": "05ee2881",
+  "db_snapshot_hash": "cf3e5ecf7c7ae5c7",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 5789,
-      "estimated_tokens": 1448,
-      "content_hash": "8be9b4b46e82a348",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE.md"
+      "chars": 5767,
+      "estimated_tokens": 1442,
+      "content_hash": "b2e36b79b2a94f36",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 48680,
-      "estimated_tokens": 12170,
-      "content_hash": "e5aca75549833ca8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_CORE.md"
+      "chars": 51077,
+      "estimated_tokens": 12770,
+      "content_hash": "d5e3a4eb0fd5592f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 53232,
-      "estimated_tokens": 13308,
-      "content_hash": "54496b44247168a5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_LEAD.md"
+      "chars": 54092,
+      "estimated_tokens": 13523,
+      "content_hash": "90d7704d4bdd64da",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 81018,
-      "estimated_tokens": 20255,
-      "content_hash": "3d3bbd151942a2fd",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_PLAN.md"
+      "chars": 82128,
+      "estimated_tokens": 20532,
+      "content_hash": "2f11d7938f8b9e66",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 67670,
-      "estimated_tokens": 16918,
-      "content_hash": "befa84f275d36772",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_EXEC.md"
+      "chars": 69134,
+      "estimated_tokens": 17284,
+      "content_hash": "8162218ecd9d8f63",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 6681,
-      "estimated_tokens": 1671,
-      "content_hash": "675c149945559a2e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_DIGEST.md"
+      "chars": 6618,
+      "estimated_tokens": 1655,
+      "content_hash": "2b2d3ae0cfacab47",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 10175,
+      "chars": 10174,
       "estimated_tokens": 2544,
-      "content_hash": "0574161bfeb8f8cb",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_CORE_DIGEST.md"
+      "content_hash": "3082557d64a475f3",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 4802,
+      "chars": 4801,
       "estimated_tokens": 1201,
-      "content_hash": "11d72346d98a8879",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_LEAD_DIGEST.md"
+      "content_hash": "ad0e9983f82b80ee",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 5032,
+      "chars": 5031,
       "estimated_tokens": 1258,
-      "content_hash": "5080a14356032d0e",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_PLAN_DIGEST.md"
+      "content_hash": "8273e1b9b91b714f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 9486,
+      "chars": 9485,
       "estimated_tokens": 2372,
-      "content_hash": "4d07bba887a091e5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FEAT-EVA-INTAKE-REDESIGN-003-A\\CLAUDE_EXEC_DIGEST.md"
+      "content_hash": "3d5ffb3e65e0e28f",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_EXEC_DIGEST.md"
     }
   }
 }
