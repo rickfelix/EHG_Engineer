@@ -125,7 +125,7 @@ async function handleAudit(opts) {
 }
 
 // ============================================================================
-// Subcommand: interview (placeholder - implemented in Child C)
+// Subcommand: interview
 // ============================================================================
 
 async function handleInterview(opts) {
@@ -133,15 +133,20 @@ async function handleInterview(opts) {
     console.error('Error: --site-dna-id is required for interview subcommand');
     process.exit(1);
   }
-  console.log(`\n📝 SRIP Brand Interview`);
-  console.log(`   Site DNA: ${opts.siteDnaId}`);
-  console.log(`   Venture: ${opts.ventureId || 'auto-detect from site_dna'}`);
-  console.log(`\n   ⚠️  Brand Interview module not yet implemented.`);
-  console.log(`   This will be implemented in SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-C.`);
+  const { runBrandInterview } = await import('./srip/brand-interview.mjs');
+  const result = await runBrandInterview({
+    siteDnaId: opts.siteDnaId,
+    ventureId: opts.ventureId || null,
+    supabase: getSupabase(),
+  });
+  if (result) {
+    console.log(`\n   Pre-populated: ${result.pre_populated_count} answers`);
+    console.log(`   Needs manual input: ${result.manual_input_count} answers`);
+  }
 }
 
 // ============================================================================
-// Subcommand: synthesize (placeholder - implemented in Child C)
+// Subcommand: synthesize
 // ============================================================================
 
 async function handleSynthesize(opts) {
@@ -149,11 +154,17 @@ async function handleSynthesize(opts) {
     console.error('Error: --site-dna-id and --brand-interview-id are required');
     process.exit(1);
   }
-  console.log(`\n🔄 SRIP Synthesis`);
-  console.log(`   Site DNA: ${opts.siteDnaId}`);
-  console.log(`   Brand Interview: ${opts.brandInterviewId}`);
-  console.log(`\n   ⚠️  Synthesis module not yet implemented.`);
-  console.log(`   This will be implemented in SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-C.`);
+  const { generateSynthesisPrompt } = await import('./srip/synthesis-engine.mjs');
+  const result = await generateSynthesisPrompt({
+    siteDnaId: opts.siteDnaId,
+    brandInterviewId: opts.brandInterviewId,
+    supabase: getSupabase(),
+  });
+  if (result) {
+    console.log(`\n   Prompt version: ${result.version}`);
+    console.log(`   Token count: ${result.token_count}`);
+    console.log(`   Fidelity target: ${result.fidelity_target}%`);
+  }
 }
 
 // ============================================================================
