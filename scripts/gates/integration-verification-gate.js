@@ -1,238 +1,364 @@
 /**
  * Integration Verification Gate
+ * SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B
  *
- * Runs at orchestrator EXEC-COMPLETE boundary to verify:
- * 1. All children completed (status=completed, progress=100)
+ * Runs at orchestrator EXEC-COMPLETE boundary. Verifies:
+ * 1. All children are completed (status + progress)
  * 2. Deliverables cross-reference correctly between children
- * 3. delivers_capabilities have consumers (no orphans)
+ * 3. Capabilities have consumers (no orphans)
  *
  * Advisory mode only — always returns pass=true with warnings.
  *
- * SD: SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B
+ * @module integration-verification-gate
+ * @version 1.0.0
  */
-
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 
 /**
- * Check that all children of an orchestrator are completed.
- * @param {Array} children - Child SDs
- * @returns {{warnings: string[]}}
+ * Resolve an SD identifier (UUID or sd_key) to { id, sd_key }.
+ *
+ * @param {string} idOrKey - UUID id or sd_key
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<{id: string, sd_key: string, sd_type: string}|null>}
  */
-export function checkChildrenCompleted(children) {
+async function resolveSD(idOrKey, supabase) {
+  // Try sd_key first
+  const { data: byKey } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, sd_type')
+    .eq('sd_key', idOrKey)
+    .limit(1);
+
+  if (byKey && byKey.length > 0) return byKey[0];
+
+  // Try UUID id
+  const { data: byId } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, sd_type')
+    .eq('id', idOrKey)
+    .limit(1);
+
+  if (byId && byId.length > 0) return byId[0];
+
+  return null;
+}
+
+/**
+ * Verify all children of an orchestrator SD are completed.
+ *
+ * @param {string} parentId - Parent UUID id
+ * @param {string} parentSdKey - Parent sd_key (for messages)
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<{complete: boolean, warnings: string[], children: Object[]}>}
+ */
+async function verifyChildrenCompleted(parentId, parentSdKey, supabase) {
   const warnings = [];
-  if (!Array.isArray(children) || children.length === 0) {
-    return { warnings: ['No children found for orchestrator'] };
+
+  const { data: children, error: childErr } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, status, progress, current_phase')
+    .eq('parent_sd_id', parentId);
+
+  if (childErr || !children || children.length === 0) {
+    warnings.push(`No children found for orchestrator ${parentSdKey}`);
+    return { complete: false, warnings, children: [] };
   }
+
+  let allComplete = true;
 
   for (const child of children) {
     if (child.status !== 'completed') {
-      warnings.push(`${child.sd_key}: status is '${child.status}' (expected 'completed')`);
+      warnings.push(`Child ${child.sd_key} status is '${child.status}' (expected 'completed')`);
+      allComplete = false;
     }
-    if (child.progress != null && child.progress < 100) {
-      warnings.push(`${child.sd_key}: progress is ${child.progress}% (expected 100%)`);
+    if (child.progress !== 100) {
+      warnings.push(`Child ${child.sd_key} progress is ${child.progress}% (expected 100%)`);
+      allComplete = false;
     }
   }
 
-  return { warnings };
+  return { complete: allComplete, warnings, children };
 }
 
 /**
- * Cross-reference deliverables between children via handoff manifests.
- * Checks that deliverables referenced by one child are produced by another.
- * @param {Array} handoffs - Handoff records with deliverables_manifest
- * @param {Array} children - Child SDs for context
- * @returns {{warnings: string[]}}
- */
-export function checkDeliverablesCrossRef(handoffs, children) {
-  const warnings = [];
-  if (!Array.isArray(handoffs) || handoffs.length === 0) {
-    return { warnings };
-  }
-
-  // Collect all deliverables by SD
-  const deliverablesBySd = new Map();
-  for (const handoff of handoffs) {
-    const manifest = handoff.deliverables_manifest;
-    if (!manifest || typeof manifest !== 'object') continue;
-
-    const sdId = handoff.sd_id;
-    if (!deliverablesBySd.has(sdId)) deliverablesBySd.set(sdId, []);
-
-    const items = Array.isArray(manifest) ? manifest :
-      (Array.isArray(manifest.deliverables) ? manifest.deliverables : []);
-
-    for (const item of items) {
-      const name = typeof item === 'string' ? item : (item?.name || item?.file || '');
-      if (name) deliverablesBySd.get(sdId).push(name);
-    }
-  }
-
-  // Check for SDs with no deliverables
-  const childKeys = new Set((children || []).map(c => c.sd_key));
-  for (const key of childKeys) {
-    if (!deliverablesBySd.has(key) || deliverablesBySd.get(key).length === 0) {
-      warnings.push(`${key}: no deliverables found in handoff manifests`);
-    }
-  }
-
-  return { warnings };
-}
-
-/**
- * Check for orphaned capabilities (delivered but not consumed).
- * @param {Array} children - Child SDs with delivers_capabilities
- * @param {Array} allSds - All SDs for consumer checking
- * @returns {{warnings: string[]}}
- */
-export function checkOrphanedCapabilities(children, allSds) {
-  const warnings = [];
-  if (!Array.isArray(children) || children.length === 0) return { warnings };
-
-  // Collect all capabilities delivered by children
-  const delivered = new Map();
-  for (const child of children) {
-    const caps = Array.isArray(child.delivers_capabilities) ? child.delivers_capabilities : [];
-    for (const cap of caps) {
-      const key = typeof cap === 'string' ? cap : (cap?.capability_key || '');
-      if (key) {
-        delivered.set(key, child.sd_key);
-      }
-    }
-  }
-
-  if (delivered.size === 0) return { warnings };
-
-  // Check if any non-child SD references these capabilities
-  const childKeys = new Set(children.map(c => c.sd_key));
-  const consumed = new Set();
-
-  for (const sd of (allSds || [])) {
-    if (childKeys.has(sd.sd_key)) continue;
-    const deps = Array.isArray(sd.dependencies) ? sd.dependencies : [];
-    for (const dep of deps) {
-      const depName = typeof dep === 'string' ? dep : (dep?.dependency || dep?.capability || '');
-      if (delivered.has(depName)) consumed.add(depName);
-    }
-  }
-
-  for (const [capKey, producerSd] of delivered) {
-    if (!consumed.has(capKey)) {
-      warnings.push(`Capability '${capKey}' delivered by ${producerSd} has no known consumer`);
-    }
-  }
-
-  return { warnings };
-}
-
-/**
- * Run integration verification on an orchestrator SD.
- * Advisory mode: always returns pass=true with warnings array.
+ * Cross-reference deliverables_manifest between children.
  *
- * @param {string} sdKey - Orchestrator SD key
- * @param {object} [options]
- * @param {object} [options.supabase] - Supabase client (for testing)
- * @returns {Promise<null|{pass: boolean, score: number, warnings: string[], checks: object}>}
+ * @param {string} parentId - Parent UUID id
+ * @param {string} parentSdKey - Parent sd_key
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<{warnings: string[], deliverableSummary: Object}>}
  */
-export async function verifyIntegration(sdKey, options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+async function crossReferenceDeliverables(parentId, parentSdKey, supabase) {
+  const warnings = [];
 
-  // Get the SD
-  const { data: sdArr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, sd_type, metadata')
-    .eq('sd_key', sdKey)
-    .limit(1);
-
-  if (!sdArr || sdArr.length === 0) return null;
-  const sd = sdArr[0];
-
-  const isOrchestrator = sd.sd_type === 'orchestrator' ||
-    sd.metadata?.is_orchestrator === true ||
-    sd.metadata?.pattern_type === 'orchestrator';
-
-  if (!isOrchestrator) return null;
-
-  // Get children
   const { data: children } = await supabase
     .from('strategic_directives_v2')
-    .select('sd_key, status, progress, delivers_capabilities, dependencies')
-    .eq('parent_sd_id', sd.id);
+    .select('sd_key, title, id')
+    .eq('parent_sd_id', parentId);
 
-  const childList = children || [];
-
-  // Check 1: Children completed
-  const completionCheck = checkChildrenCompleted(childList);
-
-  // Check 2: Deliverables cross-reference
-  const childKeys = childList.map(c => c.sd_key);
-  let handoffs = [];
-  if (childKeys.length > 0) {
-    const { data: hData } = await supabase
-      .from('sd_phase_handoffs')
-      .select('sd_id, deliverables_manifest')
-      .in('sd_id', childKeys)
-      .eq('status', 'accepted');
-    handoffs = hData || [];
+  if (!children || children.length === 0) {
+    warnings.push('No children to cross-reference deliverables');
+    return { warnings, deliverableSummary: {} };
   }
-  const deliverableCheck = checkDeliverablesCrossRef(handoffs, childList);
 
-  // Check 3: Orphaned capabilities
-  const { data: allSds } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key, dependencies')
-    .neq('parent_sd_id', sd.id)
-    .limit(100);
-  const capabilityCheck = checkOrphanedCapabilities(childList, allSds || []);
+  const deliverablesByChild = {};
 
-  const allWarnings = [
-    ...completionCheck.warnings,
-    ...deliverableCheck.warnings,
-    ...capabilityCheck.warnings,
-  ];
+  for (const child of children) {
+    const { data: handoffs } = await supabase
+      .from('sd_phase_handoffs')
+      .select('deliverables_manifest')
+      .eq('sd_id', child.sd_key)
+      .eq('status', 'accepted')
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-  const score = allWarnings.length === 0 ? 100 :
-    Math.max(0, 100 - (allWarnings.length * 15));
+    const manifest = handoffs?.[0]?.deliverables_manifest;
+    if (manifest) {
+      deliverablesByChild[child.sd_key] = parseDeliverables(manifest);
+    } else {
+      warnings.push(`Child ${child.sd_key} has no deliverables manifest in accepted handoffs`);
+    }
+  }
+
+  // Check for file path overlaps between children
+  const allFiles = {};
+  for (const [sdKey, deliverables] of Object.entries(deliverablesByChild)) {
+    for (const file of deliverables) {
+      if (!allFiles[file]) {
+        allFiles[file] = [];
+      }
+      allFiles[file].push(sdKey);
+    }
+  }
+
+  const overlaps = Object.entries(allFiles).filter(([, owners]) => owners.length > 1);
+  if (overlaps.length > 0) {
+    for (const [file, owners] of overlaps) {
+      warnings.push(`Deliverable overlap: '${file}' claimed by ${owners.join(', ')}`);
+    }
+  }
 
   return {
-    pass: true, // Advisory mode: always pass
-    score,
-    warnings: allWarnings,
-    checks: {
-      children_completed: completionCheck.warnings.length === 0,
-      deliverables_cross_ref: deliverableCheck.warnings.length === 0,
-      no_orphaned_capabilities: capabilityCheck.warnings.length === 0,
-    },
+    warnings,
+    deliverableSummary: {
+      childCount: children.length,
+      deliverableCount: Object.keys(allFiles).length,
+      overlaps: overlaps.length
+    }
   };
 }
 
 /**
- * Format gate result for display.
- * @param {object|null} result
- * @returns {string}
+ * Parse deliverables from a manifest (string or JSON).
+ *
+ * @param {string|Object} manifest - Deliverables manifest
+ * @returns {string[]} File paths
+ */
+function parseDeliverables(manifest) {
+  if (!manifest) return [];
+
+  if (typeof manifest === 'object') {
+    if (Array.isArray(manifest)) {
+      return manifest.map(item => typeof item === 'string' ? item : item.path || item.file || '').filter(Boolean);
+    }
+    if (manifest.items) return parseDeliverables(manifest.items);
+    if (manifest.files) return parseDeliverables(manifest.files);
+    return [];
+  }
+
+  if (typeof manifest === 'string') {
+    const paths = [];
+    const pathRegex = /(?:^|\s)([\w./-]+\.\w{1,10})(?:\s|$|,|;)/gm;
+    let match;
+    while ((match = pathRegex.exec(manifest)) !== null) {
+      paths.push(match[1]);
+    }
+    return paths;
+  }
+
+  return [];
+}
+
+/**
+ * Check delivers_capabilities for orphaned capabilities (no consumers).
+ *
+ * @param {string} parentId - Parent UUID id
+ * @param {string} parentSdKey - Parent sd_key
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<{warnings: string[], capabilitySummary: Object}>}
+ */
+async function detectOrphanedCapabilities(parentId, parentSdKey, supabase) {
+  const warnings = [];
+
+  const { data: children } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, delivers_capabilities, dependencies')
+    .eq('parent_sd_id', parentId);
+
+  if (!children || children.length === 0) {
+    warnings.push('No children to check capabilities');
+    return { warnings, capabilitySummary: {} };
+  }
+
+  const deliveredCapabilities = [];
+  for (const child of children) {
+    const caps = child.delivers_capabilities;
+    if (Array.isArray(caps)) {
+      for (const cap of caps) {
+        const key = typeof cap === 'string' ? cap : cap.capability_key || cap.name || '';
+        if (key) {
+          deliveredCapabilities.push({ key, source: child.sd_key });
+        }
+      }
+    }
+  }
+
+  const consumedKeys = new Set();
+  for (const child of children) {
+    const deps = child.dependencies;
+    if (Array.isArray(deps)) {
+      for (const dep of deps) {
+        const key = typeof dep === 'string' ? dep : dep.capability_key || dep.key || '';
+        if (key) consumedKeys.add(key);
+      }
+    }
+  }
+
+  const orphans = deliveredCapabilities.filter(cap => !consumedKeys.has(cap.key));
+
+  if (orphans.length > 0) {
+    for (const orphan of orphans) {
+      warnings.push(`Orphaned capability: '${orphan.key}' from ${orphan.source} has no consumer among siblings`);
+    }
+  }
+
+  return {
+    warnings,
+    capabilitySummary: {
+      delivered: deliveredCapabilities.length,
+      consumed: consumedKeys.size,
+      orphaned: orphans.length
+    }
+  };
+}
+
+/**
+ * Format a gate result for console output.
+ *
+ * @param {Object} result - Gate result from verifyIntegration
+ * @returns {string} Formatted output
  */
 export function formatGateResult(result) {
-  if (!result) return '';
+  const lines = [];
+  lines.push(`   Score: ${result.score}/${result.max_score}`);
+  lines.push(`   Advisory: ${result.advisory ? 'yes (never blocks)' : 'no'}`);
 
-  const lines = [
-    '\n🔍 INTEGRATION VERIFICATION GATE (Advisory)',
-    `   Score: ${result.score}/100`,
-    `   Children Completed: ${result.checks.children_completed ? '✅' : '⚠️'}`,
-    `   Deliverables Cross-Ref: ${result.checks.deliverables_cross_ref ? '✅' : '⚠️'}`,
-    `   No Orphaned Capabilities: ${result.checks.no_orphaned_capabilities ? '✅' : '⚠️'}`,
-  ];
+  if (result.checks) {
+    lines.push('   Checks:');
+    lines.push(`     Children complete: ${result.checks.childrenComplete ? '✅' : '⚠️'}`);
+    lines.push(`     Deliverables clean: ${result.checks.deliverablesClean ? '✅' : '⚠️'}`);
+    lines.push(`     Capabilities consumed: ${result.checks.capabilitiesConsumed ? '✅' : '⚠️'}`);
+  }
 
   if (result.warnings.length > 0) {
-    lines.push(`\n   Warnings (${result.warnings.length}):`);
+    lines.push(`   Warnings (${result.warnings.length}):`);
     for (const w of result.warnings) {
-      lines.push(`   ⚠️  ${w}`);
+      lines.push(`     • ${w}`);
     }
   } else {
-    lines.push('   ✅ All integration checks passed');
+    lines.push('   ✅ No warnings — integration looks clean');
   }
 
   return lines.join('\n');
 }
+
+/**
+ * Run the full Integration Verification Gate.
+ * Advisory mode: always returns pass=true.
+ *
+ * Called by orchestrator-completion-hook as:
+ *   verifyIntegration(orchestratorId, { supabase })
+ *
+ * @param {string} idOrKey - Orchestrator SD UUID id or sd_key
+ * @param {Object} ctx - Context object containing { supabase }
+ * @returns {Promise<Object|null>} Gate result, or null if not an orchestrator
+ */
+export async function verifyIntegration(idOrKey, ctx = {}) {
+  const supabase = ctx.supabase || ctx;
+
+  // Resolve the SD (handles both UUID and sd_key)
+  const sd = await resolveSD(idOrKey, supabase);
+
+  if (!sd) {
+    return null;
+  }
+
+  // Check for children to determine if orchestrator
+  const { data: children } = await supabase
+    .from('strategic_directives_v2')
+    .select('id')
+    .eq('parent_sd_id', sd.id)
+    .limit(1);
+
+  if (!children || children.length === 0) {
+    return null;
+  }
+
+  const result = {
+    pass: true, // Advisory mode: always true
+    score: 100,
+    max_score: 100,
+    issues: [],
+    warnings: [],
+    details: {},
+    checks: {
+      childrenComplete: true,
+      deliverablesClean: true,
+      capabilitiesConsumed: true
+    },
+    advisory: true,
+    sdKey: sd.sd_key
+  };
+
+  // Check 1: Children completion
+  const completionResult = await verifyChildrenCompleted(sd.id, sd.sd_key, supabase);
+  result.details.children = completionResult;
+  result.warnings.push(...completionResult.warnings);
+
+  if (!completionResult.complete) {
+    result.score -= 30;
+    result.checks.childrenComplete = false;
+  }
+
+  // Check 2: Deliverables cross-reference
+  const deliverableResult = await crossReferenceDeliverables(sd.id, sd.sd_key, supabase);
+  result.details.deliverables = deliverableResult;
+  result.warnings.push(...deliverableResult.warnings);
+
+  if (deliverableResult.deliverableSummary.overlaps > 0) {
+    result.score -= 20;
+    result.checks.deliverablesClean = false;
+  }
+
+  // Check 3: Orphaned capabilities
+  const capabilityResult = await detectOrphanedCapabilities(sd.id, sd.sd_key, supabase);
+  result.details.capabilities = capabilityResult;
+  result.warnings.push(...capabilityResult.warnings);
+
+  if (capabilityResult.capabilitySummary.orphaned > 0) {
+    result.score -= 10;
+    result.checks.capabilitiesConsumed = false;
+  }
+
+  result.score = Math.max(0, result.score);
+
+  return result;
+}
+
+// Also export helpers for direct use and testing
+export {
+  verifyChildrenCompleted,
+  crossReferenceDeliverables,
+  detectOrphanedCapabilities,
+  parseDeliverables,
+  resolveSD
+};
