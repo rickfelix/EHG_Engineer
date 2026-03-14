@@ -168,34 +168,21 @@ async function handleSynthesize(opts) {
 }
 
 // ============================================================================
-// Subcommand: check
+// Subcommand: check (SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-D)
 // ============================================================================
 
 async function handleCheck(opts) {
-  if (!opts.synthesisPromptId) {
-    console.error('Error: --synthesis-prompt-id is required for check subcommand');
+  if (!opts.synthesisPromptId && !opts.ventureId) {
+    console.error('Error: --synthesis-prompt-id or --venture-id is required for check subcommand');
     process.exit(1);
   }
-  const { runQualityCheck } = await import('./srip/quality-check.mjs');
-  const result = await runQualityCheck({
-    synthesisPromptId: opts.synthesisPromptId,
-    supabase: getSupabase(),
+  const { runQualityCheck } = await import('./srip/quality-checker.mjs');
+  await runQualityCheck({
+    synthesisPromptId: opts.synthesisPromptId || null,
+    ventureId: opts.ventureId || null,
+    builtOutputUrl: opts.url || null,
+    passThreshold: opts.threshold ? Number(opts.threshold) : undefined,
   });
-  if (result) {
-    const domainScores = result.domain_scores || {};
-    const gaps = result.gaps || [];
-    const passed = result.overall_score >= result.pass_threshold;
-
-    console.log(`\n   --- Domain Scores ---`);
-    for (const [domain, score] of Object.entries(domainScores)) {
-      const domainGaps = gaps.filter(g => g.domain === domain);
-      const label = domain.replace(/_/g, ' ');
-      console.log(`   ${label}: ${score}/100${domainGaps.length > 0 ? ` (${domainGaps.length} gaps)` : ''}`);
-    }
-    console.log(`\n   Overall: ${result.overall_score}/100 | Threshold: ${result.pass_threshold}`);
-    console.log(`   Result: ${passed ? 'PASS' : 'FAIL'}`);
-    console.log(`   Gaps: ${gaps.length} total`);
-  }
 }
 
 // ============================================================================
@@ -222,8 +209,11 @@ Subcommands:
               --site-dna-id <id>       Site DNA source (required)
               --brand-interview-id <id> Brand data source (required)
 
-  check       Run Quality Check
-              --synthesis-prompt-id <id> Prompt to validate (required)
+  check       Run Quality Check (6-domain fidelity scoring)
+              --synthesis-prompt-id <id> Prompt to validate against
+              --venture-id <id>        Venture to check (uses latest DNA)
+              --url <url>              Built output URL to evaluate
+              --threshold <n>          Pass threshold (default: 70)
 
   list        List SRIP artifacts
               --venture-id <id>        Filter by venture (optional)
