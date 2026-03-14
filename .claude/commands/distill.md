@@ -377,15 +377,53 @@ sb.from('eva_todoist_intake').update({
 
 Present the Gemini analysis to the chairman as a summary after all items are processed.
 
-**Step 2e: Route items with chairman notes to brainstorming**
+**Step 2e: Build brainstorm queue and mark items processed**
 
-After storing decisions (Step 2c) and any Gemini analysis (Step 2d), check if any reviewed items have chairman notes. **Any item with `chairman_notes`** — whether it's a YouTube video, a web link, or a plain text task — should go through the brainstorm process instead of directly to wave clustering.
+After storing decisions (Step 2c) and any Gemini analysis (Step 2d):
 
-For each item with `chairman_notes`:
+**2e.1: Build the brainstorm queue**
 
-1. **Invoke `/brainstorm` with the item as the topic**, seeded with context:
+Partition all reviewed items into two lists:
+- **Brainstorm queue**: Items WITH `chairman_notes` — need brainstorming before wave clustering
+- **Direct-to-wave**: Items WITHOUT `chairman_notes` — skip brainstorming, go straight to waves
 
-   Use the Skill tool to invoke brainstorm with arguments constructed from the item:
+Display the queue:
+```
+Brainstorm Queue (N items):
+  1. [PENDING] "Item title..." (YouTube / Web / Text)
+  2. [PENDING] "Item title..." (YouTube / Web / Text)
+
+Direct to Waves (M items):
+  3. "Item title..." → reference (no notes, skip brainstorm)
+```
+
+**2e.2: Mark ALL reviewed items as processed**
+
+After the chairman has expressed intent on every item (regardless of whether they have notes), mark them as `status = 'processed'`. This triggers Todoist archival (checks off the task).
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const ids = [REVIEWED_ITEM_IDS];
+sb.from('eva_todoist_intake').update({
+  status: 'processed',
+  processed_at: new Date().toISOString()
+}).in('id', ids).then(({error}) => {
+  if (error) console.error('Error:', error.message);
+  else console.log('Marked', ids.length, 'items as processed');
+});
+"
+```
+
+**2e.3: Process brainstorm queue sequentially**
+
+For each item in the brainstorm queue, process one at a time:
+
+1. Display progress: `Brainstorming 1 of N: "Item title..."`
+
+2. **Invoke `/brainstorm`** with the item as the topic, seeded with context:
 
    ```
    skill: "brainstorm"
@@ -412,14 +450,13 @@ For each item with `chairman_notes`:
    Focus the brainstorm on shaping the chairman's stated intent into an actionable plan.
    ```
 
-2. **After brainstorm completes**, link the brainstorm session back to the intake item:
+3. **After brainstorm completes**, link back and update queue:
 
    ```bash
    node -e "
    require('dotenv').config();
    const { createClient } = require('@supabase/supabase-js');
    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-   // Update intake item with brainstorm reference
    sb.from('eva_todoist_intake').update({
      enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID'
    }).eq('id', 'ITEM_UUID').then(({error}) => {
@@ -429,11 +466,19 @@ For each item with `chairman_notes`:
    "
    ```
 
-3. **If brainstorm outcome is "Ready for SD"**: The brainstorm skill already creates vision + architecture docs and suggests SD creation. No additional action needed from `/distill`.
+4. Update queue display: `[DONE] "Item title..." → sd_created (VISION-KEY, ARCH-KEY)`
 
-4. **If brainstorm outcome is "Consideration Only" or "Needs Triage"**: The item stays in its wave for future review. The brainstorm analysis enriches its context.
+5. **Continue to next item** in queue automatically.
 
-**Items WITHOUT chairman notes** skip brainstorming and proceed directly to Phase 3 (wave clustering) as before.
+After all brainstorms complete, display final summary:
+```
+Brainstorm Queue Complete:
+  1. [DONE] "Item title..." → sd_created
+  2. [DONE] "Item title..." → needs_triage
+
+Direct to Waves: M items
+Processed (Todoist archived): N items total
+```
 
 **Phase 3: Waves + Archive + Status (automated)**
 
