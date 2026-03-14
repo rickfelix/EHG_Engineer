@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T12:08:24.005Z
+**Generated**: 2026-03-14T16:01:45.445Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -41,7 +41,7 @@
 - `roadmap_wave_items_wave_id_source_type_source_id_key`: UNIQUE (wave_id, source_type, source_id)
 
 ### Check Constraints
-- `roadmap_wave_items_source_type_check`: CHECK ((source_type = ANY (ARRAY['todoist'::text, 'youtube'::text])))
+- `roadmap_wave_items_source_type_check`: CHECK ((source_type = ANY (ARRAY['todoist'::text, 'youtube'::text, 'brainstorm'::text])))
 
 ## Indexes
 
