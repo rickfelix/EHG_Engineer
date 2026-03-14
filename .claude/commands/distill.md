@@ -586,7 +586,27 @@ For each item in the **selected** brainstorm queue (cherry-picked subset), proce
 
 4. Update queue display: `[DONE] "Item title..." → SD_KEY (VISION-KEY, ARCH-KEY)` or `[NEEDS_TRIAGE] "Item title..."`
 
-5. **Continue to next item** in queue automatically.
+5. **Inter-item decision point** (SD-DISTILLTOBRAINSTORM-ORCH-001-C):
+
+   If there are remaining items in the selected queue, present AskUserQuestion:
+
+   ```
+   question: "Item N of M complete. SD_KEY created. What next?"
+   header: "Brainstorm Loop — N/M"
+   options:
+     - label: "Process next item"
+       description: "Continue to: 'NEXT_ITEM_TITLE'"
+     - label: "Defer remaining items"
+       description: "Send N remaining items to waves without brainstorm"
+     - label: "Done for now"
+       description: "Save progress — resume later with /distill"
+   ```
+
+   - **Process next item**: Continue loop to the next selected item
+   - **Defer remaining**: Set `item_disposition = 'deferred'` for all remaining items, skip to summary
+   - **Done for now**: Save loop state (step 6) and exit — state file enables resume next session
+
+   If this is the LAST item (no more remaining), skip AskUserQuestion and go directly to summary.
 
 6. **After each item completes**, update loop state:
    ```bash
