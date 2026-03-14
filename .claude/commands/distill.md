@@ -417,9 +417,53 @@ sb.from('eva_todoist_intake').update({
 "
 ```
 
+**2e.2b: Cherry-pick items for brainstorming (SD-DISTILLTOBRAINSTORM-ORCH-001-C)**
+
+If the brainstorm queue has more than 1 item, present a cherry-pick selection:
+
+```javascript
+{
+  "question": "Which items should be brainstormed now? (Others will be deferred to waves)",
+  "header": "Cherry-Pick Brainstorm Items",
+  "multiSelect": true,
+  "options": [
+    // For each item in brainstorm queue:
+    {"label": "Item title...", "description": "Source: YouTube/Web | Score: N"}
+  ]
+}
+```
+
+- **Selected items**: Set `item_disposition = 'selected'` in roadmap_wave_items (if wave item exists)
+- **Unselected items**: Set `item_disposition = 'deferred'` — they go to waves without brainstorm
+- If only 1 item in queue, auto-select it (skip AskUserQuestion)
+
+**2e.2c: Initialize pause/resume state (SD-DISTILLTOBRAINSTORM-ORCH-001-C)**
+
+Before starting the brainstorm loop, save state for resilience:
+
+```bash
+node -e "
+const fs = require('fs');
+const state = {
+  wave_id: 'CURRENT_WAVE_ID',
+  selected_items: [/* array of selected item IDs */],
+  completed_items: [],
+  sds_created: [],
+  started_at: new Date().toISOString()
+};
+fs.writeFileSync('scripts/temp/distill-loop-state.json', JSON.stringify(state, null, 2));
+console.log('Loop state saved:', state.selected_items.length, 'items to process');
+"
+```
+
+On resume (if `distill-loop-state.json` exists at start of Step 2e):
+- Load state, filter out `completed_items` from processing
+- Display: `Resuming: ${completed} of ${total} items already processed`
+- Continue with remaining items
+
 **2e.3: Process brainstorm queue sequentially**
 
-For each item in the brainstorm queue, process one at a time:
+For each item in the **selected** brainstorm queue (cherry-picked subset), process one at a time:
 
 1. Display progress: `Brainstorming 1 of N: "Item title..."`
 
@@ -544,14 +588,38 @@ For each item in the brainstorm queue, process one at a time:
 
 5. **Continue to next item** in queue automatically.
 
-After all brainstorms complete, display final summary:
-```
-Brainstorm Queue Complete:
-  1. [DONE] "Item title..." → sd_created
-  2. [DONE] "Item title..." → needs_triage
+6. **After each item completes**, update loop state:
+   ```bash
+   node -e "
+   const fs = require('fs');
+   const stateFile = 'scripts/temp/distill-loop-state.json';
+   if (fs.existsSync(stateFile)) {
+     const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+     state.completed_items.push('ITEM_ID');
+     state.sds_created.push('SD_KEY_OR_NULL');
+     fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+   }
+   "
+   ```
 
-Direct to Waves: M items
-Processed (Todoist archived): N items total
+After all brainstorms complete, display final summary and clean up state:
+```
+Distill Pipeline Complete:
+  Brainstormed: N/M selected items
+  SDs Created:  K (with vision + architecture)
+  Needs Triage: J (brainstorm incomplete)
+  Deferred:     D (not selected, sent to waves)
+  Direct to Waves: P items (no chairman notes)
+  Processed (Todoist archived): T items total
+```
+
+Clean up loop state:
+```bash
+node -e "
+const fs = require('fs');
+const stateFile = 'scripts/temp/distill-loop-state.json';
+if (fs.existsSync(stateFile)) { fs.unlinkSync(stateFile); console.log('Loop state cleaned up'); }
+"
 ```
 
 **Phase 3: Waves + Archive + Status (automated)**
