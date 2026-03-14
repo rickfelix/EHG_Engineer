@@ -53,24 +53,33 @@ Where `<section>` is the full section name (e.g., `workers`, `orchestrator`, `fo
 Display the output directly to the user.
 
 **IMPORTANT — Assessment Rules:**
-The dashboard's heartbeat-based status can be misleading. Sessions doing active work (long git operations, compilations, gate checks, PR creation) may not heartbeat frequently and can appear "stale" or "dead" while actually working.
 
-**Determining active worker count (do NOT rely on user telling you):**
-- Count all sessions that heartbeated within the last **15 minutes** as "likely active" — this includes sessions the dashboard labels "stale" (which uses a shorter 5-min threshold).
-- **Ghost filter**: A session must have **ever claimed an SD** (currently or previously) to count as a real worker. Sessions that appear idle with no history of SD claims are likely ghosts (e.g., coordinator sessions, stale terminals, automated processes). Indicators of ghost sessions:
-  - Listed as "idle" with no SD claim across multiple consecutive dashboard cycles
-  - Never appeared in sweep output as an active worker
-  - Terminal ID doesn't match any known worker from sweep history
-- Sessions labeled "idle" with a heartbeat within 15 minutes **AND a history of SD claims** are alive but between tasks — count them as available capacity.
-- Only consider a session truly dead if: heartbeat is 15+ minutes old AND it appeared in a previous sweep as stale AND has since been released.
-- The coordinator session itself (this session) is NOT a worker — exclude it from worker counts. It typically appears as an idle session with no SD claim.
-- **Derived worker count** = sessions with heartbeat < 15 min that have claimed an SD (currently or historically), minus the coordinator session. Use this for ETA calculations.
+**Heartbeat reliability (updated 2026-03-14):**
+The `heartbeat-hook.cjs` (PostToolUse) now updates heartbeats on every tool call (throttled to 30s). This makes heartbeat data significantly more reliable than before. A session that hasn't heartbeated in 2+ minutes is likely genuinely between operations, not "mid-operation with stale heartbeat."
+
+**Determining active worker count:**
+- Count all sessions that heartbeated within the last **5 minutes** as "likely active" — the PostToolUse hook ensures frequent updates during active work.
+- Sessions that haven't heartbeated in **5-10 minutes** are likely idle or between context loads — not actively processing.
+- Sessions that haven't heartbeated in **10+ minutes** are likely dead or exited — flag for release.
+- **Ghost filter**: A session must have **ever claimed an SD** (currently or previously) to count as a real worker. Sessions that appear idle with no history of SD claims are likely ghosts (e.g., coordinator sessions, stale terminals, automated processes).
+- Sessions labeled "idle" with a heartbeat within 5 minutes **AND a history of SD claims** are alive but between tasks — count them as available capacity.
+- The coordinator session itself (this session) is NOT a worker — exclude it from worker counts.
+- **Derived worker count** = sessions with heartbeat < 5 min that have claimed an SD (currently or historically), minus the coordinator session. Use this for ETA calculations.
+
+**Enriched heartbeat signals (when available):**
+The dashboard may show additional columns from the heartbeat intelligence system:
+- **Phase** (LEAD/PLAN/EXEC): Use for phase-aware ETA refinement instead of flat SD medians
+- **Fails** (handoff failure count): Flag WORKER_STRUGGLING when fails > 3. Suggest /rca at fails > 5.
+- **WIP** (uncommitted changes): If a stale session has WIP=yes, **do NOT recommend release** — flag as "stale with uncommitted work, needs SAVE_WARNING"
+- **Branch**: Cross-check for worktree conflicts. Two workers on the same branch = WORKTREE_CONFLICT. Exception: QF-type SDs on main branch are expected.
+
+When these columns show `-` (not yet populated), fall back to heartbeat-age-only assessment.
 
 **Status language:**
-- **NEVER declare "Fleet DOWN"** based solely on aged heartbeats.
-- **"Stale" does NOT mean "dead"** — a session that heartbeated 5-10 minutes ago is likely mid-operation, not crashed.
-- **Use conservative language**: Say "heartbeats aging" or "sessions may be mid-operation" instead of "fleet is DOWN" or "zero active workers".
-- **Only flag real concern** when a session hasn't heartbeated in 15+ minutes AND was previously active.
+- **"Stale" now more likely means genuinely inactive** — the PostToolUse hook ensures active sessions heartbeat every 30s.
+- A session that heartbeated 5+ minutes ago with no enriched signals is likely between tasks or exiting.
+- **Use direct language**: "worker idle" or "worker likely exited" instead of hedging with "may be mid-operation."
+- **Only hedge** when enriched signals show active work (WIP=yes, Phase=EXEC, recent Fails increment).
 
 #### For `start`:
 
@@ -151,6 +160,9 @@ Automated QA Fixes (run every sweep):
   - Dead message cleanup: coordination messages to dead sessions deleted
   - Bare shell enrichment: empty SD descriptions auto-populated from docs
   - Aging warnings: STALE_WARNING messages sent to aging workers
+  - WORKTREE_CONFLICT: two workers on same branch flagged (QF on main excluded)
+  - WORKER_STRUGGLING: handoff_fail_count > 3 flagged, /rca suggested at > 5
+  - WIP_GUARD: stale sessions with uncommitted changes held, not released
   - Standard: dead claims released, conflicts resolved, orphans cleaned
 
 Related Commands:
@@ -283,7 +295,14 @@ Do NOT use the naive `remaining SDs / velocity` formula. The dashboard's aggrega
 **Primary method: Data-driven estimation from historical handoff durations.** Velocity is only used as a sanity check.
 
 **Step 1: Determine worker count**
-Use the derived worker count from the Assessment Rules (ghost filter + 15-min heartbeat window). Exclude the coordinator session.
+Use the derived worker count from the Assessment Rules (ghost filter + 5-min heartbeat window). Exclude the coordinator session.
+
+**Phase-aware ETA (when enriched signals available):**
+If the dashboard shows Phase columns for workers, use per-phase medians instead of flat SD medians:
+- Worker in LEAD → subtract 0% (full SD estimate)
+- Worker in PLAN → subtract LEAD median from estimate
+- Worker in EXEC → use only EXEC median as remaining time
+This produces significantly more accurate ETAs than treating all workers as "0% progress."
 
 **Step 2: Query historical completion data (once per coordinator session)**
 
@@ -428,6 +447,9 @@ When the user mentions any of these phrases, suggest `/coordinator`:
 - "QA checks", "quality checks", "fleet QA"
 - "coordinate sessions", "coordination messages"
 - "how's the fleet", "fleet progress", "overall progress"
+- "worktree conflict", "same branch", "branch collision"
+- "struggling worker", "stuck worker", "gate failures"
+- "uncommitted changes", "WIP", "unsaved work"
 
 ---
 
