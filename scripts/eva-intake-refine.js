@@ -296,10 +296,12 @@ async function runScoring(waves) {
 }
 
 /**
- * Step 4: Research SD Promotion
+ * Step 4: Brainstorm Promotion Analysis
+ * SD-DISTILLTOBRAINSTORM-ORCH-001-C: Research SDs no longer created.
+ * All items go through brainstorm auto-chain (vision → arch → SD).
  */
 async function runPromotion(waves, scoringResults) {
-  header(4, 'Research SD Promotion');
+  header(4, 'Brainstorm Promotion Analysis');
 
   if (skipPromote) {
     console.log('  [SKIPPED] --skip-promote flag set');
@@ -328,29 +330,14 @@ async function runPromotion(waves, scoringResults) {
   }
 
   if (groups.length === 0) {
-    console.log('  No items scored high enough for auto-promotion.');
+    console.log('  No items scored high enough for promotion.');
     return { promoted: [], skipped: allScoredItems.length };
   }
 
-  if (dryRun) {
-    console.log('\n  [DRY RUN] Would create Research SDs:');
-    for (const g of groups) {
-      console.log(`    SD-RESEARCH-${g.application}: ${g.items.length} items`);
-    }
-    return { promoted: groups.map(g => ({ sd_key: '(dry-run)', title: `Research: ${g.application}`, item_count: g.items.length })), skipped: 0 };
-  }
-
-  const result = await promote(allScoredItems, allOriginalItems, {
-    supabase,
-    dryRun,
-  });
+  const result = await promote(allScoredItems, allOriginalItems);
 
   for (const p of result.promoted) {
-    if (p.sd_key) {
-      console.log(`  Created: ${p.sd_key} — "${p.title}" (${p.item_count} items)`);
-    } else {
-      console.log(`  Failed: "${p.title}" — ${p.error}`);
-    }
+    console.log(`  ${p.application}: ${p.brainstormed} brainstormed, ${p.pending} pending brainstorm`);
   }
 
   return result;
@@ -623,8 +610,8 @@ async function main() {
     console.log(`  Scoring: avg composite ${avg}/100`);
   }
   if (promotionResults) {
-    console.log(`  Promoted: ${promotionResults.promoted.length} Research SD(s) created`);
-    console.log(`  Skipped: ${promotionResults.skipped} items below threshold`);
+    console.log(`  Brainstorm groups: ${promotionResults.promoted.length}`);
+    console.log(`  Below threshold: ${promotionResults.skipped} items`);
   }
 
   console.log('');
