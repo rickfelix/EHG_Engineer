@@ -275,20 +275,24 @@ If `REVIEW_COUNT=0`, skip to Phase 3 — no items need review.
 
 For each item in the review JSON (or batched in groups of up to 4 — AskUserQuestion supports 1-4 questions per call):
 
-Each item has: `itemId`, `markdown` (formatted description), `options` (intent choices with AI recommendation first), `title`, `captureIntent`.
+Each item has: `itemId`, `markdown` (formatted description), `options` (ignored — use B1 options below), `title`, `captureIntent`.
 
 **Build the question text** for each item:
 1. Start with the item's `markdown` field (title, source, application, aspects, enrichment summary, confidence, description)
 2. **If the item has a YouTube video**: Add a clickable link line: `**Watch:** https://www.youtube.com/watch?v=VIDEO_ID` — detect this by checking if `enrichment_summary` contains "Video:" or "YouTube video:" or if the title contains a youtu.be/youtube.com URL
 3. **If enrichment contains "AI Analysis:"**: Show the Gemini video summary prominently — this is the actual content analysis of the video
 
-Present using AskUserQuestion:
+Present using AskUserQuestion with **B1 action-first options** (always use these, ignore the script's `options` array):
 - `question`: The built question text with clickable YouTube URL
 - `header`: "Review"
-- `options`: Use the item's `options` array (Build/Research/Reference/Improve with AI recommendation marked)
+- `options`: **Always use these 4 options:**
+  1. `"Build now (brainstorm)"` — "Shape this idea immediately via brainstorm → vision → arch → SD"
+  2. `"Build later (add to wave)"` — "Add to roadmap wave for future prioritization"
+  3. `"Research"` — "Needs investigation before committing to build"
+  4. `"Reference"` — "Store for future lookup only — exclude from wave clustering"
 - `multiSelect`: false
 
-**IMPORTANT**: Use the `annotations` parameter on the AskUserQuestion call to enable the chairman to add notes. The user can attach free-text notes to any selection. After the user responds, check `annotations` for any notes they provided.
+**Why B1:** The options explicitly encode both intent AND routing. The chairman sees exactly what will happen — no hidden logic based on annotations or notes.
 
 **Batching strategy** (for efficiency when many items):
 - If ≤ 4 items: present all in a single AskUserQuestion call (one question per item)
@@ -300,16 +304,16 @@ Present using AskUserQuestion:
 
 **Step 2c: Store decisions**
 
-For each item the chairman reviewed, store the decision AND any notes. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. So we store the chairman's action-intent choice by mapping it BACK to capture-intent for storage:
+For each item the chairman reviewed, store the decision. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. Map the B1 option to storage:
 
-| Chairman chose | Store as `chairman_intent` |
-|---------------|---------------------------|
-| Build | `idea` |
-| Improve | `insight` |
-| Reference | `reference` |
-| Research | `question` |
+| Chairman chose | Store as `chairman_intent` | Routing |
+|---------------|---------------------------|---------|
+| Build now (brainstorm) | `idea` | → brainstorm queue (immediate) |
+| Build later (add to wave) | `idea` | → direct to wave clustering |
+| Research | `question` | → wave clustering |
+| Reference | `reference` | → stored, excluded from waves |
 
-Check `annotations` from the AskUserQuestion response for any notes the chairman provided. Store notes in `chairman_notes` column.
+The routing is determined by which option was selected — NOT by annotations or notes.
 
 For each reviewed item, run:
 
@@ -383,9 +387,10 @@ After storing decisions (Step 2c) and any Gemini analysis (Step 2d):
 
 **2e.1: Build the brainstorm queue**
 
-Partition all reviewed items into two lists:
-- **Brainstorm queue**: Items WITH `chairman_notes` — need brainstorming before wave clustering
-- **Direct-to-wave**: Items WITHOUT `chairman_notes` — skip brainstorming, go straight to waves
+Partition all reviewed items based on the B1 option the chairman selected (NOT based on annotations/notes):
+- **Brainstorm queue**: Items where chairman chose **"Build now (brainstorm)"**
+- **Direct-to-wave**: Items where chairman chose **"Build later (add to wave)"** or **"Research"**
+- **Reference only**: Items where chairman chose **"Reference"** — excluded from waves
 
 Display the queue:
 ```
@@ -394,7 +399,11 @@ Brainstorm Queue (N items):
   2. [PENDING] "Item title..." (YouTube / Web / Text)
 
 Direct to Waves (M items):
-  3. "Item title..." → reference (no notes, skip brainstorm)
+  3. "Item title..." → build later
+  4. "Item title..." → research
+
+Reference Only (P items):
+  5. "Item title..." → stored for lookup
 ```
 
 **2e.2: Mark ALL reviewed items as processed**
@@ -703,7 +712,7 @@ options:
 | 1. Sync | Pull new items from Todoist + YouTube | `eva-idea-sync.js` |
 | 2. Classify | AI classification using 3D taxonomy | `eva-intake-classify.js` |
 | 2.5. Enrich | YouTube metadata, web summaries, SPA detection | `eva/intake-enricher.js` |
-| 3. Chairman Review | Interactive intent review via AskUserQuestion + notes | **Inline** (not subprocess) |
+| 3. Chairman Review | Interactive B1 action-first review via AskUserQuestion (Build now / Build later / Research / Reference) | **Inline** (not subprocess) |
 | 3.5. Gemini Analysis | Analyze YouTube videos guided by chairman's intent | `video-metadata.js` |
 | 3.7. Brainstorm | Shape items with notes into actionable plans | **Inline** → `/brainstorm` skill |
 | 4. Cluster | AI groups classified items into 2-6 execution waves | `roadmap-generate.js` |
