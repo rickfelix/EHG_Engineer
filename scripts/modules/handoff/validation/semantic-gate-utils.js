@@ -19,7 +19,7 @@ export const SEMANTIC_GATE_APPLICABILITY = {
   CHILD_SCOPE_COVERAGE:           { feature: 'SKIP', bugfix: 'SKIP', infrastructure: 'SKIP', documentation: 'SKIP', security: 'SKIP', refactor: 'SKIP', orchestrator: 'REQ', database: 'SKIP', enhancement: 'SKIP' },
   VISION_DIMENSION_COMPLETENESS:  { feature: 'REQ', bugfix: 'OPT', infrastructure: 'OPT', documentation: 'SKIP', security: 'REQ', refactor: 'SKIP', orchestrator: 'SKIP', database: 'REQ', enhancement: 'REQ' },
   SMOKE_TEST_VALIDATION:          { feature: 'REQ', bugfix: 'REQ', infrastructure: 'OPT', documentation: 'SKIP', security: 'REQ', refactor: 'SKIP', orchestrator: 'SKIP', database: 'OPT', enhancement: 'OPT' },
-  SCOPE_REDUCTION_VERIFICATION:   { feature: 'REQ', bugfix: 'REQ', infrastructure: 'REQ', documentation: 'SKIP', security: 'REQ', refactor: 'REQ', orchestrator: 'REQ', database: 'REQ', enhancement: 'SKIP' },
+  SCOPE_REDUCTION_VERIFICATION:   { feature: 'REQ', bugfix: 'REQ', infrastructure: 'REQ', documentation: 'SKIP', security: 'REQ', refactor: 'REQ', orchestrator: 'REQ', database: 'REQ', enhancement: 'OPT' },
   ARCHITECTURE_REQUIREMENT_TRACE: { feature: 'REQ', bugfix: 'OPT', infrastructure: 'REQ', documentation: 'SKIP', security: 'REQ', refactor: 'OPT', orchestrator: 'SKIP', database: 'REQ', enhancement: 'OPT' },
   USER_STORY_COVERAGE:            { feature: 'REQ', bugfix: 'REQ', infrastructure: 'OPT', documentation: 'SKIP', security: 'REQ', refactor: 'SKIP', orchestrator: 'SKIP', database: 'OPT', enhancement: 'REQ' },
   OVERLAPPING_SCOPE_DETECTION:    { feature: 'REQ', bugfix: 'REQ', infrastructure: 'REQ', documentation: 'OPT', security: 'REQ', refactor: 'REQ', orchestrator: 'REQ', database: 'REQ', enhancement: 'REQ' }
