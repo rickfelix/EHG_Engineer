@@ -450,12 +450,13 @@ For each item in the brainstorm queue, process one at a time:
    Focus the brainstorm on shaping the chairman's stated intent into an actionable plan.
    ```
 
-3. **After brainstorm completes**, capture the created SD key and link back:
+3. **After brainstorm completes**, auto-chain: vision → arch → SD → roadmap link
 
-   The brainstorm skill (when invoked from distill) outputs `DISTILL_SD_CREATED=<SD-KEY>` at the end of its auto-chain. Parse this from the brainstorm output.
+   The brainstorm skill (when invoked from distill with `source: 'distill'`) auto-chains through vision, arch, and SD creation without prompting (Step 11.0). It outputs `DISTILL_SD_CREATED=<SD-KEY>` when complete. Parse this, or fall back to querying the brainstorm session metadata.
 
-   - **If `DISTILL_SD_CREATED=<SD-KEY>`** (SD was created): Update the intake item with both brainstorm session and created SD:
+   The brainstorm skill outputs a `brainstorm_session_id`. Use it to:
 
+   **3a. Link brainstorm to intake item:**
    ```bash
    node -e "
    require('dotenv').config();
@@ -470,25 +471,76 @@ For each item in the brainstorm queue, process one at a time:
    "
    ```
 
-   - **If `DISTILL_SD_CREATED=NONE`** (brainstorm completed but SD creation failed): Update with brainstorm only:
-
+   **3b. Check if brainstorm produced vision + arch docs (fallback if DISTILL_SD_CREATED not parsed):**
    ```bash
    node -e "
    require('dotenv').config();
    const { createClient } = require('@supabase/supabase-js');
    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-   sb.from('eva_todoist_intake').update({
-     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID (no SD created)'
-   }).eq('id', 'ITEM_UUID').then(({error}) => {
-     if (error) console.error('Error:', error.message);
-     else console.log('Linked brainstorm to intake item (SD creation failed)');
+   sb.from('brainstorm_sessions').select('id, topic, metadata')
+     .eq('id', 'BRAINSTORM_SESSION_ID').single()
+     .then(({data}) => {
+       const vk = data?.metadata?.vision_key;
+       const ak = data?.metadata?.arch_key;
+       console.log('VISION_KEY=' + (vk || 'NONE'));
+       console.log('ARCH_KEY=' + (ak || 'NONE'));
+       console.log('CHAIN_READY=' + (vk && ak ? 'true' : 'false'));
+     });
+   "
+   ```
+
+   **3c. If CHAIN_READY=true, create SD from brainstorm:**
+   ```bash
+   node scripts/leo-create-sd.js --from-brainstorm BRAINSTORM_SESSION_ID --vision-key VISION_KEY --arch-key ARCH_KEY
+   ```
+   If `leo-create-sd.js` doesn't support `--from-brainstorm`, create the SD directly:
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   // Use sd-key-generator for proper key
+   const { execSync } = require('child_process');
+   const keyResult = execSync('node scripts/modules/sd-key-generator.js LEO feature \"BRAINSTORM_TOPIC\"', {encoding:'utf8'}).trim();
+   const sdKey = keyResult.split('\\n').pop().trim();
+   sb.from('strategic_directives_v2').insert({
+     sd_key: sdKey,
+     title: 'BRAINSTORM_TOPIC',
+     status: 'draft',
+     sd_type: 'feature',
+     current_phase: 'LEAD',
+     description: 'Created from brainstorm session BRAINSTORM_SESSION_ID via distill pipeline.',
+     metadata: { vision_key: 'VISION_KEY', arch_key: 'ARCH_KEY', brainstorm_session_id: 'BRAINSTORM_SESSION_ID', source: 'distill-pipeline' }
+   }).select('sd_key').single().then(({data, error}) => {
+     if (error) console.error('SD creation failed:', error.message);
+     else console.log('SD_CREATED=' + data.sd_key);
    });
    "
    ```
 
-4. Update queue display:
-   - With SD: `[DONE] "Item title..." → sd_created (SD-KEY)`
-   - Without SD: `[DONE] "Item title..." → brainstormed (no SD)`
+   **3d. Link to roadmap wave item (if wave context exists):**
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   // Update wave item with promoted_to_sd_key if this item came from a wave
+   sb.from('roadmap_wave_items')
+     .update({ promoted_to_sd_key: 'SD_KEY_CREATED' })
+     .eq('source_id', 'BRAINSTORM_SESSION_ID')
+     .eq('source_type', 'brainstorm')
+     .then(({error}) => {
+       if (error) console.warn('Wave link skipped:', error.message);
+       else console.log('Wave item linked to SD');
+     });
+   "
+   ```
+
+   **3e. If CHAIN_READY=false** (brainstorm didn't produce vision+arch):
+   - Log: `[NEEDS_TRIAGE] "Item title..." — brainstorm completed but no vision/arch produced`
+   - Item goes to waves for manual processing later
+
+4. Update queue display: `[DONE] "Item title..." → SD_KEY (VISION-KEY, ARCH-KEY)` or `[NEEDS_TRIAGE] "Item title..."`
 
 5. **Continue to next item** in queue automatically.
 

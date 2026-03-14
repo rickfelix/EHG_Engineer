@@ -37,6 +37,7 @@ async function lazyFetchVideoMetadata(videoId, options) {
   return _fetchVideoMetadata(videoId, options);
 }
 
+// eslint-disable-next-line no-unused-vars -- called from /distill skill Step 2d
 async function lazyAnalyzeVideoContent(videoId, options) {
   if (!_analyzeVideoContent) {
     try {
@@ -301,9 +302,29 @@ export async function enrichItems(options = {}) {
             enrichmentStatus = 'failed';
           }
         } else {
-          // --- No URL path: title-only summary ---
-          if (verbose) console.log(`    [${item.id.slice(0, 8)}] Title-only`);
-          enrichmentSummary = `Intake item: ${item.title || 'untitled'}`;
+          // --- No URL path: summarize from title + description ---
+          if (verbose) console.log(`    [${item.id.slice(0, 8)}] Text-only`);
+          if (item.description && item.description.length > 50) {
+            try {
+              const { getLLMClient } = await import('../../lib/llm/client-factory.js');
+              const client = getLLMClient({ purpose: 'fast' });
+              const result = await client.chat.completions.create({
+                messages: [
+                  {
+                    role: 'user',
+                    content: `Summarize this idea in 2-3 sentences for strategic evaluation. Focus on what is being proposed and why it matters:\n\nTitle: ${item.title}\n\nDescription: ${item.description.slice(0, 3000)}`,
+                  },
+                ],
+                max_tokens: 200,
+              });
+              enrichmentSummary = result?.choices?.[0]?.message?.content || `Intake item: ${item.title || 'untitled'}`;
+            } catch (llmErr) {
+              if (verbose) console.log(`    LLM summary failed: ${llmErr.message}`);
+              enrichmentSummary = `Intake item: ${item.title || 'untitled'}`;
+            }
+          } else {
+            enrichmentSummary = `Intake item: ${item.title || 'untitled'}`;
+          }
         }
       }
 
