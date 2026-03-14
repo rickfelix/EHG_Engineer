@@ -108,7 +108,7 @@ async function handleList(opts) {
 }
 
 // ============================================================================
-// Subcommand: audit (placeholder - implemented in Child B)
+// Subcommand: audit
 // ============================================================================
 
 async function handleAudit(opts) {
@@ -116,12 +116,12 @@ async function handleAudit(opts) {
     console.error('Error: --url is required for audit subcommand');
     process.exit(1);
   }
-  console.log(`\n🔍 SRIP Forensic Audit`);
-  console.log(`   URL: ${opts.url}`);
-  console.log(`   Screenshot: ${opts.screenshot || 'none (URL-only mode)'}`);
-  console.log(`   Venture: ${opts.ventureId || 'not specified'}`);
-  console.log(`\n   ⚠️  Forensic Audit module not yet implemented.`);
-  console.log(`   This will be implemented in SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-B.`);
+  const { runForensicAudit } = await import('./srip/forensic-audit.mjs');
+  await runForensicAudit({
+    url: opts.url,
+    screenshot: opts.screenshot || null,
+    ventureId: opts.ventureId || null,
+  });
 }
 
 // ============================================================================
