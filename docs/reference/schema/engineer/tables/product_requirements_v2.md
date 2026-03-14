@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T10:45:26.022Z
+**Generated**: 2026-03-14T11:14:42.080Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (6 policies)
 
@@ -234,6 +234,11 @@ Added by SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001 to consolidate scattered integ
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
+### trg_prd_creation_source_advisory
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION check_prd_creation_source()`
 
 ### trg_validate_integration_section_keys
 
