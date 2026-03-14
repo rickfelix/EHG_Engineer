@@ -37,6 +37,7 @@ async function lazyFetchVideoMetadata(videoId, options) {
   return _fetchVideoMetadata(videoId, options);
 }
 
+// eslint-disable-next-line no-unused-vars -- called from /distill skill Step 2d
 async function lazyAnalyzeVideoContent(videoId, options) {
   if (!_analyzeVideoContent) {
     try {
