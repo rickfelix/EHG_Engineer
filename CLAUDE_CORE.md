@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-08 11:19:08 AM
+**Generated**: 2026-03-14 8:36:22 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -339,39 +339,6 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -408,6 +375,77 @@ Before marking any stage/feature as complete:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Sub-Agent Routing Reference
+
+All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
+
+> **Routing Config**: Full keyword-to-agent mappings are defined in `config/agent-keywords-routing.json`. The table below is a quick reference.
+
+| Agent | Trigger Keywords | Best For |
+|-------|-----------------|----------|
+| database-agent | migration, schema, sql, postgres, rls | Database operations, migrations, RLS policies |
+| design-agent | component design, tailwind, responsive, a11y | UI/UX design, accessibility, frontend components |
+| security-agent | auth bypass, csrf, xss, vulnerability | Security audits, vulnerability fixes |
+| testing-agent | test coverage, e2e test, unit test, vitest | Test creation, test infrastructure |
+| performance-agent | bottleneck, load time, memory leak | Performance optimization, profiling |
+| rca-agent | root cause, 5 whys, failure analysis | Root cause analysis, debugging |
+| docmon-agent | documentation update, api docs, readme | Documentation maintenance |
+| regression-agent | backward compatible, breaking change, refactor | Refactoring safety, API compatibility |
+| retro-agent | retrospective, lessons learned, post-mortem | Sprint retrospectives, learning capture |
+| risk-agent | risk assessment, security risk, tradeoff | Risk analysis, architecture decisions |
+| validation-agent | duplicate check, existing implementation | Codebase validation, overlap detection |
+| stories-agent | user stories, acceptance criteria, epic | User story generation |
+| github-agent | pull request, ci pipeline, code review | Git operations, CI/CD |
+| api-agent | api endpoint, rest api, graphql | API design and implementation |
+| dependency-agent | npm audit, outdated packages, vulnerability | Dependency management |
+| uat-agent | user acceptance test, user journey, manual test | User acceptance testing |
+
+### Invocation Pattern
+```
+Task(subagent_type="<agent-name>", prompt="Execute <AGENT> analysis for SD-XXX...")
+```
+
+### Key Rules
+- **ALL phases**: Sub-agents are available in LEAD, PLAN, and EXEC phases
+- **Model**: Always use Sonnet (never Haiku) - see Sub-Agent Model Routing section
+- **Immediate invocation**: When a task matches an agent's domain, invoke IMMEDIATELY - do not attempt manual workarounds
+- **Error routing**: ANY database error triggers database-agent; ANY test failure triggers testing-agent
+
+*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1099,60 +1137,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD-LEO-INFRA-FIX-LEARNING-SYSTEM-001 Retrospective [QUALITY]
-**Category**: USER_EXPERIENCE | **Date**: 2/7/2026 | **Score**: 100
+### 1. SD Completion Retrospective: Centralized Claim Guard Eliminates 7 Multi-Session Collision Vectors [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
 
 **Key Improvements**:
-- Auto-generated user stories from PRD were UI-oriented boilerplate for an infrastructure SD - had to ...
-- Initial SD title mentioned ESM dependency resolution but actual root cause was dotenv CWD resolution...
+- The 7 separate claim paths existed because each was added incrementally without recognizing the cros...
+- ESM/CJS compatibility required a wrapper file (claim-guard.cjs) which adds one more file to maintain...
 
 **Action Items**:
-- [ ] Ship the 6-file fix via /ship - Owner: current session, Timeline: immediate
-- [ ] Audit remaining modules for bare dotenv.config() - Owner: next /learn cycle, Tim...
+- [ ] Create integration test that spawns 2 concurrent claim attempts on the same SD t...
+- [ ] Add cross-cutting concern detection to LEAD phase checklist: when approving an S...
 
-### 2. SD-LEO-INFRA-REALITY-GATES-001 Retrospective [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
+### 2. Fix Unicode Surrogate Pair Splitting in Handoff Output - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/12/2026 | **Score**: 100
 
 **Key Improvements**:
-- Boundary config artifact types need validation against actual venture_artifacts data - currently asp...
-- URL verification hardcoded timeouts need to be configurable per deployment environment
+- [PAT-AUTO-45e4dfb7] Gate 1:userStoryQualityValidation failed: score 209/300
+- [PAT-AUTO-d2c1c285] Gate PREREQUISITE_HANDOFF_CHECK failed: score 841/1000
 
 **Action Items**:
-- [ ] Owner: Infra Eng, Due: 2026-02-14 - Add operational monitoring for DB_ERROR reas...
-- [ ] Owner: Infra Eng, Due: 2026-02-21 - Create integration test with real Supabase; ...
+- [ ] No immediate actions required - continue standard workflow
+- [ ] Re-run blocking sub-agents for SD-LEO-FIX-FIX-UNICODE-SURROGATE-001 until PASS v...
 
-### 3. SD-LEO-INFRA-REFACTOR-WORKTREE-MANAGER-001: Worktree Manager Re-keyed from Session to SD Isolation [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
+### 3. Replace External API PRD Generation With Inline Claude Code - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
 
 **Key Improvements**:
-- Node.js v24 libuv crash (Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)) in pre-commit hook ...
-- ESLint caught unused imports (removeWorktree, afterEach, symlinkNodeModules) during pre-commit that ...
+- [PAT-AUTO-c205e83a] Gate 2D:testingSubAgentVerified failed: score 0/100
+- [PAT-AUTO-0bd90c7f] Gate GATE2_IMPLEMENTATION_FIDELITY failed: score 68/100
 
 **Action Items**:
-- [ ] Investigate Node.js v24 libuv async handle crash on Windows (UV_HANDLE_CLOSING a...
-- [ ] Add ESLint --fix to IDE save hooks or incremental lint step in dev workflow to c...
+- [ ] No immediate actions required - continue standard workflow
+- [ ] Re-run blocking sub-agents for SD-LEO-FIX-REPLACE-EXTERNAL-API-001 until PASS ve...
 
-### 4. SD-LEO-INFRA-STANDARDIZE-VITEST-MIGRATE-001: Jest to Vitest Migration [QUALITY]
-**Category**: TESTING_STRATEGY | **Date**: 2/6/2026 | **Score**: 100
+### 4. Terminal Identity Process Chain Hardening - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
 
 **Key Improvements**:
-- Branch switch during handoff caused git stash/unstash that reverted working-directory changes: the m...
-- Stale .git/COMMIT_EDITMSG from a previous commit caused Gate 0 (pre-flight check) false positive, bl...
+- [PAT-AUTO-b28c8662] Gate GATE_PROTOCOL_FILE_READ failed: score 0/100
+- SD-LEO-FIX-TERMINAL-IDENTITY-001 proceeded without PRD - scope defined informally
 
 **Action Items**:
-- [ ] {"action":"Address 95 pre-existing test failures now visible under Vitest","owne...
-- [ ] {"action":"Improve bulk migration scripts to detect actual mock usage before add...
+- [ ] No immediate actions required - continue standard workflow
+- [ ] Create PRD for SD-LEO-FIX-TERMINAL-IDENTITY-001 in product_requirements_v2 table
 
-### 5. SD-LEO-INFRA-STAGE-GATES-EXT-001 Retrospective [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 2/7/2026 | **Score**: 100
+### 5. LEAD_TO_PLAN Handoff Retrospective: Distill CLAUDE*.md Files for Maximum Token Reduction [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
 
 **Key Improvements**:
-- Auto-generated retrospectives lack SD-specific risk assessments - a state-machine gating change that...
-- Kill gate REQUIRES_CHAIRMAN_DECISION status creates a new state that downstream consumers (venture-s...
+- [PAT-AUTO-c205e83a] Gate 2D:testingSubAgentVerified failed: score 0/100
+- [PAT-AUTO-0bd90c7f] Gate GATE2_IMPLEMENTATION_FIDELITY failed: score 68/100
 
 **Action Items**:
-- [ ] Create database table for per-venture gate configuration to replace hardcoded KI...
-- [ ] Add integration tests that verify kill gate -> Chairman decision -> venture term...
+- [ ] Monitor digest token budget utilization over next 5 SDs — current 83% (20,814/25...
+- [ ] Add regression test to verify CLAUDE.md stays under 15K chars after regeneration...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1218,7 +1256,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-08*
+*Generated from database: 2026-03-14*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*

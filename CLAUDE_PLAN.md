@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-03-08 11:19:08 AM
+**Generated**: 2026-03-14 8:36:22 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates
 
@@ -182,6 +182,30 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
+
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -220,29 +244,24 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
 
-## Deferred Work Management
+## Phase-Specific Sub-Agent Guidance: PLAN
 
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
+During the PLAN phase, prioritize these sub-agents for PRD creation and architecture specification:
 
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
+- **stories-agent**: For generating user stories from PRD functional requirements
+- **design-agent**: For UI/UX component specifications, wireframes, and accessibility analysis
+- **database-agent**: For data model design, migration planning, and schema validation
+- **security-agent**: For security requirement analysis and threat modeling
+- **risk-agent**: For implementation risk assessment and feasibility analysis
+- **validation-agent**: For verifying proposed architecture against existing codebase patterns
 
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
+### When to Invoke
+- **Before PRD creation**: Run database-agent for schema exploration, design-agent for UI analysis
+- **During PRD writing**: Run stories-agent to generate user stories from functional requirements
+- **Before PLAN-TO-EXEC handoff**: Run security-agent and risk-agent for completeness validation
+- **NC-PLAN-004 compliance**: Gate 1 blocks handoff if sub-agent execution is not recorded
 
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
+*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## PRD Template Scaffolding
 
@@ -642,33 +661,6 @@ When a pipeline has cascading failures, the architecture plan MUST:
 
 **Detection**: The gate checks architecture plan content for failure chain diagrams and upstream-first child ordering language.
 
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
-
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -767,20 +759,32 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## CI/CD Pipeline Verification
+## 🔬 BMAD Method Enhancements
 
-## CI/CD Pipeline Verification (MANDATORY)
+## BMAD Enhancements
 
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
 
-### Verification Process
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
 
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
 
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
 
 ## DESIGN→DATABASE Validation Gates
 
@@ -833,6 +837,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -1610,6 +1629,34 @@ for (const childId of childIds) {
 
 > **Team Capabilities**: When planning complex SDs, consider whether team spawning (any agent leading specialists) could parallelize cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
+## PRD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off PRD creation scripts like:**
+- `create-prd-sd-*.js`
+- `insert-prd-*.js`
+- `enhance-prd-*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/add-prd-to-database.js
+```
+
+### Why This Matters
+- One-off scripts bypass PRD quality validation
+- They create massive maintenance burden (100+ orphaned scripts)
+- They fragment PRD creation patterns
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-prd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/add-prd-to-database.js`
+2. Follow the modular PRD creation system in `scripts/prd/`
+3. PRD is properly validated against quality rubrics
+
 ## Vision V2 PRD Requirements (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Integration in PRDs
@@ -1650,34 +1697,6 @@ Key spec requirements addressed:
 ### Implementation Guidance (from SD metadata)
 
 All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
-
-## PRD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off PRD creation scripts like:**
-- `create-prd-sd-*.js`
-- `insert-prd-*.js`
-- `enhance-prd-*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/add-prd-to-database.js
-```
-
-### Why This Matters
-- One-off scripts bypass PRD quality validation
-- They create massive maintenance burden (100+ orphaned scripts)
-- They fragment PRD creation patterns
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-prd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/add-prd-to-database.js`
-2. Follow the modular PRD creation system in `scripts/prd/`
-3. PRD is properly validated against quality rubrics
 
 ## Quality Assessment Integration in Handoffs
 
@@ -2330,6 +2349,6 @@ When creating a PRD during PLAN phase, connect functional requirements to releva
 
 ---
 
-*Generated from database: 2026-03-08*
+*Generated from database: 2026-03-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

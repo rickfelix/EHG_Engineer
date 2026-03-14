@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-03-08 11:19:08 AM
+**Generated**: 2026-03-14 8:36:22 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing
 
@@ -360,40 +360,30 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Correct Approach**: Every backend field must have corresponding UI component
 </negative_constraints>
 
-## Migration Script Pattern (MANDATORY)
+## Phase-Specific Sub-Agent Guidance: EXEC
 
-**Issue Pattern**: PAT-DB-MIGRATION-001
+During the EXEC phase, use sub-agents proactively for implementation quality and safety:
 
-When writing migration scripts, you MUST use the established pattern:
+- **database-agent**: For executing migrations, schema changes, and RLS policy deployment
+- **testing-agent**: For test creation, coverage analysis, and test infrastructure
+- **security-agent**: For security review of implementations before merge
+- **github-agent**: For PR creation, CI/CD operations, and code review coordination
+- **regression-agent**: For refactoring safety validation and backward compatibility checks
+- **performance-agent**: For performance optimization, profiling, and bottleneck detection
+- **rca-agent**: For debugging implementation issues and failure analysis
+- **uat-agent**: For user acceptance test execution before handoff
 
-### Correct Pattern
-```javascript
-import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
-import { readFileSync } from 'fs';
+### When to Invoke
+- **On ANY database error**: Immediately invoke database-agent (do not attempt workarounds)
+- **Before PR creation**: Run testing-agent for coverage, security-agent for review
+- **During refactoring**: Run regression-agent to validate backward compatibility
+- **On test failures**: Run rca-agent for root cause analysis, then testing-agent
+- **Before EXEC-TO-PLAN handoff**: Run uat-agent for acceptance validation
 
-const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
-const client = await createDatabaseClient('engineer', { verify: true });
-const statements = splitPostgreSQLStatements(migrationSQL);
+### Important
+Sub-agents are FIRST RESPONDERS in EXEC phase. When you encounter a problem that matches an agent's domain, invoke the agent IMMEDIATELY rather than attempting manual solutions.
 
-for (const statement of statements) {
-  await client.query(statement);
-}
-
-await client.end();
-```
-
-### NEVER Use This Pattern
-```javascript
-// WRONG - exec_sql RPC does not exist
-import { createClient } from '@supabase/supabase-js';
-const supabase = createClient(url, key);
-await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
-```
-
-### Before Writing Migration Scripts
-1. Search for existing patterns: `Glob *migration*.js`
-2. Read `scripts/run-sql-migration.js` as canonical template
-3. Use `lib/supabase-connection.js` utilities
+*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## 📚 Skill Integration (EXEC Phase)
 
@@ -471,6 +461,41 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 Skills are for **creative guidance** (how to build).
 Sub-agents are for **validation** (did you build it right).
 Use skills during EXEC, save sub-agents for PLAN_VERIFY.
+
+## Migration Script Pattern (MANDATORY)
+
+**Issue Pattern**: PAT-DB-MIGRATION-001
+
+When writing migration scripts, you MUST use the established pattern:
+
+### Correct Pattern
+```javascript
+import { createDatabaseClient, splitPostgreSQLStatements } from './lib/supabase-connection.js';
+import { readFileSync } from 'fs';
+
+const migrationSQL = readFileSync('path/to/migration.sql', 'utf-8');
+const client = await createDatabaseClient('engineer', { verify: true });
+const statements = splitPostgreSQLStatements(migrationSQL);
+
+for (const statement of statements) {
+  await client.query(statement);
+}
+
+await client.end();
+```
+
+### NEVER Use This Pattern
+```javascript
+// WRONG - exec_sql RPC does not exist
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(url, key);
+await supabase.rpc('exec_sql', { sql_query: sql }); // FAILS
+```
+
+### Before Writing Migration Scripts
+1. Search for existing patterns: `Glob *migration*.js`
+2. Read `scripts/run-sql-migration.js` as canonical template
+3. Use `lib/supabase-connection.js` utilities
 
 ## Validation Rules (SD-LEARN-008)
 
@@ -669,24 +694,6 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
-
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -770,6 +777,24 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
+
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -1361,77 +1386,6 @@ The ACCEPTANCE_CRITERIA_VALIDATION gate scores stories as follows:
 
 Threshold: overall score >= 60 AND no story scores 0.
 
-## Playwright MCP Integration
-
-## 🎭 Playwright MCP Integration
-
-**Status**: ✅ READY (Installed 2025-10-12)
-
-### Overview
-Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
-
-### Installed Components
-- **Chrome**: Google Chrome browser for MCP operations
-- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
-- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
-- **System Dependencies**: All required Linux libraries installed
-
-### Available MCP Tools
-
-#### Navigation
-- `mcp__playwright__browser_navigate` - Navigate to URL
-- `mcp__playwright__browser_navigate_back` - Go back to previous page
-
-#### Interaction
-- `mcp__playwright__browser_click` - Click elements
-- `mcp__playwright__browser_fill` - Fill form fields
-- `mcp__playwright__browser_select` - Select dropdown options
-- `mcp__playwright__browser_hover` - Hover over elements
-- `mcp__playwright__browser_type` - Type text into elements
-
-#### Verification
-- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
-- `mcp__playwright__browser_take_screenshot` - Take screenshots
-- `mcp__playwright__browser_evaluate` - Execute JavaScript
-
-#### Management
-- `mcp__playwright__browser_close` - Close browser
-- `mcp__playwright__browser_tabs` - Manage tabs
-
-### Testing Integration
-
-**When to Use Playwright MCP**:
-1. ✅ Visual regression testing
-2. ✅ UI component verification
-3. ✅ Screenshot capture for evidence
-4. ✅ Accessibility tree validation
-5. ✅ Cross-browser testing
-
-**When to Use Standard Playwright**:
-1. ✅ E2E test suites (`npm run test:e2e`)
-2. ✅ CI/CD pipeline tests
-3. ✅ Automated test runs
-4. ✅ User story validation
-
-### Usage Example
-
-```javascript
-// Using Playwright MCP for visual verification
-await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
-await mcp__playwright__browser_snapshot(); // Get accessibility tree
-await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
-await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
-```
-
-### QA Director Integration
-
-The QA Engineering Director sub-agent now has access to:
-- Playwright MCP for visual testing
-- Standard Playwright for E2E automation
-- Both Chrome (MCP) and Chromium (tests) browsers
-
-**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
-
 ## Triangulated Runtime Audit Protocol
 
 ### Purpose
@@ -1649,6 +1603,77 @@ See: `/runtime-audit` skill for full template
 - `codebase-search` - Finding code references
 - `schema-design` - Database schema issues
 
+
+## Playwright MCP Integration
+
+## 🎭 Playwright MCP Integration
+
+**Status**: ✅ READY (Installed 2025-10-12)
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
+
+### Installed Components
+- **Chrome**: Google Chrome browser for MCP operations
+- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
+- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
+- **System Dependencies**: All required Linux libraries installed
+
+### Available MCP Tools
+
+#### Navigation
+- `mcp__playwright__browser_navigate` - Navigate to URL
+- `mcp__playwright__browser_navigate_back` - Go back to previous page
+
+#### Interaction
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_fill` - Fill form fields
+- `mcp__playwright__browser_select` - Select dropdown options
+- `mcp__playwright__browser_hover` - Hover over elements
+- `mcp__playwright__browser_type` - Type text into elements
+
+#### Verification
+- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
+- `mcp__playwright__browser_take_screenshot` - Take screenshots
+- `mcp__playwright__browser_evaluate` - Execute JavaScript
+
+#### Management
+- `mcp__playwright__browser_close` - Close browser
+- `mcp__playwright__browser_tabs` - Manage tabs
+
+### Testing Integration
+
+**When to Use Playwright MCP**:
+1. ✅ Visual regression testing
+2. ✅ UI component verification
+3. ✅ Screenshot capture for evidence
+4. ✅ Accessibility tree validation
+5. ✅ Cross-browser testing
+
+**When to Use Standard Playwright**:
+1. ✅ E2E test suites (`npm run test:e2e`)
+2. ✅ CI/CD pipeline tests
+3. ✅ Automated test runs
+4. ✅ User story validation
+
+### Usage Example
+
+```javascript
+// Using Playwright MCP for visual verification
+await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
+await mcp__playwright__browser_snapshot(); // Get accessibility tree
+await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
+await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
+```
+
+### QA Director Integration
+
+The QA Engineering Director sub-agent now has access to:
+- Playwright MCP for visual testing
+- Standard Playwright for E2E automation
+- Both Chrome (MCP) and Chromium (tests) browsers
+
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Edge Case Testing Checklist
 
@@ -1912,6 +1937,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2026-03-08*
+*Generated from database: 2026-03-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*
