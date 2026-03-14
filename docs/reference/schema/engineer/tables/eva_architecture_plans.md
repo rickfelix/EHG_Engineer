@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T16:42:58.096Z
+**Generated**: 2026-03-14T16:52:34.381Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -114,6 +114,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_validate_archplan_quality()`
+
+### trg_enforce_archplan_quality_advancement
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_archplan_quality_on_advancement()`
 
 ### update_eva_architecture_plans_updated_at
 
