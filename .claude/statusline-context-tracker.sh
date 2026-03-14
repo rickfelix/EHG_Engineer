@@ -16,7 +16,7 @@
 # Context Calculation (v2.0 - Jan 2026):
 #   - Claude Code reserves ~45K tokens as buffer for auto-compact process
 #   - Auto-compact triggers at 80% of raw context (per v2.0.64+)
-#   - This script shows % of USABLE context (200K - 45K = 155K)
+#   - This script shows % of USABLE context (1M - 45K = 955K)
 #   - When display shows 100%, auto-compact is imminent
 #   - Raw % is logged for debugging but not displayed
 #
@@ -41,17 +41,17 @@ STATE_FILE="${LOG_DIR}/.context-state.json"
 MAX_LOG_SIZE=5242880  # 5MB rotation threshold
 
 # Thresholds (based on Claude Code v2.0.64+ behavior)
-# Auto-compact triggers at 80% of context window (160K for 200K window)
+# Auto-compact triggers at 80% of context window (800K for 1M window)
 # Claude reserves ~40-45K tokens as buffer for compaction process
-CONTEXT_WINDOW=200000
+CONTEXT_WINDOW=1000000
 AUTOCOMPACT_BUFFER=45000  # Reserved by Claude Code for compaction
 AUTOCOMPACT_TRIGGER=80    # % at which auto-compact triggers (v2.0.64+)
 
 # Display thresholds based on USABLE context (after buffer)
-# Usable = CONTEXT_WINDOW - AUTOCOMPACT_BUFFER = ~155K
-WARNING_THRESHOLD=60   # 60% of usable = ~93K (safe zone ending)
-CRITICAL_THRESHOLD=80  # 80% of usable = ~124K (compact soon)
-EMERGENCY_THRESHOLD=95 # 95% of usable = ~147K (auto-compact imminent)
+# Usable = CONTEXT_WINDOW - AUTOCOMPACT_BUFFER = ~955K
+WARNING_THRESHOLD=80   # 80% of usable = ~764K (safe zone ending)
+CRITICAL_THRESHOLD=93  # 93% of usable = ~888K (compact soon)
+EMERGENCY_THRESHOLD=97 # 97% of usable = ~926K (auto-compact imminent)
 
 # Ensure log directory exists
 mkdir -p "$LOG_DIR"
@@ -83,10 +83,10 @@ MODEL=$(echo "$INPUT" | jq -r '.model.display_name // "Unknown"')
 MODEL_ID=$(echo "$INPUT" | jq -r '.model.id // "unknown"')
 
 # Extract context window size (may vary by model)
-CONTEXT_SIZE=$(echo "$INPUT" | jq -r '.context_window.context_window_size // 200000')
+CONTEXT_SIZE=$(echo "$INPUT" | jq -r '.context_window.context_window_size // 1000000')
 # Validate CONTEXT_SIZE is a positive number
 if ! [[ "$CONTEXT_SIZE" =~ ^[0-9]+$ ]] || [ "$CONTEXT_SIZE" -eq 0 ]; then
-    CONTEXT_SIZE=200000
+    CONTEXT_SIZE=1000000
 fi
 
 # Extract current_usage (the accurate, server-authoritative data)

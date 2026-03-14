@@ -66,9 +66,9 @@ Automatic triggers:
 
 ## Token Budget Allocation
 ```yaml
-total_available: 200000
+total_available: 1000000
 safety_margin: 20000
-usable_context: 180000
+usable_context: 980000
 
 allocation:
   system_prompt: 5000

@@ -26,9 +26,9 @@ const { execSync } = require('child_process');
 const LOG_DIR = 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.claude/logs';
 const STATE_FILE = path.join(LOG_DIR, '.context-state.json');
 const AUTOCOMPACT_PCT = 80;
-const WARNING_THRESHOLD = 60;
-const CRITICAL_THRESHOLD = 90;
-const EMERGENCY_THRESHOLD = 95;
+const WARNING_THRESHOLD = 80;
+const CRITICAL_THRESHOLD = 93;
+const EMERGENCY_THRESHOLD = 97;
 
 // ANSI escape codes
 const ESC = '\x1b';
@@ -66,7 +66,7 @@ if (!data) {
 
 // Extract fields
 const model = (data.model && data.model.display_name) || 'Unknown';
-const contextSize = (data.context_window && data.context_window.context_window_size) || 200000;
+const contextSize = (data.context_window && data.context_window.context_window_size) || 1000000;
 const currentUsage = (data.context_window && data.context_window.current_usage) || {};
 const inputTokens = currentUsage.input_tokens || 0;
 const outputTokens = currentUsage.output_tokens || 0;
