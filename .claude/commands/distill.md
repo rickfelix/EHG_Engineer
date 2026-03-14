@@ -275,13 +275,20 @@ If `REVIEW_COUNT=0`, skip to Phase 3 — no items need review.
 
 For each item in the review JSON (or batched in groups of up to 4 — AskUserQuestion supports 1-4 questions per call):
 
-Each item has: `itemId`, `markdown` (formatted description), `options` (intent choices with AI recommendation first), `title`.
+Each item has: `itemId`, `markdown` (formatted description), `options` (intent choices with AI recommendation first), `title`, `captureIntent`.
+
+**Build the question text** for each item:
+1. Start with the item's `markdown` field (title, source, application, aspects, enrichment summary, confidence, description)
+2. **If the item has a YouTube video**: Add a clickable link line: `**Watch:** https://www.youtube.com/watch?v=VIDEO_ID` — detect this by checking if `enrichment_summary` contains "Video:" or "YouTube video:" or if the title contains a youtu.be/youtube.com URL
+3. **If enrichment contains "AI Analysis:"**: Show the Gemini video summary prominently — this is the actual content analysis of the video
 
 Present using AskUserQuestion:
-- `question`: Use the item's `markdown` field — it contains title, source, application, aspects, enrichment summary, confidence, and description
+- `question`: The built question text with clickable YouTube URL
 - `header`: "Review"
 - `options`: Use the item's `options` array (Build/Research/Reference/Improve with AI recommendation marked)
 - `multiSelect`: false
+
+**IMPORTANT**: Use the `annotations` parameter on the AskUserQuestion call to enable the chairman to add notes. The user can attach free-text notes to any selection. After the user responds, check `annotations` for any notes they provided.
 
 **Batching strategy** (for efficiency when many items):
 - If ≤ 4 items: present all in a single AskUserQuestion call (one question per item)
@@ -293,7 +300,7 @@ Present using AskUserQuestion:
 
 **Step 2c: Store decisions**
 
-For each item the chairman reviewed, store the decision. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. So we store the chairman's action-intent choice by mapping it BACK to capture-intent for storage:
+For each item the chairman reviewed, store the decision AND any notes. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. So we store the chairman's action-intent choice by mapping it BACK to capture-intent for storage:
 
 | Chairman chose | Store as `chairman_intent` |
 |---------------|---------------------------|
@@ -301,6 +308,8 @@ For each item the chairman reviewed, store the decision. The `chairman_intent` c
 | Improve | `insight` |
 | Reference | `reference` |
 | Research | `question` |
+
+Check `annotations` from the AskUserQuestion response for any notes the chairman provided. Store notes in `chairman_notes` column.
 
 For each reviewed item, run:
 
@@ -311,6 +320,7 @@ const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 sb.from('eva_todoist_intake').update({
   chairman_intent: 'INTENT_VALUE',
+  chairman_notes: 'NOTES_OR_NULL',
   chairman_reviewed_at: new Date().toISOString()
 }).eq('id', 'ITEM_UUID').then(({error}) => {
   if (error) console.error('Error:', error.message);
@@ -322,6 +332,50 @@ sb.from('eva_todoist_intake').update({
 Replace `INTENT_VALUE` with the mapped capture-intent value and `ITEM_UUID` with the item ID.
 
 You can batch multiple updates into a single script for efficiency.
+
+**Step 2d: Gemini video analysis for YouTube items (post-review)**
+
+After storing all chairman decisions, check if any reviewed items are YouTube videos where the chairman provided notes. For these items, run Gemini video analysis with the chairman's intent as context.
+
+Identify YouTube items: items where `enrichment_summary` starts with `"Video:"` or contains `"YouTube video:"`.
+
+For each YouTube item with chairman notes, run:
+
+```bash
+node -e "
+import dotenv from 'dotenv';
+dotenv.config();
+import { analyzeVideoContent } from './lib/integrations/youtube/video-metadata.js';
+
+const result = await analyzeVideoContent('VIDEO_ID', {
+  verbose: true,
+  chairmanIntent: 'CHAIRMAN_NOTES_HERE',
+  metadata: { title: 'VIDEO_TITLE', channelName: 'CHANNEL', durationSeconds: DURATION }
+});
+if (result) console.log('ANALYSIS:' + result);
+else console.log('ANALYSIS_FAILED');
+"
+```
+
+Use `timeout: 120000` (videos can take time).
+
+If analysis succeeds, update the item's `enrichment_summary` to append the analysis:
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+sb.from('eva_todoist_intake').update({
+  enrichment_summary: 'EXISTING_SUMMARY | Chairman Analysis: GEMINI_RESULT'
+}).eq('id', 'ITEM_UUID').then(({error}) => {
+  if (error) console.error('Error:', error.message);
+  else console.log('OK');
+});
+"
+```
+
+Present the Gemini analysis to the chairman as a summary after all items are processed.
 
 **Phase 3: Waves + Archive + Status (automated)**
 
