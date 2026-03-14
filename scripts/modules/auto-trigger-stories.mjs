@@ -776,6 +776,9 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
           implementation_context: typeof story.implementation_context === 'object'
             ? JSON.stringify(story.implementation_context)
             : story.implementation_context,
+          given_when_then: Array.isArray(story.given_when_then) ? story.given_when_then : [],
+          testing_scenarios: Array.isArray(story.testing_scenarios) ? story.testing_scenarios : [],
+          architecture_references: Array.isArray(story.architecture_references) ? story.architecture_references : [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }));
@@ -991,6 +994,9 @@ async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaCon
       status: 'ready',
       acceptance_criteria: transformedCriteria, // Now SD-type-aware
       implementation_context: fr.description || fr.requirement || 'Implementation details to be defined during EXEC phase',
+      given_when_then: [],
+      testing_scenarios: [],
+      architecture_references: [],
       technical_notes: fr.rationale || '',
       created_by: 'PRODUCT_REQUIREMENTS_EXPERT',
       // E2E Test Path (v1.3.0): Auto-populated based on SD type

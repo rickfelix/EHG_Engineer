@@ -251,6 +251,7 @@
     "git:recover": "node scripts/git-commit-recovery.js",
     "lead:dossier": "node scripts/lead-dossier.js",
     "doc:audit": "node scripts/eva/doc-health-audit.mjs",
+    "story:template": "node scripts/story-requirements-template.js",
     "sd:next": "node scripts/sd-next.js",
     "sd:start": "node scripts/sd-start.js",
     "debug:tid": "node scripts/one-time/debug-terminal-identity.mjs",
