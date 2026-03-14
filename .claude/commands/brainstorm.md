@@ -265,6 +265,77 @@ Present the score breakdown to the user.
 
 **Skip this step if `--no-team` flag is present.**
 
+**GOVERNANCE MODEL SELECTION**: Check if Board of Directors governance is enabled:
+- If `BOARD_GOVERNANCE_ENABLED` environment variable is `true` (or not set — default ON):
+  → Use **Board of Directors Deliberation** (Step 6D.1a) instead of legacy personas
+- If `BOARD_GOVERNANCE_ENABLED` is explicitly `false` or `--no-board` flag is present:
+  → Use legacy 3-persona analysis (Step 6D.1b)
+
+### 6D.1a: Board of Directors Deliberation (Default — replaces 3-persona analysis)
+
+After discovery and crystallization, execute a full board deliberation using the Board of Directors governance model.
+
+The board deliberation system is implemented in `lib/brainstorm/deliberation-engine.js` and uses:
+- 6 permanent board seats (CSO, CRO, CTO, CISO, COO, CFO) defined in `lib/brainstorm/board-seats/index.js`
+- Institutional memory from past deliberations (`lib/brainstorm/institutional-memory.js`)
+- Specialist auto-summoning when expertise gaps detected (`lib/brainstorm/specialist-registry.js`)
+- Full judiciary integration with constitutional citations (`lib/brainstorm/board-judiciary-bridge.js`)
+
+**Execution Flow:**
+
+1. **Load institutional memory** for each seat (parallel) — past positions on related topics with lifecycle annotations
+2. **Round 1** — All 6 seats produce positions in parallel (via Agent tool, one per seat):
+   - Each seat uses its domain-specific system prompt with standing question
+   - Each seat has access to its institutional memory context
+   - Positions stored in `debate_arguments` with seat agent codes (CSO, CRO, etc.)
+   - Seats flag expertise gaps with `EXPERTISE_GAP: <description>` markers
+
+3. **Specialist Summoning** — If any seat flagged expertise gaps:
+   - Check specialist registry for reusable specialist identities
+   - Generate new specialist identities for unmatched gaps (max 3 specialists)
+   - Specialists produce testimony stored in `debate_arguments` with `specialist_testimony` type
+   - Register new specialists in the registry for future reuse
+
+4. **Quorum Check** — Verify minimum 4 of 6 seats responded with substantive positions
+   - If quorum not met, report which seats are unavailable and halt deliberation
+   - Chairman can override quorum with `--override-quorum` flag
+
+5. **Round 2** — All 6 seats produce rebuttals (parallel):
+   - Each seat receives all other Round 1 positions and specialist testimony
+   - Rebuttals must reference specific positions from other seats by code
+   - Stored in `debate_arguments` with `rebuttal` type and `in_response_to_argument_id`
+
+6. **Judiciary Synthesis** — Generate verdict with:
+   - Consensus points (where 2+ seats agree)
+   - Tension points (where seats disagree — most valuable insights)
+   - Constitutional citations with relevance scores (PROTOCOL, FOUR_OATHS, DOCTRINE)
+   - Escalation decision (if positions are irreconcilable → chairman override)
+   - Stored in `judge_verdicts` with full citation trail
+
+**Performance Budget**: Total deliberation (Round 1 + Specialists + Round 2 + Judiciary) must complete within 3 minutes.
+
+**Agent Invocation** — For each seat in Round 1 and Round 2, use the Agent tool:
+```
+Agent tool:
+  subagent_type: "general-purpose"
+  description: "[SEAT_CODE] board position"
+  prompt: [seat system prompt with memory context + user prompt with topic]
+```
+
+**Synthesis Output** (replaces the legacy Challenger/Visionary/Pragmatist synthesis):
+- **Board Consensus**: Points where 3+ seats agree
+- **Key Tensions**: Where seats disagree (with constitutional citations if relevant)
+- **Specialist Insights**: Deep expertise from auto-summoned specialists
+- **Risk Assessment**: Composite from CRO (risk), CISO (security), COO (execution)
+- **Strategic Recommendation**: From judiciary verdict
+- **Escalation Status**: Whether chairman override is needed
+
+Store the board deliberation results for document generation (Step 9).
+
+### 6D.1b: Legacy 3-Persona Analysis (Fallback)
+
+**This is the fallback when `BOARD_GOVERNANCE_ENABLED=false` or `--no-board` flag is present.**
+
 After discovery and crystallization, spawn a 3-agent team for multi-perspective analysis:
 
 ```
@@ -453,7 +524,7 @@ Based on the answers, ask 1-2 follow-up questions to deepen understanding. These
 
 **Skip this step if `--no-team` flag is present.**
 
-Same team analysis as Step 6D.1 — spawn Challenger, Visionary, and Pragmatist agents with the discovery insights from Step 7A/7B. Use TeamCreate and Task tools identically to 6D.1.
+Same team analysis as Step 6D.1 — use the governance model selection logic from 6D.1. If Board of Directors is enabled (default), use the board deliberation flow (6D.1a). Otherwise, fall back to the legacy 3-persona analysis (6D.1b). Use discovery insights from Step 7A/7B as the deliberation topic context.
 
 Present synthesized team perspectives (consensus/tension/risk) to the user before proceeding to arguments.
 
@@ -660,7 +731,7 @@ Write the document using the Write tool with this structure:
 - **Mode**: [Conversational / Structured]
 - **Crystallization Score**: [score/1.0] (structured mode only)
 - **Outcome Classification**: [bucket from Step 8]
-- **Team Analysis**: [Yes (3/3 perspectives) / Yes (2/3 perspectives) / Skipped (--no-team)]
+- **Team Analysis**: [Board of Directors (6/6 seats) / Board of Directors (N/6 seats) / Legacy (3/3 personas) / Skipped (--no-team)]
 - **Related Ventures**: [venture names, if any identified]
 
 ---
@@ -703,8 +774,41 @@ Write the document using the Write tool with this structure:
 ### Architecture: Tradeoff Matrix
 (Option comparison table from Step 6I)
 
-## Team Perspectives
-(Included when team analysis is performed, omitted with --no-team)
+## Board of Directors Deliberation
+(Included when board governance is active — default. Omitted with --no-team.)
+
+### Round 1: Board Positions
+
+| Seat | Standing Question | Position Summary |
+|------|------------------|-----------------|
+| CSO | Does this move EHG forward or sideways? | [position summary] |
+| CRO | What's the blast radius if this fails? | [position summary] |
+| CTO | What do we already have? What's the real build cost? | [position summary] |
+| CISO | What attack surface does this create? | [position summary] |
+| COO | Can we actually deliver this given current load? | [position summary] |
+| CFO | What does this cost and what's the return? | [position summary] |
+
+### Specialist Testimony
+(Included when board flagged expertise gaps — omitted if no gaps detected)
+- **[Specialist Agent Code]**: [testimony summary]
+
+### Round 2: Key Rebuttals
+- [Notable rebuttals where seats changed or refined their positions]
+
+### Judiciary Verdict
+- **Board Consensus**: [points where 3+ seats agree]
+- **Key Tensions**: [where seats disagree, with constitutional citations]
+- **Constitutional Citations**: [relevant rules referenced with relevance scores]
+- **Recommendation**: [judiciary recommendation]
+- **Escalation**: [Yes/No — whether chairman override was needed]
+
+### Institutional Memory
+- [Relevant past positions loaded, with lifecycle annotations: Active/Mitigated/Superseded/Validated]
+
+---
+
+<details>
+<summary>Legacy Team Perspectives (when --no-board flag used)</summary>
 
 ### Challenger
 - **Blind Spots**: [items from Challenger agent]
@@ -726,6 +830,8 @@ Write the document using the Write tool with this structure:
 - **Consensus Points**: [where 2+ perspectives agree]
 - **Tension Points**: [where perspectives conflict]
 - **Composite Risk**: [Low/Medium/High]
+
+</details>
 
 ## Out of Scope
 (Structured mode only)
