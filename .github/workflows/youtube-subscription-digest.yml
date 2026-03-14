@@ -1,0 +1,29 @@
+name: EVA YouTube Subscription Digest
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 6am ET (11:00 UTC) daily
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci --omit=dev
+
+      - name: Run YouTube Subscription Digest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: node scripts/eva/youtube-subscription-digest.js --verbose

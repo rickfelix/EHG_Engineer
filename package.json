@@ -400,6 +400,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "express-validator": "^7.2.1",
+    "fast-xml-parser": "^5.5.5",
     "find-process": "^2.0.0",
     "formdata-node": "^4.4.1",
     "google-auth-library": "^10.5.0",
