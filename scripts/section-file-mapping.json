@@ -23,6 +23,7 @@
       "mandatory_phase_transitions",
       "builtin_agent_integration",
       "model_routing_guidance",
+      "sub_agent_routing_reference",
       "execution_philosophy",
       "compaction_instructions",
       "critical_term_definitions",
@@ -68,7 +69,8 @@
       "parent_child_lead",
       "multi_track_parallel_execution",
       "vision_v2_lead",
-      "governance_okr_alignment_lead"
+      "governance_okr_alignment_lead",
+      "sub_agent_phase_guidance_lead"
     ],
     "_removed_sections_note": "migration_execution_protocol_lead (duplicate of CORE migration_execution_protocol), mandatory_phase_transitions_lead (duplicate of CORE mandatory_phase_transitions). RCA mandate removed from generator — already in router."
   },
@@ -103,7 +105,8 @@
       "documentation_link_validation_gate",
       "governance_kr_linkage_plan",
       "plan_smoke_test_requirement",
-      "plan_failure_chain_ordering"
+      "plan_failure_chain_ordering",
+      "sub_agent_phase_guidance_plan"
     ],
     "_removed_sections_note": "migration_execution_protocol_plan (duplicate of CORE), mandatory_phase_transitions_plan (duplicate of CORE), testing_tier_strategy (superseded by testing_tier_strategy_updated), schema_documentation_access + schema_documentation_reference + database_schema_overview (reference data, on-demand lookup via docs/), plan_visual_documentation_examples (Mermaid examples, reference doc). RCA mandate removed from generator — already in router."
   },
@@ -135,6 +138,7 @@
       "integration_test_requirement_gate",
       "governance_kr_progress_exec",
       "exec_acceptance_criteria_verification",
+      "sub_agent_phase_guidance_exec",
       "reference"
     ],
     "_removed_sections_note": "mandatory_phase_transitions_exec (duplicate of CORE mandatory_phase_transitions), migration_execution_delegation (duplicate of CORE migration_execution_protocol), workflow (was listed twice — removed duplicate). RCA mandate removed from generator — already in router."
