@@ -1070,6 +1070,30 @@ Cap at 100. This score feeds into the self-improvement loop.
 
 After the document is saved and session recorded, suggest next steps based on the outcome classification:
 
+### 11.0: Distill Pipeline Auto-Chain (SD-DISTILLTOBRAINSTORM-ORCH-001-A)
+
+**When brainstorm was invoked from `/distill`** (pre-seeded context contains `source: 'distill'` or `source: distill`):
+
+Skip the AskUserQuestion in Step 11 entirely. Instead, auto-chain directly:
+
+1. **Auto-select "Create SDs"** — no user prompt needed (chairman already expressed intent during distill review)
+2. **Skip `/eva review`** — distill-sourced brainstorms don't need a separate review cycle
+3. **Invoke `/leo create`** directly with vision/arch keys:
+   - Use the Skill tool to invoke `leo` with args: `create --vision-key <VISION_KEY> --arch-key <PLAN_KEY>`
+4. **Capture the created SD key** from the `/leo create` output (look for `SD Created: <SD-KEY>` pattern)
+5. **Return control to distill** with the SD key available for wave item linkage
+6. **Output a machine-readable line**: `DISTILL_SD_CREATED=<SD-KEY>` so the calling distill skill can parse it
+
+**If vision/arch registration failed** (keys missing from Step 9.5E): Still auto-chain but report the failure:
+```
+⚠️ Brainstorm complete but vision/arch registration failed.
+DISTILL_SD_CREATED=NONE
+```
+
+**For all other invocation sources** (interactive brainstorm, not from distill): use the standard AskUserQuestion flow below.
+
+---
+
 **If outcome is "Ready for SD" AND vision/arch were registered in Step 9.5:**
 ```
 question: "Vision and architecture plan are registered in EVA. Ready to create SDs?"

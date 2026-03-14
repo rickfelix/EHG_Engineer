@@ -450,7 +450,11 @@ For each item in the brainstorm queue, process one at a time:
    Focus the brainstorm on shaping the chairman's stated intent into an actionable plan.
    ```
 
-3. **After brainstorm completes**, link back and update queue:
+3. **After brainstorm completes**, capture the created SD key and link back:
+
+   The brainstorm skill (when invoked from distill) outputs `DISTILL_SD_CREATED=<SD-KEY>` at the end of its auto-chain. Parse this from the brainstorm output.
+
+   - **If `DISTILL_SD_CREATED=<SD-KEY>`** (SD was created): Update the intake item with both brainstorm session and created SD:
 
    ```bash
    node -e "
@@ -458,15 +462,33 @@ For each item in the brainstorm queue, process one at a time:
    const { createClient } = require('@supabase/supabase-js');
    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
    sb.from('eva_todoist_intake').update({
-     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID'
+     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID | SD: SD_KEY'
    }).eq('id', 'ITEM_UUID').then(({error}) => {
      if (error) console.error('Error:', error.message);
-     else console.log('Linked brainstorm to intake item');
+     else console.log('Linked brainstorm + SD to intake item');
    });
    "
    ```
 
-4. Update queue display: `[DONE] "Item title..." → sd_created (VISION-KEY, ARCH-KEY)`
+   - **If `DISTILL_SD_CREATED=NONE`** (brainstorm completed but SD creation failed): Update with brainstorm only:
+
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   sb.from('eva_todoist_intake').update({
+     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID (no SD created)'
+   }).eq('id', 'ITEM_UUID').then(({error}) => {
+     if (error) console.error('Error:', error.message);
+     else console.log('Linked brainstorm to intake item (SD creation failed)');
+   });
+   "
+   ```
+
+4. Update queue display:
+   - With SD: `[DONE] "Item title..." → sd_created (SD-KEY)`
+   - Without SD: `[DONE] "Item title..." → brainstormed (no SD)`
 
 5. **Continue to next item** in queue automatically.
 
@@ -499,21 +521,37 @@ After the pipeline completes, summarize:
 - Number of waves proposed and their themes
 - Whether results were persisted (live run) or previewed (dry run)
 
-**Step 5: Next steps**
+**Step 5: Next steps (interactive)**
 
-If this was a live run (not dry-run), show:
+If this was a live run (not dry-run), present an AskUserQuestion with recommended next actions:
+
 ```
-Chairman Review (next steps):
-  /distill status                              View roadmap waves
-  /distill approve --roadmap-id <id>           Approve wave sequence
-  /distill promote --wave-id <id>              Promote wave to SDs
+question: "Distill pipeline complete. What would you like to do next?"
+header: "Next Steps"
+options:
+  - label: "View roadmap status"
+    description: "Show wave breakdown and progress (/distill status)"
+  - label: "Approve wave sequence"
+    description: "Lock wave ordering for promotion (/distill approve)"
+  - label: "Run refinement pipeline"
+    description: "Dedup, reconcile, and score wave items (/distill refine)"
+  - label: "Done for now"
+    description: "End distill session — resume later with /distill status"
 ```
 
-If this was a dry run, suggest:
+Auto-invoke the selected command via the Skill tool. If "Approve wave sequence" is selected, the system will need a `--roadmap-id` — fetch the most recent roadmap ID and pass it automatically.
+
+If this was a dry run, present:
 ```
-Looks good? Run without --dry-run to persist:
-  /distill
-  /distill --skip-sync    (if items already synced)
+question: "Dry run complete. Ready to persist?"
+header: "Dry Run Results"
+options:
+  - label: "Run live (persist to DB)"
+    description: "Re-run pipeline without --dry-run to write results"
+  - label: "Run live (skip sync)"
+    description: "Persist without re-syncing sources (/distill --skip-sync)"
+  - label: "Done for now"
+    description: "Review results later"
 ```
 
 ---
