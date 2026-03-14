@@ -157,18 +157,21 @@ async function handleSynthesize(opts) {
 }
 
 // ============================================================================
-// Subcommand: check (placeholder - implemented in Child D)
+// Subcommand: check (SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-D)
 // ============================================================================
 
 async function handleCheck(opts) {
-  if (!opts.synthesisPromptId) {
-    console.error('Error: --synthesis-prompt-id is required for check subcommand');
+  if (!opts.synthesisPromptId && !opts.ventureId) {
+    console.error('Error: --synthesis-prompt-id or --venture-id is required for check subcommand');
     process.exit(1);
   }
-  console.log(`\n✅ SRIP Quality Check`);
-  console.log(`   Synthesis Prompt: ${opts.synthesisPromptId}`);
-  console.log(`\n   ⚠️  Quality Check module not yet implemented.`);
-  console.log(`   This will be implemented in SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-D.`);
+  const { runQualityCheck } = await import('./srip/quality-checker.mjs');
+  await runQualityCheck({
+    synthesisPromptId: opts.synthesisPromptId || null,
+    ventureId: opts.ventureId || null,
+    builtOutputUrl: opts.url || null,
+    passThreshold: opts.threshold ? Number(opts.threshold) : undefined,
+  });
 }
 
 // ============================================================================
@@ -195,8 +198,11 @@ Subcommands:
               --site-dna-id <id>       Site DNA source (required)
               --brand-interview-id <id> Brand data source (required)
 
-  check       Run Quality Check
-              --synthesis-prompt-id <id> Prompt to validate (required)
+  check       Run Quality Check (6-domain fidelity scoring)
+              --synthesis-prompt-id <id> Prompt to validate against
+              --venture-id <id>        Venture to check (uses latest DNA)
+              --url <url>              Built output URL to evaluate
+              --threshold <n>          Pass threshold (default: 70)
 
   list        List SRIP artifacts
               --venture-id <id>        Filter by venture (optional)
