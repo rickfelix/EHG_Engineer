@@ -377,6 +377,63 @@ sb.from('eva_todoist_intake').update({
 
 Present the Gemini analysis to the chairman as a summary after all items are processed.
 
+**Step 2e: Route items with chairman notes to brainstorming**
+
+After Gemini analysis completes (Step 2d), check if any reviewed items have chairman notes AND a Gemini analysis. These items should go through the brainstorm process instead of directly to wave clustering.
+
+For each item with `chairman_notes` AND Gemini analysis:
+
+1. **Invoke `/brainstorm` with the item as the topic**, seeded with context:
+
+   Use the Skill tool to invoke brainstorm with arguments constructed from the item:
+
+   ```
+   skill: "brainstorm"
+   args: "<item title> --domain <auto-detect from target_application>"
+   ```
+
+   Domain mapping from `target_application`:
+   - `ehg_engineer` → `protocol` or `architecture` (auto-detect from aspects)
+   - `ehg_app` → `venture` or `architecture`
+   - `new_venture` → `venture`
+
+   **IMPORTANT**: Before the brainstorm skill starts its discovery questions, inject the following context so it doesn't ask redundant questions:
+
+   ```
+   Pre-seeded context from EVA intake:
+   - Chairman's intent: "<chairman_notes>"
+   - Video/content analysis: "<gemini_analysis>"
+   - Source: <todoist_url>
+   - Application: <target_application>
+   - Aspects: <target_aspects>
+
+   Use this context to skip discovery questions the chairman has already answered.
+   Focus the brainstorm on shaping the chairman's stated intent into an actionable plan.
+   ```
+
+2. **After brainstorm completes**, link the brainstorm session back to the intake item:
+
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   // Update intake item with brainstorm reference
+   sb.from('eva_todoist_intake').update({
+     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID'
+   }).eq('id', 'ITEM_UUID').then(({error}) => {
+     if (error) console.error('Error:', error.message);
+     else console.log('Linked brainstorm to intake item');
+   });
+   "
+   ```
+
+3. **If brainstorm outcome is "Ready for SD"**: The brainstorm skill already creates vision + architecture docs and suggests SD creation. No additional action needed from `/distill`.
+
+4. **If brainstorm outcome is "Consideration Only" or "Needs Triage"**: The item stays in its wave for future review. The brainstorm analysis enriches its context.
+
+**Items WITHOUT chairman notes** skip brainstorming and proceed directly to Phase 3 (wave clustering) as before.
+
 **Phase 3: Waves + Archive + Status (automated)**
 
 Resume the pipeline from Step 4:
@@ -422,7 +479,9 @@ Looks good? Run without --dry-run to persist:
 | 1. Sync | Pull new items from Todoist + YouTube | `eva-idea-sync.js` |
 | 2. Classify | AI classification using 3D taxonomy | `eva-intake-classify.js` |
 | 2.5. Enrich | YouTube metadata, web summaries, SPA detection | `eva/intake-enricher.js` |
-| 3. Chairman Review | Interactive intent review via AskUserQuestion | **Inline** (not subprocess) |
+| 3. Chairman Review | Interactive intent review via AskUserQuestion + notes | **Inline** (not subprocess) |
+| 3.5. Gemini Analysis | Analyze YouTube videos guided by chairman's intent | `video-metadata.js` |
+| 3.7. Brainstorm | Shape items with notes into actionable plans | **Inline** → `/brainstorm` skill |
 | 4. Cluster | AI groups classified items into 2-6 execution waves | `roadmap-generate.js` |
 | 5. Archive | Move classified items to Processed | `eva-intake-archive.js` |
 | 6. Status | Display roadmap with wave breakdown | `roadmap-status.js` |
