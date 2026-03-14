@@ -99,6 +99,18 @@ if (fromStep <= 2) {
   console.log('\n── Step 2: Classify ── SKIPPED\n');
 }
 
+// ─── Step 2.5: Enrich ──────────────────────────────────────
+if (fromStep <= 2) {
+  header('2.5', 'Enrich classified items');
+  const enrichFlags = dryRun ? ' --dry-run' : '';
+  const ok = run(`node scripts/eva/intake-enricher.js${enrichFlags}`);
+  if (!ok) {
+    console.error('  ⚠ Enrichment had errors. Check output above.\n');
+  }
+} else {
+  console.log('\n── Step 2.5: Enrich ── SKIPPED\n');
+}
+
 // ─── Step 3: Chairman Review ─────────────────────────────────
 if (fromStep <= 3 && !skipReview) {
   header(3, 'Chairman intake review');
