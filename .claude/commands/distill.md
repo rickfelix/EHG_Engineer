@@ -452,6 +452,8 @@ For each item in the brainstorm queue, process one at a time:
 
 3. **After brainstorm completes**, auto-chain: vision → arch → SD → roadmap link
 
+   The brainstorm skill (when invoked from distill with `source: 'distill'`) auto-chains through vision, arch, and SD creation without prompting (Step 11.0). It outputs `DISTILL_SD_CREATED=<SD-KEY>` when complete. Parse this, or fall back to querying the brainstorm session metadata.
+
    The brainstorm skill outputs a `brainstorm_session_id`. Use it to:
 
    **3a. Link brainstorm to intake item:**
@@ -461,15 +463,15 @@ For each item in the brainstorm queue, process one at a time:
    const { createClient } = require('@supabase/supabase-js');
    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
    sb.from('eva_todoist_intake').update({
-     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID'
+     enrichment_summary: 'EXISTING_SUMMARY | Brainstorm: SESSION_ID | SD: SD_KEY'
    }).eq('id', 'ITEM_UUID').then(({error}) => {
      if (error) console.error('Error:', error.message);
-     else console.log('Linked brainstorm to intake item');
+     else console.log('Linked brainstorm + SD to intake item');
    });
    "
    ```
 
-   **3b. Check if brainstorm produced vision + arch docs:**
+   **3b. Check if brainstorm produced vision + arch docs (fallback if DISTILL_SD_CREATED not parsed):**
    ```bash
    node -e "
    require('dotenv').config();
@@ -522,7 +524,7 @@ For each item in the brainstorm queue, process one at a time:
    require('dotenv').config();
    const { createClient } = require('@supabase/supabase-js');
    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-   // Update wave item with promoted_sd_key if this item came from a wave
+   // Update wave item with promoted_to_sd_key if this item came from a wave
    sb.from('roadmap_wave_items')
      .update({ promoted_to_sd_key: 'SD_KEY_CREATED' })
      .eq('source_id', 'BRAINSTORM_SESSION_ID')
@@ -571,21 +573,37 @@ After the pipeline completes, summarize:
 - Number of waves proposed and their themes
 - Whether results were persisted (live run) or previewed (dry run)
 
-**Step 5: Next steps**
+**Step 5: Next steps (interactive)**
 
-If this was a live run (not dry-run), show:
+If this was a live run (not dry-run), present an AskUserQuestion with recommended next actions:
+
 ```
-Chairman Review (next steps):
-  /distill status                              View roadmap waves
-  /distill approve --roadmap-id <id>           Approve wave sequence
-  /distill promote --wave-id <id>              Promote wave to SDs
+question: "Distill pipeline complete. What would you like to do next?"
+header: "Next Steps"
+options:
+  - label: "View roadmap status"
+    description: "Show wave breakdown and progress (/distill status)"
+  - label: "Approve wave sequence"
+    description: "Lock wave ordering for promotion (/distill approve)"
+  - label: "Run refinement pipeline"
+    description: "Dedup, reconcile, and score wave items (/distill refine)"
+  - label: "Done for now"
+    description: "End distill session — resume later with /distill status"
 ```
 
-If this was a dry run, suggest:
+Auto-invoke the selected command via the Skill tool. If "Approve wave sequence" is selected, the system will need a `--roadmap-id` — fetch the most recent roadmap ID and pass it automatically.
+
+If this was a dry run, present:
 ```
-Looks good? Run without --dry-run to persist:
-  /distill
-  /distill --skip-sync    (if items already synced)
+question: "Dry run complete. Ready to persist?"
+header: "Dry Run Results"
+options:
+  - label: "Run live (persist to DB)"
+    description: "Re-run pipeline without --dry-run to write results"
+  - label: "Run live (skip sync)"
+    description: "Persist without re-syncing sources (/distill --skip-sync)"
+  - label: "Done for now"
+    description: "Review results later"
 ```
 
 ---
