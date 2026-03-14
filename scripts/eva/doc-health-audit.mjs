@@ -692,8 +692,8 @@ async function main() {
 }
 
 // ESM entry point (handles Windows path differences)
-const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
-  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
+const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
 
 if (isMainModule) {
   main();

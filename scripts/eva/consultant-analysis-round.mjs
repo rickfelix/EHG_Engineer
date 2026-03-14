@@ -400,6 +400,8 @@ export async function consultantAnalysisHandler(options = {}) {
         action_type: 'review',
         status: 'pending',
         application_domain: finding.domain,
+        analysis_domain: finding.domain,
+        confidence_tier: finding.tier,
         detected_by: 'consultant-analysis-round.mjs',
       }, { onConflict: 'recommendation_date,title' });
 
@@ -437,8 +439,8 @@ export function registerConsultantAnalysisRound(scheduler) {
 }
 
 // Manual trigger support
-if (import.meta.url === `file://${process.argv[1]}` ||
-    import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
+if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` ||
+    import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`)) {
   console.log('[consultant-analysis] Manual trigger starting...');
   consultantAnalysisHandler().then(result => {
     console.log('[consultant-analysis] Result:', JSON.stringify(result, null, 2));

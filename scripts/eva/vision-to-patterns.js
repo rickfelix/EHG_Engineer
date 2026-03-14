@@ -285,8 +285,8 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
 // CLI entry point
 // ============================================================================
 
-const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
-                     import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
+const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
 
 if (isMainModule) {
   const args = process.argv.slice(2);
@@ -299,14 +299,14 @@ if (isMainModule) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
-  console.log(`\n🔄 Vision-to-Patterns Sync`);
+  console.log('\n🔄 Vision-to-Patterns Sync');
   console.log(`   Lookback: ${lookbackDays} days`);
   console.log(`   Dry Run:  ${dryRun}`);
   console.log('');
 
   syncVisionScoresToPatterns(supabase, { dryRun, lookbackDays })
     .then(({ synced, skipped, errors }) => {
-      console.log(`\n✅ Sync complete`);
+      console.log('\n✅ Sync complete');
       console.log(`   Synced:  ${synced} dimension patterns`);
       console.log(`   Skipped: ${skipped} high-scoring dimensions`);
       console.log(`   Errors:  ${errors}`);
