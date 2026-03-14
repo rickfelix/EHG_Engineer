@@ -3,16 +3,13 @@
  * SD: SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-D
  *
  * Stage 4 of the SRIP pipeline: Quality Check
- * Validates built UI output against reference site using 6-domain fidelity scoring.
+ * Evaluates a synthesis prompt across 6 design domains and records
+ * a pass/fail result in srip_quality_checks.
  *
- * Domains: layout, visual_composition, design_system, interaction_patterns,
- *          technical_implementation, accessibility
+ * Domains: layout, visual_composition, design_system, interaction, technical, accessibility
  *
- * Each domain returns { score: 0-100, gaps: string[] }
- * Overall score is weighted average. Pass threshold: 70%.
- *
- * Input: ventureId (looks up synthesis prompt + site DNA)
- * Output: Quality check record in srip_quality_checks table
+ * Input: synthesisPromptId
+ * Output: Quality check record stored in srip_quality_checks
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -20,312 +17,317 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PASS_THRESHOLD = 70;
+const DEFAULT_PASS_THRESHOLD = 70;
 
-const DOMAIN_WEIGHTS = {
-  layout: 0.20,
-  visual_composition: 0.15,
-  design_system: 0.20,
-  interaction_patterns: 0.15,
-  technical_implementation: 0.15,
-  accessibility: 0.15,
-};
+// ============================================================================
+// Keyword / Section Detection Helpers
+// ============================================================================
+
+/**
+ * Count how many keywords from a list appear in the text (case-insensitive).
+ * Returns { found: string[], missing: string[] }.
+ */
+function checkKeywords(text, keywords) {
+  const lower = (text || '').toLowerCase();
+  const found = [];
+  const missing = [];
+  for (const kw of keywords) {
+    if (lower.includes(kw.toLowerCase())) {
+      found.push(kw);
+    } else {
+      missing.push(kw);
+    }
+  }
+  return { found, missing };
+}
+
+/**
+ * Score based on keyword presence. Returns 0-100.
+ */
+function keywordScore(found, total) {
+  if (total === 0) return 0;
+  return Math.round((found / total) * 100);
+}
 
 // ============================================================================
 // Domain Scorers
 // ============================================================================
 
+const LAYOUT_KEYWORDS = [
+  'grid', 'flexbox', 'css-grid', 'layout',
+  'section', 'column', 'row',
+  'responsive', 'mobile', 'desktop', 'breakpoint',
+  'header', 'footer', 'hero', 'sidebar',
+];
+
 /**
- * Score layout fidelity: grid structure, spacing, responsive breakpoints.
- * @param {object} dna - Site DNA JSON
- * @param {object} synthesis - Synthesis prompt data
- * @returns {{score: number, gaps: string[]}}
+ * Score layout specifications in the prompt text.
+ * Checks for grid/flex systems, sections, responsive mentions.
  */
-export function scoreLayout(dna, synthesis) {
+export function scoreLayout(promptText, _dnaJson) {
+  const { found, missing } = checkKeywords(promptText, LAYOUT_KEYWORDS);
   const gaps = [];
-  let score = 100;
-
-  const layout = dna?.layout || dna?.structure?.layout || {};
-  if (!layout.grid && !layout.columns) {
-    gaps.push('No grid/column structure defined in Site DNA');
-    score -= 30;
+  if (!found.some(k => ['grid', 'flexbox', 'css-grid'].includes(k))) {
+    gaps.push('No grid system specified (grid, flexbox, or css-grid)');
   }
-  if (!layout.breakpoints && !dna?.design_tokens?.breakpoints) {
-    gaps.push('No responsive breakpoints defined');
-    score -= 20;
+  if (!found.some(k => ['section', 'header', 'footer', 'hero', 'sidebar'].includes(k))) {
+    gaps.push('No page sections defined (header, footer, hero, sidebar)');
   }
-  if (!synthesis?.sections?.find(s => s.title === 'LAYOUT' || s.title === 'STRUCTURE')) {
-    gaps.push('Synthesis prompt missing LAYOUT section');
-    score -= 15;
+  if (!found.some(k => ['responsive', 'mobile', 'desktop', 'breakpoint'].includes(k))) {
+    gaps.push('No responsive strategy mentioned');
   }
-
-  return { score: Math.max(0, score), gaps };
+  const score = keywordScore(found.length, LAYOUT_KEYWORDS.length);
+  return { score, gaps };
 }
 
+const VISUAL_COMPOSITION_KEYWORDS = [
+  'hierarchy', 'focal', 'contrast',
+  'whitespace', 'spacing', 'padding', 'margin',
+  'alignment', 'center', 'left-aligned', 'right-aligned',
+  'visual rhythm', 'composition', 'weight',
+];
+
 /**
- * Score visual composition: hero areas, imagery, color usage.
+ * Score visual composition quality in the prompt text.
+ * Checks for visual hierarchy, whitespace, alignment.
  */
-export function scoreVisualComposition(dna, synthesis) {
+export function scoreVisualComposition(promptText, _dnaJson) {
+  const { found, missing } = checkKeywords(promptText, VISUAL_COMPOSITION_KEYWORDS);
   const gaps = [];
-  let score = 100;
-
-  const visual = dna?.visual_composition || {};
-  if (!visual.hero_pattern && !visual.hero) {
-    gaps.push('No hero pattern defined');
-    score -= 25;
+  if (!found.some(k => ['hierarchy', 'focal', 'weight'].includes(k))) {
+    gaps.push('No visual hierarchy or focal point defined');
   }
-  if (!visual.imagery_style && !dna?.design_tokens?.imagery) {
-    gaps.push('No imagery style guidance');
-    score -= 20;
+  if (!found.some(k => ['whitespace', 'spacing', 'padding', 'margin'].includes(k))) {
+    gaps.push('No whitespace or spacing strategy specified');
   }
-  if (!visual.color_usage && !dna?.design_tokens?.colors) {
-    gaps.push('No color usage patterns');
-    score -= 20;
+  if (!found.some(k => ['alignment', 'center', 'left-aligned', 'right-aligned'].includes(k))) {
+    gaps.push('No alignment approach specified');
   }
-
-  return { score: Math.max(0, score), gaps };
+  const score = keywordScore(found.length, VISUAL_COMPOSITION_KEYWORDS.length);
+  return { score, gaps };
 }
 
+const DESIGN_SYSTEM_KEYWORDS = [
+  'color', 'primary', 'secondary', 'accent', 'background',
+  'font', 'typography', 'size', 'weight',
+  'spacing', 'border', 'radius', 'shadow',
+  'token', 'design system',
+];
+
 /**
- * Score design system: tokens, typography, spacing consistency.
+ * Score design system / design token coverage.
+ * Checks for colors, typography, spacing tokens.
  */
-export function scoreDesignSystem(dna, synthesis) {
+export function scoreDesignSystem(promptText, _dnaJson) {
+  const { found, missing } = checkKeywords(promptText, DESIGN_SYSTEM_KEYWORDS);
   const gaps = [];
-  let score = 100;
-
-  const tokens = dna?.design_tokens || {};
-  if (!tokens.colors || Object.keys(tokens.colors).length < 2) {
-    gaps.push('Insufficient color tokens (need at least 2)');
-    score -= 25;
+  if (!found.some(k => ['color', 'primary', 'secondary', 'accent', 'background'].includes(k))) {
+    gaps.push('No color tokens defined');
   }
-  if (!tokens.typography || !tokens.typography.font_family) {
-    gaps.push('Typography tokens missing font_family');
-    score -= 20;
+  if (!found.some(k => ['font', 'typography', 'size', 'weight'].includes(k))) {
+    gaps.push('No typography tokens defined');
   }
-  if (!tokens.spacing || tokens.spacing.length < 3) {
-    gaps.push('Spacing scale too small (need at least 3 values)');
-    score -= 15;
+  if (!found.some(k => ['spacing', 'border', 'radius', 'shadow'].includes(k))) {
+    gaps.push('No spacing or shape tokens defined');
   }
-
-  const designSection = synthesis?.sections?.find(s => s.title === 'DESIGN_SYSTEM');
-  if (!designSection) {
-    gaps.push('Synthesis prompt missing DESIGN_SYSTEM section');
-    score -= 15;
-  }
-
-  return { score: Math.max(0, score), gaps };
+  const score = keywordScore(found.length, DESIGN_SYSTEM_KEYWORDS.length);
+  return { score, gaps };
 }
 
+const INTERACTION_KEYWORDS = [
+  'button', 'input', 'form', 'modal', 'tooltip', 'accordion', 'dropdown',
+  'hover', 'active', 'focus', 'disabled', 'state',
+  'animation', 'transition', 'motion',
+  'click', 'component', 'interactive',
+];
+
 /**
- * Score interaction patterns: navigation, CTAs, forms.
+ * Score interaction / component behavior specifications.
+ * Checks for component types, states, animations.
  */
-export function scoreInteractionPatterns(dna, synthesis) {
+export function scoreInteraction(promptText, _dnaJson) {
+  const { found, missing } = checkKeywords(promptText, INTERACTION_KEYWORDS);
   const gaps = [];
-  let score = 100;
-
-  const interactions = dna?.interaction_patterns || dna?.interactions || {};
-  if (!interactions.navigation && !dna?.navigation) {
-    gaps.push('No navigation pattern defined');
-    score -= 30;
+  if (!found.some(k => ['button', 'input', 'form', 'modal', 'tooltip', 'accordion', 'dropdown'].includes(k))) {
+    gaps.push('No interactive components specified');
   }
-  if (!interactions.cta_style && !interactions.buttons) {
-    gaps.push('No CTA/button style defined');
-    score -= 20;
+  if (!found.some(k => ['hover', 'active', 'focus', 'disabled', 'state'].includes(k))) {
+    gaps.push('No component states defined (hover, active, focus, disabled)');
   }
-  if (!interactions.forms && !interactions.inputs) {
-    gaps.push('No form/input patterns defined');
-    score -= 15;
+  if (!found.some(k => ['animation', 'transition', 'motion'].includes(k))) {
+    gaps.push('No animation or transition behavior specified');
   }
-
-  return { score: Math.max(0, score), gaps };
+  const score = keywordScore(found.length, INTERACTION_KEYWORDS.length);
+  return { score, gaps };
 }
 
+const TECHNICAL_KEYWORDS = [
+  'react', 'vue', 'angular', 'svelte', 'next.js', 'framework',
+  'tailwind', 'css', 'sass', 'styled', 'module',
+  'vite', 'webpack', 'build',
+  'ssr', 'ssg', 'csr', 'rendering',
+  'typescript', 'javascript',
+];
+
 /**
- * Score technical implementation: component structure, performance hints.
+ * Score technical implementation specifications.
+ * Checks for framework, CSS approach, build tool references.
  */
-export function scoreTechnicalImplementation(dna, synthesis) {
+export function scoreTechnical(promptText, _dnaJson) {
+  const { found, missing } = checkKeywords(promptText, TECHNICAL_KEYWORDS);
   const gaps = [];
-  let score = 100;
-
-  const tech = dna?.technical || {};
-  if (!tech.framework && !tech.stack) {
-    gaps.push('No framework/stack specified');
-    score -= 20;
+  if (!found.some(k => ['react', 'vue', 'angular', 'svelte', 'next.js', 'framework'].includes(k))) {
+    gaps.push('No frontend framework specified');
   }
-  if (!tech.component_naming && !tech.conventions) {
-    gaps.push('No component naming conventions');
-    score -= 15;
+  if (!found.some(k => ['tailwind', 'css', 'sass', 'styled', 'module'].includes(k))) {
+    gaps.push('No CSS approach specified');
   }
-  if (!synthesis?.metadata?.target_framework) {
-    gaps.push('Synthesis missing target framework metadata');
-    score -= 15;
+  if (!found.some(k => ['vite', 'webpack', 'build'].includes(k))) {
+    gaps.push('No build tool specified');
   }
-
-  return { score: Math.max(0, score), gaps };
+  const score = keywordScore(found.length, TECHNICAL_KEYWORDS.length);
+  return { score, gaps };
 }
 
+const ACCESSIBILITY_KEYWORDS = [
+  'alt', 'alt text', 'aria', 'role', 'label',
+  'contrast', 'wcag', 'a11y', 'accessible',
+  'keyboard', 'tab', 'focus', 'screen reader',
+  'semantic', 'landmark',
+];
+
 /**
- * Score accessibility: ARIA patterns, contrast, semantic HTML.
+ * Score accessibility coverage in the prompt.
+ * Checks for alt text, contrast, keyboard navigation mentions.
  */
-export function scoreAccessibility(dna, synthesis) {
+export function scoreAccessibility(promptText, _dnaJson) {
+  const { found, missing } = checkKeywords(promptText, ACCESSIBILITY_KEYWORDS);
   const gaps = [];
-  let score = 100;
-
-  const a11y = dna?.accessibility || {};
-  if (!a11y.aria_patterns && !a11y.landmarks) {
-    gaps.push('No ARIA/landmark patterns defined');
-    score -= 25;
+  if (!found.some(k => ['alt', 'alt text', 'aria', 'role', 'label'].includes(k))) {
+    gaps.push('No alt text or ARIA attributes mentioned');
   }
-  if (!a11y.color_contrast && !a11y.contrast) {
-    gaps.push('No color contrast requirements');
-    score -= 25;
+  if (!found.some(k => ['contrast', 'wcag', 'a11y', 'accessible'].includes(k))) {
+    gaps.push('No contrast or WCAG compliance mentioned');
   }
-  if (!a11y.semantic_html && !a11y.heading_hierarchy) {
-    gaps.push('No semantic HTML guidance');
-    score -= 20;
+  if (!found.some(k => ['keyboard', 'tab', 'focus', 'screen reader'].includes(k))) {
+    gaps.push('No keyboard navigation or screen reader support mentioned');
   }
-
-  return { score: Math.max(0, score), gaps };
+  const score = keywordScore(found.length, ACCESSIBILITY_KEYWORDS.length);
+  return { score, gaps };
 }
 
 // ============================================================================
-// Core Functions
+// Domain Registry
+// ============================================================================
+
+const DOMAIN_SCORERS = [
+  { key: 'layout', fn: scoreLayout },
+  { key: 'visual_composition', fn: scoreVisualComposition },
+  { key: 'design_system', fn: scoreDesignSystem },
+  { key: 'interaction', fn: scoreInteraction },
+  { key: 'technical', fn: scoreTechnical },
+  { key: 'accessibility', fn: scoreAccessibility },
+];
+
+// ============================================================================
+// Main Entry Point
 // ============================================================================
 
 /**
- * Run quality check across all 6 domains.
- * @param {object} dna - Site DNA JSON
- * @param {object} synthesis - Synthesis prompt data
- * @returns {{domain_scores: object, overall_score: number, gaps: object, eligible: boolean}}
+ * Run quality check on a synthesis prompt across all 6 domains.
+ *
+ * @param {object} params
+ * @param {string} params.synthesisPromptId - UUID of the srip_synthesis_prompts record
+ * @param {object} [params.supabase] - Optional Supabase client
+ * @returns {object|null} The quality check record, or null on failure
  */
-export function runQualityCheck(dna, synthesis) {
-  const scorers = {
-    layout: scoreLayout,
-    visual_composition: scoreVisualComposition,
-    design_system: scoreDesignSystem,
-    interaction_patterns: scoreInteractionPatterns,
-    technical_implementation: scoreTechnicalImplementation,
-    accessibility: scoreAccessibility,
-  };
+export async function runQualityCheck({ synthesisPromptId, supabase }) {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
 
+  console.log('\n   SRIP Quality Check');
+  console.log(`   Synthesis Prompt: ${synthesisPromptId}`);
+
+  // Load synthesis prompt
+  const { data: prompt, error: promptError } = await supabase
+    .from('srip_synthesis_prompts')
+    .select('id, venture_id, site_dna_id, prompt_text, fidelity_target, status')
+    .eq('id', synthesisPromptId)
+    .single();
+
+  if (promptError || !prompt) {
+    console.error(`   Synthesis prompt not found: ${promptError?.message || 'no data'}`);
+    return null;
+  }
+
+  // Load linked site DNA for reference comparison
+  let dnaJson = {};
+  if (prompt.site_dna_id) {
+    const { data: siteDna, error: dnaError } = await supabase
+      .from('srip_site_dna')
+      .select('id, dna_json')
+      .eq('id', prompt.site_dna_id)
+      .single();
+
+    if (!dnaError && siteDna) {
+      dnaJson = siteDna.dna_json || {};
+    }
+  }
+
+  const promptText = prompt.prompt_text || '';
+  console.log(`   Prompt length: ${promptText.length} chars`);
+  console.log(`   Fidelity target: ${prompt.fidelity_target || 'N/A'}%`);
+
+  // Run all 6 domain scorers
   const domainScores = {};
-  const allGaps = {};
-  let weightedTotal = 0;
+  const allGaps = [];
 
-  for (const [domain, scorer] of Object.entries(scorers)) {
-    const result = scorer(dna || {}, synthesis || {});
-    domainScores[domain] = result.score;
-    allGaps[domain] = result.gaps;
-    weightedTotal += result.score * (DOMAIN_WEIGHTS[domain] || 0);
+  for (const { key, fn } of DOMAIN_SCORERS) {
+    const result = fn(promptText, dnaJson);
+    domainScores[key] = result.score;
+    if (result.gaps.length > 0) {
+      for (const gap of result.gaps) {
+        allGaps.push({ domain: key, gap });
+      }
+    }
+    console.log(`   ${key}: ${result.score}/100${result.gaps.length > 0 ? ` (${result.gaps.length} gaps)` : ''}`);
   }
 
-  const overallScore = Math.round(weightedTotal);
+  // Calculate overall score as average of 6 domains
+  const scores = Object.values(domainScores);
+  const overallScore = Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
 
-  return {
+  console.log(`\n   Overall: ${overallScore}/100 | Threshold: ${DEFAULT_PASS_THRESHOLD}`);
+  console.log(`   Result: ${overallScore >= DEFAULT_PASS_THRESHOLD ? 'PASS' : 'FAIL'}`);
+  console.log(`   Total gaps: ${allGaps.length}`);
+
+  // Store in database
+  const checkRecord = {
+    venture_id: prompt.venture_id || null,
+    synthesis_prompt_id: synthesisPromptId,
     domain_scores: domainScores,
     overall_score: overallScore,
     gaps: allGaps,
-    eligible: overallScore >= PASS_THRESHOLD,
+    pass_threshold: DEFAULT_PASS_THRESHOLD,
+    created_by: 'SRIP_QUALITY_CHECK',
   };
-}
 
-/**
- * Execute quality check for a venture and persist results.
- * @param {string} ventureId - Venture UUID or name
- * @param {object} [options]
- * @param {object} [options.supabase] - Supabase client (for testing)
- * @returns {Promise<object>} Quality check result
- */
-export async function executeQualityCheck(ventureId, options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-
-  // Look up latest Site DNA for this venture
-  const { data: dnaRows } = await supabase
-    .from('srip_site_dna')
-    .select('id, venture_id, dna_json')
-    .eq('venture_id', ventureId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  const dna = dnaRows?.[0];
-
-  // Look up latest synthesis prompt
-  const { data: synthRows } = await supabase
-    .from('srip_synthesis_prompts')
-    .select('id, venture_id, prompt_sections, metadata')
-    .eq('venture_id', ventureId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  const synthesis = synthRows?.[0];
-
-  // Run quality check
-  const result = runQualityCheck(
-    dna?.dna_json || {},
-    { sections: synthesis?.prompt_sections || [], metadata: synthesis?.metadata || {} }
-  );
-
-  // Persist result
-  const { data: inserted, error } = await supabase
+  const { data, error } = await supabase
     .from('srip_quality_checks')
-    .insert({
-      venture_id: ventureId,
-      site_dna_id: dna?.id || null,
-      synthesis_prompt_id: synthesis?.id || null,
-      domain_scores: result.domain_scores,
-      overall_score: result.overall_score,
-      gaps: result.gaps,
-      pass_threshold: PASS_THRESHOLD,
-      passed: result.eligible,
-    })
-    .select('id')
-    .single();
+    .insert(checkRecord)
+    .select('id, venture_id, overall_score, pass_threshold, domain_scores, gaps, created_at');
 
   if (error) {
-    console.error('Failed to persist quality check:', error.message);
+    console.error(`   DB insert failed: ${error.message}`);
+    return null;
   }
 
-  return {
-    ...result,
-    id: inserted?.id || null,
-    venture_id: ventureId,
-    site_dna_id: dna?.id || null,
-    synthesis_prompt_id: synthesis?.id || null,
-  };
-}
+  const result = data[0];
+  console.log(`\n   Quality check stored: ${result.id}`);
 
-/**
- * Format quality check result for display.
- */
-export function formatResult(result) {
-  const lines = [
-    '\n📊 SRIP QUALITY CHECK',
-    `   Overall Score: ${result.overall_score}/100 ${result.eligible ? '✅ PASS' : '❌ BELOW THRESHOLD'}`,
-    `   Pass Threshold: ${PASS_THRESHOLD}%`,
-    '',
-    '   Domain Scores:',
-  ];
-
-  for (const [domain, score] of Object.entries(result.domain_scores)) {
-    const label = domain.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const bar = '█'.repeat(Math.round(score / 10)) + '░'.repeat(10 - Math.round(score / 10));
-    lines.push(`   ${bar} ${score}% ${label}`);
-  }
-
-  const totalGaps = Object.values(result.gaps).flat();
-  if (totalGaps.length > 0) {
-    lines.push('');
-    lines.push(`   Gaps (${totalGaps.length}):`);
-    for (const gap of totalGaps.slice(0, 10)) {
-      lines.push(`   ⚠️  ${gap}`);
-    }
-    if (totalGaps.length > 10) {
-      lines.push(`   ... and ${totalGaps.length - 10} more`);
-    }
-  }
-
-  return lines.join('\n');
+  return result;
 }
