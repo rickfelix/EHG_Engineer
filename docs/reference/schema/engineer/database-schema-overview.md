@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-13T22:17:42.364Z
-**Tables**: 555
+**Generated**: 2026-03-14T10:45:26.022Z
+**Tables**: 559
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -500,6 +500,10 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [soul_extractions](tables/soul_extractions.md) | N/A (RLS restricted) | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
+| [srip_brand_interviews](tables/srip_brand_interviews.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction. |
+| [srip_quality_checks](tables/srip_quality_checks.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility. |
+| [srip_site_dna](tables/srip_site_dna.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication. |
+| [srip_synthesis_prompts](tables/srip_synthesis_prompts.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores generated one-shot replication prompts that synthesize site DNA and brand interview data into actionable site generation instructions. |
 | [stage13_assessments](tables/stage13_assessments.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated exit readiness assessments. SD-STAGE-13-001. |
 | [stage13_substage_states](tables/stage13_substage_states.md) | N/A (RLS restricted) | ✅ | 1 | Tracks current Stage 13 substage position per venture. SD-STAGE-13-001. |
 | [stage13_valuations](tables/stage13_valuations.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated valuation models with confidence scores. SD-STAGE-13-001. |
@@ -786,7 +790,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (429 tables)
+### Other (433 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1120,6 +1124,10 @@ Reference: docs/workflow/stages_v2.yaml
 - [simulation_sessions](tables/simulation_sessions.md) - Tracks Genesis simulation lifecycle including ephemeral deployments and incineration
 - [skill_assessment_scores](tables/skill_assessment_scores.md)
 - [soul_extractions](tables/soul_extractions.md) - Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17)
+- [srip_brand_interviews](tables/srip_brand_interviews.md) - SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction.
+- [srip_quality_checks](tables/srip_quality_checks.md) - SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility.
+- [srip_site_dna](tables/srip_site_dna.md) - SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication.
+- [srip_synthesis_prompts](tables/srip_synthesis_prompts.md) - SRIP: Stores generated one-shot replication prompts that synthesize site DNA and brand interview data into actionable site generation instructions.
 - [stage13_assessments](tables/stage13_assessments.md) - EVA-generated exit readiness assessments. SD-STAGE-13-001.
 - [stage13_substage_states](tables/stage13_substage_states.md) - Tracks current Stage 13 substage position per venture. SD-STAGE-13-001.
 - [stage13_valuations](tables/stage13_valuations.md) - EVA-generated valuation models with confidence scores. SD-STAGE-13-001.
@@ -2089,6 +2097,22 @@ _Key relationships between tables:_
 
 **soul_extractions**:
 - `simulation_session_id` → `simulation_sessions.id`
+
+**srip_brand_interviews**:
+- `site_dna_id` → `srip_site_dna.id`
+- `venture_id` → `ventures.id`
+
+**srip_quality_checks**:
+- `synthesis_prompt_id` → `srip_synthesis_prompts.id`
+- `venture_id` → `ventures.id`
+
+**srip_site_dna**:
+- `venture_id` → `ventures.id`
+
+**srip_synthesis_prompts**:
+- `brand_interview_id` → `srip_brand_interviews.id`
+- `site_dna_id` → `srip_site_dna.id`
+- `venture_id` → `ventures.id`
 
 **stage13_assessments**:
 - `venture_id` → `ventures.id`
