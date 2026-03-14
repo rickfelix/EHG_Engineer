@@ -245,33 +245,104 @@ Usage: /distill promote --wave-id <uuid>
 
 ### If no subcommand (default — run pipeline):
 
-**Step 1: Build the command**
+The pipeline runs in 3 phases: automated pre-processing, interactive chairman review, then automated post-processing.
 
-Start with the base command and append flags from arguments:
+**Phase 1: Sync + Classify + Enrich (automated)**
 
-```bash
-node scripts/eva-intake-pipeline.js [flags]
-```
-
-Pass through any flags the user provided (`--dry-run`, `--skip-sync`, `--from-step N`, `--app <app>`).
-
-**Step 2: Execute the pipeline**
+Run Steps 1-2.5 of the pipeline (sync, classify, enrich) via subprocess. Pass through user flags.
 
 ```bash
-node scripts/eva-intake-pipeline.js $FLAGS
+node scripts/eva-intake-pipeline.js --from-step 1 --skip-review $FLAGS
 ```
 
-Use `timeout: 600000` (10 minutes) — the AI classification and clustering steps can take time with 200+ items.
+Use `timeout: 600000`. The `--skip-review` flag skips the auto-review — we handle review interactively below.
 
-**Step 3: Present results**
+**Phase 2: Chairman Interactive Review (inline via AskUserQuestion)**
+
+After Phase 1 completes, fetch unreviewed items and present them to the chairman for intent decisions.
+
+**Step 2a: Fetch unreviewed items**
+
+```bash
+node scripts/eva/chairman-intake-review.js --interactive
+```
+
+Use `timeout: 45000`. Parse the output between `REVIEW_ITEMS_START` and `REVIEW_ITEMS_END` as JSON. Also capture `REVIEW_COUNT=N`.
+
+If `REVIEW_COUNT=0`, skip to Phase 3 — no items need review.
+
+**Step 2b: Present items to chairman via AskUserQuestion**
+
+For each item in the review JSON (or batched in groups of up to 4 — AskUserQuestion supports 1-4 questions per call):
+
+Each item has: `itemId`, `markdown` (formatted description), `options` (intent choices with AI recommendation first), `title`.
+
+Present using AskUserQuestion:
+- `question`: Use the item's `markdown` field — it contains title, source, application, aspects, enrichment summary, confidence, and description
+- `header`: "Review"
+- `options`: Use the item's `options` array (Build/Research/Reference/Improve with AI recommendation marked)
+- `multiSelect`: false
+
+**Batching strategy** (for efficiency when many items):
+- If ≤ 4 items: present all in a single AskUserQuestion call (one question per item)
+- If 5-20 items: batch into groups of 4, present sequentially
+- If > 20 items: present an initial AskUserQuestion asking:
+  - "Auto-approve all N items with AI recommendations" — stamps all items without further questions
+  - "Review each item individually" — presents each item (batched in groups of 4)
+  - "Review only low-confidence items (< 80%)" — auto-approves high-confidence, presents only low-confidence ones
+
+**Step 2c: Store decisions**
+
+For each item the chairman reviewed, store the decision. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. So we store the chairman's action-intent choice by mapping it BACK to capture-intent for storage:
+
+| Chairman chose | Store as `chairman_intent` |
+|---------------|---------------------------|
+| Build | `idea` |
+| Improve | `insight` |
+| Reference | `reference` |
+| Research | `question` |
+
+For each reviewed item, run:
+
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+sb.from('eva_todoist_intake').update({
+  chairman_intent: 'INTENT_VALUE',
+  chairman_reviewed_at: new Date().toISOString()
+}).eq('id', 'ITEM_UUID').then(({error}) => {
+  if (error) console.error('Error:', error.message);
+  else console.log('OK');
+});
+"
+```
+
+Replace `INTENT_VALUE` with the mapped capture-intent value and `ITEM_UUID` with the item ID.
+
+You can batch multiple updates into a single script for efficiency.
+
+**Phase 3: Waves + Archive + Status (automated)**
+
+Resume the pipeline from Step 4:
+
+```bash
+node scripts/eva-intake-pipeline.js --from-step 4 $FLAGS
+```
+
+Use `timeout: 600000`.
+
+**Step 4: Present results**
 
 After the pipeline completes, summarize:
 - How many items were synced (if sync ran)
 - Classification coverage (should be 100% if all items classified)
+- How many items the chairman reviewed and the intent distribution
 - Number of waves proposed and their themes
 - Whether results were persisted (live run) or previewed (dry run)
 
-**Step 4: Next steps**
+**Step 5: Next steps**
 
 If this was a live run (not dry-run), show:
 ```
@@ -292,13 +363,15 @@ Looks good? Run without --dry-run to persist:
 
 ## Pipeline Steps Reference
 
-| Step | What it does | Script |
-|------|-------------|--------|
+| Step | What it does | Script / Method |
+|------|-------------|-----------------|
 | 1. Sync | Pull new items from Todoist + YouTube | `eva-idea-sync.js` |
-| 2. Classify | AI classification using 3D taxonomy (App + Aspects + Intent) | `eva-intake-classify.js` |
-| 3. Cluster | AI groups classified items into 2-6 execution waves | `roadmap-generate.js` |
-| 4. Archive | Move classified items to Processed (Todoist project + YouTube playlist) | `eva-intake-archive.js` |
-| 5. Status | Display roadmap with wave breakdown | `roadmap-status.js` |
+| 2. Classify | AI classification using 3D taxonomy | `eva-intake-classify.js` |
+| 2.5. Enrich | YouTube metadata, web summaries, SPA detection | `eva/intake-enricher.js` |
+| 3. Chairman Review | Interactive intent review via AskUserQuestion | **Inline** (not subprocess) |
+| 4. Cluster | AI groups classified items into 2-6 execution waves | `roadmap-generate.js` |
+| 5. Archive | Move classified items to Processed | `eva-intake-archive.js` |
+| 6. Status | Display roadmap with wave breakdown | `roadmap-status.js` |
 
 ## Examples
 
