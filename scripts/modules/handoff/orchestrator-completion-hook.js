@@ -20,6 +20,8 @@ import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../l
 import { runGapAnalysis } from '../../../lib/gap-detection/index.js';
 // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Auto-claim during orchestrator chaining
 import { claimGuard } from '../../../lib/claim-guard.mjs';
+// SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B: Integration verification at orchestrator boundary
+import { verifyIntegration, formatGateResult } from '../../gates/integration-verification-gate.js';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -934,6 +936,28 @@ export async function executeOrchestratorCompletionHook(
   } catch (gapError) {
     console.warn(`   ⚠️  Gap analysis failed (advisory): ${gapError.message}`);
     hookDetails.gapAnalysis = { status: 'error', error: gapError.message };
+  }
+
+  // Integration Verification Gate (SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B)
+  // Advisory: verifies children delivered what they promised, never blocks completion
+  console.log('\n   🔗 Running integration verification gate...');
+  try {
+    const integrationResult = await verifyIntegration(orchestratorId, { supabase });
+    if (integrationResult) {
+      console.log(formatGateResult(integrationResult));
+      hookDetails.integrationVerification = {
+        status: integrationResult.pass ? 'pass' : 'warn',
+        score: integrationResult.score,
+        warnings: integrationResult.warnings.length,
+        checks: integrationResult.checks
+      };
+    } else {
+      console.log('   ℹ️  Integration verification: SKIPPED (not an orchestrator)');
+      hookDetails.integrationVerification = { status: 'skipped', reason: 'not_orchestrator' };
+    }
+  } catch (ivError) {
+    console.warn(`   ⚠️  Integration verification failed (advisory): ${ivError.message}`);
+    hookDetails.integrationVerification = { status: 'error', error: ivError.message };
   }
 
   // Auto-trigger /heal against parent orchestrator (SD-LEO-INFRA-AUTO-HEAL-ORCHESTRATOR-001)
