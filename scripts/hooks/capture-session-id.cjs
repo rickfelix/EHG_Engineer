@@ -157,23 +157,33 @@ function main() {
           const markerFile = path.join(markerDir, `${sessionId}.json`);
           fs.writeFileSync(markerFile, JSON.stringify(marker, null, 2));
 
-          // Cleanup old markers (keep last 3 of each type)
+          // Cleanup old markers — preserve markers for alive PIDs, only delete dead ones
+          // Fix: previous "keep last 3" logic deleted the current conversation's marker
+          // when 4+ concurrent conversations existed, causing terminal identity divergence.
           const cleanup = (prefix) => {
             const files = fs.readdirSync(markerDir)
               .filter(f => f.startsWith(prefix) && f.endsWith('.json'))
-              .map(f => ({ name: f, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs }))
+              .map(f => {
+                const pidMatch = f.match(/^pid-(\d+)\.json$/);
+                const pid = pidMatch ? Number(pidMatch[1]) : null;
+                let alive = false;
+                if (pid) { try { process.kill(pid, 0); alive = true; } catch { /* dead */ } }
+                return { name: f, pid, alive, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs };
+              })
               .sort((a, b) => b.mtime - a.mtime);
-            for (const old of files.slice(3)) {
+            // Keep ALL markers for alive PIDs; for dead PIDs, keep last 3
+            const dead = files.filter(f => !f.alive);
+            for (const old of dead.slice(3)) {
               try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
             }
           };
           cleanup('pid-');
-          // Clean non-prefixed session markers too
+          // Clean non-prefixed session markers — same alive-PID-aware logic
           const sessionMarkers = fs.readdirSync(markerDir)
             .filter(f => !f.startsWith('pid-') && !f.startsWith('port-') && f.endsWith('.json'))
             .map(f => ({ name: f, mtime: fs.statSync(path.join(markerDir, f)).mtimeMs }))
             .sort((a, b) => b.mtime - a.mtime);
-          for (const old of sessionMarkers.slice(3)) {
+          for (const old of sessionMarkers.slice(5)) {
             try { fs.unlinkSync(path.join(markerDir, old.name)); } catch { /* best effort */ }
           }
         } catch {
