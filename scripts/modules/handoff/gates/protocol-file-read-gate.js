@@ -65,9 +65,8 @@ const HANDOFF_FILE_REQUIREMENTS_DIGEST = {
  * @returns {Object} Requirements map
  */
 function getHandoffFileRequirements() {
-  return getProtocolMode() === 'full'
-    ? HANDOFF_FILE_REQUIREMENTS_FULL
-    : HANDOFF_FILE_REQUIREMENTS_DIGEST;
+  // Always use FULL files — 1M context window makes digest mode unnecessary
+  return HANDOFF_FILE_REQUIREMENTS_FULL;
 }
 
 // Legacy export for backward compatibility
@@ -433,7 +432,7 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     if (fullFileExists) {
       console.log(`   ⚠️  DIGEST file ${requiredFile} not found, but FULL file ${fullFileEquivalent} exists`);
       console.log('   ✅ CROSS-MODE FALLBACK: FULL file present - allowing handoff');
-      console.log(`   💡 Regenerate DIGEST files: node scripts/generate-claude-md-from-db.js`);
+      console.log('   💡 Regenerate DIGEST files: node scripts/generate-claude-md-from-db.js');
 
       markProtocolFileRead(requiredFile);
 

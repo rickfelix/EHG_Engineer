@@ -394,6 +394,26 @@ Issue Detected -> 5-Whys Analysis -> Root Cause Identified
 
 ---
 
+## SD Creation from CAPA Recommendations (NC-002 Compliance)
+
+When RCA analysis determines that corrective or preventive action requires creating a Strategic Directive:
+
+**MANDATORY: Use `node scripts/leo-create-sd.js` per NC-002.**
+
+NEVER recommend or execute direct database inserts into `strategic_directives_v2`. The `leo-create-sd.js` pipeline performs 23 governance validations including blocking guardrail checks, vision scoring, OKR mapping, and audit trail tracking. Direct inserts bypass all of these.
+
+**CAPA template when recommending SD creation:**
+```
+### Corrective Action: Create SD
+- **Create via**: `node scripts/leo-create-sd.js --title "..." --type "infrastructure|feature|fix"`
+- **Justification**: [Why this requires formal SD vs quick fix]
+- **NC-002**: SD creation MUST use leo-create-sd.js — never direct DB insert
+```
+
+Similarly, PRD creation MUST use `node scripts/add-prd-to-database.js`, not direct inserts.
+
+---
+
 ## Invocation Commands
 
 ### Direct Execution

@@ -105,9 +105,8 @@ const CORE_PROTOCOL_REQUIREMENTS_DIGEST = {
  * @returns {Object} Requirements by trigger type
  */
 function getCoreProtocolRequirements() {
-  return getProtocolMode() === 'full'
-    ? CORE_PROTOCOL_REQUIREMENTS_FULL
-    : CORE_PROTOCOL_REQUIREMENTS_DIGEST;
+  // Always use FULL files — 1M context window makes digest mode unnecessary
+  return CORE_PROTOCOL_REQUIREMENTS_FULL;
 }
 
 // Legacy export for backward compatibility
@@ -136,9 +135,8 @@ const PHASE_PROTOCOL_FILES_DIGEST = {
  * @returns {Object} Phase to file mapping
  */
 function getPhaseProtocolFiles() {
-  return getProtocolMode() === 'full'
-    ? PHASE_PROTOCOL_FILES_FULL
-    : PHASE_PROTOCOL_FILES_DIGEST;
+  // Always use FULL files — 1M context window makes digest mode unnecessary
+  return PHASE_PROTOCOL_FILES_FULL;
 }
 
 // Legacy export
@@ -169,9 +167,8 @@ const HANDOFF_PHASE_FILES_DIGEST = {
  * @returns {Object} Handoff to file mapping
  */
 function getHandoffPhaseFiles() {
-  return getProtocolMode() === 'full'
-    ? HANDOFF_PHASE_FILES_FULL
-    : HANDOFF_PHASE_FILES_DIGEST;
+  // Always use FULL files — 1M context window makes digest mode unnecessary
+  return HANDOFF_PHASE_FILES_FULL;
 }
 
 // Legacy export
