@@ -399,7 +399,7 @@ Direct to Waves (M items):
 
 **2e.2: Mark ALL reviewed items as processed**
 
-After the chairman has expressed intent on every item (regardless of whether they have notes), mark them as `status = 'processed'`. This triggers Todoist archival (checks off the task).
+After the chairman has expressed intent on every item (regardless of whether they have notes), mark them as `status = 'processed'`. Do NOT set `processed_at` here — the archive step (Step 5) sets `processed_at` after completing Todoist tasks. Setting `processed_at` prematurely causes the archive to skip these items.
 
 ```bash
 node -e "
@@ -408,8 +408,7 @@ const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const ids = [REVIEWED_ITEM_IDS];
 sb.from('eva_todoist_intake').update({
-  status: 'processed',
-  processed_at: new Date().toISOString()
+  status: 'processed'
 }).in('id', ids).then(({error}) => {
   if (error) console.error('Error:', error.message);
   else console.log('Marked', ids.length, 'items as processed');
@@ -450,8 +449,9 @@ For each item in the brainstorm queue, process one at a time:
    Focus the brainstorm on shaping the chairman's stated intent into an actionable plan.
    ```
 
-3. **After brainstorm completes**, link back and update queue:
+3. **After brainstorm completes**, auto-chain vision → arch → SD creation:
 
+   a. **Link brainstorm to intake item**:
    ```bash
    node -e "
    require('dotenv').config();
@@ -466,7 +466,50 @@ For each item in the brainstorm queue, process one at a time:
    "
    ```
 
-4. Update queue display: `[DONE] "Item title..." → sd_created (VISION-KEY, ARCH-KEY)`
+   b. **Check if brainstorm produced vision+arch docs** (SD-DISTILLTOBRAINSTORM-CONTINUOUS-GUIDED-PIPELINE-ORCH-001-A):
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   sb.from('brainstorm_sessions').select('id, title, metadata')
+     .eq('id', 'BRAINSTORM_SESSION_ID').single()
+     .then(({data}) => {
+       const vk = data?.metadata?.vision_key;
+       const ak = data?.metadata?.arch_key;
+       if (vk && ak) {
+         console.log('AUTO_CHAIN=true');
+         console.log('VISION_KEY=' + vk);
+         console.log('ARCH_KEY=' + ak);
+         console.log('BRAINSTORM_TITLE=' + data.title);
+       } else {
+         console.log('AUTO_CHAIN=false');
+         console.log('REASON=Missing ' + (!vk ? 'vision_key' : 'arch_key'));
+       }
+     });
+   "
+   ```
+
+   c. **If AUTO_CHAIN=true**, create SD from brainstorm (using existing leo-create-sd.js):
+   ```bash
+   node scripts/leo-create-sd.js --vision-key VISION_KEY --arch-key ARCH_KEY "BRAINSTORM_TITLE"
+   ```
+   This auto-creates an SD with vision+arch keys linked, bypassing the vision readiness rubric (exempt due to upstream governance).
+
+   d. **Link SD to wave item** via brainstorm-to-roadmap hook:
+   ```bash
+   node -e "
+   const { createRoadmapItemFromBrainstorm } = await import('./scripts/modules/brainstorm-to-roadmap.js');
+   createRoadmapItemFromBrainstorm('BRAINSTORM_SESSION_ID').then(r => {
+     if (r.created) console.log('Roadmap item created: ' + r.item_id);
+     else console.log('Roadmap: ' + r.reason);
+   });
+   "
+   ```
+
+   e. **If AUTO_CHAIN=false**, mark item as `needs_triage` for manual follow-up.
+
+4. Update queue display: `[DONE] "Item title..." → sd_created (VISION-KEY, ARCH-KEY)` or `[DONE] "Item title..." → needs_triage`
 
 5. **Continue to next item** in queue automatically.
 
