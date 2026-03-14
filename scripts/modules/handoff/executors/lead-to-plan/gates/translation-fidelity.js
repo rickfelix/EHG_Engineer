@@ -157,7 +157,8 @@ export function createTranslationFidelityGate(supabase) {
       }
     },
     required: true,
-    weight: 0.9
+    weight: 0.9,
+    llmPowered: true
   };
 }
 

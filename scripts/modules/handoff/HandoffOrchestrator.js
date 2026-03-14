@@ -229,6 +229,7 @@ export class HandoffOrchestrator {
         sdId,
         sd,
         options,
+        precheckMode: true,
         supabase: this.supabase
       });
 
