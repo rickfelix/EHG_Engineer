@@ -30,11 +30,11 @@ $LogDir = "C:\Users\rickf\Projects\_EHG\EHG_Engineer\.claude\logs"
 $StateFile = "$LogDir\.context-state.json"
 
 # Thresholds
-$ContextWindow = 200000
+$ContextWindow = 1000000
 $AutocompactPct = 80          # Compaction triggers at this % of context window
-$WarningThreshold = 60
-$CriticalThreshold = 80
-$EmergencyThreshold = 95
+$WarningThreshold = 80
+$CriticalThreshold = 93
+$EmergencyThreshold = 97
 
 # Ensure log directory exists
 if (-not (Test-Path $LogDir)) {
@@ -71,7 +71,7 @@ $modelShort = switch -Regex ($model) {
 $contextSize = if ($data.context_window.context_window_size) {
     [int]$data.context_window.context_window_size
 } else {
-    200000
+    1000000
 }
 
 # Extract current usage
