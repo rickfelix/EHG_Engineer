@@ -132,14 +132,16 @@ function inferAIRecommendation(item) {
 
 async function storeReviewDecision(itemId, intent, reviewMethod = 'auto') {
   if (dryRun) {
-    console.log(`  [DRY RUN] Would store intent=${intent} (${reviewMethod}) for item ${itemId}`);
+    console.log(`  [DRY RUN] Would stamp reviewed (${reviewMethod}) for item ${itemId} [intent=${intent}]`);
     return true;
   }
 
+  // Auto-review: preserve the AI capture-intent (constrained to idea/insight/reference/question/value),
+  // just stamp chairman_reviewed_at to mark the item as reviewed.
+  // The action-intent mapping (idea→build, etc.) is derived at query time via CAPTURE_TO_ACTION_MAP.
   const { error } = await supabase
     .from('eva_todoist_intake')
     .update({
-      chairman_intent: intent.toLowerCase(),
       chairman_reviewed_at: new Date().toISOString(),
     })
     .eq('id', itemId);
@@ -221,9 +223,9 @@ async function main() {
     return;
   }
 
-  // --- Auto-review mode: map capture-intent → action-intent and stamp ---
-  console.log('  Mode: AUTO (mapping capture-intent → action-intent)\n');
-  console.log('  Taxonomy bridge:');
+  // --- Auto-review mode: stamp chairman_reviewed_at, preserve capture-intent ---
+  console.log('  Mode: AUTO (stamp reviewed, preserve capture-intent)\n');
+  console.log('  Capture-intent → action-intent mapping (applied at query time):');
   console.log('    idea     → build     | insight  → improve');
   console.log('    reference→ reference | question → research');
   console.log('    value    → research\n');
@@ -233,12 +235,12 @@ async function main() {
   let failed = 0;
 
   for (const item of items) {
-    const captureIntent = item.chairman_intent || 'research';
+    const captureIntent = item.chairman_intent || 'question';
     const actionIntent = mapCaptureToActionIntent(captureIntent);
 
     const ok = await storeReviewDecision(item.id, actionIntent, 'auto');
     if (ok) {
-      decisions.push({ intent: actionIntent, captureIntent });
+      decisions.push({ intent: captureIntent, actionIntent });
       stored++;
     } else {
       failed++;
@@ -246,7 +248,21 @@ async function main() {
   }
 
   console.log(`  Reviewed: ${stored} items (${failed} errors)`);
-  console.log(buildSummaryTable(decisions));
+
+  // Show summary by capture-intent
+  const captureIntents = ['idea', 'insight', 'reference', 'question', 'value'];
+  const counts = {};
+  for (const d of decisions) counts[d.intent] = (counts[d.intent] || 0) + 1;
+  const lines = ['', '  Review Summary', '', '  | Capture   | Action    | Count |', '  |-----------|-----------|-------|'];
+  for (const ci of captureIntents) {
+    if (counts[ci]) {
+      const ai = mapCaptureToActionIntent(ci);
+      lines.push(`  | ${ci.padEnd(9)} | ${ai.padEnd(9)} | ${String(counts[ci]).padStart(5)} |`);
+    }
+  }
+  lines.push(`  | ${'Total'.padEnd(9)} | ${' '.padEnd(9)} | ${String(decisions.length).padStart(5)} |`);
+  lines.push('');
+  console.log(lines.join('\n'));
 }
 
 // Export for programmatic use
