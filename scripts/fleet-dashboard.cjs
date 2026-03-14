@@ -127,14 +127,17 @@ function printWorkers(d) {
   if (d.activeSessions.length === 0) {
     console.log('  (no active workers)');
   } else {
-    console.log('  ' + pad('Terminal', 12) + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 14) + 'Heartbeat');
-    console.log('  ' + '─'.repeat(68));
+    console.log('  ' + pad('Terminal', 12) + pad('SD', 10) + pad('Progress', 26) + pad('Phase', 8) + pad('Fails', 6) + pad('WIP', 5) + 'Heartbeat');
+    console.log('  ' + '─'.repeat(72));
     for (const s of d.activeSessions) {
       const child = d.children.find(c => c.sd_key === s.sd_id);
       const pct = child ? child.progress_percentage : 0;
-      const phase = child ? child.current_phase : '?';
+      const phase = s.current_phase || (child ? child.current_phase : '?');
       const shortSd = s.sd_id.replace('SD-LEO-ORCH-STAGE-VENTURE-WORKFLOW-001-', '').replace(/^SD-.*-/, '');
-      console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 14) + s.heartbeat_age_human);
+      const fails = s.handoff_fail_count != null ? String(s.handoff_fail_count) : '-';
+      const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
+      const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
+      console.log('  ' + pad(s.tty, 12) + pad(shortSd, 10) + bar(pct) + ' ' + pad(pct + '%', 5) + pad(phase, 8) + pad(fails, 6) + pad(wip, 5) + s.heartbeat_age_human + struggleTag);
     }
   }
 

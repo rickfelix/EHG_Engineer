@@ -466,9 +466,16 @@ async function main() {
     }
   }
 
-  // 4. Auto-release dead sessions
+  // 4. Auto-release dead sessions (with WIP guard)
   const dead = classified.filter(s => s.status === 'DEAD');
   for (const s of dead) {
+    // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: WIP release guard
+    // Sessions with uncommitted changes are protected from automatic release
+    if (s.has_uncommitted_changes === true) {
+      warnings.push('WIP_GUARD: ' + s.session_id + ' has uncommitted changes — NOT releasing (SD: ' + s.sd_id + ')');
+      continue;
+    }
+
     const { error } = await supabase
       .from('claude_sessions')
       .update({
@@ -484,6 +491,27 @@ async function main() {
     } else {
       actions.push('RELEASED ' + s.session_id + ' — PID ' + s.pid + ' dead — freed ' + s.sd_id);
     }
+  }
+
+  // 4a. Worktree conflict detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
+  // Detect multiple active sessions on the same feature branch (excludes main/QF)
+  const branchSessions = new Map();
+  for (const s of classified.filter(c => c.status === 'ACTIVE' && c.current_branch && c.current_branch !== 'main')) {
+    if (!branchSessions.has(s.current_branch)) branchSessions.set(s.current_branch, []);
+    branchSessions.get(s.current_branch).push(s);
+  }
+  for (const [branch, sessions] of branchSessions) {
+    if (sessions.length > 1) {
+      const ids = sessions.map(s => s.session_id).join(', ');
+      warnings.push('WORKTREE_CONFLICT: branch ' + branch + ' claimed by ' + sessions.length + ' sessions: ' + ids);
+    }
+  }
+
+  // 4b. Struggling worker detection (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001)
+  // Flag workers with repeated handoff failures
+  for (const s of classified.filter(c => c.status === 'ACTIVE' && (c.handoff_fail_count || 0) > 3)) {
+    const tier = s.handoff_fail_count >= 7 ? 'REASSIGN' : s.handoff_fail_count >= 5 ? 'RCA' : 'WARN';
+    warnings.push('WORKER_STRUGGLING: ' + s.session_id + ' has ' + s.handoff_fail_count + ' handoff failures (tier: ' + tier + ', SD: ' + s.sd_id + ')');
   }
 
   // 5. Resolve conflicts — keep freshest, release ALL others (including active)
