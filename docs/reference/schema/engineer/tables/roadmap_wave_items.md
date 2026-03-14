@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T16:36:57.801Z
+**Generated**: 2026-03-14T16:42:58.096Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (12 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,8 @@
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| item_disposition | `text` | YES | `'pending'::text` | Flow state: pending->selected->brainstormed->promoted (or deferred/dropped at any point) |
+| brainstorm_session_id | `uuid` | YES | - | FK to brainstorm_sessions when item has been brainstormed. Null = not yet brainstormed. |
 
 ## Constraints
 
@@ -35,12 +37,14 @@
 - `roadmap_wave_items_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `roadmap_wave_items_brainstorm_session_id_fkey`: brainstorm_session_id → brainstorm_sessions(id)
 - `roadmap_wave_items_wave_id_fkey`: wave_id → roadmap_waves(id)
 
 ### Unique Constraints
 - `roadmap_wave_items_wave_id_source_type_source_id_key`: UNIQUE (wave_id, source_type, source_id)
 
 ### Check Constraints
+- `roadmap_wave_items_item_disposition_check`: CHECK ((item_disposition = ANY (ARRAY['pending'::text, 'selected'::text, 'deferred'::text, 'brainstormed'::text, 'promoted'::text, 'dropped'::text])))
 - `roadmap_wave_items_source_type_check`: CHECK ((source_type = ANY (ARRAY['todoist'::text, 'youtube'::text, 'brainstorm'::text])))
 
 ## Indexes
