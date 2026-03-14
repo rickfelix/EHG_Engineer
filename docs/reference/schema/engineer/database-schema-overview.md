@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T17:46:47.863Z
-**Tables**: 559
+**Generated**: 2026-03-14T23:16:58.044Z
+**Tables**: 562
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -214,7 +214,10 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_vision_iterations](tables/eva_vision_iterations.md) | N/A (RLS restricted) | ✅ | 2 | Tracks scoring cycle history. UNIQUE(vision_id, iteration_number) ensures one record per cycle. completed_at is NULL until the iteration scoring run finishes. |
 | [eva_vision_scores](tables/eva_vision_scores.md) | N/A (RLS restricted) | ✅ | 2 | Append-only scoring records. rubric_snapshot is frozen at score time for immutable audit trail. sd_id is an intentional soft TEXT reference to SD keys — no FK to allow async SD creation. |
 | [eva_weekly_review_templates](tables/eva_weekly_review_templates.md) | N/A (RLS restricted) | ✅ | 1 | Templates for automated weekly review generation |
+| [eva_youtube_config](tables/eva_youtube_config.md) | N/A (RLS restricted) | ✅ | 4 | YouTube channel subscriptions and per-channel scoring configuration for EVA digest |
 | [eva_youtube_intake](tables/eva_youtube_intake.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [eva_youtube_scans](tables/eva_youtube_scans.md) | N/A (RLS restricted) | ✅ | 3 | Daily scan metadata for EVA YouTube Subscription Digest - tracks each automated scan run |
+| [eva_youtube_scores](tables/eva_youtube_scores.md) | N/A (RLS restricted) | ✅ | 3 | Per-video relevance scores from EVA scoring of YouTube subscription content |
 | [evaluation_profile_outcomes](tables/evaluation_profile_outcomes.md) | N/A (RLS restricted) | ✅ | 2 | Per-gate survival signals linking evaluation profile+version to venture outcomes at tracked boundaries |
 | [evaluation_profiles](tables/evaluation_profiles.md) | N/A (RLS restricted) | ✅ | 2 | Configurable evaluation weight profiles for EVA Stage 0 synthesis scoring |
 | [evidence_gate_mapping](tables/evidence_gate_mapping.md) | N/A (RLS restricted) | ✅ | 1 | - |
@@ -790,7 +793,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (433 tables)
+### Other (436 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -970,7 +973,10 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [eva_vision_iterations](tables/eva_vision_iterations.md) - Tracks scoring cycle history. UNIQUE(vision_id, iteration_number) ensures one record per cycle. completed_at is NULL until the iteration scoring run finishes.
 - [eva_vision_scores](tables/eva_vision_scores.md) - Append-only scoring records. rubric_snapshot is frozen at score time for immutable audit trail. sd_id is an intentional soft TEXT reference to SD keys — no FK to allow async SD creation.
 - [eva_weekly_review_templates](tables/eva_weekly_review_templates.md) - Templates for automated weekly review generation
+- [eva_youtube_config](tables/eva_youtube_config.md) - YouTube channel subscriptions and per-channel scoring configuration for EVA digest
 - [eva_youtube_intake](tables/eva_youtube_intake.md)
+- [eva_youtube_scans](tables/eva_youtube_scans.md) - Daily scan metadata for EVA YouTube Subscription Digest - tracks each automated scan run
+- [eva_youtube_scores](tables/eva_youtube_scores.md) - Per-video relevance scores from EVA scoring of YouTube subscription content
 - [evaluation_profile_outcomes](tables/evaluation_profile_outcomes.md) - Per-gate survival signals linking evaluation profile+version to venture outcomes at tracked boundaries
 - [evaluation_profiles](tables/evaluation_profiles.md) - Configurable evaluation weight profiles for EVA Stage 0 synthesis scoring
 - [evidence_gate_mapping](tables/evidence_gate_mapping.md)
@@ -1585,6 +1591,9 @@ _Key relationships between tables:_
 **eva_vision_scores**:
 - `arch_plan_id` → `eva_architecture_plans.id`
 - `vision_id` → `eva_vision_documents.id`
+
+**eva_youtube_scores**:
+- `scan_id` → `eva_youtube_scans.id`
 
 **evaluation_profile_outcomes**:
 - `profile_id` → `evaluation_profiles.id`
