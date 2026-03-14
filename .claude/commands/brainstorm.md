@@ -939,6 +939,34 @@ node scripts/eva/vision-command.mjs upsert \
    - Suggest fixing the in-memory vision content and retrying Step 9.5B
 4. **If the command succeeds**, confirm: `✅ Vision registered: VISION-<KEY> (L2, N dimensions)`
 
+5. **MANDATORY — Database Quality Validation Check:**
+   After registration, query the database to verify the quality trigger passed:
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   supabase.from('eva_vision_documents')
+     .select('vision_key, quality_checked, quality_issues, quality_checked_at')
+     .eq('vision_key', '<VISION_KEY>')
+     .single()
+     .then(({data, error}) => {
+       if (error) console.error('Error:', error.message);
+       else {
+         console.log('QUALITY_CHECKED=' + data.quality_checked);
+         console.log('QUALITY_ISSUES=' + JSON.stringify(data.quality_issues));
+       }
+     });
+   "
+   ```
+   - **If `QUALITY_CHECKED=true`**: Proceed to Step 9.5C
+   - **If `QUALITY_CHECKED=false`**: The database trigger found quality issues.
+     1. Read the `QUALITY_ISSUES` array for specific failures (e.g., content too short, missing sections)
+     2. **Enrich the vision content** to address each issue (e.g., expand sections to meet minimum length)
+     3. **Re-upsert** the vision document with the enriched content
+     4. **Re-check** quality_checked (max 2 rewrite attempts)
+     5. If still failing after 2 rewrites: report issues to user and continue (non-blocking warning)
+
 ### 9.5C: Auto-Generate Architecture Plan
 
 **AUTOMATED**: Synthesize an architecture plan from brainstorm content. Generate the content in-memory — do NOT write to the filesystem. The content will be passed directly to EVA registration via `--content` flag.
@@ -1064,6 +1092,34 @@ Weights should sum to ~1.0 — verify before passing (warn if outside 0.9-1.1).
    - **HALT** — do NOT proceed to Step 9.5E
    - Suggest fixing the architecture document and retrying
 5. **If the command succeeds**, confirm: `✅ Arch plan registered: ARCH-<KEY> (linked to VISION-<KEY>)`
+
+6. **MANDATORY — Database Quality Validation Check:**
+   After registration, query the database to verify the quality trigger passed:
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   supabase.from('eva_architecture_plans')
+     .select('plan_key, quality_checked, quality_issues, quality_checked_at')
+     .eq('plan_key', '<PLAN_KEY>')
+     .single()
+     .then(({data, error}) => {
+       if (error) console.error('Error:', error.message);
+       else {
+         console.log('QUALITY_CHECKED=' + data.quality_checked);
+         console.log('QUALITY_ISSUES=' + JSON.stringify(data.quality_issues));
+       }
+     });
+   "
+   ```
+   - **If `QUALITY_CHECKED=true`**: Proceed to Step 9.5E
+   - **If `QUALITY_CHECKED=false`**: The database trigger found quality issues.
+     1. Read the `QUALITY_ISSUES` array for specific failures
+     2. **Enrich the architecture content** to address each issue
+     3. **Re-upsert** the architecture plan with enriched content
+     4. **Re-check** quality_checked (max 2 rewrite attempts)
+     5. If still failing after 2 rewrites: report issues to user and continue (non-blocking warning)
 
 ### 9.5E: Validation Checkpoint (BLOCKING)
 
