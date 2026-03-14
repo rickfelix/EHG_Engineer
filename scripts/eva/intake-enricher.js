@@ -19,19 +19,35 @@ dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { extractYouTubeVideoId, extractYouTubeUrl, extractYouTubePlaylistId } from '../../lib/integrations/url-extractor.js';
 
-// Lazy imports — video-metadata.js pulls in googleapis which may have module issues
+// Lazy imports for YouTube metadata + video analysis
 let _fetchVideoMetadata = null;
+let _analyzeVideoContent = null;
+
 async function lazyFetchVideoMetadata(videoId, options) {
   if (!_fetchVideoMetadata) {
     try {
       const mod = await import('../../lib/integrations/youtube/video-metadata.js');
       _fetchVideoMetadata = mod.fetchVideoMetadata;
+      _analyzeVideoContent = mod.analyzeVideoContent;
     } catch (err) {
       console.error(`    video-metadata.js import failed: ${err.message}`);
       return null;
     }
   }
   return _fetchVideoMetadata(videoId, options);
+}
+
+async function lazyAnalyzeVideoContent(videoId, options) {
+  if (!_analyzeVideoContent) {
+    try {
+      const mod = await import('../../lib/integrations/youtube/video-metadata.js');
+      _analyzeVideoContent = mod.analyzeVideoContent;
+    } catch (err) {
+      if (options?.verbose) console.log(`    video analysis import failed: ${err.message}`);
+      return null;
+    }
+  }
+  return _analyzeVideoContent(videoId, options);
 }
 
 let _checkDuplicate = null;
@@ -239,6 +255,9 @@ export async function enrichItems(options = {}) {
         } else {
           enrichmentSummary = `YouTube video: ${videoId} (metadata unavailable)`;
         }
+
+        // Note: Gemini video analysis runs AFTER chairman review (in /distill skill)
+        // so the chairman's intent can guide what Gemini focuses on
 
         // Cross-link with eva_youtube_intake
         if (!item.youtube_intake_id) {
