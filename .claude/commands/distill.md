@@ -379,9 +379,9 @@ Present the Gemini analysis to the chairman as a summary after all items are pro
 
 **Step 2e: Route items with chairman notes to brainstorming**
 
-After Gemini analysis completes (Step 2d), check if any reviewed items have chairman notes AND a Gemini analysis. These items should go through the brainstorm process instead of directly to wave clustering.
+After storing decisions (Step 2c) and any Gemini analysis (Step 2d), check if any reviewed items have chairman notes. **Any item with `chairman_notes`** — whether it's a YouTube video, a web link, or a plain text task — should go through the brainstorm process instead of directly to wave clustering.
 
-For each item with `chairman_notes` AND Gemini analysis:
+For each item with `chairman_notes`:
 
 1. **Invoke `/brainstorm` with the item as the topic**, seeded with context:
 
@@ -402,7 +402,8 @@ For each item with `chairman_notes` AND Gemini analysis:
    ```
    Pre-seeded context from EVA intake:
    - Chairman's intent: "<chairman_notes>"
-   - Video/content analysis: "<gemini_analysis>"
+   - Video/content analysis: "<gemini_analysis_if_available>"
+   - Enrichment summary: "<enrichment_summary>"
    - Source: <todoist_url>
    - Application: <target_application>
    - Aspects: <target_aspects>
