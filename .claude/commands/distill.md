@@ -302,9 +302,9 @@ Present using AskUserQuestion with **B1 action-first options** (always use these
   - "Review each item individually" — presents each item (batched in groups of 4)
   - "Review only low-confidence items (< 80%)" — auto-approves high-confidence, presents only low-confidence ones
 
-**Step 2c: Store decisions**
+**Step 2c: Store decisions + complete Todoist task (IMMEDIATE)**
 
-For each item the chairman reviewed, store the decision. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. Map the B1 option to storage:
+For each item the chairman reviewed, store the decision AND immediately complete the Todoist task. The `chairman_intent` column has a check constraint allowing only: `idea`, `insight`, `reference`, `question`, `value`. Map the B1 option to storage:
 
 | Chairman chose | Store as `chairman_intent` | Routing |
 |---------------|---------------------------|---------|
@@ -315,21 +315,51 @@ For each item the chairman reviewed, store the decision. The `chairman_intent` c
 
 The routing is determined by which option was selected — NOT by annotations or notes.
 
+**IMPORTANT**: Once ANY B1 option is selected, the item is decided. Two things happen immediately:
+1. Store the decision in the database
+2. Complete (check off) the Todoist task — do NOT defer to the archive step
+
 For each reviewed item, run:
 
 ```bash
 node -e "
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+const { randomUUID } = require('crypto');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-sb.from('eva_todoist_intake').update({
-  chairman_intent: 'INTENT_VALUE',
-  chairman_notes: 'NOTES_OR_NULL',
-  chairman_reviewed_at: new Date().toISOString()
-}).eq('id', 'ITEM_UUID').then(({error}) => {
-  if (error) console.error('Error:', error.message);
-  else console.log('OK');
-});
+
+async function run() {
+  // 1. Store chairman decision + mark processed
+  const { error: dbErr } = await sb.from('eva_todoist_intake').update({
+    chairman_intent: 'INTENT_VALUE',
+    chairman_reviewed_at: new Date().toISOString(),
+    status: 'processed',
+    processed_at: new Date().toISOString()
+  }).eq('id', 'ITEM_UUID');
+  if (dbErr) { console.error('DB Error:', dbErr.message); return; }
+
+  // 2. Get the todoist_task_id
+  const { data: item } = await sb.from('eva_todoist_intake')
+    .select('todoist_task_id').eq('id', 'ITEM_UUID').single();
+  if (!item?.todoist_task_id) { console.log('No Todoist task to complete'); return; }
+
+  // 3. Complete the Todoist task via Sync API
+  const token = process.env.TODOIST_API_TOKEN;
+  if (!token) { console.log('No TODOIST_API_TOKEN — skipping Todoist completion'); return; }
+  const uuid = randomUUID();
+  const body = new URLSearchParams({
+    commands: JSON.stringify([{ type: 'item_complete', uuid, args: { id: item.todoist_task_id } }])
+  });
+  const resp = await fetch('https://api.todoist.com/api/v1/sync', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString()
+  });
+  const data = await resp.json();
+  if (data.sync_status?.[uuid] === 'ok') console.log('Todoist task completed');
+  else console.log('Todoist completion status:', JSON.stringify(data.sync_status));
+}
+run();
 "
 ```
 
@@ -406,25 +436,9 @@ Reference Only (P items):
   5. "Item title..." → stored for lookup
 ```
 
-**2e.2: Mark ALL reviewed items as processed**
+**2e.2: Items already processed and Todoist-completed**
 
-After the chairman has expressed intent on every item (regardless of whether they have notes), mark them as `status = 'processed'`. This triggers Todoist archival (checks off the task).
-
-```bash
-node -e "
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const ids = [REVIEWED_ITEM_IDS];
-sb.from('eva_todoist_intake').update({
-  status: 'processed',
-  processed_at: new Date().toISOString()
-}).in('id', ids).then(({error}) => {
-  if (error) console.error('Error:', error.message);
-  else console.log('Marked', ids.length, 'items as processed');
-});
-"
-```
+Step 2c already handles both marking items as `status = 'processed'` AND completing the Todoist task immediately after each B1 selection. No batch processing needed here — every item is processed and Todoist-completed the moment the chairman makes a decision.
 
 **2e.2b: Cherry-pick items for brainstorming (SD-DISTILLTOBRAINSTORM-ORCH-001-C)**
 
@@ -470,13 +484,15 @@ On resume (if `distill-loop-state.json` exists at start of Step 2e):
 - Display: `Resuming: ${completed} of ${total} items already processed`
 - Continue with remaining items
 
-**2e.3: Process brainstorm queue sequentially**
+**2e.3: Process brainstorm queue — AUTO-INVOKE `/brainstorm`**
+
+**IMPORTANT**: "Build now (brainstorm)" means NOW. Do NOT ask the chairman if they want to brainstorm — they already said "Build now." Auto-invoke `/brainstorm` immediately for each item in the brainstorm queue.
 
 For each item in the **selected** brainstorm queue (cherry-picked subset), process one at a time:
 
 1. Display progress: `Brainstorming 1 of N: "Item title..."`
 
-2. **Invoke `/brainstorm`** with the item as the topic, seeded with context:
+2. **Auto-invoke `/brainstorm`** with the item as the topic, seeded with context:
 
    ```
    skill: "brainstorm"
