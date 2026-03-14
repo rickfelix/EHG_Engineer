@@ -160,8 +160,8 @@ async function main() {
 }
 
 // ESM entry point (Windows-compatible)
-if (import.meta.url === `file://${process.argv[1]}` ||
-    import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
+if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` ||
+    import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`)) {
   main();
 }
 
