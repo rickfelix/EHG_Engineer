@@ -18,7 +18,7 @@ Parse `$ARGUMENTS` for flags:
 - `refine --dry-run` → Preview refinement without DB writes
 - `refine --roadmap-id <id>` → Refine a specific roadmap
 - `refine --wave-id <id>` → Refine a specific wave only
-- `refine --skip-promote` → Run steps 1-3 only (no Research SD creation)
+- `refine --skip-promote` → Run steps 1-3 only (skip promotion analysis)
 - `approve --roadmap-id <id>` → Chairman approves wave sequence
 - `promote --wave-id <id>` → Promote approved wave items to SDs
 
@@ -194,7 +194,7 @@ This loads the inline scoring results, persists scores to DB, then runs Step 4 (
 - Duplicate groups found (Phase B, semantic)
 - Reconciliation results — novel vs already-done items (Phase D, semantic)
 - Scoring distribution — promote / review / defer (Phase F, semantic)
-- Research SDs created if promotion ran (Phase G)
+- Brainstorm promotion analysis if ran (Phase G)
 
 If this was a live run, show:
 ```
