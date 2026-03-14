@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T16:01:45.445Z
+**Generated**: 2026-03-14T16:36:57.801Z
 **Tables**: 559
 **Source**: Supabase PostgreSQL introspection
 
@@ -1966,6 +1966,7 @@ _Key relationships between tables:_
 - `roadmap_id` → `strategic_roadmaps.id`
 
 **roadmap_wave_items**:
+- `brainstorm_session_id` → `brainstorm_sessions.id`
 - `wave_id` → `roadmap_waves.id`
 
 **roadmap_waves**:

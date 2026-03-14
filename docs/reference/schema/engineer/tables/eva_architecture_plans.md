@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T16:01:45.445Z
+**Generated**: 2026-03-14T16:36:57.801Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,9 @@
 | vision_version_aligned_to | `integer(32)` | YES | - | - |
 | needs_review_since | `timestamp with time zone` | YES | - | - |
 | sections | `jsonb` | YES | - | - |
+| quality_checked | `boolean` | YES | `false` | - |
+| quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
+| quality_checked_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -101,6 +104,16 @@
 
 - **Timing**: AFTER INSERT
 - **Action**: `EXECUTE FUNCTION check_arch_creation_source()`
+
+### trg_auto_validate_archplan_quality
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION auto_validate_archplan_quality()`
+
+### trg_auto_validate_archplan_quality
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION auto_validate_archplan_quality()`
 
 ### update_eva_architecture_plans_updated_at
 

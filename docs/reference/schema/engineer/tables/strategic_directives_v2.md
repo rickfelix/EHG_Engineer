@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T16:01:45.445Z
+**Generated**: 2026-03-14T16:36:57.801Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (7 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (90 total)
+## Columns (93 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -112,6 +112,9 @@ Use the id column instead - it is the canonical identifier. |
 | cancellation_reason | `text` | YES | - | Required reason when SD is cancelled — enforced by trigger |
 | cancelled_by | `text` | YES | - | Who cancelled the SD (chairman, lead, system, session_id) |
 | scope_authority | `text` | YES | - | Who authorized the current scope (chairman, lead, system) |
+| quality_checked | `boolean` | YES | `false` | - |
+| quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
+| quality_checked_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -457,6 +460,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION auto_set_is_parent()`
+
+### trg_auto_validate_sd_content_quality
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION auto_validate_sd_content_quality()`
+
+### trg_auto_validate_sd_content_quality
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION auto_validate_sd_content_quality()`
 
 ### trg_capability_lifecycle
 

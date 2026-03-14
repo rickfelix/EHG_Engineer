@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T16:01:45.445Z
+**Generated**: 2026-03-14T16:36:57.801Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,9 @@
 | created_by | `text` | YES | - | - |
 | addendums | `jsonb` | YES | `'[]'::jsonb` | - |
 | sections | `jsonb` | YES | - | - |
+| quality_checked | `boolean` | YES | `false` | - |
+| quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
+| quality_checked_at | `timestamp with time zone` | YES | - | - |
 
 ## Constraints
 
@@ -94,6 +97,16 @@
 - **With Check**: `true`
 
 ## Triggers
+
+### trg_auto_validate_vision_quality
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION auto_validate_vision_quality()`
+
+### trg_auto_validate_vision_quality
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION auto_validate_vision_quality()`
 
 ### trg_cascade_invalidation_on_vision_update
 
