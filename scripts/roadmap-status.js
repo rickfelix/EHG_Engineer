@@ -77,13 +77,25 @@ async function main() {
         .eq('wave_id', wave.id)
         .not('promoted_to_sd_key', 'is', null);
 
+      // SD-DISTILLTOBRAINSTORM-ORCH-001-B: Disposition breakdown
+      const { data: dispositionData } = await supabase
+        .from('roadmap_wave_items')
+        .select('item_disposition')
+        .eq('wave_id', wave.id);
+      const dispositions = {};
+      for (const row of (dispositionData || [])) {
+        const d = row.item_disposition || 'pending';
+        dispositions[d] = (dispositions[d] || 0) + 1;
+      }
+      const dispStr = Object.entries(dispositions).map(([k, v]) => `${k}:${v}`).join(' ');
+
       const statusLabel = WAVE_STATUS_LABELS[wave.status] || wave.status;
       const progress = Number(wave.progress_pct || 0).toFixed(0);
       const conf = Number(wave.confidence_score || 0).toFixed(2);
 
       console.log(`    [${wave.sequence_rank}] ${wave.title}`);
       console.log(`        Status: ${statusLabel} | Progress: ${progress}% | Confidence: ${conf}`);
-      console.log(`        Items: ${count || 0} | Promoted: ${promoted.count || 0}`);
+      console.log(`        Items: ${count || 0} | Promoted: ${promoted.count || 0}${dispStr ? ' | ' + dispStr : ''}`);
     }
   }
 
