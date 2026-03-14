@@ -168,18 +168,44 @@ async function handleSynthesize(opts) {
 }
 
 // ============================================================================
-// Subcommand: check (placeholder - implemented in Child D)
+// Subcommand: check (SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-D)
 // ============================================================================
 
 async function handleCheck(opts) {
-  if (!opts.synthesisPromptId) {
-    console.error('Error: --synthesis-prompt-id is required for check subcommand');
+  if (!opts.synthesisPromptId && !opts.ventureId) {
+    console.error('Error: --synthesis-prompt-id or --venture-id is required for check subcommand');
     process.exit(1);
   }
-  console.log(`\n✅ SRIP Quality Check`);
-  console.log(`   Synthesis Prompt: ${opts.synthesisPromptId}`);
-  console.log(`\n   ⚠️  Quality Check module not yet implemented.`);
-  console.log(`   This will be implemented in SD-MAN-ORCH-SRIP-CLONER-INTEGRATION-001-D.`);
+
+  const { executeQualityCheck, formatResult } = await import('./srip/quality-check.mjs');
+
+  if (opts.ventureId) {
+    console.log(`\n🔍 SRIP Quality Check (venture: ${opts.ventureId})`);
+    const result = await executeQualityCheck(opts.ventureId);
+    console.log(formatResult(result));
+    if (result.id) {
+      console.log(`\n   Stored: ${result.id}`);
+    }
+  } else {
+    // Look up venture from synthesis prompt
+    const { data: prompt } = await supabase
+      .from('srip_synthesis_prompts')
+      .select('venture_id')
+      .eq('id', opts.synthesisPromptId)
+      .single();
+
+    if (!prompt) {
+      console.error(`Synthesis prompt not found: ${opts.synthesisPromptId}`);
+      process.exit(1);
+    }
+
+    console.log(`\n🔍 SRIP Quality Check (prompt: ${opts.synthesisPromptId})`);
+    const result = await executeQualityCheck(prompt.venture_id);
+    console.log(formatResult(result));
+    if (result.id) {
+      console.log(`\n   Stored: ${result.id}`);
+    }
+  }
 }
 
 // ============================================================================
