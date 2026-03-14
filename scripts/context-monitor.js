@@ -17,11 +17,11 @@ const __dirname = dirname(__filename);
 class ContextMonitor {
   constructor() {
     this.config = {
-      totalTokens: 200000,
+      totalTokens: 1000000,
       safetyMargin: 20000,
-      usableTokens: 180000,
-      warningThreshold: 0.7,  // 70%
-      criticalThreshold: 0.9, // 90%
+      usableTokens: 980000,
+      warningThreshold: 0.85,  // 85%
+      criticalThreshold: 0.95, // 95%
       
       allocation: {
         systemPrompt: 5000,

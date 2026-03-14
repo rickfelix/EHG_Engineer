@@ -79,9 +79,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 ## Context Management
 
 ### Token Budget
-- Total Available: 200,000 tokens
-- Standard Context: 200K (standard pricing)
-- Extended Context: 1M tokens (premium pricing via `[1m]` suffix)
+- Total Available: 1,000,000 tokens
+- Standard Context: 1M (all models)
 - Current Estimated Usage: ~131K tokens
 
 ### Memory Strategy
