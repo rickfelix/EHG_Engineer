@@ -98,9 +98,8 @@ function formatItemForReview(item, index, total) {
     lines.push(`**AI Confidence:** ${Math.round(item.classification_confidence * 100)}%`);
   }
   if (item.description) {
-    const desc = item.description.length > 200 ? item.description.substring(0, 200) + '...' : item.description;
     lines.push('');
-    lines.push(`**Description:** ${desc}`);
+    lines.push(`**Description:** ${item.description}`);
   }
 
   return lines.join('\n');
