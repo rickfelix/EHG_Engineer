@@ -237,6 +237,60 @@ function renderRdProposals(data) {
   return _renderRdProposals(data);
 }
 
+// ─── Section 5b: Fleet Telemetry (SD-MAN-INFRA-WORKER-WORKTREE-SELF-001) ───
+
+async function gatherFleetTelemetry() {
+  try {
+    const { data, error } = await supabase
+      .from('fleet_telemetry_weekly')
+      .select('*')
+      .order('week_start', { ascending: false })
+      .limit(4);
+
+    if (error || !data?.length) return null;
+
+    // Also get current active session count
+    const { data: activeSessions } = await supabase
+      .from('claude_sessions')
+      .select('session_id, handoff_fail_count, has_uncommitted_changes, current_phase')
+      .eq('status', 'active');
+
+    return {
+      weeks: data,
+      currentActive: activeSessions?.length || 0,
+      currentStrugglingCount: (activeSessions || []).filter(s => (s.handoff_fail_count || 0) > 3).length,
+      currentWipCount: (activeSessions || []).filter(s => s.has_uncommitted_changes === true).length
+    };
+  } catch {
+    return null;
+  }
+}
+
+function renderFleetTelemetry(data) {
+  if (!data) return '';
+
+  const lines = ['', '  SECTION 5b: FLEET TELEMETRY', '  ' + '─'.repeat(40)];
+
+  // Current fleet snapshot
+  lines.push(`  Active Sessions:     ${data.currentActive}`);
+  lines.push(`  With WIP (uncommitted): ${data.currentWipCount}`);
+  lines.push(`  Struggling (>3 fails): ${data.currentStrugglingCount}`);
+  lines.push('');
+
+  // Weekly trend (last 4 weeks)
+  if (data.weeks.length > 0) {
+    lines.push('  Weekly Trend:');
+    lines.push('  ' + 'Week'.padEnd(14) + 'Sessions'.padEnd(10) + 'WIP'.padEnd(6) + 'Struggling'.padEnd(12) + 'Hours');
+    lines.push('  ' + '─'.repeat(48));
+    for (const w of data.weeks) {
+      const weekLabel = new Date(w.week_start).toISOString().slice(0, 10);
+      lines.push('  ' + weekLabel.padEnd(14) + String(w.total_sessions).padEnd(10) + String(w.wip_sessions).padEnd(6) + String(w.struggling_sessions).padEnd(12) + String(w.total_session_hours));
+    }
+  }
+
+  return lines.join('\n');
+}
+
 // ─── Section 6: Decisions ────────────────────────────────────
 
 function buildDecisionPayload(findings) {
@@ -434,20 +488,22 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData, rdData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, rdData, fleetData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
     gatherIntakeReview(),
     gatherRdProposals(),
+    gatherFleetTelemetry(),
   ]);
 
-  // Render sections 1-5
+  // Render sections 1-5b
   logger.log(renderPerformanceReview(perfData));
   logger.log(renderCapabilityReport(capData));
   logger.log(renderConsultantFindings(consultData));
   logger.log(renderIntakeReview(intakeData));
   logger.log(renderRdProposals(rdData));
+  logger.log(renderFleetTelemetry(fleetData));
 
   // Section 6: Decisions
   logger.log('');

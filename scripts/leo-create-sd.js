@@ -1379,6 +1379,17 @@ async function createSD(options) {
     archKey: metadata?.arch_key
   }).catch(err => console.log(`\n   ⚠️  Vision pre-screen failed (non-blocking): ${err.message}`));
 
+  // Scope complexity advisory for orchestrator SDs (SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-A)
+  if (dbType === 'orchestrator') {
+    import('../lib/analysis/scope-complexity-scorer.js')
+      .then(({ scoreComplexity, formatAdvisory }) =>
+        scoreComplexity(data.sd_key, { supabase }).then(result => {
+          if (result) console.log(formatAdvisory(result));
+        })
+      )
+      .catch(err => console.log(`\n   ⚠️  Scope complexity advisory failed (non-blocking): ${err.message}`));
+  }
+
   // OKR Auto-Mapping at SD creation (SD-MAN-FEAT-CORRECTIVE-VISION-GAP-070)
   // Automatically link new SDs to the most relevant active OKR objective
   if (!parentId) { // Skip for child SDs (they inherit parent's OKR alignment)
@@ -1775,12 +1786,12 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
           if (phases && Array.isArray(phases)) {
             const uncovered = phases.filter(p => !p.covered_by_sd_key);
             if (uncovered.length > 0) {
-              console.log(`\n⚠️  Architecture Phase Coverage Warning:`);
+              console.log('\n⚠️  Architecture Phase Coverage Warning:');
               console.log(`   ${uncovered.length}/${phases.length} phase(s) have no assigned SD:`);
               for (const p of uncovered) {
                 console.log(`   ❌ Phase ${p.number}: ${p.title}`);
               }
-              console.log(`   Assign SDs before LEAD-TO-PLAN to pass the phase coverage gate.\n`);
+              console.log('   Assign SDs before LEAD-TO-PLAN to pass the phase coverage gate.\n');
             }
           }
         } catch { /* Advisory only — continue regardless */ }

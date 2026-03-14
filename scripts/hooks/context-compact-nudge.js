@@ -218,7 +218,20 @@ function main() {
       const age = formatDuration(sessionAgeMinutes);
       const source = TIME_ONLY ? 'AUTO-PROCEED' : 'interactive';
 
-      if (level === 'CRITICAL') {
+      // Check if AUTO-PROCEED is active — downgrade CRITICAL to ADVISORY
+      // to avoid interrupting autonomous execution (SD-LEO-INFRA-AUTO-PROCEED-CONTEXT-001)
+      let isAutoProceed = false;
+      try {
+        const apStatePath = path.join(process.cwd(), '.claude', 'auto-proceed-state.json');
+        if (fs.existsSync(apStatePath)) {
+          const apState = JSON.parse(fs.readFileSync(apStatePath, 'utf8'));
+          isAutoProceed = apState.isActive === true;
+        }
+      } catch { /* fail-safe: default to non-auto-proceed (show CRITICAL) */ }
+
+      if (level === 'CRITICAL' && isAutoProceed) {
+        console.log(`[context-compact-nudge] ADVISORY (AUTO-PROCEED active): Session running ${age}. Context compaction recommended at next SD boundary.`);
+      } else if (level === 'CRITICAL') {
         console.log(`[context-compact-nudge] CRITICAL (${source}): Session running ${age}. Run /context-compact NOW to prevent API serialization errors.`);
       } else {
         console.log(`[context-compact-nudge] WARNING (${source}): Session running ${age}. Consider running /context-compact to reduce context size.`);

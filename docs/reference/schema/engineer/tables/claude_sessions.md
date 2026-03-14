@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-14T10:45:26.022Z
+**Generated**: 2026-03-14T12:08:24.005Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (28 total)
+## Columns (31 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -46,6 +46,9 @@
 | current_branch | `text` | YES | - | Current git branch, updated by heartbeat. Used for multi-session ship safety. |
 | worktree_path | `text` | YES | - | Absolute path to git worktree for this session's claimed SD. Populated at claim time by resolve-sd-workdir.js. NULL if no worktree exists. |
 | is_alive | `boolean` | YES | `false` | - |
+| has_uncommitted_changes | `boolean` | YES | - | True if worker has uncommitted git changes. NULL = unknown (pre-upgrade session). Used as release guard. |
+| handoff_fail_count | `integer(32)` | YES | `0` | Count of failed handoff attempts on current SD. Reset on SD change or success. >3 triggers WORKER_STRUGGLING. |
+| current_phase | `text` | YES | - | Normalized phase: LEAD, PLAN, or EXEC. Derived from strategic_directives_v2.current_phase. NULL if no SD claimed. |
 
 ## Constraints
 

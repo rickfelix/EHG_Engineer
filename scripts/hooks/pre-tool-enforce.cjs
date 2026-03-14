@@ -33,19 +33,22 @@ const PROFILE_ALLOWLISTS = {
 };
 
 // --- AGENT ROUTING TABLE ---
-// Source of truth: lib/keyword-intent-scorer.js (primary keywords only)
-// This is a lightweight subset for advisory hints. The full keyword set
-// remains in the scorer for weighted scoring at runtime.
-const AGENT_ROUTING = [
-  { agent: 'database-agent',    keywords: ['migration', 'schema', 'alter table', 'add column', 'sql', 'postgres', 'rls', 'supabase'] },
-  { agent: 'design-agent',      keywords: ['component design', 'tailwind', 'responsive', 'accessibility', 'wcag', 'figma'] },
-  { agent: 'security-agent',    keywords: ['auth bypass', 'csrf', 'xss', 'injection', 'api key exposed', 'vulnerability'] },
-  { agent: 'testing-agent',     keywords: ['test coverage', 'playwright', 'e2e test', 'unit test', 'vitest', 'test plan'] },
-  { agent: 'performance-agent', keywords: ['bottleneck', 'load time', 'cpu usage', 'memory leak', 'latency'] },
-  { agent: 'rca-agent',         keywords: ['root cause', '5 whys', 'causal analysis', 'why did', 'failure analysis'] },
-  { agent: 'docmon-agent',      keywords: ['documentation update', 'stale docs', 'readme', 'api docs'] },
-  { agent: 'regression-agent',  keywords: ['backward compatible', 'api signature', 'breaking change', 'refactor'] },
-];
+// Source of truth: config/agent-keywords-routing.json
+// Loaded once via require() (cached by Node.js module system).
+const path = require('path');
+let AGENT_ROUTING;
+try {
+  const configPath = path.resolve(__dirname, '..', '..', 'config', 'agent-keywords-routing.json');
+  const routingConfig = require(configPath);
+  AGENT_ROUTING = Object.entries(routingConfig.agents).map(([code, kw]) => ({
+    agent: code.toLowerCase() + '-agent',
+    keywords: kw.primary || []
+  }));
+} catch (e) {
+  // Fallback: if JSON config missing, use empty routing (fail-open)
+  process.stderr.write('[pre-tool-enforce] Warning: agent-keywords-routing.json not found, routing disabled\n');
+  AGENT_ROUTING = [];
+}
 
 function main() {
   let input;

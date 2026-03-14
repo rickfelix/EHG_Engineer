@@ -182,6 +182,17 @@ export class HandoffRecorder {
 
       console.log(`📝 Success recorded: ${executionId}`);
 
+      // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Reset handoff_fail_count on success
+      try {
+        await this.supabase
+          .from('claude_sessions')
+          .update({ handoff_fail_count: 0 })
+          .eq('sd_id', sdId)
+          .eq('status', 'active');
+      } catch (resetErr) {
+        console.warn(`   [handoff-fail-count] Reset non-blocking: ${resetErr.message}`);
+      }
+
       // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
       // Log every handoff execution (success) to validation_audit_log for compliance review
       await this._logGovernanceAudit(handoffType, sdUuid, {
@@ -295,6 +306,25 @@ export class HandoffRecorder {
       }
 
       console.log(`📝 Failure recorded: ${executionId}`);
+
+      // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
+      try {
+        const { data: sessions } = await this.supabase
+          .from('claude_sessions')
+          .select('session_id, handoff_fail_count')
+          .eq('sd_id', sdId)
+          .eq('status', 'active');
+        if (sessions?.length > 0) {
+          for (const s of sessions) {
+            await this.supabase
+              .from('claude_sessions')
+              .update({ handoff_fail_count: (s.handoff_fail_count || 0) + 1 })
+              .eq('session_id', s.session_id);
+          }
+        }
+      } catch (failCountErr) {
+        console.warn(`   [handoff-fail-count] Non-blocking: ${failCountErr.message}`);
+      }
 
       // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
       // Log every handoff execution (failure) to validation_audit_log for compliance review

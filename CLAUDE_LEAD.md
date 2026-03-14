@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-03-08 11:19:08 AM
+**Generated**: 2026-03-14 8:36:22 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation
 
@@ -479,19 +479,19 @@ Before starting ANY work on a child SD:
    node scripts/child-sd-preflight.js SD-XXX-001
    ```
 
-2. **Read CLAUDE_CORE_DIGEST.md** (provides SD type requirements):
+2. **Read CLAUDE_CORE.md** (provides SD type requirements):
    ```
-   Read tool: CLAUDE_CORE_DIGEST.md
+   Read tool: CLAUDE_CORE.md
    ```
 
 3. **Read phase-specific file** based on current_phase:
    | Phase | File |
    |-------|------|
-   | LEAD_APPROVAL | CLAUDE_LEAD_DIGEST.md |
-   | PLAN_*, PRD_* | CLAUDE_PLAN_DIGEST.md |
-   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC_DIGEST.md |
+   | LEAD_APPROVAL | CLAUDE_LEAD.md |
+   | PLAN_*, PRD_* | CLAUDE_PLAN.md |
+   | EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
 
-### What CLAUDE_CORE_DIGEST.md Provides
+### What CLAUDE_CORE.md Provides
 
 - SD type definitions (feature, bugfix, infrastructure, etc.)
 - Gate pass thresholds per SD type
@@ -501,7 +501,7 @@ Before starting ANY work on a child SD:
 
 ### Consequences of Skipping Context Loading
 
-Without loading CLAUDE_CORE_DIGEST.md before child SD work:
+Without loading CLAUDE_CORE.md before child SD work:
 - **Unknown requirements**: May not know PRD is required
 - **Wrong thresholds**: May target 70% when 85% is required
 - **Missing sub-agents**: May skip TESTING, DESIGN, etc.
@@ -513,8 +513,8 @@ The `child-sd-preflight.js` script now displays a reminder:
 ```
 ⚠️  CONTEXT LOADING REMINDER:
    Before starting work, you MUST read:
-   1. CLAUDE_CORE_DIGEST.md (SD type requirements, gates, thresholds)
-   2. Phase-specific file (CLAUDE_LEAD_DIGEST.md, CLAUDE_PLAN_DIGEST.md, or CLAUDE_EXEC_DIGEST.md)
+   1. CLAUDE_CORE.md (SD type requirements, gates, thresholds)
+   2. Phase-specific file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md)
 ```
 
 **This reminder is advisory.** The actual context loading must be performed by reading the files.
@@ -529,7 +529,7 @@ The `child-sd-preflight.js` script now displays a reminder:
 | documentation | 60% | 4 | NO |
 | refactor | 75-90% | 5 | Brief |
 
-*Always verify current requirements from CLAUDE_CORE_DIGEST.md as they may be updated.*
+*Always verify current requirements from CLAUDE_CORE.md as they may be updated.*
 
 ## Common SD Creation Errors and Solutions
 
@@ -803,6 +803,23 @@ const sdKey = await generateSDKey({ source, type, title });
 4. `scripts/create-sd.js`
 5. `scripts/modules/learning/executor.js`
 
+
+## Phase-Specific Sub-Agent Guidance: LEAD
+
+During the LEAD phase, prioritize these sub-agents for strategic evaluation and SD approval:
+
+- **rca-agent**: For investigating issues blocking SD approval or understanding recurring failures
+- **risk-agent**: For risk assessment of proposed work, architecture tradeoff analysis
+- **validation-agent**: For checking existing implementations before creating new SDs (avoid duplicates)
+- **database-agent**: For schema-level impact analysis when SD involves data model changes
+- **regression-agent**: For evaluating backward compatibility when SD proposes refactoring
+
+### When to Invoke
+- **Before SD creation**: Run validation-agent to check for overlapping SDs or existing implementations
+- **During LEAD evaluation**: Run risk-agent for Q9 strategic validation
+- **When blocking issues exist**: Run rca-agent to diagnose root cause before proceeding
+
+*Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
 
 ## 📋 Directive Submission Review Process
 
@@ -1256,33 +1273,6 @@ Sequential LEAD approval allows learning from earlier children to inform later d
 
 > **Team Capabilities**: For orchestrator SDs with parallel children, agents can spawn specialist teams to accelerate cross-domain work. See **Teams Protocol** in CLAUDE.md.
 
-## SD Creation Anti-Pattern (PROHIBITED)
-
-**NEVER create one-off SD creation scripts like:**
-- `create-*-sd.js`
-- `create-sd*.js`
-
-**ALWAYS use the standard CLI:**
-```bash
-node scripts/leo-create-sd.js
-```
-
-### Why This Matters
-- One-off scripts bypass validation and governance
-- They create maintenance burden (100+ orphaned scripts)
-- They fragment the codebase and confuse future developers
-
-### Archived Scripts Location
-~100 legacy one-off scripts have been moved to:
-- `scripts/archived-sd-scripts/`
-
-These are kept for reference but should NEVER be used as templates.
-
-### Correct Workflow
-1. Run `node scripts/leo-create-sd.js`
-2. Follow interactive prompts
-3. SD is properly validated and tracked in database
-
 ## Vision V2 SD Handling (SD-VISION-V2-*)
 
 ### MANDATORY: Vision Spec Reference Check
@@ -1324,6 +1314,33 @@ All Vision V2 SDs contain this metadata:
   "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
 }
 ```
+
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
 
 ## Parent-Child SD Phase Governance
 
@@ -1470,6 +1487,6 @@ Check `objectives` (active, current period) and `key_results` (status != 'achiev
 
 ---
 
-*Generated from database: 2026-03-08*
+*Generated from database: 2026-03-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

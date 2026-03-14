@@ -171,12 +171,8 @@ function main() {
   const contextDocPath = getContextDocPath(toPhase);
 
   if (contextDocPath && fs.existsSync(contextDocPath)) {
-    const digestDoc = PHASE_DIGEST_DOCS[toPhase];
     console.log(`[load-phase-context] Context document: ${PHASE_CONTEXT_DOCS[toPhase]} (full)`);
     console.log(`[load-phase-context] INSTRUCTION: Read ${contextDocPath} for phase-specific guidance`);
-    if (digestDoc) {
-      console.log(`[load-phase-context] COMPACT FALLBACK: Use ${digestDoc} if context is constrained`);
-    }
   } else {
     console.warn(`[load-phase-context] Context document not found for phase: ${toPhase}`);
   }
