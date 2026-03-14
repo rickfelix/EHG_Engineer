@@ -1626,7 +1626,18 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       }
 
       const [source, type, ...titleParts] = args;
-      const title = titleParts.join(' ');
+      // Strip flags and their values from the title (SD-DISTILLTOBRAINSTORM quality fix)
+      // Without this, --vision-key VALUE --arch-key VALUE leak into the title text
+      const flagsWithValues = new Set(['--venture', '--vision-key', '--arch-key']);
+      const cleanedTitleParts = [];
+      for (let i = 0; i < titleParts.length; i++) {
+        if (flagsWithValues.has(titleParts[i])) {
+          i++; // skip the flag's value too
+        } else if (!titleParts[i].startsWith('--')) {
+          cleanedTitleParts.push(titleParts[i]);
+        }
+      }
+      const title = cleanedTitleParts.join(' ');
 
       if (!source || !type || !title) {
         console.error('Usage: leo-create-sd.js <source> <type> "<title>"');

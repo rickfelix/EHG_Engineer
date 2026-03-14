@@ -26,9 +26,11 @@
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createRequire } from 'module';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
+const require = createRequire(import.meta.url);
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -63,6 +65,28 @@ console.log('══════════════════════�
 console.log('  EVA INTAKE PIPELINE');
 console.log('  Sync → Classify → Chairman Review → Propose Waves → Archive → Status');
 console.log('══════════════════════════════════════════════════════');
+
+// ─── Pre-flight: Dependency check ───────────────────────────
+const deps = [
+  { pkg: '@doist/todoist-api-typescript', steps: '1 (Todoist sync)' },
+  { pkg: 'googleapis',                   steps: '1 (YouTube sync), 5 (Archive)' },
+  { pkg: '@anthropic-ai/sdk',            steps: '4 (Wave clustering)' },
+];
+
+const missing = deps.filter(d => {
+  try { require.resolve(d.pkg); return false; } catch { return true; }
+});
+
+if (missing.length > 0) {
+  console.log('\n── Pre-flight: Dependencies ── FAILED\n');
+  console.log('  Missing packages:');
+  for (const d of missing) {
+    console.log(`    ✗ ${d.pkg}  (needed by step ${d.steps})`);
+  }
+  console.log(`\n  Fix: npm install ${missing.map(d => d.pkg).join(' ')}\n`);
+  process.exit(1);
+}
+console.log('\n── Pre-flight: Dependencies ── OK\n');
 
 // ─── Step 1: Sync ───────────────────────────────────────────
 if (fromStep <= 1 && !skipSync) {

@@ -280,7 +280,7 @@ async function main() {
         id: childId,
         sd_key: childKey,
         title: `Phase ${phase.number}: ${phase.title}`,
-        description: phase.description || `Implementation phase ${phase.number}`,
+        description: phase.description || phase.content?.trim().slice(0, 2000) || `Phase ${phase.number}: ${phase.title}`,
         sd_type: childType,
         category: orchestratorSD.category,
         status: 'draft',
@@ -288,7 +288,9 @@ async function main() {
         priority: orchestratorSD.priority,
         parent_sd_id: isSeparateOrchestrator ? null : orchestratorId,
         scope: phase.content?.trim().slice(0, 2000) || phase.description || '',
-        rationale: `Phase ${phase.number} of ${title}`,
+        rationale: phase.description
+          ? `${phase.description.slice(0, 500)}${phase.description.length > 500 ? '...' : ''}`
+          : `Phase ${phase.number} of ${title}: ${phase.title}`,
         success_metrics: phaseMetrics.length > 0 ? phaseMetrics : inherited.success_metrics || [],
         key_principles: inherited.key_principles?.length > 0 ? inherited.key_principles : orchestratorSD.key_principles,
         strategic_objectives: inherited.strategic_objectives?.length > 0 ? inherited.strategic_objectives : [`Phase ${phase.number}: ${phase.title}`],
