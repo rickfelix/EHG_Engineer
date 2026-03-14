@@ -965,5 +965,89 @@
         "look"
       ]
     }
+  },
+  "combination_rules": [
+    {
+      "name": "auth_database",
+      "description": "Authentication + database schema changes require both agents",
+      "trigger_keywords": ["auth", "rls", "row level security", "login", "permission"],
+      "agents": ["DATABASE", "SECURITY"],
+      "min_confidence": "MEDIUM"
+    },
+    {
+      "name": "migration_testing",
+      "description": "Database migrations should trigger testing for regression safety",
+      "trigger_keywords": ["migration", "alter table", "add column", "schema change"],
+      "agents": ["DATABASE", "TESTING"],
+      "min_confidence": "MEDIUM"
+    },
+    {
+      "name": "refactor_regression",
+      "description": "Refactoring needs both regression validation and testing",
+      "trigger_keywords": ["refactor", "restructure", "reorganize", "consolidate"],
+      "agents": ["REGRESSION", "TESTING"],
+      "min_confidence": "MEDIUM"
+    },
+    {
+      "name": "api_security",
+      "description": "API changes should include security review",
+      "trigger_keywords": ["api endpoint", "new endpoint", "create endpoint", "rest api"],
+      "agents": ["API", "SECURITY"],
+      "min_confidence": "MEDIUM"
+    },
+    {
+      "name": "ui_accessibility",
+      "description": "UI changes should include accessibility review",
+      "trigger_keywords": ["component", "ui", "frontend", "user interface", "page"],
+      "agents": ["DESIGN", "UAT"],
+      "min_confidence": "MEDIUM"
+    },
+    {
+      "name": "performance_database",
+      "description": "Database performance issues need both agents",
+      "trigger_keywords": ["slow query", "n+1", "query optimization", "index"],
+      "agents": ["PERFORMANCE", "DATABASE"],
+      "min_confidence": "MEDIUM"
+    },
+    {
+      "name": "incident_rca",
+      "description": "Incidents need RCA and retrospective capture",
+      "trigger_keywords": ["incident", "outage", "production issue", "p0", "critical bug"],
+      "agents": ["RCA", "RETRO"],
+      "min_confidence": "MEDIUM"
+    }
+  ],
+  "phase_modifiers": {
+    "LEAD": {
+      "description": "LEAD phase prioritizes strategic assessment agents",
+      "boosts": {
+        "RCA": 1.3,
+        "RISK": 1.3,
+        "VALIDATION": 1.2,
+        "DATABASE": 1.1
+      }
+    },
+    "PLAN": {
+      "description": "PLAN phase prioritizes design and planning agents",
+      "boosts": {
+        "STORIES": 1.3,
+        "DESIGN": 1.2,
+        "DATABASE": 1.2,
+        "SECURITY": 1.1,
+        "RISK": 1.2
+      }
+    },
+    "EXEC": {
+      "description": "EXEC phase prioritizes implementation and quality agents",
+      "boosts": {
+        "DATABASE": 1.3,
+        "TESTING": 1.3,
+        "SECURITY": 1.2,
+        "GITHUB": 1.2,
+        "REGRESSION": 1.2,
+        "PERFORMANCE": 1.1,
+        "RCA": 1.1
+      }
+    }
   }
 }
