@@ -887,6 +887,17 @@ export class ValidationOrchestrator {
         continue;
       }
 
+      // Skip LLM-powered gates in precheck mode for fast advisory checks
+      if (context.precheckMode && gate.llmPowered) {
+        console.log(`⏭️  Skipping ${gate.name} (LLM gate — evaluated during execute)`);
+        const skipResult = { passed: true, score: 0, maxScore: 0, issues: [], warnings: [`Skipped in precheck mode (LLM gate)`] };
+        results.gateResults[gate.name] = skipResult;
+        results.warnings.push(`${gate.name}: Skipped in precheck mode (LLM gate — run execute for full evaluation)`);
+        if (!results.skippedGates) results.skippedGates = [];
+        results.skippedGates.push(gate.name);
+        continue;
+      }
+
       const gateResult = await this.validateGate(gate.name, gate.validator, context);
       results.gateResults[gate.name] = gateResult;
 

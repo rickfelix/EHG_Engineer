@@ -431,6 +431,7 @@ export function createScopeReductionVerificationGate(supabase) {
       }
     },
     required: true,
-    weight: 0.6
+    weight: 0.6,
+    llmPowered: true
   };
 }

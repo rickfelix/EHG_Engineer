@@ -305,5 +305,11 @@ export async function displayExecutionResult(result, handoffType, sdId) {
         console.log(`   ${line}`);
       });
     }
+    // Auto-suggest precheck command for batch gate evaluation
+    if (handoffType && sdId) {
+      console.log('');
+      console.log('   💡 TIP: Run precheck to see ALL gate failures at once:');
+      console.log(`      node scripts/handoff.js precheck ${handoffType} ${sdId}`);
+    }
   }
 }
