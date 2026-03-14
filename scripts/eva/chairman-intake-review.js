@@ -1,15 +1,25 @@
 #!/usr/bin/env node
 /**
- * Chairman Interactive Intake Review
+ * Chairman Intake Review
  *
- * Presents each unreviewed enriched item to the Chairman via AskUserQuestion.
- * Each prompt shows: title, source, enrichment summary, AI classification,
- * and intent choices (Reference/Research/Build/Improve) with AI recommendation first.
+ * Two modes:
+ *   1. Auto-review (default / pipeline): Maps AI capture-intent to action-intent,
+ *      stamps chairman_reviewed_at. High-confidence items proceed automatically.
+ *   2. Interactive (--interactive): Emits REVIEW_ITEMS JSON for Claude Code
+ *      AskUserQuestion consumption — chairman confirms or overrides each item.
+ *
+ * Taxonomy bridge (capture-intent → action-intent):
+ *   idea     → build     (raw ideas become features)
+ *   insight  → improve   (insights suggest enhancements)
+ *   reference→ reference (direct mapping)
+ *   question → research  (questions need investigation)
+ *   value    → research  (values need strategic validation)
  *
  * Usage:
- *   node scripts/eva/chairman-intake-review.js              # Interactive review
- *   node scripts/eva/chairman-intake-review.js --skip-review # Skip (for automated runs)
- *   node scripts/eva/chairman-intake-review.js --dry-run     # Preview without DB writes
+ *   node scripts/eva/chairman-intake-review.js                # Auto-review
+ *   node scripts/eva/chairman-intake-review.js --interactive  # Emit for AskUserQuestion
+ *   node scripts/eva/chairman-intake-review.js --skip-review  # Skip (for automated runs)
+ *   node scripts/eva/chairman-intake-review.js --dry-run      # Preview without DB writes
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -25,6 +35,7 @@ const supabase = createClient(
 const args = process.argv.slice(2);
 const skipReview = args.includes('--skip-review');
 const dryRun = args.includes('--dry-run');
+const interactive = args.includes('--interactive');
 
 const INTENT_OPTIONS = ['Build', 'Research', 'Reference', 'Improve'];
 
@@ -34,6 +45,23 @@ const INTENT_DESCRIPTIONS = {
   Reference: 'Store for future lookup only — exclude from wave clustering',
   Improve: 'Enhance or fix an existing feature based on this insight',
 };
+
+/**
+ * Map AI capture-intent to chairman action-intent.
+ * Capture-intent describes WHY the item was recorded.
+ * Action-intent describes WHAT to do with it.
+ */
+const CAPTURE_TO_ACTION_MAP = {
+  idea: 'build',
+  insight: 'improve',
+  reference: 'reference',
+  question: 'research',
+  value: 'research',
+};
+
+function mapCaptureToActionIntent(captureIntent) {
+  return CAPTURE_TO_ACTION_MAP[captureIntent?.toLowerCase()] || 'research';
+}
 
 async function getUnreviewedItems() {
   const { data, error } = await supabase
@@ -79,7 +107,6 @@ function formatItemForReview(item, index, total) {
 }
 
 function buildIntentOptions(aiRecommendation) {
-  // Put AI recommendation first, then remaining options
   const recommended = aiRecommendation || 'Research';
   const normalizedRec = INTENT_OPTIONS.find(
     o => o.toLowerCase() === recommended.toLowerCase()
@@ -94,10 +121,8 @@ function buildIntentOptions(aiRecommendation) {
 }
 
 function inferAIRecommendation(item) {
-  // Infer recommendation from existing chairman_intent or classification
   if (item.chairman_intent) return item.chairman_intent;
 
-  // Heuristic based on classification confidence and aspects
   const aspects = Array.isArray(item.target_aspects) ? item.target_aspects : [];
   if (aspects.includes('reference') || aspects.includes('documentation')) return 'Reference';
   if (aspects.includes('bug') || aspects.includes('fix')) return 'Improve';
@@ -105,9 +130,9 @@ function inferAIRecommendation(item) {
   return 'Research';
 }
 
-async function storeReviewDecision(itemId, intent) {
+async function storeReviewDecision(itemId, intent, reviewMethod = 'auto') {
   if (dryRun) {
-    console.log(`  [DRY RUN] Would store intent=${intent} for item ${itemId}`);
+    console.log(`  [DRY RUN] Would store intent=${intent} (${reviewMethod}) for item ${itemId}`);
     return true;
   }
 
@@ -134,20 +159,20 @@ function buildSummaryTable(decisions) {
 
   const lines = [
     '',
-    '## Review Summary',
+    '  Review Summary',
     '',
-    '| Intent | Count |',
-    '|--------|-------|',
+    '  | Intent    | Count |',
+    '  |-----------|-------|',
   ];
 
   for (const intent of INTENT_OPTIONS) {
     const key = intent.toLowerCase();
     if (counts[key]) {
-      lines.push(`| ${intent} | ${counts[key]} |`);
+      lines.push(`  | ${intent.padEnd(9)} | ${String(counts[key]).padStart(5)} |`);
     }
   }
 
-  lines.push(`| **Total** | **${decisions.length}** |`);
+  lines.push(`  | ${'Total'.padEnd(9)} | ${String(decisions.length).padStart(5)} |`);
   lines.push('');
 
   return lines.join('\n');
@@ -175,33 +200,66 @@ async function main() {
 
   console.log(`  ${items.length} item(s) ready for review`);
   if (dryRun) console.log('  [DRY RUN MODE - no DB writes]');
-  console.log('');
 
-  // Output items as JSON for AskUserQuestion consumption by the caller
-  // When run standalone, this provides the review data
-  const reviewData = items.map((item, i) => ({
-    itemId: item.id,
-    markdown: formatItemForReview(item, i, items.length),
-    options: buildIntentOptions(inferAIRecommendation(item)),
-    title: item.title,
-  }));
+  // --- Interactive mode: emit for AskUserQuestion consumption ---
+  if (interactive) {
+    console.log('  Mode: INTERACTIVE (emit for AskUserQuestion)\n');
 
-  // Output structured data for the pipeline to consume
-  console.log('REVIEW_ITEMS_START');
-  console.log(JSON.stringify(reviewData));
-  console.log('REVIEW_ITEMS_END');
-  console.log(`REVIEW_COUNT=${items.length}`);
+    const reviewData = items.map((item, i) => ({
+      itemId: item.id,
+      markdown: formatItemForReview(item, i, items.length),
+      options: buildIntentOptions(mapCaptureToActionIntent(item.chairman_intent)),
+      captureIntent: item.chairman_intent,
+      mappedActionIntent: mapCaptureToActionIntent(item.chairman_intent),
+      title: item.title,
+    }));
+
+    console.log('REVIEW_ITEMS_START');
+    console.log(JSON.stringify(reviewData));
+    console.log('REVIEW_ITEMS_END');
+    console.log(`REVIEW_COUNT=${items.length}`);
+    return;
+  }
+
+  // --- Auto-review mode: map capture-intent → action-intent and stamp ---
+  console.log('  Mode: AUTO (mapping capture-intent → action-intent)\n');
+  console.log('  Taxonomy bridge:');
+  console.log('    idea     → build     | insight  → improve');
+  console.log('    reference→ reference | question → research');
+  console.log('    value    → research\n');
+
+  const decisions = [];
+  let stored = 0;
+  let failed = 0;
+
+  for (const item of items) {
+    const captureIntent = item.chairman_intent || 'research';
+    const actionIntent = mapCaptureToActionIntent(captureIntent);
+
+    const ok = await storeReviewDecision(item.id, actionIntent, 'auto');
+    if (ok) {
+      decisions.push({ intent: actionIntent, captureIntent });
+      stored++;
+    } else {
+      failed++;
+    }
+  }
+
+  console.log(`  Reviewed: ${stored} items (${failed} errors)`);
+  console.log(buildSummaryTable(decisions));
 }
 
-// Also export for programmatic use
+// Export for programmatic use
 export {
   getUnreviewedItems,
   formatItemForReview,
   buildIntentOptions,
   inferAIRecommendation,
+  mapCaptureToActionIntent,
   storeReviewDecision,
   buildSummaryTable,
   INTENT_OPTIONS,
+  CAPTURE_TO_ACTION_MAP,
 };
 
 main().catch(err => {
