@@ -42,6 +42,23 @@ export function registerGate1Validators(registry) {
     }
 
     if (stories.length === 0) {
+      // SD-PRD-USER-STORIES-TABLE-ORCH-001: Distinguish missing vs misplaced stories
+      const jsonbLocations = [];
+      if (prd?.content?.user_stories?.length > 0) jsonbLocations.push('prd.content.user_stories');
+      if (prd?.metadata?.user_stories?.length > 0) jsonbLocations.push('prd.metadata.user_stories');
+      if (prd?.content?.stories?.length > 0) jsonbLocations.push('prd.content.stories');
+
+      if (jsonbLocations.length > 0) {
+        return {
+          passed: false, score: 0, max_score: 100,
+          issues: [
+            `User stories found in PRD JSONB (${jsonbLocations.join(', ')}) but NOT in user_stories table.`,
+            'REMEDIATION: Run autoTriggerStories() or use add-prd-to-database.js (canonical path) to populate user_stories table.',
+            'Stories must be in the user_stories table with prd_id and sd_id foreign keys.'
+          ]
+        };
+      }
+
       return { passed: false, score: 0, max_score: 100, issues: ['No user stories found in PRD or user_stories table'] };
     }
 
