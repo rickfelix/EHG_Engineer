@@ -16,8 +16,8 @@ test.describe('Login Flow', () => {
   });
 
   test('login page renders with email and password fields', async ({ page }) => {
-    await expect(page.getByLabel(/email/i)).toBeVisible();
-    await expect(page.getByLabel(/password/i)).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Email' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Password' })).toBeVisible();
     await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
   });
 
@@ -25,8 +25,8 @@ test.describe('Login Flow', () => {
     const email = process.env.TEST_USER_EMAIL || 'admin@ehg.com';
     const password = process.env.TEST_USER_PASSWORD || 'test-password';
 
-    await page.getByLabel(/email/i).fill(email);
-    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('textbox', { name: 'Email' }).fill(email);
+    await page.getByRole('textbox', { name: 'Password' }).fill(password);
     await page.getByRole('button', { name: /sign in/i }).click();
 
     await page.waitForURL(/\/(chairman|admin)/, { timeout: 15000 });
@@ -34,8 +34,8 @@ test.describe('Login Flow', () => {
   });
 
   test('login page shows error for invalid credentials', async ({ page }) => {
-    await page.getByLabel(/email/i).fill('invalid@example.com');
-    await page.getByLabel(/password/i).fill('wrongpassword');
+    await page.getByRole('textbox', { name: 'Email' }).fill('invalid@example.com');
+    await page.getByRole('textbox', { name: 'Password' }).fill('wrongpassword');
     await page.getByRole('button', { name: /sign in/i }).click();
 
     // Should show error message, not redirect
