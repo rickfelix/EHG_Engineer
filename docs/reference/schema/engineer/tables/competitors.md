@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T23:15:54.581Z
+**Generated**: 2026-03-15T23:28:10.423Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (5 policies)
 
@@ -14,12 +14,12 @@
 
 ---
 
-## Columns (12 total)
+## Columns (17 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| venture_id | `uuid` | YES | - | - |
+| venture_id | `uuid` | **NO** | - | - |
 | name | `character varying(255)` | **NO** | - | - |
 | website | `text` | YES | - | - |
 | description | `text` | YES | - | - |
@@ -30,6 +30,11 @@
 | analyzed_at | `timestamp with time zone` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| threat_level | `text` | YES | - | Competitive threat level: H(igh), M(edium), L(ow) |
+| pricing_model | `text` | YES | - | How the competitor monetizes their product |
+| market_position | `text` | YES | - | Free-text description of competitive market positioning |
+| swot | `jsonb` | YES | `'{}'::jsonb` | Structured SWOT analysis: {strengths:[], weaknesses:[], opportunities:[], threats:[]} |
+| lifecycle_stage | `text` | YES | - | Business lifecycle stage: seed, growth, mature, declining |
 
 ## Constraints
 
@@ -38,6 +43,14 @@
 
 ### Foreign Keys
 - `competitors_venture_id_fkey`: venture_id → ventures(id)
+
+### Unique Constraints
+- `uq_competitors_venture_name`: UNIQUE (venture_id, name)
+
+### Check Constraints
+- `chk_competitors_lifecycle_stage`: CHECK ((lifecycle_stage = ANY (ARRAY['seed'::text, 'growth'::text, 'mature'::text, 'declining'::text])))
+- `chk_competitors_pricing_model`: CHECK ((pricing_model = ANY (ARRAY['subscription'::text, 'freemium'::text, 'one_time'::text, 'usage_based'::text, 'marketplace'::text, 'advertising'::text, 'enterprise'::text, 'hybrid'::text])))
+- `chk_competitors_threat_level`: CHECK ((threat_level = ANY (ARRAY['H'::text, 'M'::text, 'L'::text])))
 
 ## Indexes
 
@@ -56,6 +69,14 @@
 - `idx_competitors_venture`
   ```sql
   CREATE INDEX idx_competitors_venture ON public.competitors USING btree (venture_id)
+  ```
+- `idx_competitors_venture_stage`
+  ```sql
+  CREATE INDEX idx_competitors_venture_stage ON public.competitors USING btree (venture_id, lifecycle_stage)
+  ```
+- `uq_competitors_venture_name`
+  ```sql
+  CREATE UNIQUE INDEX uq_competitors_venture_name ON public.competitors USING btree (venture_id, name)
   ```
 
 ## RLS Policies
