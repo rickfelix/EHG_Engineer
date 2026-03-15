@@ -215,7 +215,6 @@ function main() {
     }
 
     if (level) {
-      const age = formatDuration(sessionAgeMinutes);
       const source = TIME_ONLY ? 'AUTO-PROCEED' : 'interactive';
 
       // Check if AUTO-PROCEED is active — downgrade CRITICAL to ADVISORY
@@ -230,11 +229,11 @@ function main() {
       } catch { /* fail-safe: default to non-auto-proceed (show CRITICAL) */ }
 
       if (level === 'CRITICAL' && isAutoProceed) {
-        console.log(`[context-compact-nudge] ADVISORY (AUTO-PROCEED active): Session running ${age}. Context compaction recommended at next SD boundary.`);
+        console.log('[context-compact-nudge] ADVISORY (AUTO-PROCEED active): Context compaction recommended at next SD boundary.');
       } else if (level === 'CRITICAL') {
-        console.log(`[context-compact-nudge] CRITICAL (${source}): Session running ${age}. Run /context-compact NOW to prevent API serialization errors.`);
+        console.log(`[context-compact-nudge] CRITICAL (${source}): Run /context-compact NOW to prevent API serialization errors.`);
       } else {
-        console.log(`[context-compact-nudge] WARNING (${source}): Session running ${age}. Consider running /context-compact to reduce context size.`);
+        console.log(`[context-compact-nudge] WARNING (${source}): Consider running /context-compact to reduce context size.`);
       }
 
       writeFlag(level, Math.round(sessionAgeMinutes), state);
