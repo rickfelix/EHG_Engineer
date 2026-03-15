@@ -20,7 +20,7 @@ model: sonnet
 
 Before any documentation work, consult these authoritative sources:
 
-1. **Documentation Standards**: `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md`
+1. **Documentation Standards**: `docs/03_protocols_and_standards/documentation-standards.md`
    - File naming conventions (kebab-case, version underscores)
    - Folder hierarchy (01_architecture through 06_deployment)
    - Documentation rules and organization
@@ -163,7 +163,7 @@ supabase.from('leo_protocol_sections')
 
 #### 0.0.1 Read Canonical Standards
 
-Use the Read tool to load: `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md`
+Use the Read tool to load: `docs/03_protocols_and_standards/documentation-standards.md`
 
 #### 0.0.2 Parse Location Rules Table
 
@@ -255,7 +255,7 @@ Output a summary confirming standards were loaded:
 ## Documentation Standards Loaded ✓
 
 ### Source
-- **File**: docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md
+- **File**: docs/03_protocols_and_standards/documentation-standards.md
 - **Version**: [extracted from footer, e.g., "1.1.0"]
 - **Last Updated**: [extracted from footer, e.g., "2025-10-24"]
 
@@ -277,7 +277,7 @@ If the standards file cannot be read or parsed:
 1. **Log warning**:
    ```markdown
    ⚠️ WARNING: Could not load documentation standards from canonical source.
-   - File: docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md
+   - File: docs/03_protocols_and_standards/documentation-standards.md
    - Error: [file not found / parse error description]
    - Action: Using FALLBACK hardcoded rules
    ```
@@ -294,7 +294,7 @@ If the standards file cannot be read or parsed:
 
 #### 0.1 Location Rules Reference
 
-**Source**: Use the `LOCATION_RULES` extracted from `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` in Phase 0.0.
+**Source**: Use the `LOCATION_RULES` extracted from `docs/03_protocols_and_standards/documentation-standards.md` in Phase 0.0.
 
 If Phase 0.0 extraction succeeded, use the dynamically loaded rules.
 If Phase 0.0 extraction failed, use these **FALLBACK** rules:
@@ -321,7 +321,7 @@ If Phase 0.0 extraction failed, use these **FALLBACK** rules:
 
 #### 0.2 Prohibited Locations Check
 
-**Source**: Use the `PROHIBITED_LOCATIONS` extracted from `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` in Phase 0.0.
+**Source**: Use the `PROHIBITED_LOCATIONS` extracted from `docs/03_protocols_and_standards/documentation-standards.md` in Phase 0.0.
 
 If Phase 0.0 extraction succeeded, use the dynamically loaded prohibited list.
 If Phase 0.0 extraction failed, use these **FALLBACK** prohibited locations:
@@ -866,7 +866,7 @@ supabase.from('leo_protocol_sections')
 ## Documentation Update Summary
 
 ### Standards Source (Phase 0.0)
-- **File**: docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md
+- **File**: docs/03_protocols_and_standards/documentation-standards.md
 - **Version**: [extracted from footer, e.g., "1.1.0"]
 - **Last Updated**: [extracted from footer, e.g., "2025-10-24"]
 - **Load Status**: SUCCESS | FALLBACK (hardcoded)
@@ -1057,7 +1057,7 @@ When a protocol violation is detected:
 ### Location Mapping Quick Reference
 
 **⚠️ FALLBACK ONLY**: Prefer using values extracted in Phase 0.0 from the canonical source.
-These hardcoded values are only used when `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` cannot be loaded.
+These hardcoded values are only used when `docs/03_protocols_and_standards/documentation-standards.md` cannot be loaded.
 
 ```javascript
 // FALLBACK: Used only when Phase 0.0 extraction fails

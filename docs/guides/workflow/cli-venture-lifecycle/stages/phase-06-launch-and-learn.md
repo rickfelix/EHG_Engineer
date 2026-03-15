@@ -3,7 +3,7 @@ category: guide
 status: draft
 version: 1.0.0
 author: auto-fixer
-last_updated: 2026-03-01
+last_updated: 2026-03-15
 tags: [guide, auto-generated]
 ---
 
@@ -12,7 +12,7 @@ tags: [guide, auto-generated]
 - [Phase Purpose](#phase-purpose)
 - [Phase Flow](#phase-flow)
 - [Mermaid Diagram](#mermaid-diagram)
-- [Stage 23: Launch Execution](#stage-23-launch-execution)
+- [Stage 23: Marketing Preparation](#stage-23-marketing-preparation)
   - [Purpose](#purpose)
   - [Required Inputs](#required-inputs)
   - [Kill Gate Rules](#kill-gate-rules)
@@ -23,7 +23,7 @@ tags: [guide, auto-generated]
   - [Chairman Interaction](#chairman-interaction)
   - [Integration Points](#integration-points)
   - [For AI Agents](#for-ai-agents)
-- [Stage 24: Metrics & Learning](#stage-24-metrics-learning)
+- [Stage 24: Launch Readiness](#stage-24-launch-readiness)
   - [Purpose](#purpose)
   - [The AARRR Framework](#the-aarrr-framework)
   - [Required Inputs](#required-inputs)
@@ -33,7 +33,7 @@ tags: [guide, auto-generated]
   - [Chairman Interaction](#chairman-interaction)
   - [Integration Points](#integration-points)
   - [For AI Agents](#for-ai-agents)
-- [Stage 25: Venture Review](#stage-25-venture-review)
+- [Stage 25: Launch Execution](#stage-25-launch-execution)
   - [Purpose](#purpose)
   - [Required Inputs](#required-inputs)
   - [Review Categories](#review-categories)
@@ -56,11 +56,11 @@ Status: Approved
 Version: 1.0.0
 Author: DOCMON Sub-Agent
 Last Updated: 2026-02-08
-Tags: [cli-venture-lifecycle, eva, stages, phase-6, launch-and-learn]
+Tags: [cli-venture-lifecycle, eva, stages, phase-6, the-launch]
 Related SDs: [SD-LEO-ORCH-CLI-VENTURE-LIFECYCLE-001]
 ---
 
-# Phase 6: Launch & Learn -- Stages 23-25
+# Phase 6: THE LAUNCH -- Stages 23-25
 
 ## Phase Purpose
 
@@ -76,8 +76,8 @@ Phase 6 is the final phase of the venture lifecycle. The product is built, teste
 
  +-------------------+
  |   STAGE 23        |
- |   Launch          |
- |   Execution       |
+ |   Marketing       |
+ |   Preparation     |
  |   (decision_gate) |
  +--------+----------+
    KILL   |   PASS
@@ -87,8 +87,8 @@ Phase 6 is the final phase of the venture lifecycle. The product is built, teste
           v
  +-------------------+     +-------------------+
  |   STAGE 24        |     |   STAGE 25        |
- |   Metrics &       |---->|   Venture Review  |
- |   Learning        |     |   (sd_required)   |
+ |   Launch          |---->|   Launch Execution  |
+ |   Readiness       |     |   (sd_required)   |
  |   (artifact_only) |     |                   |
  +-------------------+     |   DRIFT CHECK     |
                             |   vs Stage 1      |
@@ -103,9 +103,9 @@ Phase 6 is the final phase of the venture lifecycle. The product is built, teste
 
 ```mermaid
 flowchart TD
-    S23{"Stage 23: Launch Execution\n(KILL GATE - Go/No-Go)"}
-    S24["Stage 24: Metrics & Learning\n(AARRR Framework)"]
-    S25["Stage 25: Venture Review\n(SD Required)\nDRIFT CHECK"]
+    S23{"Stage 23: Marketing Preparation\n(KILL GATE - Go/No-Go)"}
+    S24["Stage 24: Launch Readiness\n(AARRR Framework)"]
+    S25["Stage 25: Launch Execution\n(SD Required)\nDRIFT CHECK"]
 
     S23 -->|go| S24
     S23 -->|no-go| HOLD["Launch Blocked"]
@@ -123,12 +123,12 @@ flowchart TD
 
 ---
 
-## Stage 23: Launch Execution
+## Stage 23: Marketing Preparation
 
 | Property | Value |
 |----------|-------|
 | Template | `lib/eva/stage-templates/stage-23.js` (151 lines) |
-| Slug | `launch-execution` |
+| Slug | `marketing-preparation` |
 | Stage Type | decision_gate |
 | Gate Type | **KILL GATE** (Go/No-Go) |
 | Version | 1.0.0 |
@@ -213,7 +213,7 @@ The kill gate is evaluated by the exported `evaluateKillGate()` function.
 ### Integration Points
 
 - Operational plans connect to Stage 6 (Risk Matrix) mitigations
-- Monitoring setup feeds into Stage 24 (Metrics & Learning)
+- Monitoring setup feeds into Stage 24 (Launch Readiness)
 - Rollback plan provides safety net for Stage 25 if post-launch issues arise
 
 ### For AI Agents
@@ -228,12 +228,12 @@ The kill gate is evaluated by the exported `evaluateKillGate()` function.
 
 ---
 
-## Stage 24: Metrics & Learning
+## Stage 24: Launch Readiness
 
 | Property | Value |
 |----------|-------|
 | Template | `lib/eva/stage-templates/stage-24.js` (160 lines) |
-| Slug | `metrics-learning` |
+| Slug | `launch-readiness` |
 | Stage Type | artifact_only |
 | Gate Type | None |
 | Version | 1.0.0 |
@@ -331,12 +331,12 @@ Each metric:
 
 ### Chairman Interaction
 
-No automated checkpoint. Metrics dashboard is reviewed by the Chairman alongside the Stage 25 Venture Review.
+No automated checkpoint. Metrics dashboard is reviewed by the Chairman alongside the Stage 25 Launch Execution.
 
 ### Integration Points
 
 - Metrics map to Stage 12 (Sales Logic) funnel stages
-- AARRR data provides input for Stage 25 (Venture Review) assumptions-vs-reality analysis
+- AARRR data provides input for Stage 25 (Launch Execution) assumptions-vs-reality analysis
 - Learnings feed into Cross-Venture Learning system at `lib/eva/cross-venture-learning.js`
 - Trend windows inform optimization priorities
 
@@ -352,12 +352,12 @@ No automated checkpoint. Metrics dashboard is reviewed by the Chairman alongside
 
 ---
 
-## Stage 25: Venture Review
+## Stage 25: Launch Execution
 
 | Property | Value |
 |----------|-------|
 | Template | `lib/eva/stage-templates/stage-25.js` (196 lines) |
-| Slug | `venture-review` |
+| Slug | `launch-execution` |
 | Stage Type | sd_required |
 | Gate Type | **DRIFT CHECK** |
 | Version | 1.0.0 |
@@ -469,7 +469,7 @@ The Cross-Venture Learning module at `lib/eva/cross-venture-learning.js` capture
 
 ### For AI Agents
 
-**When to invoke**: After Stage 24 (Metrics & Learning) data is collected. This is the final lifecycle stage.
+**When to invoke**: After Stage 24 (Launch Readiness) data is collected. This is the final lifecycle stage.
 
 **What to check**: All 5 initiative categories populated. Current vision stated. Next steps defined with owners.
 

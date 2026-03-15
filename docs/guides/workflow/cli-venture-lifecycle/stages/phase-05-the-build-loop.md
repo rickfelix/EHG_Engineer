@@ -3,7 +3,7 @@ category: guide
 status: draft
 version: 1.0.0
 author: auto-fixer
-last_updated: 2026-03-01
+last_updated: 2026-03-15
 tags: [guide, auto-generated]
 ---
 
@@ -12,7 +12,7 @@ tags: [guide, auto-generated]
 - [Phase Purpose](#phase-purpose)
 - [Phase Flow](#phase-flow)
 - [Mermaid Diagram](#mermaid-diagram)
-- [Stage 17: Pre-Build Checklist](#stage-17-pre-build-checklist)
+- [Stage 17: Build Readiness](#stage-17-build-readiness)
   - [Purpose](#purpose)
   - [Required Inputs](#required-inputs)
   - [Generated Artifacts](#generated-artifacts)
@@ -51,7 +51,7 @@ tags: [guide, auto-generated]
   - [Chairman Interaction](#chairman-interaction)
   - [Integration Points](#integration-points)
   - [For AI Agents](#for-ai-agents)
-- [Stage 21: Integration Testing](#stage-21-integration-testing)
+- [Stage 21: Build Review & Integration Testing](#stage-21-integration-testing)
   - [Purpose](#purpose)
   - [Required Inputs](#required-inputs)
   - [Generated Artifacts](#generated-artifacts)
@@ -141,11 +141,11 @@ Phase 5 is the largest phase (6 stages) and where actual code is written. All st
 
 ```mermaid
 flowchart TD
-    S17["Stage 17: Pre-Build Checklist\n(SD Required)"]
+    S17["Stage 17: Build Readiness\n(SD Required)"]
     S18["Stage 18: Sprint Planning\n(SD Required)\nLIFECYCLE-TO-SD BRIDGE"]
     S19["Stage 19: Build Execution\n(SD Required)"]
     S20["Stage 20: Quality Assurance\n(SD Required)"]
-    S21["Stage 21: Integration Testing\n(SD Required)"]
+    S21["Stage 21: Build Review & Integration Testing\n(SD Required)"]
     S22["Stage 22: Release Readiness\n(SD Required)"]
     PG{"Promotion Gate\nPhase 5 -> 6"}
 
@@ -167,12 +167,12 @@ flowchart TD
 
 ---
 
-## Stage 17: Pre-Build Checklist
+## Stage 17: Build Readiness
 
 | Property | Value |
 |----------|-------|
 | Template | `lib/eva/stage-templates/stage-17.js` (142 lines) |
-| Slug | `pre-build-checklist` |
+| Slug | `build-readiness` |
 | Stage Type | sd_required |
 | Gate Type | None (but contributes to Promotion Gate at Stage 22) |
 | Version | 1.0.0 |
@@ -350,7 +350,7 @@ The Chairman approves the sprint plan before SD creation begins. Sprint items ma
 
 ### For AI Agents
 
-**When to invoke**: After Stage 17 (Pre-Build Checklist) confirms readiness.
+**When to invoke**: After Stage 17 (Build Readiness) confirms readiness.
 
 **What to check**: Duration in valid range (1-30 days). Each item has a valid priority and type enum. target_application is set.
 
@@ -510,7 +510,7 @@ No automated checkpoint. Quality metrics are reviewed in the Promotion Gate.
 
 ---
 
-## Stage 21: Integration Testing
+## Stage 21: Build Review & Integration Testing
 
 | Property | Value |
 |----------|-------|
@@ -635,7 +635,7 @@ The Promotion Gate is evaluated by the exported `evaluatePromotionGate()` functi
    [x] 100% test pass rate
    [x] >= 60% code coverage
 
- Stage 21: Integration Testing
+ Stage 21: Build Review & Integration Testing
    [x] All integrations passing
 
  Stage 22: Release Readiness
