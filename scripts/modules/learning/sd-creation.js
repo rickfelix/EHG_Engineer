@@ -80,6 +80,14 @@ export async function createSDFromLearning(items, type, options = {}) {
     key_principles: keyPrinciples,
     key_changes: keyChanges,
     risks: risks,
+    dependencies: [
+      { sd_key: 'none', description: 'No blocking dependencies — corrective patterns from retrospective analysis' }
+    ],
+    implementation_guidelines: items.map(item => {
+      const summary = item.issue_summary || item.content || item.title || 'Address identified pattern';
+      const solution = item.proven_solution || '';
+      return solution ? `${summary.substring(0, 100)}: ${solution.substring(0, 200)}` : `Fix: ${summary.substring(0, 300)}`;
+    }),
     metadata: {
       source: 'learn_command',
       source_items: items.map(i => i.id || i.pattern_id),
