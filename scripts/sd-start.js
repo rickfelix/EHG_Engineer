@@ -499,6 +499,19 @@ async function main() {
     console.log(`   Source: ${worktreeInfo.source}${worktreeInfo.worktree.created ? ' (newly created)' : ''}`);
     // Machine-readable directive for agent consumption (PAT-WORKTREE-LIFECYCLE-001)
     console.log(`\n>>> WORKTREE_CWD=${worktreeInfo.cwd}`);
+
+    // QF-20260314-250: Child claim verification gate
+    // Warn when orchestrator sd:start resolves to a child's worktree
+    const wtBranch = worktreeInfo.worktree.branch || '';
+    if (sd.sd_type === 'orchestrator' && wtBranch && !wtBranch.includes(effectiveId)) {
+      const childMatch = wtBranch.match(/SD-[A-Z0-9-]+/);
+      if (childMatch) {
+        console.log(`\n${colors.yellow}⚠️  CHILD CLAIM VERIFICATION REQUIRED${colors.reset}`);
+        console.log(`   Worktree resolved to child: ${childMatch[0]}`);
+        console.log(`   You MUST run: npm run sd:start ${childMatch[0]}`);
+        console.log('   Parent auto-routing is NOT a substitute for explicit child claim.');
+      }
+    }
   }
 
   // 5.5. Show duration estimate
