@@ -244,7 +244,8 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
       // context-builder.js uses 'id' field, but sd-builders.js expects 'pattern_id'
       approvedItems.push({
         ...pattern,
-        pattern_id: pattern.id || pattern.pattern_id  // Ensure pattern_id is set
+        pattern_id: pattern.id || pattern.pattern_id,  // Ensure pattern_id is set
+        issue_summary: pattern.issue_summary || pattern.content  // Restore field contract
       });
       continue;
     }
