@@ -61,7 +61,7 @@ export function buildSDDescription(items) {
       lines.push(`### Pattern: ${item.pattern_id}`);
       lines.push(`- **Category:** ${item.category || 'Unknown'}`);
       lines.push(`- **Severity:** ${item.severity || 'Unknown'}`);
-      lines.push(`- **Summary:** ${item.issue_summary || 'No summary'}`);
+      lines.push(`- **Summary:** ${item.issue_summary || item.content || 'No summary'}`);
       lines.push(`- **Occurrences:** ${item.occurrence_count || 1}`);
       lines.push(`- **Impact:** ${item.occurrence_count > 1 ? 'Recurring issue requiring systematic fix to prevent future occurrences' : 'Single occurrence — root cause fix prevents recurrence'}`);
       lines.push('');
@@ -99,7 +99,7 @@ export function buildSDTitle(items) {
   if (items.length === 1) {
     const item = items[0];
     if (item.pattern_id) {
-      const summary = item.issue_summary || item.category || 'Recurring issue';
+      const summary = item.issue_summary || item.content || item.category || 'Recurring issue';
       return `Address ${item.pattern_id}: ${summary.slice(0, 60)}`;
     }
     return (item.description || 'Learning improvement').slice(0, 80);
@@ -306,7 +306,7 @@ export function buildKeyChanges(items) {
   for (const item of items) {
     if (item.pattern_id) {
       changes.push({
-        change: `Address pattern ${item.pattern_id}: ${(item.issue_summary || '').slice(0, 80)}`,
+        change: `Address pattern ${item.pattern_id}: ${(item.issue_summary || item.content || '').slice(0, 80)}`,
         type: 'fix',
         impact: `Eliminates ${item.occurrence_count || 1} recorded occurrence(s) of this pattern`
       });

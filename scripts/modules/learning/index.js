@@ -95,10 +95,16 @@ async function autoApproveCommand(threshold = 50, sdId = null) {
 
   for (const pattern of (reviewed.patterns || [])) {
     const score = pattern.composite_score || 0;
-    if (score >= threshold) {
-      qualifying.push(pattern);
-    } else {
+    const content = pattern.content || pattern.issue_summary || '';
+    const hasContent = content.length >= 10;
+    const hasSolutions = Array.isArray(pattern.proven_solutions) && pattern.proven_solutions.length > 0;
+
+    if (score < threshold) {
       deferred.push({ ...pattern, reason: `composite_score ${score} < ${threshold}` });
+    } else if (!hasContent && !hasSolutions) {
+      deferred.push({ ...pattern, reason: 'empty pattern: no content and no proven_solutions' });
+    } else {
+      qualifying.push(pattern);
     }
   }
 
