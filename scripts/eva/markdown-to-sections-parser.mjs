@@ -90,7 +90,7 @@ export function parseMarkdownToSections(content, headingToKeyMap) {
       // If still no match, use a slug of the heading
       if (!currentKey) {
         currentKey = heading
-          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/[^a-z0-9\s]/g, ' ')
           .replace(/\s+/g, '_')
           .substring(0, 50);
       }
