@@ -48,7 +48,8 @@ class LEOMaintenanceManager {
       activations: this.cleanupActivations.bind(this),
       failureLogs: this.rotateFailureLogs.bind(this),
       circuitBreakers: this.resetStaleCircuitBreakers.bind(this),
-      orphanedFiles: this.cleanupOrphanedFiles.bind(this)
+      orphanedFiles: this.cleanupOrphanedFiles.bind(this),
+      brainstormPipeline: this.fixBrainstormPipeline.bind(this)
     };
 
     const results = {};
@@ -283,6 +284,25 @@ class LEOMaintenanceManager {
       success: true,
       message: `Cleaned ${cleaned.tempFiles} temp, ${cleaned.archiveFiles} archive, ${cleaned.stashFiles} stash files`
     };
+  }
+
+  /**
+   * Auto-fix brainstorm pipeline issues (outcome upgrades)
+   */
+  async fixBrainstormPipeline() {
+    try {
+      const { autoFixBrainstormPipeline } = await import('./brainstorm-pipeline-health.js');
+      const result = await autoFixBrainstormPipeline();
+      return {
+        success: true,
+        message: `Pipeline: ${result.fixed} fixed, ${result.errors} errors, ${result.total_issues} total issues`
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Brainstorm pipeline check unavailable: ${error.message}`
+      };
+    }
   }
 
   /**

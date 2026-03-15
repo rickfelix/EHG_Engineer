@@ -29,3 +29,4 @@ export { displayVisionPortfolioHeader, formatVisionBadge } from './vision-scorec
 export { displayQuickFixes } from './quick-fixes.js';
 export { displayRoadmapAwareness } from './roadmap-awareness.js';
 export { displayHealthFreshness } from './health-freshness.js';
+export { displayBrainstormPipelineAdvisory } from './brainstorm-pipeline.js';
