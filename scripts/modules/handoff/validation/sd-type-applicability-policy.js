@@ -708,6 +708,118 @@ export function getSkipConditionsForType(sdType) {
   };
 }
 
+// ============================================================================
+// SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-D: Test Tier Assignment
+// ============================================================================
+
+/**
+ * Test Tier definitions for SD-scoped test execution.
+ *
+ * Tier 0: Backend only — unit/integration tests, no browser testing
+ * Tier 1: Minor UI — smoke tests (page loads, no errors)
+ * Tier 2: Significant UI — journey tests (navigation, form interactions)
+ * Tier 3: Critical flows — full Playwright suite (auth, transactions, data integrity)
+ */
+export const TEST_TIER_DEFINITIONS = {
+  0: { name: 'Backend Only', tests: 'unit/integration', browser: false, description: 'No UI files changed. Unit and integration tests only.' },
+  1: { name: 'Smoke', tests: 'smoke', browser: true, description: 'Minor UI changes. Page loads without errors, critical elements render.' },
+  2: { name: 'Journey', tests: 'journey', browser: true, description: 'Significant UI work. Navigation, form interactions, state transitions.' },
+  3: { name: 'Full Suite', tests: 'full', browser: true, description: 'Critical flows. Auth, transactions, data integrity, cross-page journeys.' }
+};
+
+// File extension patterns for tier classification
+const UI_EXTENSIONS = /\.(tsx|jsx|css|scss|less|html|svelte|vue)$/i;
+const ROUTE_PATTERNS = /route|page|layout|nav|sidebar|header|footer/i;
+const AUTH_PATTERNS = /auth|login|session|credential|token|permission/i;
+const CRITICAL_PATTERNS = /payment|checkout|transaction|migration|schema/i;
+
+/**
+ * Compute the test tier for an SD based on its changed files.
+ *
+ * @param {Object} options
+ * @param {string[]} [options.changedFiles] - List of changed file paths from git diff
+ * @param {string} [options.sdType] - The SD type (feature, infrastructure, etc.)
+ * @param {number|null} [options.manualOverride] - Manual tier override from PRD metadata
+ * @returns {{ tier: number, reason: string, breakdown: Object }}
+ */
+export function computeTestTier({ changedFiles = [], sdType = 'unknown', manualOverride = null } = {}) {
+  // Manual override takes precedence
+  if (manualOverride !== null && manualOverride >= 0 && manualOverride <= 3) {
+    return {
+      tier: manualOverride,
+      reason: `Manual override (PRD metadata.test_tier=${manualOverride})`,
+      breakdown: { source: 'manual_override', override: manualOverride }
+    };
+  }
+
+  // SD types that never need browser tests
+  const BACKEND_ONLY_TYPES = ['documentation', 'docs', 'process', 'orchestrator', 'discovery_spike'];
+  if (BACKEND_ONLY_TYPES.includes(sdType)) {
+    return {
+      tier: 0,
+      reason: `SD type '${sdType}' does not require browser testing`,
+      breakdown: { source: 'sd_type_exempt', sdType }
+    };
+  }
+
+  if (changedFiles.length === 0) {
+    return {
+      tier: 0,
+      reason: 'No changed files detected',
+      breakdown: { source: 'no_files', fileCount: 0 }
+    };
+  }
+
+  // Classify files
+  const uiFiles = changedFiles.filter(f => UI_EXTENSIONS.test(f));
+  const routeFiles = changedFiles.filter(f => ROUTE_PATTERNS.test(f));
+  const authFiles = changedFiles.filter(f => AUTH_PATTERNS.test(f));
+  const criticalFiles = changedFiles.filter(f => CRITICAL_PATTERNS.test(f));
+
+  const breakdown = {
+    source: 'file_analysis',
+    totalFiles: changedFiles.length,
+    uiFiles: uiFiles.length,
+    routeFiles: routeFiles.length,
+    authFiles: authFiles.length,
+    criticalFiles: criticalFiles.length
+  };
+
+  // Tier 3: Critical flows (auth, payment, migration)
+  if (authFiles.length > 0 || criticalFiles.length > 0) {
+    return {
+      tier: 3,
+      reason: `Critical files changed: ${[...authFiles, ...criticalFiles].slice(0, 3).join(', ')}`,
+      breakdown
+    };
+  }
+
+  // Tier 2: Significant UI (routes, multiple UI files)
+  if (routeFiles.length > 0 || uiFiles.length >= 3) {
+    return {
+      tier: 2,
+      reason: `Significant UI: ${routeFiles.length} route files, ${uiFiles.length} UI files`,
+      breakdown
+    };
+  }
+
+  // Tier 1: Minor UI (1-2 UI files)
+  if (uiFiles.length > 0) {
+    return {
+      tier: 1,
+      reason: `Minor UI: ${uiFiles.length} UI file(s) changed`,
+      breakdown
+    };
+  }
+
+  // Tier 0: No UI files
+  return {
+    tier: 0,
+    reason: 'No UI files changed — backend only',
+    breakdown
+  };
+}
+
 export default {
   POLICY_VERSION,
   RequirementLevel,
@@ -728,5 +840,8 @@ export default {
   // SD-LEO-INFRA-HARDENING-001: Centralized skip checking
   checkSkipCondition,
   checkSkipConditionsBatch,
-  getSkipConditionsForType
+  getSkipConditionsForType,
+  // SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-D: Test tier assignment
+  computeTestTier,
+  TEST_TIER_DEFINITIONS
 };
