@@ -1253,10 +1253,14 @@ With the preflight:
 
 When starting work on an orchestrator SD:
 1. **Run preflight automatically** - `node scripts/orchestrator-preflight.js SD-XXX-001`
-2. **Display the requirements** - Let the user see child workflow requirements
-3. **Proceed with full workflow** - No confirmation needed; full LEAD→PLAN→EXEC for each child is the ONLY correct path
+2. **Display the requirements** - Let the user see child workflow requirements and claim status
+3. **Identify the target child** - Pick the first unclaimed, non-completed child from preflight output
+4. **Claim the child explicitly** - Run `npm run sd:start <CHILD-SD-ID>` to formally claim it. **Do NOT skip this step.** The parent's `sd:start` auto-routing does NOT substitute for an explicit child claim.
+5. **Proceed with full workflow** - Full LEAD→PLAN→EXEC for the claimed child
 
-**There is no question about how to proceed.** Children are independent SDs requiring full workflow. The preflight is for visibility, not approval.
+**CRITICAL**: `sd:start` on the parent may auto-route to a child's worktree. Treat this as a recommendation, NOT a commitment. Always verify the child is unclaimed before starting work. If `sd:start` output shows `WORKTREE_CWD` for a child you did not explicitly claim, **STOP and run `sd:start` on the child first.**
+
+Children are independent SDs requiring full workflow. The preflight is for visibility, not approval.
 
 ### Child SD Pre-Work Validation (MANDATORY)
 
