@@ -71,7 +71,7 @@ function rankVentures(ventures, journalGroups) {
 
       return {
         id: v.id,
-        name: v.name || v.venture_name || `Venture ${v.id.slice(0, 8)}`,
+        name: v.name || `Venture ${v.id.slice(0, 8)}`,
         lifecycle_stage: stage,
         journal_count: journalCount,
         state,
