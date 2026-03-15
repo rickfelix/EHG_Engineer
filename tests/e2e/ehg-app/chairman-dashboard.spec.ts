@@ -5,9 +5,12 @@
  * SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-C
  */
 import { test, expect } from '@playwright/test';
-import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const authFile = path.join(__dirname, '.auth', 'user.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const authFile = join(__dirname, '.auth', 'user.json');
 
 test.describe('Chairman Dashboard', () => {
   // Use saved auth state

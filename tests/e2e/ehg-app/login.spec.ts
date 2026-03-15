@@ -5,6 +5,8 @@
  * SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-C
  */
 import { test, expect } from '@playwright/test';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.test' });
 
 test.describe('Login Flow', () => {
   test.beforeEach(async ({ page }) => {

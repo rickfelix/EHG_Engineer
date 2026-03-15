@@ -225,3 +225,4 @@ playground.config.js
 # Claude Code temp files (Windows migration artifacts)
 tmpclaude-*-cwd
 nul
+tests/e2e/ehg-app/.auth/
