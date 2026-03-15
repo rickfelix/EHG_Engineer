@@ -278,7 +278,54 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
     }
   }
 
-  return { synced, skipped, errors };
+  // ========================================================================
+  // FEEDBACK LOOP: Auto-resolve patterns whose scores have improved
+  // Without this, patterns created when scores were low remain active
+  // forever even after the underlying dimension improves above threshold.
+  // ========================================================================
+  let resolved = 0;
+
+  const { data: activeVgaps, error: vgapError } = await supabase
+    .from('issue_patterns')
+    .select('id, pattern_id, metadata')
+    .ilike('pattern_id', 'VGAP-%')
+    .in('status', ['active', 'assigned']);
+
+  if (!vgapError && activeVgaps && activeVgaps.length > 0) {
+    // Build set of dimension IDs that are STILL scoring low in this sync
+    const stillLowDims = new Set(Object.keys(dimAggregates));
+
+    for (const vgap of activeVgaps) {
+      if (stillLowDims.has(vgap.pattern_id)) continue; // Still scoring low — keep active
+
+      // This pattern's dimension is no longer in the low-scoring set — it improved
+      if (!dryRun) {
+        const { error: resolveError } = await supabase
+          .from('issue_patterns')
+          .update({
+            status: 'resolved',
+            severity: 'low',
+            trend: 'decreasing',
+            issue_summary: (vgap.metadata?.dim_name || vgap.pattern_id) +
+              ' — auto-resolved: dimension no longer scores below ' + SCORE_THRESHOLD,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', vgap.id);
+
+        if (resolveError) {
+          console.error(`  Error auto-resolving ${vgap.pattern_id}: ${resolveError.message}`);
+          errors++;
+        } else {
+          resolved++;
+        }
+      } else {
+        console.log(`  [DRY RUN] Would auto-resolve: ${vgap.pattern_id} (no longer below threshold)`);
+        resolved++;
+      }
+    }
+  }
+
+  return { synced, skipped, errors, resolved };
 }
 
 // ============================================================================
@@ -305,11 +352,12 @@ if (isMainModule) {
   console.log('');
 
   syncVisionScoresToPatterns(supabase, { dryRun, lookbackDays })
-    .then(({ synced, skipped, errors }) => {
+    .then(({ synced, skipped, errors, resolved }) => {
       console.log('\n✅ Sync complete');
-      console.log(`   Synced:  ${synced} dimension patterns`);
-      console.log(`   Skipped: ${skipped} high-scoring dimensions`);
-      console.log(`   Errors:  ${errors}`);
+      console.log(`   Synced:    ${synced} dimension patterns`);
+      console.log(`   Skipped:   ${skipped} high-scoring dimensions`);
+      console.log(`   Resolved:  ${resolved || 0} patterns (feedback loop)`);
+      console.log(`   Errors:    ${errors}`);
       if (dryRun) console.log('\n   [DRY RUN] No DB writes made');
     })
     .catch((err) => {
