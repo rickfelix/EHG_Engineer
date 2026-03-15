@@ -3,7 +3,14 @@
  * Gate detection, venture ranking, gap formatting, brainstorm context building
  */
 
-const GATE_STAGES = [3, 5, 10, 22, 25];
+// Gate stages derived from lifecycle_stage_config (decision_gate work_type)
+// and venture-workflow.ts (kill + promotion gates).
+// Kill: 3, 5, 13. Promotion: 16, 17.
+// Proving run covers stages 1-17 only (THE_TRUTH → THE_BLUEPRINT → THE_BUILD entry).
+// Stages 18-25 (THE_BUILD execution → THE_LAUNCH) require venture-repo-aware
+// assessment infrastructure that doesn't exist yet.
+const GATE_STAGES = [3, 5, 13, 16, 17];
+const MAX_PROVING_STAGE = 17;
 
 /**
  * Detect the next gate segment to assess based on journal entries
@@ -12,27 +19,26 @@ const GATE_STAGES = [3, 5, 10, 22, 25];
  */
 function detectNextGate(journalEntries) {
   if (!journalEntries || journalEntries.length === 0) {
-    return { from: 0, toGate: GATE_STAGES[0], isComplete: false };
+    return { from: 1, toGate: GATE_STAGES[0], isComplete: false };
   }
 
   const maxStage = Math.max(...journalEntries.map(e => e.stage_number));
+
+  if (maxStage >= MAX_PROVING_STAGE) {
+    return { from: MAX_PROVING_STAGE, toGate: MAX_PROVING_STAGE, isComplete: true };
+  }
 
   // Find which gate we just completed
   const completedGateIdx = GATE_STAGES.findIndex(g => g === maxStage);
 
   if (completedGateIdx >= 0 && completedGateIdx < GATE_STAGES.length - 1) {
-    // Completed a gate, move to next segment
     const nextFrom = maxStage + 1;
     const nextGate = GATE_STAGES[completedGateIdx + 1];
     return { from: nextFrom, toGate: nextGate, isComplete: false };
   }
 
-  if (maxStage >= 25) {
-    return { from: 25, toGate: 25, isComplete: true };
-  }
-
   // Mid-segment — find which gate segment we're in
-  const currentGate = GATE_STAGES.find(g => g > maxStage) || 25;
+  const currentGate = GATE_STAGES.find(g => g > maxStage) || MAX_PROVING_STAGE;
   return { from: maxStage + 1, toGate: currentGate, isComplete: false };
 }
 
@@ -54,12 +60,12 @@ function rankVentures(ventures, journalGroups) {
       const stage = v.current_lifecycle_stage || 0;
       let state, rationale;
 
-      if (journalCount >= 26) {
+      if (journalCount >= MAX_PROVING_STAGE) {
         state = 'complete';
         rationale = 'Proving run complete — view report or re-run';
       } else if (journalCount > 0) {
         state = 'in_progress';
-        rationale = `${journalCount}/26 stages assessed — resume to continue`;
+        rationale = `${journalCount}/${MAX_PROVING_STAGE} stages assessed — resume to continue`;
       } else {
         state = 'not_started';
         rationale = stage >= 10
@@ -141,13 +147,13 @@ function buildBrainstormContext(ventureName, gateStage, gapAnalysis) {
 
 /**
  * Determine if gaps are complex (need brainstorm) or simple (QF)
- * @param {object} gapAnalysis
+ * @param {Array<{severity: string}>} gaps - array of gap objects
  * @returns {{ isComplex: boolean, reason: string }}
  */
-function assessGapComplexity(gapAnalysis) {
-  const blockers = (gapAnalysis.gaps || []).filter(g => g.severity === 'blocker').length;
-  const majors = (gapAnalysis.gaps || []).filter(g => g.severity === 'major').length;
-  const total = (gapAnalysis.gaps || []).length;
+function assessGapComplexity(gaps) {
+  const blockers = gaps.filter(g => g.severity === 'blocker').length;
+  const majors = gaps.filter(g => g.severity === 'major').length;
+  const total = gaps.length;
 
   if (blockers > 0 || majors >= 3 || total >= 5) {
     return {
@@ -166,6 +172,7 @@ function assessGapComplexity(gapAnalysis) {
 
 module.exports = {
   GATE_STAGES,
+  MAX_PROVING_STAGE,
   detectNextGate,
   rankVentures,
   formatGapSummary,
