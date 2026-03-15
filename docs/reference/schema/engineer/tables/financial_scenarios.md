@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T20:57:18.651Z
+**Generated**: 2026-03-15T23:15:54.581Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -33,7 +33,6 @@
 
 ### Foreign Keys
 - `financial_scenarios_model_id_fkey`: model_id → financial_models(id)
-- `fk_scenario_model`: model_id → financial_models(id)
 
 ### Check Constraints
 - `valid_scenario_type`: CHECK (((scenario_type)::text = ANY ((ARRAY['monte_carlo'::character varying, 'sensitivity'::character varying, 'best_case'::character varying, 'base_case'::character varying, 'worst_case'::character varying, 'custom'::character varying])::text[])))

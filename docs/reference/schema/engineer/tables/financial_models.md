@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T20:57:18.651Z
+**Generated**: 2026-03-15T23:15:54.581Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (4 policies)
 
@@ -36,7 +36,9 @@
 ### Foreign Keys
 - `financial_models_company_id_fkey`: company_id → companies(id)
 - `financial_models_venture_id_fkey`: venture_id → ventures(id)
-- `fk_company`: company_id → companies(id)
+
+### Unique Constraints
+- `uq_financial_models_venture_template`: UNIQUE (venture_id, template_type)
 
 ### Check Constraints
 - `valid_template`: CHECK (((template_type)::text = ANY ((ARRAY['saas'::character varying, 'marketplace'::character varying, 'hardware'::character varying, 'services'::character varying, 'ecommerce'::character varying, 'subscription'::character varying, 'custom'::character varying])::text[])))
@@ -58,6 +60,10 @@
 - `idx_financial_models_venture`
   ```sql
   CREATE INDEX idx_financial_models_venture ON public.financial_models USING btree (venture_id)
+  ```
+- `uq_financial_models_venture_template`
+  ```sql
+  CREATE UNIQUE INDEX uq_financial_models_venture_template ON public.financial_models USING btree (venture_id, template_type)
   ```
 
 ## RLS Policies

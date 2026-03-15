@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T20:57:18.651Z
+**Generated**: 2026-03-15T23:15:54.581Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -47,7 +47,7 @@
 - `modeling_requests_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
-- `modeling_requests_request_type_check`: CHECK ((request_type = ANY (ARRAY['time_horizon'::text, 'build_cost'::text, 'market_trend'::text, 'portfolio_synergy'::text, 'kill_gate_prediction'::text, 'nursery_reeval'::text, 'competitive_density'::text])))
+- `modeling_requests_request_type_check`: CHECK ((request_type = ANY (ARRAY['time_horizon'::text, 'build_cost'::text, 'market_trend'::text, 'portfolio_synergy'::text, 'kill_gate_prediction'::text, 'nursery_reeval'::text, 'competitive_density'::text, 'profitability_forecast'::text, 'revenue_architecture'::text])))
 - `modeling_requests_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'failed'::text])))
 
 ## Indexes
@@ -71,11 +71,39 @@
 
 ## RLS Policies
 
-### 1. modeling_requests_service_all (ALL)
+### 1. modeling_requests_insert (INSERT)
 
-- **Roles**: {public}
+- **Roles**: {authenticated}
+- **With Check**: `(venture_id IN ( SELECT v.id
+   FROM (ventures v
+     JOIN user_company_access uca ON ((v.company_id = uca.company_id)))
+  WHERE ((uca.user_id = auth.uid()) AND (uca.is_active = true))))`
+
+### 2. modeling_requests_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `(venture_id IN ( SELECT v.id
+   FROM (ventures v
+     JOIN user_company_access uca ON ((v.company_id = uca.company_id)))
+  WHERE ((uca.user_id = auth.uid()) AND (uca.is_active = true))))`
+
+### 3. modeling_requests_service (ALL)
+
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 4. modeling_requests_update (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `(venture_id IN ( SELECT v.id
+   FROM (ventures v
+     JOIN user_company_access uca ON ((v.company_id = uca.company_id)))
+  WHERE ((uca.user_id = auth.uid()) AND (uca.is_active = true))))`
+- **With Check**: `(venture_id IN ( SELECT v.id
+   FROM (ventures v
+     JOIN user_company_access uca ON ((v.company_id = uca.company_id)))
+  WHERE ((uca.user_id = auth.uid()) AND (uca.is_active = true))))`
 
 ---
 
