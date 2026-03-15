@@ -456,15 +456,26 @@ async function printPreflightReport(sd, children, detection, validation) {
   console.log('CHILD WORKFLOW REQUIREMENTS (per SD type):');
   console.log('─'.repeat(60));
 
+  // Query active session claims for child claim status
+  const { data: activeClaims } = await supabase
+    .from('claude_sessions')
+    .select('session_id, sd_id')
+    .not('sd_id', 'is', null)
+    .in('status', ['active', 'busy', 'idle']);
+  const claimMap = new Map((activeClaims || []).map(c => [c.sd_id, c.session_id]));
+
   for (const child of children) {
     const profile = getProfile(child.sd_type);
     const handoffs = await getHandoffCount(child.sd_key || child.id);
     const prdExists = await hasPRD(child.sd_key || child.id);
+    const claimedBy = claimMap.get(child.sd_key) || claimMap.get(child.id);
+    const claimStatus = claimedBy ? `⚠️  CLAIMED (${claimedBy.substring(0, 20)})` : '🟢 unclaimed';
 
     console.log('');
     console.log(`${child.sd_key || child.id} (${child.sd_type || 'feature'})`);
     console.log(`  Title: ${child.title.substring(0, 50)}${child.title.length > 50 ? '...' : ''}`);
     console.log(`  Status: ${formatStatus(child.status)}`);
+    console.log(`  Claim: ${claimStatus}`);
     console.log(`  PRD: ${profile.prd_required ? (prdExists ? '✅ exists' : '❌ REQUIRED') : '⏭️ skip'}`);
     console.log(`  E2E: ${profile.e2e_required ? 'required' : 'skip'}`);
     console.log(`  Handoffs: ${handoffs}/${profile.min_handoffs} min`);
