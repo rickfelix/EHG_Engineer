@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "modules": {
+    "testing": {
+      "name": "Testing (Playwright)",
+      "version": "1.0.0",
+      "description": "Playwright config, smoke tests, and test fixtures",
+      "files": ["playwright.config.js", "tests/e2e/smoke.spec.ts"],
+      "dependencies": ["@playwright/test"],
+      "compatible_with": ["ci-cd"]
+    },
+    "ci-cd": {
+      "name": "CI/CD (GitHub Actions)",
+      "version": "1.0.0",
+      "description": "GitHub Actions workflow for test execution",
+      "files": [".github/workflows/playwright.yml"],
+      "dependencies": [],
+      "compatible_with": ["testing"]
+    }
+  }
+}
