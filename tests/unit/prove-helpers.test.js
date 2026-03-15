@@ -7,46 +7,53 @@ const {
   formatGapSummary,
   buildBrainstormContext,
   assessGapComplexity,
-  GATE_STAGES
+  GATE_STAGES,
+  MAX_PROVING_STAGE
 } = require('../../scripts/prove-helpers.cjs');
 
 describe('detectNextGate', () => {
-  it('returns gate 3 for empty journal', () => {
+  it('returns gate 3 starting from stage 1 for empty journal', () => {
     const result = detectNextGate([]);
-    expect(result).toEqual({ from: 0, toGate: 3, isComplete: false });
+    expect(result).toEqual({ from: 1, toGate: 3, isComplete: false });
   });
 
-  it('returns gate 3 for null journal', () => {
+  it('returns gate 3 starting from stage 1 for null journal', () => {
     const result = detectNextGate(null);
-    expect(result).toEqual({ from: 0, toGate: 3, isComplete: false });
+    expect(result).toEqual({ from: 1, toGate: 3, isComplete: false });
   });
 
   it('advances to gate 5 after completing gate 3', () => {
     const journal = [
-      { stage_number: 0 }, { stage_number: 1 },
-      { stage_number: 2 }, { stage_number: 3 }
+      { stage_number: 1 }, { stage_number: 2 }, { stage_number: 3 }
     ];
     const result = detectNextGate(journal);
     expect(result).toEqual({ from: 4, toGate: 5, isComplete: false });
   });
 
-  it('advances to gate 10 after completing gate 5', () => {
-    const journal = Array.from({ length: 6 }, (_, i) => ({ stage_number: i }));
+  it('advances to gate 13 after completing gate 5', () => {
+    const journal = Array.from({ length: 5 }, (_, i) => ({ stage_number: i + 1 }));
     const result = detectNextGate(journal);
-    expect(result).toEqual({ from: 6, toGate: 10, isComplete: false });
+    expect(result).toEqual({ from: 6, toGate: 13, isComplete: false });
   });
 
-  it('detects completion at stage 25', () => {
-    const journal = Array.from({ length: 26 }, (_, i) => ({ stage_number: i }));
+  it('detects completion at stage 17 (max proving stage)', () => {
+    const journal = Array.from({ length: 17 }, (_, i) => ({ stage_number: i + 1 }));
     const result = detectNextGate(journal);
     expect(result.isComplete).toBe(true);
   });
 
-  it('handles mid-segment correctly (stage 7 assessed)', () => {
-    const journal = Array.from({ length: 8 }, (_, i) => ({ stage_number: i }));
+  it('handles mid-segment correctly (stage 8 assessed)', () => {
+    const journal = Array.from({ length: 8 }, (_, i) => ({ stage_number: i + 1 }));
     const result = detectNextGate(journal);
-    expect(result.from).toBe(8);
-    expect(result.toGate).toBe(10);
+    expect(result.from).toBe(9);
+    expect(result.toGate).toBe(13);
+  });
+
+  it('advances through promotion gates correctly', () => {
+    // Completed through gate 13
+    const journal = Array.from({ length: 13 }, (_, i) => ({ stage_number: i + 1 }));
+    const result = detectNextGate(journal);
+    expect(result).toEqual({ from: 14, toGate: 16, isComplete: false });
   });
 });
 
@@ -74,8 +81,8 @@ describe('rankVentures', () => {
   });
 
   it('marks complete runs', () => {
-    const ventures = [{ id: 'a', name: 'Done', current_lifecycle_stage: 25 }];
-    const journalGroups = [{ venture_id: 'a', count: 26 }];
+    const ventures = [{ id: 'a', name: 'Done', current_lifecycle_stage: 17 }];
+    const journalGroups = [{ venture_id: 'a', count: 17 }];
     const ranked = rankVentures(ventures, journalGroups);
     expect(ranked[0].state).toBe('complete');
   });
@@ -104,23 +111,20 @@ describe('formatGapSummary', () => {
 
 describe('assessGapComplexity', () => {
   it('returns complex for blockers', () => {
-    const analysis = { gaps: [{ severity: 'blocker' }] };
-    const result = assessGapComplexity(analysis);
+    const result = assessGapComplexity([{ severity: 'blocker' }]);
     expect(result.isComplex).toBe(true);
     expect(result.reason).toContain('blocker');
   });
 
   it('returns complex for 3+ majors', () => {
-    const analysis = { gaps: [
+    const result = assessGapComplexity([
       { severity: 'major' }, { severity: 'major' }, { severity: 'major' }
-    ]};
-    const result = assessGapComplexity(analysis);
+    ]);
     expect(result.isComplex).toBe(true);
   });
 
   it('returns simple for minor gaps only', () => {
-    const analysis = { gaps: [{ severity: 'minor' }, { severity: 'cosmetic' }] };
-    const result = assessGapComplexity(analysis);
+    const result = assessGapComplexity([{ severity: 'minor' }, { severity: 'cosmetic' }]);
     expect(result.isComplex).toBe(false);
     expect(result.reason).toContain('quick fix');
   });
@@ -144,7 +148,31 @@ describe('buildBrainstormContext', () => {
 });
 
 describe('GATE_STAGES', () => {
-  it('has correct gate stages', () => {
-    expect(GATE_STAGES).toEqual([3, 5, 10, 22, 25]);
+  it('covers stages 1-17 only (proving scope)', () => {
+    expect(GATE_STAGES).toEqual([3, 5, 13, 16, 17]);
+  });
+
+  it('includes all kill gates within proving scope', () => {
+    for (const killGate of [3, 5, 13]) {
+      expect(GATE_STAGES).toContain(killGate);
+    }
+  });
+
+  it('includes all promotion gates within proving scope', () => {
+    for (const promoGate of [16, 17]) {
+      expect(GATE_STAGES).toContain(promoGate);
+    }
+  });
+
+  it('does not include build/launch gates (18+)', () => {
+    for (const buildGate of [22, 23, 24, 25]) {
+      expect(GATE_STAGES).not.toContain(buildGate);
+    }
+  });
+});
+
+describe('MAX_PROVING_STAGE', () => {
+  it('is 17 (Build Readiness gate)', () => {
+    expect(MAX_PROVING_STAGE).toBe(17);
   });
 });
