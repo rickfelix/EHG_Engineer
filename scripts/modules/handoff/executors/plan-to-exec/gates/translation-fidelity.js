@@ -20,7 +20,23 @@ import {
 } from '../../../validation/semantic-gate-utils.js';
 
 const GATE_NAME = 'TRANSLATION_FIDELITY';
-const PASSING_SCORE = 70;
+
+// SD-type-aware thresholds — consistent with LEAD-TO-PLAN gate
+// (SD-LEARN-FIX-ADDRESS-PAT-AUTO-068)
+const PASSING_SCORES = {
+  feature: 70,
+  enhancement: 70,
+  orchestrator: 70,
+  infrastructure: 60,
+  fix: 60,
+  documentation: 60,
+  refactor: 65,
+};
+const DEFAULT_PASSING_SCORE = 70;
+
+function getPassingScore(sdType) {
+  return PASSING_SCORES[sdType] || DEFAULT_PASSING_SCORE;
+}
 
 export function createTranslationFidelityGate(supabase) {
   return {
@@ -84,7 +100,9 @@ export function createTranslationFidelityGate(supabase) {
         const gapCount = result.gaps?.length || 0;
         const criticalGaps = result.gaps?.filter(g => g.severity === 'critical') || [];
         const score = result.score ?? 0;
-        const passed = score >= PASSING_SCORE && criticalGaps.length === 0;
+        const sdType = sd?.sd_type || sd?.metadata?.sd_type || 'feature';
+        const passingScore = getPassingScore(sdType);
+        const passed = score >= passingScore && criticalGaps.length === 0;
 
         console.log(`   Score: ${score}/100 | Gaps: ${gapCount} (${criticalGaps.length} critical)`);
 
@@ -99,7 +117,7 @@ export function createTranslationFidelityGate(supabase) {
         if (passed) {
           console.log(`   ✅ Translation fidelity PASSED (${score}/100)`);
         } else {
-          console.log(`   ❌ Translation fidelity FAILED (${score}/100, need ${PASSING_SCORE})`);
+          console.log(`   ❌ Translation fidelity FAILED (${score}/100, need ${passingScore})`);
         }
 
         return buildSemanticResult({
@@ -107,7 +125,7 @@ export function createTranslationFidelityGate(supabase) {
           score,
           confidence: 1.0,
           issues: passed ? [] : [
-            `Translation fidelity score ${score}/100 below threshold ${PASSING_SCORE}`,
+            `Translation fidelity score ${score}/100 below threshold ${passingScore}`,
             ...criticalGaps.map(g => `Critical gap: ${g.item}`)
           ],
           warnings: result.gaps

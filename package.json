@@ -34,6 +34,7 @@
     "leo-status": "node scripts/leo-status-line.js show",
     "build:loader": "tsc -p tsconfig.json",
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
+    "venture:prove": "node scripts/venture-proving-companion.js",
     "test": "vitest run",
     "test:smoke": "vitest run tests/smoke.test.js",
     "test:unit": "vitest run tests/unit/",
