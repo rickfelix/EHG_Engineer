@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T23:28:10.423Z
+**Generated**: 2026-03-15T23:54:38.013Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (43 total)
+## Columns (55 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -61,6 +61,18 @@
 | approval_notes | `text` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| product_risk_previous | `character varying` | YES | - | - |
+| product_risk_current | `character varying` | YES | - | - |
+| product_risk_delta | `character varying` | YES | - | - |
+| product_risk_justification | `text` | YES | - | - |
+| product_risk_mitigations | `jsonb` | YES | - | - |
+| legal_risk_previous | `character varying` | YES | - | - |
+| legal_risk_current | `character varying` | YES | - | - |
+| legal_risk_delta | `character varying` | YES | - | - |
+| legal_risk_justification | `text` | YES | - | - |
+| legal_risk_mitigations | `jsonb` | YES | - | - |
+| risk_context | `text` | YES | `'evaluation'::text` | - |
+| review_period | `text` | YES | - | - |
 
 ## Constraints
 
@@ -82,7 +94,7 @@
 - `risk_recalibration_forms_financial_risk_delta_check`: CHECK (((financial_risk_delta)::text = ANY ((ARRAY['IMPROVED'::character varying, 'STABLE'::character varying, 'DEGRADED'::character varying, 'NEW'::character varying, 'RESOLVED'::character varying])::text[])))
 - `risk_recalibration_forms_financial_risk_previous_check`: CHECK (((financial_risk_previous)::text = ANY ((ARRAY['CRITICAL'::character varying, 'HIGH'::character varying, 'MEDIUM'::character varying, 'LOW'::character varying, 'N/A'::character varying])::text[])))
 - `risk_recalibration_forms_from_phase_check`: CHECK (((from_phase)::text = ANY ((ARRAY['IDEATION'::character varying, 'VALIDATION'::character varying, 'DEVELOPMENT'::character varying, 'SCALING'::character varying])::text[])))
-- `risk_recalibration_forms_gate_number_check`: CHECK ((gate_number = ANY (ARRAY[3, 4, 5, 6])))
+- `risk_recalibration_forms_gate_number_check`: CHECK (((gate_number >= 1) AND (gate_number <= 25)))
 - `risk_recalibration_forms_go_decision_check`: CHECK (((go_decision)::text = ANY ((ARRAY['GO'::character varying, 'NO_GO'::character varying, 'CONDITIONAL'::character varying])::text[])))
 - `risk_recalibration_forms_market_risk_current_check`: CHECK (((market_risk_current)::text = ANY ((ARRAY['CRITICAL'::character varying, 'HIGH'::character varying, 'MEDIUM'::character varying, 'LOW'::character varying])::text[])))
 - `risk_recalibration_forms_market_risk_delta_check`: CHECK (((market_risk_delta)::text = ANY ((ARRAY['IMPROVED'::character varying, 'STABLE'::character varying, 'DEGRADED'::character varying, 'NEW'::character varying, 'RESOLVED'::character varying])::text[])))
@@ -99,6 +111,10 @@
 
 ## Indexes
 
+- `idx_risk_forms_unique_context`
+  ```sql
+  CREATE UNIQUE INDEX idx_risk_forms_unique_context ON public.risk_recalibration_forms USING btree (venture_id, gate_number, risk_context) WHERE ((status)::text <> 'superseded'::text)
+  ```
 - `idx_risk_recal_chairman_review`
   ```sql
   CREATE INDEX idx_risk_recal_chairman_review ON public.risk_recalibration_forms USING btree (chairman_review_required) WHERE (chairman_review_required = true)
