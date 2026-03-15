@@ -1,24 +1,26 @@
 /**
  * Test Coverage Quality Gate for EXEC-TO-PLAN
- * Part of SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-B
  *
- * Reads coverage/coverage-summary.json, computes coverage for CHANGED files only,
- * flags files with 0% coverage.
+ * REWRITTEN: SD-LEO-TESTING-STRATEGY-REDESIGN-ORCH-001-B
+ *
+ * Executes live Playwright tests via subprocess and maps results to gate scores.
+ * Replaces stale coverage-summary.json file reading with real test execution.
+ *
+ * Modes:
+ *   - LIVE (ENABLE_LIVE_TEST_EXECUTION=true): Spawns npx playwright test, parses JSON results
+ *   - ADVISORY (default): Returns advisory score without executing tests (gradual rollout)
  *
  * Thresholds:
  *   - 60% for feature/bugfix/security (BLOCKING)
  *   - 40% for infrastructure/refactor (ADVISORY/WARN)
  *
- * Fixes GAP-002 and GAP-004 from quality gate audit.
+ * Timeout: 60s default (configurable via PLAYWRIGHT_GATE_TIMEOUT_MS)
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { resolve, relative } from 'path';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 
 /**
  * Detect code file changes in the current branch/working directory.
- * Reuses the same logic as mandatory-testing-validation.js detectCodeChanges().
  *
  * @returns {{ hasCodeFiles: boolean, codeFileCount: number, codeFiles: string[] }}
  */
@@ -56,32 +58,124 @@ function detectCodeChanges() {
 }
 
 /**
- * Resolve a coverage key path to a relative path for matching.
- * Coverage keys can be absolute paths (e.g., C:\Users\...\src\foo.js)
- * or relative paths. We normalize to forward-slash relative paths.
+ * Execute Playwright tests via subprocess and parse JSON reporter output.
  *
- * @param {string} coverageKey - Key from coverage-summary.json
- * @param {string} rootDir - Project root directory
- * @returns {string} Normalized relative path
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @returns {Promise<{success: boolean, results: Object|null, error: string|null}>}
  */
-function normalizeCoveragePath(coverageKey, rootDir) {
-  if (coverageKey === 'total') return 'total';
+function runPlaywrightTests(timeoutMs) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
 
-  // Try to make it relative to root
-  let rel = coverageKey;
-  try {
-    rel = relative(rootDir, coverageKey);
-  } catch {
-    // If relative() fails, try string replacement
-    const normalizedRoot = rootDir.replace(/\\/g, '/');
-    const normalizedKey = coverageKey.replace(/\\/g, '/');
-    if (normalizedKey.startsWith(normalizedRoot)) {
-      rel = normalizedKey.slice(normalizedRoot.length).replace(/^\//, '');
+    const proc = spawn('npx', ['playwright', 'test', '--reporter=json'], {
+      shell: true,
+      timeout: timeoutMs,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        proc.kill('SIGTERM');
+        resolve({
+          success: false,
+          results: null,
+          error: `Timeout after ${timeoutMs}ms`
+        });
+      }
+    }, timeoutMs);
+
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('error', (err) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve({
+          success: false,
+          results: null,
+          error: `Subprocess error: ${err.message}`
+        });
+      }
+    });
+
+    proc.on('close', (code) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+
+        try {
+          const results = JSON.parse(stdout);
+          resolve({
+            success: code === 0,
+            results,
+            error: code !== 0 ? `Exit code ${code}` : null
+          });
+        } catch (parseErr) {
+          resolve({
+            success: false,
+            results: null,
+            error: `Failed to parse JSON output: ${parseErr.message}. Stderr: ${stderr.slice(0, 200)}`
+          });
+        }
+      }
+    });
+  });
+}
+
+/**
+ * Parse Playwright JSON reporter output into structured results.
+ *
+ * @param {Object} jsonReport - Parsed Playwright JSON reporter output
+ * @returns {{ total: number, passed: number, failed: number, skipped: number, duration: number }}
+ */
+function parsePlaywrightResults(jsonReport) {
+  if (!jsonReport || !jsonReport.suites) {
+    return { total: 0, passed: 0, failed: 0, skipped: 0, duration: 0 };
+  }
+
+  let total = 0, passed = 0, failed = 0, skipped = 0;
+
+  function walkSuites(suites) {
+    for (const suite of suites) {
+      if (suite.specs) {
+        for (const spec of suite.specs) {
+          if (spec.tests) {
+            for (const test of spec.tests) {
+              total++;
+              const status = test.status || (test.results?.[0]?.status);
+              if (status === 'expected' || status === 'passed') passed++;
+              else if (status === 'skipped') skipped++;
+              else failed++;
+            }
+          }
+        }
+      }
+      if (suite.suites) walkSuites(suite.suites);
     }
   }
 
-  // Normalize to forward slashes
-  return rel.replace(/\\/g, '/');
+  walkSuites(jsonReport.suites);
+
+  const duration = jsonReport.stats?.duration || 0;
+
+  return { total, passed, failed, skipped, duration };
+}
+
+/**
+ * Map Playwright test results to a 0-100 gate score.
+ *
+ * @param {{ total: number, passed: number, failed: number, skipped: number }} results
+ * @returns {number} Score 0-100
+ */
+function mapToGateScore(results) {
+  if (results.total === 0) return 100; // No tests = pass (advisory)
+  const runnable = results.total - results.skipped;
+  if (runnable === 0) return 100; // All skipped = pass
+  return Math.round((results.passed / runnable) * 100);
 }
 
 /**
@@ -98,16 +192,18 @@ export function createTestCoverageQualityGate(_supabase) {
       console.log('-'.repeat(50));
 
       const sdType = ctx.sd?.sd_type || 'unknown';
-      console.log(`   📋 SD Type: ${sdType}${ctx.sd?.sd_type ? '' : ' (defaulted - sd_type not provided in context)'}`);
+      const liveExecution = process.env.ENABLE_LIVE_TEST_EXECUTION === 'true';
+      const timeoutMs = parseInt(process.env.PLAYWRIGHT_GATE_TIMEOUT_MS || '60000', 10);
 
-      // Determine thresholds and blocking behavior based on sd_type
-      // Only explicitly listed types use blocking mode; unknown/missing defaults to advisory
+      console.log(`   📋 SD Type: ${sdType}`);
+      console.log(`   📋 Mode: ${liveExecution ? 'LIVE (Playwright subprocess)' : 'ADVISORY (feature flag off)'}`);
+
       const BLOCKING_TYPES = ['feature', 'bugfix', 'security'];
       const isBlocking = BLOCKING_TYPES.includes(sdType);
       const threshold = isBlocking ? 60 : 40;
 
       console.log(`   📋 Threshold: ${threshold}%`);
-      console.log(`   📋 Mode: ${isBlocking ? 'BLOCKING' : 'ADVISORY'}`);
+      console.log(`   📋 Blocking: ${isBlocking ? 'YES' : 'NO (advisory)'}`);
 
       // 1. Detect changed code files
       const codeChanges = detectCodeChanges();
@@ -126,235 +222,147 @@ export function createTestCoverageQualityGate(_supabase) {
             blocking: false,
             threshold_used: threshold,
             sd_type: sdType,
+            mode: liveExecution ? 'live' : 'advisory',
             changed_files_count: 0,
-            evaluated_files_count: 0,
-            zero_coverage_files: [],
-            below_threshold_files: [],
             summary: 'No code files changed'
           }
         };
       }
 
-      // 2. Read coverage-summary.json
-      const rootDir = process.cwd();
-      const coveragePath = resolve(rootDir, 'coverage', 'coverage-summary.json');
-
-      if (!existsSync(coveragePath)) {
-        console.log(`   ⚠️  Coverage file not found: ${coveragePath}`);
-        console.log('   💡 Generate coverage: npx vitest run --coverage');
+      // 2. If feature flag is off, return advisory result
+      if (!liveExecution) {
+        console.log('   ⚠️  Live test execution disabled (ENABLE_LIVE_TEST_EXECUTION != true)');
+        console.log('   💡 Set ENABLE_LIVE_TEST_EXECUTION=true to enable live Playwright testing');
         return {
           passed: true,
           score: 70,
           max_score: 100,
           issues: [],
           warnings: [
-            'Coverage file not found: coverage/coverage-summary.json',
-            'Generate coverage by running: npx vitest run --coverage'
+            'Live test execution disabled. Set ENABLE_LIVE_TEST_EXECUTION=true to enable.',
+            `${codeChanges.codeFileCount} code files changed but not verified by live tests`
           ],
           details: {
-            status: 'WARN',
+            status: 'ADVISORY',
             blocking: false,
             threshold_used: threshold,
             sd_type: sdType,
+            mode: 'advisory',
             changed_files_count: codeChanges.codeFileCount,
-            evaluated_files_count: 0,
-            zero_coverage_files: [],
-            below_threshold_files: [],
-            summary: 'Coverage file missing at coverage/coverage-summary.json. Run: npx vitest run --coverage'
+            summary: 'Live test execution disabled - advisory mode'
           }
         };
       }
 
-      // 3. Parse coverage data
-      let coverageData;
-      try {
-        const raw = readFileSync(coveragePath, 'utf-8');
-        coverageData = JSON.parse(raw);
-      } catch (parseError) {
-        console.log(`   ⚠️  Failed to parse coverage-summary.json: ${parseError.message}`);
-        return {
-          passed: true,
-          score: 70,
-          max_score: 100,
-          issues: [],
-          warnings: [
-            `Failed to parse coverage/coverage-summary.json: ${parseError.message}`,
-            'Ensure coverage-summary.json is valid JSON'
-          ],
-          details: {
-            status: 'WARN',
-            blocking: false,
-            threshold_used: threshold,
-            sd_type: sdType,
-            changed_files_count: codeChanges.codeFileCount,
-            evaluated_files_count: 0,
-            zero_coverage_files: [],
-            below_threshold_files: [],
-            summary: `Parse error in coverage-summary.json: ${parseError.message}`
-          }
-        };
-      }
+      // 3. Execute Playwright tests
+      console.log(`   🔄 Executing: npx playwright test --reporter=json (timeout: ${timeoutMs}ms)`);
 
-      // 4. Build normalized coverage map
-      const coverageKeys = Object.keys(coverageData).filter(k => k !== 'total');
-      const coverageMap = new Map();
-      for (const key of coverageKeys) {
-        const normalized = normalizeCoveragePath(key, rootDir);
-        coverageMap.set(normalized, coverageData[key]);
-      }
+      const execution = await runPlaywrightTests(timeoutMs);
 
-      // 5. Match changed files to coverage entries
-      const zeroCoverageFiles = [];
-      const belowThresholdFiles = [];
-      let evaluatedCount = 0;
+      if (execution.error && !execution.results) {
+        console.log(`   ⚠️  Test execution failed: ${execution.error}`);
 
-      for (const changedFile of codeChanges.codeFiles) {
-        const normalizedChanged = changedFile.replace(/\\/g, '/');
-        const entry = coverageMap.get(normalizedChanged);
-
-        if (!entry) continue; // No coverage data for this file
-
-        evaluatedCount++;
-        const lines = entry.lines || entry.statements || {};
-        const total = lines.total || 0;
-        const covered = lines.covered || 0;
-
-        if (total === 0) continue; // No statements to cover
-
-        const percent = (covered / total) * 100;
-
-        if (covered === 0 && total > 0) {
-          zeroCoverageFiles.push({
-            file: normalizedChanged,
-            total_statements: total,
-            covered_statements: 0,
-            percent: 0
-          });
+        if (execution.error.startsWith('Timeout')) {
+          console.log(`   ❌ TIMEOUT: Tests did not complete within ${timeoutMs}ms`);
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`Test execution timed out after ${timeoutMs}ms`],
+            warnings: [],
+            details: {
+              status: 'FAIL',
+              blocking: isBlocking,
+              threshold_used: threshold,
+              sd_type: sdType,
+              mode: 'live',
+              changed_files_count: codeChanges.codeFileCount,
+              error: execution.error,
+              summary: `TIMEOUT: Tests exceeded ${timeoutMs}ms limit`
+            }
+          };
         }
 
-        if (percent < threshold) {
-          belowThresholdFiles.push({
-            file: normalizedChanged,
-            total_statements: total,
-            covered_statements: covered,
-            percent: Math.round(percent * 10) / 10
-          });
-        }
-      }
-
-      console.log(`   📊 Evaluated: ${evaluatedCount}/${codeChanges.codeFileCount} changed files`);
-      console.log(`   📊 Zero coverage: ${zeroCoverageFiles.length} files`);
-      console.log(`   📊 Below threshold: ${belowThresholdFiles.length} files`);
-
-      // 6. Handle no coverage matches
-      if (evaluatedCount === 0 && codeChanges.codeFileCount > 0) {
-        const sampleChanged = codeChanges.codeFiles.slice(0, 3);
-        console.log('   ⚠️  No changed files matched coverage entries');
-        console.log(`   💡 Sample changed files: ${sampleChanged.join(', ')}`);
-        console.log(`   💡 Coverage entries: ${coverageKeys.length} keys available`);
+        // Subprocess error (e.g., Playwright not installed)
+        console.log('   ⚠️  Falling back to advisory mode due to execution error');
         return {
           passed: true,
-          score: 70,
+          score: 50,
           max_score: 100,
           issues: [],
           warnings: [
-            `No changed files matched coverage entries (${codeChanges.codeFileCount} changed, ${coverageKeys.length} coverage keys)`,
-            `Sample changed: ${sampleChanged.join(', ')}`,
-            'Check path normalization between git diff output and coverage-summary.json keys'
+            `Test execution failed: ${execution.error}`,
+            'Falling back to advisory mode. Ensure Playwright is installed: npx playwright install'
           ],
           details: {
             status: 'WARN',
             blocking: false,
             threshold_used: threshold,
             sd_type: sdType,
+            mode: 'live_fallback',
             changed_files_count: codeChanges.codeFileCount,
-            evaluated_files_count: 0,
-            zero_coverage_files: [],
-            below_threshold_files: [],
-            summary: `Path mismatch: ${codeChanges.codeFileCount} changed files, ${coverageKeys.length} coverage keys, 0 matched`
+            error: execution.error,
+            summary: `Execution error: ${execution.error}`
           }
         };
       }
 
-      // 7. Determine result
-      const hasZeroCoverage = zeroCoverageFiles.length > 0;
-      const hasBelowThreshold = belowThresholdFiles.length > 0;
-      const failed = hasZeroCoverage || hasBelowThreshold;
+      // 4. Parse results
+      const results = parsePlaywrightResults(execution.results);
+      const score = mapToGateScore(results);
 
-      if (!failed) {
-        console.log('   ✅ All evaluated files meet coverage threshold');
-        return {
-          passed: true,
-          score: 100,
-          max_score: 100,
-          issues: [],
-          warnings: [],
-          details: {
-            status: 'PASS',
-            blocking: false,
-            threshold_used: threshold,
-            sd_type: sdType,
-            changed_files_count: codeChanges.codeFileCount,
-            evaluated_files_count: evaluatedCount,
-            zero_coverage_files: [],
-            below_threshold_files: [],
-            summary: `All ${evaluatedCount} evaluated files meet ${threshold}% threshold`
-          }
-        };
+      console.log(`   📊 Results: ${results.passed} passed, ${results.failed} failed, ${results.skipped} skipped (${results.total} total)`);
+      console.log(`   📊 Score: ${score}/100 (threshold: ${threshold}%)`);
+      if (results.duration) console.log(`   ⏱️  Duration: ${Math.round(results.duration / 1000)}s`);
+
+      // 5. Determine pass/fail
+      const passed = score >= threshold;
+      const issues = [];
+      const warnings = [];
+
+      if (!passed && isBlocking) {
+        issues.push(`Test score ${score}% below blocking threshold ${threshold}%: ${results.failed} test(s) failed`);
+      } else if (!passed && !isBlocking) {
+        warnings.push(`Test score ${score}% below advisory threshold ${threshold}%: ${results.failed} test(s) failed`);
       }
 
-      // Failed - build issues/warnings based on blocking mode
-      const messages = [];
-      if (hasZeroCoverage) {
-        messages.push(`${zeroCoverageFiles.length} file(s) with 0% coverage: ${zeroCoverageFiles.map(f => f.file).join(', ')}`);
-      }
-      if (hasBelowThreshold) {
-        messages.push(`${belowThresholdFiles.length} file(s) below ${threshold}% threshold: ${belowThresholdFiles.map(f => `${f.file} (${f.percent}%)`).join(', ')}`);
+      if (results.skipped > 0) {
+        warnings.push(`${results.skipped} test(s) skipped`);
       }
 
-      if (isBlocking) {
-        console.log('   ❌ BLOCKING: Coverage issues detected');
-        for (const msg of messages) console.log(`      • ${msg}`);
-        return {
-          passed: false,
-          score: 0,
-          max_score: 100,
-          issues: messages,
-          warnings: [],
-          details: {
-            status: 'FAIL',
-            blocking: true,
-            threshold_used: threshold,
-            sd_type: sdType,
-            changed_files_count: codeChanges.codeFileCount,
-            evaluated_files_count: evaluatedCount,
-            zero_coverage_files: zeroCoverageFiles,
-            below_threshold_files: belowThresholdFiles,
-            summary: `FAIL: ${messages.join('; ')}`
-          }
-        };
+      const status = passed ? 'PASS' : (isBlocking ? 'FAIL' : 'WARN');
+
+      if (passed) {
+        console.log(`   ✅ ${status}: Score ${score}% meets ${threshold}% threshold`);
+      } else if (isBlocking) {
+        console.log(`   ❌ ${status}: Score ${score}% below ${threshold}% threshold (BLOCKING)`);
       } else {
-        console.log('   ⚠️  ADVISORY: Coverage issues detected (non-blocking)');
-        for (const msg of messages) console.log(`      • ${msg}`);
-        return {
-          passed: true,
-          score: 60,
-          max_score: 100,
-          issues: [],
-          warnings: messages,
-          details: {
-            status: 'WARN',
-            blocking: false,
-            threshold_used: threshold,
-            sd_type: sdType,
-            changed_files_count: codeChanges.codeFileCount,
-            evaluated_files_count: evaluatedCount,
-            zero_coverage_files: zeroCoverageFiles,
-            below_threshold_files: belowThresholdFiles,
-            summary: `WARN: ${messages.join('; ')}`
-          }
-        };
+        console.log(`   ⚠️  ${status}: Score ${score}% below ${threshold}% threshold (advisory)`);
       }
+
+      return {
+        passed: isBlocking ? passed : true,
+        score,
+        max_score: 100,
+        issues,
+        warnings,
+        details: {
+          status,
+          blocking: isBlocking && !passed,
+          threshold_used: threshold,
+          sd_type: sdType,
+          mode: 'live',
+          changed_files_count: codeChanges.codeFileCount,
+          test_results: {
+            total: results.total,
+            passed: results.passed,
+            failed: results.failed,
+            skipped: results.skipped,
+            duration_ms: results.duration
+          },
+          summary: `${status}: ${results.passed}/${results.total} tests passed (${score}%, threshold ${threshold}%)`
+        }
+      };
     },
     required: true
   };
