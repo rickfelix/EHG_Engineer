@@ -26,8 +26,8 @@ setup('authenticate', async ({ page }) => {
   const email = process.env.TEST_USER_EMAIL || 'admin@ehg.com';
   const password = process.env.TEST_USER_PASSWORD || 'test-password';
 
-  await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(password);
+  await page.getByRole('textbox', { name: 'Email' }).fill(email);
+  await page.getByRole('textbox', { name: 'Password' }).fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
 
   // Wait for redirect to chairman dashboard
