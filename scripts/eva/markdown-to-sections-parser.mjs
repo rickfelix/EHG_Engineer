@@ -88,10 +88,13 @@ export function parseMarkdownToSections(content, headingToKeyMap) {
       }
 
       // If still no match, use a slug of the heading
+      // SD-VISION-SECTIONS-JSONB-FORMAT-ORCH-001-B: Replace special chars with space (not empty)
+      // so "UI/UX Wireframes" → "ui ux wireframes" → "ui_ux_wireframes" (not "uiux_wireframes")
       if (!currentKey) {
         currentKey = heading
-          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/[^a-z0-9\s]/g, ' ')
           .replace(/\s+/g, '_')
+          .replace(/^_|_$/g, '')
           .substring(0, 50);
       }
 
