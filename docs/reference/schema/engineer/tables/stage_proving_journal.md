@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T02:45:15.846Z
+**Generated**: 2026-03-15T20:57:18.651Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (1 policy)
 
@@ -44,7 +44,7 @@
 - `stage_proving_journal_venture_id_stage_number_key`: UNIQUE (venture_id, stage_number)
 
 ### Check Constraints
-- `stage_proving_journal_chairman_decision_check`: CHECK ((chairman_decision = ANY (ARRAY['proceed'::text, 'fix_first'::text, 'skip'::text, 'defer'::text])))
+- `stage_proving_journal_chairman_decision_check`: CHECK ((chairman_decision = ANY (ARRAY['proceed'::text, 'fix_first'::text, 'skip'::text, 'defer'::text, 'kill'::text])))
 - `stage_proving_journal_stage_number_check`: CHECK (((stage_number >= 0) AND (stage_number <= 25)))
 
 ## Indexes
