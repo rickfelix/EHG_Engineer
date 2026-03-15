@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T00:40:53.132Z
-**Tables**: 562
+**Generated**: 2026-03-15T02:45:15.846Z
+**Tables**: 563
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -513,6 +513,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [stage_data_contracts](tables/stage_data_contracts.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [stage_events](tables/stage_events.md) | N/A (RLS restricted) | ✅ | 4 | - |
 | [stage_of_death_predictions](tables/stage_of_death_predictions.md) | N/A (RLS restricted) | ✅ | 1 | - |
+| [stage_proving_journal](tables/stage_proving_journal.md) | N/A (RLS restricted) | ✅ | 1 | Records per-stage assessment results from venture proving runs. Each entry captures Plan Agent, Reality Agent, Gap Analyst outputs and chairman decisions. |
 | [stage_zero_requests](tables/stage_zero_requests.md) | N/A (RLS restricted) | ✅ | 4 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
 | [story_test_mappings](tables/story_test_mappings.md) | N/A (RLS restricted) | ✅ | 4 | Links user stories to test results with traceability |
 | [strategic_directives_v2](tables/strategic_directives_v2.md) | N/A (RLS restricted) | ✅ | 7 | RLS enabled: service_role full access, authenticated read-only |
@@ -793,7 +794,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (436 tables)
+### Other (437 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1140,6 +1141,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [stage_data_contracts](tables/stage_data_contracts.md)
 - [stage_events](tables/stage_events.md)
 - [stage_of_death_predictions](tables/stage_of_death_predictions.md)
+- [stage_proving_journal](tables/stage_proving_journal.md) - Records per-stage assessment results from venture proving runs. Each entry captures Plan Agent, Reality Agent, Gap Analyst outputs and chairman decisions.
 - [stage_zero_requests](tables/stage_zero_requests.md) - Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them.
 - [story_test_mappings](tables/story_test_mappings.md) - Links user stories to test results with traceability
 - [strategic_roadmaps](tables/strategic_roadmaps.md) - Top-level roadmap entities for wave-based planning. Linked to vision documents for strategic alignment.
@@ -2138,6 +2140,9 @@ _Key relationships between tables:_
 
 **stage_of_death_predictions**:
 - `profile_id` → `evaluation_profiles.id`
+
+**stage_proving_journal**:
+- `venture_id` → `ventures.id`
 
 **stage_zero_requests**:
 - `blueprint_id` → `opportunity_blueprints.id`
