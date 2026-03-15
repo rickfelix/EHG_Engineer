@@ -249,6 +249,9 @@
     "gate:health": "node scripts/gate-health-check.js",
     "gate:health:dry": "node scripts/gate-health-check.js --dry-run",
     "gate:health:refresh": "node scripts/gate-health-check.js --refresh",
+    "brainstorm:health": "node scripts/brainstorm-pipeline-health.js",
+    "brainstorm:health:fix": "node scripts/brainstorm-pipeline-health.js --fix",
+    "brainstorm:health:dry": "node scripts/brainstorm-pipeline-health.js --fix --dry-run",
     "git:recover": "node scripts/git-commit-recovery.js",
     "lead:dossier": "node scripts/lead-dossier.js",
     "doc:audit": "node scripts/eva/doc-health-audit.mjs",
@@ -423,7 +426,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.8.0",
     "@lhci/cli": "^0.13.0",
-    "@playwright/test": "^1.56.0",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20.10.0",
     "@types/pg": "^8.15.5",
     "@typescript-eslint/eslint-plugin": "^8.46.2",

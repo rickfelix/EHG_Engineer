@@ -51,7 +51,8 @@ import {
   isOrchestratorBlocked,
   displayTelemetryFindings,
   displayQuickFixes,
-  displayRoadmapAwareness
+  displayRoadmapAwareness,
+  displayBrainstormPipelineAdvisory
 } from './display/index.js';
 import {
   detectAllBlockedState,
@@ -238,6 +239,9 @@ export class SDNextSelector {
 
     // Display health snapshot freshness advisory (SD-LEO-INFRA-PRIORITY-SCORER-HEALTH-001)
     await this.displayHealthFreshness();
+
+    // Display brainstorm pipeline health advisory
+    await this.displayBrainstormPipelineHealth();
 
     console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
@@ -453,6 +457,16 @@ export class SDNextSelector {
       }
     } catch {
       // Non-critical - silently skip
+    }
+  }
+
+  async displayBrainstormPipelineHealth() {
+    try {
+      const { getBrainstormPipelineSummary } = await import('../../brainstorm-pipeline-health.js');
+      const summary = await getBrainstormPipelineSummary();
+      displayBrainstormPipelineAdvisory(summary);
+    } catch {
+      // Non-critical - silently skip if module unavailable
     }
   }
 
