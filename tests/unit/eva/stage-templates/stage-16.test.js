@@ -441,12 +441,48 @@ describe('stage-16.js - Financial Projections template', () => {
       },
     };
 
-    it('should pass promotion gate for all valid prerequisites', () => {
+    it('should pass promotion gate for all valid prerequisites (legacy)', () => {
       const result = evaluatePromotionGate(validPrerequisites);
       expect(result.pass).toBe(true);
       expect(result.blockers).toEqual([]);
       expect(result.required_next_actions).toEqual([]);
-      expect(result.rationale).toContain('All Phase 4 prerequisites met');
+      expect(result.rationale).toContain('Phase 4 prerequisites met');
+    });
+
+    it('should PROMOTE when readiness score >= 70', () => {
+      const result = evaluatePromotionGate(validPrerequisites, { readinessScore: 85 });
+      expect(result.pass).toBe(true);
+      expect(result.decision).toBe('PROMOTE');
+      expect(result.readinessScore).toBe(85);
+    });
+
+    it('should REVISE when readiness score 50-69', () => {
+      const result = evaluatePromotionGate(validPrerequisites, { readinessScore: 55 });
+      expect(result.pass).toBe(false);
+      expect(result.decision).toBe('REVISE');
+      expect(result.readinessScore).toBe(55);
+    });
+
+    it('should REJECT when readiness score < 50', () => {
+      const result = evaluatePromotionGate(validPrerequisites, { readinessScore: 30 });
+      expect(result.pass).toBe(false);
+      expect(result.decision).toBe('REJECT');
+      expect(result.readinessScore).toBe(30);
+    });
+
+    it('should allow chairman override', () => {
+      const result = evaluatePromotionGate(validPrerequisites, {
+        readinessScore: 30,
+        chairmanOverride: { approved: true, justification: 'Strategic priority' },
+      });
+      expect(result.pass).toBe(true);
+      expect(result.decision).toBe('OVERRIDE');
+      expect(result.rationale).toContain('Strategic priority');
+    });
+
+    it('should fall back to legacy checks when no readiness score', () => {
+      const result = evaluatePromotionGate(validPrerequisites);
+      expect(result.decision).toBe('PROMOTE_LEGACY');
     });
 
     it('should fail for insufficient milestones in stage 13', () => {
