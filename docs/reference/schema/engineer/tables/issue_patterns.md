@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T10:15:33.591Z
+**Generated**: 2026-03-16T16:27:25.979Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -153,6 +153,12 @@
 
 - **Roles**: {authenticated}
 - **Using**: `true`
+
+### 5. Allow service_role full access to issue_patterns (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 
