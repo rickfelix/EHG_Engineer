@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T01:24:38.522Z
+**Generated**: 2026-03-16T02:05:36.024Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (5 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,39 +62,27 @@
 
 ## RLS Policies
 
-### 1. srip_site_dna_delete_owner (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `(venture_id IN ( SELECT ventures.id
-   FROM ventures
-  WHERE (ventures.created_by = auth.uid())))`
-
-### 2. srip_site_dna_insert_owner (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `(venture_id IN ( SELECT ventures.id
-   FROM ventures
-  WHERE (ventures.created_by = auth.uid())))`
-
-### 3. srip_site_dna_select_owner (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `(venture_id IN ( SELECT ventures.id
-   FROM ventures
-  WHERE (ventures.created_by = auth.uid())))`
-
-### 4. srip_site_dna_service_all (ALL)
+### 1. srip_site_dna_service_role (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 5. srip_site_dna_update_owner (UPDATE)
+### 2. srip_site_dna_venture_insert (INSERT)
 
 - **Roles**: {authenticated}
-- **Using**: `(venture_id IN ( SELECT ventures.id
-   FROM ventures
-  WHERE (ventures.created_by = auth.uid())))`
+- **With Check**: `(venture_id = (((auth.jwt() -> 'app_metadata'::text) ->> 'venture_id'::text))::uuid)`
+
+### 3. srip_site_dna_venture_select (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `(venture_id = (((auth.jwt() -> 'app_metadata'::text) ->> 'venture_id'::text))::uuid)`
+
+### 4. srip_site_dna_venture_update (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `(venture_id = (((auth.jwt() -> 'app_metadata'::text) ->> 'venture_id'::text))::uuid)`
+- **With Check**: `(venture_id = (((auth.jwt() -> 'app_metadata'::text) ->> 'venture_id'::text))::uuid)`
 
 ## Triggers
 
