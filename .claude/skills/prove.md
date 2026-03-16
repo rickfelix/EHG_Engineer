@@ -408,6 +408,8 @@ node scripts/venture-proving-companion.js assess <venture-id> --from <FROM> --to
 
 Display the results as inline text (gap counts, severity breakdown, recommendation, top blocker).
 
+Note: `formatGapSummary()` returns `{ summary, topGaps }`. Display the `topGaps` array below the aggregate counts to give the chairman specific gap descriptions for decision-making.
+
 ---
 
 ### Step 6: Decision Prompt (ALWAYS — NEVER skip this)
@@ -418,7 +420,7 @@ After EVERY gate assessment, present the decision via AskUserQuestion:
 {
   "questions": [
     {
-      "question": "Gate <N> Assessment Complete. <gap_count> gaps found (<blocker_count> blockers). Recommendation: <RECOMMENDATION>. What is your decision?",
+      "question": "Gate <N> Assessment Complete. <gap_count> gaps found (<blocker_count> blockers). Recommendation: <RECOMMENDATION>.\n\nTop gaps:\n<topGaps joined by newline>\n\nWhat is your decision?",
       "header": "Gate <N>",
       "multiSelect": false,
       "options": [

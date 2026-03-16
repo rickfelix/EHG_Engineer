@@ -131,4 +131,56 @@ describe('gap-analyst', () => {
     expect(result.summary.by_severity).toBeTruthy();
     expect(typeof result.summary.total).toBe('number');
   });
+
+  it('matches files with backslash paths after normalization', () => {
+    const plan = {
+      0: {
+        stage_name: 'Test',
+        expected_files: ['src/pages/ventures/index.tsx'],
+        planned_capabilities: [],
+        success_criteria: []
+      }
+    };
+    const reality = {
+      0: {
+        stage_name: 'Test',
+        found_files: ['src\\pages\\ventures\\index.tsx'],
+        missing_patterns: [],
+        found_capabilities: [],
+        implementation_status: 'complete',
+        coverage_pct: 100
+      }
+    };
+
+    const result = analyzeGaps(plan, reality);
+    const missingFile = result.gaps.find(g => g.type === 'missing_file');
+    expect(missingFile).toBeUndefined();
+  });
+
+  it('downgrades severity with contradiction_detected when reality shows complete', () => {
+    const plan = {
+      0: {
+        stage_name: 'Test',
+        expected_files: ['src/nonexistent-pattern/*'],
+        planned_capabilities: [],
+        success_criteria: []
+      }
+    };
+    const reality = {
+      0: {
+        stage_name: 'Test',
+        found_files: ['src/other-file.tsx'],
+        missing_patterns: ['src/nonexistent-pattern/*'],
+        found_capabilities: [],
+        implementation_status: 'complete',
+        coverage_pct: 80
+      }
+    };
+
+    const result = analyzeGaps(plan, reality);
+    const gap = result.gaps.find(g => g.type === 'missing_file');
+    expect(gap).toBeTruthy();
+    expect(gap.severity).toBe('minor');
+    expect(gap.contradiction_detected).toBe(true);
+  });
 });

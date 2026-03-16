@@ -89,23 +89,41 @@ describe('rankVentures', () => {
 });
 
 describe('formatGapSummary', () => {
-  it('formats gap analysis with severity counts', () => {
+  it('formats gap analysis with severity counts and topGaps', () => {
     const analysis = {
       summary: { total: 5, by_severity: { blocker: 1, major: 2, minor: 2, cosmetic: 0 } },
       recommendation: 'fix_first',
       recommendation_reason: '1 blocker must be resolved',
       gaps: [{ severity: 'blocker', description: 'Missing create component' }]
     };
-    const text = formatGapSummary(analysis);
-    expect(text).toContain('Gaps: 5 total');
-    expect(text).toContain('Blocker: 1');
-    expect(text).toContain('FIX_FIRST');
-    expect(text).toContain('Missing create component');
+    const result = formatGapSummary(analysis);
+    expect(result.summary).toContain('Gaps: 5 total');
+    expect(result.summary).toContain('Blocker: 1');
+    expect(result.summary).toContain('FIX_FIRST');
+    expect(result.summary).toContain('Missing create component');
+    expect(result.topGaps).toBeInstanceOf(Array);
+    expect(result.topGaps.length).toBeLessThanOrEqual(3);
+    expect(result.topGaps[0]).toContain('[blocker]');
   });
 
   it('handles empty gap analysis', () => {
-    expect(formatGapSummary(null)).toBe('No gap data available.');
-    expect(formatGapSummary({})).toBe('No gap data available.');
+    const nullResult = formatGapSummary(null);
+    expect(nullResult.summary).toBe('No gap data available.');
+    expect(nullResult.topGaps).toEqual([]);
+    const emptyResult = formatGapSummary({});
+    expect(emptyResult.summary).toBe('No gap data available.');
+  });
+
+  it('caps gap descriptions at 80 characters', () => {
+    const analysis = {
+      summary: { total: 1, by_severity: { blocker: 0, major: 1, minor: 0, cosmetic: 0 } },
+      recommendation: 'proceed',
+      recommendation_reason: 'Minor gaps only',
+      gaps: [{ severity: 'major', description: 'A'.repeat(100) }]
+    };
+    const result = formatGapSummary(analysis);
+    expect(result.topGaps[0].length).toBeLessThanOrEqual(80);
+    expect(result.topGaps[0]).toContain('...');
   });
 });
 
