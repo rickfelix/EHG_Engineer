@@ -548,6 +548,30 @@ async function main() {
       worktree_key: worktreeKey
     });
 
+    // Persist worktree info to claude_sessions so coordinator can track it
+    try {
+      const repoRoot = path.resolve(__dirname, '../..');
+      const worktreePath = path.join(repoRoot, '.worktrees', 'sd', worktreeKey);
+      if (mySessionId && fs.existsSync(worktreePath)) {
+        const { createClient } = require('@supabase/supabase-js');
+        const sbUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (sbUrl && sbKey) {
+          const supabase = createClient(sbUrl, sbKey);
+          supabase
+            .from('claude_sessions')
+            .update({ worktree_path: worktreePath, worktree_branch: worktreeBranch })
+            .eq('session_id', mySessionId)
+            .then(({ error }) => {
+              if (error) logEvent('session.worktree.db_persist_failed', { error: error.message });
+              else logEvent('session.worktree.db_persisted', { worktree_path: worktreePath, worktree_branch: worktreeBranch });
+            });
+        }
+      }
+    } catch (dbErr) {
+      logEvent('session.worktree.db_persist_failed', { error: dbErr.message });
+    }
+
     console.log(`  Worktree created in ${durationMs}ms`);
     console.log(`  Key: ${worktreeKey}`);
     console.log('');
