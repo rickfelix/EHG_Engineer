@@ -64,8 +64,10 @@ jobs:
           npm run pattern:stale:dry 2>&1 | tee stale-output.txt
 
           # Check for patterns needing attention
-          DECREASING=$(grep -c "MARK AS DECREASING" stale-output.txt || echo "0")
-          OBSOLETE=$(grep -c "MARK AS OBSOLETE" stale-output.txt || echo "0")
+          DECREASING=$(grep -c "MARK AS DECREASING" stale-output.txt || true)
+          DECREASING=${DECREASING:-0}
+          OBSOLETE=$(grep -c "MARK AS OBSOLETE" stale-output.txt || true)
+          OBSOLETE=${OBSOLETE:-0}
 
           echo "decreasing_count=$DECREASING" >> $GITHUB_OUTPUT
           echo "obsolete_count=$OBSOLETE" >> $GITHUB_OUTPUT
