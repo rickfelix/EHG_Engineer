@@ -185,6 +185,9 @@ export class SDNextSelector {
     // Display multi-repo warning if uncommitted changes exist
     displayMultiRepoWarning(this.multiRepoStatus);
 
+    // Display scheduled job failure alerts from feedback table
+    await this.displayScheduledJobAlerts();
+
     if (!this.baseline) {
       await showFallbackQueue(this.supabase, {
         sessionContext: this.getSessionContext()
@@ -467,6 +470,27 @@ export class SDNextSelector {
       displayBrainstormPipelineAdvisory(summary);
     } catch {
       // Non-critical - silently skip if module unavailable
+    }
+  }
+
+  /**
+   * Display alert banner for failed scheduled GitHub Actions jobs.
+   * Queries feedback table for source_type='github_actions' with status='new'.
+   */
+  async displayScheduledJobAlerts() {
+    try {
+      const { count, error } = await this.supabase
+        .from('feedback')
+        .select('*', { count: 'exact', head: true })
+        .eq('source_type', 'github_actions')
+        .eq('status', 'new');
+
+      if (error || !count || count === 0) return;
+
+      const plural = count === 1 ? 'failure' : 'failures';
+      console.log(`\n${colors.yellow}${colors.bold}⚠  ${count} scheduled job ${plural} pending review${colors.reset}${colors.yellow} — run /inbox${colors.reset}`);
+    } catch {
+      // Non-critical — silently skip
     }
   }
 
