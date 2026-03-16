@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T00:53:05.043Z
+**Generated**: 2026-03-16T01:24:38.522Z
 **Tables**: 568
 **Source**: Supabase PostgreSQL introspection
 
@@ -507,10 +507,10 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [soul_extractions](tables/soul_extractions.md) | N/A (RLS restricted) | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
-| [srip_brand_interviews](tables/srip_brand_interviews.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction. |
-| [srip_quality_checks](tables/srip_quality_checks.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility. |
-| [srip_site_dna](tables/srip_site_dna.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication. |
-| [srip_synthesis_prompts](tables/srip_synthesis_prompts.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores generated one-shot replication prompts that synthesize site DNA and brand interview data into actionable site generation instructions. |
+| [srip_brand_interviews](tables/srip_brand_interviews.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction. |
+| [srip_quality_checks](tables/srip_quality_checks.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility. |
+| [srip_site_dna](tables/srip_site_dna.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication. |
+| [srip_synthesis_prompts](tables/srip_synthesis_prompts.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores generated one-shot replication prompts that synthesize site DNA and brand interview data into actionable site generation instructions. |
 | [stage13_assessments](tables/stage13_assessments.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated exit readiness assessments. SD-STAGE-13-001. |
 | [stage13_substage_states](tables/stage13_substage_states.md) | N/A (RLS restricted) | ✅ | 1 | Tracks current Stage 13 substage position per venture. SD-STAGE-13-001. |
 | [stage13_valuations](tables/stage13_valuations.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated valuation models with confidence scores. SD-STAGE-13-001. |

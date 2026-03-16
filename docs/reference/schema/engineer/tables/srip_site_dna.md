@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T00:53:05.043Z
+**Generated**: 2026-03-16T01:24:38.522Z
 **Rows**: N/A (RLS restricted)
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,25 +62,39 @@
 
 ## RLS Policies
 
-### 1. srip_site_dna_delete_policy (DELETE)
+### 1. srip_site_dna_delete_owner (DELETE)
 
-- **Roles**: {public}
+- **Roles**: {authenticated}
+- **Using**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
+
+### 2. srip_site_dna_insert_owner (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
+
+### 3. srip_site_dna_select_owner (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
+
+### 4. srip_site_dna_service_all (ALL)
+
+- **Roles**: {service_role}
 - **Using**: `true`
-
-### 2. srip_site_dna_insert_policy (INSERT)
-
-- **Roles**: {public}
 - **With Check**: `true`
 
-### 3. srip_site_dna_select_policy (SELECT)
+### 5. srip_site_dna_update_owner (UPDATE)
 
-- **Roles**: {public}
-- **Using**: `true`
-
-### 4. srip_site_dna_update_policy (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `true`
+- **Roles**: {authenticated}
+- **Using**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
 
 ## Triggers
 
