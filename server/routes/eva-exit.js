@@ -469,4 +469,90 @@ router.get('/:ventureId/data-room/completeness', asyncHandler(async (req, res) =
   });
 }));
 
+// ── Business Readiness ─────────────────────────────────────────
+// SD: SD-LEO-INFRA-EXIT-BUSINESS-READINESS-001
+
+/**
+ * Compute readiness score from business metrics (0-100).
+ * Weighted average: ARR ratio (40%), customer ratio (30%), growth ratio (30%).
+ */
+function computeReadinessScore({ target_arr, actual_arr, target_customer_count, actual_customer_count, growth_rate_target, growth_rate_actual }) {
+  const ratios = [];
+  if (target_arr > 0 && actual_arr != null) ratios.push({ weight: 0.4, value: Math.min(actual_arr / target_arr, 1.5) });
+  if (target_customer_count > 0 && actual_customer_count != null) ratios.push({ weight: 0.3, value: Math.min(actual_customer_count / target_customer_count, 1.5) });
+  if (growth_rate_target > 0 && growth_rate_actual != null) ratios.push({ weight: 0.3, value: Math.min(growth_rate_actual / growth_rate_target, 1.5) });
+
+  if (ratios.length === 0) return 0;
+
+  const totalWeight = ratios.reduce((s, r) => s + r.weight, 0);
+  const weighted = ratios.reduce((s, r) => s + r.value * r.weight, 0) / totalWeight;
+  return Math.round(Math.min(100, weighted * 100));
+}
+
+/**
+ * GET /api/eva/exit/readiness/:ventureId
+ * Get business readiness metrics for a venture.
+ */
+router.get('/readiness/:ventureId', asyncHandler(async (req, res) => {
+  const { data, error } = await dbLoader.supabase
+    .from('venture_exit_readiness')
+    .select('*')
+    .eq('venture_id', req.params.ventureId)
+    .single();
+
+  if (error) return res.status(404).json({ error: 'No readiness record found' });
+  res.json(data);
+}));
+
+/**
+ * PATCH /api/eva/exit/readiness/:ventureId
+ * Update business readiness metrics. Auto-computes readiness_score and chairman escalation.
+ */
+router.patch('/readiness/:ventureId', asyncHandler(async (req, res) => {
+  const ventureId = req.params.ventureId;
+  const { target_arr, actual_arr, target_customer_count, actual_customer_count, growth_rate_target, growth_rate_actual, market_multiple_current, readiness_threshold } = req.body;
+
+  // Get current record for escalation check
+  const { data: current } = await dbLoader.supabase
+    .from('venture_exit_readiness')
+    .select('readiness_score, readiness_threshold, chairman_review_triggered')
+    .eq('venture_id', ventureId)
+    .single();
+
+  const updates = {};
+  if (target_arr !== undefined) updates.target_arr = target_arr;
+  if (actual_arr !== undefined) updates.actual_arr = actual_arr;
+  if (target_customer_count !== undefined) updates.target_customer_count = target_customer_count;
+  if (actual_customer_count !== undefined) updates.actual_customer_count = actual_customer_count;
+  if (growth_rate_target !== undefined) updates.growth_rate_target = growth_rate_target;
+  if (growth_rate_actual !== undefined) updates.growth_rate_actual = growth_rate_actual;
+  if (market_multiple_current !== undefined) updates.market_multiple_current = market_multiple_current;
+  if (readiness_threshold !== undefined) updates.readiness_threshold = readiness_threshold;
+
+  // Merge with existing values for score computation
+  const merged = { ...current, ...updates };
+  const score = computeReadinessScore(merged);
+  updates.readiness_score = score;
+
+  // Chairman escalation: trigger if score > threshold for 2+ consecutive periods
+  const threshold = merged.readiness_threshold || 70;
+  const previousAbove = current?.readiness_score > threshold;
+  const currentAbove = score > threshold;
+  if (previousAbove && currentAbove && !current?.chairman_review_triggered) {
+    updates.chairman_review_triggered = true;
+  }
+
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await dbLoader.supabase
+    .from('venture_exit_readiness')
+    .update(updates)
+    .eq('venture_id', ventureId)
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+}));
+
 export default router;
