@@ -33,14 +33,6 @@ jobs:
           delete-other-labels: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Label this workflow run
-        if: success()
-        uses: actions-ecosystem/action-add-labels@v1
-        with:
-          labels: |
-            automated
-            ws6:observability
-
   apply-security-labels:
     name: Apply Security Labels to PRs
     runs-on: ubuntu-latest
