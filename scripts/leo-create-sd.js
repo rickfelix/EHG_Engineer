@@ -1289,7 +1289,16 @@ async function createSD(options) {
       'Follow LEO Protocol for all changes',
       'Ensure backward compatibility'
     ],
-    risks: [],
+    risks: risks && risks.length > 0 ? risks : [
+      { risk: 'Implementation may not fully address root cause', likelihood: 'low', impact: 'low', mitigation: 'Verify against original evidence; re-queue via /learn if pattern recurs' }
+    ],
+    dependencies: dependencies && dependencies.length > 0 ? dependencies : [
+      { dependency: 'none', type: 'internal', status: 'available' }
+    ],
+    implementation_guidelines: implementation_guidelines && implementation_guidelines.length > 0 ? implementation_guidelines : [
+      `Implement changes for: ${title}`,
+      'Verify no regressions in existing functionality'
+    ],
     metadata: {
       ...metadata,
       created_via: 'leo-create-sd',
