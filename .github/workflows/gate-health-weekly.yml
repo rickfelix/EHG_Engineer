@@ -73,17 +73,6 @@ jobs:
           echo "🏥 Running gate health check with flags: $FLAGS"
           node scripts/gate-health-check.js $FLAGS
 
-      - name: Regenerate CLAUDE.md with gate health
-        if: success()
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          echo "📝 Regenerating CLAUDE.md with gate health section..."
-          npm run leo:generate || echo "⚠️ CLAUDE.md generation skipped"
-
       - name: Create GitHub Issue for failing gates
         if: steps.gate_health.outputs.alerts_count > 0
         uses: actions/github-script@v7

@@ -2,8 +2,6 @@ name: WSJF Bulk-Accept (Prod)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '10 5 * * *'   # after proposals-ingest
 
 permissions:
   contents: read

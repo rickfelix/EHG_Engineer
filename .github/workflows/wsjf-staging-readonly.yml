@@ -1,8 +1,6 @@
 name: WSJF Recommendations (Staging, Read-Only)
 
 on:
-  schedule:
-    - cron: '45 4 * * *'        # after other 4:00 jobs
   workflow_dispatch: {}
 
 permissions:

@@ -1,8 +1,6 @@
 name: WSJF Recommendations (Prod, Read-Only)
 
 on:
-  schedule:
-    - cron: '45 4 * * *'  # after vision alignment
   workflow_dispatch: {}
 
 permissions:

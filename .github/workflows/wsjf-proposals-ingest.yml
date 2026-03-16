@@ -2,8 +2,6 @@ name: WSJF Proposals Ingest (Staging)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '5 5 * * *'  # optional: after WSJF export
 
 permissions:
   contents: read
