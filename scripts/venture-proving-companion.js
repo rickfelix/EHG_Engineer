@@ -3,7 +3,7 @@
  * Venture Proving Companion CLI
  *
  * Sub-commands:
- *   assess   - Run Plan/Reality/Gap analysis for a stage range
+ *   assess   - Run process compliance checks for a stage range
  *   journal  - View journal entries for a venture
  *   persist-specialists - Create Board of Directors entries from run
  *   report   - Generate proving run summary report
@@ -67,89 +67,62 @@ async function main() {
   }
 }
 
-async function preflight() {
-  console.log('🛡️  Pre-flight canary — checking path normalization...');
-  const { getPlan } = await import('../lib/proving-companion/plan-agent.js');
-  const { getReality } = await import('../lib/proving-companion/reality-agent.js');
-  const { analyzeGaps } = await import('../lib/proving-companion/gap-analyst.js');
-
-  const planData = await getPlan(1, 3);
-  const realityData = await getReality(1, 3);
-  const gapAnalysis = analyzeGaps(planData, realityData);
-
-  const missingFileGaps = gapAnalysis.gaps.filter(g => g.type === 'missing_file');
-  const stagesWithMissing = new Set(missingFileGaps.map(g => g.stage_number));
-  const stagesWithFiles = Object.entries(realityData)
-    .filter(([, r]) => r.found_files.length > 0)
-    .map(([n]) => parseInt(n));
-
-  // If all checked stages report missing_file gaps but reality found files, abort
-  if (stagesWithMissing.size >= 3 && stagesWithFiles.length >= 3) {
-    const allContradict = stagesWithFiles.every(s => stagesWithMissing.has(s));
-    if (allContradict) {
-      console.error('\n❌ Pre-flight FAILED: gap analyst reports missing files that reality agent found.');
-      console.error('   Likely path normalization issue. Check scanPattern and matchesPattern.');
-      process.exit(1);
-    }
-  }
-  console.log('   ✓ Pre-flight passed\n');
-}
-
 async function runAssess(ventureId, flags) {
-  const fromStage = parseInt(flags.from || '0');
+  const fromStage = parseInt(flags.from || '1');
   const toGate = parseInt(flags['to-gate'] || '3');
 
-  console.log(`\nAssessing stages ${fromStage}-${toGate} for venture ${ventureId}\n`);
-
-  // Run preflight canary before assessment
-  await preflight();
+  console.log(`\nProcess compliance check: stages ${fromStage}-${toGate} for venture ${ventureId}\n`);
 
   const startTime = Date.now();
 
-  // Step 1: Plan Agent
-  console.log('📋 Step 1: Plan Agent — querying vision/arch docs...');
-  const { getPlan } = await import('../lib/proving-companion/plan-agent.js');
-  const planData = await getPlan(fromStage, toGate);
-  const planStages = Object.keys(planData).length;
-  console.log(`   ✓ ${planStages} stages planned\n`);
+  // Step 1: Artifact Integrity
+  console.log('📦 Step 1: Artifact Integrity — checking venture_artifacts...');
+  const { checkArtifactIntegrity } = await import('../lib/proving-companion/artifact-integrity-checker.js');
+  const artifactResults = await checkArtifactIntegrity(ventureId, fromStage, toGate);
+  const artifactFails = Object.values(artifactResults).reduce((sum, r) => sum + r.fail_count, 0);
+  console.log(`   ✓ ${Object.keys(artifactResults).length} stages checked, ${artifactFails} findings\n`);
 
-  // Step 2: Reality Agent
-  console.log('🔍 Step 2: Reality Agent — scanning EHG app...');
-  const { getReality } = await import('../lib/proving-companion/reality-agent.js');
-  const realityData = await getReality(fromStage, toGate);
-  console.log('   ✓ Scan complete\n');
+  // Step 2: Gate Discipline
+  console.log('🚪 Step 2: Gate Discipline — checking chairman decisions...');
+  const { checkGateDiscipline } = await import('../lib/proving-companion/gate-discipline-checker.js');
+  const gateResults = await checkGateDiscipline(ventureId, fromStage, toGate);
+  const gateFails = Object.values(gateResults).reduce((sum, r) => sum + r.fail_count, 0);
+  console.log(`   ✓ ${Object.keys(gateResults).length} stages checked, ${gateFails} findings\n`);
 
-  // Step 3: Gap Analyst
-  console.log('📊 Step 3: Gap Analyst — comparing plan vs reality...');
-  const { analyzeGaps } = await import('../lib/proving-companion/gap-analyst.js');
-  const gapAnalysis = analyzeGaps(planData, realityData);
-  console.log(`   ✓ ${gapAnalysis.summary.total} gaps found`);
-  console.log(`   Recommendation: ${gapAnalysis.recommendation} — ${gapAnalysis.recommendation_reason}\n`);
-
-  // Step 4: Enhancement Sourcer
-  console.log('💡 Step 4: Enhancement Sourcer — aggregating from 4 adapters...');
-  const { getEnhancements } = await import('../lib/proving-companion/enhancement-sourcer.js');
-  const enhancements = await getEnhancements(fromStage, toGate, gapAnalysis);
-  console.log(`   ✓ ${enhancements.length} enhancements found\n`);
+  // Step 3: Transition Correctness
+  console.log('🔗 Step 3: Transition Correctness — checking stage ordering...');
+  const { checkTransitionCorrectness } = await import('../lib/proving-companion/transition-correctness-checker.js');
+  const transitionResults = await checkTransitionCorrectness(ventureId, fromStage, toGate);
+  const transitionFails = Object.values(transitionResults).reduce((sum, r) => sum + r.fail_count, 0);
+  console.log(`   ✓ ${Object.keys(transitionResults).length} stages checked, ${transitionFails} findings\n`);
 
   const durationMs = Date.now() - startTime;
+  const totalFindings = artifactFails + gateFails + transitionFails;
 
-  // Step 5: Journal Capture
-  console.log('📝 Step 5: Journal Capture — writing entries...');
+  // Step 4: Journal Capture
+  console.log('📝 Step 4: Journal Capture — writing entries...');
   const { writeJournalEntry } = await import('../lib/proving-companion/journal-capture.js');
 
   for (let stage = fromStage; stage <= toGate; stage++) {
-    const stageGaps = gapAnalysis.gaps.filter(g => g.stage_number === stage);
-    const stageEnhancements = enhancements.filter(e =>
-      e.title?.includes(`Stage ${stage}`) || true // include all for now
-    ).slice(0, 5);
+    const stageKey = String(stage);
+    const artifact = artifactResults[stageKey] || { checks: [] };
+    const gate = gateResults[stageKey] || { checks: [] };
+    const transition = transitionResults[stageKey] || { checks: [] };
+
+    const allChecks = [...artifact.checks, ...gate.checks, ...transition.checks];
+    const gaps = allChecks.filter(c => !c.pass).map(c => ({
+      stage_number: stage,
+      type: 'process_compliance',
+      severity: 'minor',
+      description: `[${c.name}] ${c.detail}`
+    }));
 
     await writeJournalEntry(ventureId, stage, {
-      plan: planData[stage] || {},
-      reality: realityData[stage] || {},
-      gaps: stageGaps,
-      enhancements: stageEnhancements,
-      decision: null, // Chairman decides later
+      plan: { compliance_checks: allChecks.length },
+      reality: { pass_count: allChecks.filter(c => c.pass).length, fail_count: allChecks.filter(c => !c.pass).length },
+      gaps,
+      enhancements: [],
+      decision: null,
       notes: null,
       durationMs: Math.round(durationMs / (toGate - fromStage + 1))
     });
@@ -158,12 +131,11 @@ async function runAssess(ventureId, flags) {
 
   // Summary
   console.log('═'.repeat(50));
-  console.log('ASSESSMENT COMPLETE');
+  console.log('PROCESS COMPLIANCE CHECK COMPLETE');
   console.log(`  Stages: ${fromStage}-${toGate}`);
-  console.log(`  Gaps: ${gapAnalysis.summary.total} (${gapAnalysis.summary.by_severity.blocker} blockers)`);
-  console.log(`  Enhancements: ${enhancements.length}`);
+  console.log(`  Findings: ${totalFindings} (${artifactFails} artifact, ${gateFails} gate, ${transitionFails} transition)`);
   console.log(`  Duration: ${durationMs}ms`);
-  console.log(`  Recommendation: ${gapAnalysis.recommendation.toUpperCase()}`);
+  console.log('  Mode: Advisory (non-blocking)');
   console.log('═'.repeat(50));
 }
 
