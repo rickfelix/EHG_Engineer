@@ -9,6 +9,7 @@
 // Proving run covers stages 1-17 only (THE_TRUTH → THE_BLUEPRINT → THE_BUILD entry).
 // Stages 18-25 (THE_BUILD execution → THE_LAUNCH) require venture-repo-aware
 // assessment infrastructure that doesn't exist yet.
+const SEVERITY_ORDER = ['blocker', 'major', 'minor', 'cosmetic'];
 const GATE_STAGES = [3, 5, 13, 16, 17];
 const MAX_PROVING_STAGE = 17;
 
@@ -94,7 +95,7 @@ function rankVentures(ventures, journalGroups) {
  * @returns {string} formatted text
  */
 function formatGapSummary(gapAnalysis) {
-  if (!gapAnalysis || !gapAnalysis.summary) return 'No gap data available.';
+  if (!gapAnalysis || !gapAnalysis.summary) return { summary: 'No gap data available.', topGaps: [] };
 
   const s = gapAnalysis.summary;
   const lines = [];
@@ -114,7 +115,16 @@ function formatGapSummary(gapAnalysis) {
     lines.push(`\nTop blocker: ${blocker.description}`);
   }
 
-  return lines.join('\n');
+  // L2: Top gap descriptions for gate prompts (max 3, capped at 80 chars)
+  const topGaps = (gapAnalysis.gaps || [])
+    .sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
+    .slice(0, 3)
+    .map(g => {
+      const desc = `[${g.severity}] ${g.description}`;
+      return desc.length > 80 ? desc.slice(0, 77) + '...' : desc;
+    });
+
+  return { summary: lines.join('\n'), topGaps };
 }
 
 /**

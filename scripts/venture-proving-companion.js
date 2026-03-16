@@ -67,11 +67,42 @@ async function main() {
   }
 }
 
+async function preflight() {
+  console.log('🛡️  Pre-flight canary — checking path normalization...');
+  const { getPlan } = await import('../lib/proving-companion/plan-agent.js');
+  const { getReality } = await import('../lib/proving-companion/reality-agent.js');
+  const { analyzeGaps } = await import('../lib/proving-companion/gap-analyst.js');
+
+  const planData = await getPlan(1, 3);
+  const realityData = await getReality(1, 3);
+  const gapAnalysis = analyzeGaps(planData, realityData);
+
+  const missingFileGaps = gapAnalysis.gaps.filter(g => g.type === 'missing_file');
+  const stagesWithMissing = new Set(missingFileGaps.map(g => g.stage_number));
+  const stagesWithFiles = Object.entries(realityData)
+    .filter(([, r]) => r.found_files.length > 0)
+    .map(([n]) => parseInt(n));
+
+  // If all checked stages report missing_file gaps but reality found files, abort
+  if (stagesWithMissing.size >= 3 && stagesWithFiles.length >= 3) {
+    const allContradict = stagesWithFiles.every(s => stagesWithMissing.has(s));
+    if (allContradict) {
+      console.error('\n❌ Pre-flight FAILED: gap analyst reports missing files that reality agent found.');
+      console.error('   Likely path normalization issue. Check scanPattern and matchesPattern.');
+      process.exit(1);
+    }
+  }
+  console.log('   ✓ Pre-flight passed\n');
+}
+
 async function runAssess(ventureId, flags) {
   const fromStage = parseInt(flags.from || '0');
   const toGate = parseInt(flags['to-gate'] || '3');
 
   console.log(`\nAssessing stages ${fromStage}-${toGate} for venture ${ventureId}\n`);
+
+  // Run preflight canary before assessment
+  await preflight();
 
   const startTime = Date.now();
 
@@ -86,7 +117,7 @@ async function runAssess(ventureId, flags) {
   console.log('🔍 Step 2: Reality Agent — scanning EHG app...');
   const { getReality } = await import('../lib/proving-companion/reality-agent.js');
   const realityData = await getReality(fromStage, toGate);
-  console.log(`   ✓ Scan complete\n`);
+  console.log('   ✓ Scan complete\n');
 
   // Step 3: Gap Analyst
   console.log('📊 Step 3: Gap Analyst — comparing plan vs reality...');
