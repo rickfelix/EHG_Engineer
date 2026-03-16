@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T10:15:33.591Z
-**Tables**: 579
+**Generated**: 2026-03-16T16:27:25.979Z
+**Tables**: 580
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -263,7 +263,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [intelligence_analysis](tables/intelligence_analysis.md) | N/A (RLS restricted) | ✅ | 4 | - |
 | [intelligence_patterns](tables/intelligence_patterns.md) | N/A (RLS restricted) | ✅ | 2 | Stores learned patterns about project types, complexity factors, and their typical outcomes |
 | [interaction_history](tables/interaction_history.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled 2025-10-26 (migration 020) - Complete history of context monitoring interactions |
-| [issue_patterns](tables/issue_patterns.md) | N/A (RLS restricted) | ✅ | 4 | Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention |
+| [issue_patterns](tables/issue_patterns.md) | N/A (RLS restricted) | ✅ | 5 | Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention |
 | [judge_verdicts](tables/judge_verdicts.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [key_results](tables/key_results.md) | N/A (RLS restricted) | ✅ | 2 | Measurable outcomes (the KR in OKRs) |
 | [kr_progress_snapshots](tables/kr_progress_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | Historical tracking of Key Result values |
@@ -518,6 +518,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [soul_extractions](tables/soul_extractions.md) | N/A (RLS restricted) | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
+| [specialist_registry](tables/specialist_registry.md) | N/A (RLS restricted) | ✅ | 1 | Board of Directors specialist registry — one entry per assessed venture stage, upserted by proving companion |
 | [srip_brand_interviews](tables/srip_brand_interviews.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction. |
 | [srip_quality_checks](tables/srip_quality_checks.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility. |
 | [srip_site_dna](tables/srip_site_dna.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication. |
@@ -810,7 +811,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (453 tables)
+### Other (454 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1162,6 +1163,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [simulation_sessions](tables/simulation_sessions.md) - Tracks Genesis simulation lifecycle including ephemeral deployments and incineration
 - [skill_assessment_scores](tables/skill_assessment_scores.md)
 - [soul_extractions](tables/soul_extractions.md) - Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17)
+- [specialist_registry](tables/specialist_registry.md) - Board of Directors specialist registry — one entry per assessed venture stage, upserted by proving companion
 - [srip_brand_interviews](tables/srip_brand_interviews.md) - SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction.
 - [srip_quality_checks](tables/srip_quality_checks.md) - SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility.
 - [srip_site_dna](tables/srip_site_dna.md) - SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication.
