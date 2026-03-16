@@ -79,6 +79,108 @@ describe('Operations Customer Health Service', () => {
   });
 });
 
+describe('detectAtRiskCustomers mapping', () => {
+  it('maps at-risk customers with trigger type from lowest dimension', async () => {
+    const mockData = [
+      {
+        customer_id: 'cust-001',
+        overall_score: 25,
+        dimension_scores: { login_frequency: 10, feature_adoption: 30, sentiment: 40, payment: 20 },
+        computed_at: '2026-03-16T00:00:00Z',
+      },
+    ];
+
+    const { createClient } = await import('@supabase/supabase-js');
+    createClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
+      })),
+    });
+
+    const { detectAtRiskCustomers } = await import('../../../lib/eva/services/ops-customer-health.js');
+    const result = await detectAtRiskCustomers('00000000-0000-0000-0000-000000000001');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].customerId).toBe('cust-001');
+    expect(result[0].overallScore).toBe(25);
+    expect(result[0].triggerType).toBe('low_login_frequency');
+    expect(result[0].recommendedAction).toBe('engagement_campaign');
+  });
+
+  it('returns urgent_outreach for scores below 20', async () => {
+    const mockData = [
+      {
+        customer_id: 'cust-002',
+        overall_score: 15,
+        dimension_scores: { login_frequency: 50, feature_adoption: 10, sentiment: 5, payment: 60 },
+        computed_at: '2026-03-16T00:00:00Z',
+      },
+    ];
+
+    const { createClient } = await import('@supabase/supabase-js');
+    createClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
+      })),
+    });
+
+    const { detectAtRiskCustomers } = await import('../../../lib/eva/services/ops-customer-health.js');
+    const result = await detectAtRiskCustomers('00000000-0000-0000-0000-000000000001');
+
+    expect(result[0].recommendedAction).toBe('urgent_outreach');
+  });
+
+  it('returns dimension-specific action for scores 20-40', async () => {
+    const mockData = [
+      {
+        customer_id: 'cust-003',
+        overall_score: 35,
+        dimension_scores: { login_frequency: 80, feature_adoption: 25, sentiment: 30, payment: 35 },
+        computed_at: '2026-03-16T00:00:00Z',
+      },
+    ];
+
+    const { createClient } = await import('@supabase/supabase-js');
+    createClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockData, error: null }),
+      })),
+    });
+
+    const { detectAtRiskCustomers } = await import('../../../lib/eva/services/ops-customer-health.js');
+    const result = await detectAtRiskCustomers('00000000-0000-0000-0000-000000000001');
+
+    expect(result[0].triggerType).toBe('low_feature_adoption');
+    expect(result[0].recommendedAction).toBe('onboarding_refresh');
+  });
+
+  it('returns empty array when no at-risk customers', async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    createClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        lt: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      })),
+    });
+
+    const { detectAtRiskCustomers } = await import('../../../lib/eva/services/ops-customer-health.js');
+    const result = await detectAtRiskCustomers('00000000-0000-0000-0000-000000000001');
+
+    expect(result).toEqual([]);
+  });
+});
+
 describe('Barrel Export includes customer health', () => {
   it('re-exports customer health functions from index', async () => {
     const services = await import('../../../lib/eva/services/index.js');
