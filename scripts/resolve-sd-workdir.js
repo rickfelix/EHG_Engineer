@@ -241,9 +241,9 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
 }
 
 /**
- * Update claude_sessions.worktree_path for the active session
+ * Update claude_sessions.worktree_path and worktree_branch for the session
  */
-async function persistWorktreePath(sdKey, worktreePath) {
+async function persistWorktreePath(sdKey, worktreePath, worktreeBranch) {
   try {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(
@@ -251,11 +251,14 @@ async function persistWorktreePath(sdKey, worktreePath) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
+    const updateFields = { worktree_path: worktreePath };
+    if (worktreeBranch) updateFields.worktree_branch = worktreeBranch;
+
     const { error } = await supabase
       .from('claude_sessions')
-      .update({ worktree_path: worktreePath })
+      .update(updateFields)
       .eq('sd_id', sdKey)
-      .eq('status', 'active');
+      .in('status', ['active', 'idle']);
 
     if (error) {
       emitLog({ event: 'worktree.db_update_failed', sdKey, error: error.message, errorCode: 'DB_UPDATE_FAILED' });
@@ -313,7 +316,7 @@ async function resolve(sdKey, mode, repoRoot) {
     emitLog({ event: 'worktree.resolved', sdKey, source: 'scan', resolvedCwd: scanResult.path, outcome: 'success' });
 
     // Persist to DB for future lookups
-    await persistWorktreePath(sdKey, scanResult.path);
+    await persistWorktreePath(sdKey, scanResult.path, branch);
 
     ensureWorktreeEssentials(scanResult.path, repoRoot);
     return {
@@ -330,7 +333,7 @@ async function resolve(sdKey, mode, repoRoot) {
       emitLog({ event: 'worktree.resolved', sdKey, source: 'created', resolvedCwd: created.path, outcome: 'success' });
 
       // Persist to DB
-      await persistWorktreePath(sdKey, created.path);
+      await persistWorktreePath(sdKey, created.path, created.branch);
 
       return {
         sdKey, cwd: created.path, source: 'created', success: true,
