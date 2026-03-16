@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T02:05:36.024Z
-**Tables**: 570
+**Generated**: 2026-03-16T09:53:49.951Z
+**Tables**: 577
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -370,6 +370,12 @@ Reference: docs/workflow/stages_v2.yaml |
 | [opportunity_scans](tables/opportunity_scans.md) | N/A (RLS restricted) | ✅ | 2 | Tracks AI opportunity discovery scans. Each scan can generate multiple blueprints. |
 | [opportunity_scores](tables/opportunity_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [opportunity_sources](tables/opportunity_sources.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [ops_agent_health](tables/ops_agent_health.md) | N/A (RLS restricted) | ✅ | 4 | Daily AI agent health snapshots — quality, accuracy, cost, quota per agent per venture |
+| [ops_customer_health_scores](tables/ops_customer_health_scores.md) | N/A (RLS restricted) | ✅ | 4 | Per-customer health scores across 4 dimensions: login_frequency, feature_adoption, sentiment, payment |
+| [ops_health_alerts](tables/ops_health_alerts.md) | N/A (RLS restricted) | ✅ | 4 | Health metric alerts triggered when thresholds are breached |
+| [ops_product_health](tables/ops_product_health.md) | N/A (RLS restricted) | ✅ | 4 | Daily product health snapshots — uptime, latency, error rates per venture |
+| [ops_revenue_alerts](tables/ops_revenue_alerts.md) | N/A (RLS restricted) | ✅ | 4 | Revenue metric alerts triggered when actuals deviate from targets beyond thresholds |
+| [ops_revenue_metrics](tables/ops_revenue_metrics.md) | N/A (RLS restricted) | ✅ | 4 | Revenue KPIs tracked per venture per date — MRR, churn, expansion/contraction, LTV/CAC |
 | [orchestration_metrics](tables/orchestration_metrics.md) | N/A (RLS restricted) | ✅ | 4 | Performance analytics for EVA orchestration - tracks efficiency, quality, and resource utilization |
 | [outcome_signals](tables/outcome_signals.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [pattern_occurrences](tables/pattern_occurrences.md) | N/A (RLS restricted) | ✅ | 1 | Tracks individual pattern occurrences for trend calculation. |
@@ -377,6 +383,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [pattern_subagent_mapping](tables/pattern_subagent_mapping.md) | N/A (RLS restricted) | ✅ | 3 | RLS: Service role write, authenticated read |
 | [pending_ceo_handoffs](tables/pending_ceo_handoffs.md) | N/A (RLS restricted) | ✅ | 2 | Persists pending CEO handoff reviews. Replaces in-memory Map in venture-state-machine.js.
 Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
+| [persona_behavioral_data](tables/persona_behavioral_data.md) | N/A (RLS restricted) | ✅ | 4 | Anonymized behavioral pattern aggregations per persona segment for Portfolio Intelligence Phase 2 |
 | [persona_config](tables/persona_config.md) | N/A (RLS restricted) | ✅ | 1 | Per-application persona validation rules. SD-MAN-GEN-TITLE-TARGET-APPLICATION-001 |
 | [pipeline_metrics](tables/pipeline_metrics.md) | N/A (RLS restricted) | ✅ | 2 | Time-series metrics for self-improvement pipeline. Retention: 30 days. |
 | [plan_conflict_rules](tables/plan_conflict_rules.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -801,7 +808,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (444 tables)
+### Other (451 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1071,11 +1078,18 @@ Reference: docs/workflow/stages_v2.yaml
 - [opportunity_scans](tables/opportunity_scans.md) - Tracks AI opportunity discovery scans. Each scan can generate multiple blueprints.
 - [opportunity_scores](tables/opportunity_scores.md)
 - [opportunity_sources](tables/opportunity_sources.md)
+- [ops_agent_health](tables/ops_agent_health.md) - Daily AI agent health snapshots — quality, accuracy, cost, quota per agent per venture
+- [ops_customer_health_scores](tables/ops_customer_health_scores.md) - Per-customer health scores across 4 dimensions: login_frequency, feature_adoption, sentiment, payment
+- [ops_health_alerts](tables/ops_health_alerts.md) - Health metric alerts triggered when thresholds are breached
+- [ops_product_health](tables/ops_product_health.md) - Daily product health snapshots — uptime, latency, error rates per venture
+- [ops_revenue_alerts](tables/ops_revenue_alerts.md) - Revenue metric alerts triggered when actuals deviate from targets beyond thresholds
+- [ops_revenue_metrics](tables/ops_revenue_metrics.md) - Revenue KPIs tracked per venture per date — MRR, churn, expansion/contraction, LTV/CAC
 - [orchestration_metrics](tables/orchestration_metrics.md) - Performance analytics for EVA orchestration - tracks efficiency, quality, and resource utilization
 - [outcome_signals](tables/outcome_signals.md)
 - [pattern_occurrences](tables/pattern_occurrences.md) - Tracks individual pattern occurrences for trend calculation.
 - [pattern_resolution_signals](tables/pattern_resolution_signals.md) - Signals indicating pattern resolution for evidence tracking
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md) - RLS: Service role write, authenticated read
+- [persona_behavioral_data](tables/persona_behavioral_data.md) - Anonymized behavioral pattern aggregations per persona segment for Portfolio Intelligence Phase 2
 - [persona_config](tables/persona_config.md) - Per-application persona validation rules. SD-MAN-GEN-TITLE-TARGET-APPLICATION-001
 - [pipeline_metrics](tables/pipeline_metrics.md) - Time-series metrics for self-improvement pipeline. Retention: 30 days.
 - [plan_conflict_rules](tables/plan_conflict_rules.md)
@@ -1881,6 +1895,24 @@ _Key relationships between tables:_
 **opportunity_scores**:
 - `opportunity_id` → `opportunities.id`
 
+**ops_agent_health**:
+- `venture_id` → `ventures.id`
+
+**ops_customer_health_scores**:
+- `venture_id` → `ventures.id`
+
+**ops_health_alerts**:
+- `venture_id` → `ventures.id`
+
+**ops_product_health**:
+- `venture_id` → `ventures.id`
+
+**ops_revenue_alerts**:
+- `venture_id` → `ventures.id`
+
+**ops_revenue_metrics**:
+- `venture_id` → `ventures.id`
+
 **orchestration_metrics**:
 - `company_id` → `companies.id`
 - `session_id` → `eva_orchestration_sessions.session_id`
@@ -1894,6 +1926,9 @@ _Key relationships between tables:_
 - `sd_id` → `strategic_directives_v2.id`
 
 **pending_ceo_handoffs**:
+- `venture_id` → `ventures.id`
+
+**persona_behavioral_data**:
 - `venture_id` → `ventures.id`
 
 **plan_quality_gates**:
