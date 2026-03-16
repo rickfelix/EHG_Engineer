@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T00:41:46.314Z
+**Generated**: 2026-03-16T00:53:05.043Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,7 @@
 | market_position | `text` | YES | - | Free-text description of competitive market positioning |
 | swot | `jsonb` | YES | `'{}'::jsonb` | Structured SWOT analysis: {strengths:[], weaknesses:[], opportunities:[], threats:[]} |
 | lifecycle_stage | `text` | YES | - | Business lifecycle stage: seed, growth, mature, declining |
+| global_competitor_id | `uuid` | YES | - | FK to global_competitors for cross-venture competitive intelligence linkage. |
 
 ## Constraints
 
@@ -42,6 +43,7 @@
 - `competitors_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `competitors_global_competitor_id_fkey`: global_competitor_id → global_competitors(id)
 - `competitors_venture_id_fkey`: venture_id → ventures(id)
 
 ### Unique Constraints
