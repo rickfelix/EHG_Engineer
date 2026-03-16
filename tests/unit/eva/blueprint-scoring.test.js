@@ -4,6 +4,7 @@ import { scoreArtifact } from '../../../lib/eva/blueprint-scoring/quality-scorer
 import { checkConsistency } from '../../../lib/eva/blueprint-scoring/consistency-checker.js';
 import { calculateReadiness } from '../../../lib/eva/blueprint-scoring/readiness-calculator.js';
 import { evaluateGate } from '../../../lib/eva/blueprint-scoring/gate-engine.js';
+import { scoreAndPersist, seedDefaultRubrics, getLatestReadiness, getLatestAssessment, listAssessments } from '../../../lib/eva/blueprint-scoring/persistence.js';
 
 // --- Rubric Definitions ---
 
@@ -199,5 +200,103 @@ describe('QualityGateDecisionEngine', () => {
     const result = evaluateGate(readiness, details);
     expect(result.remediationItems.some((r) => r.dimension === 'entity_coverage')).toBe(true);
     expect(result.remediationItems.some((r) => r.dimension === 'relationship_clarity')).toBe(false);
+  });
+});
+
+// --- Persistence Module (Exports Check) ---
+
+describe('PersistenceModule', () => {
+  it('exports scoreAndPersist function', () => {
+    expect(typeof scoreAndPersist).toBe('function');
+  });
+
+  it('exports seedDefaultRubrics function', () => {
+    expect(typeof seedDefaultRubrics).toBe('function');
+  });
+
+  it('exports getLatestReadiness function', () => {
+    expect(typeof getLatestReadiness).toBe('function');
+  });
+
+  it('exports getLatestAssessment function', () => {
+    expect(typeof getLatestAssessment).toBe('function');
+  });
+
+  it('exports listAssessments function', () => {
+    expect(typeof listAssessments).toBe('function');
+  });
+});
+
+// --- End-to-End Scoring Flow (Pure Logic) ---
+
+describe('End-to-End Scoring Flow', () => {
+  it('scores a complete blueprint through all stages', () => {
+    const artifacts = {
+      data_model: {
+        entities: [
+          { name: 'User', attributes: [{ name: 'id' }, { name: 'email' }, { name: 'name' }] },
+          { name: 'Order', attributes: [{ name: 'id' }, { name: 'total' }, { name: 'status' }] },
+        ],
+        relationships: [{ from: 'User', to: 'Order', type: '1:N' }],
+        normalization: { level: '3NF' },
+        naming: { convention: 'snake_case' },
+      },
+      erd_diagram: { entities: ['User', 'Order'], diagram: 'erDiagram...' },
+      api_contract: { endpoints: ['users', 'orders'], schemas: { User: {}, Order: {} } },
+      user_story_pack: { stories: ['create user', 'place order'], epics: [{ name: 'Core' }] },
+      technical_architecture: { layers: ['presentation', 'api', 'data'], components: ['auth'] },
+      schema_spec: { tables: { users: {}, orders: {} }, types: {} },
+      risk_register: { risks: [{ name: 'Scale' }, { name: 'Security' }], mitigations: {} },
+      financial_projection: { revenue: {}, costs: {}, metrics: { ltv: 500, cac: 100 } },
+      launch_readiness: { screens: ['users', 'orders'], checklist: [], dimensions: {} },
+      sprint_plan: { sprints: [{ stories: ['create user', 'place order'] }] },
+      promotion_gate: { criteria: {}, decision: 'promote', evidence: {} },
+    };
+
+    // Score each artifact
+    const scores = [];
+    for (const [type, content] of Object.entries(artifacts)) {
+      if (ARTIFACT_TYPES.includes(type)) {
+        const result = scoreArtifact(type, content);
+        scores.push({ artifactType: type, total: result.total });
+        expect(result.total).toBeGreaterThan(0);
+      }
+    }
+
+    // Consistency check
+    const consistency = checkConsistency(artifacts);
+    expect(consistency.checkedPairs).toBe(3);
+
+    // Readiness calculation
+    const readiness = calculateReadiness(scores, consistency);
+    expect(readiness.readinessScore).toBeGreaterThan(0);
+    expect(readiness.missingArtifacts).toHaveLength(0);
+    expect(readiness.breakdown.presentCount).toBe(11);
+
+    // Gate decision
+    const gate = evaluateGate(readiness);
+    expect(['pass', 'retry', 'fail']).toContain(gate.decision);
+    expect(gate.score).toBe(readiness.readinessScore);
+  });
+
+  it('handles partial blueprint with missing artifacts', () => {
+    const artifacts = {
+      data_model: { entities: [{ name: 'User' }] },
+      api_contract: { endpoints: ['users'] },
+    };
+
+    const scores = Object.entries(artifacts)
+      .filter(([type]) => ARTIFACT_TYPES.includes(type))
+      .map(([type, content]) => ({ artifactType: type, total: scoreArtifact(type, content).total }));
+
+    const consistency = checkConsistency(artifacts);
+    const readiness = calculateReadiness(scores, consistency);
+
+    expect(readiness.missingArtifacts.length).toBeGreaterThan(0);
+    expect(readiness.readinessScore).toBeLessThan(50);
+
+    const gate = evaluateGate(readiness);
+    expect(gate.decision).toBe('fail');
+    expect(gate.remediationItems.length).toBeGreaterThan(0);
   });
 });
