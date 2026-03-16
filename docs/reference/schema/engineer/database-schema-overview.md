@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T01:24:38.522Z
-**Tables**: 568
+**Generated**: 2026-03-16T02:05:36.024Z
+**Tables**: 570
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -77,7 +77,9 @@ Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [auto_apply_denylist](tables/auto_apply_denylist.md) | N/A (RLS restricted) | ✅ | 2 | Tables that AUTO-tier must NEVER modify. Includes governance, safety, and critical system tables. |
 | [backlog_item_completion](tables/backlog_item_completion.md) | N/A (RLS restricted) | ✅ | 2 | RLS enabled: service_role full access, authenticated read-only |
 | [blueprint_board_submissions](tables/blueprint_board_submissions.md) | N/A (RLS restricted) | ✅ | 5 | Tracks blueprint submissions for board review (SD-BLUEPRINT-UI-001:US-002,US-003) |
+| [blueprint_quality_assessments](tables/blueprint_quality_assessments.md) | N/A (RLS restricted) | ✅ | 5 | Stores quality assessment results for blueprint artifacts per venture |
 | [blueprint_selection_signals](tables/blueprint_selection_signals.md) | N/A (RLS restricted) | ✅ | 3 | - |
+| [blueprint_templates](tables/blueprint_templates.md) | N/A (RLS restricted) | ✅ | 4 | Stores reusable blueprint templates for different artifact types and archetypes |
 | [board_meeting_attendance](tables/board_meeting_attendance.md) | N/A (RLS restricted) | ✅ | 1 | Attendance and voting records for board meetings |
 | [board_meetings](tables/board_meetings.md) | N/A (RLS restricted) | ✅ | 1 | Board meetings with agenda, outcomes, and workflow linkage |
 | [board_members](tables/board_members.md) | N/A (RLS restricted) | ✅ | 2 | Board of Directors members with voting weights and expertise domains |
@@ -507,10 +509,10 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [simulation_sessions](tables/simulation_sessions.md) | N/A (RLS restricted) | ✅ | 2 | Tracks Genesis simulation lifecycle including ephemeral deployments and incineration |
 | [skill_assessment_scores](tables/skill_assessment_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [soul_extractions](tables/soul_extractions.md) | N/A (RLS restricted) | ✅ | 2 | Stores extracted structured requirements from simulations for regeneration gates (Stage 16/17) |
-| [srip_brand_interviews](tables/srip_brand_interviews.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction. |
+| [srip_brand_interviews](tables/srip_brand_interviews.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores 12-question brand interview answers per venture. Some answers may be auto-populated from site DNA extraction. |
 | [srip_quality_checks](tables/srip_quality_checks.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores multi-domain fidelity scores comparing generated site output against the reference across 6 domains: layout, visual_composition, design_system, interaction, technical, accessibility. |
-| [srip_site_dna](tables/srip_site_dna.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication. |
-| [srip_synthesis_prompts](tables/srip_synthesis_prompts.md) | N/A (RLS restricted) | ✅ | 5 | SRIP: Stores generated one-shot replication prompts that synthesize site DNA and brand interview data into actionable site generation instructions. |
+| [srip_site_dna](tables/srip_site_dna.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores extracted design DNA (tokens, layout, components) from reference site URLs for venture site replication. |
+| [srip_synthesis_prompts](tables/srip_synthesis_prompts.md) | N/A (RLS restricted) | ✅ | 4 | SRIP: Stores generated one-shot replication prompts that synthesize site DNA and brand interview data into actionable site generation instructions. |
 | [stage13_assessments](tables/stage13_assessments.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated exit readiness assessments. SD-STAGE-13-001. |
 | [stage13_substage_states](tables/stage13_substage_states.md) | N/A (RLS restricted) | ✅ | 1 | Tracks current Stage 13 substage position per venture. SD-STAGE-13-001. |
 | [stage13_valuations](tables/stage13_valuations.md) | N/A (RLS restricted) | ✅ | 1 | EVA-generated valuation models with confidence scores. SD-STAGE-13-001. |
@@ -799,7 +801,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (442 tables)
+### Other (444 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -844,7 +846,9 @@ Lifecycle: discovered → evaluating → adapted/rejected → outdated
 - [auto_apply_denylist](tables/auto_apply_denylist.md) - Tables that AUTO-tier must NEVER modify. Includes governance, safety, and critical system tables.
 - [backlog_item_completion](tables/backlog_item_completion.md) - RLS enabled: service_role full access, authenticated read-only
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md) - Tracks blueprint submissions for board review (SD-BLUEPRINT-UI-001:US-002,US-003)
+- [blueprint_quality_assessments](tables/blueprint_quality_assessments.md) - Stores quality assessment results for blueprint artifacts per venture
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
+- [blueprint_templates](tables/blueprint_templates.md) - Stores reusable blueprint templates for different artifact types and archetypes
 - [board_meeting_attendance](tables/board_meeting_attendance.md) - Attendance and voting records for board meetings
 - [board_meetings](tables/board_meetings.md) - Board meetings with agenda, outcomes, and workflow linkage
 - [board_members](tables/board_members.md) - Board of Directors members with voting weights and expertise domains
@@ -1354,6 +1358,10 @@ _Key relationships between tables:_
 **blueprint_board_submissions**:
 - `blueprint_id` → `opportunity_blueprints.id`
 - `board_meeting_id` → `board_meetings.id`
+
+**blueprint_quality_assessments**:
+- `template_id` → `blueprint_templates.id`
+- `venture_id` → `ventures.id`
 
 **blueprint_selection_signals**:
 - `blueprint_id` → `opportunity_blueprints.id`
