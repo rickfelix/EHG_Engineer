@@ -126,16 +126,16 @@ function main() {
       }
     }
 
-    // Block new file creation in brainstorm/
+    // Block ALL markdown writes to brainstorm/ (new or existing)
+    // Brainstorm content belongs in brainstorm_sessions.content column, not on disk.
     if (/brainstorm\/[^/]+\.md$/.test(filePath)) {
-      if (!fs.existsSync(input.file_path)) {
-        process.stderr.write(
-          'DB-ONLY ENFORCEMENT: Blocked new markdown file in brainstorm/.\n' +
-          'Brainstorm content must be stored in brainstorm_sessions.content column.\n' +
-          'Store via Supabase upsert to brainstorm_sessions table.\n'
-        );
-        process.exit(2);
-      }
+      process.stderr.write(
+        'DB-ONLY ENFORCEMENT: Blocked markdown write to brainstorm/.\n' +
+        'Brainstorm content must be stored in brainstorm_sessions.content column.\n' +
+        'Build content in-memory and pass it to the DB insert in Step 9.\n' +
+        'Do NOT use the Write tool for brainstorm documents.\n'
+      );
+      process.exit(2);
     }
   }
 
