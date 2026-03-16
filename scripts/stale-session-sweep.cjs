@@ -106,8 +106,9 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
       collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid);
 
     for (const extra of extras) {
-      const newTerminalId = 'win-' + extra.pid;
-      const newSessionId = 'session_' + randomUUID().substring(0, 8) + '_' + newTerminalId + '_' + extra.pid;
+      // Use marker-based UUID if available, fall back to PID-based format
+      const newTerminalId = extra.session_id || ('win-' + extra.pid);
+      const newSessionId = 'session_' + randomUUID().substring(0, 8) + '_' + extra.pid;
 
       // Check if a session with this terminal_id already exists (idempotent)
       const { data: existing } = await supabase
