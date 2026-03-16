@@ -2,8 +2,6 @@ name: WSJF Apply Accepted Proposals (Staging)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '20 5 * * *'  # optional: after ingest window
 
 permissions:
   contents: read

@@ -2,8 +2,6 @@ name: Vision Governance Apply (Staging)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '35 4 * * *'  # opt-in; will no-op unless guards set
 
 permissions:
   contents: write

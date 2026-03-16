@@ -2,8 +2,6 @@ name: WSJF Proposals Ingest (Prod)
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '5 5 * * *'  # after WSJF export
 
 permissions:
   contents: read
