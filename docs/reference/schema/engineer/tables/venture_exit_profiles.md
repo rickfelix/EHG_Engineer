@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-15T23:54:38.013Z
+**Generated**: 2026-03-16T00:27:13.521Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (11 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,8 @@
 | is_current | `boolean` | **NO** | `true` | Only one profile per venture should be current |
 | created_by | `uuid` | YES | - | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| exit_context | `text` | YES | `'planning'::text` | Context in which the exit profile was created: planning (Stage 9) or readiness_assessment (later stages) |
+| review_period | `text` | YES | - | Review period label, e.g. Q1-2026, for tracking when the profile was assessed |
 
 ## Constraints
 
@@ -38,14 +40,15 @@
 - `venture_exit_profiles_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
+- `venture_exit_profiles_exit_context_check`: CHECK ((exit_context = ANY (ARRAY['planning'::text, 'readiness_assessment'::text])))
 - `venture_exit_profiles_exit_model_check`: CHECK ((exit_model = ANY (ARRAY['full_acquisition'::text, 'licensing'::text, 'revenue_share'::text, 'acqui_hire'::text, 'asset_sale'::text, 'merger'::text])))
 - `venture_exit_profiles_target_buyer_type_check`: CHECK ((target_buyer_type = ANY (ARRAY['strategic'::text, 'financial'::text, 'competitor'::text, 'partner'::text, 'unknown'::text])))
 
 ## Indexes
 
-- `idx_exit_profiles_current`
+- `idx_exit_profiles_current_context`
   ```sql
-  CREATE INDEX idx_exit_profiles_current ON public.venture_exit_profiles USING btree (venture_id, is_current) WHERE (is_current = true)
+  CREATE UNIQUE INDEX idx_exit_profiles_current_context ON public.venture_exit_profiles USING btree (venture_id, exit_context) WHERE (is_current = true)
   ```
 - `idx_exit_profiles_venture_id`
   ```sql
@@ -58,15 +61,19 @@
 
 ## RLS Policies
 
-### 1. exit_profiles_insert_authenticated (INSERT)
+### 1. exit_profiles_insert_owner (INSERT)
 
 - **Roles**: {authenticated}
-- **With Check**: `true`
+- **With Check**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
 
-### 2. exit_profiles_select_authenticated (SELECT)
+### 2. exit_profiles_select_owner (SELECT)
 
 - **Roles**: {authenticated}
-- **Using**: `true`
+- **Using**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
 
 ### 3. exit_profiles_service_role (ALL)
 
@@ -74,10 +81,12 @@
 - **Using**: `true`
 - **With Check**: `true`
 
-### 4. exit_profiles_update_authenticated (UPDATE)
+### 4. exit_profiles_update_owner (UPDATE)
 
 - **Roles**: {authenticated}
-- **Using**: `true`
+- **Using**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.created_by = auth.uid())))`
 
 ---
 
