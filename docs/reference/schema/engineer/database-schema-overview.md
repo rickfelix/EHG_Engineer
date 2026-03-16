@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T00:41:46.314Z
-**Tables**: 563
+**Generated**: 2026-03-16T00:53:05.043Z
+**Tables**: 568
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -135,6 +135,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [cross_agent_correlations](tables/cross_agent_correlations.md) | N/A (RLS restricted) | ✅ | 2 | Tracks how decisions by one agent correlate with outcomes in other agents |
 | [cross_sd_utilization](tables/cross_sd_utilization.md) | N/A (RLS restricted) | ✅ | 2 | Manages cross-SD utilization requests and approvals |
 | [cultural_design_styles](tables/cultural_design_styles.md) | N/A (RLS restricted) | ✅ | 4 | - |
+| [customer_personas](tables/customer_personas.md) | N/A (RLS restricted) | ✅ | 2 | Canonical customer persona catalog. Personas can be venture-specific (source_venture_id) or global (canonical_id IS NULL). |
 | [daily_rollups](tables/daily_rollups.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [db_agent_config](tables/db_agent_config.md) | N/A (RLS restricted) | ✅ | 1 | Runtime configuration for database sub-agent auto-invocation (SD-LEO-INFRA-DATABASE-SUB-AGENT-001) |
 | [db_agent_invocations](tables/db_agent_invocations.md) | N/A (RLS restricted) | ✅ | 1 | Audit trail for database sub-agent invocation decisions (SD-LEO-INFRA-DATABASE-SUB-AGENT-001) |
@@ -227,6 +228,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [exec_quality_checkpoints](tables/exec_quality_checkpoints.md) | N/A (RLS restricted) | ✅ | 2 | Tracks completion of quality checkpoints during EXEC implementation |
 | [exec_sub_agent_activations](tables/exec_sub_agent_activations.md) | N/A (RLS restricted) | ✅ | 2 | Detailed results from sub-agent activations during EXEC implementation |
 | [execution_sequences_v2](tables/execution_sequences_v2.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [exit_playbooks](tables/exit_playbooks.md) | N/A (RLS restricted) | ✅ | 2 | Templated exit strategy playbooks (IPO, acquisition, merger, etc.) with prerequisites, timeline, and step-by-step guidance. |
 | [experiment_assignments](tables/experiment_assignments.md) | N/A (RLS restricted) | ✅ | 1 | Maps ventures to experiment variants - one assignment per venture per experiment |
 | [experiment_outcomes](tables/experiment_outcomes.md) | N/A (RLS restricted) | ✅ | 1 | Recorded outcome scores for each experiment assignment evaluation |
 | [experiments](tables/experiments.md) | N/A (RLS restricted) | ✅ | 1 | Stage Zero Experiment Engine - experiment definitions with hypothesis, variants, and lifecycle status |
@@ -242,6 +244,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [gap_analysis_results](tables/gap_analysis_results.md) | N/A (RLS restricted) | ✅ | 3 | Stores integration gap analysis results comparing PRD requirements against actual implementation. Part of SD-LEO-FEAT-INTEGRATION-GAP-DETECTOR-001. |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | N/A (RLS restricted) | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | N/A (RLS restricted) | ✅ | 4 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
+| [global_competitors](tables/global_competitors.md) | N/A (RLS restricted) | ✅ | 2 | Global competitor catalog for cross-venture competitive intelligence. Supports deduplication via canonical_id. |
 | [governance_audit_log](tables/governance_audit_log.md) | N/A (RLS restricted) | ✅ | 3 | - |
 | [governance_decisions](tables/governance_decisions.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [governance_policies](tables/governance_policies.md) | N/A (RLS restricted) | ✅ | 2 | - |
@@ -423,6 +426,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [risk_forecasts](tables/risk_forecasts.md) | N/A (RLS restricted) | ✅ | 1 | Stores risk forecast predictions per venture, including category scores, confidence levels, and contributing factors. |
 | [risk_gate_passage_log](tables/risk_gate_passage_log.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Tracks gate passage attempts and outcomes with risk summary |
 | [risk_recalibration_forms](tables/risk_recalibration_forms.md) | N/A (RLS restricted) | ✅ | 2 | SD-LIFECYCLE-GAP-005: Risk re-calibration forms at phase boundary gates (Gates 3, 4, 5, 6) |
+| [risk_templates](tables/risk_templates.md) | N/A (RLS restricted) | ✅ | 2 | Reusable risk assessment templates categorized by type and applicable to specific archetypes and venture stages. |
 | [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md) | N/A (RLS restricted) | ✅ | 2 | Versioned snapshots of roadmap wave sequences. Supports Chairman approval audit trail. |
 | [roadmap_wave_items](tables/roadmap_wave_items.md) | N/A (RLS restricted) | ✅ | 2 | Links classified EVA intake items to roadmap waves. Tracks promotion to SDs. |
 | [roadmap_waves](tables/roadmap_waves.md) | N/A (RLS restricted) | ✅ | 2 | Ordered wave sequences within a roadmap. Each wave groups related intake items for phased execution. |
@@ -602,6 +606,7 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_exit_readiness](tables/venture_exit_readiness.md) | N/A (RLS restricted) | ✅ | 3 | 30-day clean-break exit tracking per venture. |
 | [venture_financial_contract](tables/venture_financial_contract.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [venture_nursery](tables/venture_nursery.md) | N/A (RLS restricted) | ✅ | 1 | Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation |
+| [venture_persona_mapping](tables/venture_persona_mapping.md) | N/A (RLS restricted) | ✅ | 4 | Maps customer personas to ventures with a relevance score (0.00-1.00). |
 | [venture_phase_budgets](tables/venture_phase_budgets.md) | N/A (RLS restricted) | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Phase-level token budget tracking. Enables granular budget allocation across venture lifecycle stages. Default 20k tokens per phase. |
 | [venture_raid_summary](tables/venture_raid_summary.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [venture_separability_scores](tables/venture_separability_scores.md) | N/A (RLS restricted) | ✅ | 3 | - |
@@ -794,7 +799,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (437 tables)
+### Other (442 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -896,6 +901,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [counterfactual_scores](tables/counterfactual_scores.md)
 - [cross_agent_correlations](tables/cross_agent_correlations.md) - Tracks how decisions by one agent correlate with outcomes in other agents
 - [cultural_design_styles](tables/cultural_design_styles.md)
+- [customer_personas](tables/customer_personas.md) - Canonical customer persona catalog. Personas can be venture-specific (source_venture_id) or global (canonical_id IS NULL).
 - [daily_rollups](tables/daily_rollups.md)
 - [db_agent_config](tables/db_agent_config.md) - Runtime configuration for database sub-agent auto-invocation (SD-LEO-INFRA-DATABASE-SUB-AGENT-001)
 - [db_agent_invocations](tables/db_agent_invocations.md) - Audit trail for database sub-agent invocation decisions (SD-LEO-INFRA-DATABASE-SUB-AGENT-001)
@@ -986,6 +992,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [exec_quality_checkpoints](tables/exec_quality_checkpoints.md) - Tracks completion of quality checkpoints during EXEC implementation
 - [exec_sub_agent_activations](tables/exec_sub_agent_activations.md) - Detailed results from sub-agent activations during EXEC implementation
 - [execution_sequences_v2](tables/execution_sequences_v2.md)
+- [exit_playbooks](tables/exit_playbooks.md) - Templated exit strategy playbooks (IPO, acquisition, merger, etc.) with prerequisites, timeline, and step-by-step guidance.
 - [experiment_assignments](tables/experiment_assignments.md) - Maps ventures to experiment variants - one assignment per venture per experiment
 - [experiment_outcomes](tables/experiment_outcomes.md) - Recorded outcome scores for each experiment assignment evaluation
 - [experiments](tables/experiments.md) - Stage Zero Experiment Engine - experiment definitions with hypothesis, variants, and lifecycle status
@@ -1000,6 +1007,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement.
 - [gap_analysis_results](tables/gap_analysis_results.md) - Stores integration gap analysis results comparing PRD requirements against actual implementation. Part of SD-LEO-FEAT-INTEGRATION-GAP-DETECTOR-001.
 - [gate_requirements_templates](tables/gate_requirements_templates.md) - Templates for generating verification gates with standard requirements
 - [github_operations](tables/github_operations.md) - Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent
+- [global_competitors](tables/global_competitors.md) - Global competitor catalog for cross-venture competitive intelligence. Supports deduplication via canonical_id.
 - [governance_audit_log](tables/governance_audit_log.md)
 - [governance_decisions](tables/governance_decisions.md)
 - [governance_policies](tables/governance_policies.md)
@@ -1108,6 +1116,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [risk_forecasts](tables/risk_forecasts.md) - Stores risk forecast predictions per venture, including category scores, confidence levels, and contributing factors.
 - [risk_gate_passage_log](tables/risk_gate_passage_log.md) - SD-LIFECYCLE-GAP-005: Tracks gate passage attempts and outcomes with risk summary
 - [risk_recalibration_forms](tables/risk_recalibration_forms.md) - SD-LIFECYCLE-GAP-005: Risk re-calibration forms at phase boundary gates (Gates 3, 4, 5, 6)
+- [risk_templates](tables/risk_templates.md) - Reusable risk assessment templates categorized by type and applicable to specific archetypes and venture stages.
 - [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md) - Versioned snapshots of roadmap wave sequences. Supports Chairman approval audit trail.
 - [roadmap_wave_items](tables/roadmap_wave_items.md) - Links classified EVA intake items to roadmap waves. Tracks promotion to SDs.
 - [roadmap_waves](tables/roadmap_waves.md) - Ordered wave sequences within a roadmap. Each wave groups related intake items for phased execution.
@@ -1229,6 +1238,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [venture_exit_readiness](tables/venture_exit_readiness.md) - 30-day clean-break exit tracking per venture.
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md) - Stores venture ideas not ready for Stage 1 at seed/sprout/ready maturity levels with trigger conditions for automatic re-evaluation
+- [venture_persona_mapping](tables/venture_persona_mapping.md) - Maps customer personas to ventures with a relevance score (0.00-1.00).
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_separability_scores](tables/venture_separability_scores.md)
 - [venture_service_bindings](tables/venture_service_bindings.md) - Which ventures consume which services, with pinned API version per binding.
@@ -1404,6 +1414,7 @@ _Key relationships between tables:_
 - `venture_id` → `ventures.id`
 
 **competitors**:
+- `global_competitor_id` → `global_competitors.id`
 - `venture_id` → `ventures.id`
 
 **compliance_checklist_items**:
@@ -1437,6 +1448,10 @@ _Key relationships between tables:_
 
 **counterfactual_scores**:
 - `profile_id` → `evaluation_profiles.id`
+
+**customer_personas**:
+- `canonical_id` → `customer_personas.id`
+- `source_venture_id` → `ventures.id`
 
 **daily_rollups**:
 - `content_id` → `marketing_content.id`
@@ -1657,6 +1672,9 @@ _Key relationships between tables:_
 **gap_analysis_results**:
 - `prd_id` → `product_requirements_v2.id`
 - `sd_key` → `strategic_directives_v2.sd_key`
+
+**global_competitors**:
+- `canonical_id` → `global_competitors.id`
 
 **governance_decisions**:
 - `venture_id` → `ventures.id`
@@ -2328,6 +2346,10 @@ _Key relationships between tables:_
 **venture_nursery**:
 - `brief_id` → `venture_briefs.id`
 - `promoted_to_venture_id` → `ventures.id`
+
+**venture_persona_mapping**:
+- `persona_id` → `customer_personas.id`
+- `venture_id` → `ventures.id`
 
 **venture_phase_budgets**:
 - `venture_id` → `ventures.id`

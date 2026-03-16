@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T00:41:46.314Z
-**Tables**: 563
+**Generated**: 2026-03-16T00:53:05.043Z
+**Tables**: 568
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (563)
+## All Tables (568)
 
 ### LEO Protocol
 
@@ -260,6 +260,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [counterfactual_scores](tables/counterfactual_scores.md)
 - [cross_agent_correlations](tables/cross_agent_correlations.md)
 - [cultural_design_styles](tables/cultural_design_styles.md)
+- [customer_personas](tables/customer_personas.md)
 - [daily_rollups](tables/daily_rollups.md)
 - [db_agent_config](tables/db_agent_config.md)
 - [db_agent_invocations](tables/db_agent_invocations.md)
@@ -348,6 +349,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [exec_quality_checkpoints](tables/exec_quality_checkpoints.md)
 - [exec_sub_agent_activations](tables/exec_sub_agent_activations.md)
 - [execution_sequences_v2](tables/execution_sequences_v2.md)
+- [exit_playbooks](tables/exit_playbooks.md)
 - [experiment_assignments](tables/experiment_assignments.md)
 - [experiment_outcomes](tables/experiment_outcomes.md)
 - [experiments](tables/experiments.md)
@@ -362,6 +364,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [gap_analysis_results](tables/gap_analysis_results.md)
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
 - [github_operations](tables/github_operations.md)
+- [global_competitors](tables/global_competitors.md)
 - [governance_audit_log](tables/governance_audit_log.md)
 - [governance_decisions](tables/governance_decisions.md)
 - [governance_policies](tables/governance_policies.md)
@@ -466,6 +469,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [risk_forecasts](tables/risk_forecasts.md)
 - [risk_gate_passage_log](tables/risk_gate_passage_log.md)
 - [risk_recalibration_forms](tables/risk_recalibration_forms.md)
+- [risk_templates](tables/risk_templates.md)
 - [roadmap_baseline_snapshots](tables/roadmap_baseline_snapshots.md)
 - [roadmap_wave_items](tables/roadmap_wave_items.md)
 - [roadmap_waves](tables/roadmap_waves.md)
@@ -585,6 +589,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [venture_exit_readiness](tables/venture_exit_readiness.md)
 - [venture_financial_contract](tables/venture_financial_contract.md)
 - [venture_nursery](tables/venture_nursery.md)
+- [venture_persona_mapping](tables/venture_persona_mapping.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
 - [venture_separability_scores](tables/venture_separability_scores.md)
 - [venture_service_bindings](tables/venture_service_bindings.md)
