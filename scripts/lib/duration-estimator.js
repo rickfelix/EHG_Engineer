@@ -7,7 +7,28 @@
  * 3. Orchestrator Child Count adjustment
  * 4. Recency-Weighted Learning (recent SDs count more)
  * 5. Same Category Matching
+ * 6. Session-aware calibration (rolling median from current session)
+ * 7. Active-time measurement (excludes idle gaps >30m)
+ * 8. SD key pattern sub-bucketing
  */
+
+// Configurable: gaps longer than this between handoffs are considered idle time
+const IDLE_GAP_THRESHOLD_MINUTES = 30;
+
+// Minimum session completions before session calibration kicks in
+const SESSION_CALIBRATION_MIN = 3;
+
+// Minimum sub-bucket size before falling back to parent category
+const SUB_BUCKET_MIN_SIZE = 5;
+
+// SD key prefix patterns for sub-bucketing
+const KEY_PREFIX_PATTERNS = [
+  { pattern: /^SD-.*-OPS-/, label: 'OPS' },
+  { pattern: /^SD-.*-LEARN-FIX-/, label: 'LEARN-FIX' },
+  { pattern: /^SD-.*-WIRE-/, label: 'WIRE' },
+  { pattern: /^SD-.*-BLUEPRINT-/, label: 'BLUEPRINT' },
+  { pattern: /^SD-.*-MAN-/, label: 'MAN' },
+];
 
 // Baseline durations by SD type (median from actual data)
 const TYPE_BASELINES = {
@@ -36,18 +57,91 @@ const PRIORITY_MULTIPLIERS = {
   default: 1.0
 };
 
+// --- Session Completion Tracker (Tier 1) ---
+// Module-level state: persists across calls within the same process
+const sessionCompletions = [];
+
 /**
- * Get historical duration data from handoffs (actual work time)
+ * Register a completed SD in the session tracker
+ * @param {Object} completion - { sdKey, sdType, durationMinutes, sdKeyPrefix }
+ */
+export function registerCompletion(completion) {
+  sessionCompletions.push({
+    ...completion,
+    completedAt: new Date(),
+    sdKeyPrefix: extractKeyPrefix(completion.sdKey),
+  });
+}
+
+/**
+ * Get session statistics for a given SD type
+ * @param {string} sdType - Filter by type (optional)
+ * @returns {{ n: number, median: number, completions: Array }}
+ */
+export function getSessionStats(sdType = null) {
+  const filtered = sdType
+    ? sessionCompletions.filter(c => c.sdType === sdType)
+    : sessionCompletions;
+  return {
+    n: filtered.length,
+    median: calculateMedian(filtered.map(c => c.durationMinutes)),
+    completions: filtered,
+  };
+}
+
+/**
+ * Extract SD key prefix for sub-bucketing
+ * @param {string} sdKey
+ * @returns {string|null}
+ */
+function extractKeyPrefix(sdKey) {
+  if (!sdKey) return null;
+  for (const { pattern, label } of KEY_PREFIX_PATTERNS) {
+    if (pattern.test(sdKey)) return label;
+  }
+  return null;
+}
+
+// --- Active-Time Computation (Tier 2) ---
+
+/**
+ * Compute active-time from a sorted array of timestamps, excluding idle gaps
+ * @param {string[]} timestamps - Sorted ascending
+ * @returns {{ activeMinutes: number, wallClockMinutes: number, gapsExcluded: number }}
+ */
+function computeActiveTime(timestamps) {
+  if (timestamps.length < 2) return { activeMinutes: 0, wallClockMinutes: 0, gapsExcluded: 0 };
+
+  const first = new Date(timestamps[0]);
+  const last = new Date(timestamps[timestamps.length - 1]);
+  const wallClockMinutes = Math.round((last - first) / (1000 * 60));
+
+  let activeMinutes = 0;
+  let gapsExcluded = 0;
+  for (let i = 0; i < timestamps.length - 1; i++) {
+    const interval = Math.round((new Date(timestamps[i + 1]) - new Date(timestamps[i])) / (1000 * 60));
+    if (interval <= IDLE_GAP_THRESHOLD_MINUTES) {
+      activeMinutes += interval;
+    } else {
+      gapsExcluded++;
+    }
+  }
+
+  return { activeMinutes, wallClockMinutes, gapsExcluded };
+}
+
+/**
+ * Get historical duration data from handoffs (active work time, excluding idle gaps)
  * @param {SupabaseClient} supabase
  * @param {string} sdType - Optional filter by type
  * @param {string} category - Optional filter by category
- * @returns {Promise<Array>} Array of { sdId, sdType, category, priority, durationMinutes, completedAt }
+ * @returns {Promise<Array>} Array of { sdId, sdKey, sdType, category, priority, durationMinutes, wallClockMinutes, completedAt, sdKeyPrefix }
  */
 export async function getHistoricalDurations(supabase, sdType = null, category = null) {
   // Get completed SDs
   let query = supabase
     .from('strategic_directives_v2')
-    .select('id, sd_type, category, priority, completion_date')
+    .select('id, sd_key, sd_type, category, priority, completion_date')
     .eq('status', 'completed');
 
   if (sdType) {
@@ -68,7 +162,6 @@ export async function getHistoricalDurations(supabase, sdType = null, category =
   const sdIds = Array.from(sdMap.keys());
 
   // Batch fetch ALL accepted handoffs for all completed SDs in one query
-  // Supabase .in() has a practical limit, so chunk if needed
   const CHUNK_SIZE = 200;
   const allHandoffs = [];
   for (let i = 0; i < sdIds.length; i += CHUNK_SIZE) {
@@ -93,23 +186,27 @@ export async function getHistoricalDurations(supabase, sdType = null, category =
     handoffsBySd.get(h.sd_id).push(h.created_at);
   }
 
-  // Compute durations from first/last handoff timestamps
+  // Compute durations using active-time (Tier 2)
   const results = [];
   for (const [sdId, timestamps] of handoffsBySd) {
     if (timestamps.length >= 2) {
-      const first = new Date(timestamps[0]);
-      const last = new Date(timestamps[timestamps.length - 1]);
-      const minutes = Math.round((last - first) / (1000 * 60));
+      const { activeMinutes, wallClockMinutes } = computeActiveTime(timestamps);
+
+      // Use active-time as the primary duration
+      const minutes = activeMinutes > 0 ? activeMinutes : wallClockMinutes;
 
       // Filter out invalid durations (negative, zero, or > 24 hours)
       if (minutes > 0 && minutes < 1440) {
         const sd = sdMap.get(sdId);
         results.push({
           sdId: sd.id,
+          sdKey: sd.sd_key,
           sdType: sd.sd_type,
+          sdKeyPrefix: extractKeyPrefix(sd.sd_key),
           category: sd.category,
           priority: sd.priority,
           durationMinutes: minutes,
+          wallClockMinutes,
           completedAt: sd.completion_date
         });
       }
@@ -180,7 +277,6 @@ async function getElapsedTime(supabase, sd) {
   }
 
   const now = new Date();
-  // Ensure elapsed is non-negative (in case of clock skew)
   const elapsedMinutes = Math.max(0, Math.round((now - startedAt) / (1000 * 60)));
 
   return { elapsedMinutes, startedAt, source };
@@ -207,11 +303,9 @@ async function getParentEstimate(supabase, sd) {
     return null;
   }
 
-  // Get parent's estimate (recursive call, but without parent info to avoid infinite loop)
   const parentEstimate = await getEstimatedDuration(supabase, parent, { includeParent: false });
   const parentElapsed = await getElapsedTime(supabase, parent);
 
-  // Get sibling count and completed count
   const { data: siblings } = await supabase
     .from('strategic_directives_v2')
     .select('id, status')
@@ -238,7 +332,7 @@ async function getParentEstimate(supabase, sd) {
 /**
  * Get intelligent duration estimate for an SD
  * @param {SupabaseClient} supabase
- * @param {Object} sd - Strategic Directive { id, sd_type, category, priority }
+ * @param {Object} sd - Strategic Directive { id, sd_key, sd_type, category, priority }
  * @param {Object} options - { includeParent: true } to include parent estimate
  * @returns {Promise<Object>} Estimate with confidence and factors
  */
@@ -246,12 +340,17 @@ export async function getEstimatedDuration(supabase, sd, options = { includePare
   const sdType = sd.sd_type || 'default';
   const priority = sd.priority || 'medium';
   const category = sd.category;
+  const sdKey = sd.sd_key || '';
+  const sdKeyPrefix = extractKeyPrefix(sdKey);
 
-  // Get historical data
+  // Get historical data (now uses active-time via Tier 2)
   const allHistory = await getHistoricalDurations(supabase, sdType);
   const categoryHistory = category
     ? allHistory.filter(h => h.category === category)
     : [];
+
+  // Track which source provided the estimate
+  let estimateSource = 'default';
 
   // Factor 1: Base estimate from type
   let estimate = TYPE_BASELINES[sdType] || TYPE_BASELINES.default;
@@ -278,15 +377,27 @@ export async function getEstimatedDuration(supabase, sd, options = { includePare
     }
   }
 
-  // Factor 4: Category-specific adjustment
+  // Factor 4: SD key prefix sub-bucketing (Tier 3)
+  if (sdKeyPrefix && allHistory.length > 0) {
+    const subBucket = allHistory.filter(h => h.sdKeyPrefix === sdKeyPrefix);
+    if (subBucket.length >= SUB_BUCKET_MIN_SIZE) {
+      const subMedian = calculateMedian(subBucket.map(h => h.durationMinutes));
+      estimate = Math.round(estimate * 0.3 + subMedian * 0.7);
+      factors.push(`Sub-bucket ${sdKeyPrefix} (${subBucket.length} SDs): blended`);
+      estimateSource = 'historical';
+    }
+  }
+
+  // Factor 5: Category-specific adjustment
   if (categoryHistory.length >= 3) {
     const categoryMedian = calculateMedian(categoryHistory.map(h => h.durationMinutes));
     // Blend 40% base + 60% category-specific
     estimate = Math.round(estimate * 0.4 + categoryMedian * 0.6);
     factors.push(`Category match (${categoryHistory.length} SDs): blended`);
+    estimateSource = 'historical';
   }
 
-  // Factor 5: Recency adjustment (last 14 days)
+  // Factor 6: Recency adjustment (last 14 days)
   const now = new Date();
   const fourteenDaysAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
   const recentHistory = allHistory.filter(
@@ -298,12 +409,23 @@ export async function getEstimatedDuration(supabase, sd, options = { includePare
     // Blend 60% current + 40% recent
     estimate = Math.round(estimate * 0.6 + recentMedian * 0.4);
     factors.push(`Recent trend (${recentHistory.length} SDs): adjusted`);
+    estimateSource = 'historical';
+  }
+
+  // Factor 7: Session calibration (Tier 1) — overrides when sufficient data
+  const sessionStats = getSessionStats(sdType);
+  if (sessionStats.n >= SESSION_CALIBRATION_MIN) {
+    // Blend 70% session + 30% historical
+    estimate = Math.round(sessionStats.median * 0.7 + estimate * 0.3);
+    factors.push(`Session calibrated (${sessionStats.n} SDs, median ${formatMinutes(sessionStats.median)}): 70/30 blend`);
+    estimateSource = 'session-calibrated';
   }
 
   // Determine confidence
   const sampleSize = allHistory.length;
   let confidence;
-  if (sampleSize >= 10) confidence = 'high';
+  if (estimateSource === 'session-calibrated') confidence = 'high';
+  else if (sampleSize >= 10) confidence = 'high';
   else if (sampleSize >= 5) confidence = 'medium';
   else if (sampleSize >= 2) confidence = 'low';
   else confidence = 'default';
@@ -336,6 +458,7 @@ export async function getEstimatedDuration(supabase, sd, options = { includePare
     startedAt: elapsed.startedAt,
     confidence,
     sampleSize,
+    estimateSource,
     factors,
     recentSimilar: recentSimilar.map(s => ({
       id: s.sdId,
@@ -406,6 +529,16 @@ export function formatEstimateDetailed(estimate) {
   }
   lines.push(`Confidence: ${estimate.confidence.charAt(0).toUpperCase() + estimate.confidence.slice(1)} (${estimate.sampleSize} ${estimate.sampleSize === 1 ? 'SD' : 'SDs'})`);
 
+  // ETA source label (Tier 1 / general)
+  if (estimate.estimateSource) {
+    const sourceLabel = estimate.estimateSource === 'session-calibrated'
+      ? `Session calibrated (n=${getSessionStats().n})`
+      : estimate.estimateSource === 'historical'
+        ? 'Historical baseline'
+        : 'Default baseline';
+    lines.push(`Source:     ${sourceLabel}`);
+  }
+
   // Parent SD info (if child)
   if (estimate.parent) {
     const p = estimate.parent;
@@ -422,13 +555,13 @@ export function formatEstimateDetailed(estimate) {
   if (estimate.factors.length > 0) {
     lines.push('');
     lines.push('Factors applied:');
-    estimate.factors.forEach(f => lines.push(`  • ${f}`));
+    estimate.factors.forEach(f => lines.push(`  \u2022 ${f}`));
   }
 
   if (estimate.recentSimilar.length > 0) {
     lines.push('');
     lines.push('Recent similar SDs:');
-    estimate.recentSimilar.forEach(s => lines.push(`  • ${s.id}: ${s.duration}`));
+    estimate.recentSimilar.forEach(s => lines.push(`  \u2022 ${s.id}: ${s.duration}`));
   }
 
   return lines;
