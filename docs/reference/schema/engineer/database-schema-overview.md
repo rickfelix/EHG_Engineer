@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T10:01:05.770Z
-**Tables**: 577
+**Generated**: 2026-03-16T10:15:33.591Z
+**Tables**: 579
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -372,8 +372,10 @@ Reference: docs/workflow/stages_v2.yaml |
 | [opportunity_sources](tables/opportunity_sources.md) | N/A (RLS restricted) | ✅ | 2 | - |
 | [ops_agent_health](tables/ops_agent_health.md) | N/A (RLS restricted) | ✅ | 4 | Daily AI agent health snapshots — quality, accuracy, cost, quota per agent per venture |
 | [ops_customer_health_scores](tables/ops_customer_health_scores.md) | N/A (RLS restricted) | ✅ | 4 | Per-customer health scores across 4 dimensions: login_frequency, feature_adoption, sentiment, payment |
+| [ops_friday_scorecards](tables/ops_friday_scorecards.md) | N/A (RLS restricted) | ✅ | 4 | Weekly operations scorecard snapshots for Friday meeting with Eva |
 | [ops_health_alerts](tables/ops_health_alerts.md) | N/A (RLS restricted) | ✅ | 4 | Health metric alerts triggered when thresholds are breached |
 | [ops_product_health](tables/ops_product_health.md) | N/A (RLS restricted) | ✅ | 4 | Daily product health snapshots — uptime, latency, error rates per venture |
+| [ops_quarterly_assessments](tables/ops_quarterly_assessments.md) | N/A (RLS restricted) | ✅ | 4 | Quarterly deep assessments surfaced through Friday meeting |
 | [ops_revenue_alerts](tables/ops_revenue_alerts.md) | N/A (RLS restricted) | ✅ | 4 | Revenue metric alerts triggered when actuals deviate from targets beyond thresholds |
 | [ops_revenue_metrics](tables/ops_revenue_metrics.md) | N/A (RLS restricted) | ✅ | 4 | Revenue KPIs tracked per venture per date — MRR, churn, expansion/contraction, LTV/CAC |
 | [orchestration_metrics](tables/orchestration_metrics.md) | N/A (RLS restricted) | ✅ | 4 | Performance analytics for EVA orchestration - tracks efficiency, quality, and resource utilization |
@@ -808,7 +810,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (451 tables)
+### Other (453 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1080,8 +1082,10 @@ Reference: docs/workflow/stages_v2.yaml
 - [opportunity_sources](tables/opportunity_sources.md)
 - [ops_agent_health](tables/ops_agent_health.md) - Daily AI agent health snapshots — quality, accuracy, cost, quota per agent per venture
 - [ops_customer_health_scores](tables/ops_customer_health_scores.md) - Per-customer health scores across 4 dimensions: login_frequency, feature_adoption, sentiment, payment
+- [ops_friday_scorecards](tables/ops_friday_scorecards.md) - Weekly operations scorecard snapshots for Friday meeting with Eva
 - [ops_health_alerts](tables/ops_health_alerts.md) - Health metric alerts triggered when thresholds are breached
 - [ops_product_health](tables/ops_product_health.md) - Daily product health snapshots — uptime, latency, error rates per venture
+- [ops_quarterly_assessments](tables/ops_quarterly_assessments.md) - Quarterly deep assessments surfaced through Friday meeting
 - [ops_revenue_alerts](tables/ops_revenue_alerts.md) - Revenue metric alerts triggered when actuals deviate from targets beyond thresholds
 - [ops_revenue_metrics](tables/ops_revenue_metrics.md) - Revenue KPIs tracked per venture per date — MRR, churn, expansion/contraction, LTV/CAC
 - [orchestration_metrics](tables/orchestration_metrics.md) - Performance analytics for EVA orchestration - tracks efficiency, quality, and resource utilization
@@ -1901,10 +1905,16 @@ _Key relationships between tables:_
 **ops_customer_health_scores**:
 - `venture_id` → `ventures.id`
 
+**ops_friday_scorecards**:
+- `venture_id` → `ventures.id`
+
 **ops_health_alerts**:
 - `venture_id` → `ventures.id`
 
 **ops_product_health**:
+- `venture_id` → `ventures.id`
+
+**ops_quarterly_assessments**:
 - `venture_id` → `ventures.id`
 
 **ops_revenue_alerts**:
