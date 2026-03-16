@@ -797,11 +797,23 @@ export function createPhaseCoverageExitGate(supabase) {
         const covered = [];
         const uncovered = [];
         const incomplete = [];
+        const deferred = [];
+
+        // PAT-AUTO-30e58b88: Detect phases explicitly marked as deferred/future.
+        // These should not block orchestrator completion.
+        const DEFERRED_PATTERN = /\b(deferred|future|planned|upcoming|tbd)\b/i;
 
         // The SD currently being approved should count as covered (avoid circular dependency)
         const currentSdKey = ctx.sd?.sd_key || ctx.sd?.id;
 
         for (const phase of phases) {
+          // Check if this phase is explicitly deferred/future before evaluating coverage
+          const phaseTitle = phase.title || '';
+          if (DEFERRED_PATTERN.test(phaseTitle)) {
+            deferred.push(phase);
+            continue;
+          }
+
           const assignedKey = phase.covered_by_sd_key;
           if (!assignedKey) {
             uncovered.push(phase);
@@ -851,11 +863,23 @@ export function createPhaseCoverageExitGate(supabase) {
         for (const phase of uncovered) {
           console.log(`   ❌ Phase ${phase.number}: ${phase.title} → NO SD ASSIGNED`);
         }
+        for (const phase of deferred) {
+          console.log(`   ⏭️  Phase ${phase.number}: ${phase.title} → DEFERRED (excluded from coverage)`);
+        }
 
-        const totalPhases = phases.length;
+        // PAT-AUTO-30e58b88: Only count active (non-deferred) phases for coverage
+        const activePhaseCount = phases.length - deferred.length;
         const coveredCount = covered.length;
-        const coveragePct = totalPhases > 0 ? Math.round((coveredCount / totalPhases) * 100) : 100;
-        console.log(`\n   Coverage: ${coveredCount}/${totalPhases} completed (${coveragePct}%)`);
+        const coveragePct = activePhaseCount > 0 ? Math.round((coveredCount / activePhaseCount) * 100) : 100;
+        console.log(`\n   Coverage: ${coveredCount}/${activePhaseCount} active phases completed (${coveragePct}%)`);
+        if (deferred.length > 0) {
+          console.log(`   ⏭️  ${deferred.length} phase(s) deferred (excluded): ${deferred.map(d => d.title).join(', ')}`);
+        }
+
+        const warnings = [];
+        if (deferred.length > 0) {
+          warnings.push(`${deferred.length} phase(s) deferred and excluded from coverage: ${deferred.map(d => d.title).join(', ')}`);
+        }
 
         if (incomplete.length > 0 || uncovered.length > 0) {
           const issues = [];
@@ -865,11 +889,11 @@ export function createPhaseCoverageExitGate(supabase) {
           if (uncovered.length > 0) {
             issues.push(`${uncovered.length} phase(s) have no SD assigned: ${uncovered.map(u => u.title).join(', ')}`);
           }
-          return { passed: false, score: coveragePct, max_score: 100, issues, warnings: [] };
+          return { passed: false, score: coveragePct, max_score: 100, issues, warnings, details: { deferred_phases: deferred.length } };
         }
 
-        console.log('   ✅ All architecture phases have completed SDs');
-        return { passed: true, score: 100, max_score: 100, issues: [], warnings: [] };
+        console.log('   ✅ All active architecture phases have completed SDs');
+        return { passed: true, score: 100, max_score: 100, issues: [], warnings, details: { deferred_phases: deferred.length } };
       } catch (err) {
         console.log(`   ⚠️  Error: ${err.message}`);
         return { passed: true, score: 50, max_score: 100, issues: [], warnings: [`Phase coverage exit error: ${err.message}`] };
