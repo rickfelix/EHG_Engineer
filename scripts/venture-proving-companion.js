@@ -96,11 +96,18 @@ async function runAssess(ventureId, flags) {
   const transitionFails = Object.values(transitionResults).reduce((sum, r) => sum + r.fail_count, 0);
   console.log(`   ✓ ${Object.keys(transitionResults).length} stages checked, ${transitionFails} findings\n`);
 
-  const durationMs = Date.now() - startTime;
-  const totalFindings = artifactFails + gateFails + transitionFails;
+  // Step 4: Pipeline Status
+  console.log('⚙️  Step 4: Pipeline Status — checking worker and execution state...');
+  const { checkPipelineStatus } = await import('../lib/proving-companion/pipeline-status-checker.js');
+  const pipelineResults = await checkPipelineStatus(ventureId, fromStage, toGate);
+  const pipelineFails = Object.values(pipelineResults).reduce((sum, r) => sum + r.fail_count, 0);
+  console.log(`   ✓ ${Object.keys(pipelineResults).length} stages checked, ${pipelineFails} findings\n`);
 
-  // Step 4: Journal Capture
-  console.log('📝 Step 4: Journal Capture — writing entries...');
+  const durationMs = Date.now() - startTime;
+  const totalFindings = artifactFails + gateFails + transitionFails + pipelineFails;
+
+  // Step 5: Journal Capture
+  console.log('📝 Step 5: Journal Capture — writing entries...');
   const { writeJournalEntry } = await import('../lib/proving-companion/journal-capture.js');
 
   for (let stage = fromStage; stage <= toGate; stage++) {
@@ -108,8 +115,9 @@ async function runAssess(ventureId, flags) {
     const artifact = artifactResults[stageKey] || { checks: [] };
     const gate = gateResults[stageKey] || { checks: [] };
     const transition = transitionResults[stageKey] || { checks: [] };
+    const pipeline = pipelineResults[stageKey] || { checks: [] };
 
-    const allChecks = [...artifact.checks, ...gate.checks, ...transition.checks];
+    const allChecks = [...artifact.checks, ...gate.checks, ...transition.checks, ...pipeline.checks];
     const gaps = allChecks.filter(c => !c.pass).map(c => ({
       stage_number: stage,
       type: 'process_compliance',
@@ -133,7 +141,7 @@ async function runAssess(ventureId, flags) {
   console.log('═'.repeat(50));
   console.log('PROCESS COMPLIANCE CHECK COMPLETE');
   console.log(`  Stages: ${fromStage}-${toGate}`);
-  console.log(`  Findings: ${totalFindings} (${artifactFails} artifact, ${gateFails} gate, ${transitionFails} transition)`);
+  console.log(`  Findings: ${totalFindings} (${artifactFails} artifact, ${gateFails} gate, ${transitionFails} transition, ${pipelineFails} pipeline)`);
   console.log(`  Duration: ${durationMs}ms`);
   console.log('  Mode: Advisory (non-blocking)');
   console.log('═'.repeat(50));
