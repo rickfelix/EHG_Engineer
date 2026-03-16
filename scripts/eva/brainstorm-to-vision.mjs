@@ -91,7 +91,7 @@ async function main() {
   // Find unlinked brainstorm sessions with vision-relevant outcomes
   let query = supabase
     .from('brainstorm_sessions')
-    .select('id, topic, outcome_type, metadata, document_path, new_capability_candidates, created_at')
+    .select('id, topic, outcome_type, metadata, content, document_path, new_capability_candidates, created_at')
     .in('outcome_type', VISION_RELEVANT_OUTCOMES)
     .order('created_at', { ascending: true });
 
@@ -139,15 +139,18 @@ async function main() {
     console.log(`\n─── Processing: ${label}`);
     console.log(`    Outcome: ${session.outcome_type} | Created: ${session.created_at}`);
 
-    // Build content from session data: prefer document_path, fallback to metadata+topic
+    // Build content from session data: prefer DB content column, fallback to document_path, then metadata
     let content = '';
-    if (session.document_path) {
+    if (session.content) {
+      content = session.content;
+      console.log(`    📄 Loaded from DB content column (${content.length} chars)`);
+    } else if (session.document_path) {
       try {
         const { readFileSync } = await import('fs');
         const { resolve } = await import('path');
         const docPath = resolve(process.cwd(), session.document_path);
         content = readFileSync(docPath, 'utf8');
-        console.log(`    📄 Loaded document: ${session.document_path} (${content.length} chars)`);
+        console.log(`    📄 Loaded from document_path: ${session.document_path} (${content.length} chars)`);
       } catch {
         console.log(`    ⚠️  Document not found: ${session.document_path}, using metadata`);
       }

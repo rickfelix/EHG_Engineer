@@ -1,6 +1,6 @@
 # /brainstorm - EHG-Aware Strategic Brainstorming
 
-Universal thinking tool with domain-specific question banks, multi-venture awareness, and self-improving retrospective. Produces a document in `brainstorm/`.
+Universal thinking tool with domain-specific question banks, multi-venture awareness, and self-improving retrospective. Stores content in the `brainstorm_sessions.content` database column (DB-only — no filesystem markdown files).
 
 **Arguments**: `$ARGUMENTS`
 
@@ -707,19 +707,17 @@ No AskUserQuestion needed — proceed directly to Step 9.5 after Step 9.
 
 ---
 
-## Step 9: Generate and Save Document
+## Step 9: Generate and Save to Database
 
-### File Naming
+### DB-Only Storage (MANDATORY)
 
-Generate a slug from the topic (lowercase, hyphens, no special chars, max 50 chars).
+**Do NOT write a markdown file to the filesystem.** Brainstorm content is stored in the `brainstorm_sessions.content` column.
 
-**File path**: `brainstorm/YYYY-MM-DD-<topic-slug>.md`
-
-Example: `brainstorm/2026-02-10-improve-handoff-gate-scoring.md`
+Build the brainstorm document **in-memory** using the template below. You will pass this content to the database insert at the end of this step.
 
 ### Document Template
 
-Write the document using the Write tool with this structure:
+Build the following markdown content in-memory (do NOT use the Write tool):
 
 ```markdown
 # Brainstorm: [Topic Title]
@@ -846,12 +844,9 @@ Write the document using the Write tool with this structure:
 - [Actionable next steps based on the brainstorm and outcome classification]
 ```
 
-### After Saving
+### After Building Content
 
-Confirm the file was saved:
-```
-Brainstorm saved to: brainstorm/YYYY-MM-DD-<topic-slug>.md
-```
+The in-memory markdown content will be stored in the database in the session recording step below. Do NOT write it to the filesystem.
 
 ---
 
@@ -1182,7 +1177,10 @@ supabase.from('brainstorm_sessions')
 
 ## Step 10: Session Retrospective
 
-After saving the document, record the session for self-improvement:
+Record the session with the in-memory brainstorm content stored in the `content` column:
+
+**IMPORTANT**: Pass the brainstorm markdown content (built in-memory above) as the `content` field value.
+Do NOT set `document_path` — that field is deprecated. All brainstorm content goes in the `content` column.
 
 ```bash
 node -e "
@@ -1200,7 +1198,7 @@ supabase.from('brainstorm_sessions').insert({
   session_quality_score: <0-100>,
   crystallization_score: <0.0-1.0 or null>,
   retrospective_status: 'pending',
-  document_path: '<file_path>',
+  content: \`<BRAINSTORM_MARKDOWN_CONTENT>\`,
   metadata: {
     questions_asked: <count>,
     questions_skipped: <count>,
@@ -1217,6 +1215,10 @@ supabase.from('brainstorm_sessions').insert({
 "
 ```
 
+**Note**: The `<BRAINSTORM_MARKDOWN_CONTENT>` placeholder must be replaced with the actual in-memory markdown content from the template above. Use backtick template literal for multi-line content. Escape any backticks in the content with `\\\``.
+
+**NEVER write brainstorm content to `brainstorm/*.md` files.** The PreToolUse hook will block it, and it violates the DB-only policy.
+
 **Session quality score** (0-100): Rate based on:
 - Did the user engage with all required questions? (+20 per question answered)
 - Was the evaluation framework used? (+20)
@@ -1230,7 +1232,7 @@ Cap at 100. This score feeds into the self-improvement loop.
 
 ## Step 11: Command Ecosystem Integration
 
-After the document is saved and session recorded, suggest next steps based on the outcome classification:
+After the session is recorded in the database, suggest next steps based on the outcome classification:
 
 ### 11.0: Distill Pipeline Auto-Chain (SD-DISTILLTOBRAINSTORM-ORCH-001-A)
 

@@ -29,6 +29,9 @@ applications/*/.leo-sync/supabase/.temp/
 docs/plans/*-vision.md
 docs/plans/*-architecture.md
 
+# Brainstorm documents are DB-only — content stored in brainstorm_sessions.content column
+brainstorm/
+
 # Auto-generated database optimization files
 database-optimization.sql
 migrations/*_optimize_database.sql
