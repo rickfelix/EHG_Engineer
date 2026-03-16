@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T02:36:34.491Z
-**Tables**: 572
+**Generated**: 2026-03-16T09:53:49.951Z
+**Tables**: 577
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (572)
+## All Tables (577)
 
 ### LEO Protocol
 
@@ -424,6 +424,10 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [opportunity_scans](tables/opportunity_scans.md)
 - [opportunity_scores](tables/opportunity_scores.md)
 - [opportunity_sources](tables/opportunity_sources.md)
+- [ops_agent_health](tables/ops_agent_health.md)
+- [ops_customer_health_scores](tables/ops_customer_health_scores.md)
+- [ops_health_alerts](tables/ops_health_alerts.md)
+- [ops_product_health](tables/ops_product_health.md)
 - [ops_revenue_alerts](tables/ops_revenue_alerts.md)
 - [ops_revenue_metrics](tables/ops_revenue_metrics.md)
 - [orchestration_metrics](tables/orchestration_metrics.md)
@@ -431,6 +435,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [pattern_occurrences](tables/pattern_occurrences.md)
 - [pattern_resolution_signals](tables/pattern_resolution_signals.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
+- [persona_behavioral_data](tables/persona_behavioral_data.md)
 - [persona_config](tables/persona_config.md)
 - [pipeline_metrics](tables/pipeline_metrics.md)
 - [plan_conflict_rules](tables/plan_conflict_rules.md)
