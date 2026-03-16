@@ -291,6 +291,57 @@ function renderFleetTelemetry(data) {
   return lines.join('\n');
 }
 
+// ─── Section 5c: Plugin Pipeline ─────────────────────────────
+
+async function gatherPluginDiscoveries() {
+  try {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('anthropic_plugin_registry')
+      .select('plugin_name, source_repo, status, fitness_score, last_scanned_at, created_at')
+      .gte('last_scanned_at', oneWeekAgo)
+      .order('status')
+      .order('fitness_score', { ascending: false, nullsFirst: false });
+
+    if (error || !data) return null;
+    if (data.length === 0) return null;
+
+    const byStatus = {};
+    for (const p of data) {
+      const s = p.status || 'discovered';
+      if (!byStatus[s]) byStatus[s] = [];
+      byStatus[s].push(p);
+    }
+
+    return { plugins: data, byStatus, total: data.length };
+  } catch {
+    return null;
+  }
+}
+
+function renderPluginDiscoveries(data) {
+  if (!data) return '';
+
+  const lines = ['', '  SECTION 5c: ANTHROPIC PLUGIN PIPELINE', '  ' + '─'.repeat(40)];
+  lines.push(`  Plugins scanned this week: ${data.total}`);
+  lines.push('');
+
+  const statusIcons = { discovered: 'NEW', adapted: 'LIVE', evaluating: 'EVAL', rejected: 'SKIP', outdated: 'OLD' };
+
+  for (const [status, plugins] of Object.entries(data.byStatus)) {
+    const icon = statusIcons[status] || status.toUpperCase();
+    lines.push(`  [${icon}]`);
+    for (const p of plugins) {
+      const repo = (p.source_repo || '').split('/').pop();
+      const score = p.fitness_score != null ? ` (fitness: ${p.fitness_score})` : '';
+      lines.push(`    - ${p.plugin_name} (${repo})${score}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 // ─── Section 6: Decisions ────────────────────────────────────
 
 function buildDecisionPayload(findings) {
@@ -488,13 +539,14 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log('═'.repeat(55));
 
   // Gather all data in parallel
-  const [perfData, capData, consultData, intakeData, rdData, fleetData] = await Promise.all([
+  const [perfData, capData, consultData, intakeData, rdData, fleetData, pluginData] = await Promise.all([
     gatherPerformanceReview(),
     gatherCapabilityReport(),
     gatherConsultantFindings(),
     gatherIntakeReview(),
     gatherRdProposals(),
     gatherFleetTelemetry(),
+    gatherPluginDiscoveries(),
   ]);
 
   // Render sections 1-5b
@@ -504,6 +556,7 @@ export async function fridayMeetingHandler(options = {}) {
   logger.log(renderIntakeReview(intakeData));
   logger.log(renderRdProposals(rdData));
   logger.log(renderFleetTelemetry(fleetData));
+  logger.log(renderPluginDiscoveries(pluginData));
 
   // Section 6: Decisions
   logger.log('');
@@ -519,6 +572,7 @@ export async function fridayMeetingHandler(options = {}) {
       consultant: { totalFindings: consultData.findings.length, domains: Object.keys(consultData.grouped).length },
       intake: { pendingItems: intakeData.pending.length },
       rd_proposals: { pendingProposals: rdData.proposals.length, sources: Object.keys(rdData.grouped).length },
+      plugin_pipeline: { scannedThisWeek: pluginData?.total || 0 },
     },
     decisions: { accepted: 0, dismissed: 0, deferred: 0, total: totalDecisionItems },
   };
