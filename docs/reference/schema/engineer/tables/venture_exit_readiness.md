@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T00:27:13.521Z
+**Generated**: 2026-03-16T00:41:46.314Z
 **Rows**: N/A (RLS restricted)
 **RLS**: Enabled (3 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (12 total)
+## Columns (22 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -30,6 +30,16 @@
 | notes | `text` | YES | - | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | separation_test_results | `jsonb` | YES | `'{}'::jsonb` | Structured per-dimension pass/fail separation test results with blocking items |
+| target_arr | `numeric` | YES | - | Target Annual Recurring Revenue in USD |
+| actual_arr | `numeric` | YES | - | Actual Annual Recurring Revenue in USD |
+| target_customer_count | `integer(32)` | YES | - | Target number of customers for exit readiness |
+| actual_customer_count | `integer(32)` | YES | - | Current actual number of customers |
+| growth_rate_target | `numeric` | YES | - | Target growth rate as decimal (e.g., 0.20 = 20%) |
+| growth_rate_actual | `numeric` | YES | - | Actual growth rate as decimal (e.g., 0.15 = 15%) |
+| market_multiple_current | `numeric` | YES | - | Current market revenue multiple for the venture sector |
+| readiness_score | `numeric` | YES | `0` | Computed business readiness score (0-100) |
+| readiness_threshold | `numeric` | YES | `70` | Score threshold that triggers chairman review escalation |
+| chairman_review_triggered | `boolean` | YES | `false` | Set true when readiness_score exceeds threshold for 2+ consecutive periods |
 
 ## Constraints
 
