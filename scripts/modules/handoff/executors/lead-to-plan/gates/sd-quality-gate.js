@@ -277,6 +277,33 @@ export async function validateSdQuality(sd) {
 
   const pass = totalScore >= threshold.passingScore && allIssues.length === 0;
 
+  // PAT-AUTO-bcc45c54: Near-threshold diagnostics — show actionable guidance
+  // when score is within 10 points of passing to help orchestrators enrich SDs
+  const deficit = threshold.passingScore - totalScore;
+  if (deficit > 0 && deficit <= 10) {
+    console.log(`\n   📊 NEAR-THRESHOLD DIAGNOSTIC (${deficit} point(s) below passing score of ${threshold.passingScore}):`);
+    const improvements = [];
+    if (completeness.score < 40) {
+      const fieldDeficit = threshold.requiredFields - completeness.populatedCount;
+      if (fieldDeficit > 0) improvements.push(`Populate ${fieldDeficit} more JSONB field(s) for up to +${Math.min(fieldDeficit * 5, 40 - completeness.score)} completeness points`);
+    }
+    if (content.score < 30) {
+      const descWords = wordCount(sd.description);
+      if (descWords < threshold.minDescriptionWords) {
+        improvements.push(`Add ${threshold.minDescriptionWords - descWords} more words to description for up to +20 content points`);
+      }
+      if (content.score < 20) {
+        improvements.push(`Add scope with in-scope/out-of-scope boundaries for up to +10 content points`);
+      }
+    }
+    if (structure.score < 30) {
+      improvements.push(`Convert plain string entries in success_criteria/key_changes to structured objects for up to +${30 - structure.score} structure points`);
+    }
+    for (const imp of improvements) {
+      console.log(`      → ${imp}`);
+    }
+  }
+
   if (!pass && (allIssues.length > 0 || allWarnings.length > 0)) {
     console.log(`\n   Remediation Report:`);
     console.log(buildRemediationReport(allIssues, allWarnings));

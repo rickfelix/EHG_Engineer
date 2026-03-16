@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-16T02:05:36.024Z
-**Tables**: 570
+**Generated**: 2026-03-16T02:36:34.491Z
+**Tables**: 572
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -370,6 +370,8 @@ Reference: docs/workflow/stages_v2.yaml |
 | [opportunity_scans](tables/opportunity_scans.md) | N/A (RLS restricted) | ✅ | 2 | Tracks AI opportunity discovery scans. Each scan can generate multiple blueprints. |
 | [opportunity_scores](tables/opportunity_scores.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [opportunity_sources](tables/opportunity_sources.md) | N/A (RLS restricted) | ✅ | 2 | - |
+| [ops_revenue_alerts](tables/ops_revenue_alerts.md) | N/A (RLS restricted) | ✅ | 4 | Revenue metric alerts triggered when actuals deviate from targets beyond thresholds |
+| [ops_revenue_metrics](tables/ops_revenue_metrics.md) | N/A (RLS restricted) | ✅ | 4 | Revenue KPIs tracked per venture per date — MRR, churn, expansion/contraction, LTV/CAC |
 | [orchestration_metrics](tables/orchestration_metrics.md) | N/A (RLS restricted) | ✅ | 4 | Performance analytics for EVA orchestration - tracks efficiency, quality, and resource utilization |
 | [outcome_signals](tables/outcome_signals.md) | N/A (RLS restricted) | ✅ | 1 | - |
 | [pattern_occurrences](tables/pattern_occurrences.md) | N/A (RLS restricted) | ✅ | 1 | Tracks individual pattern occurrences for trend calculation. |
@@ -801,7 +803,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 - [sensemaking_knowledge_base](tables/sensemaking_knowledge_base.md)
 
-### Other (444 tables)
+### Other (446 tables)
 
 - [_migration_metadata](tables/_migration_metadata.md)
 - [activity_logs](tables/activity_logs.md) - RLS: Append-only for authenticated, no delete/update
@@ -1071,6 +1073,8 @@ Reference: docs/workflow/stages_v2.yaml
 - [opportunity_scans](tables/opportunity_scans.md) - Tracks AI opportunity discovery scans. Each scan can generate multiple blueprints.
 - [opportunity_scores](tables/opportunity_scores.md)
 - [opportunity_sources](tables/opportunity_sources.md)
+- [ops_revenue_alerts](tables/ops_revenue_alerts.md) - Revenue metric alerts triggered when actuals deviate from targets beyond thresholds
+- [ops_revenue_metrics](tables/ops_revenue_metrics.md) - Revenue KPIs tracked per venture per date — MRR, churn, expansion/contraction, LTV/CAC
 - [orchestration_metrics](tables/orchestration_metrics.md) - Performance analytics for EVA orchestration - tracks efficiency, quality, and resource utilization
 - [outcome_signals](tables/outcome_signals.md)
 - [pattern_occurrences](tables/pattern_occurrences.md) - Tracks individual pattern occurrences for trend calculation.
@@ -1880,6 +1884,12 @@ _Key relationships between tables:_
 
 **opportunity_scores**:
 - `opportunity_id` → `opportunities.id`
+
+**ops_revenue_alerts**:
+- `venture_id` → `ventures.id`
+
+**ops_revenue_metrics**:
+- `venture_id` → `ventures.id`
 
 **orchestration_metrics**:
 - `company_id` → `companies.id`
