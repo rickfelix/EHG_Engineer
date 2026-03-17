@@ -240,6 +240,55 @@ function printCoordination(d) {
   console.log('');
 }
 
+// ── Section: Coaching ──
+async function printCoaching(d) {
+  // Query recent coaching messages (last hour)
+  const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data: msgs } = await supabase
+    .from('session_coordination')
+    .select('id, target_session, message_type, subject, payload, read_at, acknowledged_at, created_at')
+    .eq('message_type', 'COACHING')
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  const coaching = msgs || [];
+
+  console.log('COACHING (last hour)');
+  console.log('─'.repeat(72));
+
+  if (coaching.length === 0) {
+    console.log('  (no coaching messages sent recently)');
+    console.log('');
+    return;
+  }
+
+  const acked = coaching.filter(m => m.acknowledged_at).length;
+  const read = coaching.filter(m => m.read_at && !m.acknowledged_at).length;
+  const unread = coaching.filter(m => !m.read_at).length;
+  console.log('  Sent: ' + coaching.length + '  |  Acked: ' + acked + '  |  Read: ' + read + '  |  Unread: ' + unread);
+  console.log('');
+
+  // Group by coaching_type
+  const byType = {};
+  for (const m of coaching) {
+    const ct = m.payload?.coaching_type || 'UNKNOWN';
+    if (!byType[ct]) byType[ct] = { count: 0, targets: new Set(), acked: 0 };
+    byType[ct].count++;
+    const tty = (m.target_session || '').replace('session_', '').substring(0, 14);
+    byType[ct].targets.add(tty);
+    if (m.acknowledged_at) byType[ct].acked++;
+  }
+
+  console.log('  ' + pad('Type', 28) + pad('Sent', 6) + pad('Acked', 7) + 'Workers');
+  console.log('  ' + '─'.repeat(64));
+  for (const [type, data] of Object.entries(byType).sort((a, b) => b[1].count - a[1].count)) {
+    console.log('  ' + pad(type, 28) + pad(String(data.count), 6) + pad(String(data.acked), 7) + [...data.targets].join(', '));
+  }
+
+  console.log('');
+}
+
 // ── Section: Health ──
 function printHealth(d) {
   const health = d.activeSessions.length >= 3 ? 'HEALTHY' : d.activeSessions.length >= 1 ? 'DEGRADED' : 'DOWN';
@@ -616,6 +665,7 @@ async function main() {
     orchestrator:  () => printOrchestrator(d),
     available:     () => printAvailable(d),
     coordination:  () => printCoordination(d),
+    coaching:      async () => await printCoaching(d),
     health:        () => printHealth(d),
     qa:            () => printQA(d),
     forecast:      async () => await printForecast(d),
@@ -625,6 +675,7 @@ async function main() {
       printOrchestrator(d);
       printAvailable(d);
       printCoordination(d);
+      await printCoaching(d);
       printHealth(d);
       printQA(d);
       await printForecast(d);
@@ -635,7 +686,7 @@ async function main() {
   const fn = sections[section];
   if (!fn) {
     console.log('Usage: node scripts/fleet-dashboard.cjs [section]');
-    console.log('Sections: workers, orchestrator, available, coordination, health, qa, forecast, predictions, all');
+    console.log('Sections: workers, orchestrator, available, coordination, coaching, health, qa, forecast, predictions, all');
     process.exit(1);
   }
 
