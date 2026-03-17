@@ -118,16 +118,17 @@ export function registerAdditionalValidators(registry) {
 
     const issues = [];
 
-    for (const agentCode of requiredAgents) {
-      const { data, error } = await supabase
-        .from('sub_agent_execution_results')
-        .select('id, verdict')
-        .eq('sd_id', sd_id)
-        .eq('sub_agent_code', agentCode)
-        .order('created_at', { ascending: false })
-        .limit(1);
+    // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Single .in() query replaces N+1 loop
+    const { data: results, error } = await supabase
+      .from('sub_agent_execution_results')
+      .select('sub_agent_code, verdict')
+      .eq('sd_id', sd_id)
+      .in('sub_agent_code', requiredAgents)
+      .order('created_at', { ascending: false });
 
-      if (error || !data || data.length === 0) {
+    const executedAgents = new Set((results || []).map(r => r.sub_agent_code));
+    for (const agentCode of requiredAgents) {
+      if (!executedAgents.has(agentCode)) {
         issues.push(`${agentCode} sub-agent not executed`);
       }
     }

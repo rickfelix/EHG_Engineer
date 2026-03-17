@@ -308,19 +308,19 @@ export class HandoffRecorder {
       console.log(`📝 Failure recorded: ${executionId}`);
 
       // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
+      // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch update replaces N+1 loop
       try {
-        const { data: sessions } = await this.supabase
-          .from('claude_sessions')
-          .select('session_id, handoff_fail_count')
-          .eq('sd_id', sdId)
-          .eq('status', 'active');
-        if (sessions?.length > 0) {
-          for (const s of sessions) {
-            await this.supabase
-              .from('claude_sessions')
-              .update({ handoff_fail_count: (s.handoff_fail_count || 0) + 1 })
-              .eq('session_id', s.session_id);
-          }
+        await this.supabase.rpc('increment_handoff_fail_count', { p_sd_id: sdId });
+      } catch (rpcErr) {
+        // Fallback: single UPDATE with increment expression if RPC doesn't exist
+        try {
+          await this.supabase
+            .from('claude_sessions')
+            .update({ handoff_fail_count: this.supabase.raw('COALESCE(handoff_fail_count, 0) + 1') })
+            .eq('sd_id', sdId)
+            .eq('status', 'active');
+        } catch (fallbackErr) {
+          // Non-blocking: ignore if both methods fail
         }
       } catch (failCountErr) {
         console.warn(`   [handoff-fail-count] Non-blocking: ${failCountErr.message}`);
