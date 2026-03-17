@@ -394,6 +394,77 @@ export class HandoffOrchestrator {
       const enabledCount = manifest.filter(g => g.enabled).length;
       const disabledCount = manifest.filter(g => !g.enabled).length;
 
+      // Step 9 (optional): Evaluate gates if requested
+      let evaluationResults = null;
+      let aggregateScore = null;
+      let wouldPass = null;
+
+      if (options.evaluate) {
+        console.log('\n  Evaluating gates (dry-run, no writes)...');
+
+        // Load PRD for context
+        let prd = null;
+        try { prd = await this.prdRepo.getBySdId(sd.id); } catch (_) { /* no PRD yet is ok */ }
+
+        const validationContext = {
+          sdId,
+          sd_id: sd.id || sdId,
+          sd,
+          prd,
+          prdId: prd?.id,
+          options: {},
+          supabase: this.supabase
+        };
+
+        // Build final gate set from rules + policy-filtered gates
+        const gates = await this.validationOrchestrator.buildGatesFromRules(
+          filteredGates,
+          normalizedType,
+          validationContext
+        );
+
+        // Run all gates without stopping (batch mode)
+        const gateResults = await this.validationOrchestrator.validateGatesAll(gates, validationContext);
+
+        // Build per-gate evaluation rows
+        evaluationResults = [];
+        for (const gate of manifest) {
+          const gateName = gate.name;
+          const result = gateResults.gateResults[gateName];
+          evaluationResults.push({
+            name: gateName,
+            source: gate.source,
+            enabled: gate.enabled,
+            required: gate.required,
+            score: result ? result.score : null,
+            maxScore: result ? result.maxScore : null,
+            passed: result ? result.passed : null,
+            issues: result?.issues || []
+          });
+        }
+
+        // Include any gates that were in gateResults but not in manifest
+        // (e.g. database-driven rules merged by buildGatesFromRules)
+        const manifestNames = new Set(manifest.map(m => m.name));
+        for (const [gateName, result] of Object.entries(gateResults.gateResults)) {
+          if (!manifestNames.has(gateName)) {
+            evaluationResults.push({
+              name: gateName,
+              source: 'validation_rules',
+              enabled: true,
+              required: true,
+              score: result.score,
+              maxScore: result.maxScore,
+              passed: result.passed,
+              issues: result.issues || []
+            });
+          }
+        }
+
+        aggregateScore = gateResults.normalizedScore;
+        wouldPass = gateResults.passed && aggregateScore >= gateThreshold;
+      }
+
       return {
         success: true,
         handoffType: normalizedType,
@@ -404,6 +475,9 @@ export class HandoffOrchestrator {
         gateThreshold,
         fallbackUsed,
         manifest,
+        evaluationResults,
+        aggregateScore,
+        wouldPass,
         summary: {
           enabled: enabledCount,
           disabled: disabledCount,

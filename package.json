@@ -294,6 +294,7 @@
     "session:info": "node scripts/claude-session-coordinator.mjs info",
     "session:worktree": "node scripts/session-worktree.js",
     "handoff": "node scripts/handoff.js",
+    "handoff:dry-run": "node scripts/unified-handoff-system-v2.js execute --dry-run",
     "handoff:list": "node scripts/handoff.js list",
     "handoff:stats": "node scripts/handoff.js stats",
     "handoff:compliance": "node scripts/check-handoff-compliance.js",
