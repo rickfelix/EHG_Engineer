@@ -43,7 +43,7 @@ async function analyzePrompt(prompt) {
       const { execSync } = await import('child_process');
       const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
       context.git_branch = branch;
-    } catch (_e) {}
+    } catch (_e) { /* intentionally silent: git branch is optional context */ }
 
     // Analyze with context monitor
     const _contextAnalysis = await contextMonitor.analyzeContext(prompt, context);

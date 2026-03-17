@@ -231,7 +231,7 @@ router.post('/stop', (req, res) => {
       const heartbeatPath = '/tmp/campaign-heartbeat.txt';
       if (fs.existsSync(heartbeatPath)) fs.unlinkSync(heartbeatPath);
       if (fs.existsSync('/tmp/campaign-checkpoint.json')) fs.unlinkSync('/tmp/campaign-checkpoint.json');
-    } catch (_e) {}
+    } catch (_e) { /* intentionally silent: cleanup failure is non-critical */ }
 
     res.status(500).json({ error: error.message });
   }

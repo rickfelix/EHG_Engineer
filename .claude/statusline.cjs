@@ -39,15 +39,15 @@ const RED = `${ESC}[0;31m`;
 const BOLD_RED = `${ESC}[1;31m`;
 const WHITE_ON_RED = `${ESC}[97;41m`;
 
-// Ensure log dir exists
-try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch (_) {}
+// Ensure log dir exists (silent: statusline must never crash)
+try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch (_) { /* intentionally silent: non-critical setup */ }
 
 // Read stdin synchronously via fd 0 — works reliably on Windows when Claude Code
 // spawns this process and writes JSON to its stdin (not a PowerShell pipeline).
 let inputJson = '';
 try {
   inputJson = fs.readFileSync(0, 'utf8');
-} catch (_) {}
+} catch (_) { /* intentionally silent: stdin may not be available */ }
 
 let data = null;
 if (inputJson && inputJson.trim().length > 0) {
@@ -130,14 +130,14 @@ try {
     }
     try {
       execSync('git diff --quiet 2>NUL', { cwd, timeout: 2000, windowsHide: true });
-    } catch (_) { gitDirty = '*'; }
+    } catch (_) { gitDirty = '*'; } // expected: non-zero exit = dirty
     if (!gitDirty) {
       try {
         execSync('git diff --cached --quiet 2>NUL', { cwd, timeout: 2000, windowsHide: true });
-      } catch (_) { gitDirty = '*'; }
+      } catch (_) { gitDirty = '*'; } // expected: non-zero exit = staged changes
     }
   }
-} catch (_) {}
+} catch (_) { /* intentionally silent: git may not be available */ }
 
 // Worktree SD detection
 let activeWorktreeSd = '';
@@ -150,7 +150,7 @@ try {
     if (dirs.length === 1) activeWorktreeSd = dirs[0];
     else if (dirs.length > 1) activeWorktreeSd = `${dirs.length}wt`;
   }
-} catch (_) {}
+} catch (_) { /* intentionally silent: worktree detection is optional */ }
 
 // Activity state
 let activityState = 'idle';
@@ -171,7 +171,7 @@ try {
       if (timeSinceActive <= 4) activityState = 'running';
     }
   }
-} catch (_) {}
+} catch (_) { /* intentionally silent: activity state is best-effort */ }
 
 // Activity signal
 const activitySignal = activityState === 'running'
@@ -196,7 +196,7 @@ try {
       autoProceedInfo = ` | AP:ON/${apPhase}/${apProgress}%${childInfo}`;
     }
   }
-} catch (_) {}
+} catch (_) { /* intentionally silent: auto-proceed display is optional */ }
 
 // Project info
 const projectName = path.basename(cwd);
@@ -230,7 +230,7 @@ try {
     hook_triggered: false
   };
   fs.writeFileSync(STATE_FILE, JSON.stringify(newState), 'utf8');
-} catch (_) {}
+} catch (_) { /* intentionally silent: state persistence is best-effort */ }
 
 process.stdout.write(output + '\n');
 process.exit(0);
