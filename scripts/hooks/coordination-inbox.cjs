@@ -97,6 +97,10 @@ async function main() {
         'SD_BLOCKED': 'SD BLOCKED',
         'SD_COMPLETED_NEARBY': 'NEARBY SD COMPLETED',
         'PRIORITY_CHANGE': 'PRIORITY CHANGE',
+        'COACHING': 'COACHING' + (msg.payload?.coaching_type ? ': ' + msg.payload.coaching_type : ''),
+        'IDENTITY_COLLISION': 'IDENTITY COLLISION',
+        'CLAIM_REMINDER': 'CLAIM REMINDER',
+        'STALE_WARNING': 'STALE WARNING',
         'INFO': 'INFO'
       }[msg.message_type] || msg.message_type;
 
