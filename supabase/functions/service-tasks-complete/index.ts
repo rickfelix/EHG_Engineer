@@ -5,30 +5,28 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
+import { verifyJwt } from '../_shared/auth.ts';
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
-  }
+  const corsPreFlight = handleCorsPreFlight(req);
+  if (corsPreFlight) return corsPreFlight;
+
+  const corsHeaders = getCorsHeaders(req);
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const { user, error: authError } = await verifyJwt(req);
+    if (authError) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: authError }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -38,18 +36,19 @@ serve(async (req: Request) => {
     if (!task_id) {
       return new Response(
         JSON.stringify({ error: 'task_id is required' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!action || (action !== 'complete' && action !== 'fail')) {
       return new Response(
         JSON.stringify({ error: 'action must be "complete" or "fail"' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Create authenticated client (RLS enforces venture isolation)
+    const authHeader = req.headers.get('Authorization')!;
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -67,7 +66,7 @@ serve(async (req: Request) => {
         if (isNaN(score) || score < 0 || score > 1) {
           return new Response(
             JSON.stringify({ error: 'confidence_score must be between 0 and 1' }),
-            { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
       }
@@ -91,12 +90,12 @@ serve(async (req: Request) => {
         if (error.code === 'PGRST116') {
           return new Response(
             JSON.stringify({ error: 'Task not found, not claimed, or not accessible' }),
-            { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         return new Response(
           JSON.stringify({ error: error.message }),
-          { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -140,7 +139,7 @@ serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ task: data, aggregated_confidence }),
-        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -150,7 +149,7 @@ serve(async (req: Request) => {
       if (!error_message) {
         return new Response(
           JSON.stringify({ error: 'error_message is required for fail action' }),
-          { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -171,24 +170,24 @@ serve(async (req: Request) => {
         if (error.code === 'PGRST116') {
           return new Response(
             JSON.stringify({ error: 'Task not found, not claimed, or not accessible' }),
-            { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         return new Response(
           JSON.stringify({ error: error.message }),
-          { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ task: data }),
-        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (err) {
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
