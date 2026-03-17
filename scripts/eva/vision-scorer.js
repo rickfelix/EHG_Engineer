@@ -399,7 +399,8 @@ Previous response (truncated):
 ${rawResponse.substring(0, 1000)}`;
       const retry = await llmClient.complete(systemPrompt, repairPrompt, { maxTokens: 8000, timeout: 180000 });
       parsed = parseAndValidateResponse(retry.content, allCriteria);
-    } catch {
+    } catch (retryErr) {
+      console.error('[vision-scorer] LLM retry parse error:', retryErr?.message || retryErr);
       throw new Error(`LLM response parse failed after retry: ${parseErr.message}`);
     }
   }

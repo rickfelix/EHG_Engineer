@@ -305,18 +305,13 @@ export async function enrichItems(options = {}) {
             try {
               const { getLLMClient } = await import('../../lib/llm/client-factory.js');
               const client = getLLMClient({ purpose: 'fast' });
-              const result = await client.chat.completions.create({
-                messages: [
-                  {
-                    role: 'user',
-                    content: `Summarize this idea in 2-3 sentences for strategic evaluation. Focus on what is being proposed and why it matters:\n\nTitle: ${item.title}\n\nDescription: ${item.description.slice(0, 3000)}`,
-                  },
-                ],
-                max_tokens: 200,
-              });
-              enrichmentSummary = result?.choices?.[0]?.message?.content || `Intake item: ${item.title || 'untitled'}`;
+              const systemPrompt = 'You are a strategic intake summarizer. Respond with 2-3 sentences only.';
+              const userPrompt = `Summarize this idea in 2-3 sentences for strategic evaluation. Focus on what is being proposed and why it matters:\n\nTitle: ${item.title}\n\nDescription: ${item.description.slice(0, 3000)}`;
+              const result = await client.complete(systemPrompt, userPrompt);
+              const text = typeof result === 'string' ? result : result?.content || result?.text || '';
+              enrichmentSummary = text || `Intake item: ${item.title || 'untitled'}`;
             } catch (llmErr) {
-              if (verbose) console.log(`    LLM summary failed: ${llmErr.message}`);
+              console.error(`[intake-enricher] LLM error: ${llmErr?.message || llmErr}`);
               enrichmentSummary = `Intake item: ${item.title || 'untitled'}`;
             }
           } else {

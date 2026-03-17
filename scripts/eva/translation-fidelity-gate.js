@@ -17,6 +17,40 @@ import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
 const supabase = createSupabaseServiceClient();
 
+// =============================================================================
+// LLM RESULT CACHE (SD-LEO-FIX-LLM-FACTORY-BYPASS-001)
+// Avoids redundant LLM calls for the same upstream/downstream pair within 1 hour.
+// =============================================================================
+
+const _cache = new Map();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function getCachedResult(key) {
+  const entry = _cache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) return entry.result;
+  _cache.delete(key);
+  return null;
+}
+
+function setCachedResult(key, result) {
+  _cache.set(key, { result, timestamp: Date.now() });
+}
+
+/**
+ * Build a cache key from upstream/downstream identifiers and gate type.
+ * @param {Object|Array} upstream
+ * @param {Object} downstream
+ * @param {string} gateType
+ * @returns {string}
+ */
+function buildCacheKey(upstream, downstream, gateType) {
+  const upKeys = Array.isArray(upstream)
+    ? upstream.map(u => u.key || u.id).sort().join('+')
+    : (upstream.key || upstream.id);
+  const downKey = downstream.key || downstream.id;
+  return `${gateType}:${upKeys}:${downKey}`;
+}
+
 /**
  * Sanitize string by replacing invalid Unicode surrogates with U+FFFD.
  * JSON.stringify can produce \uD8XX sequences from lone surrogates in source data,
@@ -55,6 +89,14 @@ function sanitizeUnicode(value) {
 export async function evaluateTranslationFidelity(upstream, downstream, gateType) {
   const startTime = Date.now();
 
+  // Check cache first (SD-LEO-FIX-LLM-FACTORY-BYPASS-001)
+  const cacheKey = buildCacheKey(upstream, downstream, gateType);
+  const cached = getCachedResult(cacheKey);
+  if (cached) {
+    console.log(`   ♻️  Translation fidelity cache hit for ${gateType} (${cacheKey.substring(0, 60)}...)`);
+    return cached;
+  }
+
   try {
     // Build comparison prompt based on gate type
     const { systemPrompt, userPrompt } = buildPrompts(upstream, downstream, gateType);
@@ -73,7 +115,7 @@ export async function evaluateTranslationFidelity(upstream, downstream, gateType
     try {
       response = await client.complete(systemPrompt, userPrompt);
     } catch (e) {
-      console.warn(`   ⚠️  LLM call failed: ${e.message}`);
+      console.error('[translation-fidelity-gate] LLM error:', e?.message || e);
       return buildFallbackResult(gateType, `LLM call failed: ${e.message}`);
     }
 
@@ -96,6 +138,9 @@ export async function evaluateTranslationFidelity(upstream, downstream, gateType
         coverage_areas: parsed.coverage_areas || [],
       }
     };
+
+    // Cache the result (SD-LEO-FIX-LLM-FACTORY-BYPASS-001)
+    setCachedResult(cacheKey, result);
 
     return result;
   } catch (e) {
@@ -368,7 +413,7 @@ function parseGateResponse(text) {
         })),
       };
     } catch (e) {
-      // JSON parse failed
+      console.error('[translation-fidelity-gate] JSON parse error:', e?.message || e);
     }
   }
 
