@@ -41,10 +41,10 @@ export function createSmokeTestValidationGate(supabase) {
       }
 
       try {
-        // Get PRD test scenarios
+        // Get PRD test scenarios + acceptance_criteria as fallback
         const { data: prd, error } = await supabase
           .from('product_requirements_v2')
-          .select('test_scenarios, exec_checklist')
+          .select('test_scenarios, exec_checklist, acceptance_criteria')
           .eq('sd_id', sdId)
           .single();
 
@@ -56,16 +56,30 @@ export function createSmokeTestValidationGate(supabase) {
           });
         }
 
-        const scenarios = prd.test_scenarios || [];
+        let scenarios = prd.test_scenarios || [];
         const execChecklist = prd.exec_checklist || [];
 
+        // SD-LEARN-FIX-ADDRESS-PAT-AUTO-071: Fall back to acceptance_criteria
+        // when test_scenarios is empty. Inline-generated PRDs often populate
+        // acceptance_criteria but leave test_scenarios empty, causing 0/100 scores.
+        if (scenarios.length === 0) {
+          const acceptanceCriteria = prd.acceptance_criteria || [];
+          if (acceptanceCriteria.length > 0) {
+            console.log(`   ℹ️  No test_scenarios, using ${acceptanceCriteria.length} acceptance_criteria as fallback`);
+            scenarios = acceptanceCriteria.map(ac => ({
+              scenario: typeof ac === 'string' ? ac : ac?.criterion || ac?.description || JSON.stringify(ac),
+              source: 'acceptance_criteria_fallback'
+            }));
+          }
+        }
+
         if (scenarios.length === 0 && execChecklist.length === 0) {
-          console.log('   ⚠️  No test scenarios defined in PRD');
+          console.log('   ⚠️  No test scenarios or acceptance criteria defined in PRD');
           return buildSemanticResult({
             passed: level === 'OPT',
             score: level === 'OPT' ? 50 : 0,
             confidence: 0.7,
-            issues: level === 'REQ' ? ['No test scenarios defined in PRD'] : [],
+            issues: level === 'REQ' ? ['No test scenarios or acceptance criteria defined in PRD'] : [],
             warnings: level === 'OPT' ? ['No test scenarios — optional for this SD type'] : [],
             remediation: 'Add test_scenarios to PRD with specific test steps'
           });
