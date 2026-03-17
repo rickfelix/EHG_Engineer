@@ -258,6 +258,7 @@
     "story:template": "node scripts/story-requirements-template.js",
     "sd:next": "node scripts/sd-next.js",
     "sd:start": "node scripts/sd-start.js",
+    "search": "node scripts/leo-search.mjs",
     "debug:tid": "node scripts/one-time/debug-terminal-identity.mjs",
     "sd:baseline": "node scripts/sd-baseline.js",
     "sd:baseline:create": "node scripts/sd-baseline.js create",
