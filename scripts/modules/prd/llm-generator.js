@@ -17,7 +17,7 @@ import { buildPRDGenerationContext } from './context-builder.js';
  */
 export const LLM_PRD_CONFIG = {
   temperature: 0.6,   // Slightly lower for more structured PRD content
-  maxTokens: 32000,   // Extended for comprehensive PRD generation
+  maxTokens: 16000,   // Reduced from 32K: PRD outputs average 4-8K tokens (SD-LEO-INFRA-LLM-RESPONSE-CACHING-001)
   enabled: process.env.LLM_PRD_GENERATION !== 'false'  // Enabled by default
 };
 
