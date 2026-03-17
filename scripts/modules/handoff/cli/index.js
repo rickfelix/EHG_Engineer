@@ -14,6 +14,7 @@ export {
   handleVerifyCommand,
   handlePendingCommand,
   handlePrecheckCommand,
+  handleDryRunCommand,
   handleExecuteCommand,
   handleListCommand,
   handleStatsCommand

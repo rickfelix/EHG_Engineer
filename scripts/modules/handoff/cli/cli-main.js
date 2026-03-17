@@ -154,6 +154,7 @@ export function displayHelp() {
   console.log('  verify SD-ID           - Verify SD is truly complete (PAT-WF-NEXT-001)');
   console.log('  pending                - Show SDs stuck in pending_approval');
   console.log('  precheck TYPE SD-ID    - Find ALL issues before execute (batch validation)');
+  console.log('  dry-run TYPE SD-ID     - Show gate manifest without executing (read-only)');
   console.log('  execute TYPE SD-ID     - Execute handoff');
   console.log('  list [SD-ID]           - List handoff executions');
   console.log('  stats                  - Show system statistics');
@@ -178,10 +179,16 @@ export function displayHelp() {
   console.log('  --no-auto-proceed   Disable AUTO-PROCEED mode for this handoff');
   console.log('  (Precedence: CLI > ENV > Session > Database > Default)');
   console.log('');
+  console.log('DRY RUN FLAGS:');
+  console.log('  --dry-run               Show gate manifest instead of executing');
+  console.log('                          (can be used with execute or as standalone command)');
+  console.log('');
   console.log('EXAMPLES:');
   console.log('  node scripts/handoff.js workflow SD-LEO-GEMINI-001');
   console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-FEATURE-001');
   console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-FEATURE-001 --auto-proceed');
+  console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-FEATURE-001 --dry-run');
+  console.log('  node scripts/handoff.js dry-run LEAD-TO-PLAN SD-INFRA-001');
   console.log('  node scripts/handoff.js list SD-FEATURE-001');
   console.log('  node scripts/handoff.js stats');
 
@@ -278,6 +285,71 @@ export async function introspectGateStatus(sdId, { json = true } = {}) {
     console.log(JSON.stringify({ sd_id: sdId, gates: results }, null, 2));
   }
   return results;
+}
+
+/**
+ * Handle dry-run command
+ *
+ * Shows a gate manifest for a handoff without executing anything.
+ * Displays which gates would run, which are disabled by policy,
+ * the threshold that would apply, and the source of each gate.
+ *
+ * @param {string} handoffType - Handoff type
+ * @param {string} sdId - SD identifier
+ * @returns {Promise<Object>} Result
+ */
+export async function handleDryRunCommand(handoffType, sdId) {
+  if (!handoffType || !sdId) {
+    console.log('Usage: node scripts/handoff.js dry-run HANDOFF_TYPE SD-ID');
+    console.log('');
+    console.log('Shows which gates WOULD run without executing anything.');
+    console.log('No database writes, no SD status changes.');
+    console.log('');
+    console.log('Examples:');
+    console.log('  node scripts/handoff.js dry-run LEAD-TO-PLAN SD-EXAMPLE-001');
+    console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-EXAMPLE-001 --dry-run');
+    return { success: false };
+  }
+
+  const system = createHandoffSystem();
+  const result = await system.dryRunHandoff(handoffType, sdId);
+
+  if (!result.success) {
+    console.error(`\nDRY RUN ERROR: ${result.error}`);
+    return { success: false };
+  }
+
+  // Display manifest
+  console.log('');
+  console.log(`DRY RUN: ${result.handoffType} for ${result.sdKey || result.sdId}`);
+  console.log('='.repeat(70));
+  console.log('');
+  console.log(`  SD Title: ${result.sdTitle}`);
+  console.log(`  SD Type: ${result.sdType}`);
+  console.log(`  Gate Threshold: ${result.gateThreshold}%`);
+  if (result.fallbackUsed) {
+    console.log('  Policy Source: FALLBACK (validation_gate_registry unavailable)');
+  }
+  console.log('');
+  console.log('  Gates that would execute:');
+  console.log('  ' + '-'.repeat(66));
+
+  for (const gate of result.manifest) {
+    const status = gate.enabled ? 'ENABLED ' : 'DISABLED';
+    const req = gate.required ? 'Required' : 'Advisory';
+    let line = `    ${status} | ${gate.name.padEnd(38)} | Source: ${gate.source.padEnd(16)} | ${req}`;
+    if (!gate.enabled && gate.policyReason) {
+      line += `\n             Policy: ${gate.policyReason}`;
+    }
+    console.log(line);
+  }
+
+  console.log('');
+  console.log('  ' + '-'.repeat(66));
+  console.log(`  Summary: ${result.summary.enabled} gates enabled, ${result.summary.disabled} disabled by policy, ${result.summary.total} total`);
+  console.log('');
+
+  return { success: true };
 }
 
 export async function handlePrecheckCommand(precheckType, precheckSdId) {
@@ -957,9 +1029,18 @@ export async function main() {
       result = await handlePrecheckCommand(args[1], args[2]);
       break;
 
+    case 'dry-run':
+      result = await handleDryRunCommand(args[1], args[2]);
+      break;
+
     case 'execute':
-      // Use continuation wrapper for AUTO-PROCEED child SD continuation
-      result = await handleExecuteWithContinuation(args[1], args[2], args);
+      // Check for --dry-run flag on execute command
+      if (args.includes('--dry-run')) {
+        result = await handleDryRunCommand(args[1], args[2]);
+      } else {
+        // Use continuation wrapper for AUTO-PROCEED child SD continuation
+        result = await handleExecuteWithContinuation(args[1], args[2], args);
+      }
       break;
 
     case 'list':
