@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T17:22:56.600Z
-**Rows**: 2,014
+**Generated**: 2026-03-17T18:30:46.422Z
+**Rows**: 2,020
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -130,7 +130,6 @@ Use the id column instead - it is the canonical identifier. |
 ### Unique Constraints
 - `strategic_directives_v2_sd_code_user_facing_key`: UNIQUE (sd_code_user_facing)
 - `strategic_directives_v2_sd_key_key`: UNIQUE (sd_key)
-- `strategic_directives_v2_sd_key_unique`: UNIQUE (sd_key)
 
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
@@ -178,10 +177,6 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_parent`
   ```sql
   CREATE INDEX idx_sd_parent ON public.strategic_directives_v2 USING btree (parent_sd_id)
-  ```
-- `idx_sd_parent_sd_id`
-  ```sql
-  CREATE INDEX idx_sd_parent_sd_id ON public.strategic_directives_v2 USING btree (parent_sd_id)
   ```
 - `idx_sd_release`
   ```sql
@@ -271,10 +266,6 @@ Use the id column instead - it is the canonical identifier. |
   ```sql
   CREATE INDEX idx_strategic_directives_v2_priority ON public.strategic_directives_v2 USING btree (priority)
   ```
-- `idx_strategic_directives_v2_sd_key`
-  ```sql
-  CREATE INDEX idx_strategic_directives_v2_sd_key ON public.strategic_directives_v2 USING btree (sd_key)
-  ```
 - `idx_strategic_directives_v2_sd_type`
   ```sql
   CREATE INDEX idx_strategic_directives_v2_sd_type ON public.strategic_directives_v2 USING btree (sd_type)
@@ -298,10 +289,6 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_sd_key_key`
   ```sql
   CREATE UNIQUE INDEX strategic_directives_v2_sd_key_key ON public.strategic_directives_v2 USING btree (sd_key)
-  ```
-- `strategic_directives_v2_sd_key_unique`
-  ```sql
-  CREATE UNIQUE INDEX strategic_directives_v2_sd_key_unique ON public.strategic_directives_v2 USING btree (sd_key)
   ```
 
 ## RLS Policies

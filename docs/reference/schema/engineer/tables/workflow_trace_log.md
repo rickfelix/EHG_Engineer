@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T17:22:56.600Z
-**Rows**: 247,332
+**Generated**: 2026-03-17T18:30:46.422Z
+**Rows**: 249,195
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -50,6 +50,14 @@
 - `idx_workflow_trace_log_execution_time`
   ```sql
   CREATE INDEX idx_workflow_trace_log_execution_time ON public.workflow_trace_log USING btree (workflow_execution_id, start_time_ms DESC)
+  ```
+- `idx_workflow_trace_log_phase`
+  ```sql
+  CREATE INDEX idx_workflow_trace_log_phase ON public.workflow_trace_log USING btree (phase)
+  ```
+- `idx_workflow_trace_log_sd_id`
+  ```sql
+  CREATE INDEX idx_workflow_trace_log_sd_id ON public.workflow_trace_log USING btree (sd_id)
   ```
 - `idx_workflow_trace_log_span_type_name`
   ```sql

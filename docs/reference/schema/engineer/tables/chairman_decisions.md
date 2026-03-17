@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T17:22:56.600Z
-**Rows**: 8
+**Generated**: 2026-03-17T18:30:46.422Z
+**Rows**: 10
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -53,7 +53,7 @@
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
 
 ### Check Constraints
-- `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY ((ARRAY['pass'::character varying, 'revise'::character varying, 'kill'::character varying, 'conditional_pass'::character varying, 'go'::character varying, 'conditional_go'::character varying, 'no_go'::character varying, 'complete'::character varying, 'continue'::character varying, 'blocked'::character varying, 'fail'::character varying, 'approve'::character varying, 'conditional'::character varying, 'reject'::character varying, 'release'::character varying, 'hold'::character varying, 'cancel'::character varying, 'no-go'::character varying, 'pivot'::character varying, 'expand'::character varying, 'sunset'::character varying, 'exit'::character varying, 'proceed'::character varying, 'fix'::character varying, 'pause'::character varying, 'override'::character varying, 'pending'::character varying, 'terminate'::character varying])::text[])))
+- `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY (ARRAY['pass'::text, 'revise'::text, 'kill'::text, 'conditional_pass'::text, 'go'::text, 'conditional_go'::text, 'no_go'::text, 'complete'::text, 'continue'::text, 'blocked'::text, 'fail'::text, 'approve'::text, 'conditional'::text, 'reject'::text, 'release'::text, 'hold'::text, 'cancel'::text, 'no-go'::text, 'pivot'::text, 'expand'::text, 'sunset'::text, 'exit'::text, 'proceed'::text, 'fix'::text, 'pause'::text, 'override'::text, 'pending'::text, 'terminate'::text, 'review'::text, 'advisory'::text])))
 - `chairman_decisions_health_score_check`: CHECK (((health_score)::text = ANY ((ARRAY['green'::character varying, 'yellow'::character varying, 'red'::character varying])::text[])))
 - `chairman_decisions_recommendation_check`: CHECK (((recommendation)::text = ANY ((ARRAY['proceed'::character varying, 'pivot'::character varying, 'fix'::character varying, 'kill'::character varying, 'pause'::character varying])::text[])))
 - `chairman_decisions_status_check`: CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])))
@@ -119,6 +119,11 @@
 - **With Check**: `true`
 
 ## Triggers
+
+### trg_chairman_decision_unblock
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_chairman_approval_unblock_orchestrator()`
 
 ### trg_chairman_decision_updated_at
 
