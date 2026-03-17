@@ -20,13 +20,16 @@ import { NextApiResponse } from 'next';
 import { z } from 'zod';
 import { withAuth, AuthenticatedRequest } from '../../lib/middleware/api-auth';
 import { getUserRole, hasPermission } from '../../lib/middleware/rbac';
+import { withSanitization } from '../../lib/middleware/sanitize';
+import { sanitizedString } from '../../lib/validation/content-schemas';
 
 // Request body validation schema
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: sanitizedString strips HTML/scripts at schema level
 const CreateVentureSchema = z.object({
-  name: z.string().min(1, 'Venture name is required'),
-  problem_statement: z.string().min(1, 'Problem statement is required'),
-  solution: z.string().min(1, 'Solution is required'),
-  target_market: z.string().min(1, 'Target market is required'),
+  name: sanitizedString({ min: 1, message: 'Venture name is required' }),
+  problem_statement: sanitizedString({ min: 1, message: 'Problem statement is required' }),
+  solution: sanitizedString({ min: 1, message: 'Solution is required' }),
+  target_market: sanitizedString({ min: 1, message: 'Target market is required' }),
   origin_type: z.enum(['manual', 'competitor_clone', 'blueprint']),
   competitor_ref: z.string().nullable().optional(),
   blueprint_id: z.string().nullable().optional()
@@ -147,5 +150,6 @@ async function handler(
   });
 }
 
-// SECURITY: Wrap handler with authentication middleware
-export default withAuth(handler);
+// SECURITY: Wrap handler with authentication and XSS sanitization middleware
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: withSanitization strips HTML/scripts from request bodies
+export default withAuth(withSanitization(handler));

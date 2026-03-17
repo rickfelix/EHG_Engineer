@@ -17,6 +17,7 @@
 import { NextApiResponse } from 'next';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 import { getUserRole, hasPermission } from '../../../lib/middleware/rbac';
+import { withSanitization } from '../../../lib/middleware/sanitize';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -229,5 +230,6 @@ async function handlePut(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 }
 
-// SECURITY: Wrap handler with authentication middleware
-export default withAuth(handler);
+// SECURITY: Wrap handler with authentication and XSS sanitization middleware
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: withSanitization strips HTML/scripts from request bodies
+export default withAuth(withSanitization(handler));
