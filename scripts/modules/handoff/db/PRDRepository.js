@@ -25,36 +25,25 @@ export class PRDRepository {
    * @returns {Promise<object|null>} PRD record or null
    */
   async getBySdId(sdId) {
-    // Primary lookup by sd_id (canonical column after schema cleanup)
+    // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Single query with .or() replaces 2 sequential queries
     const { data: prds, error } = await this.supabase
       .from('product_requirements_v2')
       .select('*')
-      .eq('sd_id', sdId);
+      .or(`sd_id.eq.${sdId},directive_id.eq.${sdId}`)
+      .limit(2);
 
     if (error) {
-      console.warn(`PRD query error (sd_id): ${error.message}`);
+      console.warn(`PRD query error: ${error.message}`);
+      return null;
     }
 
-    if (prds && prds.length > 0) {
-      return prds[0];
+    if (!prds || prds.length === 0) {
+      return null;
     }
 
-    // Fallback: Try directive_id column (for very old PRDs created before standardization)
-    const { data: fallback, error: fallbackErr } = await this.supabase
-      .from('product_requirements_v2')
-      .select('*')
-      .eq('directive_id', sdId);
-
-    if (fallbackErr) {
-      console.warn(`PRD query error (directive_id): ${fallbackErr.message}`);
-    }
-
-    if (fallback && fallback.length > 0) {
-      console.log('   ℹ️  PRD found via directive_id column (legacy fallback)');
-      return fallback[0];
-    }
-
-    return null;
+    // Prefer sd_id match over directive_id match
+    const sdIdMatch = prds.find(p => p.sd_id === sdId);
+    return sdIdMatch || prds[0];
   }
 
   /**

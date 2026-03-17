@@ -188,6 +188,9 @@ export class OIVGate {
     const failedContracts = [];
     const issues = [];
 
+    // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Collect records for batch insert
+    const pendingRecords = [];
+
     for (const contract of contracts) {
       // Determine effective max level (min of SD type level and contract level)
       const contractLevel = contract.checkpoint_level || 'L3_EXPORT_EXISTS';
@@ -198,8 +201,8 @@ export class OIVGate {
       const result = await this.verifier.verify(contract, effectiveLevel);
       results.push(result);
 
-      // Persist result to database
-      await this._persistResult(runId, contract, result, sdId, sdType, handoffType);
+      // Collect record for batch insert instead of individual persist
+      pendingRecords.push(this._buildResultRecord(runId, contract, result, sdId, sdType, handoffType));
 
       if (result.final_status === 'PASS') {
         passedCount++;
@@ -219,6 +222,16 @@ export class OIVGate {
         if (result.remediation_hint) {
           console.log(`   │    Fix: ${result.remediation_hint}`);
         }
+      }
+    }
+
+    // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch insert all results at once
+    if (pendingRecords.length > 0) {
+      const { error: batchErr } = await this.supabase
+        .from('leo_integration_verification_results')
+        .insert(pendingRecords);
+      if (batchErr) {
+        console.warn(`   ⚠️  Failed to batch persist OIV results: ${batchErr.message}`);
       }
     }
 
@@ -269,10 +282,11 @@ export class OIVGate {
   }
 
   /**
-   * Persist verification result to database
+   * Build verification result record for batch insert
+   * SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Refactored from _persistResult to support batch insert
    */
-  async _persistResult(runId, contract, result, sdId, sdType, handoffType) {
-    const record = {
+  _buildResultRecord(runId, contract, result, sdId, sdType, handoffType) {
+    return {
       run_id: runId,
       contract_id: contract.id,
       contract_key: contract.contract_key,
@@ -299,14 +313,6 @@ export class OIVGate {
       completed_at: result.completed_at,
       duration_ms: result.duration_ms
     };
-
-    const { error } = await this.supabase
-      .from('leo_integration_verification_results')
-      .insert(record);
-
-    if (error) {
-      console.warn(`   ⚠️  Failed to persist OIV result: ${error.message}`);
-    }
   }
 
   /**
