@@ -60,6 +60,27 @@ export function createSmokeTestValidationGate(supabase) {
         const execChecklist = prd.exec_checklist || [];
 
         if (scenarios.length === 0 && execChecklist.length === 0) {
+          // Fallback: check SD smoke_test_steps before scoring 0
+          let sdSmokeSteps = ctx.sd?.smoke_test_steps || [];
+          if (sdSmokeSteps.length === 0 && supabase && sdId) {
+            const { data: sdData } = await supabase
+              .from('strategic_directives_v2')
+              .select('smoke_test_steps')
+              .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
+              .limit(1)
+              .single();
+            sdSmokeSteps = sdData?.smoke_test_steps || [];
+          }
+
+          if (sdSmokeSteps.length > 0) {
+            console.log(`   ℹ️  No PRD test scenarios, using ${sdSmokeSteps.length} SD smoke_test_steps as fallback`);
+            return buildSemanticResult({
+              passed: true, score: 60, confidence: 0.5,
+              warnings: ['Using SD smoke_test_steps as fallback (no PRD test_scenarios)'],
+              details: { source: 'sd_smoke_test_steps', count: sdSmokeSteps.length }
+            });
+          }
+
           console.log('   ⚠️  No test scenarios defined in PRD');
           return buildSemanticResult({
             passed: level === 'OPT',

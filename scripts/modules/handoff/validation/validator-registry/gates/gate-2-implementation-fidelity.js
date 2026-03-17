@@ -202,7 +202,7 @@ export function registerGate2Validators(registry) {
     // Check if this SD type should skip code validation
     const { data: sdData } = await supabase
       .from('strategic_directives_v2')
-      .select('id, sd_type, title')
+      .select('id, sd_type, title, category, scope, description')
       .eq('id', sd_id)
       .single();
 
