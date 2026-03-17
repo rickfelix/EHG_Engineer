@@ -22,10 +22,10 @@
  * @see docs/discovery/auto-proceed-enhancement-discovery.md
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,10 +41,7 @@ const STATE_FILE = path.join(__dirname, '../../../.claude/auto-proceed-state.jso
 let _supabase = null;
 function getSupabase() {
   if (!_supabase && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    _supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    _supabase = createSupabaseServiceClient();
   }
   return _supabase;
 }

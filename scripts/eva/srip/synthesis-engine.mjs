@@ -10,7 +10,7 @@
  * Output: Synthesis prompt stored in srip_synthesis_prompts table
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -211,10 +211,7 @@ function assemblePromptText(sections) {
  */
 export async function generateSynthesisPrompt({ siteDnaId, brandInterviewId, supabase }) {
   if (!supabase) {
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
   }
 
   console.log('\n   Synthesis Engine');

@@ -6,7 +6,7 @@
  * Usage: node templates/create-handoff.js [FROM] [TO] [SD-ID]
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
@@ -21,10 +21,7 @@ const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 class UniversalHandoffCreator {
   constructor() {

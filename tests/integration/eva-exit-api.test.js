@@ -3,16 +3,13 @@
  * SD: SD-VENTURE-ACQUISITIONREADINESS-ARCHITECTURE-ORCH-001-A
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // We'll test the database layer directly since the tables are the core deliverable
 let testVentureId;

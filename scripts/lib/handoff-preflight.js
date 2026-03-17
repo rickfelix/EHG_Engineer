@@ -14,7 +14,8 @@
  * might start working without running the handoff command.
  *
  * USAGE:
- *   import { validateSDHandoffState, getRequiredHandoffsForPhase } from './handoff-preflight.js';
+ *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { validateSDHandoffState, getRequiredHandoffsForPhase } from './handoff-preflight.js';
  *
  *   const result = await validateSDHandoffState(sdId, 'EXEC');
  *   if (!result.ready) {
@@ -30,15 +31,11 @@
  * @see .git/archived-markdown/retrospectives/SD-BACKEND-002A-ROOT-CAUSE.md
  */
 
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Handoff sequence definitions

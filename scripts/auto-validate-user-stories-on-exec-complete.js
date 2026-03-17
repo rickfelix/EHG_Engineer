@@ -16,7 +16,7 @@
  * **Usage**: node scripts/auto-validate-user-stories-on-exec-complete.js <SD-ID>
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -28,10 +28,7 @@ dotenv.config();
  * @returns {Promise<Object>} Validation result
  */
 async function autoValidateUserStories(sdId, sbClient) {
-  const supabase = sbClient || createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = sbClient || createSupabaseServiceClient();
 
   console.log(`🔍 Checking user stories for ${sdId}...`);
 

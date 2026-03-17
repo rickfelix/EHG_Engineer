@@ -8,7 +8,7 @@
  * - Consistent error handling and recording
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { SDRepository } from './db/SDRepository.js';
 import { PRDRepository } from './db/PRDRepository.js';
@@ -26,10 +26,7 @@ import { captureHandoffGate } from '../../../lib/flywheel/capture.js';
 export class HandoffOrchestrator {
   constructor(options = {}) {
     // Create or use injected Supabase client
-    this.supabase = options.supabase || createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = options.supabase || createSupabaseServiceClient();
 
     // Dependency injection for all components
     this.sdRepo = options.sdRepo || new SDRepository(this.supabase);

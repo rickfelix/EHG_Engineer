@@ -19,8 +19,8 @@
  * Part of SD-LEO-ORCH-STAGE-INTELLIGENT-VENTURE-001-B
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import {
   executeStageZero,
   ENTRY_PATHS,
@@ -48,10 +48,7 @@ function getArrayArg(name) {
 // ── Main ──────────────────────────────────────────────────────
 
 async function main() {
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const dryRun = hasFlag('dry-run');
   const nonInteractive = hasFlag('non-interactive');

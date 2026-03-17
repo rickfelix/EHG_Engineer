@@ -4,6 +4,7 @@
  * Target execution time: <60 seconds
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { vi } from 'vitest';
 import dotenv from 'dotenv';
 
@@ -52,16 +53,15 @@ describe('Smoke Tests - Critical System Validation', () => {
     let supabase;
 
     beforeAll(async () => {
-      const { createClient } = await import('@supabase/supabase-js');
       // Use service role key for smoke tests (needs full schema access)
-      // Fall back to anon key for environment compatibility
-      const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
-                     process.env.SUPABASE_ANON_KEY ||
-                     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      supabase = createClient(
-        process.env.SUPABASE_URL,
-        apiKey
-      );
+      // Factory handles env var resolution and key validation
+      try {
+        supabase = createSupabaseServiceClient();
+      } catch {
+        // Fall back to anon client if service role key not available
+        const { createSupabaseClient } = await import('../lib/supabase-client.js');
+        supabase = createSupabaseClient();
+      }
     });
 
     test('should connect to strategic_directives_v2 table', async () => {
@@ -143,16 +143,12 @@ describe('Smoke Tests - Critical System Validation', () => {
     let supabase;
 
     beforeAll(async () => {
-      const { createClient } = await import('@supabase/supabase-js');
-      // Use service role key for smoke tests (needs full schema access)
-      // Fall back to anon key for environment compatibility
-      const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
-                     process.env.SUPABASE_ANON_KEY ||
-                     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      supabase = createClient(
-        process.env.SUPABASE_URL,
-        apiKey
-      );
+      try {
+        supabase = createSupabaseServiceClient();
+      } catch {
+        const { createSupabaseClient } = await import('../lib/supabase-client.js');
+        supabase = createSupabaseClient();
+      }
     });
 
     test('should have an active LEO protocol version', async () => {

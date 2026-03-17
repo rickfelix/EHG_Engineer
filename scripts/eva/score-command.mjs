@@ -12,7 +12,7 @@
  * Part of: SD-MAN-INFRA-EVA-SCORE-COMMAND-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -82,10 +82,7 @@ export async function runScore(options = {}) {
     throw new Error('--sd-id or --scope is required');
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // Resolve keys (dynamic defaults if not provided)
   const visionKey = options.visionKey || await loadDefaultVisionKey(supabase);

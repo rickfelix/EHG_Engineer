@@ -4,6 +4,7 @@
  * SD-LEO-REFACTOR-SERVER-001
  */
 
+import { createSupabaseClient } from '../../lib/supabase-client.js';
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -99,10 +100,7 @@ router.get('/health', (req, res) => {
 router.get('/apps', async (req, res) => {
   try {
     const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
-    );
+    const supabase = createSupabaseClient();
 
     const { data, error } = await supabase
       .from('v_untested_sds')

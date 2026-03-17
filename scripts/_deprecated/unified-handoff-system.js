@@ -39,7 +39,7 @@
  * - User story → E2E test mapping validation (100% coverage requirement)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { randomUUID } from 'crypto';
 import HandoffValidator from './handoff-validator.js';
 import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
@@ -69,10 +69,7 @@ dotenv.config();
 
 class UnifiedHandoffSystem {
   constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
     
     this.handoffValidator = new HandoffValidator();
     

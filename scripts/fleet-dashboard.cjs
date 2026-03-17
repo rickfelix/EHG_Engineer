@@ -2,13 +2,9 @@
 // Usage: node scripts/fleet-dashboard.cjs [workers|orchestrator|available|coordination|health|qa|forecast|all]
 
 const os = require('os');
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 

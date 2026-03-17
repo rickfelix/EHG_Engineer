@@ -22,7 +22,7 @@
  * @module stop-subagent-enforcement/index
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 
@@ -133,10 +133,7 @@ export async function main() {
     return;
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // 1. Check for bypass (with timeout protection)
   const bypassResult = await safeAsync(

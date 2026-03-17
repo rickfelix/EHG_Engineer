@@ -10,7 +10,7 @@
  * @module child-sd-selector
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 
@@ -316,10 +316,7 @@ export async function getOrchestratorContext(supabase, parentSdId) {
  * @returns {object} Supabase client
  */
 export function createSupabaseClient() {
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 export default {

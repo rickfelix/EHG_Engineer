@@ -10,7 +10,7 @@
  */
 
 // Jest provides describe, test, expect, beforeAll, afterAll globally
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -396,18 +396,12 @@ describe('Handoff Retrospective Integration', () => {
 
     // PAT-SUPABASE-KEY-001: Use service role key for integration tests
     // Integration tests need insert/delete permissions which require service role
-    // Also provides resilience if anon key is rotated without updating .env
-    const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!apiKey) {
-      console.warn('Skipping integration tests - no Supabase API key available');
+    try {
+      supabase = createSupabaseServiceClient();
+    } catch {
+      console.warn('Skipping integration tests - no Supabase service key available');
       return;
     }
-
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      apiKey
-    );
 
     // Validate connection before running tests
     const { error } = await supabase.from('strategic_directives_v2').select('id').limit(1);

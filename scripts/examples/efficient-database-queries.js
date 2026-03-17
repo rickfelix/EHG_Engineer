@@ -7,15 +7,12 @@
  * Run: node scripts/examples/efficient-database-queries.js
  */
 
+import { createSupabaseClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 // Helper to estimate tokens
 function estimateTokens(text) {

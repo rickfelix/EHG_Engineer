@@ -10,7 +10,7 @@
  * Output: Structured DNA stored in srip_site_dna table
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -253,10 +253,7 @@ async function extractTechStack(page) {
  */
 export async function extractSiteDna({ url, ventureId, supabase }) {
   if (!supabase) {
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
   }
 
   console.log('\n   Site DNA Extractor');
@@ -381,10 +378,7 @@ export async function extractSiteDna({ url, ventureId, supabase }) {
  */
 export async function createManualDna({ url, ventureId, manualData, supabase }) {
   if (!supabase) {
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
   }
 
   console.log('\n   Manual DNA Entry');

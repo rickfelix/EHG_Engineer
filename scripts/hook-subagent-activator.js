@@ -8,7 +8,7 @@
  * Provides unified interface for resolution
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import SessionManagerSubAgent from './session-manager-subagent.js';
 // GitHubDeploymentSubAgent import reserved for future use
 // import { GitHubDeploymentSubAgent } from './github-deployment-subagent.js';
@@ -24,10 +24,7 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 class HookSubAgentActivator {
   constructor() {

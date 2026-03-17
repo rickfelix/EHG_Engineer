@@ -12,7 +12,7 @@
  * - GOVERNED pipeline (human approval required)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { getLLMClient } from '../../../lib/llm/client-factory.js';
 import { ConstitutionValidator } from './constitution-validator.js';
 import { AssessmentStorage } from './storage.js';
@@ -30,10 +30,7 @@ import { MODEL_CONFIG } from './config.js';
  */
 export class AIQualityJudge {
   constructor(options = {}) {
-    this.supabase = options.supabase || createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    this.supabase = options.supabase || createSupabaseServiceClient();
 
     this.openai = options.openai || getLLMClient({ purpose: 'validation' });
 

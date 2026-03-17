@@ -8,8 +8,8 @@
  * Part of SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-04-B
  */
 
-import { createClient } from '@supabase/supabase-js';
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 const DEFAULT_GUARD_DAYS = 3; // Warn when ≤3 days remain in OKR cycle
 
 /**
@@ -51,10 +51,7 @@ export async function checkDay28HardStop({
   ventureId = null,
   guardDays = null,
 } = {}) {
-  const supabase = supabaseClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   // Load threshold from DB config if not explicitly provided
   if (guardDays === null) {
@@ -132,10 +129,7 @@ export async function getOkrDateProximity({
   sd,
   supabase: supabaseClient,
 } = {}) {
-  const supabase = supabaseClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   // Find OKR links from SD's strategic_objectives or metadata
   const objectiveIds = sd?.metadata?.objective_ids || [];
@@ -180,10 +174,7 @@ export async function autoDeferOkrLinkedSDs({
   logger = console,
   dryRun = false,
 } = {}) {
-  const supabase = supabaseClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   // Check if we're in the deferral window
   const guardResult = await checkDay28HardStop({ supabase, logger });

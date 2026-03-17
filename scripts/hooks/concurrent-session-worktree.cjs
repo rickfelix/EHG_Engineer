@@ -440,12 +440,9 @@ async function main() {
   // Initialize Supabase
   let supabase;
   try {
-    require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+ });
+        supabase = createSupabaseServiceClient();
   } catch {
     return; // Supabase not available - skip silently
   }
@@ -553,8 +550,7 @@ async function main() {
       const repoRoot = path.resolve(__dirname, '../..');
       const worktreePath = path.join(repoRoot, '.worktrees', 'sd', worktreeKey);
       if (mySessionId && fs.existsSync(worktreePath)) {
-        const { createClient } = require('@supabase/supabase-js');
-        const sbUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+                const sbUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
         const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (sbUrl && sbKey) {
           const supabase = createClient(sbUrl, sbKey);

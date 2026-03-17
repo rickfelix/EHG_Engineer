@@ -14,7 +14,7 @@
  * @see {@link ../docs/russian-judge-quality-system.md} Complete documentation
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
@@ -48,10 +48,7 @@ export class AIQualityEvaluator {
     this.temperature = 0.3;
     this.llmClient = null; // Initialized lazily on first use
 
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     this.bandThresholds = BAND_THRESHOLDS;
   }

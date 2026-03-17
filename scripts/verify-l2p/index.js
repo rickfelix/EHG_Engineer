@@ -12,7 +12,7 @@
  * SD-LEO-REFACTOR-VERIFY-L2P-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import _fs from 'fs'; // Reserved for future use
@@ -51,10 +51,7 @@ const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../..');
  */
 export class LeadToPlanVerifier {
   constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     this.handoffValidator = new HandoffValidator();
     this.sdRequirements = SD_REQUIREMENTS;

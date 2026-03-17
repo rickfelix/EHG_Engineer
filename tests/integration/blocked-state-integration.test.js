@@ -6,8 +6,8 @@
  * This validates that the system works with actual orchestrator SDs.
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import {
   detectAllBlockedState,
@@ -17,10 +17,7 @@ import {
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('Blocked State Detection Integration', () => {
   describe('Module Exports', () => {

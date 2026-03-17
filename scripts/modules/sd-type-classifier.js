@@ -15,6 +15,7 @@
  * @version 1.2.0 - LEO v4.3.3 Refactoring Enhancement
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
@@ -490,10 +491,7 @@ BUILD REQUIREMENTS:
 
   // Load SD from database
   const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const sdId = args[0];
   const { data: sd, error } = await supabase

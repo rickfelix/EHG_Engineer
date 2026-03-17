@@ -11,7 +11,7 @@
  * - loadHealthUrgencyForSD() for batch loading in sd-next queue
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,10 +20,7 @@ dotenv.config();
  * Get a Supabase client (reuses process-level singleton pattern)
  */
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 /**

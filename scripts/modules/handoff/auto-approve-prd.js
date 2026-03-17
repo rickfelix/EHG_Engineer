@@ -8,7 +8,7 @@
  * User Request: "I want automation" - bypasses manual review for qualified PRDs
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -56,10 +56,7 @@ const AUTO_APPROVE_CONFIG = {
  * @returns {Promise<{approved: boolean, reason: string, score?: number}>}
  */
 export async function autoApprovePRD(sdId, options = {}) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const config = { ...AUTO_APPROVE_CONFIG, ...options };
 
@@ -198,10 +195,7 @@ export async function autoApprovePRD(sdId, options = {}) {
  * @returns {Promise<{results: Array, summary: string}>}
  */
 export async function autoApproveChildPRDs(parentSdId) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   console.log(`\n🤖 AUTO-APPROVE CHILD PRDs for: ${parentSdId}`);
   console.log('═'.repeat(60));

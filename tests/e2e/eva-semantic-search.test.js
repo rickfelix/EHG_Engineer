@@ -10,8 +10,8 @@
  * SD: SD-EVA-FEAT-SEMANTIC-SEARCH-001
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { test, expect, describe, beforeAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,10 +20,7 @@ describe('EVA Hybrid Semantic Search E2E', () => {
   let supabase;
 
   beforeAll(() => {
-    supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
   });
 
   describe('Database Migration Verification', () => {

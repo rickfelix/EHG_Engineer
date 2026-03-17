@@ -9,13 +9,9 @@
  * SD-MAN-INFRA-VENTURE-ARTIFACT-PIPELINE-003
  */
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const jsonMode = process.argv.includes('--json');
 

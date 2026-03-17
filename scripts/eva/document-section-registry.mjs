@@ -7,17 +7,14 @@
  * and architecture_plan document types.
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
-import { createClient } from '@supabase/supabase-js';
 
 let _supabase = null;
 function getSupabase() {
   if (!_supabase) {
-    _supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    _supabase = createSupabaseServiceClient();
   }
   return _supabase;
 }

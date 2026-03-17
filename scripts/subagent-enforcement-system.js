@@ -5,7 +5,7 @@
  * Automatically detects and enforces ALL sub-agent requirements
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import path from 'path';
@@ -15,10 +15,7 @@ dotenv.config();
 class SubAgentEnforcementSystem {
   constructor() {
     // Use service role key for full access to LEO tables (anon key blocked by RLS on some tables)
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
     
     // Define ALL sub-agent triggers based on LEO Protocol
     this.subAgentTriggers = {

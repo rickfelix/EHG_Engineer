@@ -12,7 +12,7 @@
  * the formal handoff workflow.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import os from 'os';
 import dotenv from 'dotenv';
@@ -28,10 +28,7 @@ import { checkSDAge, handleTimelineViolation, formatBlockMessage } from './modul
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Map a phase to the appropriate CLAUDE_*.md context file.

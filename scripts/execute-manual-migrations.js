@@ -15,7 +15,7 @@
  *   --today        Only execute files created today
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { config } from 'dotenv';
 import { existsSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
@@ -32,10 +32,7 @@ const __dirname = dirname(__filename);
 config({ path: join(__dirname, '../.env') });
 config({ path: join(__dirname, '../../ehg/.env') });
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const MANUAL_UPDATES_DIR = join(__dirname, '../database/manual-updates');
 

@@ -10,6 +10,7 @@
  * @sd SD-LEO-INFRA-TYPE-CONTENT-BASED-001
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -29,10 +30,7 @@ export class SiblingContextAnalyzer {
 
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      this.supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      this.supabase = createSupabaseServiceClient();
       return this.supabase;
     } catch {
       return null;

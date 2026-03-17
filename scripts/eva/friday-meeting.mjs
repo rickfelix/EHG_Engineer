@@ -13,17 +13,14 @@
  * SD-AUTONOMOUS-SKUNKWORKS-RD-DEPARTMENT-ORCH-001-B
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getLLMClient } from '../../lib/llm/client-factory.js';
 import { gatherRdProposals as _gatherRdProposals, renderRdProposals as _renderRdProposals, buildCombinedDecisionPayload as _buildCombinedDecisionPayload, processRdProposalDecision as _processRdProposalDecision } from '../../lib/skunkworks/friday-rd-section.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const logger = console;
 

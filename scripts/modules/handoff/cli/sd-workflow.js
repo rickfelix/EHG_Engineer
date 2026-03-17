@@ -7,7 +7,7 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { shouldSkipCodeValidation, getValidationRequirements } from '../../../../lib/utils/sd-type-validation.js';
 import { WORKFLOW_BY_SD_TYPE } from './workflow-definitions.js';
 
@@ -18,10 +18,7 @@ import { WORKFLOW_BY_SD_TYPE } from './workflow-definitions.js';
  * @returns {Promise<Object>} - Workflow info or error
  */
 export async function getSDWorkflow(sdId) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // Support UUID and sd_key lookups
   const { data: sd, error } = await supabase

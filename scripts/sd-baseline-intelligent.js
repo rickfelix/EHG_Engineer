@@ -14,7 +14,7 @@
  *   npm run sd:baseline:intelligent:dry       # Show GPT analysis
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import _readline from 'readline';
 import { getLLMClient } from '../lib/llm/client-factory.js';
@@ -42,10 +42,7 @@ import {
 dotenv.config();
 
 // Initialize clients
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const openai = getLLMClient({ purpose: 'generation' });
 

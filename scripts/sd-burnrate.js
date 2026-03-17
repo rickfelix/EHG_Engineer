@@ -14,16 +14,13 @@
  * - Take periodic snapshots for trending
  */
 
-import { createClient } from '@supabase/supabase-js';
-// import { execSync } from 'child_process'; // Unused - available for future shell commands
+// import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { execSync } from 'child_process'; // Unused - available for future shell commands
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // ANSI color codes
 const colors = {

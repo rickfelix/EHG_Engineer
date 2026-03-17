@@ -9,14 +9,11 @@
  * Usage: node scripts/eva-recovery-status.js [--json]
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import { getRecoveryStatus } from '../lib/eva/error-recovery-orchestrator.js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 async function main() {
   const jsonMode = process.argv.includes('--json');

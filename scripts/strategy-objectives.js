@@ -16,13 +16,10 @@
  *   node scripts/strategy-objectives.js show <id>
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 function parseArgs(args) {
   const result = {};

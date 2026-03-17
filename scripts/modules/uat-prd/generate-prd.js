@@ -5,7 +5,7 @@
  * @module generate-prd
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { authStories } from './auth-stories.js';
 import { dashboardStories } from './dashboard-stories.js';
 import { ventureStories } from './venture-stories.js';
@@ -213,10 +213,7 @@ function buildPRDContent(userStories, stats) {
 export async function generatePRD() {
   console.log('Generating comprehensive PRD for SD-UAT-001...\n');
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const userStories = generateUserStories();
   const stats = calculateStats(userStories);

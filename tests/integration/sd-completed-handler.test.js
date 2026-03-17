@@ -11,17 +11,14 @@
  * - Idempotent Stage 19 record creation
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
 import { handleSdCompleted } from '../../lib/eva/event-bus/handlers/sd-completed.js';
 

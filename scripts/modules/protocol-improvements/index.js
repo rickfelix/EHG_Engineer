@@ -17,6 +17,7 @@
  */
 
 // Import classes
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { ImprovementExtractor } from './ImprovementExtractor.js';
 import { ImprovementApplicator } from './ImprovementApplicator.js';
 import { EffectivenessTracker } from './EffectivenessTracker.js';
@@ -34,10 +35,7 @@ export function createProtocolImprovementSystem() {
     // List improvements with optional filtering
     async listImprovements(filters = {}) {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       let query = supabase.from('protocol_improvement_queue').select('*');
 
@@ -56,10 +54,7 @@ export function createProtocolImprovementSystem() {
     // Get a single improvement by ID
     async getImprovement(id) {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
         .from('protocol_improvement_queue')
@@ -74,10 +69,7 @@ export function createProtocolImprovementSystem() {
     // Approve an improvement
     async approveImprovement(id, reviewedBy = 'system') {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
         .from('protocol_improvement_queue')
@@ -98,10 +90,7 @@ export function createProtocolImprovementSystem() {
     // Reject an improvement
     async rejectImprovement(id, reason, reviewedBy = 'system') {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
         .from('protocol_improvement_queue')
@@ -122,10 +111,7 @@ export function createProtocolImprovementSystem() {
     // Apply a single improvement
     async applyImprovement(id, dryRun = false) {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       // Get the improvement
       const { data: improvement, error: fetchError } = await supabase
@@ -169,10 +155,7 @@ export function createProtocolImprovementSystem() {
     // Get effectiveness report
     async getEffectivenessReport(_filters = {}) {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
         .from('v_improvement_effectiveness')
@@ -203,10 +186,7 @@ export function createProtocolImprovementSystem() {
     // Get statistics
     async getStats() {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      const supabase = createSupabaseServiceClient();
 
       const { data, error } = await supabase
         .from('protocol_improvement_queue')

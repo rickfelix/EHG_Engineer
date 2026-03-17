@@ -7,7 +7,7 @@
  * be converted to proper CREATE TYPE enums.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -15,10 +15,7 @@ import dotenv from 'dotenv';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
 // Known status-like column patterns
 const STATUS_PATTERNS = ['status', 'state', 'phase', 'priority', 'severity', 'category'];

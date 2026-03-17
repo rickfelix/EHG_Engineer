@@ -3,8 +3,8 @@
  * Tests the complete workflow: SD → PRD → Execution → Verification → Approval
  */
 
+import { createSupabaseClient } from '../../lib/supabase-client.js';
 import request from 'supertest';
-import { createClient } from '@supabase/supabase-js';
 import HandoffValidator from '../../lib/dashboard/handoff-validator.js';
 import dotenv from 'dotenv';
 
@@ -23,10 +23,7 @@ describe('LEO Protocol E2E Journey', () => {
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL &&
         process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your_supabase_url_here') {
-      supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      );
+      supabase = createSupabaseClient();
     }
   });
 

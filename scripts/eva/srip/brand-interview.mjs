@@ -10,7 +10,7 @@
  * Output: Structured interview stored in srip_brand_interviews table
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -286,10 +286,7 @@ export async function prePopulateFromVenture(ventureId, supabase) {
  */
 export async function runBrandInterview({ siteDnaId, ventureId, supabase }) {
   if (!supabase) {
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
   }
 
   console.log('\n   Brand Interview');

@@ -5,7 +5,7 @@
  * @module update-test-case
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../../../lib/supabase-client.js';
 import { comprehensiveAssessment } from './assessment-template.js';
 
 /**
@@ -13,10 +13,7 @@ import { comprehensiveAssessment } from './assessment-template.js';
  * @returns {import('@supabase/supabase-js').SupabaseClient} Supabase client
  */
 function createSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  return createSupabaseClient();
 }
 
 /**

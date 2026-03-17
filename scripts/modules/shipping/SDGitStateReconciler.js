@@ -10,11 +10,11 @@
  * @version 1.0.0
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -53,10 +53,7 @@ export class SDGitStateReconciler {
 
   async initialize() {
     if (!this.supabase) {
-      this.supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      this.supabase = createSupabaseServiceClient();
     }
   }
 

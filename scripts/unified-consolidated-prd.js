@@ -4,7 +4,7 @@
  * Ensures consistent PRD creation for consolidated SDs with proper JSON format
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { program } from 'commander';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
@@ -12,10 +12,7 @@ import { validatePRDContent } from './prd-format-validator.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 program
   .argument('<sd-id>', 'Strategic Directive ID (e.g., SD-022)')

@@ -3,17 +3,14 @@
  * Handles all database queries and external data loading
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import { checkUncommittedChanges, getAffectedRepos } from '../../lib/multi-repo/index.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 export { supabase };
 

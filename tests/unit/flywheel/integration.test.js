@@ -9,17 +9,14 @@
  * - CHECK constraint enforcement
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { describe, it, expect, afterAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { captureInteraction, captureHandoffGate } from '../../../lib/flywheel/capture.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // Track inserted IDs for cleanup
 const insertedIds = [];

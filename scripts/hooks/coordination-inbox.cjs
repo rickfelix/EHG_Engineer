@@ -66,12 +66,9 @@ async function main() {
 
   let supabase;
   try {
-    require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
-    const { createClient } = require('@supabase/supabase-js');
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+ });
+        supabase = createSupabaseServiceClient();
   } catch {
     return;
   }

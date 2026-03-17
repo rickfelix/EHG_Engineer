@@ -1,3 +1,4 @@
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 #!/usr/bin/env node
 /**
  * Semantic Codebase Indexer
@@ -12,7 +13,6 @@
  *   node scripts/semantic-indexer.js [--application ehg|ehg_engineer] [--incremental]
  */
 
-const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs').promises;
 const path = require('path');
 const { parseCodeEntities } = require('./modules/language-parsers');
@@ -55,10 +55,7 @@ const SUPPORTED_EXTENSIONS = [
 ];
 
 // Initialize clients
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // OpenAI client removed — embeddings now handled by centralized LLM factory
 

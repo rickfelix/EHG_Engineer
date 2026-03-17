@@ -5,17 +5,14 @@
  * Tests that the RCA gate properly blocks EXEC->PLAN handoffs when P0/P1 RCRs exist without verified CAPAs.
  */
 
+import { createSupabaseClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { checkRCAGate } from '../../scripts/root-cause-agent.js';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 const TEST_SD_ID = 'SD-RCA-GATE-TEST';
 let testRCRId = null;

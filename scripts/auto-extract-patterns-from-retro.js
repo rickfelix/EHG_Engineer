@@ -12,16 +12,13 @@
  * - Adds resolution_date and resolution_notes support
  */
 
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 const kb = new IssueKnowledgeBase();
 

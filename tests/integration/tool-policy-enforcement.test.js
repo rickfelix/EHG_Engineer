@@ -1,14 +1,11 @@
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import { filterToolsByProfile, canUseTool, isValidProfile } from '../../lib/tool-policy.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('Tool Policy E2E: Compile-Time Enforcement', () => {
   let agents;

@@ -5,7 +5,7 @@
  * Orchestrates the intelligent SD selection display using modular components.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -80,10 +80,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
  */
 export class SDNextSelector {
   constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     this.baseline = null;
     this.baselineItems = [];

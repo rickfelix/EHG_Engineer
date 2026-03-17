@@ -7,7 +7,7 @@
  * Compares live schema against a stored reference to detect drift.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -18,10 +18,7 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const SNAPSHOT_PATH = join(__dirname, '..', 'docs', 'database', 'schema-snapshot.json');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
 async function captureSchema() {
   // Get all tables

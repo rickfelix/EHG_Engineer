@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 async function generateSessionPrologue() {
   console.log('📝 Generating session prologue template...\n');

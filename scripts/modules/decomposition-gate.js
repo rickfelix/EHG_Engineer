@@ -14,19 +14,16 @@
  * - Duration estimate exceeds 1-2 weeks
  *
  * Usage:
- *   import { validateDecompositionGate } from './modules/decomposition-gate.js';
+ *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { validateDecompositionGate } from './modules/decomposition-gate.js';
  *   const result = await validateDecompositionGate(sdId, transitionType);
  */
 
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * INTELLIGENT Decomposition Assessment

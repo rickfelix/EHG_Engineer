@@ -10,7 +10,7 @@
  * Output: Array of naming candidates with domain_status='unknown'
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../../lib/llm/client-factory.js';
 
@@ -33,10 +33,7 @@ export async function generateNamingCandidates({
   brandInterviewId,
   count = DEFAULT_CANDIDATE_COUNT,
 }) {
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // Fetch DNA and interview data
   const [dnaResult, interviewResult] = await Promise.all([

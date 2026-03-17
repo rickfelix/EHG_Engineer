@@ -11,8 +11,8 @@
  * US-005: No secrets in output
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import { SessionEventCollector, createCollector } from '../../scripts/modules/session-summary/SessionEventCollector.js';
 import { SummaryGenerator, createGenerator, SCHEMA_VERSION } from '../../scripts/modules/session-summary/SummaryGenerator.js';
 import { generateAndEmitSummary } from '../../scripts/modules/session-summary/index.js';
@@ -26,10 +26,7 @@ describe('Session Summary E2E Tests', () => {
 
   beforeAll(async () => {
     if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      supabase = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      supabase = createSupabaseServiceClient();
     }
   });
 

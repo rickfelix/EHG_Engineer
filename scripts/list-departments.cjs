@@ -5,12 +5,8 @@
  */
 
 function getClient() {
-  require('dotenv').config();
-  const { createClient } = require('@supabase/supabase-js');
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+    return createSupabaseServiceClient();
 }
 
 async function main(supabase) {

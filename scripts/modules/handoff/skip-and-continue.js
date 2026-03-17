@@ -11,7 +11,7 @@
  * @module skip-and-continue
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { getNextReadyChild, getOrchestratorContext } from './child-sd-selector.js';
 
@@ -380,10 +380,7 @@ export async function executeSkipAndContinue(params) {
  * @returns {object} Supabase client
  */
 export function createSupabaseClient() {
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 export default {
