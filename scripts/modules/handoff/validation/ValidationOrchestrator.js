@@ -223,63 +223,94 @@ export class ValidationOrchestrator {
     let weightedScoreSum = 0;
     let totalWeight = 0;
 
+    // SD-LEO-INFRA-PARALLEL-GATE-EXECUTION-001: Group gates by dependency tier
+    // Tier 0: instant/protocol checks, Tier 1 (default): independent DB gates,
+    // Tier 2: dependent on earlier results, Tier 3: LLM-powered gates
+    const tierMap = new Map();
     for (const gate of gates) {
-      // Check condition if provided
-      if (gate.condition && !(await gate.condition(context))) {
-        console.log(`⏭️  Skipping ${gate.name} (condition not met)`);
-        continue;
-      }
+      const tier = gate.tier ?? 1;
+      if (!tierMap.has(tier)) tierMap.set(tier, []);
+      tierMap.get(tier).push(gate);
+    }
+    const sortedTiers = [...tierMap.keys()].sort((a, b) => a - b);
 
-      const gateResult = await this.validateGate(gate.name, gate.validator, context);
-      results.gateResults[gate.name] = gateResult;
+    let earlyExit = false;
+    for (const tier of sortedTiers) {
+      if (earlyExit) break;
 
-      // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Track SKIPPED status
-      const isSkipped = isSkippedResult(gateResult);
-      if (isSkipped) {
-        results.skippedCount++;
-        results.skippedGates.push(gate.name);
-        results.gateStatuses[gate.name] = {
-          status: ValidatorStatus.SKIPPED,
-          required: gate.required !== false,
-          skipReason: gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE,
-          skipDetails: gateResult.skipDetails
-        };
-      } else {
-        results.gateStatuses[gate.name] = {
-          status: gateResult.passed ? ValidatorStatus.PASS : ValidatorStatus.FAIL,
-          required: gate.required !== false
-        };
-      }
+      const tierGates = tierMap.get(tier);
 
-      // Backward compat: sum raw scores
-      results.totalScore += gateResult.score;
-      results.totalMaxScore += gateResult.maxScore;
-      results.gateCount++;
-
-      // Calculate weighted contribution
-      // Gate weight defaults to 1.0, can be customized per gate
-      const gateWeight = gate.weight || 1.0;
-      const gatePercentage = gateResult.maxScore > 0
-        ? (gateResult.score / gateResult.maxScore) * 100
-        : 0;
-      weightedScoreSum += gatePercentage * gateWeight;
-      totalWeight += gateWeight;
-
-      // Defensive check for optional warnings array (PAT-SCHEMA-VALIDATION-001)
-      if (gateResult.warnings && Array.isArray(gateResult.warnings)) {
-        results.warnings.push(...gateResult.warnings);
-      }
-
-      // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: SKIPPED counts as satisfied (not a failure)
-      // Only FAIL (not SKIPPED) should block handoff for required gates
-      if (!gateResult.passed && gate.required !== false && !isSkipped) {
-        results.passed = false;
-        results.failedGate = gate.name;
-        // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
-        if (gateResult.issues && Array.isArray(gateResult.issues)) {
-          results.issues.push(...gateResult.issues);
+      // Filter gates with unmet conditions before parallel execution
+      const eligibleGates = [];
+      for (const gate of tierGates) {
+        if (gate.condition && !(await gate.condition(context))) {
+          console.log(`⏭️  Skipping ${gate.name} (condition not met)`);
+          continue;
         }
-        break; // Stop on first required failure
+        eligibleGates.push(gate);
+      }
+
+      if (eligibleGates.length === 0) continue;
+
+      // Execute all gates within this tier concurrently
+      const tierResults = await Promise.all(
+        eligibleGates.map(gate =>
+          this.validateGate(gate.name, gate.validator, context)
+            .then(gateResult => ({ gate, gateResult }))
+        )
+      );
+
+      // Process results from this tier
+      for (const { gate, gateResult } of tierResults) {
+        results.gateResults[gate.name] = gateResult;
+
+        // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Track SKIPPED status
+        const isSkipped = isSkippedResult(gateResult);
+        if (isSkipped) {
+          results.skippedCount++;
+          results.skippedGates.push(gate.name);
+          results.gateStatuses[gate.name] = {
+            status: ValidatorStatus.SKIPPED,
+            required: gate.required !== false,
+            skipReason: gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE,
+            skipDetails: gateResult.skipDetails
+          };
+        } else {
+          results.gateStatuses[gate.name] = {
+            status: gateResult.passed ? ValidatorStatus.PASS : ValidatorStatus.FAIL,
+            required: gate.required !== false
+          };
+        }
+
+        // Backward compat: sum raw scores
+        results.totalScore += gateResult.score;
+        results.totalMaxScore += gateResult.maxScore;
+        results.gateCount++;
+
+        // Calculate weighted contribution
+        const gateWeight = gate.weight || 1.0;
+        const gatePercentage = gateResult.maxScore > 0
+          ? (gateResult.score / gateResult.maxScore) * 100
+          : 0;
+        weightedScoreSum += gatePercentage * gateWeight;
+        totalWeight += gateWeight;
+
+        // Defensive check for optional warnings array (PAT-SCHEMA-VALIDATION-001)
+        if (gateResult.warnings && Array.isArray(gateResult.warnings)) {
+          results.warnings.push(...gateResult.warnings);
+        }
+
+        // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: SKIPPED counts as satisfied (not a failure)
+        // Only FAIL (not SKIPPED) should block handoff for required gates
+        if (!gateResult.passed && gate.required !== false && !isSkipped) {
+          results.passed = false;
+          if (!results.failedGate) results.failedGate = gate.name;
+          // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
+          if (gateResult.issues && Array.isArray(gateResult.issues)) {
+            results.issues.push(...gateResult.issues);
+          }
+          earlyExit = true; // Stop after processing this tier's results
+        }
       }
     }
 
@@ -941,62 +972,87 @@ export class ValidationOrchestrator {
     let weightedScoreSum = 0;
     let totalWeight = 0;
 
-    // Run ALL gates, don't stop on failure
+    // SD-LEO-INFRA-PARALLEL-GATE-EXECUTION-001: Group gates by tier for parallel execution
+    const tierMap = new Map();
     for (const gate of gates) {
-      // Check condition if provided
-      if (gate.condition && !(await gate.condition(context))) {
-        console.log(`⏭️  Skipping ${gate.name} (condition not met)`);
-        continue;
-      }
+      const tier = gate.tier ?? 1;
+      if (!tierMap.has(tier)) tierMap.set(tier, []);
+      tierMap.get(tier).push(gate);
+    }
+    const sortedTiers = [...tierMap.keys()].sort((a, b) => a - b);
 
-      // Skip LLM-powered gates in precheck mode for fast advisory checks
-      if (context.precheckMode && gate.llmPowered) {
-        console.log(`⏭️  Skipping ${gate.name} (LLM gate — evaluated during execute)`);
-        const skipResult = { passed: true, score: 0, maxScore: 0, issues: [], warnings: [`Skipped in precheck mode (LLM gate)`] };
-        results.gateResults[gate.name] = skipResult;
-        results.warnings.push(`${gate.name}: Skipped in precheck mode (LLM gate — run execute for full evaluation)`);
-        if (!results.skippedGates) results.skippedGates = [];
-        results.skippedGates.push(gate.name);
-        continue;
-      }
+    // Run ALL tiers, don't stop on failure (batch mode)
+    for (const tier of sortedTiers) {
+      const tierGates = tierMap.get(tier);
 
-      const gateResult = await this.validateGate(gate.name, gate.validator, context);
-      results.gateResults[gate.name] = gateResult;
-
-      results.totalScore += gateResult.score;
-      results.totalMaxScore += gateResult.maxScore;
-      results.gateCount++;
-
-      const gateWeight = gate.weight || 1.0;
-      const gatePercentage = gateResult.maxScore > 0
-        ? (gateResult.score / gateResult.maxScore) * 100
-        : 0;
-      weightedScoreSum += gatePercentage * gateWeight;
-      totalWeight += gateWeight;
-
-      // Defensive check for optional warnings array (PAT-SCHEMA-VALIDATION-001)
-      if (gateResult.warnings && Array.isArray(gateResult.warnings)) {
-        results.warnings.push(...gateResult.warnings);
-      }
-
-      // Collect issues but DON'T stop - this is the key difference
-      if (!gateResult.passed && gate.required !== false) {
-        results.passed = false;
-        results.failedGates.push({
-          name: gate.name,
-          issues: gateResult.issues || [],
-          score: gateResult.score,
-          maxScore: gateResult.maxScore
-        });
-        // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
-        if (gateResult.issues && Array.isArray(gateResult.issues)) {
-          results.issues.push(...gateResult.issues.map(issue => ({
-            gate: gate.name,
-            issue
-          })));
+      // Filter gates with unmet conditions or LLM gates in precheck mode
+      const eligibleGates = [];
+      for (const gate of tierGates) {
+        if (gate.condition && !(await gate.condition(context))) {
+          console.log(`⏭️  Skipping ${gate.name} (condition not met)`);
+          continue;
         }
-      } else {
-        results.passedGates.push(gate.name);
+        if (context.precheckMode && gate.llmPowered) {
+          console.log(`⏭️  Skipping ${gate.name} (LLM gate — evaluated during execute)`);
+          const skipResult = { passed: true, score: 0, maxScore: 0, issues: [], warnings: ['Skipped in precheck mode (LLM gate)'] };
+          results.gateResults[gate.name] = skipResult;
+          results.warnings.push(`${gate.name}: Skipped in precheck mode (LLM gate — run execute for full evaluation)`);
+          if (!results.skippedGates) results.skippedGates = [];
+          results.skippedGates.push(gate.name);
+          continue;
+        }
+        eligibleGates.push(gate);
+      }
+
+      if (eligibleGates.length === 0) continue;
+
+      // Execute all gates within this tier concurrently
+      const tierResults = await Promise.all(
+        eligibleGates.map(gate =>
+          this.validateGate(gate.name, gate.validator, context)
+            .then(gateResult => ({ gate, gateResult }))
+        )
+      );
+
+      // Process results from this tier
+      for (const { gate, gateResult } of tierResults) {
+        results.gateResults[gate.name] = gateResult;
+
+        results.totalScore += gateResult.score;
+        results.totalMaxScore += gateResult.maxScore;
+        results.gateCount++;
+
+        const gateWeight = gate.weight || 1.0;
+        const gatePercentage = gateResult.maxScore > 0
+          ? (gateResult.score / gateResult.maxScore) * 100
+          : 0;
+        weightedScoreSum += gatePercentage * gateWeight;
+        totalWeight += gateWeight;
+
+        // Defensive check for optional warnings array (PAT-SCHEMA-VALIDATION-001)
+        if (gateResult.warnings && Array.isArray(gateResult.warnings)) {
+          results.warnings.push(...gateResult.warnings);
+        }
+
+        // Collect issues but DON'T stop - this is the key difference
+        if (!gateResult.passed && gate.required !== false) {
+          results.passed = false;
+          results.failedGates.push({
+            name: gate.name,
+            issues: gateResult.issues || [],
+            score: gateResult.score,
+            maxScore: gateResult.maxScore
+          });
+          // Defensive check for optional issues array (PAT-SCHEMA-VALIDATION-001)
+          if (gateResult.issues && Array.isArray(gateResult.issues)) {
+            results.issues.push(...gateResult.issues.map(issue => ({
+              gate: gate.name,
+              issue
+            })));
+          }
+        } else {
+          results.passedGates.push(gate.name);
+        }
       }
     }
 
