@@ -282,7 +282,8 @@ async function waitForSyncMarker() {
         }
       }
     } catch (_error) {
-      // Marker doesn't exist or is invalid, keep polling
+      // Intentionally suppressed: marker doesn't exist or is invalid, keep polling
+      console.debug('[CoreProtocolGate] sync marker poll suppressed:', _error?.message || _error);
     }
 
     // Wait before next poll
@@ -304,7 +305,8 @@ function clearSyncMarker() {
       fs.unlinkSync(SYNC_MARKER_FILE);
     }
   } catch (_error) {
-    // Ignore errors - marker cleanup is best-effort
+    // Intentionally suppressed: marker cleanup is best-effort
+    console.debug('[CoreProtocolGate] sync marker cleanup suppressed:', _error?.message || _error);
   }
 }
 

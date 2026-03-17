@@ -79,8 +79,9 @@ export function validatePRDReadiness(sd) {
   try {
     criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
       (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
-  } catch {
-    // success_criteria is a plain text string, treat as 1 item
+  } catch (e) {
+    // Intentionally suppressed: success_criteria is a plain text string, treat as 1 item
+    console.debug('[PRDReadiness] success_criteria parse suppressed:', e?.message || e);
     criteria = sd.success_criteria ? [sd.success_criteria] : [];
   }
   if (criteria.length >= checks.success_criteria.minItems) {
@@ -208,8 +209,9 @@ export function validateSuccessCriteriaActionability(sd) {
   try {
     criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
       (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
-  } catch {
-    // If parsing fails, skip this check
+  } catch (e) {
+    // Intentionally suppressed: If parsing fails, skip this check
+    console.debug('[PRDReadiness] success_criteria actionability parse suppressed:', e?.message || e);
     return result;
   }
 

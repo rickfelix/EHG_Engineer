@@ -79,7 +79,10 @@ function loadState(statePath) {
   const tmpPath = `${statePath}.tmp`;
   try {
     if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-  } catch { /* ignore */ }
+  } catch (e) {
+    // Intentionally suppressed: tmp file cleanup is best-effort
+    console.debug('[ParallelTeamSpawner] tmp cleanup suppressed:', e?.message || e);
+  }
 
   try {
     if (!fs.existsSync(statePath)) return empty;
@@ -188,7 +191,10 @@ export async function planParallelExecution(supabase, parentSdId, currentSdId) {
       .eq('id', parentSdId)
       .single();
     if (parent?.sd_key) parentSdKey = parent.sd_key;
-  } catch { /* UUID fallback */ }
+  } catch (e) {
+    // Intentionally suppressed: UUID fallback
+    console.debug('[ParallelTeamSpawner] parent SD key lookup suppressed:', e?.message || e);
+  }
 
   // 2. Get ready children via DAG-aware selector (handles deps, urgency, cycles)
   const { children, allComplete, dagErrors, reason } = await getReadyChildren(
@@ -277,7 +283,10 @@ export async function planParallelExecution(supabase, parentSdId, currentSdId) {
         maxPromptTokens: 1200
       });
       aefPreamble = promptPreamble || '';
-    } catch { /* AEF failure is non-fatal */ }
+    } catch (e) {
+      // Intentionally suppressed: AEF failure is non-fatal
+      console.debug('[ParallelTeamSpawner] AEF compose suppressed:', e?.message || e);
+    }
 
     const prompt = buildChildPrompt({
       aefPreamble,

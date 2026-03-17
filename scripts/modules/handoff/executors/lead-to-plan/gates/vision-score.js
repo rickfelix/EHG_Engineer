@@ -83,8 +83,9 @@ async function checkOverride(sdType, supabase) {
       }
     }
     return { active: false };
-  } catch {
-    // Table or columns absent — fail-closed (enforce the gate)
+  } catch (e) {
+    // Intentionally suppressed: Table or columns absent — fail-closed (enforce the gate)
+    console.debug('[VisionScore] bypass check suppressed:', e?.message || e);
     return { active: false };
   }
 }
@@ -177,8 +178,9 @@ export async function validateVisionScore(sd, supabase) {
         thresholdAction = data[0].threshold_action;
         dimensionScores = data[0].dimension_scores ?? null;
       }
-    } catch {
-      // DB unavailable — proceed to hard block (no score = no pass)
+    } catch (e) {
+      // Intentionally suppressed: DB unavailable — proceed to hard block
+      console.debug('[VisionScore] DB score lookup suppressed:', e?.message || e);
     }
   }
 
