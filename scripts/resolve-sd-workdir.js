@@ -158,7 +158,7 @@ function createWorktree(sdKey, repoRoot) {
       cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
     }).trim();
     if (branches) {
-      branch = branches.split('\n')[0].replace(/^\*?\s*/, '').trim();
+      branch = branches.split('\n')[0].replace(/^[*+]?\s*/, '').trim();
     }
   } catch { /* no match */ }
 
