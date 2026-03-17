@@ -129,7 +129,10 @@ async function classifyScopeItems(supabase, sd, protectedItems) {
         ? dims.map(d => `${d.id || d.name}: ${d.description || ''}`).join('\n')
         : JSON.stringify(dims);
     }
-  } catch { /* non-blocking */ }
+  } catch (e) {
+    // Intentionally suppressed: vision dimension load is non-blocking
+    console.debug('[ScopeReductionVerification] vision dimensions suppressed:', e?.message || e);
+  }
 
   // Load architecture dimensions
   let archContext = '';
@@ -146,7 +149,10 @@ async function classifyScopeItems(supabase, sd, protectedItems) {
         ? dims.map(d => `${d.id || d.name}: ${d.description || ''}`).join('\n')
         : JSON.stringify(dims);
     }
-  } catch { /* non-blocking */ }
+  } catch (e) {
+    // Intentionally suppressed: architecture dimension load is non-blocking
+    console.debug('[ScopeReductionVerification] architecture dimensions suppressed:', e?.message || e);
+  }
 
   // Build protected items context
   const protectedContext = protectedItems.length > 0

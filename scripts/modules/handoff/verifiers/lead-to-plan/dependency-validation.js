@@ -73,7 +73,8 @@ export async function validateDependenciesExist(sd, supabase) {
   if (typeof deps === 'string') {
     try {
       deps = JSON.parse(deps);
-    } catch {
+    } catch (e) {
+      console.debug('[DependencyValidation] JSON parse suppressed:', e?.message || e);
       return result; // Invalid JSON, skip validation
     }
   }
