@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-03-14 8:36:22 AM
+**Generated**: 2026-03-17 10:23:33 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions
 
@@ -11,8 +11,6 @@
 ---
 
 ## Migration Execution Protocol
-
-## ⚠️ CRITICAL: Migration Execution Protocol
 
 **CRITICAL**: When you need to execute a migration, INVOKE the DATABASE sub-agent rather than writing execution scripts yourself.
 
@@ -36,14 +34,14 @@ Task tool with subagent_type="database-agent":
 ### System Overview
 | Component | Port | Path | Role |
 |-----------|------|------|------|
-| **EHG** (Frontend) | 8080 | `/mnt/c/_EHG/EHG/` | All UI (user + admin at /admin/*) |
-| **EHG_Engineer** (Backend) | 3000 | `/mnt/c/_EHG/EHG_Engineer/` | REST API + LEO scripts |
+| **EHG** (Frontend) | 8080 | `C:/Users/rickf/Projects/_EHG/ehg/` | All UI (user + admin at /admin/*) |
+| **EHG_Engineer** (Backend) | 3000 | `C:/Users/rickf/Projects/_EHG/EHG_Engineer/` | REST API + LEO scripts |
 
 **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
 
 ### CRITICAL: During EXEC Phase
 1. Read PRD from EHG_Engineer database
-2. Navigate to `/mnt/c/_EHG/EHG/` for ALL frontend work
+2. Navigate to `C:/Users/rickf/Projects/_EHG/ehg/` for ALL frontend work
 3. Admin features: `/src/components/admin/` or `/src/pages/admin/`
 4. User features: `/src/components/` or `/src/pages/`
 5. Push to EHG repo: `rickfelix/ehg.git`
@@ -181,48 +179,6 @@ npm run handoff:compliance SD-ID
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
-
 ## Claude Code Plan Mode Integration
 
 **Status**: ACTIVE | **Version**: 1.0.0
@@ -265,6 +221,48 @@ Claude Code's Plan Mode integrates with LEO Protocol to provide:
 
 ### Module Location
 `scripts/modules/plan-mode/` - LEOPlanModeOrchestrator.js, phase-permissions.js
+
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Sub-Agent Model Routing
 
@@ -339,6 +337,39 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
 ## Execution Philosophy
 
 ### Quality-First (PARAMOUNT)
@@ -375,39 +406,6 @@ The pre-push hook automatically:
 - Skip LEAD approval for child SDs
 - Skip PRD creation for child SDs
 - Mark parent complete before all children complete in database
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sub-Agent Routing Reference
 
@@ -492,6 +490,38 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
+
+### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id
+2. **Dependency Chain**: For each dependency SD:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present
+3. **Parent Context**: Loads parent orchestrator for reference
+
+### Results
+**PASS** - Ready to work if:
+- SD is standalone (not a child), OR
+- No dependencies, OR
+- All dependencies complete with required handoffs
+
+**BLOCKED** - Cannot proceed if:
+- One or more dependency SDs incomplete
+- Missing required handoffs on dependencies
+- Action: Complete blocking dependency first
+
+### Integration
+- `npm run sd:next` shows dependency status in queue
+- Child SDs with incomplete dependencies show as BLOCKED
+
 ## Global Negative Constraints
 
 These anti-patterns apply across ALL phases. Violating them leads to failed handoffs and rework.
@@ -524,38 +554,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/handoff.js execute ...`
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
-
-## Child SD Pre-Work Validation (MANDATORY)
-
-**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), run preflight validation.
-
-### Validation Command
-```bash
-node scripts/child-sd-preflight.js SD-XXX-001
-```
-
-### What It Checks
-1. **Is Child SD**: Verifies the SD has a parent_sd_id
-2. **Dependency Chain**: For each dependency SD:
-   - Status must be `completed`
-   - Progress must be `100%`
-   - Required handoffs must be present
-3. **Parent Context**: Loads parent orchestrator for reference
-
-### Results
-**PASS** - Ready to work if:
-- SD is standalone (not a child), OR
-- No dependencies, OR
-- All dependencies complete with required handoffs
-
-**BLOCKED** - Cannot proceed if:
-- One or more dependency SDs incomplete
-- Missing required handoffs on dependencies
-- Action: Complete blocking dependency first
-
-### Integration
-- `npm run sd:next` shows dependency status in queue
-- Child SDs with incomplete dependencies show as BLOCKED
 
 ## 🔄 Git Commit Guidelines
 
@@ -1137,60 +1135,60 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. SD Completion Retrospective: Centralized Claim Guard Eliminates 7 Multi-Session Collision Vectors [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+### 1. LEAD_TO_PLAN Handoff Retrospective: Crew Tournament Pattern for Stage 11 GTM [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
 
 **Key Improvements**:
-- The 7 separate claim paths existed because each was added incrementally without recognizing the cros...
-- ESM/CJS compatibility required a wrapper file (claim-guard.cjs) which adds one more file to maintain...
+- {"area":"PRD quality validation failed 4 times during planning (scores: 46, 0, 51, 49/100) - the LEA...
+- {"area":"Goal summary validation scored 0/100 on first attempt - the summary lacked measurable objec...
 
 **Action Items**:
-- [ ] Create integration test that spawns 2 concurrent claim attempts on the same SD t...
-- [ ] Add cross-cutting concern detection to LEAD phase checklist: when approving an S...
+- [ ] During LEAD approval for AI-related SDs, require explicit cost impact analysis (...
+- [ ] Add measurable success criteria to LEAD approval template: target quality improv...
 
-### 2. Fix Unicode Surrogate Pair Splitting in Handoff Output - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/12/2026 | **Score**: 100
+### 2. SD Completion Retrospective: Autonomy Model L0-L4 Full Implementation [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-45e4dfb7] Gate 1:userStoryQualityValidation failed: score 209/300
-- [PAT-AUTO-d2c1c285] Gate PREREQUISITE_HANDOFF_CHECK failed: score 841/1000
+- First EXEC-TO-PLAN handoff rejected (score 0) because sd_type="feature" requires 85% gate score but ...
+- PLAN-TO-LEAD retrospective rejected for learning_specificity (3/10) -- initial retrospective contain...
 
 **Action Items**:
-- [ ] No immediate actions required - continue standard workflow
-- [ ] Re-run blocking sub-agents for SD-LEO-FIX-FIX-UNICODE-SURROGATE-001 until PASS v...
+- [ ] Add sd_type "backend" or "infrastructure" that does not include UI gates in scor...
+- [ ] Document integration_operationalization required keys (consumers, dependencies, ...
 
-### 3. Replace External API PRD Generation With Inline Claude Code - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+### 3. SD Completion Retrospective: Assumptions vs Reality End-to-End Loop (assumption-reality-tracker.js) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-c205e83a] Gate 2D:testingSubAgentVerified failed: score 0/100
-- [PAT-AUTO-0bd90c7f] Gate GATE2_IMPLEMENTATION_FIDELITY failed: score 68/100
+- PLAN-TO-EXEC handoff rejected 10 times before passing due to missing user stories and insufficient t...
+- deriveStatus() initially returned active instead of partially_validated, violating PRD FR-3 -- root ...
 
 **Action Items**:
-- [ ] No immediate actions required - continue standard workflow
-- [ ] Re-run blocking sub-agents for SD-LEO-FIX-REPLACE-EXTERNAL-API-001 until PASS ve...
+- [ ] Add observability/metrics for fire-and-forget Supabase writes in assumption-real...
+- [ ] Create integration test for full pipeline: collectRealityMeasurements -> buildCa...
 
-### 4. Terminal Identity Process Chain Hardening - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+### 4. SD Completion Retrospective: Four Buckets Epistemic Classification Across 25 EVA Analysis Steps [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-b28c8662] Gate GATE_PROTOCOL_FILE_READ failed: score 0/100
-- SD-LEO-FIX-TERMINAL-IDENTITY-001 proceeded without PRD - scope defined informally
+- PLAN-TO-EXEC handoff required 5 attempts because PRD separate columns (system_architecture, implemen...
+- Stage-02 (multi-persona) had fourBuckets variable scoped inside a for loop - required hoisting varia...
 
 **Action Items**:
-- [ ] No immediate actions required - continue standard workflow
-- [ ] Create PRD for SD-LEO-FIX-TERMINAL-IDENTITY-001 in product_requirements_v2 table
+- [ ] Create smoke test that runs one stage analysis end-to-end and verifies epistemic...
+- [ ] Monitor LLM token usage increase from appended Four Buckets prompt (~150 tokens ...
 
-### 5. LEAD_TO_PLAN Handoff Retrospective: Distill CLAUDE*.md Files for Maximum Token Reduction [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 2/13/2026 | **Score**: 100
+### 5. PLAN_TO_EXEC Handoff Retrospective: Crew Tournament Pattern for Stage 11 GTM [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 2/15/2026 | **Score**: 100
 
 **Key Improvements**:
-- [PAT-AUTO-c205e83a] Gate 2D:testingSubAgentVerified failed: score 0/100
-- [PAT-AUTO-0bd90c7f] Gate GATE2_IMPLEMENTATION_FIDELITY failed: score 68/100
+- {"area":"PRD quality gate failed first attempt at 44/100 due to missing system_architecture section,...
+- {"area":"Exploration audit gate scored 0/100 because the format used files_examined instead of the r...
 
 **Action Items**:
-- [ ] Monitor digest token budget utilization over next 5 SDs — current 83% (20,814/25...
-- [ ] Add regression test to verify CLAUDE.md stays under 15K chars after regeneration...
+- [ ] Create a pre-submission checklist for PRD quality gates that includes: system_ar...
+- [ ] Add timeout configuration testing to tournament orchestrator acceptance criteria...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1200,7 +1198,7 @@ Each SD should trace upward through this hierarchy. When evaluating or creating 
 
 | Agent | Code | Responsibilities | % Split |
 |-------|------|------------------|----------|
-| Implementation Agent | EXEC | Implementation based on PRD. **CRITICAL: Implementations happen in /mnt/c/_EHG/e... | I:30 = 30% |
+| Implementation Agent | EXEC | Implementation based on PRD. **CRITICAL: Implementations happen in C:/Users/rick... | I:30 = 30% |
 | Strategic Leadership Agent | LEAD | Strategic planning, business objectives, final approval. **SIMPLICITY FIRST (PRE... | P:20 A:15 = 35% |
 | Technical Planning Agent | PLAN | Technical design, PRD creation with comprehensive test plans, pre-automation val... | P:20 V:15 = 35% |
 
@@ -1256,7 +1254,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-03-14*
+*Generated from database: 2026-03-17*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (0) + Lessons (5)*
 *Load this file first in all sessions*
