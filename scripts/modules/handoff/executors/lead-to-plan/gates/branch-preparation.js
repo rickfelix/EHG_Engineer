@@ -73,8 +73,9 @@ export async function ensureSDBranchExists(sd, supabase) {
             .update({ branch_name: branchName })
             .eq('id', sd.id);
           console.log('   ✅ Branch name recorded in database');
-        } catch {
-          // Non-critical - continue
+        } catch (e) {
+          // Intentionally suppressed: branch name DB update is non-critical
+          console.debug('[BranchPreparation] branch name update suppressed:', e?.message || e);
         }
       }
 

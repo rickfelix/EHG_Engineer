@@ -192,7 +192,8 @@ export async function recordFailedCompletion(parentSD, errorMessage, report = nu
         created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
       });
   } catch (_e) {
-    // Silent fail for logging - don't break the flow
+    // Intentionally suppressed: silent fail for logging, don't break the flow
+    console.debug('[LeadFinalApproval] completion logging suppressed:', _e?.message || _e);
   }
 }
 
@@ -352,7 +353,10 @@ export async function releaseSessionClaim(sd, supabase) {
       if (resolved.data && resolved.source !== 'heartbeat_fallback') {
         session = resolved.data;
       }
-    } catch { /* fall through */ }
+    } catch (e) {
+      // Intentionally suppressed: fall through to session manager
+      console.debug('[LeadFinalApproval] resolveOwnSession suppressed:', e?.message || e);
+    }
 
     if (!session) {
       const sessionManager = await import('../../../../../lib/session-manager.mjs');

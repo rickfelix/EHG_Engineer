@@ -142,7 +142,10 @@ export class ValidationOrchestrator {
           gate_runner_class: 'ValidationOrchestrator',
         }, traceCtx, parentSpan);
       }
-    } catch { /* telemetry failure is non-fatal */ }
+    } catch (e) {
+      // Intentionally suppressed: telemetry failure is non-fatal
+      console.debug('[ValidationOrchestrator] telemetry span start suppressed:', e?.message || e);
+    }
 
     try {
       const result = await validator(context);
@@ -162,13 +165,13 @@ export class ValidationOrchestrator {
       ResultBuilder.logGateResult(gateName, normalizedResult, !normalizedResult.passed);
 
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End gate span with result
-      try { endSpan(gateSpan, { result: normalizedResult.passed ? 'pass' : 'fail', gate_name: gateName }); } catch { /* non-fatal */ }
+      try { endSpan(gateSpan, { result: normalizedResult.passed ? 'pass' : 'fail', gate_name: gateName }); } catch (e) { console.debug('[ValidationOrchestrator] telemetry suppressed:', e?.message || e); }
 
       return normalizedResult;
     } catch (error) {
       console.error(`\n❌ ${gateName} validation error: ${error.message}`);
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End gate span with error
-      try { endSpan(gateSpan, { result: 'error', gate_name: gateName, error_class: error.constructor?.name, error_message: error.message }); } catch { /* non-fatal */ }
+      try { endSpan(gateSpan, { result: 'error', gate_name: gateName, error_class: error.constructor?.name, error_message: error.message }); } catch (e) { console.debug('[ValidationOrchestrator] telemetry suppressed:', e?.message || e); }
       // Return a schema-validated error result
       return validateGateResult({
         passed: false,

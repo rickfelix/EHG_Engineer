@@ -66,8 +66,9 @@ function getCurrentSessionIdSync() {
         return data.session_id;
       }
     }
-  } catch {
-    // Fallback - no session found
+  } catch (e) {
+    // Intentionally suppressed: Fallback - no session found
+    console.debug('[AutoProceedState] session lookup suppressed:', e?.message || e);
   }
   return null;
 }
@@ -244,8 +245,9 @@ export function writeState(state) {
 
   // Sync to database (async, fire-and-forget)
   // This ensures database is updated even if caller doesn't await
-  syncStateToDb(mergedState).catch(() => {
-    // Already logged in syncStateToDb
+  syncStateToDb(mergedState).catch((e) => {
+    // Intentionally suppressed: Already logged in syncStateToDb
+    console.debug('[AutoProceedState] syncStateToDb fire-and-forget suppressed:', e?.message || e);
   });
 
   return fileSuccess;

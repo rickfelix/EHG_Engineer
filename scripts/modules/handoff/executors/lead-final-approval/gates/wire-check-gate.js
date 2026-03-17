@@ -61,7 +61,8 @@ function discoverEntryPoints(rootDir) {
       for (const b of bins) entries.add(normalize(path.resolve(rootDir, b)));
     }
   } catch (_err) {
-    // package.json read failed — continue with other sources
+    // Intentionally suppressed: package.json read failed, continue with other sources
+    console.debug('[WireCheckGate] package.json read suppressed:', _err?.message || _err);
   }
 
   // 2. Known pipeline entry points

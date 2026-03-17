@@ -294,87 +294,10 @@ export function registerGate1Validators(registry) {
     };
   }, 'Goal summary validation with SD fallback (max 300 chars)');
 
-  registry.register('fileScopeValidation', async (context) => {
-    const { sd, prd } = context;
-
-    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
-    const sdType = (sd?.sd_type || '').toLowerCase();
-    if (isLightweightSDType(sdType)) {
-      return {
-        passed: true,
-        score: 100,
-        max_score: 100,
-        issues: [],
-        warnings: [`file_scope validation skipped for ${sdType} SD type`]
-      };
-    }
-
-    // PAT-VALSCHEMA-001: file_scope column does not exist in product_requirements_v2.
-    // Check both prd.file_scope and prd.metadata.file_scope as fallback.
-    // Missing file_scope is advisory (warning), not blocking, since no PRD
-    // creation path currently populates this field.
-    const fileScope = prd?.file_scope || prd?.metadata?.file_scope || {};
-    const warnings = [];
-
-    if (!fileScope.create && !fileScope.modify && !fileScope.delete) {
-      warnings.push('file_scope not defined - consider adding create/modify/delete arrays to PRD metadata');
-    }
-
-    const hasContent = (fileScope.create?.length > 0) ||
-                       (fileScope.modify?.length > 0) ||
-                       (fileScope.delete?.length > 0);
-
-    if (!hasContent && fileScope.create) {
-      warnings.push('file_scope arrays are all empty');
-    }
-
-    return {
-      passed: true,  // PAT-VALSCHEMA-001: Never block on missing file_scope
-      score: hasContent ? 100 : 70,
-      max_score: 100,
-      issues: [],
-      warnings
-    };
-  }, 'File scope validation');
-
-  registry.register('executionPlanValidation', async (context) => {
-    const { sd, prd } = context;
-
-    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
-    const sdType = (sd?.sd_type || '').toLowerCase();
-    if (isLightweightSDType(sdType)) {
-      return {
-        passed: true,
-        score: 100,
-        max_score: 100,
-        issues: [],
-        warnings: [`execution_plan validation skipped for ${sdType} SD type`]
-      };
-    }
-
-    // SD-LIFECYCLE-GAP-004: Check for non-empty arrays only
-    const getSteps = (arr) => Array.isArray(arr) && arr.length > 0 ? arr : null;
-    const executionPlan =
-      getSteps(prd?.execution_plan) ||
-      getSteps(prd?.implementation_steps) ||
-      getSteps(prd?.planning_section?.implementation_steps) ||
-      getSteps(prd?.metadata?.execution_plan?.steps) ||
-      [];
-
-    // PAT-VALSCHEMA-001: execution_plan is not populated by any PRD creation path.
-    // Downgraded from blocking error to advisory warning.
-    if (!executionPlan || executionPlan.length === 0) {
-      return {
-        passed: true,
-        score: 70,
-        max_score: 100,
-        issues: [],
-        warnings: ['Execution plan has no steps - consider adding implementation_steps to PRD']
-      };
-    }
-
-    return { passed: true, score: 100, max_score: 100, issues: [] };
-  }, 'Execution plan validation (min 1 step)');
+  // SD-LEO-FIX-REMOVE-RUBBER-STAMP-001: Removed fileScopeValidation and executionPlanValidation.
+  // These gates can never meaningfully evaluate because the required data fields (file_scope,
+  // execution_plan) are never populated by any PRD creation path. They always returned
+  // score 70-100 with advisory warnings, inflating aggregate scores without adding value.
 
   registry.register('testingStrategyValidation', async (context) => {
     const { sd, prd } = context;

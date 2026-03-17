@@ -49,14 +49,16 @@ export function createRCAGate(supabase) {
           gate_status: 'PASS'
         };
       } catch (error) {
-        // Table might not exist
-        console.log(`   ℹ️  RCA gate check skipped: ${error.message || 'table may not exist'}`);
+        // CRITICAL: Do not return PASS when root_cause_analyses table is missing.
+        // Failing open here would allow SDs with unverified CAPAs to proceed.
+        console.warn(`[RCAGate] RCA gate check failed: ${error.message || 'table may not exist'}`);
         return {
-          passed: true,
-          score: 100,
+          passed: false,
+          score: 0,
           max_score: 100,
-          issues: [],
-          warnings: ['RCA table check skipped']
+          issues: [`RCA gate check failed: ${error.message || 'root_cause_analyses table may not exist'}. Cannot verify CAPA status.`],
+          warnings: ['RCA table query failed — returning FAIL to prevent unverified CAPAs from passing'],
+          gate_status: 'FAIL'
         };
       }
     },

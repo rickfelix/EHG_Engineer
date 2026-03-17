@@ -128,7 +128,8 @@ function installOutputSanitizer() {
     if (typeof arg === 'object' && arg !== null) {
       try {
         return deepSanitizeUnicode(arg);
-      } catch {
+      } catch (e) {
+        console.debug('[HandoffCLI] unicode sanitization suppressed:', e?.message || e);
         return arg;
       }
     }
@@ -267,7 +268,8 @@ export async function introspectGateStatus(sdId, { json = true } = {}) {
         failedGates: result.failedGates || [],
         issues: result.issues || [],
       };
-    } catch {
+    } catch (e) {
+      console.debug('[HandoffCLI] gate check not applicable:', e?.message || e);
       results[type] = { passed: false, error: 'not_applicable' };
     }
   }
@@ -1022,8 +1024,9 @@ export async function main() {
         handoffType,
         stderr: result.message || result.reasonCode || 'Unknown failure'
       }));
-    } catch {
-      // RCA trigger should never prevent exit
+    } catch (e) {
+      // Intentionally suppressed: RCA trigger should never prevent exit
+      console.debug('[HandoffCLI] RCA trigger on exit suppressed:', e?.message || e);
     }
   }
 

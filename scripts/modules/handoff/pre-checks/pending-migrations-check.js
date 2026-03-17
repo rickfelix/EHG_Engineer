@@ -263,7 +263,8 @@ async function consultIssuePatterns(supabase, errorMessage) {
       return errorKeywords.some(kw => patternText.includes(kw)) ||
              searchTerms.some(term => patternText.includes(term));
     });
-  } catch {
+  } catch (e) {
+    console.debug('[PendingMigrations] issue patterns lookup suppressed:', e?.message || e);
     return [];
   }
 }
@@ -305,7 +306,8 @@ async function consultRetrospectives(supabase, errorMessage) {
     }
 
     return learnings.slice(0, 3);
-  } catch {
+  } catch (e) {
+    console.debug('[PendingMigrations] retrospective lookup suppressed:', e?.message || e);
     return [];
   }
 }
@@ -482,8 +484,9 @@ async function checkUncommittedManualUpdates() {
         }
       }
     }
-  } catch {
-    // If git fails, fall back to checking file timestamps
+  } catch (e) {
+    // Intentionally suppressed: If git fails, fall back to checking file timestamps
+    console.debug('[PendingMigrations] git status fallback:', e?.message || e);
     const manualUpdatesDir = path.join(PROJECT_ROOT, 'database', 'manual-updates');
     if (existsSync(manualUpdatesDir)) {
       const files = await readdir(manualUpdatesDir);
@@ -604,7 +607,8 @@ async function checkMigrationExecuted(supabase, filename) {
       const mVersion = (m.version || m.name || '').toString();
       return mVersion.includes(version) || version.includes(mVersion);
     });
-  } catch {
+  } catch (e) {
+    console.debug('[PendingMigrations] migration status check suppressed:', e?.message || e);
     return null; // Unknown status
   }
 }

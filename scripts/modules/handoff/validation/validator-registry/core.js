@@ -82,10 +82,10 @@ export class ValidatorRegistry {
       console.warn(`Warning: Fallback validator for ${ruleName}: ${reason}`);
       return {
         passed: true,
-        score: 100,
+        score: 50,
         max_score: 100,
         issues: [],
-        warnings: [`${ruleName}: ${reason} - auto-passing`],
+        warnings: [`${ruleName}: ${reason} - fallback (penalized score)`],
         details: {
           isFallback: true,
           reason

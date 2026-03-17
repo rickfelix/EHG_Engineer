@@ -97,8 +97,9 @@ export function validateStrategicDirective(sd) {
       metrics = Array.isArray(metricsSource)
         ? metricsSource
         : (typeof metricsSource === 'string' ? JSON.parse(metricsSource) : []);
-    } catch {
-      // If parsing fails, treat as single item
+    } catch (e) {
+      // Intentionally suppressed: If parsing fails, treat as single item
+      console.debug('[SDValidation] metrics parse suppressed:', e?.message || e);
       metrics = [metricsSource];
     }
 
