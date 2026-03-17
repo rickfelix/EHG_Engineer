@@ -11,6 +11,7 @@
  * 5. SUBAGENT_ROUTING — database/test work should use sub-agents
  * 6. DEPENDENCY_UNLOCK — newly available SDs after blocker completed
  * 7. PRIORITY_REBALANCE — working on MED when HIGH is available
+ * 8. AUTO_PROCEED_CHAINING — standing directive to keep auto-proceed and chaining on
  *
  * Anti-spam: 20-minute cooldown per coaching_type per worker.
  * Messages expire after 30 minutes (ephemeral advice).
@@ -264,6 +265,21 @@ function evaluatePriorityRebalance(session, sdDetails, availableSDs) {
   };
 }
 
+function evaluateAutoProceedChaining() {
+  // Always fires for every active worker — this is a standing directive
+  return {
+    subject: 'Ensure AUTO-PROCEED=ON and CHAINING=ON',
+    body: 'STANDING DIRECTIVE: Your session MUST have these settings active:\n\n' +
+      '1. AUTO-PROCEED: ON (default). Phases transition automatically without prompts.\n' +
+      '2. CHAINING: ON. After completing an SD and running /learn, auto-chain to the next SD.\n\n' +
+      'To verify: Check sd:next output for SESSION_SETTINGS line.\n' +
+      'Expected: {"auto_proceed":true,"chain_orchestrators":true}\n\n' +
+      'WHY: Workers that exit after completing an SD waste fleet capacity. With chaining ON, ' +
+      'you automatically pick up the next available SD after /learn completes. ' +
+      'Do NOT pause, ask "what next?", or exit after SD completion.'
+  };
+}
+
 // --- Main ---
 
 async function main() {
@@ -385,6 +401,13 @@ async function main() {
     if (rebalance) {
       const ok = await sendCoaching(session.session_id, 'PRIORITY_REBALANCE', rebalance.subject, rebalance.body, rebalance.extra);
       (ok ? sent : skipped).push({ session: session.tty, type: 'PRIORITY_REBALANCE' });
+    }
+
+    // AUTO_PROCEED_CHAINING (standing directive — fires every cycle for every worker)
+    const autoProceed = evaluateAutoProceedChaining();
+    if (autoProceed) {
+      const ok = await sendCoaching(session.session_id, 'AUTO_PROCEED_CHAINING', autoProceed.subject, autoProceed.body, { sd_id: session.sd_id });
+      (ok ? sent : skipped).push({ session: session.tty, type: 'AUTO_PROCEED_CHAINING' });
     }
   }
 
