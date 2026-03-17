@@ -466,12 +466,14 @@ export function createPRMergeVerificationGate() {
                     });
                   }
                 } catch (_e) {
-                  // Branch comparison failed - skip
+                  // Intentionally suppressed: branch comparison failed, skip
+                  console.debug('[LeadFinalApproval] branch comparison suppressed:', _e?.message || _e);
                 }
               }
             }
           } catch (_repoError) {
-            // Skip repo if can't check branches
+            // Intentionally suppressed: skip repo if can't check branches
+            console.debug('[LeadFinalApproval] repo branch check suppressed:', _repoError?.message || _repoError);
           }
         }
 

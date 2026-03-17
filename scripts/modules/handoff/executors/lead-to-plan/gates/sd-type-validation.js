@@ -123,7 +123,8 @@ async function analyzePrdSignals(sd, supabase) {
     const confidence = Math.min(totalScore / 6, 1);
 
     return { suggestedType, confidence, signals };
-  } catch {
+  } catch (e) {
+    console.debug('[SDTypeValidation] type inference suppressed:', e?.message || e);
     return null;
   }
 }

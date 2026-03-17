@@ -40,8 +40,9 @@ export function validateFeasibility(sd) {
           check.issues.push('Timeline constraint may be unrealistic for comprehensive implementation');
         }
       }
-    } catch {
-      // Ignore JSON parsing errors for feasibility check
+    } catch (e) {
+      // Intentionally suppressed: JSON parsing errors for feasibility check
+      console.debug('[FeasibilityChecks] constraints JSON parse suppressed:', e?.message || e);
     }
   }
 
@@ -62,8 +63,9 @@ export function validateFeasibility(sd) {
           check.issues.push('High-risk items lack mitigation strategies');
         }
       }
-    } catch {
-      // Ignore JSON parsing errors
+    } catch (e) {
+      // Intentionally suppressed: JSON parsing errors for risk validation
+      console.debug('[FeasibilityChecks] risks JSON parse suppressed:', e?.message || e);
     }
   }
 

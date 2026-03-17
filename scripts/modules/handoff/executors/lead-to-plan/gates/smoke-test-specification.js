@@ -42,7 +42,7 @@ export async function validateSmokeTestSpecification(sd) {
   // Handle TEXT column returning JSON string (not pre-parsed JSONB)
   let smokeTestSteps = sd.smoke_test_steps || [];
   if (typeof smokeTestSteps === 'string') {
-    try { smokeTestSteps = JSON.parse(smokeTestSteps); } catch { smokeTestSteps = []; }
+    try { smokeTestSteps = JSON.parse(smokeTestSteps); } catch (e) { console.debug('[SmokeTestSpec] JSON parse suppressed:', e?.message || e); smokeTestSteps = []; }
   }
   const isArray = Array.isArray(smokeTestSteps);
   const stepCount = isArray ? smokeTestSteps.length : 0;
@@ -110,8 +110,9 @@ export async function validateSmokeTestSpecification(sd) {
         warnings.push(`AI review: ${aiValidation.feedback || 'Smoke test steps may be too vague'}`);
       }
     }
-  } catch {
-    // AI validation optional - continue without it
+  } catch (e) {
+    // Intentionally suppressed: AI validation optional
+    console.debug('[SmokeTestSpec] AI validation suppressed:', e?.message || e);
   }
 
   const passed = issues.length === 0;

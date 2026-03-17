@@ -103,8 +103,9 @@ function findTestFiles(dir, files = []) {
         files.push(fullPath);
       }
     }
-  } catch {
-    // Directory not accessible — skip
+  } catch (e) {
+    // Intentionally suppressed: Directory not accessible
+    console.debug('[AcceptanceCriteriaTraceability] directory scan suppressed:', e?.message || e);
   }
   return files;
 }
@@ -150,8 +151,9 @@ export function createAcceptanceCriteriaTraceabilityGate(supabase) {
           visionContent = data.content;
           console.log(`   Vision doc: ${data.vision_key}`);
         }
-      } catch {
-        // No vision doc found
+      } catch (e) {
+        // Intentionally suppressed: No vision doc found
+        console.debug('[AcceptanceCriteriaTraceability] vision doc query suppressed:', e?.message || e);
       }
 
       // Also check metadata for vision_key
@@ -166,8 +168,9 @@ export function createAcceptanceCriteriaTraceabilityGate(supabase) {
             visionContent = data.content;
             console.log(`   Vision doc (via metadata): ${data.vision_key}`);
           }
-        } catch {
-          // Not found
+        } catch (e) {
+          // Intentionally suppressed: Vision doc not found via metadata
+          console.debug('[AcceptanceCriteriaTraceability] vision metadata query suppressed:', e?.message || e);
         }
       }
 
@@ -210,8 +213,9 @@ export function createAcceptanceCriteriaTraceabilityGate(supabase) {
       for (const file of testFiles) {
         try {
           testContentCache.set(file, readFileSync(file, 'utf8'));
-        } catch {
-          // Skip unreadable files
+        } catch (e) {
+          // Intentionally suppressed: Skip unreadable files
+          console.debug('[AcceptanceCriteriaTraceability] test file read suppressed:', e?.message || e);
         }
       }
 
