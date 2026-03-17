@@ -33,6 +33,9 @@ import { validateGateResult } from './gate-result-schema.js';
 // SD-LEO-INFRA-OIV-001: Operational Integration Verification
 import { OIVGate, OIV_GATE_WEIGHT } from './oiv/index.js';
 
+// SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Gate context preloader
+import { preloadGateContext, getGateNumberForRule } from './validator-registry/gate-context-preloader.js';
+
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
     if (!supabase) {
@@ -211,6 +214,10 @@ export class ValidationOrchestrator {
       issues: [],
       warnings: []
     };
+
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pre-fetch shared gate data
+    // before running validators to eliminate redundant DB queries within a gate group
+    await this.preloadGateContexts(gates, context);
 
     // Track weighted scores for normalization
     let weightedScoreSum = 0;
@@ -561,6 +568,55 @@ export class ValidationOrchestrator {
     console.error('='.repeat(60));
   }
 
+  /**
+   * SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pre-fetch shared gate data
+   * before running validators. Analyzes the gate list to determine which
+   * numbered gates (2, 3, 4) are present, fetches the shared validation
+   * data once per gate number, and injects it into context.gateContext.
+   *
+   * @param {Array} gates - Array of gate definitions about to be validated
+   * @param {Object} context - Validation context (will be mutated to add gateContext)
+   * @returns {Promise<void>}
+   */
+  async preloadGateContexts(gates, context) {
+    // Determine which gate numbers are present in the gate list
+    const gateNumbers = new Set();
+    for (const gate of gates) {
+      // Extract rule name from gate name (format: "GATE_CODE:rule_name" or just "rule_name")
+      const ruleName = gate.meta?.ruleName || (gate.name.includes(':') ? gate.name.split(':')[1] : gate.name);
+      const gateNum = getGateNumberForRule(ruleName);
+      if (gateNum !== null) {
+        gateNumbers.add(gateNum);
+      }
+    }
+
+    if (gateNumbers.size === 0) return;
+
+    const sdId = context.sd_id || context.sdId;
+    if (!sdId || !context.supabase) return;
+
+    const gateContext = {};
+
+    for (const gateNum of gateNumbers) {
+      try {
+        const extras = {};
+        if (gateNum === 3) extras.gate2Results = context.gate2Results || null;
+        if (gateNum === 4) extras.allGateResults = context.allGateResults || {};
+        // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pass pre-fetched data from BaseExecutor
+        if (context._prefetched) extras.prefetched = { sd: context.sd, prd: context.prd, handoffHistory: context._prefetched?.handoffHistory };
+
+        const preloaded = await preloadGateContext(gateNum, sdId, context.supabase, extras);
+        Object.assign(gateContext, preloaded);
+      } catch (err) {
+        // Preload failure is non-fatal — validators will fetch independently
+        console.log(`   [GatePreloader] Warning: Gate ${gateNum} preload failed (${err.message}), validators will query independently`);
+      }
+    }
+
+    // Inject preloaded data into context
+    context.gateContext = gateContext;
+  }
+
   clearCache() {
     this.constraintsCache = null;
     this.constraintsCacheExpiry = 0;
@@ -878,6 +934,9 @@ export class ValidationOrchestrator {
       issues: [],       // ALL issues from ALL gates
       warnings: []
     };
+
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pre-fetch shared gate data
+    await this.preloadGateContexts(gates, context);
 
     let weightedScoreSum = 0;
     let totalWeight = 0;

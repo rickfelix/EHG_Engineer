@@ -1,11 +1,29 @@
 /**
  * Gates 2A-2D - Implementation Fidelity Validators
  * Part of SD-LEO-REFACTOR-VALIDATOR-REG-001
+ *
+ * SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Validators now check
+ * ctx.gateContext.gate2Result before making independent DB queries.
+ * The preloader fetches shared data once; validators reuse it.
  */
 
 import { validateGate2ExecToPlan } from '../../../../implementation-fidelity-validation.js';
 import { shouldSkipCodeValidation } from '../../../../../../lib/utils/sd-type-validation.js';
 import { validateWireframeQA } from '../../../validators/wireframe-qa-validator.js';
+
+/**
+ * Get Gate 2 result from preloaded context or fetch it fresh.
+ * @param {object} context - Validator context
+ * @returns {Promise<object>} Gate 2 validation result
+ */
+async function getGate2Result(context) {
+  // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use preloaded result if available
+  if (context.gateContext?.gate2Result) {
+    return context.gateContext.gate2Result;
+  }
+  const { sd_id, supabase } = context;
+  return validateGate2ExecToPlan(sd_id, supabase);
+}
 
 /**
  * Register Gate 2 validators
@@ -14,8 +32,7 @@ import { validateWireframeQA } from '../../../validators/wireframe-qa-validator.
 export function registerGate2Validators(registry) {
   // Section A: UI Components Implementation
   registry.register('uiComponentsImplemented', async (context) => {
-    const { sd_id, supabase } = context;
-    const result = await validateGate2ExecToPlan(sd_id, supabase);
+    const result = await getGate2Result(context);
 
     // Extract Section A score - check multiple paths for compatibility
     const sectionA = result?.sections?.A || result?.sectionScores?.A ||
@@ -48,8 +65,7 @@ export function registerGate2Validators(registry) {
 
   // Section B: Database Migrations
   registry.register('migrationsCreatedAndExecuted', async (context) => {
-    const { sd_id, supabase } = context;
-    const result = await validateGate2ExecToPlan(sd_id, supabase);
+    const result = await getGate2Result(context);
 
     const sectionB = result?.sections?.B || result?.sectionScores?.B ||
       result?.details?.database_fidelity || {};
@@ -80,8 +96,7 @@ export function registerGate2Validators(registry) {
 
   // Section C: Data Flow
   registry.register('databaseQueriesIntegrated', async (context) => {
-    const { sd_id, supabase } = context;
-    const result = await validateGate2ExecToPlan(sd_id, supabase);
+    const result = await getGate2Result(context);
 
     const sectionC = result?.sections?.C || result?.sectionScores?.C ||
       result?.details?.data_flow_alignment || {};
@@ -112,8 +127,7 @@ export function registerGate2Validators(registry) {
 
   // Section D: E2E Testing
   registry.register('e2eTestCoverage', async (context) => {
-    const { sd_id, supabase } = context;
-    const result = await validateGate2ExecToPlan(sd_id, supabase);
+    const result = await getGate2Result(context);
 
     const sectionD = result?.sections?.D || result?.sectionScores?.D ||
       result?.details?.enhanced_testing || {};

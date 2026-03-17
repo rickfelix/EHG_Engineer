@@ -29,7 +29,9 @@ export function createGate2ImplementationFidelityGate(supabase) {
 
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - queries use UUID FK
       const sdUuid = ctx.sd?.id || ctx.sdId;
-      return validateGate2ExecToPlan(sdUuid, supabase);
+      // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pass pre-fetched context
+      const prefetched = { sd: ctx.sd, prd: ctx.prd, handoffHistory: ctx._prefetched?.handoffHistory };
+      return validateGate2ExecToPlan(sdUuid, supabase, { prefetched });
     },
     required: true
   };

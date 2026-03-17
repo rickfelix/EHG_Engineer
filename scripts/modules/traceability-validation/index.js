@@ -42,12 +42,13 @@ import {
  * @param {Object} gate2Results - Results from Gate 2 validation (optional)
  * @returns {Promise<Object>} Validation result
  */
-export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = null) {
+export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = null, options = {}) {
   console.log('\n GATE 3: End-to-End Traceability Validation (PLAN->LEAD)');
   console.log('='.repeat(60));
 
   // Resolve SD context (UUID, key, category, type, repo path)
-  const { sdUuid, sdKey, sdCategory, sdType, gitRepoPath } = await resolveSDContext(sd_id, supabase);
+  // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Pass pre-fetched SD to avoid duplicate query
+  const { sdUuid, sdKey, sdCategory, sdType, gitRepoPath } = await resolveSDContext(sd_id, supabase, options.prefetched?.sd);
 
   const validation = {
     passed: true,
@@ -71,24 +72,28 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   console.log('-'.repeat(60));
 
   try {
-    // Fetch PRD metadata (try sd_key first, fallback to UUID for legacy PRDs)
-    let prdData, prdError;
-    ({ data: prdData, error: prdError } = await supabase
-      .from('product_requirements_v2')
-      .select('metadata, directive_id, title')
-      .eq('directive_id', sdKey)
-      .single());
-
-    // Root Cause 1 fix: Fallback to UUID if sd_key lookup failed
-    // Some PRDs (created via auto-generation before fix) store UUID in directive_id
-    if (prdError && sdUuid && sdUuid !== sdKey) {
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched PRD when available
+    let prdData = options.prefetched?.prd || null;
+    let prdError = null;
+    if (!prdData) {
+      // Fetch PRD metadata (try sd_key first, fallback to UUID for legacy PRDs)
       ({ data: prdData, error: prdError } = await supabase
         .from('product_requirements_v2')
         .select('metadata, directive_id, title')
-        .eq('directive_id', sdUuid)
+        .eq('directive_id', sdKey)
         .single());
-      if (prdData) {
-        console.log('   ℹ️  PRD found via UUID fallback (directive_id format mismatch)');
+
+      // Root Cause 1 fix: Fallback to UUID if sd_key lookup failed
+      // Some PRDs (created via auto-generation before fix) store UUID in directive_id
+      if (prdError && sdUuid && sdUuid !== sdKey) {
+        ({ data: prdData, error: prdError } = await supabase
+          .from('product_requirements_v2')
+          .select('metadata, directive_id, title')
+          .eq('directive_id', sdUuid)
+          .single());
+        if (prdData) {
+          console.log('   ℹ️  PRD found via UUID fallback (directive_id format mismatch)');
+        }
       }
     }
 
@@ -156,12 +161,19 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     console.log('\n' + '='.repeat(60));
     console.log(`GATE 3 SCORE: ${validation.score}/${validation.max_score} points`);
 
-    const { data: handoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('handoff_type, metadata')
-      .eq('sd_id', sdUuid)
-      .in('handoff_type', ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'])
-      .order('created_at', { ascending: false });
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched handoff/SD data when available
+    const handoffHistory = options.prefetched?.handoffHistory;
+    let handoffs;
+    if (handoffHistory) {
+      handoffs = handoffHistory.filter(h => ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'].includes(h.handoff_type));
+    } else {
+      ({ data: handoffs } = await supabase
+        .from('sd_phase_handoffs')
+        .select('handoff_type, metadata')
+        .eq('sd_id', sdUuid)
+        .in('handoff_type', ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'])
+        .order('created_at', { ascending: false }));
+    }
 
     const priorGateScores = [];
     if (handoffs) {
@@ -171,11 +183,11 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
       if (gate2) priorGateScores.push(gate2);
     }
 
-    const { data: sdData } = await supabase
+    const sdData = options.prefetched?.sd || (await supabase
       .from('strategic_directives_v2')
       .select('*')
       .eq('id', sd_id)
-      .single();
+      .single()).data;
 
     const patternStats = await getPatternStats(sdData, supabase);
 

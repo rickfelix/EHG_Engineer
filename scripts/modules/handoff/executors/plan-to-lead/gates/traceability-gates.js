@@ -25,18 +25,25 @@ export function createTraceabilityGate(supabase) {
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
       const sdUuid = ctx.sd?.id || ctx.sdId;
 
-      // Fetch Gate 2 results from EXEC→PLAN handoff
-      const { data: execToPlanHandoff } = await supabase
-        .from('sd_phase_handoffs')
-        .select('metadata')
-        .eq('sd_id', sdUuid)
-        .eq('handoff_type', 'EXEC-TO-PLAN')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched handoff data when available
+      let gate2Results = null;
+      const handoffHistory = ctx._prefetched?.handoffHistory;
+      if (handoffHistory) {
+        const execToPlan = handoffHistory.find(h => h.handoff_type === 'EXEC-TO-PLAN');
+        gate2Results = execToPlan?.metadata?.gate2_validation || null;
+      } else {
+        const { data: execToPlanHandoff } = await supabase
+          .from('sd_phase_handoffs')
+          .select('metadata')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', 'EXEC-TO-PLAN')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        gate2Results = execToPlanHandoff?.[0]?.metadata?.gate2_validation || null;
+      }
 
-      const gate2Results = execToPlanHandoff?.[0]?.metadata?.gate2_validation || null;
-
-      const result = await validateGate3PlanToLead(sdUuid, supabase, gate2Results);
+      const prefetched = { sd: ctx.sd, prd: ctx.prd, handoffHistory };
+      const result = await validateGate3PlanToLead(sdUuid, supabase, gate2Results, { prefetched });
       ctx._gate3Results = result;
 
       return result;
@@ -64,31 +71,41 @@ export function createWorkflowROIGate(supabase) {
       // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
       const sdUuid = ctx.sd?.id || ctx.sdId;
 
-      // Fetch Gate 1 results from PLAN→EXEC handoff
-      const { data: planToExecHandoff } = await supabase
-        .from('sd_phase_handoffs')
-        .select('metadata')
-        .eq('sd_id', sdUuid)
-        .eq('handoff_type', 'PLAN-TO-EXEC')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched handoff data when available
+      const handoffHistory = ctx._prefetched?.handoffHistory;
+      let allGateResults;
+      if (handoffHistory) {
+        const planToExec = handoffHistory.find(h => h.handoff_type === 'PLAN-TO-EXEC');
+        const execToPlan = handoffHistory.find(h => h.handoff_type === 'EXEC-TO-PLAN');
+        allGateResults = {
+          gate1: planToExec?.metadata?.gate1_validation || null,
+          gate2: execToPlan?.metadata?.gate2_validation || null,
+          gate3: ctx._gate3Results || null
+        };
+      } else {
+        const { data: planToExecHandoff } = await supabase
+          .from('sd_phase_handoffs')
+          .select('metadata')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', 'PLAN-TO-EXEC')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        const { data: execToPlanHandoff } = await supabase
+          .from('sd_phase_handoffs')
+          .select('metadata')
+          .eq('sd_id', sdUuid)
+          .eq('handoff_type', 'EXEC-TO-PLAN')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        allGateResults = {
+          gate1: planToExecHandoff?.[0]?.metadata?.gate1_validation || null,
+          gate2: execToPlanHandoff?.[0]?.metadata?.gate2_validation || null,
+          gate3: ctx._gate3Results || null
+        };
+      }
 
-      // Fetch Gate 2 results from EXEC→PLAN handoff
-      const { data: execToPlanHandoff } = await supabase
-        .from('sd_phase_handoffs')
-        .select('metadata')
-        .eq('sd_id', sdUuid)
-        .eq('handoff_type', 'EXEC-TO-PLAN')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const allGateResults = {
-        gate1: planToExecHandoff?.[0]?.metadata?.gate1_validation || null,
-        gate2: execToPlanHandoff?.[0]?.metadata?.gate2_validation || null,
-        gate3: ctx._gate3Results || null
-      };
-
-      const result = await validateGate4LeadFinal(sdUuid, supabase, allGateResults);
+      const prefetched = { sd: ctx.sd, prd: ctx.prd, handoffHistory };
+      const result = await validateGate4LeadFinal(sdUuid, supabase, allGateResults, { prefetched });
       ctx._gate4Results = result;
 
       return result;

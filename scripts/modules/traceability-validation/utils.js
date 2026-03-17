@@ -19,22 +19,24 @@ export const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 /**
  * Resolve SD UUID and get SD metadata
  * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+ * SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Accept optional pre-fetched SD data
  * @param {string} sd_id - SD ID (may be sd_key or UUID)
  * @param {Object} supabase - Supabase client
+ * @param {Object} [prefetchedSd] - Pre-fetched SD data to avoid duplicate query
  * @returns {Promise<{sdUuid: string, sdKey: string, sdCategory: string|null, sdType: string|null, gitRepoPath: string}>}
  */
-export async function resolveSDContext(sd_id, supabase) {
+export async function resolveSDContext(sd_id, supabase, prefetchedSd = null) {
   let sdUuid = sd_id;
   let sdKey = sd_id;
   let sdCategory = null;
   let sdType = null;
   let gitRepoPath = process.cwd();
 
-  const { data: sdData } = await supabase
+  const sdData = prefetchedSd || (await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, category, metadata, target_application, sd_type')
     .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
-    .single();
+    .single()).data;
 
   if (sdData) {
     sdUuid = sdData.id;

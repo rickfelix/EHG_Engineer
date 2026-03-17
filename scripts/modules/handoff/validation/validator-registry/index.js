@@ -64,4 +64,7 @@ export {
   registerAdditionalValidators
 } from './gates/index.js';
 
+// SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Gate context preloader
+export { preloadGateContext, getGateNumberForRule } from './gate-context-preloader.js';
+
 export default ValidatorRegistry;

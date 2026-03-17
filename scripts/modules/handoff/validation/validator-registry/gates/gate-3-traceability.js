@@ -1,9 +1,27 @@
 /**
  * Gate 3 - Traceability Validators
  * Part of SD-LEO-REFACTOR-VALIDATOR-REG-001
+ *
+ * SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Validators now check
+ * ctx.gateContext.gate3Result before making independent DB queries.
+ * The preloader fetches shared data once; validators reuse it.
  */
 
 import { validateGate3PlanToLead } from '../../../../traceability-validation.js';
+
+/**
+ * Get Gate 3 result from preloaded context or fetch it fresh.
+ * @param {object} context - Validator context
+ * @returns {Promise<object>} Gate 3 validation result
+ */
+async function getGate3Result(context) {
+  // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use preloaded result if available
+  if (context.gateContext?.gate3Result) {
+    return context.gateContext.gate3Result;
+  }
+  const { sd_id, supabase, gate2Results } = context;
+  return validateGate3PlanToLead(sd_id, supabase, gate2Results);
+}
 
 /**
  * Register Gate 3 validators
@@ -12,8 +30,7 @@ import { validateGate3PlanToLead } from '../../../../traceability-validation.js'
 export function registerGate3Validators(registry) {
   // Section A: Recommendation Adherence (30 points)
   registry.register('recommendationAdherence', async (context) => {
-    const { sd_id, supabase, gate2Results } = context;
-    const result = await validateGate3PlanToLead(sd_id, supabase, gate2Results);
+    const result = await getGate3Result(context);
 
     // SD-QUALITY-UI-001 FIX: Check multiple paths for section A score
     const sectionAFromSections = result?.sections?.A || {};
@@ -37,8 +54,7 @@ export function registerGate3Validators(registry) {
 
   // Section B: Implementation Quality (30 points)
   registry.register('implementationQuality', async (context) => {
-    const { sd_id, supabase, gate2Results } = context;
-    const result = await validateGate3PlanToLead(sd_id, supabase, gate2Results);
+    const result = await getGate3Result(context);
 
     const sectionBFromSections = result?.sections?.B || {};
     const sectionBScore = sectionBFromSections.score ??
@@ -61,8 +77,7 @@ export function registerGate3Validators(registry) {
 
   // Section C: Traceability Mapping (25 points)
   registry.register('traceabilityMapping', async (context) => {
-    const { sd_id, supabase, gate2Results } = context;
-    const result = await validateGate3PlanToLead(sd_id, supabase, gate2Results);
+    const result = await getGate3Result(context);
 
     const sectionCFromSections = result?.sections?.C || {};
     const sectionCScore = sectionCFromSections.score ??
@@ -85,8 +100,7 @@ export function registerGate3Validators(registry) {
 
   // Section D: Sub-Agent Effectiveness (10 points)
   registry.register('subAgentEffectiveness', async (context) => {
-    const { sd_id, supabase, gate2Results } = context;
-    const result = await validateGate3PlanToLead(sd_id, supabase, gate2Results);
+    const result = await getGate3Result(context);
 
     const sectionDFromSections = result?.sections?.D || {};
     const sectionDScore = sectionDFromSections.score ??
@@ -108,8 +122,7 @@ export function registerGate3Validators(registry) {
 
   // Section E: Lessons Captured (5 points)
   registry.register('lessonsCaptured', async (context) => {
-    const { sd_id, supabase, gate2Results } = context;
-    const result = await validateGate3PlanToLead(sd_id, supabase, gate2Results);
+    const result = await getGate3Result(context);
 
     const sectionEFromSections = result?.sections?.E || {};
     const sectionEScore = sectionEFromSections.score ??
