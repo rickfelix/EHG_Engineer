@@ -309,6 +309,7 @@ async function main() {
 
 // CLI entry point
 const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
                      import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` ||
                      process.argv[1]?.endsWith('vision-delta-aggregator.js');
 

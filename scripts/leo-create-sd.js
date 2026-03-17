@@ -1857,6 +1857,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
 
 // Only run CLI when invoked directly (not when imported)
 const _isMainModule = import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
                       import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}`;
 if (_isMainModule) {
   main();

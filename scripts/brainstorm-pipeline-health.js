@@ -334,6 +334,7 @@ function printReport(result) {
 
 // CLI entry point
 const isMain = import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
                import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
 
 if (isMain) {

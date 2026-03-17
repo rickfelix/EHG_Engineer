@@ -189,7 +189,8 @@ async function createExecPlanHandoff() {
 }
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
   createExecPlanHandoff()
     .then(() => process.exit(0))
     .catch(error => {

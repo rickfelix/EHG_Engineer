@@ -238,7 +238,8 @@ AFTER REGISTRATION:
 }
 
 // Run the wizard
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
   const wizard = new LEORegistrationWizard();
   wizard.run().catch(error => {
     console.error('❌ Wizard error:', error.message);

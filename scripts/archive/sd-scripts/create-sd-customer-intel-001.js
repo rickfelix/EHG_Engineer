@@ -400,6 +400,7 @@ PASS CRITERIA: All 10 success criteria met, E2E tests pass, performance targets 
 export { createCustomerIntelSD };
 
 // Execute if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
   createCustomerIntelSD();
 }

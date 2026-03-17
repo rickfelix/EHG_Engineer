@@ -163,6 +163,7 @@ async function main() {
 // Execute if run directly (Windows-compatible)
 const _isMain = process.argv[1] && (
   import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
   import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
 if (_isMain) {
   main().catch(error => {

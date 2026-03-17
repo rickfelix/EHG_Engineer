@@ -246,7 +246,8 @@ function detectSubAgents(prdContent) {
 }
 
 // Run the test
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}`) {
   testCoordinationWithImprovedAgents();
 }
 
