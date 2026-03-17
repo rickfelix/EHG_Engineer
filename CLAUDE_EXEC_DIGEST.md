@@ -1,7 +1,7 @@
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-03-14T12:36:22.370Z -->
-<!-- git_commit: 05ee2881 -->
-<!-- db_snapshot_hash: cf3e5ecf7c7ae5c7 -->
+<!-- generated_at: 2026-03-17T14:23:33.230Z -->
+<!-- git_commit: 0be59f24 -->
+<!-- db_snapshot_hash: 41d2dee99ad0b539 -->
 <!-- file_content_hash: pending -->
 
 # CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
@@ -47,12 +47,12 @@ Before writing ANY code, EXEC MUST:
    - Document: "Integration context reviewed: [X consumers, Y dependencies, Z metrics]"
 
 1. **APPLICATION CHECK** ⚠️ CRITICAL
-   - **ALL UI changes** (user AND admin) go to `/mnt/c/_EHG/EHG/`
-   - **User features**: `/mnt/c/_EHG/EHG/src/components/` and `/src/pages/`
-   - **Admin features**: `/mnt/c/_EHG/EHG/src/components/admin/` and `/src/pages/admin/`
-   - **Stage components**: `/mnt/c/_EHG/EHG/src/components/stages/admin/`
-   - **Backend API only**: `/mnt/c/_EHG/EHG_Engineer/` (routes, scripts, no UI)
-   - Verify: `cd /mnt/c/_EHG/EHG && pwd`
+   - **ALL UI changes** (user AND admin) go to `C:/Users/rickf/Projects/_EHG/ehg/`
+   - **User features**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/` and `/src/pages/`
+   - **Admin features**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/admin/` and `/src/pages/admin/`
+   - **Stage components**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/stages/admin/`
+   - **Backend API only**: `C:/Users/rickf/Projects/_EHG/EHG_Engineer/` (routes, scripts, no UI)
+   - Verify: `cd C:/Users/rickf/Projects/_EHG/ehg && pwd`
    - Check GitHub: `git remote -v` should show `rickfelix/ehg.git` for frontend
 
 2. **URL Verification** ✅
@@ -63,10 +63,7 @@ Before writing ANY code, EXEC MUST:
 
 3. **Component Identification** 🎯
    - Identify the exact file path of the target component
-   - Confirm component exists at specified location
-   - Document: "Target component: [full/path/to/component.tsx]"
-
-4. **Application C
+   - Confirm component exists at 
 
 *...truncated. Read full file for complete section.*
 
@@ -221,5 +218,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-03-14 8:36:22 AM*
+*DIGEST generated: 2026-03-17 10:23:33 AM*
 *Protocol: 4.3.3*

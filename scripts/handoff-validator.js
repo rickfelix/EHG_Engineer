@@ -30,7 +30,7 @@ class HandoffValidator {
       'PLAN->EXEC': 100,  // PLAN must be 100% complete
       'EXEC->PLAN': 100,  // EXEC must be 100% complete before verification
       'PLAN->LEAD': 100,  // Verification must be 100% complete
-      'LEAD->DEPLOY': 100 // Final approval must be 100%
+      'LEAD-FINAL-APPROVAL': 100 // Final approval must be 100%
     };
     
     // Define which sub-agents are critical at each handoff
@@ -72,8 +72,8 @@ class HandoffValidator {
           'Analytics': 'If success metrics defined'
         }
       },
-      'LEAD->DEPLOY': {
-        // LEAD approves for deployment
+      'LEAD-FINAL-APPROVAL': {
+        // LEAD final approval before completion
         triggers: {
           'DevOps': 'ALWAYS - deployment readiness',
           'Documentation': 'ALWAYS - final documentation',
@@ -415,7 +415,7 @@ class HandoffValidator {
       'PLAN->EXEC': 'PLAN_DESIGN',
       'EXEC->PLAN': 'EXEC_IMPLEMENTATION',
       'PLAN->LEAD': 'PLAN_VERIFICATION',
-      'LEAD->DEPLOY': 'LEAD_APPROVAL'
+      'LEAD-FINAL-APPROVAL': 'LEAD_APPROVAL'
     };
     return phaseMap[handoffKey] || 'UNKNOWN';
   }

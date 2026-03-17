@@ -59,10 +59,10 @@ node scripts/leo.js new-sd "Add feature X"
 node scripts/context-monitor.js check
 
 # Perform handoff
-node scripts/handoff-controller.js handoff LEAD-to-PLAN
+node scripts/handoff.js handoff LEAD-to-PLAN
 
 # Archive work
-node scripts/handoff-controller.js archive EXEC completed-feature
+node scripts/handoff.js archive EXEC completed-feature
 ```
 
 ---
@@ -213,7 +213,7 @@ Project/
 ```bash
 1. Complete missing items
 2. OR request exception:
-   node scripts/handoff-controller.js handoff [type]
+   node scripts/handoff.js handoff [type]
    > Provide justification
 ```
 

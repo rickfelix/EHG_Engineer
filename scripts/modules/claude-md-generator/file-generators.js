@@ -120,7 +120,7 @@ Use \`*_DIGEST.md\` variants only when context is constrained (e.g. smaller mode
 
 ## Essential Commands
 - **Pick Work**: \`npm run sd:next\`
-- **Phase Handoff**: \`node scripts/unified-handoff-system.js execute <PHASE> <SD-ID>\`
+- **Phase Handoff**: \`node scripts/handoff.js execute <PHASE> <SD-ID>\`
 - **Create SD**: \`node scripts/leo-create-sd.js\`
 - **Create PRD**: \`node scripts/add-prd-to-database.js\`
 - **LEO Stack**: \`node scripts/cross-platform-run.js leo-stack restart|status|stop\`
