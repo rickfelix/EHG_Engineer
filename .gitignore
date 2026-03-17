@@ -229,3 +229,5 @@ playground.config.js
 tmpclaude-*-cwd
 nul
 tests/e2e/ehg-app/.auth/
+tests/e2e/.auth/
+tests/uat/.auth/
