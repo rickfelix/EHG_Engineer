@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T18:58:02.392Z
+**Generated**: 2026-03-17T21:36:15.078Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -48,9 +48,9 @@
 
 ## RLS Policies
 
-### 1. Service role full access on claude_code_releases (ALL)
+### 1. service_role_all_claude_code_releases (ALL)
 
-- **Roles**: {public}
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 

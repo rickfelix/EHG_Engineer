@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T18:58:02.392Z
-**Rows**: 2,020
+**Generated**: 2026-03-17T21:36:15.078Z
+**Rows**: 2,021
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -134,9 +134,9 @@ Use the id column instead - it is the canonical identifier. |
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
-- `key_changes_is_array`: CHECK (((key_changes IS NULL) OR (jsonb_typeof(key_changes) = 'array'::text))) NOT VALID
-- `key_principles_is_array`: CHECK (((key_principles IS NULL) OR (jsonb_typeof(key_principles) = 'array'::text))) NOT VALID
-- `key_principles_not_empty`: CHECK (((key_principles IS NULL) OR (jsonb_array_length(key_principles) >= 1))) NOT VALID
+- `key_changes_is_array`: CHECK (((key_changes IS NULL) OR (jsonb_typeof(key_changes) = 'array'::text)))
+- `key_principles_is_array`: CHECK (((key_principles IS NULL) OR (jsonb_typeof(key_principles) = 'array'::text)))
+- `key_principles_not_empty`: CHECK (((key_principles IS NULL) OR (jsonb_array_length(key_principles) >= 1)))
 - `sd_type_check`: CHECK (((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'bugfix'::character varying, 'database'::character varying, 'infrastructure'::character varying, 'security'::character varying, 'refactor'::character varying, 'documentation'::character varying, 'orchestrator'::character varying, 'performance'::character varying, 'enhancement'::character varying, 'docs'::character varying, 'discovery_spike'::character varying, 'implementation'::character varying, 'ux_debt'::character varying, 'uat'::character varying])::text[])))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
@@ -150,10 +150,10 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'in_progress'::character varying, 'planning'::character varying, 'review'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
 - `strategic_directives_v2_vision_score_action_check`: CHECK (((vision_score_action)::text = ANY ((ARRAY['accept'::character varying, 'minor_sd'::character varying, 'gap_closure_sd'::character varying, 'escalate'::character varying])::text[])))
 - `strategic_directives_v2_vision_score_check`: CHECK (((vision_score >= 0) AND (vision_score <= 100)))
-- `success_criteria_is_array`: CHECK (((success_criteria IS NULL) OR (jsonb_typeof(success_criteria) = 'array'::text))) NOT VALID
-- `success_criteria_not_empty`: CHECK (((success_criteria IS NULL) OR (jsonb_array_length(success_criteria) >= 1))) NOT VALID
-- `success_metrics_is_array`: CHECK (((success_metrics IS NULL) OR (jsonb_typeof(success_metrics) = 'array'::text))) NOT VALID
-- `success_metrics_not_empty`: CHECK (((success_metrics IS NULL) OR (jsonb_array_length(success_metrics) >= 1))) NOT VALID
+- `success_criteria_is_array`: CHECK (((success_criteria IS NULL) OR (jsonb_typeof(success_criteria) = 'array'::text)))
+- `success_criteria_not_empty`: CHECK (((success_criteria IS NULL) OR (jsonb_array_length(success_criteria) >= 1)))
+- `success_metrics_is_array`: CHECK (((success_metrics IS NULL) OR (jsonb_typeof(success_metrics) = 'array'::text)))
+- `success_metrics_not_empty`: CHECK (((success_metrics IS NULL) OR (jsonb_array_length(success_metrics) >= 1)))
 - `valid_human_verification_status`: CHECK ((human_verification_status = ANY (ARRAY['not_required'::text, 'pending'::text, 'in_progress'::text, 'passed'::text, 'failed'::text])))
 
 ## Indexes

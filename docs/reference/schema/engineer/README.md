@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T18:58:02.392Z
-**Tables**: 580
+**Generated**: 2026-03-17T21:36:15.078Z
+**Tables**: 581
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (580)
+## All Tables (581)
 
 ### LEO Protocol
 
@@ -37,7 +37,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [leo_execution_jobs](tables/leo_execution_jobs.md)
 - [leo_feature_flag_approvals](tables/leo_feature_flag_approvals.md)
 - [leo_feature_flag_audit](tables/leo_feature_flag_audit.md)
-- [leo_feature_flag_audit_log](tables/leo_feature_flag_audit_log.md)
 - [leo_feature_flag_policies](tables/leo_feature_flag_policies.md)
 - [leo_feature_flags](tables/leo_feature_flags.md)
 - [leo_feedback](tables/leo_feedback.md)
@@ -141,6 +140,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ### Handoffs & Phases
 
+- [backup_leo_sub_agent_handoffs](tables/backup_leo_sub_agent_handoffs.md)
+- [backup_leo_subagent_handoffs](tables/backup_leo_subagent_handoffs.md)
 - [exec_handoff_preparations](tables/exec_handoff_preparations.md)
 - [handoff_audit_log](tables/handoff_audit_log.md)
 - [handoff_validation_rules](tables/handoff_validation_rules.md)
@@ -151,7 +152,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ### Sub-Agents
 
-- [leo_sub_agent_handoffs](tables/leo_sub_agent_handoffs.md)
 - [leo_sub_agent_triggers](tables/leo_sub_agent_triggers.md)
 - [leo_sub_agents](tables/leo_sub_agents.md)
 
@@ -206,6 +206,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [auto_apply_allowlist](tables/auto_apply_allowlist.md)
 - [auto_apply_denylist](tables/auto_apply_denylist.md)
 - [backlog_item_completion](tables/backlog_item_completion.md)
+- [backup_leo_feature_flag_audit](tables/backup_leo_feature_flag_audit.md)
+- [backup_leo_feature_flag_audit_log](tables/backup_leo_feature_flag_audit_log.md)
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md)
 - [blueprint_quality_assessments](tables/blueprint_quality_assessments.md)
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
@@ -451,7 +453,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [pr_metrics](tables/pr_metrics.md)
 - [prd_research_audit_log](tables/prd_research_audit_log.md)
 - [prd_ui_mappings](tables/prd_ui_mappings.md)
-- [prds_backup_20251016](tables/prds_backup_20251016.md)
 - [product_requirements_v2](tables/product_requirements_v2.md)
 - [profiles](tables/profiles.md)
 - [prompt_templates](tables/prompt_templates.md)
