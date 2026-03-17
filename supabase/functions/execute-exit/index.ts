@@ -9,8 +9,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
-import { verifyJwt } from '../_shared/auth.ts';
+import { verifyJWT, getCorsHeaders, createAdminClient } from '../_shared/auth.ts';
 
 const MIN_SEPARABILITY_SCORE = 60;
 const ROUNDS = ['dependency_freeze', 'data_export', 'cutover_validation', 'certification'] as const;
@@ -26,10 +25,11 @@ interface ExitState {
 }
 
 serve(async (req: Request) => {
-  const corsPreFlight = handleCorsPreFlight(req);
-  if (corsPreFlight) return corsPreFlight;
-
   const corsHeaders = getCorsHeaders(req);
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   if (req.method !== 'POST') {
     return new Response(
@@ -39,18 +39,31 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { user, error: authError } = await verifyJwt(req);
+    // Verify JWT before any database operations
+    const { user, error: authError, status: authStatus } = await verifyJWT(req);
     if (authError) {
       return new Response(
         JSON.stringify({ error: authError }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: authStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
+    // Use service_role client for DB operations (after JWT verification)
+    const supabase = createAdminClient();
+
+    // Check chairman role (only chairman can manage exits)
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!profile || profile.role !== 'chairman') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: chairman role required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
     const { venture_id, action, confirm } = body;
@@ -91,7 +104,11 @@ serve(async (req: Request) => {
   }
 });
 
-async function getExitStatus(supabase: ReturnType<typeof createClient>, ventureId: string, corsHeaders: Record<string, string>) {
+async function getExitStatus(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  corsHeaders: Record<string, string>
+) {
   const { data } = await supabase
     .from('venture_exit_readiness')
     .select('*')
@@ -106,7 +123,12 @@ async function getExitStatus(supabase: ReturnType<typeof createClient>, ventureI
   );
 }
 
-async function startExit(supabase: ReturnType<typeof createClient>, ventureId: string, confirm: boolean, corsHeaders: Record<string, string>) {
+async function startExit(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  confirm: boolean,
+  corsHeaders: Record<string, string>
+) {
   if (!confirm) {
     return new Response(
       JSON.stringify({ error: 'Exit requires explicit confirmation. Set confirm: true' }),
@@ -177,7 +199,12 @@ async function startExit(supabase: ReturnType<typeof createClient>, ventureId: s
   );
 }
 
-async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId: string, chairmanApproval: boolean, corsHeaders: Record<string, string>) {
+async function advanceRound(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  chairmanApproval: boolean,
+  corsHeaders: Record<string, string>
+) {
   const { data: state } = await supabase
     .from('venture_exit_readiness')
     .select('*')
@@ -281,7 +308,11 @@ async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId
   );
 }
 
-async function abortExit(supabase: ReturnType<typeof createClient>, ventureId: string, corsHeaders: Record<string, string>) {
+async function abortExit(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  corsHeaders: Record<string, string>
+) {
   const { data: state } = await supabase
     .from('venture_exit_readiness')
     .select('current_round, status')

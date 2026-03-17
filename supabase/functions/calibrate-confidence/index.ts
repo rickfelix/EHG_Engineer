@@ -5,9 +5,7 @@
 // updates per-service per-venture confidence thresholds.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getCorsHeaders, handleCorsPreFlight } from '../_shared/cors.ts';
-import { verifyJwt } from '../_shared/auth.ts';
+import { verifyJWT, getCorsHeaders, createAdminClient } from '../_shared/auth.ts';
 
 const EMA_ALPHA = 0.1;
 const DRIFT_THRESHOLD_PCT = 15;
@@ -66,10 +64,11 @@ function clampDelta(delta: number, maxPct: number): number {
 }
 
 serve(async (req: Request) => {
-  const corsPreFlight = handleCorsPreFlight(req);
-  if (corsPreFlight) return corsPreFlight;
-
   const corsHeaders = getCorsHeaders(req);
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   if (req.method !== 'POST') {
     return new Response(
@@ -79,18 +78,17 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { user, error: authError } = await verifyJwt(req);
+    // Verify JWT before any database operations
+    const { user, error: authError, status: authStatus } = await verifyJWT(req);
     if (authError) {
       return new Response(
         JSON.stringify({ error: authError }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: authStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
+    // Use service_role client for DB operations (after JWT verification)
+    const supabase = createAdminClient();
 
     const body = await req.json().catch(() => ({}));
     const ventureId = body.venture_id;
