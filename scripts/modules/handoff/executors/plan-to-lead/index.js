@@ -130,7 +130,8 @@ async function preCheckSmokeTestReadiness(supabase, sd, sdId) {
       console.log('   Add: ## Baseline Observation with actual runtime output.');
     }
   } catch (_err) {
-    // Non-fatal — gate handles actual validation
+    // Intentionally suppressed: non-fatal, gate handles actual validation
+    console.debug('[PlanToLeadExecutor] smoke test readiness pre-check suppressed:', _err?.message || _err);
   }
 }
 

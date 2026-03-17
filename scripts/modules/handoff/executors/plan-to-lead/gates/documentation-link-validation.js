@@ -81,12 +81,19 @@ function extractRelativeLinks(content) {
 
 /**
  * Get markdown files changed in the current branch compared to main.
+ * SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Accepts optional SharedGitContext to avoid redundant git calls.
  *
  * @param {string} cwd - Working directory
+ * @param {Object} [gitContext] - SharedGitContext instance (optional, falls back to execSync)
  * @returns {string[]} Array of changed markdown file paths
  */
-function getChangedMarkdownFiles(cwd) {
+function getChangedMarkdownFiles(cwd, gitContext) {
   try {
+    // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Use cached diffFiles from SharedGitContext when available
+    if (gitContext && gitContext.diffFiles) {
+      return gitContext.diffFiles.filter(f => f && /\.md$/i.test(f));
+    }
+
     const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
       encoding: 'utf8', cwd, timeout: 10000
     }).trim();
@@ -183,7 +190,8 @@ export function createDocumentationLinkValidationGate(_supabase) {
       const repoRoot = process.cwd();
 
       // Get changed markdown files
-      const changedFiles = getChangedMarkdownFiles(repoRoot);
+      // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Pass gitContext from validation context to avoid redundant git calls
+      const changedFiles = getChangedMarkdownFiles(repoRoot, ctx.gitContext);
 
       if (changedFiles.length === 0) {
         console.log('   ℹ️  No markdown files changed in this branch');

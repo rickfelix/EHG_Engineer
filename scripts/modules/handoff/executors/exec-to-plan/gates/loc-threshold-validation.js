@@ -46,6 +46,7 @@ export function createLOCThresholdValidationGate(supabase) {
       console.log(`   📊 LOC Threshold: ${locThreshold} lines`);
 
       // 3. Calculate LOC from git diff
+      // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Use SharedGitContext when available for cached branch/diffStat
       let locCount = 0;
       let diffOutput = '';
 
@@ -53,10 +54,15 @@ export function createLOCThresholdValidationGate(supabase) {
         // Get the base branch (usually main)
         const baseBranch = process.env.LEO_BASE_BRANCH || 'main';
 
-        // Get current branch
-        const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+        // Get current branch (use cached value from gitContext if available)
+        const currentBranch = ctx.gitContext
+          ? ctx.gitContext.branch
+          : execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
 
-        if (currentBranch === baseBranch) {
+        // Get diff stat (use cached value from gitContext if available)
+        if (ctx.gitContext) {
+          diffOutput = ctx.gitContext.diffStat;
+        } else if (currentBranch === baseBranch) {
           // On main branch, check uncommitted changes
           diffOutput = execSync('git diff --stat', { encoding: 'utf8' });
         } else {

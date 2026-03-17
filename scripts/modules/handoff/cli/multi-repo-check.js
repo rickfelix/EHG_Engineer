@@ -34,8 +34,9 @@ export function checkMultiRepoStatus(sdInfo = null) {
           description: sdInfo.description || '',
           sd_type: sdInfo.sd_type || 'feature'
         });
-      } catch {
-        // Keep default
+      } catch (e) {
+        // Intentionally suppressed: Keep default repo list
+        console.debug('[MultiRepoCheck] getAffectedRepos suppressed:', e?.message || e);
       }
     }
 
@@ -55,8 +56,9 @@ export function checkMultiRepoStatus(sdInfo = null) {
       relevantChanges,
       affectedRepos
     };
-  } catch {
-    // If multi-repo check fails, don't block
+  } catch (e) {
+    // Intentionally suppressed: If multi-repo check fails, don't block
+    console.debug('[MultiRepoCheck] multi-repo check suppressed:', e?.message || e);
     return { passed: true, status: null, error: 'Could not check multi-repo status' };
   }
 }

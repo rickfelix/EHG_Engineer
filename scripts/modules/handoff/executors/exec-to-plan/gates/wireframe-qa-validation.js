@@ -83,8 +83,9 @@ async function gatherWireframeArtifacts(prd, supabase, sdId) {
       if (data && data.length > 0) {
         data.forEach(a => artifacts.push(`Artifact: ${a.title} (${a.artifact_type})`));
       }
-    } catch {
-      // Non-blocking
+    } catch (e) {
+      // Intentionally suppressed: wireframe artifact lookup is non-blocking
+      console.debug('[WireframeQAValidation] artifact query suppressed:', e?.message || e);
     }
   }
 

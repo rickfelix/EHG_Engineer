@@ -190,8 +190,9 @@ async function runProgrammaticRetrospective(sd) {
       try {
         const retroData = JSON.parse(result.stdout.trim());
         console.log(`   ✅ Retrospective generated: ID=${retroData.retrospective_id}, quality=${retroData.quality_score}/100`);
-      } catch {
+      } catch (e) {
         console.log('   ✅ Retrospective generator ran (output parse skipped)');
+        console.debug('[LeadFinalApproval] retrospective JSON parse suppressed:', e?.message || e);
       }
     } else {
       console.log(`   ⚠️  Retrospective generator exited ${result.status} (non-blocking)`);
@@ -539,7 +540,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
                 result.foundTables.push(tableName);
               }
             }
-          } catch (_) { /* skip unreadable files */ }
+          } catch (e) {
+            // Intentionally suppressed: skip unreadable files
+            console.debug('[LeadFinalApproval] migration file read suppressed:', e?.message || e);
+          }
         }
       }
     }
