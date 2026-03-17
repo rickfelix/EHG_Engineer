@@ -18,7 +18,6 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => ({})) }));
 vi.mock('../../../lib/llm/client-factory.js', () => ({ getValidationClient: vi.fn() }));
 vi.mock('../../../lib/notifications/orchestrator.js', () => ({
   sendVisionScoreNotification: vi.fn(),
-  sendVisionScoreTelegramNotification: vi.fn(),
 }));
 
 let scoreSD;

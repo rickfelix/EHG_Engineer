@@ -1,11 +1,10 @@
 /**
  * Claude Code Release Monitor Pipeline Tests
  *
- * Unit tests for all 4 pipeline modules:
- *   1. release-monitor.js   — GitHub fetch, dedup, circuit breaker
- *   2. release-analyzer.js  — keyword relevance scoring
- *   3. chairman-notifier.js — Telegram notification formatting
- *   4. approval-handler.js  — approval routing, expiry
+ * Unit tests for pipeline modules:
+ *   1. release-analyzer.js  — keyword relevance scoring
+ *   2. release-monitor.js   — GitHub fetch, dedup, circuit breaker
+ *   3. approval-handler.js  — approval routing, expiry
  *
  * Part of SD-LEO-FEAT-AUTOMATED-CLAUDE-CODE-001
  */
@@ -53,15 +52,9 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => mockSupabase),
 }));
 
-vi.mock('../../../../lib/notifications/telegram-adapter.js', () => ({
-  sendTelegramMessage: vi.fn().mockResolvedValue({ success: true, providerMessageId: 'msg_123' }),
-}));
-
 // Set env vars before imports
 process.env.SUPABASE_URL = 'https://test.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
-process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
-process.env.TELEGRAM_CHAT_ID = '12345';
 
 // ── Imports (after mocks) ─────────────────────────────────
 
@@ -69,9 +62,6 @@ const { analyzeRelevance, IMPACT_KEYWORDS, AUTO_SKIP_THRESHOLD } = await import(
   '../../../../lib/integrations/claude-code/release-analyzer.js'
 );
 
-const { formatTelegramMessage } = await import(
-  '../../../../lib/integrations/claude-code/chairman-notifier.js'
-);
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -287,115 +277,7 @@ describe('release-analyzer', () => {
 });
 
 // ══════════════════════════════════════════════════════════
-// 2. CHAIRMAN NOTIFIER TESTS
-// ══════════════════════════════════════════════════════════
-
-describe('chairman-notifier', () => {
-  describe('formatTelegramMessage', () => {
-    it('includes tag name and relevance percentage', () => {
-      const intake = makeIntakeRow({
-        tag_name: 'v1.2.0',
-        relevance_score: 0.85,
-        recommendation: 'adopt',
-      });
-
-      const msg = formatTelegramMessage(intake);
-
-      expect(msg).toContain('v1.2.0');
-      expect(msg).toContain('85%');
-      expect(msg).toContain('ADOPT');
-    });
-
-    it('lists workflow improvements when present', () => {
-      const intake = makeIntakeRow({
-        tag_name: 'v1.3.0',
-        relevance_score: 0.6,
-        recommendation: 'evaluate',
-        workflow_improvements: [
-          { area: 'tools', description: 'New bash timeout configuration' },
-          { area: 'git', description: 'Improved branch management' },
-        ],
-      });
-
-      const msg = formatTelegramMessage(intake);
-
-      expect(msg).toContain('Key Improvements for EHG');
-      expect(msg).toContain('tools');
-      expect(msg).toContain('bash timeout');
-      expect(msg).toContain('git');
-    });
-
-    it('lists impact areas when present', () => {
-      const intake = makeIntakeRow({
-        tag_name: 'v2.0.0',
-        relevance_score: 0.7,
-        recommendation: 'adopt',
-        impact_areas: ['sub-agent', 'automation', 'memory'],
-      });
-
-      const msg = formatTelegramMessage(intake);
-
-      expect(msg).toContain('Impact');
-      expect(msg).toContain('sub-agent');
-      expect(msg).toContain('automation');
-      expect(msg).toContain('memory');
-    });
-
-    it('contains approval instructions', () => {
-      const intake = makeIntakeRow({ tag_name: 'v1.0.0', relevance_score: 0.5 });
-
-      const msg = formatTelegramMessage(intake);
-
-      expect(msg).toContain('Approve');
-      expect(msg).toContain('48h');
-    });
-
-    it('handles zero relevance score', () => {
-      const intake = makeIntakeRow({
-        tag_name: 'v0.0.1',
-        relevance_score: 0,
-        recommendation: 'skip',
-      });
-
-      const msg = formatTelegramMessage(intake);
-
-      expect(msg).toContain('0%');
-      expect(msg).toContain('SKIP');
-    });
-
-    it('handles null workflow_improvements', () => {
-      const intake = makeIntakeRow({
-        tag_name: 'v1.0.0',
-        workflow_improvements: null,
-      });
-
-      const msg = formatTelegramMessage(intake);
-
-      expect(msg).not.toContain('Key Improvements');
-    });
-
-    it('limits improvements to 5 in message', () => {
-      const intake = makeIntakeRow({
-        tag_name: 'v1.0.0',
-        relevance_score: 0.8,
-        recommendation: 'adopt',
-        workflow_improvements: Array.from({ length: 8 }, (_, i) => ({
-          area: `area-${i}`,
-          description: `Improvement ${i}`,
-        })),
-      });
-
-      const msg = formatTelegramMessage(intake);
-
-      // Should cap at 5 improvements in the message
-      const bulletCount = (msg.match(/•/g) || []).length;
-      expect(bulletCount).toBeLessThanOrEqual(5);
-    });
-  });
-});
-
-// ══════════════════════════════════════════════════════════
-// 3. RELEASE MONITOR INTEGRATION (mock-based)
+// 2. RELEASE MONITOR INTEGRATION (mock-based)
 // ══════════════════════════════════════════════════════════
 
 describe('release-monitor (mock-based)', () => {
@@ -461,7 +343,7 @@ describe('release-monitor (mock-based)', () => {
 });
 
 // ══════════════════════════════════════════════════════════
-// 4. APPROVAL HANDLER INTEGRATION (mock-based)
+// 3. APPROVAL HANDLER INTEGRATION (mock-based)
 // ══════════════════════════════════════════════════════════
 
 describe('approval-handler (mock-based)', () => {

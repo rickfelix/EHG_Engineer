@@ -6,21 +6,18 @@
  * Orchestrates the full release monitoring pipeline:
  *   1. Fetch new releases from GitHub (release-monitor)
  *   2. Analyze relevance to EHG (release-analyzer)
- *   3. Notify chairman via Telegram (chairman-notifier)
- *   4. Process any prior approval decisions (approval-handler)
+ *   3. Process any prior approval decisions (approval-handler)
  *
  * Usage:
  *   npm run release:check
  *   npm run release:check -- --dry-run --verbose
  *   npm run release:check -- --stage monitor     # run only stage 1
  *   npm run release:check -- --stage analyze     # run only stage 2
- *   npm run release:check -- --stage notify      # run only stage 3
- *   npm run release:check -- --stage approve     # run only stage 4
+ *   npm run release:check -- --stage approve     # run only stage 3
  */
 
 import { syncReleases } from '../lib/integrations/claude-code/release-monitor.js';
 import { analyzePendingReleases } from '../lib/integrations/claude-code/release-analyzer.js';
-import { notifyEvaluatedReleases } from '../lib/integrations/claude-code/chairman-notifier.js';
 import { processApprovals } from '../lib/integrations/claude-code/approval-handler.js';
 
 function parseArgs() {
@@ -68,18 +65,10 @@ async function main() {
     console.log(`  Analyzed: ${analyzerResult.analyzed} | Evaluating: ${analyzerResult.evaluating} | Auto-skipped: ${analyzerResult.skipped}`);
   }
 
-  // ── Stage 3: Notify chairman ─────────────────────────────────
-  let notifyResult = null;
-  if (shouldRun('notify') && !opts.dryRun) {
-    console.log('\n── Stage 3: Chairman Notification ──');
-    notifyResult = await notifyEvaluatedReleases({ verbose: opts.verbose });
-    console.log(`  Notified: ${notifyResult.notified} | Skipped: ${notifyResult.skipped} | Failed: ${notifyResult.failed}`);
-  }
-
-  // ── Stage 4: Process approvals ───────────────────────────────
+  // ── Stage 3: Process approvals ───────────────────────────────
   let approvalResult = null;
   if (shouldRun('approve') && !opts.dryRun) {
-    console.log('\n── Stage 4: Process Approvals ──');
+    console.log('\n── Stage 3: Process Approvals ──');
     approvalResult = await processApprovals({ verbose: opts.verbose });
     console.log(`  Approved→inbox: ${approvalResult.approved} | Rejected: ${approvalResult.rejected} | Expired: ${approvalResult.expired}`);
   }

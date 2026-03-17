@@ -502,8 +502,8 @@ ${rawResponse.substring(0, 1000)}`;
 
     scoreRecord.id = inserted.id;
 
-    // Publish vision.scored event — notification orchestrator and Telegram adapter
-    // subscribe via event bus (SD-MAN-INFRA-EVENT-BUS-BACKBONE-001).
+    // Publish vision.scored event — notification orchestrator subscribes
+    // via event bus (SD-MAN-INFRA-EVENT-BUS-BACKBONE-001).
     // Errors are caught per-subscriber in the event bus; never fail the scoring run.
     publishVisionEvent(VISION_EVENTS.SCORED, {
       supabase,
