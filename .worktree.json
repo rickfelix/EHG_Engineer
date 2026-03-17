@@ -1,6 +1,12 @@
 {
-  "sdKey": "SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001",
-  "expectedBranch": "feat/SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001",
-  "createdAt": "2026-03-17T18:06:57.991Z",
+<<<<<<< Updated upstream
+  "sdKey": "SD-LEO-FIX-DATABASE-SECURITY-DEFINER-001",
+  "expectedBranch": "feat/SD-LEO-FIX-DATABASE-SECURITY-DEFINER-001",
+  "createdAt": "2026-03-17T16:53:45.662Z",
+=======
+  "sdKey": "SD-LEO-FIX-EMPTY-CATCH-BLOCK-001",
+  "expectedBranch": "feat/SD-LEO-FIX-EMPTY-CATCH-BLOCK-001",
+  "createdAt": "2026-03-17T15:54:03.009Z",
+>>>>>>> Stashed changes
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }

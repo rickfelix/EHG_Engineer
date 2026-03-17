@@ -312,7 +312,8 @@ export class ContentBuilder {
     if (Array.isArray(field)) return field;
     try {
       return JSON.parse(field);
-    } catch {
+    } catch (e) {
+      console.debug('[ContentBuilder] JSON field parse suppressed:', e?.message || e);
       return [];
     }
   }

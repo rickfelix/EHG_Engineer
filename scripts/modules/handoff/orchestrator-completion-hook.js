@@ -160,8 +160,9 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
         .not('sd_id', 'is', null)
         .in('status', ['active', 'idle']);
       claimedSdKeys = (claimedSessions || []).map(s => s.sd_id).filter(Boolean);
-    } catch {
-      // Fail-open: if claim query fails, proceed without filtering
+    } catch (e) {
+      // Intentionally suppressed: Fail-open, proceed without claim filtering
+      console.debug('[OrchestratorCompletionHook] claim query suppressed:', e?.message || e);
     }
 
     let query = supabase
@@ -489,8 +490,9 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
       if (match) {
         branchLoc._total = parseInt(match[1], 10);
       }
-    } catch {
-      // Git LOC not available, continue without it
+    } catch (e) {
+      // Intentionally suppressed: Git LOC not available, continue without it
+      console.debug('[OrchestratorCompletionHook] git LOC suppressed:', e?.message || e);
     }
 
     // Process each child
@@ -542,8 +544,9 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
             }
           }
         }
-      } catch {
-        // Test file detection not available
+      } catch (e) {
+        // Intentionally suppressed: Test file detection not available
+        console.debug('[OrchestratorCompletionHook] test file detection suppressed:', e?.message || e);
       }
 
       childEntry.has_test_files = hasTestFiles;
@@ -1003,7 +1006,10 @@ export async function executeOrchestratorCompletionHook(
           .limit(1)
           .single();
         sessionId = sessionData?.session_id;
-      } catch { /* fallback: proceed without claiming */ }
+      } catch (e) {
+        // Intentionally suppressed: fallback, proceed without claiming
+        console.debug('[OrchestratorCompletionHook] session claim fallback suppressed:', e?.message || e);
+      }
 
       for (let attempt = 1; attempt <= MAX_CLAIM_ATTEMPTS; attempt++) {
         const { orchestrator: nextOrchestrator, reason } = await findNextAvailableOrchestrator(supabase, orchestratorId);

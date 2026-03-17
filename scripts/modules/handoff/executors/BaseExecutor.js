@@ -54,7 +54,9 @@ function getRepoPath(repoName) {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe']
       }).trim();
-    } catch {
+    } catch (e) {
+      // Intentionally suppressed: Fallback when git rev-parse unavailable
+      console.debug('[BaseExecutor] getRepoPath git rev-parse fallback:', e?.message || e);
       _cachedGitRoot = path.resolve(__dirname, '../../../../');
     }
   }
@@ -103,29 +105,32 @@ export class BaseExecutor {
         executor_class: this.constructor.name,
         telemetry_version: '1',
       }, traceCtx);
-    } catch { /* telemetry init failure is non-fatal */ }
+    } catch (e) {
+      // Intentionally suppressed: telemetry init failure is non-fatal
+      console.debug('[BaseExecutor] telemetry init suppressed:', e?.message || e);
+    }
 
     try {
       // Step 1: Load SD
       let step1Span;
-      try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step1Span = startSpan('step.loadSD', { span_type: 'phase', step_name: 'loadSD', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const sd = await this.sdRepo.getById(sdId);
-      try { endSpan(step1Span); } catch { /* non-fatal */ }
+      try { endSpan(step1Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // Step 1.5: Pre-handoff migration check (auto-execute pending migrations)
       let step1_5Span;
-      try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step1_5Span = startSpan('step.migrationCheck', { span_type: 'phase', step_name: 'migrationCheck', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       await this._checkAndExecutePendingMigrations(sd, options);
-      try { endSpan(step1_5Span); } catch { /* non-fatal */ }
+      try { endSpan(step1_5Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // Step 1.8: PAT-MSESS-BYP-001 - Multi-session claim conflict check (BLOCKING)
       // Prevents duplicate work when another Claude Code instance is already working on this SD
       let step1_8Span;
-      try { step1_8Span = startSpan('step.claimConflictCheck', { span_type: 'phase', step_name: 'claimConflictCheck', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step1_8Span = startSpan('step.claimConflictCheck', { span_type: 'phase', step_name: 'claimConflictCheck', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const claimConflict = await this._checkMultiSessionClaimConflict(sdId, sd);
-      try { endSpan(step1_8Span); } catch { /* non-fatal */ }
+      try { endSpan(step1_8Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (claimConflict && !claimConflict.pass) {
-        try { endSpan(rootSpan, { result: 'claim_conflict' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+        try { endSpan(rootSpan, { result: 'claim_conflict' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
         return ResultBuilder.gateFailure('GATE_MULTI_SESSION_CLAIM_CONFLICT', {
           issues: claimConflict.issues,
           score: claimConflict.score,
@@ -136,20 +141,20 @@ export class BaseExecutor {
 
       // Step 2: Pre-execution setup (optional, override in subclass)
       let step2Span;
-      try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step2Span = startSpan('step.setup', { span_type: 'phase', step_name: 'setup', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const setupResult = await this.setup(sdId, sd, options);
-      try { endSpan(step2Span); } catch { /* non-fatal */ }
+      try { endSpan(step2Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (setupResult && !setupResult.success) {
-        try { endSpan(rootSpan, { result: 'setup_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+        try { endSpan(rootSpan, { result: 'setup_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
         return setupResult;
       }
 
       // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
       let step2_5Span;
-      try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step2_5Span = startSpan('step.claimAndPrepare', { span_type: 'phase', step_name: 'claimAndPrepare', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const claimResult = await this._claimSDForSession(sdId, sd);
       if (claimResult && !claimResult.success) {
-        try { endSpan(step2_5Span, { result: 'claim_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+        try { endSpan(step2_5Span, { result: 'claim_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
         return claimResult;
       }
 
@@ -159,11 +164,11 @@ export class BaseExecutor {
       // Step 2.7: SD-LEO-CONTINUITY-001 - Display HANDOFF_START directives (protocol familiarization)
       const targetPhase = this._getTargetPhaseFromHandoff();
       await this._displayHandoffStartDirectives(targetPhase);
-      try { endSpan(step2_5Span); } catch { /* non-fatal */ }
+      try { endSpan(step2_5Span); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
       let step3Span;
-      try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step3Span = startSpan('step.gateValidation', { span_type: 'phase', step_name: 'gateValidation', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
       // SD-MAN-GEN-CORRECTIVE-VISION-GAP-012 (V04): Inject DFE escalation gate globally
@@ -252,7 +257,7 @@ export class BaseExecutor {
         break; // Not retry-eligible or max retries reached
       }
 
-      try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch { /* non-fatal */ }
+      try { endSpan(step3Span, { result: gateResults.passed ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // SD-LEARN-010:US-005: Handle bypass validation
       if (!gateResults.passed) {
@@ -284,7 +289,7 @@ export class BaseExecutor {
               sessionId: options.autoProceedSessionId || 'unknown'
             });
 
-            try { endSpan(rootSpan, { result: 'skipped' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+            try { endSpan(rootSpan, { result: 'skipped' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
             // Return special result for skip-and-continue
             return {
               success: false,
@@ -318,9 +323,12 @@ export class BaseExecutor {
               sdId,
               handoffType: this.handoffType
             }));
-          } catch { /* RCA trigger should never block handoff */ }
+          } catch (e) {
+            // Intentionally suppressed: RCA trigger should never block handoff
+            console.debug('[BaseExecutor] RCA trigger suppressed:', e?.message || e);
+          }
 
-          try { endSpan(rootSpan, { result: 'gate_failure' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+          try { endSpan(rootSpan, { result: 'gate_failure' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
           return ResultBuilder.gateFailure(gateResults.failedGate, {
             issues: gateResults.issues,
             score: gateResults.totalScore,
@@ -333,11 +341,11 @@ export class BaseExecutor {
 
       // Step 4: Execute type-specific logic
       let step4Span;
-      try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_id: sdId }, traceCtx, rootSpan); } catch { /* non-fatal */ }
+      try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_id: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       const executionResult = await this.executeSpecific(sdId, sd, options, gateResults);
-      try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch { /* non-fatal */ }
+      try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (!executionResult.success) {
-        try { endSpan(rootSpan, { result: 'exec_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+        try { endSpan(rootSpan, { result: 'exec_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
         return executionResult;
       }
 
@@ -353,7 +361,10 @@ export class BaseExecutor {
           command: 'handoff',
           sdKey: sd?.sd_key || sdId,
         });
-      } catch { /* CLI tracking is fire-and-forget */ }
+      } catch (e) {
+        // Intentionally suppressed: CLI tracking is fire-and-forget
+        console.debug('[BaseExecutor] CLI tracking suppressed:', e?.message || e);
+      }
 
       // Step 5: Build success result
       console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
@@ -362,10 +373,13 @@ export class BaseExecutor {
       // SD-LEO-INFRA-TYPE-AWARE-GATE-001: Progressive gate preflight advisory
       try {
         await this._displayProgressivePreflight(sd);
-      } catch { /* advisory is non-blocking */ }
+      } catch (e) {
+        // Intentionally suppressed: advisory is non-blocking
+        console.debug('[BaseExecutor] progressive preflight advisory suppressed:', e?.message || e);
+      }
 
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: End root span and persist
-      try { endSpan(rootSpan, { result: 'success' }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+      try { endSpan(rootSpan, { result: 'success' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       return {
         success: true,
@@ -383,7 +397,7 @@ export class BaseExecutor {
       console.error(`❌ ${this.handoffType} execution error:`, error.message);
 
       // SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A: Record error in telemetry
-      try { endSpan(rootSpan, { result: 'error', error_class: error.constructor?.name, error_message: error.message }); persist(traceCtx, { supabase: this.supabase }); } catch { /* non-fatal */ }
+      try { endSpan(rootSpan, { result: 'error', error_class: error.constructor?.name, error_message: error.message }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
 
       // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
       const failurePhase = this._getSourcePhaseFromHandoff();
@@ -479,7 +493,10 @@ export class BaseExecutor {
         if (profile.gate_threshold) notes.push(`Gate threshold: ${profile.gate_threshold}%`);
         if (notes.length > 0) typeNote = `\n   SD type '${sdType}': ${notes.join(', ')}`;
       }
-    } catch { /* non-fatal */ }
+    } catch (e) {
+      // Intentionally suppressed: SD type profile lookup is non-fatal
+      console.debug('[BaseExecutor] SD type profile query suppressed:', e?.message || e);
+    }
 
     console.log(`\n📋 NEXT HANDOFF: ${chain.next}`);
     console.log('   The next gate will expect:');
@@ -690,7 +707,10 @@ export class BaseExecutor {
         session = resolved.data;
         console.log(`   [Claim] Reusing existing session ${session.session_id} (via ${resolved.source})`);
       }
-    } catch { /* resolve-own-session not available, fall back */ }
+    } catch (e) {
+      // Intentionally suppressed: resolve-own-session not available, fall back
+      console.debug('[BaseExecutor] resolve-own-session suppressed:', e?.message || e);
+    }
 
     if (!session) {
       console.log('   [Claim] No existing session found — creating new one');
@@ -732,7 +752,8 @@ export class BaseExecutor {
       const sessionManager = await import('../../../../lib/session-manager.mjs');
       const existing = sessionManager.getCurrentSession?.();
       return existing?.session_id || null;
-    } catch {
+    } catch (e) {
+      console.debug('[BaseExecutor] getCurrentSessionId suppressed:', e?.message || e);
       return null;
     }
   }
@@ -763,14 +784,18 @@ export class BaseExecutor {
         if (resolved.data && resolved.source !== 'heartbeat_fallback') {
           currentSessionId = resolved.data.session_id;
         }
-      } catch { /* fall through to session manager */ }
+      } catch (e) {
+        // Intentionally suppressed: fall through to session manager
+        console.debug('[BaseExecutor] resolveOwnSession fallback suppressed:', e?.message || e);
+      }
       if (!currentSessionId) {
         try {
           const sessionManager = await import('../../../../lib/session-manager.mjs');
           const session = await sessionManager.getOrCreateSession();
           currentSessionId = session?.session_id || null;
         } catch (_err) {
-          // If session manager unavailable, proceed without self-exclusion
+          // Intentionally suppressed: session manager unavailable, proceed without self-exclusion
+          console.debug('[BaseExecutor] resolveOwnSession session-manager fallback suppressed:', _err?.message || _err);
         }
       }
 

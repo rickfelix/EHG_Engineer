@@ -170,8 +170,9 @@ export function createArchitecturalPatternChecklistGate(prdRepo, sd, supabase) {
           .select('id')
           .eq('parent_sd_id', sd?.id);
         childrenCount = children?.length || 0;
-      } catch {
-        // Non-blocking
+      } catch (e) {
+        // Intentionally suppressed: children count query is non-blocking
+        console.debug('[ArchitecturalPatternChecklist] children query suppressed:', e?.message || e);
       }
 
       // 1. Evaluate complexity

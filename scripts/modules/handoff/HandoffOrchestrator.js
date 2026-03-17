@@ -421,8 +421,9 @@ export class HandoffOrchestrator {
             console.log(`   ✅ PRD creation verified after ${Math.round(elapsed / 1000)}s`);
             break;
           }
-        } catch {
-          // Supabase query failed - keep waiting
+        } catch (e) {
+          // Intentionally suppressed: Supabase query failed - keep waiting
+          console.debug('[HandoffOrchestrator] PRD poll query suppressed:', e?.message || e);
         }
 
         if (elapsed % 15000 === 0) {
@@ -437,7 +438,10 @@ export class HandoffOrchestrator {
           fs.closeSync(logFd);
           logFd = null;
           logContents = fs.readFileSync(logPath, 'utf-8');
-        } catch { /* ignore read errors */ }
+        } catch (e) {
+          // Intentionally suppressed: ignore read errors
+          console.debug('[HandoffOrchestrator] log file read suppressed:', e?.message || e);
+        }
 
         const lastLines = logContents.split('\n').filter(Boolean).slice(-10).join('\n   ');
         console.warn(`   ⚠️  PRD not created after ${maxWaitMs / 1000}s`);
@@ -455,7 +459,7 @@ export class HandoffOrchestrator {
       console.log(`   💡 Run manually: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
     } finally {
       if (logFd != null) {
-        try { fs.closeSync(logFd); } catch { /* ignore */ }
+        try { fs.closeSync(logFd); } catch (e) { console.debug('[HandoffOrchestrator] logFd close suppressed:', e?.message || e); }
       }
     }
   }

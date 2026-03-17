@@ -23,11 +23,9 @@ export const POLICY_VERSION = '1.2.0';
  * detailed PRD documentation requirements (exploration, file scope, etc.)
  *
  * Use this constant in PLAN-TO-EXEC validators to ensure consistency:
- * - fileScopeValidation
- * - explorationAudit
- * - executionPlanValidation
  * - testingStrategyValidation
  * - deliverablesPlanning
+ * (fileScopeValidation, explorationAudit, executionPlanValidation removed by SD-LEO-FIX-REMOVE-RUBBER-STAMP-001)
  *
  * Criteria for "lightweight":
  * - Scope is typically well-defined (no extensive exploration needed)

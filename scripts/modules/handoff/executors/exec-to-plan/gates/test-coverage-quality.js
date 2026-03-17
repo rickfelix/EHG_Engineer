@@ -35,7 +35,8 @@ function detectCodeChanges() {
         timeout: 5000,
         stdio: ['pipe', 'pipe', 'pipe']
       }).trim();
-    } catch {
+    } catch (e) {
+      console.debug('[TestCoverageQuality] git diff HEAD~10 suppressed:', e?.message || e);
       diffOutput = execSync('git diff --name-only', {
         encoding: 'utf-8',
         timeout: 5000,

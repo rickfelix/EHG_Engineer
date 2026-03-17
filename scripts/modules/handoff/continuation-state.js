@@ -55,8 +55,9 @@ function getCurrentSessionIdSync() {
         return data.session_id;
       }
     }
-  } catch {
-    // Fallback - no session found
+  } catch (e) {
+    // Intentionally suppressed: Fallback - no session found
+    console.debug('[ContinuationState] session lookup suppressed:', e?.message || e);
   }
   return null;
 }

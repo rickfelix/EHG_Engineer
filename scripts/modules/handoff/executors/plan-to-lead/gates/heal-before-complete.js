@@ -81,7 +81,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
       structuralPassed += 0.5;
       details.structural.stories = 'No stories found (may be expected)';
     }
-  } catch { details.structural.stories = 'Query failed'; }
+  } catch (e) { details.structural.stories = 'Query failed'; console.debug('[HealBeforeComplete] stories query suppressed:', e?.message || e); }
 
   // Check 2: PRD exists
   try {
@@ -98,7 +98,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
     } else {
       details.structural.prd = 'missing';
     }
-  } catch { details.structural.prd = 'not found (may be expected for SD type)'; structuralChecks++; structuralPassed += 0.5; }
+  } catch (e) { details.structural.prd = 'not found (may be expected for SD type)'; structuralChecks++; structuralPassed += 0.5; console.debug('[HealBeforeComplete] PRD query suppressed:', e?.message || e); }
 
   // Check 3: Retrospective exists with PUBLISHED status
   try {
@@ -119,7 +119,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
     } else {
       details.structural.retrospective = 'missing';
     }
-  } catch { details.structural.retrospective = 'query failed'; structuralChecks++; }
+  } catch (e) { details.structural.retrospective = 'query failed'; structuralChecks++; console.debug('[HealBeforeComplete] retrospective query suppressed:', e?.message || e); }
 
   // Check 4: Handoff chain has required handoffs
   try {
@@ -136,7 +136,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
     } else {
       details.structural.handoffs = `only ${handoffCount} accepted (need ≥2)`;
     }
-  } catch { details.structural.handoffs = 'query failed'; structuralChecks++; }
+  } catch (e) { details.structural.handoffs = 'query failed'; structuralChecks++; console.debug('[HealBeforeComplete] handoffs query suppressed:', e?.message || e); }
 
   structuralScore = structuralChecks > 0
     ? Math.round((structuralPassed / structuralChecks) * 100)
@@ -170,7 +170,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
           { encoding: 'utf8', timeout: 5000 }
         ).trim();
       }
-    } catch { gitDiff = '(git history unavailable)'; }
+    } catch (e) { gitDiff = '(git history unavailable)'; console.debug('[HealBeforeComplete] git history suppressed:', e?.message || e); }
 
     const keyChanges = (sd.key_changes || [])
       .map(kc => typeof kc === 'string' ? kc : kc.description || kc.title || JSON.stringify(kc))
@@ -292,8 +292,9 @@ async function loadHealThreshold(supabase, sdType) {
         return { threshold: parsed, source: 'leo_config' };
       }
     }
-  } catch {
-    // Fall through to SD-type tier
+  } catch (e) {
+    // Intentionally suppressed: Fall through to SD-type tier
+    console.debug('[HealBeforeComplete] leo_config threshold lookup suppressed:', e?.message || e);
   }
 
   // 2. SD-type-aware tier
@@ -326,8 +327,9 @@ async function loadToleranceBuffer(supabase) {
         return parsed;
       }
     }
-  } catch {
-    // Fall through to default
+  } catch (e) {
+    // Intentionally suppressed: Fall through to default tolerance buffer
+    console.debug('[HealBeforeComplete] tolerance buffer lookup suppressed:', e?.message || e);
   }
   return DEFAULT_TOLERANCE_BUFFER;
 }
@@ -379,8 +381,9 @@ export function createHealBeforeCompleteGate(supabase) {
           .eq('id', sdUuid)
           .single();
         isChildSD = !!parentCheck?.parent_sd_id;
-      } catch {
-        // Fail-open: if check fails, treat as standalone
+      } catch (e) {
+        // Intentionally suppressed: Fail-open, treat as standalone if check fails
+        console.debug('[HealBeforeComplete] parent SD check suppressed:', e?.message || e);
       }
 
       // Resolve SD type for threshold tiering
@@ -699,8 +702,9 @@ export function createHealBeforeCompleteGate(supabase) {
         } else {
           console.log('   Vision Heal (advisory): No recent score — consider running /heal vision');
         }
-      } catch {
+      } catch (e) {
         console.log('   Vision Heal (advisory): Query failed (non-blocking)');
+        console.debug('[HealBeforeComplete] vision heal query suppressed:', e?.message || e);
       }
 
       // Intent-vs-Outcome Advisory (PAT-HEAL-SCOPE-001)
@@ -759,8 +763,9 @@ export function createHealBeforeCompleteGate(supabase) {
             }
           }
         }
-      } catch {
-        // Graceful skip — advisory should never block
+      } catch (e) {
+        // Intentionally suppressed: advisory should never block
+        console.debug('[HealBeforeComplete] intent-vs-outcome advisory suppressed:', e?.message || e);
       }
 
       // SD heal score within tolerance buffer — PASS with warning

@@ -111,7 +111,8 @@ function countModifiedModules(gitContext) {
       if (firstSegment) modules.add(firstSegment);
     }
     return modules.size;
-  } catch {
+  } catch (e) {
+    console.debug('[IntegrationTestReq] module count suppressed:', e?.message || e);
     return 0;
   }
 }
@@ -132,7 +133,8 @@ function findIntegrationTestFiles(dir, repoRoot) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
+  } catch (e) {
+    console.debug('[IntegrationTestReq] readdir suppressed:', e?.message || e);
     return files;
   }
 
@@ -148,8 +150,9 @@ function findIntegrationTestFiles(dir, repoRoot) {
           console.log(`   ⚠️  Skipping symlink escaping repo: ${entry.name} → ${realPath}`);
           continue;
         }
-      } catch {
+      } catch (e) {
         console.log(`   ⚠️  Skipping unresolvable symlink: ${entry.name}`);
+        console.debug('[IntegrationTestReq] symlink resolve suppressed:', e?.message || e);
         continue;
       }
     }
@@ -184,7 +187,8 @@ function countTestCalls(files) {
       const count = lines.filter(line => line.includes('test(')).length;
       perFile.push({ file: filePath, count });
       totalTestCalls += count;
-    } catch {
+    } catch (e) {
+      console.debug('[IntegrationTestReq] test file read suppressed:', e?.message || e);
       perFile.push({ file: filePath, count: 0 });
     }
   }
@@ -208,7 +212,8 @@ async function checkHasChildren(supabase, sdId) {
       .eq('parent_sd_id', sdId)
       .limit(1);
     return data && data.length > 0;
-  } catch {
+  } catch (e) {
+    console.debug('[IntegrationTestReq] children check suppressed:', e?.message || e);
     return false;
   }
 }

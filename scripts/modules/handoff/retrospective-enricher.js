@@ -642,7 +642,8 @@ function getGitChangedFiles(targetApp) {
       timeout: 5000
     });
     return output.trim().split('\n').filter(f => f && f.match(/\.(js|ts|mjs|json|md|sql|css|tsx|jsx)$/)).slice(0, 6);
-  } catch {
+  } catch (e) {
+    console.debug('[RetrospectiveEnricher] git diff suppressed:', e?.message || e);
     return [];
   }
 }

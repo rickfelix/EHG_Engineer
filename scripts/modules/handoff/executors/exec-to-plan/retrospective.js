@@ -112,8 +112,9 @@ function getGitContext(sdId) {
       const catSummary = Object.entries(categories).map(([k, v]) => `${v} ${k}`).join(', ');
       if (catSummary) result.summary += ` (${catSummary})`;
     }
-  } catch {
-    // Git context is optional - graceful fallback
+  } catch (e) {
+    // Intentionally suppressed: Git context is optional
+    console.debug('[Retrospective] git context suppressed:', e?.message || e);
     result.summary = 'Git context unavailable';
   }
   return result;
