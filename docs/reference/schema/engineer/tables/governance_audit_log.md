@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T17:22:56.600Z
-**Rows**: 138,857
+**Generated**: 2026-03-17T18:30:46.422Z
+**Rows**: 139,559
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -43,6 +43,10 @@
 - `governance_audit_log_pkey`
   ```sql
   CREATE UNIQUE INDEX governance_audit_log_pkey ON public.governance_audit_log USING btree (id)
+  ```
+- `idx_audit_operation`
+  ```sql
+  CREATE INDEX idx_audit_operation ON public.governance_audit_log USING btree (operation)
   ```
 - `idx_audit_record`
   ```sql
