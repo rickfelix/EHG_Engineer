@@ -16,6 +16,7 @@ import { NextApiResponse } from 'next';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 import { withPermission } from '../../../lib/middleware/rbac';
+import { withSanitization } from '../../../lib/middleware/sanitize';
 import {
   SubAgentReportBody,
   SubAgentReportResponse,
@@ -295,6 +296,7 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication and authorization middleware
+// SECURITY: Wrap handler with authentication, authorization, and XSS sanitization middleware
 // SD-SEC-AUTHORIZATION-RBAC-001: Requires leo:write permission
-export default withAuth(withPermission('leo:write')(handler));
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: withSanitization strips HTML/scripts from request bodies
+export default withAuth(withSanitization(withPermission('leo:write')(handler)));

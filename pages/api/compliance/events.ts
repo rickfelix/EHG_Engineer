@@ -20,6 +20,7 @@ import {
 } from '../../../lib/validation/leo-schemas';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 import { getUserRole, hasPermission } from '../../../lib/middleware/rbac';
+import { withSanitization } from '../../../lib/middleware/sanitize';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -180,6 +181,7 @@ async function handlePatch(req: AuthenticatedRequest, res: NextApiResponse) {
   }
 }
 
-// SECURITY: Wrap handler with authentication middleware
+// SECURITY: Wrap handler with authentication and XSS sanitization middleware
 // SD-SEC-AUTHORIZATION-RBAC-001: RBAC checks inside handler (method-specific)
-export default withAuth(handler);
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: withSanitization strips HTML/scripts from request bodies
+export default withAuth(withSanitization(handler));
