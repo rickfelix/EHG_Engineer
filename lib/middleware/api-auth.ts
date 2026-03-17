@@ -10,6 +10,16 @@
 
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
+
+/**
+ * Timing-safe string comparison to prevent timing attacks on API keys.
+ * SD-LEO-FIX-API-ROUTE-AUTH-001
+ */
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 export interface AuthenticatedRequest extends NextApiRequest {
   user: User;
@@ -171,7 +181,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
       });
     }
 
-    if (!providedKey || providedKey !== internalApiKey) {
+    if (!providedKey || typeof providedKey !== 'string' || !safeCompare(providedKey, internalApiKey)) {
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Invalid or missing internal API key',

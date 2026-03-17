@@ -6,6 +6,7 @@
  */
 
 import { Router } from 'express';
+import { validateUuidParam } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const router = Router();
  * GET /api/eva/economic-lens/:ventureId
  * Returns cached economic lens analysis for a venture.
  */
-router.get('/:ventureId', async (req, res) => {
+router.get('/:ventureId', validateUuidParam('ventureId'), async (req, res) => {
   try {
     const { getEconomicLens } = await import('../../lib/eva/economic-lens-analysis.js');
     const supabase = req.app.locals.supabase || req.supabase;
@@ -36,7 +37,7 @@ router.get('/:ventureId', async (req, res) => {
  * POST /api/eva/economic-lens/:ventureId/analyze
  * Triggers new economic lens analysis (or returns cached if exists).
  */
-router.post('/:ventureId/analyze', async (req, res) => {
+router.post('/:ventureId/analyze', validateUuidParam('ventureId'), async (req, res) => {
   try {
     const { analyzeEconomicLens } = await import('../../lib/eva/economic-lens-analysis.js');
     const supabase = req.app.locals.supabase || req.supabase;

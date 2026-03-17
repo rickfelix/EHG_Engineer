@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
 import { DfeEscalationService } from '../../lib/services/dfe-escalation-service.js';
+import { validateUuidParam, isValidStringLength } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const router = Router();
  * Returns the normalized DFE escalation context for a decision,
  * including triggers, historical patterns, and recent events.
  */
-router.get('/decisions/:decisionId/dfe-escalation', asyncHandler(async (req, res) => {
+router.get('/decisions/:decisionId/dfe-escalation', validateUuidParam('decisionId'), asyncHandler(async (req, res) => {
   const { decisionId } = req.params;
 
   if (!decisionId) {
@@ -43,7 +44,7 @@ router.get('/decisions/:decisionId/dfe-escalation', asyncHandler(async (req, res
  *
  * Body: { mitigationId, action: 'accept'|'reject', reason?, idempotencyKey? }
  */
-router.post('/decisions/:decisionId/dfe-escalation/mitigate', asyncHandler(async (req, res) => {
+router.post('/decisions/:decisionId/dfe-escalation/mitigate', validateUuidParam('decisionId'), asyncHandler(async (req, res) => {
   const { decisionId } = req.params;
   const { mitigationId, action, reason, idempotencyKey } = req.body;
 
@@ -52,6 +53,11 @@ router.post('/decisions/:decisionId/dfe-escalation/mitigate', asyncHandler(async
       success: false,
       error: 'decisionId, mitigationId, and action are required',
     });
+  }
+
+  // SD-LEO-FIX-API-ROUTE-AUTH-001: Input length validation
+  if (reason && !isValidStringLength(reason, 2000)) {
+    return res.status(400).json({ success: false, error: 'reason must be under 2000 characters' });
   }
 
   if (!['accept', 'reject'].includes(action)) {

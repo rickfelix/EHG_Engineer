@@ -7,9 +7,20 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+/**
+ * Timing-safe string comparison to prevent timing attacks on API keys.
+ * SD-LEO-FIX-API-ROUTE-AUTH-001
+ */
+function safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 /**
  * Extract and verify JWT token from Authorization header.
@@ -42,8 +53,8 @@ export function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   const internalKey = req.headers['x-internal-api-key'];
 
-  // Allow internal API key as alternative auth
-  if (internalKey && process.env.INTERNAL_API_KEY && internalKey === process.env.INTERNAL_API_KEY) {
+  // Allow internal API key as alternative auth (timing-safe comparison)
+  if (internalKey && process.env.INTERNAL_API_KEY && safeCompare(internalKey, process.env.INTERNAL_API_KEY)) {
     req.isAdmin = true;
     return next();
   }
@@ -85,8 +96,8 @@ export function optionalAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   const internalKey = req.headers['x-internal-api-key'];
 
-  // Allow internal API key
-  if (internalKey && process.env.INTERNAL_API_KEY && internalKey === process.env.INTERNAL_API_KEY) {
+  // Allow internal API key (timing-safe comparison)
+  if (internalKey && process.env.INTERNAL_API_KEY && safeCompare(internalKey, process.env.INTERNAL_API_KEY)) {
     req.isAdmin = true;
     return next();
   }
@@ -124,7 +135,7 @@ export function requireAdminAuth(req, res, next) {
     });
   }
 
-  if (!providedKey || providedKey !== internalApiKey) {
+  if (!providedKey || !safeCompare(providedKey, internalApiKey)) {
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Invalid or missing internal API key',

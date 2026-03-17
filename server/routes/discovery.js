@@ -7,6 +7,7 @@
 
 import { Router } from 'express';
 import { dbLoader } from '../config.js';
+import { isValidUuid, validateUuidParam, isValidStringLength, isValidEnum } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -28,12 +29,20 @@ router.post('/scan', async (req, res) => {
   try {
     const { scan_type, target_url, target_market } = req.body;
 
-    if (!scan_type) {
-      return res.status(400).json({ error: 'scan_type is required' });
+    if (!scan_type || !isValidStringLength(scan_type, 50)) {
+      return res.status(400).json({ error: 'scan_type is required and must be under 50 characters' });
     }
 
     if (scan_type === 'competitor' && !target_url) {
       return res.status(400).json({ error: 'target_url is required for competitor scans' });
+    }
+
+    // SD-LEO-FIX-API-ROUTE-AUTH-001: Validate URL format
+    if (target_url) {
+      try { new URL(target_url); } catch { return res.status(400).json({ error: 'target_url must be a valid URL' }); }
+    }
+    if (target_market && !isValidStringLength(target_market, 500)) {
+      return res.status(400).json({ error: 'target_market must be under 500 characters' });
     }
 
     const discoveryService = await getDiscoveryService();
@@ -100,8 +109,17 @@ router.post('/decision', async (req, res) => {
   try {
     const { blueprint_id, decision, feedback } = req.body;
 
-    if (!blueprint_id || !decision) {
-      return res.status(400).json({ error: 'blueprint_id and decision are required' });
+    if (!blueprint_id || !isValidUuid(blueprint_id)) {
+      return res.status(400).json({ error: 'blueprint_id is required and must be a valid UUID' });
+    }
+
+    if (!decision) {
+      return res.status(400).json({ error: 'decision is required' });
+    }
+
+    // SD-LEO-FIX-API-ROUTE-AUTH-001: Validate feedback length
+    if (feedback && !isValidStringLength(feedback, 5000)) {
+      return res.status(400).json({ error: 'feedback must be under 5000 characters' });
     }
 
     if (!['approved', 'rejected'].includes(decision)) {
@@ -161,7 +179,7 @@ router.get('/blueprints', async (req, res) => {
  * GET /api/blueprints/:id
  * Get a single blueprint by ID
  */
-router.get('/blueprints/:id', async (req, res) => {
+router.get('/blueprints/:id', validateUuidParam('id'), async (req, res) => {
   try {
     const { id } = req.params;
 

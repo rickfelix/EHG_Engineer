@@ -135,25 +135,26 @@ app.use(express.json());
 // =============================================================================
 
 // Mount route modules with authentication (SD-LEO-ORCH-SECURITY-AUDIT-REMEDIATION-001-C)
-// optionalAuth: allows unauthenticated reads, enriches if token present
-// requireAuth: blocks unauthenticated access (mutation-heavy routes)
+// SD-LEO-FIX-API-ROUTE-AUTH-001: Tightened auth — requireAuth for routes with mutation endpoints
+// optionalAuth: ONLY for truly read-only route modules
+// requireAuth: blocks unauthenticated access (any route with POST/PUT/PATCH/DELETE)
 app.use('/api/sdip', requireAuth, sdipRoutes);
 app.use('/api/backlog', optionalAuth, backlogRoutes);
 app.use('/api/feedback', requireAuth, feedbackRoutes);
-app.use('/api/discovery', optionalAuth, discoveryRoutes);
+app.use('/api/discovery', requireAuth, discoveryRoutes);
 app.use('/api/blueprints', optionalAuth, discoveryRoutes);
-app.use('/api/calibration', optionalAuth, calibrationRoutes);
+app.use('/api/calibration', requireAuth, calibrationRoutes);
 app.use('/api/testing/campaign', requireAuth, testingCampaignRoutes);
-app.use('/api/ventures', optionalAuth, venturesRoutes);
-app.use('/api/competitor-analysis', optionalAuth, venturesRoutes);
-app.use('/api/v2', optionalAuth, v2ApiRoutes);
-app.use('/api/chairman', optionalAuth, createChairmanScopeGuard({ blocking: true }), chairmanRoutes);
-app.use('/api/eva/operations', optionalAuth, evaOperationsRoutes);
-app.use('/api/eva/launch', optionalAuth, evaLaunchRoutes);
-app.use('/api/eva/pipeline', optionalAuth, evaPipelineRoutes);
-app.use('/api/eva/exit', optionalAuth, evaExitRoutes);
-app.use('/api/eva/chat', optionalAuth, evaChatRoutes);
-app.use('/api/eva/economic-lens', optionalAuth, evaEconomicLensRoutes);
+app.use('/api/ventures', requireAuth, venturesRoutes);
+app.use('/api/competitor-analysis', requireAuth, venturesRoutes);
+app.use('/api/v2', requireAuth, v2ApiRoutes);
+app.use('/api/chairman', requireAuth, createChairmanScopeGuard({ blocking: true }), chairmanRoutes);
+app.use('/api/eva/operations', requireAuth, evaOperationsRoutes);
+app.use('/api/eva/launch', requireAuth, evaLaunchRoutes);
+app.use('/api/eva/pipeline', requireAuth, evaPipelineRoutes);
+app.use('/api/eva/exit', requireAuth, evaExitRoutes);
+app.use('/api/eva/chat', requireAuth, evaChatRoutes);
+app.use('/api/eva/economic-lens', requireAuth, evaEconomicLensRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 

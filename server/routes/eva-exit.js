@@ -12,6 +12,7 @@
 import { Router } from 'express';
 import { dbLoader } from '../config.js';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
+import { isValidUuid, validateUuidParam, isValidStringLength } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -23,8 +24,8 @@ const router = Router();
  */
 router.get('/assets', asyncHandler(async (req, res) => {
   const { venture_id } = req.query;
-  if (!venture_id) {
-    return res.status(400).json({ error: 'venture_id query parameter is required' });
+  if (!venture_id || !isValidUuid(venture_id)) {
+    return res.status(400).json({ error: 'venture_id query parameter is required and must be a valid UUID' });
   }
 
   const { data, error } = await dbLoader.supabase
@@ -41,7 +42,7 @@ router.get('/assets', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/assets/:id
  * Get a single asset by ID.
  */
-router.get('/assets/:id', asyncHandler(async (req, res) => {
+router.get('/assets/:id', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('venture_asset_registry')
     .select('*')
@@ -59,8 +60,14 @@ router.get('/assets/:id', asyncHandler(async (req, res) => {
 router.post('/assets', asyncHandler(async (req, res) => {
   const { venture_id, asset_name, asset_type, description, estimated_value, provenance } = req.body;
 
-  if (!venture_id || !asset_name || !asset_type) {
-    return res.status(400).json({ error: 'venture_id, asset_name, and asset_type are required' });
+  if (!venture_id || !isValidUuid(venture_id)) {
+    return res.status(400).json({ error: 'venture_id is required and must be a valid UUID' });
+  }
+  if (!asset_name || !isValidStringLength(asset_name, 500)) {
+    return res.status(400).json({ error: 'asset_name is required and must be under 500 characters' });
+  }
+  if (!asset_type || !isValidStringLength(asset_type, 100)) {
+    return res.status(400).json({ error: 'asset_type is required and must be under 100 characters' });
   }
 
   const { data, error } = await dbLoader.supabase
@@ -85,7 +92,7 @@ router.post('/assets', asyncHandler(async (req, res) => {
  * PATCH /api/eva/exit/assets/:id
  * Update an asset.
  */
-router.patch('/assets/:id', asyncHandler(async (req, res) => {
+router.patch('/assets/:id', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { asset_name, asset_type, description, estimated_value, provenance } = req.body;
 
   const updates = {};
@@ -111,7 +118,7 @@ router.patch('/assets/:id', asyncHandler(async (req, res) => {
  * DELETE /api/eva/exit/assets/:id
  * Delete an asset.
  */
-router.delete('/assets/:id', asyncHandler(async (req, res) => {
+router.delete('/assets/:id', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { error } = await dbLoader.supabase
     .from('venture_asset_registry')
     .delete()
@@ -129,8 +136,8 @@ router.delete('/assets/:id', asyncHandler(async (req, res) => {
  */
 router.get('/profiles', asyncHandler(async (req, res) => {
   const { venture_id, include_history } = req.query;
-  if (!venture_id) {
-    return res.status(400).json({ error: 'venture_id query parameter is required' });
+  if (!venture_id || !isValidUuid(venture_id)) {
+    return res.status(400).json({ error: 'venture_id query parameter is required and must be a valid UUID' });
   }
 
   let query = dbLoader.supabase
@@ -155,8 +162,11 @@ router.get('/profiles', asyncHandler(async (req, res) => {
 router.post('/profiles', asyncHandler(async (req, res) => {
   const { venture_id, exit_model, notes, target_buyer_type } = req.body;
 
-  if (!venture_id || !exit_model) {
-    return res.status(400).json({ error: 'venture_id and exit_model are required' });
+  if (!venture_id || !isValidUuid(venture_id)) {
+    return res.status(400).json({ error: 'venture_id is required and must be a valid UUID' });
+  }
+  if (!exit_model || !isValidStringLength(exit_model, 200)) {
+    return res.status(400).json({ error: 'exit_model is required and must be under 200 characters' });
   }
 
   // Get current version number
@@ -203,8 +213,8 @@ router.post('/profiles', asyncHandler(async (req, res) => {
  */
 router.get('/summary', asyncHandler(async (req, res) => {
   const { venture_id } = req.query;
-  if (!venture_id) {
-    return res.status(400).json({ error: 'venture_id query parameter is required' });
+  if (!venture_id || !isValidUuid(venture_id)) {
+    return res.status(400).json({ error: 'venture_id query parameter is required and must be a valid UUID' });
   }
 
   const [assetsResult, profileResult, ventureResult] = await Promise.all([
@@ -335,7 +345,7 @@ router.get('/portfolio-readiness', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/scores/:ventureId
  * Get separability score history for a venture.
  */
-router.get('/scores/:ventureId', asyncHandler(async (req, res) => {
+router.get('/scores/:ventureId', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('venture_separability_scores')
     .select('*')
@@ -350,7 +360,7 @@ router.get('/scores/:ventureId', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/scores/:ventureId/latest
  * Get most recent separability score.
  */
-router.get('/scores/:ventureId/latest', asyncHandler(async (req, res) => {
+router.get('/scores/:ventureId/latest', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('venture_separability_scores')
     .select('*')
@@ -369,7 +379,7 @@ router.get('/scores/:ventureId/latest', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/data-room/:ventureId
  * List current data room artifacts for a venture.
  */
-router.get('/data-room/:ventureId', asyncHandler(async (req, res) => {
+router.get('/data-room/:ventureId', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('venture_data_room_artifacts')
     .select('id, artifact_type, artifact_version, content, content_hash, is_current, generated_at')
@@ -385,7 +395,7 @@ router.get('/data-room/:ventureId', asyncHandler(async (req, res) => {
  * POST /api/eva/exit/data-room/:ventureId/generate
  * Trigger data room artifact refresh.
  */
-router.post('/data-room/:ventureId/generate', asyncHandler(async (req, res) => {
+router.post('/data-room/:ventureId/generate', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { generateDataRoom } = await import('../../lib/eva/exit/data-room-generator.js');
   const { types } = req.body;
 
@@ -404,7 +414,7 @@ router.post('/data-room/:ventureId/generate', asyncHandler(async (req, res) => {
  * POST /api/eva/exit/:ventureId/rehearsal
  * Trigger a separation rehearsal (dry_run or full).
  */
-router.post('/:ventureId/rehearsal', asyncHandler(async (req, res) => {
+router.post('/:ventureId/rehearsal', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { mode } = req.body;
   const validModes = ['dry_run', 'full'];
   const rehearsalMode = validModes.includes(mode) ? mode : 'dry_run';
@@ -418,7 +428,7 @@ router.post('/:ventureId/rehearsal', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/:ventureId/rehearsal/latest
  * Get most recent rehearsal results (stored on exit profile).
  */
-router.get('/:ventureId/rehearsal/latest', asyncHandler(async (req, res) => {
+router.get('/:ventureId/rehearsal/latest', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('venture_exit_profiles')
     .select('readiness_assessment, updated_at')
@@ -440,7 +450,7 @@ router.get('/:ventureId/rehearsal/latest', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/:ventureId/data-room/template
  * Get data room document checklist for venture's current exit model.
  */
-router.get('/:ventureId/data-room/template', asyncHandler(async (req, res) => {
+router.get('/:ventureId/data-room/template', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { generateDataRoomChecklist } = await import('../../lib/eva/exit/data-room-templates.js');
   const result = await generateDataRoomChecklist(req.params.ventureId, dbLoader.supabase);
   res.json(result);
@@ -450,7 +460,7 @@ router.get('/:ventureId/data-room/template', asyncHandler(async (req, res) => {
  * GET /api/eva/exit/:ventureId/data-room/completeness
  * Get data room completion percentage and missing items.
  */
-router.get('/:ventureId/data-room/completeness', asyncHandler(async (req, res) => {
+router.get('/:ventureId/data-room/completeness', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { generateDataRoomChecklist } = await import('../../lib/eva/exit/data-room-templates.js');
   const checklist = await generateDataRoomChecklist(req.params.ventureId, dbLoader.supabase);
 
@@ -493,7 +503,7 @@ function computeReadinessScore({ target_arr, actual_arr, target_customer_count, 
  * GET /api/eva/exit/readiness/:ventureId
  * Get business readiness metrics for a venture.
  */
-router.get('/readiness/:ventureId', asyncHandler(async (req, res) => {
+router.get('/readiness/:ventureId', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const { data, error } = await dbLoader.supabase
     .from('venture_exit_readiness')
     .select('*')
@@ -508,7 +518,7 @@ router.get('/readiness/:ventureId', asyncHandler(async (req, res) => {
  * PATCH /api/eva/exit/readiness/:ventureId
  * Update business readiness metrics. Auto-computes readiness_score and chairman escalation.
  */
-router.patch('/readiness/:ventureId', asyncHandler(async (req, res) => {
+router.patch('/readiness/:ventureId', validateUuidParam('ventureId'), asyncHandler(async (req, res) => {
   const ventureId = req.params.ventureId;
   const { target_arr, actual_arr, target_customer_count, actual_customer_count, growth_rate_target, growth_rate_actual, market_multiple_current, readiness_threshold } = req.body;
 
