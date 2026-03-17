@@ -42,7 +42,7 @@ import {
  * @param {Object} supabase - Supabase client
  * @returns {Promise<Object>} Validation result
  */
-export async function validateGate2ExecToPlan(sd_id, supabase) {
+export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
   console.log('\n🚪 GATE 2: Implementation Fidelity Validation (EXEC→PLAN)');
   console.log('='.repeat(60));
 
@@ -58,12 +58,13 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   };
 
   // Check if this is a documentation-only SD
+  // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched SD when available
   try {
-    const { data: sd } = await supabase
+    const sd = options.prefetched?.sd || (await supabase
       .from('strategic_directives_v2')
       .select('id, title, sd_type, scope, category')
       .eq('id', sd_id)
-      .single();
+      .single()).data;
 
     if (sd && shouldSkipCodeValidation(sd)) {
       const validationReqs = getValidationRequirements(sd);
@@ -109,16 +110,18 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Fixed SD lookup to not use deprecated legacy_id
   let resolvedSdUuid = sd_id;
   try {
-    let sd;
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched SD when available
+    let sd = options.prefetched?.sd || null;
 
-    // Try direct ID lookup first (works for both UUID and SD-KEY format IDs)
-    const result = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, sd_type, scope, category, intensity_level, target_application')
-      .eq('id', sd_id)
-      .single();
-
-    sd = result.data;
+    if (!sd) {
+      // Try direct ID lookup first (works for both UUID and SD-KEY format IDs)
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level, target_application')
+        .eq('id', sd_id)
+        .single();
+      sd = result.data;
+    }
     if (sd?.id) {
       resolvedSdUuid = sd.id;
     }
@@ -179,12 +182,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
   try {
     // Fetch PRD metadata
-    // SD-LEO-FIX-PRD-FETCH-001: Use sd_id column (UUID) instead of directive_id (SD key string)
-    const { data: prdData, error: prdError } = await supabase
-      .from('product_requirements_v2')
-      .select('metadata, directive_id, sd_id, title')
-      .eq('sd_id', resolvedSdUuid)
-      .single();
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched PRD when available
+    let prdData = options.prefetched?.prd || null;
+    let prdError = null;
+    if (!prdData) {
+      // SD-LEO-FIX-PRD-FETCH-001: Use sd_id column (UUID) instead of directive_id (SD key string)
+      ({ data: prdData, error: prdError } = await supabase
+        .from('product_requirements_v2')
+        .select('metadata, directive_id, sd_id, title')
+        .eq('sd_id', resolvedSdUuid)
+        .single());
+    }
 
     if (prdError) {
       console.log(`   ⚠️  PRD fetch error: ${prdError.message}`);
@@ -228,24 +236,32 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     console.log('\n' + '='.repeat(60));
     console.log(`GATE 2 SCORE: ${validation.score}/${validation.max_score} points`);
 
-    const { data: gate1Handoff } = await supabase
-      .from('sd_phase_handoffs')
-      .select('metadata')
-      .eq('sd_id', sd_id)
-      .eq('handoff_type', 'PLAN-TO-EXEC')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // SD-LEO-FIX-GATE-QUERY-DEDUPLICATION-001: Use pre-fetched handoff/SD data when available
+    let gate1Handoff;
+    const handoffHistory = options.prefetched?.handoffHistory;
+    if (handoffHistory) {
+      gate1Handoff = handoffHistory.find(h => h.handoff_type === 'PLAN-TO-EXEC') || null;
+    } else {
+      const { data } = await supabase
+        .from('sd_phase_handoffs')
+        .select('metadata')
+        .eq('sd_id', sd_id)
+        .eq('handoff_type', 'PLAN-TO-EXEC')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      gate1Handoff = data;
+    }
 
     const priorGateScores = gate1Handoff?.metadata?.gate1_validation?.score
       ? [gate1Handoff.metadata.gate1_validation.score]
       : [];
 
-    const { data: sdData } = await supabase
+    const sdData = options.prefetched?.sd || (await supabase
       .from('strategic_directives_v2')
       .select('*')
       .eq('id', sd_id)
-      .single();
+      .single()).data;
 
     const patternStats = await getPatternStats(sdData, supabase);
 
