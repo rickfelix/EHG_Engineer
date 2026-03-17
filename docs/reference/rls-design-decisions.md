@@ -30,7 +30,35 @@ Fixed critical security gaps:
 - 3 tables had `anon ALL` policies (unauthenticated full CRUD) — now SERVICE-ONLY
 - 12+ tables had `public ALL` policies — now SERVICE-ONLY
 
+### Phase 1.5 Changes (SD-LEO-INFRA-RLS-POLICY-TIGHTENING-001, 2026-03-17)
+
+Tightened 30 additional tables from OPEN to SERVICE-ONLY:
+
+**Tier 1 (11 high-risk audit/log tables):**
+- `model_usage_log` — had `anon ALL` (unauthenticated full CRUD)
+- `nursery_evaluation_log` — had `public ALL`
+- `runtime_audits` — had `public INSERT/SELECT/UPDATE` + `authenticated DELETE`
+- `audit_triangulation_log` — had `public INSERT/SELECT` + `authenticated DELETE/UPDATE`
+- `prd_research_audit_log` — had `anon INSERT/SELECT`
+- `sd_type_change_audit` — had `anon SELECT`
+- `continuous_execution_log` — had `anon SELECT`
+- `context_usage_log` — had `anon SELECT`
+- `activity_logs` — had `authenticated INSERT/SELECT`
+- `raid_log` — had `authenticated SELECT/INSERT/UPDATE`
+- `validation_audit_log` — had `authenticated SELECT/INSERT`
+
+**Tier 2 (19 internal infrastructure tables):**
+- LEO audit tables: `leo_audit_checklists`, `leo_audit_config`, `leo_error_log`, `leo_feature_flag_audit`, `leo_protocol_file_audit`, `leo_kb_generation_log`
+- Governance: `governance_audit_log`, `handoff_audit_log`, `operations_audit_log`
+- Enhancement tracking: `enhancement_proposal_audit`, `protocol_improvement_audit_log`
+- Internal: `cascade_invalidation_log`, `capability_reuse_log`, `backlog_item_completion`
+- Security: `sd_governance_bypass_audit`
+- Risk: `risk_escalation_log`, `risk_gate_passage_log`
+- Other: `import_audit`, `eva_event_log`
+
+All 30 tables now have only `service_role` policies. No application impact since all EHG_Engineer access uses `SUPABASE_SERVICE_ROLE_KEY`.
+
 ### Future Phases
 
-- **Phase 2**: Convert non-zero-row audit tables to APPEND-ONLY (requires code path audit)
-- **Phase 3**: Add venture-scoping to venture-owned tables (if multi-venture isolation needed)
+- **Phase 2**: Venture-scoping for venture-owned tables (if multi-venture isolation needed)
+- **Phase 3**: Periodic RLS audit automation (detect policy drift)
