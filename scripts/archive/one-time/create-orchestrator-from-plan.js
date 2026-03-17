@@ -375,6 +375,7 @@ async function main() {
 
 // Only run CLI when invoked directly
 const _isMainModule = import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
                       import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}`;
 if (_isMainModule) {
   main().catch(err => {
