@@ -323,6 +323,82 @@ export function buildKeyChanges(items) {
 }
 
 /**
+ * Build scope with explicit IN SCOPE / OUT OF SCOPE boundaries
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: Prevents GATE_SD_QUALITY content quality deductions
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {string}
+ */
+export function buildScope(items) {
+  const patternIds = items.filter(i => i.pattern_id).map(i => i.pattern_id);
+  const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
+
+  const inScope = [];
+  if (patternIds.length > 0) {
+    inScope.push(`Address root cause of ${patternIds.join(', ')} in ${categories.join(', ') || 'affected'} code paths`);
+  }
+  for (const item of items) {
+    if (item.pattern_id) {
+      const summary = (item.issue_summary || item.content || '').slice(0, 80);
+      if (summary) inScope.push(`Fix: ${summary}`);
+    } else {
+      const desc = (item.description || '').slice(0, 80);
+      if (desc) inScope.push(`Implement: ${desc}`);
+    }
+  }
+
+  const outOfScope = [
+    'Changing existing gate thresholds or scoring algorithms',
+    'Modifying SDs that have already passed quality gates',
+    'Refactoring unrelated code paths'
+  ];
+
+  return `IN SCOPE: ${inScope.join('. ')}. OUT OF SCOPE: ${outOfScope.join('. ')}.`;
+}
+
+/**
+ * Build strategic_intent from learning items
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: Prevents null strategic_intent triggering quality flags
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {string}
+ */
+export function buildStrategicIntent(items) {
+  const patternIds = items.filter(i => i.pattern_id).map(i => i.pattern_id);
+  const totalOccurrences = items.reduce((sum, i) => sum + (i.occurrence_count || 1), 0);
+  const categories = [...new Set(items.map(i => i.category).filter(Boolean))];
+
+  if (patternIds.length > 0) {
+    return `Eliminate root cause of recurring pattern(s) ${patternIds.join(', ')} (${totalOccurrences} total occurrences) in ${categories.join(', ') || 'affected'} code. These patterns increase manual intervention time and reduce workflow throughput. Systematic fix prevents future recurrence and reduces handoff retry loops.`;
+  }
+
+  const descriptions = items.map(i => (i.description || '').slice(0, 60)).filter(Boolean);
+  return `Implement ${items.length} improvement(s) identified through retrospective analysis: ${descriptions.join('; ') || 'workflow enhancements'}. Evidence-backed changes to reduce friction and improve automation reliability.`;
+}
+
+/**
+ * Build non-boilerplate rationale from learning items
+ * SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: Prevents boilerplate_rationale quality flag (40.9% cancellation rate)
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {string}
+ */
+export function buildRationale(items) {
+  const parts = [];
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      const count = item.occurrence_count || 1;
+      const summary = (item.issue_summary || item.content || 'recurring issue').slice(0, 100);
+      parts.push(`Pattern ${item.pattern_id} has ${count} recorded occurrence(s): "${summary}"`);
+    } else {
+      const desc = (item.description || 'improvement').slice(0, 100);
+      parts.push(`Improvement backed by ${item.evidence_count || 0} evidence item(s): "${desc}"`);
+    }
+  }
+
+  const totalOccurrences = items.reduce((sum, i) => sum + (i.occurrence_count || 1), 0);
+  return `${parts.join('. ')}. With ${totalOccurrences} total occurrence(s), each instance requires manual intervention. Addressing the root cause prevents recurrence and reduces handoff retry waste.`;
+}
+
+/**
  * Build key_principles from selected items
  * @param {Array} items - Selected patterns and improvements
  * @returns {Array} key_principles array

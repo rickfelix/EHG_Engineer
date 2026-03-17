@@ -20,8 +20,13 @@ import {
   buildStrategicObjectives,
   buildKeyPrinciples,
   buildRisks,
-  buildKeyChanges
+  buildKeyChanges,
+  buildScope,
+  buildStrategicIntent,
+  buildRationale
 } from './sd-builders.js';
+
+import { validateSDCreation } from '../sd-creation-validator.js';
 
 import {
   classifyComplexity,
@@ -58,13 +63,18 @@ export async function createSDFromLearning(items, type, options = {}) {
   const risks = buildRisks(items);
   const keyChanges = buildKeyChanges(items);
 
+  const scope = buildScope(items);
+  const strategicIntent = buildStrategicIntent(items);
+  const rationale = buildRationale(items);
+
   const sdData = {
     id: sdKey,
     sd_key: sdKey,
     title: title,
     description: description,
-    rationale: `Accumulated ${items.length} item(s) from retrospectives and pattern analysis via /learn command.`,
-    scope: 'Address identified patterns and implement suggested improvements.',
+    rationale: rationale,
+    scope: scope,
+    strategic_intent: strategicIntent,
     status: 'draft',
     priority: type === 'quick-fix' ? 'medium' : 'high',
     category: type === 'quick-fix' ? 'bug_fix' : 'infrastructure',
@@ -95,6 +105,29 @@ export async function createSDFromLearning(items, type, options = {}) {
       created_via: '/learn apply'
     }
   };
+
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: Shift-left validation before insert
+  try {
+    const validation = validateSDCreation(sdData);
+    if (validation.warnings.length > 0) {
+      console.log(`   ⚠️  SD validation warnings (${validation.warnings.length}):`);
+      for (const w of validation.warnings) {
+        console.log(`      - ${w}`);
+      }
+    }
+    if (!validation.valid && validation.errors.length > 0) {
+      console.error(`   ❌ SD validation failed (${validation.errors.length} error(s)):`);
+      for (const e of validation.errors) {
+        console.error(`      - ${e}`);
+      }
+      console.error('   ℹ️  Fix the above errors and retry. SD was NOT created.');
+      return { sd_key: sdKey, success: false, error: `Validation failed: ${validation.errors.join('; ')}` };
+    }
+    console.log(`   ✅ SD pre-insert validation passed (score: ${validation.score}%)`);
+  } catch (validationError) {
+    // Non-blocking: if validator fails to load, proceed with insert (backward compatibility)
+    console.warn(`   ⚠️  SD validation skipped: ${validationError.message}`);
+  }
 
   // Informational triage gate: log tier recommendation (non-blocking — /learn has
   // already classified this as an SD through its approval flow).
