@@ -5,7 +5,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getCorsHeaders } from '../_shared/auth.ts';
+import { verifyJWT, getCorsHeaders } from '../_shared/auth.ts';
 
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
@@ -22,15 +22,17 @@ serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Verify JWT before any database operations
+    const { user, error: authError, status: authStatus } = await verifyJWT(req);
+    if (authError) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: authError }),
+        { status: authStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create authenticated client (uses caller's JWT for RLS)
+    const authHeader = req.headers.get('Authorization')!;
+    // Create authenticated client (uses caller's verified JWT for RLS)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',

@@ -5,7 +5,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getCorsHeaders } from '../_shared/auth.ts';
+import { verifyJWT, getCorsHeaders } from '../_shared/auth.ts';
 
 /**
  * Validates input_params against a JSON Schema definition from ehg_services.artifact_schema.
@@ -114,14 +114,16 @@ serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Verify JWT before any database operations
+    const { user, error: authError, status: authStatus } = await verifyJWT(req);
+    if (authError) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: authError }),
+        { status: authStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const authHeader = req.headers.get('Authorization')!;
     const body = await req.json();
     const { task_id, claimed_by } = body;
 
