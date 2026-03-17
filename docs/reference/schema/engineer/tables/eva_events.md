@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -71,19 +71,15 @@
 
 ## RLS Policies
 
-### 1. eva_events_select_user_ventures (SELECT)
+### 1. service_role_insert_eva_events (INSERT)
 
-- **Roles**: {authenticated}
-- **Using**: `(eva_venture_id IN ( SELECT ev.id
-   FROM (eva_ventures ev
-     JOIN ventures v ON ((ev.venture_id = v.id)))
-  WHERE (v.created_by = auth.uid())))`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. eva_events_service_role_all (ALL)
+### 2. service_role_select_eva_events (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
 ---
 

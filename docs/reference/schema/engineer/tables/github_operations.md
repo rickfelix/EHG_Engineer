@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -81,26 +81,16 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to delete github_operations (DELETE)
+### 1. authenticated_select_github_operations (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. Allow authenticated users to update github_operations (UPDATE)
+### 2. service_role_all_github_operations (ALL)
 
-- **Roles**: {authenticated}
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
-
-### 3. Allow insert GitHub operations (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `((sd_id IS NOT NULL) OR (prd_id IS NOT NULL))`
-
-### 4. Allow read access to GitHub operations (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
 
 ---
 

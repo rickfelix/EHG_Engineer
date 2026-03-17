@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 11
 **RLS**: Enabled (2 policies)
 
@@ -126,16 +126,15 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_sd_backlog_map (SELECT)
+### 1. service_role_insert_sd_backlog_map (INSERT)
 
-- **Roles**: {authenticated}
-- **Using**: `true`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. service_role_all_sd_backlog_map (ALL)
+### 2. service_role_select_sd_backlog_map (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
 ---
 

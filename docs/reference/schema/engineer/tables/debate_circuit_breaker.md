@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -70,14 +70,14 @@
 
 ## RLS Policies
 
-### 1. Allow read access to circuit breaker (SELECT)
+### 1. authenticated_select_debate_circuit_breaker (SELECT)
 
-- **Roles**: {public}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. Allow service role full access to circuit breaker (ALL)
+### 2. service_role_all_debate_circuit_breaker (ALL)
 
-- **Roles**: {public}
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 

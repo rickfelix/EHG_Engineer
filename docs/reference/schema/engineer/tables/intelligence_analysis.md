@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -45,30 +45,19 @@
 
 ## RLS Policies
 
-### 1. Allow update for authenticated (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 2. Users can insert intelligence for their ventures (INSERT)
+### 1. Users can insert intelligence for their ventures (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `(venture_id IN ( SELECT ventures.id
    FROM ventures
   WHERE (ventures.created_by = auth.uid())))`
 
-### 3. Users can view their venture intelligence (SELECT)
+### 2. Users can view their venture intelligence (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(venture_id IN ( SELECT ventures.id
    FROM ventures
   WHERE (ventures.created_by = auth.uid())))`
-
-### 4. intelligence_analysis_delete (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
 
 ---
 

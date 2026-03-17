@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 4
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -48,12 +48,6 @@
 
 - **Roles**: {authenticated}
 - **Using**: `true`
-
-### 2. authenticated_write_sources (ALL)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

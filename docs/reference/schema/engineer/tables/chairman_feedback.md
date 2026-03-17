@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -88,23 +88,12 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to delete chairman_feedback (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. Allow authenticated users to insert chairman_feedback (INSERT)
+### 1. Allow authenticated users to insert chairman_feedback (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `true`
 
-### 3. Allow authenticated users to update chairman_feedback (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 4. authenticated_select_chairman_feedback (SELECT)
+### 2. authenticated_select_chairman_feedback (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

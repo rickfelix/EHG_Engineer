@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 1
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -64,17 +64,12 @@
 
 ## RLS Policies
 
-### 1. public_insert_rca_learning_records (INSERT)
+### 1. authenticated_select_rca_learning_records (SELECT)
 
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. public_select_rca_learning_records (SELECT)
-
-- **Roles**: {public}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. service_role_all_rca_learning_records (ALL)
+### 2. service_role_all_rca_learning_records (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

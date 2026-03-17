@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
-**Rows**: 15,721
+**Generated**: 2026-03-17T22:39:49.934Z
+**Rows**: 15,779
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -55,16 +55,15 @@
 
 ## RLS Policies
 
-### 1. Authenticated users can view handoff_audit_log (SELECT)
+### 1. service_role_insert_handoff_audit_log (INSERT)
 
-- **Roles**: {authenticated}
-- **Using**: `true`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. Service role has full access to handoff_audit_log (ALL)
+### 2. service_role_select_handoff_audit_log (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
 ---
 

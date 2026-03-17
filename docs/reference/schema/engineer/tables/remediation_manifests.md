@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 1
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -72,23 +72,12 @@
 
 ## RLS Policies
 
-### 1. public_insert_remediation_manifests (INSERT)
+### 1. authenticated_select_remediation_manifests (SELECT)
 
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. public_select_remediation_manifests (SELECT)
-
-- **Roles**: {public}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. public_update_remediation_manifests (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 4. service_role_all_remediation_manifests (ALL)
+### 2. service_role_all_remediation_manifests (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

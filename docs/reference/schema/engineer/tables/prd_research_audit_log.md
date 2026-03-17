@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 4
-**RLS**: Enabled (6 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -61,36 +61,15 @@
 
 ## RLS Policies
 
-### 1. Allow anon users to insert prd_research_audit_log (INSERT)
+### 1. service_role_insert_prd_research_audit_log (INSERT)
 
-- **Roles**: {anon}
+- **Roles**: {service_role}
 - **With Check**: `true`
 
-### 2. Allow anon users to select prd_research_audit_log (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `true`
-
-### 3. Allow authenticated users to read prd_research_audit_log (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 4. Allow service_role to delete prd_research_audit_log (DELETE)
+### 2. service_role_select_prd_research_audit_log (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-
-### 5. Allow service_role to update prd_research_audit_log (UPDATE)
-
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 6. insert_prd_research_audit_log_policy (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
 
 ---
 

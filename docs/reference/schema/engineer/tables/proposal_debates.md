@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -79,15 +79,16 @@
 
 ## RLS Policies
 
-### 1. proposal_debates_read (SELECT)
+### 1. authenticated_select_proposal_debates (SELECT)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'authenticated'::text)`
+- **Roles**: {authenticated}
+- **Using**: `true`
 
-### 2. proposal_debates_service_all (ALL)
+### 2. service_role_all_proposal_debates (ALL)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 

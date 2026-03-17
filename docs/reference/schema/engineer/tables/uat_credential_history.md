@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -48,15 +48,19 @@
 
 ## RLS Policies
 
-### 1. Allow service_role to manage uat_credential_history (ALL)
-
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 2. Service role can view history (SELECT)
+### 1. Service role can view history (SELECT)
 
 - **Roles**: {public}
+- **Using**: `true`
+
+### 2. service_role_insert_uat_credential_history (INSERT)
+
+- **Roles**: {service_role}
+- **With Check**: `true`
+
+### 3. service_role_select_uat_credential_history (SELECT)
+
+- **Roles**: {service_role}
 - **Using**: `true`
 
 ---

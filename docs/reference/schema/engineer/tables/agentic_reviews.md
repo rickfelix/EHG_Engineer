@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 12
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -67,22 +67,17 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to delete agentic_reviews (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. Enable insert for authenticated users (INSERT)
+### 1. Enable insert for authenticated users (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `true`
 
-### 3. Enable read access for all users (SELECT)
+### 2. Enable read access for all users (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 4. Enable update for authenticated users (UPDATE)
+### 3. Enable update for authenticated users (UPDATE)
 
 - **Roles**: {public}
 - **Using**: `true`
