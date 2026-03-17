@@ -12,6 +12,7 @@
  * 6. DEPENDENCY_UNLOCK — newly available SDs after blocker completed
  * 7. PRIORITY_REBALANCE — working on MED when HIGH is available
  * 8. AUTO_PROCEED_CHAINING — standing directive to keep auto-proceed and chaining on
+ * 9. LEO_PROTOCOL_COMPLIANCE — standing directive to follow LEO protocol diligently
  *
  * Anti-spam: 20-minute cooldown per coaching_type per worker.
  * Messages expire after 30 minutes (ephemeral advice).
@@ -23,8 +24,11 @@ const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
 const supabase = createSupabaseServiceClient();
 
-const COOLDOWN_MINUTES = 20;
-const EXPIRE_MINUTES = 30;
+// Worker median lifespan is ~9 minutes. Cooldowns must be shorter than that
+// to have any chance of a second message reaching the same worker.
+const COOLDOWN_MINUTES = 12;         // Conditional reminders — slightly above median lifespan
+const STANDING_COOLDOWN_MINUTES = 12; // Standing directives — same, since workers rarely survive 20min
+const EXPIRE_MINUTES = 15;           // Expire fast — dead workers won't read stale messages
 const LONG_SESSION_MINUTES = 45;
 
 // --- Helpers ---
@@ -46,8 +50,9 @@ async function wasRecentlySent(sessionId, coachingType) {
 }
 
 // More precise: query with payload filter
-async function wasRecentlySentPrecise(sessionId, coachingType) {
-  const cutoff = new Date(Date.now() - COOLDOWN_MINUTES * 60 * 1000).toISOString();
+async function wasRecentlySentPrecise(sessionId, coachingType, cooldownOverride) {
+  const cooldown = cooldownOverride || COOLDOWN_MINUTES;
+  const cutoff = new Date(Date.now() - cooldown * 60 * 1000).toISOString();
   const { data } = await supabase
     .from('session_coordination')
     .select('id, payload')
@@ -59,8 +64,8 @@ async function wasRecentlySentPrecise(sessionId, coachingType) {
   return (data || []).some(m => m.payload?.coaching_type === coachingType);
 }
 
-async function sendCoaching(sessionId, coachingType, subject, body, extraPayload = {}) {
-  if (await wasRecentlySentPrecise(sessionId, coachingType)) {
+async function sendCoaching(sessionId, coachingType, subject, body, extraPayload = {}, cooldownOverride) {
+  if (await wasRecentlySentPrecise(sessionId, coachingType, cooldownOverride)) {
     return false; // Cooldown active
   }
 
@@ -266,17 +271,27 @@ function evaluatePriorityRebalance(session, sdDetails, availableSDs) {
 }
 
 function evaluateAutoProceedChaining() {
-  // Always fires for every active worker — this is a standing directive
+  // Standing directive — compact reminder
   return {
-    subject: 'Ensure AUTO-PROCEED=ON and CHAINING=ON',
-    body: 'STANDING DIRECTIVE: Your session MUST have these settings active:\n\n' +
-      '1. AUTO-PROCEED: ON (default). Phases transition automatically without prompts.\n' +
-      '2. CHAINING: ON. After completing an SD and running /learn, auto-chain to the next SD.\n\n' +
-      'To verify: Check sd:next output for SESSION_SETTINGS line.\n' +
-      'Expected: {"auto_proceed":true,"chain_orchestrators":true}\n\n' +
-      'WHY: Workers that exit after completing an SD waste fleet capacity. With chaining ON, ' +
-      'you automatically pick up the next available SD after /learn completes. ' +
-      'Do NOT pause, ask "what next?", or exit after SD completion.'
+    subject: 'AUTO-PROCEED=ON, CHAINING=ON — do not exit after SD completion',
+    body: 'After /learn completes, auto-chain to the next SD. Do NOT pause, ask "what next?", or exit.'
+  };
+}
+
+function evaluateLeoProtocolCompliance(session, sdDetails) {
+  // Standing directive — compact, phase-aware
+  const phase = sdDetails ? sdDetails.current_phase : 'LEAD';
+  const phaseFile = phase === 'EXEC' || phase === 'EXEC_COMPLETE'
+    ? 'CLAUDE_EXEC.md'
+    : phase === 'PLAN_PRD' || phase === 'PLAN_VERIFICATION'
+      ? 'CLAUDE_PLAN.md'
+      : 'CLAUDE_LEAD.md';
+
+  return {
+    subject: 'LEO Protocol: read CLAUDE_CORE.md + ' + phaseFile + ' (' + (phase || '?') + ')',
+    body: 'Follow LEO diligently. Read phase file before working. Use process scripts (handoff.js, add-prd-to-database.js). ' +
+      'Use sub-agents (database-agent, testing-agent, rca-agent). Target ≤100 LOC. ' +
+      'After completion: /learn → /ship → auto-chain. If gate fails, read error — do not retry blindly.'
   };
 }
 
@@ -403,11 +418,18 @@ async function main() {
       (ok ? sent : skipped).push({ session: session.tty, type: 'PRIORITY_REBALANCE' });
     }
 
-    // AUTO_PROCEED_CHAINING (standing directive — fires every cycle for every worker)
+    // AUTO_PROCEED_CHAINING (standing directive — 45min cooldown to reduce noise)
     const autoProceed = evaluateAutoProceedChaining();
     if (autoProceed) {
-      const ok = await sendCoaching(session.session_id, 'AUTO_PROCEED_CHAINING', autoProceed.subject, autoProceed.body, { sd_id: session.sd_id });
+      const ok = await sendCoaching(session.session_id, 'AUTO_PROCEED_CHAINING', autoProceed.subject, autoProceed.body, { sd_id: session.sd_id }, STANDING_COOLDOWN_MINUTES);
       (ok ? sent : skipped).push({ session: session.tty, type: 'AUTO_PROCEED_CHAINING' });
+    }
+
+    // LEO_PROTOCOL_COMPLIANCE (standing directive — 45min cooldown to reduce noise)
+    const leoCompliance = evaluateLeoProtocolCompliance(session, sdDetails);
+    if (leoCompliance) {
+      const ok = await sendCoaching(session.session_id, 'LEO_PROTOCOL_COMPLIANCE', leoCompliance.subject, leoCompliance.body, { sd_id: session.sd_id, phase: sdDetails?.current_phase }, STANDING_COOLDOWN_MINUTES);
+      (ok ? sent : skipped).push({ session: session.tty, type: 'LEO_PROTOCOL_COMPLIANCE' });
     }
   }
 
