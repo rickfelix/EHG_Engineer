@@ -47,6 +47,7 @@ import { runTriageGate } from './modules/triage-gate.js';
 import { evaluateVisionReadiness, formatRubricResult } from './modules/vision-readiness-rubric.js';
 import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
+import { validateSDFields } from './modules/validate-sd-fields.js';
 
 dotenv.config();
 
@@ -1333,6 +1334,14 @@ async function createSD(options) {
     } catch {
       // Non-fatal: decomposition check should not block creation
     }
+  }
+
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: GATE_SD_QUALITY-aligned validation with auto-enrichment
+  // Uses the same scoring logic as the LEAD-TO-PLAN quality gate to prevent creation-time gaps.
+  try {
+    validateSDFields(sdData, { enrich: true, quiet: false });
+  } catch (vErr) {
+    console.warn(`   ⚠️  GATE_SD_QUALITY pre-check skipped: ${vErr.message}`);
   }
 
   const { data, error } = await supabase

@@ -27,6 +27,7 @@ import {
 } from './sd-builders.js';
 
 import { validateSDCreation } from '../sd-creation-validator.js';
+import { validateSDFields } from '../validate-sd-fields.js';
 
 import {
   classifyComplexity,
@@ -127,6 +128,19 @@ export async function createSDFromLearning(items, type, options = {}) {
   } catch (validationError) {
     // Non-blocking: if validator fails to load, proceed with insert (backward compatibility)
     console.warn(`   ⚠️  SD validation skipped: ${validationError.message}`);
+  }
+
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-069: GATE_SD_QUALITY-aligned validation with auto-enrichment
+  // This uses the exact same scoring logic as the LEAD-TO-PLAN quality gate,
+  // so SDs born here will pass the gate without manual intervention.
+  try {
+    const gateResult = validateSDFields(sdData, { enrich: true, quiet: false });
+    if (!gateResult.valid) {
+      console.log(`   ⚠️  GATE_SD_QUALITY pre-check: score ${gateResult.score}/${gateResult.threshold} (below threshold)`);
+      console.log(`   ℹ️  Auto-enrichment applied ${gateResult.enrichments.length} fix(es). Proceeding with insert.`);
+    }
+  } catch (gateErr) {
+    console.warn(`   ⚠️  GATE_SD_QUALITY pre-check skipped: ${gateErr.message}`);
   }
 
   // Informational triage gate: log tier recommendation (non-blocking — /learn has
