@@ -131,9 +131,11 @@ async function handlePatch(req: AuthenticatedRequest, res: NextApiResponse) {
   const { supabase } = req;
   const { id } = req.query;
 
-  if (!id || typeof id !== 'string') {
+  // SD-LEO-FIX-API-ROUTE-AUTH-001: UUID format validation
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!id || typeof id !== 'string' || !uuidRegex.test(id)) {
     return res.status(400).json({
-      error: 'Event ID is required'
+      error: 'Event ID is required and must be a valid UUID'
     });
   }
 
