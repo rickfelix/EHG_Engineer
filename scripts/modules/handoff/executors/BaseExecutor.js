@@ -11,6 +11,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
+// SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Shared git context to eliminate redundant execSync calls
+import { SharedGitContext } from '../shared-git-context.js';
 
 // SD-MAN-GEN-CORRECTIVE-VISION-GAP-013 (V02): Max gate retry attempts before failure
 const GATE_MAX_RETRIES = 2;
@@ -31,6 +33,10 @@ import { trackWriteSource } from '../../../../lib/eva/cli-write-gate.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Module-level cache for getRepoPath()
+// Eliminates redundant `git rev-parse --show-toplevel` calls (was called 2x per getRepoPath invocation)
+let _cachedGitRoot = null;
+
 /**
  * Get cross-platform repository path
  * SD-LEO-INFRA-GATE-WORKTREE-FIXES-001: Use git rev-parse for worktree-safe resolution.
@@ -40,31 +46,26 @@ const __dirname = path.dirname(__filename);
  */
 function getRepoPath(repoName) {
   const normalizedName = repoName.toLowerCase();
-  if (normalizedName.includes('engineer')) {
-    // Use git rev-parse to get true repo root (works in worktrees)
+
+  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cache git root to avoid redundant execSync calls
+  if (_cachedGitRoot === null) {
     try {
-      const gitRoot = execSync('git rev-parse --show-toplevel', {
+      _cachedGitRoot = execSync('git rev-parse --show-toplevel', {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe']
       }).trim();
-      return gitRoot;
     } catch (e) {
       // Intentionally suppressed: Fallback when git rev-parse unavailable
       console.debug('[BaseExecutor] getRepoPath git rev-parse fallback:', e?.message || e);
-      return path.resolve(__dirname, '../../../../');
+      _cachedGitRoot = path.resolve(__dirname, '../../../../');
     }
   }
-  // EHG/ehg is sibling to EHG_Engineer
-  try {
-    const gitRoot = execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    }).trim();
-    return path.resolve(gitRoot, '../ehg');
-  } catch (e) {
-    console.debug('[BaseExecutor] getRepoPath ehg git fallback:', e?.message || e);
-    return path.resolve(__dirname, '../../../../../ehg');
+
+  if (normalizedName.includes('engineer')) {
+    return _cachedGitRoot;
   }
+  // EHG/ehg is sibling to EHG_Engineer
+  return path.resolve(_cachedGitRoot, '../ehg');
 }
 
 export class BaseExecutor {
@@ -203,6 +204,8 @@ export class BaseExecutor {
 
       // SD-LEO-INFRA-HARDENING-001: Deep-copy context objects to prevent mutation
       // This ensures chained skills and validators don't accidentally modify original data
+      // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Inject SharedGitContext for gates to reuse
+      const gitContext = new SharedGitContext();
       const validationContext = {
         sdId,
         sd_id: sd?.id || sdId,  // Use UUID when available for database queries
@@ -210,7 +213,8 @@ export class BaseExecutor {
         prd: prd ? structuredClone(prd) : null,  // SD-LEO-001: Include PRD in context for validators
         prdId: prd?.id,  // Also provide prdId for convenience
         options: options ? structuredClone(options) : {},  // Deep copy options
-        supabase: this.supabase  // Supabase client cannot be cloned (has methods)
+        supabase: this.supabase,  // Supabase client cannot be cloned (has methods)
+        gitContext  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Cached git state (branch, diffFiles, gitRoot)
       };
 
       // Use database-driven gates when available, fall back to hardcoded
