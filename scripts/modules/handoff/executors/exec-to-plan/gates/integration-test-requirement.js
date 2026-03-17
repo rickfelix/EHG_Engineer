@@ -48,9 +48,10 @@ function classifyComplexity(sd, options = {}) {
   const hasChildren = !!(options.hasChildren || sd.has_children);
 
   // Count modified modules from git diff
+  // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Pass gitContext for cached lookups
   const modifiedModulesCount = options.modifiedModulesCount !== undefined
     ? options.modifiedModulesCount
-    : countModifiedModules();
+    : countModifiedModules(options.gitContext);
 
   if (storyPoints >= 5) {
     reasons.push(`story_points=${storyPoints} (>= 5)`);
@@ -74,27 +75,36 @@ function classifyComplexity(sd, options = {}) {
 /**
  * Count distinct top-level modules modified in the current branch.
  * A "module" is the first path segment (e.g., "scripts/", "lib/", "tests/").
+ * SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Accepts optional SharedGitContext to avoid redundant git calls.
  *
+ * @param {Object} [gitContext] - SharedGitContext instance (optional, falls back to execSync)
  * @returns {number} Number of distinct modified modules
  */
-function countModifiedModules() {
+function countModifiedModules(gitContext) {
   try {
-    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
-      encoding: 'utf8', timeout: 10000
-    }).trim();
-
-    let diffOutput;
-    if (currentBranch === 'main' || currentBranch === 'master') {
-      diffOutput = execSync('git diff --name-only HEAD', {
-        encoding: 'utf8', timeout: 10000
-      });
+    // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Use cached diffFiles when available
+    let files;
+    if (gitContext && gitContext.diffFiles) {
+      files = gitContext.diffFiles;
     } else {
-      diffOutput = execSync('git diff --name-only main...HEAD', {
+      const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
         encoding: 'utf8', timeout: 10000
-      });
+      }).trim();
+
+      let diffOutput;
+      if (currentBranch === 'main' || currentBranch === 'master') {
+        diffOutput = execSync('git diff --name-only HEAD', {
+          encoding: 'utf8', timeout: 10000
+        });
+      } else {
+        diffOutput = execSync('git diff --name-only main...HEAD', {
+          encoding: 'utf8', timeout: 10000
+        });
+      }
+
+      files = diffOutput.split('\n').map(f => f.trim()).filter(Boolean);
     }
 
-    const files = diffOutput.split('\n').map(f => f.trim()).filter(Boolean);
     const modules = new Set();
     for (const file of files) {
       const firstSegment = file.split('/')[0];
@@ -227,9 +237,11 @@ export function createIntegrationTestRequirementGate(supabase) {
       const hasChildren = await checkHasChildren(supabase, sdId);
 
       // Classify complexity
+      // SD-LEO-FIX-HANDOFF-PIPELINE-GIT-001: Pass gitContext for cached git lookups
       const complexity = classifyComplexity(sd, {
         hasChildren,
-        modifiedModulesCount: undefined // auto-detect from git
+        modifiedModulesCount: undefined, // auto-detect from git (uses gitContext when available)
+        gitContext: ctx.gitContext
       });
 
       console.log(`   Complex: ${complexity.isComplex}`);
