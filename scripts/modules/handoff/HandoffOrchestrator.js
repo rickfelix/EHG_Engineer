@@ -331,7 +331,7 @@ export class HandoffOrchestrator {
       const dbRules = await this.validationOrchestrator.loadValidationRules(normalizedType);
 
       // Step 7: Resolve threshold
-      const { THRESHOLD_PROFILES } = await import('../../sd-type-checker.js');
+      const { THRESHOLD_PROFILES } = await import('../sd-type-checker.js');
       const sdType = (sd.sd_type || 'feature').toLowerCase();
       const thresholdProfile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
       const gateThreshold = thresholdProfile?.gateThreshold || 85;
