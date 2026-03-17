@@ -14,9 +14,8 @@
  * Part of SD-LEO-SDKEY-001: Centralize SD Creation Through /leo
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import {
   generateSDKey,
   generateChildKey,
@@ -49,12 +48,7 @@ import { scoreSD } from './eva/vision-scorer.js';
 import { trackWriteSource } from '../lib/eva/cli-write-gate.js';
 import { validateSDFields } from './modules/validate-sd-fields.js';
 
-dotenv.config();
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // ============================================================================
 // Venture Context Resolution (SD-LEO-INFRA-SD-NAMESPACING-001)
@@ -1784,7 +1778,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // FR-003: Auto-route to orchestrator creator when arch key has phases
       if (visionKey && archKey) {
         try {
-          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const sb = createSupabaseServiceClient();
           const { data: archPlan } = await sb
             .from('eva_architecture_plans')
             .select('content, sections')
@@ -1805,7 +1799,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
 
         // Advisory: warn about uncovered architecture phases (SD-LEO-INFRA-ARCHITECTURE-PHASE-COVERAGE-001)
         try {
-          const sb2 = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+          const sb2 = createSupabaseServiceClient();
           const { data: archPlanSections } = await sb2
             .from('eva_architecture_plans')
             .select('sections')

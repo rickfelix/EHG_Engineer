@@ -3,10 +3,9 @@
  * Addresses 103 findings (10 critical, 38 high, 47 medium, 8 low) from R2 post-remediation audit.
  * One-time script. Run: node scripts/one-time/insert-eva-remediation-r2-sds.cjs
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createSupabaseServiceClient();
 
 const ORCH_KEY = 'SD-EVA-REMEDIATION-R2-ORCH-001';
 

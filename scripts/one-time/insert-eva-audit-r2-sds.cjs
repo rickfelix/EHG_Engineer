@@ -3,10 +3,9 @@
  * Re-audits all 12 areas from Round 1 to verify remediation effectiveness.
  * One-time script. Run: node scripts/one-time/insert-eva-audit-r2-sds.cjs
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createSupabaseServiceClient();
 
 const ORCH_KEY = 'SD-EVA-QA-AUDIT-R2-ORCH-001';
 const R1_ORCH_KEY = 'SD-EVA-QA-AUDIT-ORCH-001';

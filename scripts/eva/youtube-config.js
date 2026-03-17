@@ -12,12 +12,9 @@
  *   node scripts/eva/youtube-config.js seed
  */
 
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-dotenv.config();
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 const SEED_CHANNELS = [
   { channel_id: 'UCbfYPyITQ-7l4upoX8nvctg', channel_name: 'Two Minute Papers' },

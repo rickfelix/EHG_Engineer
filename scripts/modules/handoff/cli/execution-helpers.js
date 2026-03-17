@@ -7,7 +7,7 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
 import { createTaskHydrator } from '../../../../lib/tasks/index.js';
 import { validateBypassReason } from '../bypass-rubric.js';
@@ -21,10 +21,7 @@ import { validateBypassReason } from '../bypass-rubric.js';
  * @returns {Promise<Object>} Result with success boolean
  */
 export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // CONST-015: Validate bypass reason against rubric before proceeding
   const rubricResult = validateBypassReason(bypassReason);
@@ -249,7 +246,7 @@ export async function displayExecutionResult(result, handoffType, sdId) {
     const nextStep = nextStepMap[handoffType.toUpperCase()];
     if (nextStep) {
       // Update SD status in database
-      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const supabase = createSupabaseServiceClient();
       const canonicalId = await normalizeSDId(supabase, sdId);
 
       if (canonicalId) {

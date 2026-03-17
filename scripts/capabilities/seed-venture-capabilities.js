@@ -6,12 +6,9 @@
  * Registers 5+ venture capabilities as seed data based on existing ventures.
  * Idempotent: skips already-existing capabilities.
  */
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 const SEED_CAPABILITIES = [
   {

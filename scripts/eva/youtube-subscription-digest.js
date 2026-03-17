@@ -20,15 +20,12 @@
  *   --verbose       Verbose output
  */
 
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { scanSubscriptions } from '../../lib/integrations/youtube/subscription-scanner.js';
 import { scoreVideoBatch } from '../../lib/eva/youtube-relevance-scorer.js';
 import { createDigestTasks } from '../../lib/integrations/todoist/digest-task-creator.js';
 
-dotenv.config();
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 function parseArgs() {
   const args = process.argv.slice(2);

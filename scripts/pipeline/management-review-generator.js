@@ -7,10 +7,9 @@
  * Usage: node scripts/pipeline/management-review-generator.js [--dry-run]
  */
 
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 const STALE_THRESHOLD_HOURS = 24;
 const isDryRun = process.argv.includes('--dry-run');
 const isHistory = process.argv.includes('--history');

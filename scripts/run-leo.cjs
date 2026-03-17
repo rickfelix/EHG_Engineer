@@ -88,10 +88,9 @@ function runCommand(cmd, options = {}) {
 async function getActiveSD() {
   try {
     const result = execSync(`node -e "
-      const { createClient } = require('@supabase/supabase-js');
-      require('dotenv').config();
-      const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const { createSupabaseServiceClient } = require('./lib/supabase-client.cjs');
       async function get() {
+        const supabase = createSupabaseServiceClient();
         const { data } = await supabase.from('strategic_directives_v2').select('id, title, current_phase, status').eq('is_working_on', true).single();
         if (data) console.log(JSON.stringify(data));
       }
@@ -106,10 +105,9 @@ async function getActiveSD() {
 async function getRecentSDs() {
   try {
     const result = execSync(`node -e "
-      const { createClient } = require('@supabase/supabase-js');
-      require('dotenv').config();
-      const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const { createSupabaseServiceClient } = require('./lib/supabase-client.cjs');
       async function get() {
+        const supabase = createSupabaseServiceClient();
         const { data } = await supabase.from('strategic_directives_v2')
           .select('id, title, current_phase, status')
           .in('status', ['draft', 'in_progress', 'active', 'planning'])
@@ -496,13 +494,9 @@ async function createSDInteractive() {
   const sdKey = sdId.replace('SD-', '');
 
   const createScript = `
-    const { createClient } = require('@supabase/supabase-js');
-    require('dotenv').config();
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const { createSupabaseServiceClient } = require('./lib/supabase-client.cjs');
     async function create() {
+      const supabase = createSupabaseServiceClient();
       const sd = {
         id: '${sdId}',
         sd_key: '${sdKey}',

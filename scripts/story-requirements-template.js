@@ -11,10 +11,7 @@
  *   npm run story:template SD-XXX-001   # Show with SD-type-specific thresholds
  */
 
-import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
-
-dotenv.config();
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 const SD_TYPE_THRESHOLDS = {
   documentation: 50, docs: 50,
@@ -36,7 +33,7 @@ const RUBRIC_WEIGHTS = {
 
 async function getSDType(sdKey) {
   if (!sdKey) return null;
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
   const { data } = await supabase.from('strategic_directives_v2')
     .select('sd_type').eq('sd_key', sdKey).single();
   return data?.sd_type || null;

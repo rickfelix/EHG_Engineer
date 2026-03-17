@@ -19,10 +19,9 @@
  *
  * Run: node scripts/one-time/fix-eva-remediation-quality-pass3.cjs
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createSupabaseServiceClient();
 
 const AUDIT_SOURCE = 'Source: docs/audits/eva-comprehensive/ (12 completed audit reports from SD-EVA-QA-AUDIT-ORCH-001)';
 

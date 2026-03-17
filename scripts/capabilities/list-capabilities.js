@@ -6,12 +6,9 @@
  * Queries venture_capabilities table and displays all registered capabilities
  * in a formatted table.
  */
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 async function main() {
   const { data: capabilities, error } = await supabase

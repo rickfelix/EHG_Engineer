@@ -3,10 +3,9 @@
  * Addresses 157 findings (36 critical, 53 high, 48 medium, 20 low) from EVA Comprehensive Audit.
  * One-time script. Run: node scripts/one-time/insert-eva-remediation-sds.cjs
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createSupabaseServiceClient();
 
 const ORCH_KEY = 'SD-EVA-REMEDIATION-ORCH-001';
 

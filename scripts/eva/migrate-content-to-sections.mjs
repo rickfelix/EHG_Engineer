@@ -10,14 +10,12 @@
  * and writes the parsed sections to the `sections` JSONB column.
  */
 
-import dotenv from 'dotenv';
-dotenv.config();
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sections-parser.mjs';
 import { buildSectionKeyMapping } from './document-section-registry.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 async function migrateTable(tableName, documentType, keyColumn) {
   console.log(`\n--- ${tableName} (${documentType}) ---`);

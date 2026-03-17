@@ -9,13 +9,10 @@
  * 3. Orphan capabilities
  * 4. Gap analysis
  */
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { CAPABILITY_CATEGORIES, CAPABILITY_TYPES } from '../../lib/capabilities/capability-taxonomy.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 async function main() {
   const { data: capabilities, error } = await supabase

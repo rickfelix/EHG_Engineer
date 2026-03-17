@@ -5,15 +5,11 @@
  *
  * Registers a new venture capability via CLI with validation.
  */
-import { createRequire } from 'node:module';
 import { parseArgs } from 'node:util';
 import { CAPABILITY_TYPES, isValidCapabilityType } from '../../lib/capabilities/capability-taxonomy.js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-const require = createRequire(import.meta.url);
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 const VALID_TYPES = Object.keys(CAPABILITY_TYPES);
 const MATURITY_LEVELS = ['experimental', 'stable', 'production', 'deprecated'];

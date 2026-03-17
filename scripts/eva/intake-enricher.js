@@ -13,10 +13,7 @@
  * All external fetches use fail-open pattern — never blocks the pipeline.
  */
 
-import dotenv from 'dotenv';
-dotenv.config();
-
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { extractYouTubeVideoId, extractYouTubeUrl, extractYouTubePlaylistId } from '../../lib/integrations/url-extractor.js';
 
 // Lazy imports for YouTube metadata + video analysis
@@ -65,7 +62,7 @@ async function lazyCheckDuplicate(title, options) {
   return _checkDuplicate(title, options);
 }
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Extract the first URL from text (any URL, not just YouTube).

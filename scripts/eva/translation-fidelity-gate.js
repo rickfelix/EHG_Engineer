@@ -13,10 +13,9 @@
  * @created 2026-03-11 SD-LEO-FEAT-TRANSLATION-FIDELITY-GATES-001
  */
 
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Sanitize string by replacing invalid Unicode surrogates with U+FFFD.
