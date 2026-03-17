@@ -320,10 +320,8 @@ export class HandoffRecorder {
             .eq('sd_id', sdId)
             .eq('status', 'active');
         } catch (fallbackErr) {
-          // Non-blocking: ignore if both methods fail
+          console.warn(`   [handoff-fail-count] Non-blocking: ${fallbackErr.message}`);
         }
-      } catch (failCountErr) {
-        console.warn(`   [handoff-fail-count] Non-blocking: ${failCountErr.message}`);
       }
 
       // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-072 US-001: Governance audit trail
