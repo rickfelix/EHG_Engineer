@@ -197,6 +197,7 @@ export default getWorkingOnSD;
 
 // Run if called directly (cross-platform: Windows uses file:///C:/... vs C:\...)
 const isMain = import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
   import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
 
 if (isMain) {

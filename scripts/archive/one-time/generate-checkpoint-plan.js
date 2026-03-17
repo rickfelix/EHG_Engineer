@@ -287,6 +287,7 @@ async function main() {
 
 // Cross-platform entry point (Windows file:///C:/ vs process.argv C:\)
 const isMain = import.meta.url === `file://${process.argv[1]}` ||
+                     import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
   import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`;
 if (isMain) {
   main();
