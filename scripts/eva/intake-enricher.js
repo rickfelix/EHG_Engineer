@@ -365,7 +365,7 @@ export async function enrichItems(options = {}) {
 }
 
 // CLI entry point
-if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` ||
+if (process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
     import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`)) {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
   const dryRun = process.argv.includes('--dry-run');
