@@ -288,10 +288,16 @@ BEGIN
     NOW()
   );
 
-  -- Record transition (idempotent)
+  -- Record transition (idempotent, with sequence counter to avoid collisions on REVISE loops)
   v_idempotency := uuid_generate_v5(
     '00000000-0000-0000-0000-000000000000'::uuid,
     p_venture_id::text || ':' || p_from_stage::text || ':' || p_to_stage::text
+      || ':' || COALESCE(
+        (SELECT COUNT(*)::text FROM venture_stage_transitions
+         WHERE venture_id = p_venture_id
+           AND from_stage = p_from_stage
+           AND to_stage = p_to_stage),
+        '0')
   );
 
   INSERT INTO venture_stage_transitions (

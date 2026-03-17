@@ -110,6 +110,9 @@ router.get('/:id/artifacts', validateUuidParam('id'), asyncHandler(async (req, r
   res.json(formattedWork);
 }));
 
+// Kill gate stages that require chairman approval before entry
+const GATE_STAGES = [3, 5, 10, 22, 23, 24];
+
 // Update venture stage
 router.patch('/:id/stage', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -117,6 +120,25 @@ router.patch('/:id/stage', validateUuidParam('id'), asyncHandler(async (req, res
 
   if (!stage || stage < 1 || stage > 25) {
     return res.status(400).json({ error: 'Invalid stage. Must be 1-25.' });
+  }
+
+  // Gate enforcement: if target stage is a gate, require chairman approval
+  if (GATE_STAGES.includes(stage)) {
+    const { data: approval } = await dbLoader.supabase
+      .from('chairman_decisions')
+      .select('id')
+      .eq('venture_id', id)
+      .eq('lifecycle_stage', stage)
+      .eq('status', 'approved')
+      .in('decision', ['pass', 'go', 'proceed', 'approve', 'conditional_pass', 'conditional_go', 'continue', 'release'])
+      .limit(1);
+
+    if (!approval || approval.length === 0) {
+      return res.status(403).json({
+        error: 'Gate stage requires chairman approval',
+        gate_stage: stage
+      });
+    }
   }
 
   const { data, error } = await dbLoader.supabase
@@ -132,6 +154,9 @@ router.patch('/:id/stage', validateUuidParam('id'), asyncHandler(async (req, res
     console.error('Error updating venture stage:', error);
     return res.status(500).json({ error: error.message });
   }
+
+  // Emit event for observability
+  console.log(`[VentureStage] Venture ${id} advanced to stage ${stage} via API`);
 
   res.json(data);
 }));
