@@ -1,6 +1,6 @@
 {
-  "sdKey": "SD-LEO-FIX-DATABASE-SECURITY-DEFINER-001",
-  "expectedBranch": "feat/SD-LEO-FIX-DATABASE-SECURITY-DEFINER-001",
-  "createdAt": "2026-03-17T16:53:45.662Z",
+  "sdKey": "SD-LEO-FIX-DATABASE-DUPLICATE-INDEX-001",
+  "expectedBranch": "feat/SD-LEO-FIX-DATABASE-DUPLICATE-INDEX-001",
+  "createdAt": "2026-03-17T18:16:01.817Z",
   "repoRoot": "C:/Users/rickf/Projects/_EHG/EHG_Engineer"
 }
