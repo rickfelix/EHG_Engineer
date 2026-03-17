@@ -4,17 +4,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1'
-
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean)
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get('Origin') || ''
-  const allowedOrigin = ALLOWED_ORIGINS.length > 0 && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0] || ''
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
-}
+import { verifyJWT, getCorsHeaders } from '../_shared/auth.ts'
 
 interface TokenRequest {
   userId?: string
@@ -37,32 +27,21 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client
+    // Verify JWT before any operations
+    const { user, error: jwtError, status: jwtStatus } = await verifyJWT(req)
+    if (jwtError) {
+      return new Response(
+        JSON.stringify({ error: jwtError }),
+        { status: jwtStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Initialize Supabase client for DB operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY')!
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey)
-
-    // Verify authentication
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    )
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
 
     // Parse request body
     const { sessionConfig = {} } = await req.json() as TokenRequest

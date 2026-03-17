@@ -5,6 +5,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getCorsHeaders } from '../_shared/auth.ts';
 
 /**
  * Validates input_params against a JSON Schema definition from ehg_services.artifact_schema.
@@ -98,20 +99,17 @@ function validateAgainstSchema(
   return { valid: errors.length === 0, errors };
 }
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -120,7 +118,7 @@ serve(async (req: Request) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -130,7 +128,7 @@ serve(async (req: Request) => {
     if (!task_id) {
       return new Response(
         JSON.stringify({ error: 'task_id is required' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -173,7 +171,7 @@ serve(async (req: Request) => {
                 error: 'Input validation failed against service artifact_schema',
                 validation_errors: validation.errors,
               }),
-              { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
         }
@@ -209,30 +207,30 @@ serve(async (req: Request) => {
         if (existing && existing.status !== 'pending') {
           return new Response(
             JSON.stringify({ error: 'Task already claimed or completed', current_status: existing.status }),
-            { status: 409, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
         return new Response(
           JSON.stringify({ error: 'Task not found or not accessible' }),
-          { status: 404, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: error.message }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
       JSON.stringify({ task: data }),
-      { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

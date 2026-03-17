@@ -5,12 +5,7 @@
 // updates per-service per-venture confidence thresholds.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { verifyJWT, getCorsHeaders, createAdminClient } from '../_shared/auth.ts';
 
 const EMA_ALPHA = 0.1;
 const DRIFT_THRESHOLD_PCT = 15;
@@ -69,30 +64,31 @@ function clampDelta(delta: number, maxPct: number): number {
 }
 
 serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Verify JWT before any database operations
+    const { user, error: authError, status: authStatus } = await verifyJWT(req);
+    if (authError) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: authError }),
+        { status: authStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
+    // Use service_role client for DB operations (after JWT verification)
+    const supabase = createAdminClient();
 
     const body = await req.json().catch(() => ({}));
     const ventureId = body.venture_id;
@@ -122,14 +118,14 @@ serve(async (req: Request) => {
     if (telErr) {
       return new Response(
         JSON.stringify({ error: telErr.message }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!telemetry || telemetry.length === 0) {
       return new Response(
         JSON.stringify({ message: 'No telemetry data to calibrate', calibrations: [] }),
-        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -217,12 +213,12 @@ serve(async (req: Request) => {
         calibrations: results,
         total_telemetry_processed: telemetry.length,
       }),
-      { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

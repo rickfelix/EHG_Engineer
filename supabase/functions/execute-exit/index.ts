@@ -9,11 +9,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { verifyJWT, getCorsHeaders, createAdminClient } from '../_shared/auth.ts';
 
 const MIN_SEPARABILITY_SCORE = 60;
 const ROUNDS = ['dependency_freeze', 'data_export', 'cutover_validation', 'certification'] as const;
@@ -29,30 +25,45 @@ interface ExitState {
 }
 
 serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Verify JWT before any database operations
+    const { user, error: authError, status: authStatus } = await verifyJWT(req);
+    if (authError) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: authError }),
+        { status: authStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
+    // Use service_role client for DB operations (after JWT verification)
+    const supabase = createAdminClient();
+
+    // Check chairman role (only chairman can manage exits)
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!profile || profile.role !== 'chairman') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: chairman role required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
     const { venture_id, action, confirm } = body;
@@ -60,40 +71,44 @@ serve(async (req: Request) => {
     if (!venture_id) {
       return new Response(
         JSON.stringify({ error: 'venture_id is required' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Action: start, advance, abort, status
     if (action === 'status' || !action) {
-      return await getExitStatus(supabase, venture_id);
+      return await getExitStatus(supabase, venture_id, corsHeaders);
     }
 
     if (action === 'start') {
-      return await startExit(supabase, venture_id, confirm);
+      return await startExit(supabase, venture_id, confirm, corsHeaders);
     }
 
     if (action === 'advance') {
-      return await advanceRound(supabase, venture_id, body.chairman_approval);
+      return await advanceRound(supabase, venture_id, body.chairman_approval, corsHeaders);
     }
 
     if (action === 'abort') {
-      return await abortExit(supabase, venture_id);
+      return await abortExit(supabase, venture_id, corsHeaders);
     }
 
     return new Response(
       JSON.stringify({ error: 'Invalid action. Use: start, advance, abort, status' }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
 
-async function getExitStatus(supabase: ReturnType<typeof createClient>, ventureId: string) {
+async function getExitStatus(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  corsHeaders: Record<string, string>
+) {
   const { data } = await supabase
     .from('venture_exit_readiness')
     .select('*')
@@ -104,15 +119,20 @@ async function getExitStatus(supabase: ReturnType<typeof createClient>, ventureI
 
   return new Response(
     JSON.stringify({ exit_state: data ?? null }),
-    { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
-async function startExit(supabase: ReturnType<typeof createClient>, ventureId: string, confirm: boolean) {
+async function startExit(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  confirm: boolean,
+  corsHeaders: Record<string, string>
+) {
   if (!confirm) {
     return new Response(
       JSON.stringify({ error: 'Exit requires explicit confirmation. Set confirm: true' }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -133,7 +153,7 @@ async function startExit(supabase: ReturnType<typeof createClient>, ventureId: s
         current_score: score,
         required_score: MIN_SEPARABILITY_SCORE,
       }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -155,7 +175,7 @@ async function startExit(supabase: ReturnType<typeof createClient>, ventureId: s
   if (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -175,11 +195,16 @@ async function startExit(supabase: ReturnType<typeof createClient>, ventureId: s
       round_name: 'dependency_freeze',
       separability_score: score,
     }),
-    { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
-async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId: string, chairmanApproval: boolean) {
+async function advanceRound(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  chairmanApproval: boolean,
+  corsHeaders: Record<string, string>
+) {
   const { data: state } = await supabase
     .from('venture_exit_readiness')
     .select('*')
@@ -189,7 +214,7 @@ async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId
   if (!state || state.status !== 'in_progress') {
     return new Response(
       JSON.stringify({ error: 'No active exit process for this venture' }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -200,7 +225,7 @@ async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId
         current_round: state.current_round,
         round_name: ROUNDS[state.current_round - 1],
       }),
-      { status: 403, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -250,7 +275,7 @@ async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId
         certification_id: certId,
         rounds_completed: completedRounds,
       }),
-      { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -279,11 +304,15 @@ async function advanceRound(supabase: ReturnType<typeof createClient>, ventureId
       round_name: ROUNDS[nextRound - 1],
       rounds_completed: completedRounds,
     }),
-    { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
-async function abortExit(supabase: ReturnType<typeof createClient>, ventureId: string) {
+async function abortExit(
+  supabase: ReturnType<typeof createClient>,
+  ventureId: string,
+  corsHeaders: Record<string, string>
+) {
   const { data: state } = await supabase
     .from('venture_exit_readiness')
     .select('current_round, status')
@@ -293,7 +322,7 @@ async function abortExit(supabase: ReturnType<typeof createClient>, ventureId: s
   if (!state || state.status !== 'in_progress') {
     return new Response(
       JSON.stringify({ error: 'No active exit process to abort' }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -303,7 +332,7 @@ async function abortExit(supabase: ReturnType<typeof createClient>, ventureId: s
         error: 'Cannot abort after round 2. Rounds 3-4 are irreversible.',
         current_round: state.current_round,
       }),
-      { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -325,6 +354,6 @@ async function abortExit(supabase: ReturnType<typeof createClient>, ventureId: s
       venture_id: ventureId,
       aborted_at_round: state.current_round,
     }),
-    { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
