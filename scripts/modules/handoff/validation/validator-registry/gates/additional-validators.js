@@ -60,30 +60,9 @@ export function registerAdditionalValidators(registry) {
     return { passed: true, score: 100, max_score: 100, issues: [] };
   }, 'Target application validation');
 
-  registry.register('branchEnforcement', async () => {
-    // Simplified check - assume branch exists if we got this far
-    return { passed: true, score: 100, max_score: 100, issues: [], warnings: ['Branch enforcement check simplified'] };
-  }, 'Git branch enforcement');
-
-  registry.register('architectureVerification', async () => {
-    // Optional gate - always passes with warning
-    return {
-      passed: true,
-      score: 100,
-      max_score: 100,
-      warnings: ['Architecture verification not implemented - auto-pass']
-    };
-  }, 'Architecture verification');
-
-  registry.register('explorationAudit', async () => {
-    // Optional gate - always passes with warning
-    return {
-      passed: true,
-      score: 100,
-      max_score: 100,
-      warnings: ['Exploration audit not implemented - auto-pass']
-    };
-  }, 'Exploration audit');
+  // SD-LEO-FIX-REMOVE-RUBBER-STAMP-001: Removed branchEnforcement, architectureVerification,
+  // explorationAudit rubber-stamp validators. These duplicated real executor-level gates and
+  // always returned score: 100, inflating aggregate scores.
 
   registry.register('subAgentOrchestration', async (context) => {
     const { sd_id, supabase } = context;
@@ -187,15 +166,8 @@ export function registerAdditionalValidators(registry) {
     return registry.normalizeResult(result);
   }, 'Retrospective quality gate');
 
-  registry.register('gitCommitEnforcement', async () => {
-    // Simplified check
-    return {
-      passed: true,
-      score: 100,
-      max_score: 100,
-      warnings: ['Git commit enforcement check simplified']
-    };
-  }, 'Git commit enforcement');
+  // SD-LEO-FIX-REMOVE-RUBBER-STAMP-001: Removed gitCommitEnforcement rubber-stamp validator.
+  // Duplicated real executor-level gate and always returned score: 100.
 
   registry.register('planToLeadHandoffExists', async (context) => {
     const { sd_id, supabase } = context;
