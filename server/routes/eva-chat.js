@@ -10,6 +10,7 @@
  */
 
 import { Router } from 'express';
+import { isValidUuid, validateUuidParam, isValidStringLength } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -54,7 +55,7 @@ router.get('/conversations', async (req, res) => {
  * GET /api/eva/chat/conversations/:id/messages
  * Get messages for a conversation.
  */
-router.get('/conversations/:id/messages', async (req, res) => {
+router.get('/conversations/:id/messages', validateUuidParam('id'), async (req, res) => {
   try {
     const { getMessages } = await import('../../lib/integrations/eva-chat-service.js');
     const messages = await getMessages(req.params.id);
@@ -75,8 +76,8 @@ router.post('/message', async (req, res) => {
     const { conversation_id, content, user_id } = req.body;
     const userId = req.user?.id || user_id;
 
-    if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
-    if (!content) return res.status(400).json({ error: 'content required' });
+    if (!conversation_id || !isValidUuid(conversation_id)) return res.status(400).json({ error: 'conversation_id required and must be a valid UUID' });
+    if (!content || !isValidStringLength(content, 10000)) return res.status(400).json({ error: 'content required and must be under 10000 characters' });
     if (!userId) return res.status(400).json({ error: 'user_id required' });
 
     const result = await sendMessage(conversation_id, content, userId);
@@ -95,8 +96,8 @@ router.post('/stream', async (req, res) => {
   const { conversation_id, content, user_id } = req.body;
   const userId = req.user?.id || user_id;
 
-  if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
-  if (!content) return res.status(400).json({ error: 'content required' });
+  if (!conversation_id || !isValidUuid(conversation_id)) return res.status(400).json({ error: 'conversation_id required and must be a valid UUID' });
+  if (!content || !isValidStringLength(content, 10000)) return res.status(400).json({ error: 'content required and must be under 10000 characters' });
   if (!userId) return res.status(400).json({ error: 'user_id required' });
 
   // Set SSE headers

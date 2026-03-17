@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import { dbLoader } from '../config.js';
 import { asyncHandler } from '../../lib/middleware/eva-error-handler.js';
+import { isValidUuid, validateUuidParam, isValidStringLength } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 // Get single venture by ID
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const { data, error } = await dbLoader.supabase
@@ -46,7 +47,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // Get artifacts for a venture
-router.get('/:id/artifacts', asyncHandler(async (req, res) => {
+router.get('/:id/artifacts', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { stage } = req.query;
 
@@ -110,7 +111,7 @@ router.get('/:id/artifacts', asyncHandler(async (req, res) => {
 }));
 
 // Update venture stage
-router.patch('/:id/stage', asyncHandler(async (req, res) => {
+router.patch('/:id/stage', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { stage } = req.body;
 
@@ -136,7 +137,7 @@ router.patch('/:id/stage', asyncHandler(async (req, res) => {
 }));
 
 // Create or update artifact for a venture stage
-router.post('/:id/artifacts', asyncHandler(async (req, res) => {
+router.post('/:id/artifacts', validateUuidParam('id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { stage, artifact_type, title, content, metadata } = req.body;
 
@@ -202,6 +203,17 @@ router.post('/:id/artifacts', asyncHandler(async (req, res) => {
 // Create new venture - IDEATION-GENESIS-AUDIT: Capture raw Chairman intent
 router.post('/', asyncHandler(async (req, res) => {
   const ventureData = req.body;
+
+  // SD-LEO-FIX-API-ROUTE-AUTH-001: Input validation
+  if (!ventureData.name || !isValidStringLength(ventureData.name, 500)) {
+    return res.status(400).json({ error: 'name is required and must be under 500 characters' });
+  }
+  if (ventureData.problem_statement && !isValidStringLength(ventureData.problem_statement, 5000)) {
+    return res.status(400).json({ error: 'problem_statement must be under 5000 characters' });
+  }
+  if (ventureData.origin_type && !['manual', 'competitor_clone', 'blueprint'].includes(ventureData.origin_type)) {
+    return res.status(400).json({ error: 'origin_type must be one of: manual, competitor_clone, blueprint' });
+  }
 
   const { data, error } = await dbLoader.supabase
     .from('ventures')
