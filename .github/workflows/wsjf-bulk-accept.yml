@@ -1,15 +1,29 @@
-name: WSJF Bulk-Accept (Staging)
+name: WSJF Bulk-Accept
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+        default: staging
 
 permissions:
   contents: read
 
+concurrency:
+  group: wsjf-bulk-accept-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   bulk_accept:
-    # Guard writes to staging; explicit opt-in
-    if: ${{ vars.STAGING_WRITE_OK == '1' && vars.ENABLE_WSJF_BULK_ACCEPT == '1' }}
+    if: >-
+      (inputs.environment == 'staging' && vars.STAGING_WRITE_OK == '1' && vars.ENABLE_WSJF_BULK_ACCEPT == '1') ||
+      (inputs.environment == 'prod' && vars.PROD_WRITE_OK == '1' && vars.ENABLE_PROD_BULK_ACCEPT == '1')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -19,30 +33,45 @@ jobs:
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
+      - name: Configure database connection (staging)
+        if: inputs.environment == 'staging'
+        run: |
+          echo "PGHOST=${{ secrets.PGHOST_STAGING }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_STAGING }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_STAGING }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_STAGING }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_STAGING }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Configure database connection (prod)
+        if: inputs.environment == 'prod'
+        run: |
+          echo "PGHOST=${{ secrets.PGHOST_PROD }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_PROD }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_PROD }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_PROD }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_PROD }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
       - name: Bulk-accept top proposals per venture (guarded; DRY-RUN by default)
-        env:
-          PGHOST: ${{ secrets.PGHOST_STAGING }}
-          PGPORT: ${{ secrets.PGPORT_STAGING }}
-          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
-          PGUSER: ${{ secrets.PGUSER_STAGING }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
-          PGSSLMODE: require
         run: |
           mkdir -p ops/checks/out
+          PER_VENTURE="${{ inputs.environment == 'prod' && '1' || vars.PER_VENTURE_LIMIT || '3' }}"
           psql -v ON_ERROR_STOP=1 \
                -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
                -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
-               -v PER_VENTURE_LIMIT="${{ vars.PER_VENTURE_LIMIT || '3' }}" \
+               -v PER_VENTURE_LIMIT="$PER_VENTURE" \
                -v MIN_SCORE="${{ vars.MIN_SCORE || '0' }}" \
                -v PROPOSED_BY="wsjf" \
                -f ops/jobs/wsjf_bulk_accept_staging.sql
 
       - name: Summary
         run: |
-          echo "### WSJF Bulk-Accept (Staging)" >> $GITHUB_STEP_SUMMARY
+          echo "### WSJF Bulk-Accept (${{ inputs.environment }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
           echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- PER_VENTURE_LIMIT: ${{ vars.PER_VENTURE_LIMIT || '3' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- PER_VENTURE_LIMIT: ${{ inputs.environment == 'prod' && '1' || vars.PER_VENTURE_LIMIT || '3' }}" >> $GITHUB_STEP_SUMMARY
           echo "- MIN_SCORE: ${{ vars.MIN_SCORE || '0' }}" >> $GITHUB_STEP_SUMMARY
           if [ -f ops/checks/out/wsjf_bulk_accept_results.csv ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -55,6 +84,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wsjf-bulk-accept-results-${{ github.run_id }}
+          name: wsjf-bulk-accept-${{ inputs.environment }}-${{ github.run_id }}
           path: ops/checks/out/wsjf_bulk_accept_results.csv
           retention-days: 30

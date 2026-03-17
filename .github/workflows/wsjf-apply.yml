@@ -1,11 +1,19 @@
-name: WSJF Apply Accepted Proposals (Prod)
+name: WSJF Apply Accepted Proposals
 
 on:
   workflow_dispatch:
     inputs:
-      confirm:
-        description: 'Type PROMOTE to confirm production changes'
+      environment:
+        description: 'Target environment'
         required: true
+        type: choice
+        options:
+          - staging
+          - prod
+        default: staging
+      confirm:
+        description: 'Type PROMOTE to confirm production changes (prod only)'
+        required: false
         default: 'DRY_RUN'
 
 permissions:
@@ -13,12 +21,14 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: wsjf-apply-prod
+  group: wsjf-apply-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   apply:
-    if: ${{ vars.PROD_WRITE_OK == '1' && vars.APPLY_WSJF_PROD == '1' && (inputs.confirm == 'PROMOTE' || vars.DRY_RUN == '1') }}
+    if: >-
+      (inputs.environment == 'staging' && vars.STAGING_WRITE_OK == '1' && vars.APPLY_WSJF == '1') ||
+      (inputs.environment == 'prod' && vars.PROD_WRITE_OK == '1' && vars.APPLY_WSJF_PROD == '1' && (inputs.confirm == 'PROMOTE' || vars.DRY_RUN == '1'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -28,14 +38,37 @@ jobs:
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Pre-apply snapshot (execution_order backup)
-        env:
-          PGHOST: ${{ secrets.PGHOST_PROD }}
-          PGPORT: ${{ secrets.PGPORT_PROD }}
-          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
-          PGUSER: ${{ secrets.PGUSER_PROD }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
-          PGSSLMODE: require
+      - name: Configure database connection (staging)
+        if: inputs.environment == 'staging'
+        run: |
+          echo "PGHOST=${{ secrets.PGHOST_STAGING }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_STAGING }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_STAGING }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_STAGING }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_STAGING }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Configure database connection (prod)
+        if: inputs.environment == 'prod'
+        run: |
+          echo "PGHOST=${{ secrets.PGHOST_PROD }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_PROD }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_PROD }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_PROD }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_PROD }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Validate prod confirmation
+        if: inputs.environment == 'prod'
+        run: |
+          DRY_RUN_VAL="${{ vars.DRY_RUN || '1' }}"
+          if [ "${{ inputs.confirm }}" != "PROMOTE" ] && [ "$DRY_RUN_VAL" != "1" ]; then
+            echo "ERROR: Must specify confirm=PROMOTE for production changes"
+            exit 1
+          fi
+
+      - name: Pre-apply snapshot (prod only)
+        if: inputs.environment == 'prod'
         run: |
           mkdir -p ops/checks/out
           psql -v ON_ERROR_STOP=1 <<'SQL'
@@ -46,34 +79,20 @@ jobs:
           ) TO 'ops/checks/out/execution_order_snapshot_before.csv' WITH CSV HEADER;
           SQL
 
-      - name: Apply accepted proposals → execution_order (triple-guarded; DRY-RUN by default)
-        env:
-          PGHOST: ${{ secrets.PGHOST_PROD }}
-          PGPORT: ${{ secrets.PGPORT_PROD }}
-          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
-          PGUSER: ${{ secrets.PGUSER_PROD }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
-          PGSSLMODE: require
+      - name: Apply accepted proposals (guarded; DRY-RUN by default)
         run: |
           mkdir -p ops/checks/out
-          DRY_RUN_VAL="${{ vars.DRY_RUN || '1' }}"
-          if [ "${{ inputs.confirm }}" != "PROMOTE" ] && [ "$DRY_RUN_VAL" != "1" ]; then
-            echo "ERROR: Must specify confirm=PROMOTE for production changes"
-            exit 1
-          fi
           psql -v ON_ERROR_STOP=1 \
-               -v DRY_RUN="$DRY_RUN_VAL" \
+               -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
                -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" <<'SQL'
           \set ON_ERROR_STOP on
           \timing on
           BEGIN;
 
-          -- Snapshot 'before' for delta
           DROP TABLE IF EXISTS _before;
           CREATE TEMP TABLE _before AS
           SELECT id AS sd_id, execution_order FROM strategic_directives_v2;
 
-          -- Candidate set: accepted proposals, re-validate bounded movement
           DROP TABLE IF EXISTS _accepted;
           CREATE TEMP TABLE _accepted AS
           SELECT p.sd_id,
@@ -83,7 +102,6 @@ jobs:
           JOIN strategic_directives_v2 s ON s.id = p.sd_id
           WHERE p.status = 'accepted';
 
-          -- Enforce MAX_MOVE again (safety)
           DROP TABLE IF EXISTS _bounded;
           CREATE TEMP TABLE _bounded AS
           SELECT a.*
@@ -91,13 +109,11 @@ jobs:
           WHERE a.current_execution_order IS NULL
              OR abs(a.proposed_execution_order - a.current_execution_order) <= :MAX_MOVE::int;
 
-          -- Apply updates
           UPDATE strategic_directives_v2 s
           SET execution_order = b.proposed_execution_order
           FROM _bounded b
           WHERE s.id = b.sd_id;
 
-          -- Mark applied proposals
           UPDATE eng_sequence_proposals p
           SET status = 'applied', violation = NULL, proposed_at = now()
           FROM _bounded b
@@ -105,7 +121,6 @@ jobs:
             AND p.proposed_execution_order = b.proposed_execution_order
             AND p.status = 'accepted';
 
-          -- Delta report
           DROP TABLE IF EXISTS _after;
           CREATE TEMP TABLE _after AS
           SELECT id AS sd_id, execution_order FROM strategic_directives_v2;
@@ -125,7 +140,7 @@ jobs:
             WHERE NOT EXISTS (
               SELECT 1 FROM _bounded b WHERE b.sd_id = a.sd_id
             )
-          ) TO 'ops/checks/out/wsjf_apply_delta.csv' WITH CSV HEADER;
+          ) TO 'ops/checks/out/wsjf_apply_results.csv' WITH CSV HEADER;
 
           \echo DRY_RUN=:DRY_RUN  MAX_MOVE=:MAX_MOVE
           \if :DRY_RUN = '1'
@@ -137,15 +152,8 @@ jobs:
           \endif
           SQL
 
-      - name: Post-apply snapshot (execution_order verification)
-        if: always()
-        env:
-          PGHOST: ${{ secrets.PGHOST_PROD }}
-          PGPORT: ${{ secrets.PGPORT_PROD }}
-          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
-          PGUSER: ${{ secrets.PGUSER_PROD }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
-          PGSSLMODE: require
+      - name: Post-apply snapshot (prod only)
+        if: always() && inputs.environment == 'prod'
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
           \copy (
@@ -155,8 +163,8 @@ jobs:
           ) TO 'ops/checks/out/execution_order_snapshot_after.csv' WITH CSV HEADER;
           SQL
 
-      - name: Generate audit report
-        if: always()
+      - name: Generate audit report (prod only)
+        if: always() && inputs.environment == 'prod'
         run: |
           echo "# WSJF Apply Audit Report (Prod)" > ops/checks/out/wsjf_apply_audit.md
           echo "" >> ops/checks/out/wsjf_apply_audit.md
@@ -165,28 +173,31 @@ jobs:
           echo "**MAX_MOVE**: ${{ vars.MAX_MOVE || '2' }}" >> ops/checks/out/wsjf_apply_audit.md
           echo "**Confirm**: ${{ inputs.confirm }}" >> ops/checks/out/wsjf_apply_audit.md
           echo "" >> ops/checks/out/wsjf_apply_audit.md
-          if [ -f ops/checks/out/wsjf_apply_delta.csv ]; then
+          if [ -f ops/checks/out/wsjf_apply_results.csv ]; then
             echo "## Changes Applied" >> ops/checks/out/wsjf_apply_audit.md
-            echo "\`\`\`csv" >> ops/checks/out/wsjf_apply_audit.md
-            cat ops/checks/out/wsjf_apply_delta.csv >> ops/checks/out/wsjf_apply_audit.md
-            echo "\`\`\`" >> ops/checks/out/wsjf_apply_audit.md
+            echo '```csv' >> ops/checks/out/wsjf_apply_audit.md
+            cat ops/checks/out/wsjf_apply_results.csv >> ops/checks/out/wsjf_apply_audit.md
+            echo '```' >> ops/checks/out/wsjf_apply_audit.md
           fi
 
       - name: Summary
         if: always()
         run: |
-          echo "### WSJF Apply — Accepted Proposals (Prod)" >> $GITHUB_STEP_SUMMARY
+          echo "### WSJF Apply — Accepted Proposals (${{ inputs.environment }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
           echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Confirm: ${{ inputs.confirm }}" >> $GITHUB_STEP_SUMMARY
-          if [ -f ops/checks/out/wsjf_apply_delta.csv ]; then
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            echo "- Confirm: ${{ inputs.confirm }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f ops/checks/out/wsjf_apply_results.csv ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Results (sample):" >> $GITHUB_STEP_SUMMARY
-            head -n 11 ops/checks/out/wsjf_apply_delta.csv | tail -n +2 | awk -F, '{printf "- %s sd=%s %s→%s\n",$1,$2,$3,$4}' >> $GITHUB_STEP_SUMMARY || true
+            head -n 11 ops/checks/out/wsjf_apply_results.csv | tail -n +2 | awk -F, '{printf "- %s sd=%s %s→%s\n",$1,$2,$3,$4}' >> $GITHUB_STEP_SUMMARY || true
           fi
 
-      - name: Create audit PR
-        if: always() && vars.DRY_RUN != '1'
+      - name: Create audit PR (prod, non-dry-run only)
+        if: always() && inputs.environment == 'prod' && vars.DRY_RUN != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -205,7 +216,7 @@ jobs:
           Files:
           - execution_order_snapshot_before.csv
           - execution_order_snapshot_after.csv
-          - wsjf_apply_delta.csv
+          - wsjf_apply_results.csv
           - wsjf_apply_audit.md"
           git push origin "$BRANCH"
           gh pr create --title "Audit: WSJF Apply to Production" \
@@ -219,10 +230,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wsjf-apply-prod-audit-${{ github.run_id }}
+          name: wsjf-apply-${{ inputs.environment }}-${{ github.run_id }}
           path: |
+            ops/checks/out/wsjf_apply_results.csv
             ops/checks/out/execution_order_snapshot_before.csv
             ops/checks/out/execution_order_snapshot_after.csv
-            ops/checks/out/wsjf_apply_delta.csv
             ops/checks/out/wsjf_apply_audit.md
-          retention-days: 90
+          retention-days: ${{ inputs.environment == 'prod' && 90 || 30 }}

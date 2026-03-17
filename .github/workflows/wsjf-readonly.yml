@@ -1,0 +1,84 @@
+name: WSJF Recommendations (Read-Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+        default: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wsjf-readonly-${{ inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  wsjf:
+    if: >-
+      (inputs.environment == 'staging' && vars.ENABLE_WSJF_CHECKS == '1') ||
+      (inputs.environment == 'prod' && vars.ENABLE_PROD_READONLY == '1')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Configure database connection (staging)
+        if: inputs.environment == 'staging'
+        run: |
+          echo "PGHOST=${{ secrets.PGHOST_STAGING }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_STAGING }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_STAGING }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_STAGING }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_STAGING }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Configure database connection (prod)
+        if: inputs.environment == 'prod'
+        run: |
+          echo "PGHOST=${{ vars.PGHOST_PROD }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ vars.PGPORT_PROD }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ vars.PGDATABASE_PROD }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ vars.PGUSER_PROD }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_PROD }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Generate WSJF recommendations (read-only)
+        run: |
+          mkdir -p ops/checks/out
+          SQL_FILE="${{ inputs.environment == 'prod' && 'ops/checks/wsjf_recommendations_prod.sql' || 'ops/checks/wsjf_recommendations_staging.sql' }}"
+          W_BV_DEFAULT="${{ inputs.environment == 'prod' && '1.2' || vars.W_BV || '1.0' }}"
+          MAX_MOVE_DEFAULT="${{ inputs.environment == 'prod' && '2' || vars.MAX_MOVE || '3' }}"
+          psql -v ON_ERROR_STOP=1 \
+               -v W_BV="$W_BV_DEFAULT" \
+               -v W_TC="${{ vars.W_TC || '1.0' }}" \
+               -v W_RR="${{ vars.W_RR || (inputs.environment == 'prod' && '0.9' || '1.0') }}" \
+               -v W_JS="${{ vars.W_JS || '1.0' }}" \
+               -v MAX_MOVE="$MAX_MOVE_DEFAULT" \
+               -f "$SQL_FILE"
+
+      - name: WSJF — top suggestions
+        run: |
+          f=ops/checks/out/wsjf_recommendations.csv
+          echo "### WSJF — Suggested execution_order adjustments (${{ inputs.environment }})" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$f" ]; then
+            head -n 11 "$f" | tail -n +2 | awk -F, '{printf "- venture=%s sd=%s: %s → %s (WSJF=%.2f)\n",$1,$2,$3,$4,$5}' >> $GITHUB_STEP_SUMMARY || true
+          else
+            echo "_No file produced_" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wsjf-recommendations-${{ inputs.environment }}-${{ github.run_id }}
+          path: ops/checks/out/wsjf_recommendations.csv
+          retention-days: 30
