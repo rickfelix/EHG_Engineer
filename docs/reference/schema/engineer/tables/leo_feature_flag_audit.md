@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T18:58:02.392Z
-**Rows**: 12
+**Generated**: 2026-03-17T21:36:15.078Z
+**Rows**: 18
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -35,7 +35,7 @@
 - `leo_feature_flag_audit_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `chk_action_type`: CHECK ((action_type = ANY (ARRAY['create'::text, 'update'::text, 'transition'::text, 'approval'::text, 'rollback'::text, 'expire'::text])))
+- `chk_action_type`: CHECK ((action_type = ANY (ARRAY['create'::text, 'update'::text, 'transition'::text, 'approval'::text, 'rollback'::text, 'expire'::text, 'delete'::text])))
 - `chk_actor_type`: CHECK (((actor_type IS NULL) OR (actor_type = ANY (ARRAY['user'::text, 'system'::text, 'pipeline'::text]))))
 
 ## Indexes

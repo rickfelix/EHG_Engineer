@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T18:58:02.392Z
+**Generated**: 2026-03-17T21:36:15.078Z
 **Rows**: 80
-**RLS**: Enabled (0 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -55,6 +55,14 @@
   ```sql
   CREATE UNIQUE INDEX telegram_bot_interactions_pkey ON public.telegram_bot_interactions USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. service_role_all (ALL)
+
+- **Roles**: {public}
+- **Using**: `(auth.role() = 'service_role'::text)`
+- **With Check**: `(auth.role() = 'service_role'::text)`
 
 ---
 

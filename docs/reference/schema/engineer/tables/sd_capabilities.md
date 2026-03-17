@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T18:58:02.392Z
+**Generated**: 2026-03-17T21:36:15.078Z
 **Rows**: 206
 **RLS**: Enabled (3 policies)
 
@@ -19,7 +19,7 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| sd_uuid | `uuid` | **NO** | - | - |
+| sd_uuid | `character varying` | **NO** | - | - |
 | sd_id | `character varying(100)` | **NO** | - | - |
 | capability_type | `character varying(50)` | **NO** | - | Capability type from formal taxonomy. Categories: ai_automation (agent, crew, tool, skill), infrastructure (database_schema, database_function, rls_policy, migration), application (api_endpoint, component, hook, service, utility), integration (workflow, webhook, external_integration), governance (validation_rule, quality_gate, protocol) |
 | capability_key | `character varying(200)` | YES | - | TEMPORARILY NULLABLE: Investigating what inserts NULL values. Should be NOT NULL once root cause fixed. |
@@ -49,7 +49,7 @@
 - `sd_capabilities_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
-- `sd_capabilities_sd_uuid_fkey`: sd_uuid → strategic_directives_v2(uuid_id)
+- `sd_capabilities_sd_uuid_fkey`: sd_uuid → strategic_directives_v2(id)
 
 ### Unique Constraints
 - `sd_capabilities_sd_uuid_capability_key_action_key`: UNIQUE (sd_uuid, capability_key, action)
