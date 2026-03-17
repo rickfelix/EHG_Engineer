@@ -298,31 +298,38 @@ export async function introspectGateStatus(sdId, { json = true } = {}) {
  * @param {string} sdId - SD identifier
  * @returns {Promise<Object>} Result
  */
-export async function handleDryRunCommand(handoffType, sdId) {
+export async function handleDryRunCommand(handoffType, sdId, options = {}) {
   if (!handoffType || !sdId) {
-    console.log('Usage: node scripts/handoff.js dry-run HANDOFF_TYPE SD-ID');
+    console.log('Usage: node scripts/handoff.js dry-run HANDOFF_TYPE SD-ID [--evaluate]');
     console.log('');
     console.log('Shows which gates WOULD run without executing anything.');
     console.log('No database writes, no SD status changes.');
     console.log('');
+    console.log('Flags:');
+    console.log('  --evaluate   Also run gate evaluation to show scores (default when invoked via --dry-run on execute)');
+    console.log('');
     console.log('Examples:');
     console.log('  node scripts/handoff.js dry-run LEAD-TO-PLAN SD-EXAMPLE-001');
+    console.log('  node scripts/handoff.js dry-run LEAD-TO-PLAN SD-EXAMPLE-001 --evaluate');
     console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-EXAMPLE-001 --dry-run');
     return { success: false };
   }
 
   const system = createHandoffSystem();
-  const result = await system.dryRunHandoff(handoffType, sdId);
+
+  // --evaluate triggers gate scoring; --dry-run on execute always evaluates
+  const evaluate = options.evaluate !== undefined ? options.evaluate : false;
+  const result = await system.dryRunHandoff(handoffType, sdId, { evaluate });
 
   if (!result.success) {
     console.error(`\nDRY RUN ERROR: ${result.error}`);
     return { success: false };
   }
 
-  // Display manifest
+  // Display manifest header
   console.log('');
   console.log(`DRY RUN: ${result.handoffType} for ${result.sdKey || result.sdId}`);
-  console.log('='.repeat(70));
+  console.log('='.repeat(90));
   console.log('');
   console.log(`  SD Title: ${result.sdTitle}`);
   console.log(`  SD Type: ${result.sdType}`);
@@ -331,23 +338,68 @@ export async function handleDryRunCommand(handoffType, sdId) {
     console.log('  Policy Source: FALLBACK (validation_gate_registry unavailable)');
   }
   console.log('');
-  console.log('  Gates that would execute:');
-  console.log('  ' + '-'.repeat(66));
 
-  for (const gate of result.manifest) {
-    const status = gate.enabled ? 'ENABLED ' : 'DISABLED';
-    const req = gate.required ? 'Required' : 'Advisory';
-    let line = `    ${status} | ${gate.name.padEnd(38)} | Source: ${gate.source.padEnd(16)} | ${req}`;
-    if (!gate.enabled && gate.policyReason) {
-      line += `\n             Policy: ${gate.policyReason}`;
+  // If evaluation results available, show scored summary table
+  if (result.evaluationResults) {
+    console.log('  Gate                                    | Source           | Score     | Result');
+    console.log('  ' + '-'.repeat(86));
+
+    for (const row of result.evaluationResults) {
+      const name = row.name.substring(0, 40).padEnd(40);
+      const src = row.source.padEnd(16);
+      const score = row.score !== null ? `${row.score}/${row.maxScore}`.padEnd(9) : 'N/A      ';
+      let verdict;
+      if (!row.enabled) {
+        verdict = 'DISABLED';
+      } else if (row.passed === null) {
+        verdict = 'N/A';
+      } else {
+        verdict = row.passed ? 'PASS' : 'FAIL';
+      }
+      console.log(`  ${name} | ${src} | ${score} | ${verdict}`);
     }
-    console.log(line);
-  }
 
-  console.log('');
-  console.log('  ' + '-'.repeat(66));
-  console.log(`  Summary: ${result.summary.enabled} gates enabled, ${result.summary.disabled} disabled by policy, ${result.summary.total} total`);
-  console.log('');
+    console.log('  ' + '-'.repeat(86));
+    console.log(`  Aggregate: ${result.aggregateScore}% (threshold: ${result.gateThreshold}%) => ${result.wouldPass ? 'WOULD PASS' : 'WOULD FAIL'}`);
+    console.log('');
+
+    // Show failed gate details
+    const failedGates = result.evaluationResults.filter(r => r.enabled && r.passed === false);
+    if (failedGates.length > 0) {
+      console.log('  FAILED GATE DETAILS:');
+      for (const gate of failedGates) {
+        console.log(`    ${gate.name}:`);
+        for (const issue of gate.issues.slice(0, 5)) {
+          console.log(`      - ${issue}`);
+        }
+        if (gate.issues.length > 5) {
+          console.log(`      ... and ${gate.issues.length - 5} more`);
+        }
+      }
+      console.log('');
+    }
+  } else {
+    // Manifest-only display (no evaluation)
+    console.log('  Gates that would execute:');
+    console.log('  ' + '-'.repeat(66));
+
+    for (const gate of result.manifest) {
+      const status = gate.enabled ? 'ENABLED ' : 'DISABLED';
+      const req = gate.required ? 'Required' : 'Advisory';
+      let line = `    ${status} | ${gate.name.padEnd(38)} | Source: ${gate.source.padEnd(16)} | ${req}`;
+      if (!gate.enabled && gate.policyReason) {
+        line += `\n             Policy: ${gate.policyReason}`;
+      }
+      console.log(line);
+    }
+
+    console.log('');
+    console.log('  ' + '-'.repeat(66));
+    console.log(`  Summary: ${result.summary.enabled} gates enabled, ${result.summary.disabled} disabled by policy, ${result.summary.total} total`);
+    console.log('');
+    console.log('  TIP: Add --evaluate to also run gate scoring');
+    console.log('');
+  }
 
   return { success: true };
 }
@@ -1030,13 +1082,14 @@ export async function main() {
       break;
 
     case 'dry-run':
-      result = await handleDryRunCommand(args[1], args[2]);
+      result = await handleDryRunCommand(args[1], args[2], { evaluate: args.includes('--evaluate') });
       break;
 
     case 'execute':
       // Check for --dry-run flag on execute command
       if (args.includes('--dry-run')) {
-        result = await handleDryRunCommand(args[1], args[2]);
+        // --dry-run on execute always evaluates gates (shows scores)
+        result = await handleDryRunCommand(args[1], args[2], { evaluate: true });
       } else {
         // Use continuation wrapper for AUTO-PROCEED child SD continuation
         result = await handleExecuteWithContinuation(args[1], args[2], args);

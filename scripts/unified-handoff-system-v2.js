@@ -80,17 +80,51 @@ async function main() {
     case 'execute': {
       const handoffType = args[1];
       const sdId = args[2];
-      const prdId = args[3];
+      const dryRun = args.includes('--dry-run');
+      const prdId = args.find((a, i) => i >= 3 && !a.startsWith('--'));
 
       if (!handoffType || !sdId) {
-        console.log('Usage: node unified-handoff-system-v2.js execute HANDOFF_TYPE SD-YYYY-XXX [PRD-ID]');
+        console.log('Usage: node unified-handoff-system-v2.js execute HANDOFF_TYPE SD-YYYY-XXX [PRD-ID] [--dry-run]');
         console.log('');
         console.log('Handoff Types (case-insensitive, normalized to uppercase):');
         console.log('  LEAD-TO-PLAN   - Strategic to Planning handoff');
         console.log('  PLAN-TO-EXEC   - Planning to Execution handoff');
         console.log('  EXEC-TO-PLAN   - Execution to Verification handoff');
         console.log('  PLAN-TO-LEAD   - Verification to Final Approval handoff');
+        console.log('');
+        console.log('Flags:');
+        console.log('  --dry-run   Show gate manifest and scores without executing');
         process.exit(1);
+      }
+
+      if (dryRun) {
+        const result = await system._orchestrator.dryRunHandoff(handoffType, sdId, { prdId, evaluate: true });
+        if (!result.success) {
+          console.error(`DRY RUN ERROR: ${result.error}`);
+          process.exit(1);
+        }
+        // Display summary table
+        console.log('');
+        console.log(`DRY RUN: ${result.handoffType} for ${result.sdKey || result.sdId}`);
+        console.log('='.repeat(70));
+        console.log(`  SD: ${result.sdTitle} (${result.sdType})`);
+        console.log(`  Threshold: ${result.gateThreshold}%`);
+        console.log('');
+        if (result.evaluationResults) {
+          console.log('  Gate                                    | Source           | Score     | Result');
+          console.log('  ' + '-'.repeat(86));
+          for (const row of result.evaluationResults) {
+            const name = row.name.padEnd(40);
+            const src = row.source.padEnd(16);
+            const score = row.score !== null ? `${row.score}/${row.maxScore}`.padEnd(9) : 'N/A      ';
+            const pass = row.enabled ? (row.passed ? 'PASS' : 'FAIL') : 'DISABLED';
+            console.log(`  ${name} | ${src} | ${score} | ${pass}`);
+          }
+          console.log('  ' + '-'.repeat(86));
+          console.log(`  Aggregate: ${result.aggregateScore}% (threshold: ${result.gateThreshold}%) => ${result.wouldPass ? 'WOULD PASS' : 'WOULD FAIL'}`);
+        }
+        console.log('');
+        process.exit(0);
       }
 
       const result = await system.executeHandoff(handoffType, sdId, { prdId });
