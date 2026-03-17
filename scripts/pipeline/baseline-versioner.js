@@ -9,10 +9,9 @@
  *   node scripts/pipeline/baseline-versioner.js history
  */
 
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 async function getActiveBaseline() {
   const { data } = await supabase

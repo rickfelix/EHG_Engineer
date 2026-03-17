@@ -13,11 +13,10 @@
  * On subsequent runs, shows delta comparison against previous snapshot.
  */
 
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { rehearseSeparation, DIMENSIONS, PASS_THRESHOLD } from '../lib/eva/exit/separation-rehearsal.js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 function parseArgs() {
   const args = {};

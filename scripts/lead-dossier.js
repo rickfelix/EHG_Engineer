@@ -18,11 +18,10 @@
  *     --json       Output raw JSON (default: formatted summary)
  */
 
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { randomUUID } from 'crypto';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createSupabaseServiceClient();
 
 async function fetchSD(sdKey) {
   // Try by sd_key first, then by id (for legacy SDs)

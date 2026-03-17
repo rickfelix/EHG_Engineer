@@ -31,14 +31,11 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { parseMarkdownToSections, buildDefaultMapping } from './markdown-to-sections-parser.mjs';
 import { buildSectionKeyMapping, getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown, renderSectionsSummary } from './sections-to-markdown-renderer.mjs';
-
-dotenv.config();
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -147,7 +144,7 @@ async function cmdUpsert({ visionKey, level, source, ventureId, dimensions: dime
   if (!level || !['L1', 'L2'].includes(level)) { console.error('--level must be L1 or L2'); process.exit(1); }
   if (!source && !sectionsJson && !contentArg) { console.error('--source, --sections, or --content is required'); process.exit(1); }
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
 
   let content = '';
   let sections = null;
@@ -282,7 +279,7 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
   if (!section) { console.error('--section is required (the addendum text)'); process.exit(1); }
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
 
   // Fetch existing doc
   const { data: existing, error: fetchErr } = await supabase
@@ -343,7 +340,7 @@ async function cmdAddendum({ visionKey, section, brainstormId }) {
 }
 
 async function cmdList() {
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
   const { data, error } = await supabase
     .from('eva_vision_documents')
     .select('id, vision_key, level, version, status, chairman_approved, sections, created_at')
@@ -364,7 +361,7 @@ async function cmdList() {
 async function cmdView({ visionKey, section: sectionKey, format }) {
   if (!visionKey) { console.error('--vision-key is required'); process.exit(1); }
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
   const { data, error } = await supabase
     .from('eva_vision_documents')
     .select('vision_key, level, version, status, content, sections')

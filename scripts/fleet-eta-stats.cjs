@@ -7,10 +7,9 @@
  *
  * Usage: node scripts/fleet-eta-stats.cjs
  */
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createSupabaseServiceClient();
 
 // Idle gap threshold: gaps longer than this between handoffs are excluded from active-time
 const IDLE_GAP_THRESHOLD_MINUTES = 30;

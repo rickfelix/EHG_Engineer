@@ -9,16 +9,17 @@
  * @version 1.0.0
  */
 
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 
-dotenv.config();
-
-// Initialize Supabase client for error logging
+// Initialize Supabase client for error logging (lazy, fail-safe)
 let supabase = null;
 function getSupabaseClient() {
-  if (!supabase && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!supabase) {
+    try {
+      supabase = createSupabaseServiceClient();
+    } catch {
+      // Fail silently — error logging is optional
+    }
   }
   return supabase;
 }

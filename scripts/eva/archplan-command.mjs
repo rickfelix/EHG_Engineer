@@ -33,13 +33,10 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown } from './sections-to-markdown-renderer.mjs';
-
-dotenv.config();
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -187,7 +184,7 @@ async function cmdExtract({ source, content: contentArg }) {
   }
   console.error(`\n🤖 Extracting architecture dimensions from: ${source} (${content.length.toLocaleString()} chars)...`);
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
   const context = await fetchContext(supabase);
 
   if (context.adrs.length > 0) {
@@ -210,7 +207,7 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
   if (!visionKey) { console.error('--vision-key is required (link to parent vision document)'); process.exit(1); }
   if (!source && !contentArg && !sectionsJson) { console.error('--source, --content, or --sections is required'); process.exit(1); }
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
 
   let content = '';
 
@@ -379,7 +376,7 @@ async function cmdAddendum({ planKey, section }) {
   if (!planKey) { console.error('--plan-key is required'); process.exit(1); }
   if (!section) { console.error('--section is required (the addendum text)'); process.exit(1); }
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
 
   // Fetch existing plan
   const { data: existing, error: fetchErr } = await supabase
@@ -438,7 +435,7 @@ async function cmdAddendum({ planKey, section }) {
 }
 
 async function cmdList() {
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
   const { data, error } = await supabase
     .from('eva_architecture_plans')
     .select('id, plan_key, version, status, chairman_approved, created_at, eva_vision_documents(vision_key, level)')

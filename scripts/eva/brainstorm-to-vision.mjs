@@ -17,11 +17,8 @@
  *   node scripts/eva/brainstorm-to-vision.mjs --id <uuid>  # Process single session
  */
 
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
-
-dotenv.config();
 
 const VISION_RELEVANT_OUTCOMES = ['sd_created', 'significant_departure'];
 const MAX_LLM_CONTENT_CHARS = 15000;
@@ -86,7 +83,7 @@ async function main() {
   if (opts.dryRun) console.log(' MODE: DRY RUN (no DB changes)');
   console.log('═══════════════════════════════════════════════════════\n');
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = createSupabaseServiceClient();
 
   // Find unlinked brainstorm sessions with vision-relevant outcomes
   let query = supabase

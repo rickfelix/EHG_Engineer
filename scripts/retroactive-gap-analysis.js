@@ -13,11 +13,10 @@
  *   node scripts/retroactive-gap-analysis.js --sd SD-KEY --create-sds # Create corrective SDs
  */
 
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { runGapAnalysis } from '../lib/gap-detection/index.js';
 
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createSupabaseServiceClient();
 
 function parseArgs() {
   const args = process.argv.slice(2);
