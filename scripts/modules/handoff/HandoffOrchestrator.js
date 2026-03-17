@@ -267,6 +267,159 @@ export class HandoffOrchestrator {
   }
 
   /**
+   * Dry-run a handoff: resolve gate policies and display a manifest
+   * without executing gates, writing to database, or updating SD status.
+   *
+   * @param {string} handoffType - Handoff type (case-insensitive)
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} options - Options
+   * @returns {Promise<object>} Dry-run manifest
+   */
+  async dryRunHandoff(handoffType, sdId, options = {}) {
+    const normalizedType = handoffType.toUpperCase();
+
+    try {
+      // Validate handoff type
+      if (!this.supportedHandoffs.includes(normalizedType)) {
+        return {
+          success: false,
+          error: `Unsupported handoff type: ${normalizedType}. Valid: ${this.supportedHandoffs.join(', ')}`
+        };
+      }
+
+      // Step 1: Load SD info (read-only)
+      const sd = await this.sdRepo.getById(sdId);
+      if (!sd) {
+        return {
+          success: false,
+          error: `SD not found: ${sdId}`
+        };
+      }
+
+      // Step 2: Get executor
+      const executor = await this._getExecutor(normalizedType);
+      if (!executor) {
+        return {
+          success: false,
+          error: `No executor registered for handoff type: ${normalizedType}`
+        };
+      }
+
+      // Step 3: Get hardcoded gates from executor
+      const hardcodedGates = await executor.getRequiredGates(sd, options);
+
+      // Step 4: Inject DFE escalation gate (same as BaseExecutor.execute)
+      const hasDFE = hardcodedGates.some(g => g.name === 'DFE_ESCALATION_GATE');
+      if (!hasDFE) {
+        const { createDFEEscalationGate } = await import('./gates/dfe-escalation-gate.js');
+        hardcodedGates.push(createDFEEscalationGate(this.supabase, `${normalizedType}-gate`));
+      }
+
+      // Step 5: Apply gate policies (reads validation_gate_registry)
+      const { applyGatePolicies } = await import('./gate-policy-resolver.js');
+      const { filteredGates, resolutions, fallbackUsed } = await applyGatePolicies(
+        this.supabase,
+        hardcodedGates,
+        {
+          sdType: sd.sd_type,
+          validationProfile: sd.validation_profile || options.validationProfile,
+          sdId: sd.sd_key || sdId
+        }
+      );
+
+      // Step 6: Load database-driven rules (for display only)
+      const dbRules = await this.validationOrchestrator.loadValidationRules(normalizedType);
+
+      // Step 7: Resolve threshold
+      const { THRESHOLD_PROFILES } = await import('../../sd-type-checker.js');
+      const sdType = (sd.sd_type || 'feature').toLowerCase();
+      const thresholdProfile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
+      const gateThreshold = thresholdProfile?.gateThreshold || 85;
+
+      // Step 8: Build manifest
+      const allGateNames = hardcodedGates.map(g => g.name || g.key || 'unknown');
+      const filteredGateNames = new Set(filteredGates.map(g => g.name || g.key || 'unknown'));
+      const dbRuleNames = new Set(dbRules.map(r => `${r.gate}:${r.rule_name}`));
+
+      const manifest = [];
+      for (const gate of hardcodedGates) {
+        const gateName = gate.name || gate.key || 'unknown';
+        const isEnabled = filteredGateNames.has(gateName);
+        const resolution = resolutions.find(r => r.gate_key === gateName);
+        const isRequired = gate.required !== false;
+
+        let source = 'executor';
+        if (gate.meta?.fromDatabase) {
+          source = 'validation_rules';
+        } else if (resolution) {
+          source = 'registry';
+        }
+
+        let policyReason = null;
+        if (!isEnabled && resolution) {
+          policyReason = `${resolution.matched_scope}: ${resolution.applicability}`;
+        } else if (!isEnabled) {
+          // Find the reason from the gate policy resolver resolutions
+          const matchingResolution = resolutions.find(r => r.gate_key === gateName && r.applicability === 'DISABLED');
+          if (matchingResolution) {
+            policyReason = `sd_type=${sdType}`;
+          }
+        }
+
+        manifest.push({
+          name: gateName,
+          enabled: isEnabled,
+          source,
+          required: isRequired,
+          policyReason,
+          weight: gate.weight || 0
+        });
+      }
+
+      // Add database rules not already represented
+      for (const rule of dbRules) {
+        const ruleName = `${rule.gate}:${rule.rule_name}`;
+        if (!allGateNames.includes(ruleName)) {
+          manifest.push({
+            name: ruleName,
+            enabled: true,
+            source: 'validation_rules',
+            required: rule.required !== false,
+            policyReason: null,
+            weight: rule.weight || 0
+          });
+        }
+      }
+
+      const enabledCount = manifest.filter(g => g.enabled).length;
+      const disabledCount = manifest.filter(g => !g.enabled).length;
+
+      return {
+        success: true,
+        handoffType: normalizedType,
+        sdId,
+        sdKey: sd.sd_key,
+        sdTitle: sd.title,
+        sdType,
+        gateThreshold,
+        fallbackUsed,
+        manifest,
+        summary: {
+          enabled: enabledCount,
+          disabled: disabledCount,
+          total: manifest.length
+        }
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * List handoff executions
    * @param {object} filters - Query filters
    * @returns {Promise<array>} Execution records
