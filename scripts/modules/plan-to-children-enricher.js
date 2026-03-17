@@ -10,8 +10,7 @@
  * - Children get generic scopes that don't include plan details
  *
  * Usage:
- *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-import { extractPlanSections, enrichChildrenFromPlan } from './plan-to-children-enricher.js';
+ *   import { extractPlanSections, enrichChildrenFromPlan } from './plan-to-children-enricher.js';
  *
  *   // Extract sections from plan
  *   const sections = await extractPlanSections('docs/planning/my-plan.md');
@@ -27,6 +26,7 @@ import { extractPlanSections, enrichChildrenFromPlan } from './plan-to-children-
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
 dotenv.config();
 
