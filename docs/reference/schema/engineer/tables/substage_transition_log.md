@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -68,14 +68,25 @@
 
 ## RLS Policies
 
-### 1. Company access substage_transition_log (ALL)
+### 1. authenticated_insert_substage_transition_log (INSERT)
 
-- **Roles**: {public}
-- **Using**: `(venture_id IN ( SELECT v.id
-   FROM ventures v
-  WHERE (v.company_id IN ( SELECT user_company_access.company_id
-           FROM user_company_access
-          WHERE (user_company_access.user_id = auth.uid())))))`
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. authenticated_select_substage_transition_log (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 3. service_role_insert_substage_transition_log (INSERT)
+
+- **Roles**: {service_role}
+- **With Check**: `true`
+
+### 4. service_role_select_substage_transition_log (SELECT)
+
+- **Roles**: {service_role}
+- **Using**: `true`
 
 ---
 

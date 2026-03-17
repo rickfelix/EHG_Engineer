@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -51,16 +51,16 @@
 
 ## RLS Policies
 
-### 1. Anon can read active configs (SELECT)
+### 1. authenticated_select_leo_prioritization_config (SELECT)
 
-- **Roles**: {public}
-- **Using**: `(status = 'active'::text)`
+- **Roles**: {authenticated}
+- **Using**: `true`
 
-### 2. Service role full access to leo_prioritization_config (ALL)
+### 2. service_role_all_leo_prioritization_config (ALL)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
-- **With Check**: `(auth.role() = 'service_role'::text)`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

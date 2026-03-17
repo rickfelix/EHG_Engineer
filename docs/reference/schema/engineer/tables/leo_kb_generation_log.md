@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -53,17 +53,12 @@
 
 ## RLS Policies
 
-### 1. Anon users can read kb_generation_log (SELECT)
+### 1. service_role_insert_leo_kb_generation_log (INSERT)
 
-- **Roles**: {anon}
-- **Using**: `true`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. Authenticated users can read kb generation log (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 3. Service role has full access to kb generation log (ALL)
+### 2. service_role_select_leo_kb_generation_log (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`

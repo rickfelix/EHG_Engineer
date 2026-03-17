@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -57,25 +57,15 @@
 
 ## RLS Policies
 
-### 1. groups_delete_policy (DELETE)
+### 1. service_role_insert_sdip_groups (INSERT)
 
-- **Roles**: {public}
-- **Using**: `((auth.jwt() ->> 'role'::text) = 'admin'::text)`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. groups_insert_policy (INSERT)
+### 2. service_role_select_sdip_groups (SELECT)
 
-- **Roles**: {public}
-- **With Check**: `(auth.uid() = created_by)`
-
-### 3. groups_select_policy (SELECT)
-
-- **Roles**: {public}
-- **Using**: `((auth.uid() = created_by) OR ((auth.jwt() ->> 'role'::text) = ANY (ARRAY['admin'::text, 'validator'::text, 'system'::text])))`
-
-### 4. groups_update_policy (UPDATE)
-
-- **Roles**: {public}
-- **Using**: `((auth.jwt() ->> 'role'::text) = ANY (ARRAY['admin'::text, 'validator'::text]))`
+- **Roles**: {service_role}
+- **Using**: `true`
 
 ## Triggers
 

@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -75,26 +75,15 @@
 
 ## RLS Policies
 
-### 1. Allow human decision updates (UPDATE)
+### 1. authenticated_select_leo_vetting_outcomes (SELECT)
 
-- **Roles**: {public}
-- **Using**: `true`
-- **With Check**: `((outcome = ( SELECT leo_vetting_outcomes_1.outcome
-   FROM leo_vetting_outcomes leo_vetting_outcomes_1
-  WHERE (leo_vetting_outcomes_1.id = leo_vetting_outcomes_1.id))) AND (rubric_score = ( SELECT leo_vetting_outcomes_1.rubric_score
-   FROM leo_vetting_outcomes leo_vetting_outcomes_1
-  WHERE (leo_vetting_outcomes_1.id = leo_vetting_outcomes_1.id))) AND (aegis_result = ( SELECT leo_vetting_outcomes_1.aegis_result
-   FROM leo_vetting_outcomes leo_vetting_outcomes_1
-  WHERE (leo_vetting_outcomes_1.id = leo_vetting_outcomes_1.id))))`
-
-### 2. Allow read access to vetting outcomes (SELECT)
-
-- **Roles**: {public}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. Allow service role to insert vetting outcomes (INSERT)
+### 2. service_role_all_leo_vetting_outcomes (ALL)
 
-- **Roles**: {public}
+- **Roles**: {service_role}
+- **Using**: `true`
 - **With Check**: `true`
 
 ---

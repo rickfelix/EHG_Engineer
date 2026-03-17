@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -61,15 +61,16 @@
 
 ## RLS Policies
 
-### 1. transitions_select_all (SELECT)
+### 1. authenticated_select_leo_proposal_transitions (SELECT)
 
-- **Roles**: {public}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. transitions_service_role (ALL)
+### 2. service_role_all_leo_proposal_transitions (ALL)
 
-- **Roles**: {public}
-- **Using**: `(((current_setting('request.jwt.claims'::text, true))::jsonb ->> 'role'::text) = 'service_role'::text)`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

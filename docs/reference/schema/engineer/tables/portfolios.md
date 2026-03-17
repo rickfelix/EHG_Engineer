@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 8
-**RLS**: Enabled (7 policies)
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -57,41 +57,30 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated users to delete portfolios (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. Allow authenticated users to insert portfolios (INSERT)
+### 1. Allow authenticated users to insert portfolios (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `true`
 
-### 3. Allow authenticated users to update portfolios (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 4. Allow service_role to manage portfolios (ALL)
+### 2. Allow service_role to manage portfolios (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
-### 5. Company access portfolios (ALL)
+### 3. Company access portfolios (ALL)
 
 - **Roles**: {authenticated}
 - **Using**: `(company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
   WHERE (user_company_access.user_id = auth.uid())))`
 
-### 6. anon_select_portfolios (SELECT)
+### 4. anon_select_portfolios (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 7. authenticated_select_portfolios (SELECT)
+### 5. authenticated_select_portfolios (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

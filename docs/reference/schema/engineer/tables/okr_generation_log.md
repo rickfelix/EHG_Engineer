@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 1
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -66,10 +66,15 @@
 - **Roles**: {public}
 - **Using**: `(auth.role() = 'authenticated'::text)`
 
-### 2. Service role full access on okr_generation_log (ALL)
+### 2. service_role_insert_okr_generation_log (INSERT)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
+- **Roles**: {service_role}
+- **With Check**: `true`
+
+### 3. service_role_select_okr_generation_log (SELECT)
+
+- **Roles**: {service_role}
+- **Using**: `true`
 
 ---
 

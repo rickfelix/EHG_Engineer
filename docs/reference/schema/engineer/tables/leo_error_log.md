@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 123
 **RLS**: Enabled (2 policies)
 
@@ -86,16 +86,15 @@
 
 ## RLS Policies
 
-### 1. leo_error_log_auth_select (SELECT)
+### 1. leo_error_log_service_role_insert (INSERT)
 
-- **Roles**: {authenticated}
-- **Using**: `true`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. leo_error_log_service_all (ALL)
+### 2. leo_error_log_service_role_select (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -74,24 +74,14 @@
 
 ## RLS Policies
 
-### 1. sd_contract_exceptions_delete (DELETE)
+### 1. authenticated_select_sd_contract_exceptions (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. sd_contract_exceptions_insert (INSERT)
+### 2. service_role_all_sd_contract_exceptions (ALL)
 
-- **Roles**: {authenticated}
-- **With Check**: `true`
-
-### 3. sd_contract_exceptions_select (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
-
-### 4. sd_contract_exceptions_update (UPDATE)
-
-- **Roles**: {authenticated}
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 

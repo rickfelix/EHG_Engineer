@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,22 +62,12 @@
 
 ## RLS Policies
 
-### 1. Allow delete for authenticated (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. venture_decisions_insert_policy (INSERT)
+### 1. venture_decisions_insert_policy (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `true`
 
-### 3. venture_decisions_select_policy (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 4. venture_decisions_update_policy (UPDATE)
+### 2. venture_decisions_select_policy (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

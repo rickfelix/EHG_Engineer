@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -56,10 +56,11 @@
 
 ## RLS Policies
 
-### 1. Service role can manage test users (ALL)
+### 1. service_role_all_uat_test_users (ALL)
 
-- **Roles**: {public}
+- **Roles**: {service_role}
 - **Using**: `true`
+- **With Check**: `true`
 
 ---
 

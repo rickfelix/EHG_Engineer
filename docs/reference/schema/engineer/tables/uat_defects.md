@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (5 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -65,30 +65,16 @@
 
 ## RLS Policies
 
-### 1. Anon users can create uat_defects (INSERT)
+### 1. authenticated_select_uat_defects (SELECT)
 
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. Anon users can view all uat_defects (SELECT)
-
-- **Roles**: {public}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. uat_defects_auth_read (SELECT)
+### 2. service_role_all_uat_defects (ALL)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'authenticated'::text)`
-
-### 4. uat_defects_chairman_read (SELECT)
-
-- **Roles**: {public}
-- **Using**: `(((auth.jwt() ->> 'role'::text) = 'chairman'::text) OR ((auth.jwt() ->> 'email'::text) ~~ '%@chairman%'::text))`
-
-### 5. uat_defects_service_all (ALL)
-
-- **Roles**: {public}
-- **Using**: `(((auth.jwt() ->> 'role'::text) = 'service_role'::text) OR (CURRENT_USER = 'service_role'::name))`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

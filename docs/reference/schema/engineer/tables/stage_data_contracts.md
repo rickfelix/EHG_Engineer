@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 2
 **RLS**: Enabled (2 policies)
 
@@ -64,16 +64,16 @@
 
 ## RLS Policies
 
-### 1. modify_stage_data_contracts_policy (ALL)
-
-- **Roles**: {public}
-- **Using**: `((auth.jwt() ->> 'role'::text) = 'admin'::text)`
-- **With Check**: `((auth.jwt() ->> 'role'::text) = 'admin'::text)`
-
-### 2. select_stage_data_contracts_policy (SELECT)
+### 1. authenticated_select_stage_data_contracts (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
+
+### 2. service_role_all_stage_data_contracts (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 

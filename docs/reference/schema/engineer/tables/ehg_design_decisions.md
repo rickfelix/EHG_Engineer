@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -52,26 +52,16 @@
 
 ## RLS Policies
 
-### 1. Allow authenticated insert to design decisions (INSERT)
-
-- **Roles**: {public}
-- **With Check**: `true`
-
-### 2. Allow authenticated users to delete ehg_design_decisions (DELETE)
+### 1. authenticated_select_ehg_design_decisions (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. Allow authenticated users to update ehg_design_decisions (UPDATE)
+### 2. service_role_all_ehg_design_decisions (ALL)
 
-- **Roles**: {authenticated}
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
-
-### 4. Allow read access to design decisions (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
 
 ---
 

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -47,16 +47,16 @@
 
 ## RLS Policies
 
-### 1. Authenticated users can read pipeline_metrics (SELECT)
+### 1. authenticated_select_pipeline_metrics (SELECT)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'authenticated'::text)`
+- **Roles**: {authenticated}
+- **Using**: `true`
 
-### 2. Service role full access to pipeline_metrics (ALL)
+### 2. service_role_all_pipeline_metrics (ALL)
 
-- **Roles**: {public}
-- **Using**: `(auth.role() = 'service_role'::text)`
-- **With Check**: `(auth.role() = 'service_role'::text)`
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

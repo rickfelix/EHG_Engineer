@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 8
 **RLS**: Enabled (2 policies)
 
@@ -50,16 +50,15 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_cascade_log (SELECT)
+### 1. service_role_insert_cascade_invalidation_log (INSERT)
 
-- **Roles**: {authenticated}
-- **Using**: `true`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. service_role_all_cascade_log (ALL)
+### 2. service_role_select_cascade_invalidation_log (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
 ---
 

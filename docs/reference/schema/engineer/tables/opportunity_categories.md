@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (0 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -58,14 +58,6 @@
   ```sql
   CREATE UNIQUE INDEX opportunity_categories_pkey ON public.opportunity_categories USING btree (id)
   ```
-
-## RLS Policies
-
-### 1. authenticated_all_categories (ALL)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
 
 ---
 

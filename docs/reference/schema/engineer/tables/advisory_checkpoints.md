@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 3
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -46,26 +46,15 @@
 
 ## RLS Policies
 
-### 1. advisory_checkpoints_delete (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. advisory_checkpoints_insert (INSERT)
+### 1. advisory_checkpoints_insert (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `true`
 
-### 3. advisory_checkpoints_select (SELECT)
+### 2. advisory_checkpoints_select (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
-
-### 4. advisory_checkpoints_update (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-- **With Check**: `true`
 
 ---
 

@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -80,21 +80,15 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_venture_capabilities (SELECT)
+### 1. service_role_insert_venture_capabilities (INSERT)
 
-- **Roles**: {authenticated}
-- **Using**: `true`
+- **Roles**: {service_role}
+- **With Check**: `true`
 
-### 2. authenticated_select_venture_capabilities (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 3. service_role_all_venture_capabilities (ALL)
+### 2. service_role_select_venture_capabilities (SELECT)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
 ## Triggers
 

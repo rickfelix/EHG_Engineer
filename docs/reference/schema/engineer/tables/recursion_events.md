@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -82,25 +82,16 @@
 
 ## RLS Policies
 
-### 1. insert_recursion_events_policy (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `(auth.uid() IS NOT NULL)`
-
-### 2. recursion_events_delete (DELETE)
+### 1. authenticated_select_recursion_events (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 3. select_recursion_events_policy (SELECT)
+### 2. service_role_all_recursion_events (ALL)
 
-- **Roles**: {authenticated}
+- **Roles**: {service_role}
 - **Using**: `true`
-
-### 4. update_recursion_events_policy (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 

@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-17T21:36:15.078Z
+**Generated**: 2026-03-17T22:39:49.934Z
 **Rows**: 0
-**RLS**: Enabled (4 policies)
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -59,17 +59,7 @@
 - **Roles**: {authenticated}
 - **Using**: `fn_is_chairman()`
 
-### 2. ledger_no_delete (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `false`
-
-### 3. ledger_no_update (UPDATE)
-
-- **Roles**: {authenticated}
-- **Using**: `false`
-
-### 4. service_role_all_ledger (ALL)
+### 2. service_role_all_ledger (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
