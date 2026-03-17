@@ -332,7 +332,7 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
 // CLI entry point
 // ============================================================================
 
-const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` ||
+const isMainModule = process.argv[1] && (import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
                      import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`);
 
 if (isMainModule) {

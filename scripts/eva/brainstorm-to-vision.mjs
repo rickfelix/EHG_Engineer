@@ -250,7 +250,7 @@ async function main() {
 
 // Windows-compatible ESM entry point
 if (process.argv[1] && (
-  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url === `file://${process.argv[1]}` || import.meta.url === `file:///${process.argv[1].replace(/\\\\/g, '/')}` ||
   import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`
 )) {
   main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });
