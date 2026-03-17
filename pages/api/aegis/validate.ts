@@ -15,6 +15,7 @@
 import { NextApiResponse } from 'next';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 import { withPermission } from '../../../lib/middleware/rbac';
+import { withSanitization } from '../../../lib/middleware/sanitize';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -243,6 +244,7 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication and authorization middleware
+// SECURITY: Wrap handler with authentication, authorization, and XSS sanitization middleware
 // SD-SEC-AUTHORIZATION-RBAC-001: Requires compliance:write permission
-export default withAuth(withPermission('compliance:write')(handler));
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: withSanitization strips HTML/scripts from request bodies
+export default withAuth(withSanitization(withPermission('compliance:write')(handler)));

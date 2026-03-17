@@ -18,6 +18,7 @@ import { NextApiResponse } from 'next';
 import { z } from 'zod';
 import { withAuth, AuthenticatedRequest } from '../../lib/middleware/api-auth';
 import { withPermission } from '../../lib/middleware/rbac';
+import { withSanitization } from '../../lib/middleware/sanitize';
 
 // Request body validation schema
 const AnalyzeCompetitorSchema = z.object({
@@ -151,6 +152,7 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication and authorization middleware
+// SECURITY: Wrap handler with authentication, authorization, and XSS sanitization middleware
 // SD-SEC-AUTHORIZATION-RBAC-001: Requires ventures:create permission
-export default withAuth(withPermission('ventures:create')(handler));
+// SD-MANUAL-INFRA-XSS-SANITIZE-001: withSanitization strips HTML/scripts from request bodies
+export default withAuth(withSanitization(withPermission('ventures:create')(handler)));
