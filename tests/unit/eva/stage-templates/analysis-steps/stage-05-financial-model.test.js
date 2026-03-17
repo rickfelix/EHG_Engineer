@@ -124,7 +124,7 @@ describe('analyzeStage05', () => {
   });
 
   it('returns kill decision when ROI is below threshold', async () => {
-    // Low-revenue scenario: revenue barely covers costs
+    // Low-revenue scenario: all years unprofitable, break-even never reached
     mockComplete.mockResolvedValueOnce(makeFinancialResponse({
       initialInvestment: 500000,
       year1: { revenue: 10000, cogs: 5000, opex: 8000 },
@@ -139,15 +139,17 @@ describe('analyzeStage05', () => {
 
     expect(result.decision).toBe('kill');
     expect(result.blockProgression).toBe(true);
-    expect(result.reasons.some(r => r.type === 'roi_below_threshold')).toBe(true);
+    // Kill gate fires on no break-even (all years have negative net profit)
+    expect(result.reasons.some(r => r.type === 'no_break_even_year1')).toBe(true);
   });
 
-  it('flags no_break_even_year1 when Y1 net profit is negative', async () => {
+  it('flags no_break_even when cumulative profit never covers investment', async () => {
+    // All 3 years have negative net profit so break-even is never reached
     mockComplete.mockResolvedValueOnce(makeFinancialResponse({
       initialInvestment: 100000,
-      year1: { revenue: 10000, cogs: 5000, opex: 20000 }, // net = -15000
-      year2: { revenue: 200000, cogs: 50000, opex: 60000 },
-      year3: { revenue: 350000, cogs: 80000, opex: 80000 },
+      year1: { revenue: 10000, cogs: 5000, opex: 20000 },  // net = -15000
+      year2: { revenue: 15000, cogs: 8000, opex: 20000 },  // net = -13000
+      year3: { revenue: 20000, cogs: 10000, opex: 25000 }, // net = -15000
     }));
 
     const result = await analyzeStage05({
@@ -188,10 +190,12 @@ describe('analyzeStage05', () => {
     expect(result.roi3y).toBe(2.6);
   });
 
-  it('computes breakEvenMonth from Y1 net profit', async () => {
+  it('computes breakEvenMonth from cumulative profit across years', async () => {
     mockComplete.mockResolvedValueOnce(makeFinancialResponse({
       initialInvestment: 60000,
       year1: { revenue: 200000, cogs: 60000, opex: 80000 }, // NP = 60k, monthly = 5k
+      year2: { revenue: 300000, cogs: 80000, opex: 100000 },
+      year3: { revenue: 400000, cogs: 100000, opex: 120000 },
     }));
 
     const result = await analyzeStage05({
@@ -199,7 +203,7 @@ describe('analyzeStage05', () => {
       logger,
     });
 
-    // breakEvenMonth = ceil(60000 / 5000) = 12
+    // Y1 monthly NP = 5000. Cumulative at month 12 = 60000 >= 60000 → break-even at month 12
     expect(result.breakEvenMonth).toBe(12);
   });
 
@@ -216,7 +220,7 @@ describe('analyzeStage05', () => {
     // Fallback: cac=100, ltv=500
     expect(result.unitEconomics.cac).toBe(100);
     expect(result.unitEconomics.ltv).toBe(500);
-    expect(result.unitEconomics.monthlyChurn).toBe(0.05); // Default
+    expect(result.unitEconomics.churnRate).toBe(0.05); // Default
   });
 
   it('clamps monthlyChurn between 0 and 1', async () => {
@@ -234,10 +238,10 @@ describe('analyzeStage05', () => {
       logger,
     });
 
-    expect(result.unitEconomics.monthlyChurn).toBeLessThanOrEqual(1);
+    expect(result.unitEconomics.churnRate).toBeLessThanOrEqual(1);
   });
 
-  it('computes ROI bands from base ROI', async () => {
+  it('computes ROI bands from base ROI with optimistic > base > pessimistic', async () => {
     mockComplete.mockResolvedValueOnce(makeFinancialResponse());
 
     const result = await analyzeStage05({
@@ -245,7 +249,10 @@ describe('analyzeStage05', () => {
       logger,
     });
 
-    // Bands should be: pessimistic = roi * 0.8, optimistic = roi * 1.3
+    // Bands should be sorted: optimistic > base > pessimistic
+    expect(result.roiBands.optimistic).toBeGreaterThanOrEqual(result.roiBands.base);
+    expect(result.roiBands.base).toBeGreaterThanOrEqual(result.roiBands.pessimistic);
+    // For positive ROI: pessimistic = roi * 0.8, optimistic = roi * 1.3
     expect(result.roiBands.pessimistic).toBeCloseTo(result.roi3y * 0.8, 2);
     expect(result.roiBands.base).toBeCloseTo(result.roi3y, 2);
     expect(result.roiBands.optimistic).toBeCloseTo(result.roi3y * 1.3, 2);
