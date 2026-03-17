@@ -2,15 +2,12 @@
  * Health Config — loads DB-backed threshold configuration for each dimension
  * SD: SD-LEO-INFRA-DEAD-CODE-SCANNER-001
  */
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Load configuration for a specific dimension or all enabled dimensions

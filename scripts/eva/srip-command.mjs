@@ -28,7 +28,7 @@
  *   node scripts/eva/srip-command.mjs list --venture-id <uuid>
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -55,10 +55,7 @@ function parseArgs(argv) {
 // ============================================================================
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 // ============================================================================

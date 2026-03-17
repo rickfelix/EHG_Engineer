@@ -12,17 +12,14 @@
  *   7. Cleanup of test data
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 dotenv.config({ path: '.env', override: true });
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const TEST_VENTURE_ID = randomUUID();
 const TEST_VENTURE_NAME = `Pipeline-Test-${Date.now()}`;

@@ -13,8 +13,8 @@
  * - Fix script application and verification
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execSync } from 'child_process';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,16 +27,7 @@ const rootDir = path.resolve(__dirname, '../..');
 dotenv.config({ path: path.join(rootDir, '.env') });
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  }
-);
+const supabase = createSupabaseServiceClient();
 
 const timestamp = Date.now();
 

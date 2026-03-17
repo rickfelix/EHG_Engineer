@@ -17,7 +17,7 @@
  * Dimension: V09 (Strategic Governance Cascade)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -222,10 +222,7 @@ const __isMain = process.argv[1] && (
   import.meta.url === `file://${process.argv[1]}`
 );
 if (__isMain) {
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const args = process.argv.slice(2);
   const command = args[0] || 'summary';

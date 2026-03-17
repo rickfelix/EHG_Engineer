@@ -5,8 +5,8 @@
  * Tests stream requirement lookup, conditional activation, and completion validation.
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import {
   getStreamRequirements,
@@ -17,10 +17,7 @@ import {
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('Stream Requirements', () => {
   describe('getStreamRequirements', () => {

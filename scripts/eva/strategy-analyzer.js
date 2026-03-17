@@ -11,14 +11,11 @@
  *   node scripts/eva/strategy-analyzer.js --json     # Machine-readable JSON
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import { checkEvolutionThreshold } from '../../lib/eva/stage-zero/strategy-loader.js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const JSON_MODE = process.argv.includes('--json');
 

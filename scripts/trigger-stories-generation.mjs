@@ -6,16 +6,13 @@
  * Usage: node scripts/trigger-stories-generation.mjs SD-DOCS-ARCH-002
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 async function main() {
   const sdId = process.argv[2];

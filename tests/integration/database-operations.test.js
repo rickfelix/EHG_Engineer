@@ -3,7 +3,7 @@
  * Tests Supabase database interactions
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { vi } from 'vitest';
 
@@ -18,20 +18,14 @@ class DatabaseLoader {
 
   async loadStrategicDirectives() {
     if (!this.isConnected) return [];
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    const supabase = createSupabaseClient();
     const { data } = await supabase.from('strategic_directives_v2').select('*');
     return data || [];
   }
 
   async loadPRDs() {
     if (!this.isConnected) return [];
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    const supabase = createSupabaseClient();
     const { data } = await supabase.from('product_requirements_v2').select('*');
     return (data || []).map(prd => ({
       ...prd,
@@ -45,20 +39,14 @@ class DatabaseLoader {
 
   async loadExecutionSequences() {
     if (!this.isConnected) return [];
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    const supabase = createSupabaseClient();
     const { data } = await supabase.from('execution_sequences').select('*');
     return data || [];
   }
 
   async updateChecklistItem(docType, docId, checklistType, index, checked) {
     if (!this.isConnected) return false;
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    const supabase = createSupabaseClient();
 
     const table = docType === 'PRD' ? 'product_requirements_v2' : 'strategic_directives_v2';
 
@@ -92,10 +80,7 @@ describe('Database Operations Integration', () => {
     }
     
     dbLoader = new DatabaseLoader();
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    supabase = createSupabaseClient();
   });
 
   afterAll(async () => {

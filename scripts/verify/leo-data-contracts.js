@@ -10,15 +10,12 @@
  * 3. TypeScript types compile without errors
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const results = {
   tables: {},

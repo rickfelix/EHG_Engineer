@@ -22,7 +22,7 @@
  *   node scripts/eva/vision-heal.js loop                     # Full status + next action recommendation
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -46,10 +46,7 @@ function parseKeyArgs(argv) {
 }
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 // ─── SCORE: Output context for Claude Code inline evaluation ─────────────────

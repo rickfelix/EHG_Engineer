@@ -3,15 +3,12 @@
  * Handles parsing and checking of SD dependencies
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Parse dependencies from various formats

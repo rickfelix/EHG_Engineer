@@ -14,16 +14,13 @@
  * Manual trigger: node scripts/eva/consultant-analysis-round.mjs
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { processFindings } from '../../lib/eva/consultant/confidence-engine.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const LOOKBACK_DAYS = 30;
 const TODAY = new Date().toISOString().split('T')[0];

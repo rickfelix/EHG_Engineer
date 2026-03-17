@@ -14,7 +14,7 @@
  * Output: Ranked table of relevant patterns with success rates and recommendations
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
 import { validateDecompositionGate } from './modules/decomposition-gate.js';
@@ -24,10 +24,7 @@ dotenv.config();
 
 // FIX: Use service role key for server-side scripts that need full database access
 // The anon key may have RLS restrictions or be invalid for backend operations
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const kb = new IssueKnowledgeBase();
 

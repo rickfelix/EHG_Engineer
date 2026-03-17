@@ -21,7 +21,7 @@
  * 4. Run the script to create the SD
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { validateTargetApplication } from '../validators/semantic-target-application-validator.js';
@@ -31,10 +31,7 @@ dotenv.config();
 // Configuration: Set to true to enable semantic target_application validation
 const ENABLE_SEMANTIC_VALIDATION = process.env.ENABLE_SEMANTIC_TARGET_VALIDATION !== 'false';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 async function createStrategicDirective() {
   console.log('Creating Strategic Directive...\n');

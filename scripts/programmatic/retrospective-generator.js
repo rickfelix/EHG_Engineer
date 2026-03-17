@@ -13,9 +13,9 @@
  * Output (stdout): JSON { retrospective_id, quality_score, sd_id, dry_run? }
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
 import { parseArgs } from 'node:util';
-import { createClient } from '@supabase/supabase-js';
 import { runProgrammaticTask } from '../../lib/programmatic/tool-loop.js';
 import { createSupabaseTool, createSupabaseUpsertTool } from '../../lib/programmatic/tools/supabase-tool.js';
 import { createGitTools } from '../../lib/programmatic/tools/git-tool.js';
@@ -37,10 +37,7 @@ if (!sdId) {
   process.exit(1);
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const { gitDiff, changedFiles } = createGitTools();
 const tools = [

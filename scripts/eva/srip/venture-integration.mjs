@@ -7,7 +7,7 @@
  * the venture is eligible to advance in its lifecycle.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -24,10 +24,7 @@ const SRIP_ARTIFACT_TYPES = ['site_dna', 'brand_interview', 'synthesis_prompt', 
  * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
 export async function linkArtifact(ventureId, artifactType, artifactId, metadata = {}, options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   if (!SRIP_ARTIFACT_TYPES.includes(artifactType)) {
     return { success: false, error: `Invalid artifact type: ${artifactType}` };
@@ -56,10 +53,7 @@ export async function linkArtifact(ventureId, artifactType, artifactId, metadata
  * @returns {Promise<{eligible: boolean, score?: number, reason?: string}>}
  */
 export async function checkStageEligibility(ventureId, options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   // Get latest quality check
   const { data: checks } = await supabase
@@ -90,10 +84,7 @@ export async function checkStageEligibility(ventureId, options = {}) {
  * @returns {Promise<object[]>}
  */
 export async function getVentureArtifacts(ventureId, options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   const { data } = await supabase
     .from('venture_artifacts')

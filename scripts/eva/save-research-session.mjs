@@ -13,7 +13,7 @@
  * Part of: SD-MAN-INFRA-EVA-RESEARCH-COMMAND-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -49,10 +49,7 @@ async function main() {
     process.exit(1);
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const metadata = {
     research_tier: tier,

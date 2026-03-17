@@ -7,6 +7,7 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
+import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { createHandoffSystem } from '../index.js';
 import dotenv from 'dotenv';
 
@@ -469,10 +470,7 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
       if (handoffIndex > 0) {
         // Check that all prior required handoffs have been accepted
         const { createClient } = await import('@supabase/supabase-js');
-        const supabaseForCheck = createClient(
-          process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-          process.env.SUPABASE_SERVICE_ROLE_KEY
-        );
+        const supabaseForCheck = createSupabaseServiceClient();
 
         const { data: completedHandoffs } = await supabaseForCheck
           .from('sd_phase_handoffs')

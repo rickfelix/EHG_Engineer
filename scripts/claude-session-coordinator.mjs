@@ -13,9 +13,9 @@
  *   node scripts/claude-session-coordinator.mjs info           - Show current session info
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import sessionManager from '../lib/session-manager.mjs';
 import conflictChecker from '../lib/session-conflict-checker.mjs';
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import dotenv from 'dotenv';
 
@@ -27,10 +27,7 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // ANSI color codes
 const colors = {

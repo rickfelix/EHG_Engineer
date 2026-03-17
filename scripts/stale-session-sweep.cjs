@@ -23,14 +23,10 @@
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
 const { randomUUID } = require('crypto');
-require('dotenv').config();
+const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const STALE_THRESHOLD_SECONDS = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10) || 300;
 const LOCAL_HOSTNAME = os.hostname();

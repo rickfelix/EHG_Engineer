@@ -11,8 +11,8 @@
  * SD: SD-AUTONOMOUS-SKUNKWORKS-RD-DEPARTMENT-ORCH-001-A (FR-006)
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import { readCalibrationSignals } from '../../lib/skunkworks/signal-readers/calibration.js';
 import { readCodebaseHealthSignals } from '../../lib/skunkworks/signal-readers/codebase-health.js';
 import { readVenturePortfolioSignals } from '../../lib/skunkworks/signal-readers/venture-portfolio.js';
@@ -20,10 +20,7 @@ import { generateProposals } from '../../lib/skunkworks/proposal-agent.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const logger = console;
 const dryRun = process.argv.includes('--dry-run');

@@ -7,15 +7,12 @@
  * Part of SD-EVA-FEAT-CHAIRMAN-API-001
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import { createOrReusePendingDecision, waitForDecision } from '../../lib/eva/chairman-decision-watcher.js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // Use an existing venture from the database (FK constraints make test venture creation complex)
 let testVentureId = null;

@@ -19,7 +19,7 @@
  *   node scripts/eva/vision-scorer.js --sd-id <SD-KEY> --scope "custom description"
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { getValidationClient, isLocalLLMEnabled } from '../../lib/llm/client-factory.js';
@@ -321,10 +321,7 @@ export async function scoreSD(options = {}) {
     llmClient: llmClientOverride,
   } = options;
 
-  const supabase = supabaseOverride || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseOverride || createSupabaseServiceClient();
 
   // Register vision event handlers (idempotent — safe to call on every scoreSD() invocation).
   // Handlers are subscribed here so they are always registered before vision.scored is published,
@@ -567,10 +564,7 @@ const isMainModule = process.argv[1] && (import.meta.url === `file://${process.a
  * the result back via: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> --persist <JSON>
  */
 async function runInlineMode(sdKey, visionKey, archKey) {
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const [visionResult, archResult] = await Promise.all([
     loadVisionDimensions(supabase, visionKey),
@@ -615,10 +609,7 @@ async function runInlineMode(sdKey, visionKey, archKey) {
  * Usage: node scripts/eva/vision-scorer.js --sd-id <SD-KEY> --persist '<JSON>'
  */
 async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   registerVisionScoredHandlers();
 

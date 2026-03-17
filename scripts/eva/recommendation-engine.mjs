@@ -9,16 +9,13 @@
  * Cost target: <$0.10 per run using Haiku-tier model.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getClassificationClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const MIN_CONFIDENCE = 0.4; // Only recommend from trends above this confidence
 const MAX_TRENDS_PER_BATCH = 10; // Keep batches small for local LLM

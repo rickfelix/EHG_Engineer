@@ -24,7 +24,7 @@
  * Added: 2025-01-15 (SD-DESIGN-WORKFLOW-REVIEW-001)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execute as executeDesignSubAgent } from '../lib/sub-agents/design.js';
 import { applyFixes } from '../lib/workflow-review/story-updater.js';
 // refreshCache - available for future cache operations
@@ -55,10 +55,7 @@ const colors = {
 };
 
 // Service role key for database operations (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabaseAdmin = createSupabaseServiceClient();
 
 // CLI configuration
 const config = {

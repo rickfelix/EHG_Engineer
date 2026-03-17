@@ -7,16 +7,13 @@
  * consistent results after the fix.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { strict as assert } from 'assert';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 // Test SDs at various completion stages
 const TEST_SDS = [

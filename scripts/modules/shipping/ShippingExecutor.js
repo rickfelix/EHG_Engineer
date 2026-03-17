@@ -10,9 +10,9 @@
  * @version 1.0.0
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -26,10 +26,7 @@ export class ShippingExecutor {
   constructor(context) {
     this.context = context;
     this.repoPath = context.repoPath;
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
   }
 
   /**

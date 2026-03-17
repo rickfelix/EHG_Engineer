@@ -5,8 +5,8 @@
  * Tests the ALL_BLOCKED state detection, aggregation, and decision recording.
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import {
   detectAllBlockedState,
@@ -16,10 +16,7 @@ import {
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('Blocked State Detector', () => {
   let testOrchestratorId = null;

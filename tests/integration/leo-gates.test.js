@@ -15,8 +15,8 @@
  * - Gate 3 (EXEC Verification): PRD status = 'approved'
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execSync } from 'child_process';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -29,16 +29,7 @@ const rootDir = path.resolve(__dirname, '../..');
 dotenv.config({ path: path.join(rootDir, '.env') });
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  }
-);
+const supabase = createSupabaseServiceClient();
 
 // Test data
 const TEST_SD_ID = 'SD-TEST-LEO-GATES-001';

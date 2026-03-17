@@ -19,6 +19,7 @@
  *   1 - Error (JSON error on stderr)
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -96,10 +97,7 @@ function validateWorktreePath(wtPath, repoRoot) {
 async function resolveFromDB(sdKey) {
   try {
     const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = createSupabaseServiceClient();
 
     const { data } = await supabase
       .from('claude_sessions')
@@ -246,10 +244,7 @@ function ensureWorktreeEssentials(worktreePath, repoRoot) {
 async function persistWorktreePath(sdKey, worktreePath, worktreeBranch) {
   try {
     const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = createSupabaseServiceClient();
 
     const updateFields = { worktree_path: worktreePath };
     if (worktreeBranch) updateFields.worktree_branch = worktreeBranch;

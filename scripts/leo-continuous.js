@@ -22,7 +22,7 @@
  *   Set CONTINUOUS_SESSION_ID to resume an existing session
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -73,10 +73,7 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const colors = {
   reset: '\x1b[0m',

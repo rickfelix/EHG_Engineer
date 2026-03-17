@@ -5,7 +5,7 @@
  * Auto-starts the STORY sub-agent when FEATURE_STORY_AGENT is enabled
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import StoryAgent from '../../agents/story/index.js';
 
@@ -27,10 +27,7 @@ class StoryAgentBootstrap {
     console.log('🚀 Bootstrapping STORY Agent...');
 
     // Initialize Supabase client
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     // Check feature flags
     console.log('📋 Feature Flags:');

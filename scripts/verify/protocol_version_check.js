@@ -15,8 +15,8 @@
  *   2 - Error (could not check)
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -24,10 +24,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = join(__dirname, '..', '..');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const CLAUDE_FILES = [
   'CLAUDE.md',

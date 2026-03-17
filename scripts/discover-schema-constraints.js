@@ -11,9 +11,9 @@
  *   --table <name>: Only discover constraints for specific table
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import pg from 'pg';
-import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -123,10 +123,7 @@ async function main() {
     console.log('✅ Connected to PostgreSQL\n');
 
     // Also connect to Supabase for inserts
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = createSupabaseServiceClient();
 
     const tablesToScan = specificTable ? [specificTable] : TARGET_TABLES;
     const discovered = [];

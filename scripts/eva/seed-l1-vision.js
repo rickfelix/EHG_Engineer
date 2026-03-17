@@ -17,10 +17,10 @@
  *   node scripts/eva/seed-l1-vision.js --dry-run   (skips DB writes, prints dimensions)
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { readFileSync, existsSync } from 'fs';
 import { resolve, join } from 'path';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../lib/llm/client-factory.js';
 
@@ -180,10 +180,7 @@ export async function main() {
   }
 
   // ── 3. Upsert eva_vision_documents ────────────────────────────────────────
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   console.log('\n📝 Upserting eva_vision_documents...');
   const visionRecord = {

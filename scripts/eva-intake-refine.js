@@ -24,7 +24,7 @@
  *   node scripts/eva-intake-refine.js --reconcile-file <f>  # Load reconcile results from file, run steps 3-4
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -39,10 +39,7 @@ dotenv.config();
 // Force cloud LLM — local Ollama can't handle multi-persona scoring at scale
 process.env.USE_LOCAL_LLM = 'false';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // ─── CLI Args ──────────────────────────────────────────────
 

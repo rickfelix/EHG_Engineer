@@ -11,6 +11,7 @@
  * alongside SD claim info, enabling post-compaction re-claim.
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import UnifiedStateManager from '../../lib/context/unified-state-manager.js';
 import fs from 'fs';
 import path from 'path';
@@ -50,10 +51,7 @@ async function extendHeartbeat(sessionId) {
       dotenv.config({ path: envPath });
     }
     const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = createSupabaseServiceClient();
     // Include 'released' so sessions that were swept while between SDs can recover
     const { error } = await supabase
       .from('claude_sessions')

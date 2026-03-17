@@ -20,7 +20,7 @@
  *   node scripts/eva/vision-to-patterns.js --days 60  (lookback window, default: 30)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -341,10 +341,7 @@ if (isMainModule) {
   const daysIdx = args.indexOf('--days');
   const lookbackDays = daysIdx !== -1 ? parseInt(args[daysIdx + 1], 10) : DEFAULT_LOOKBACK_DAYS;
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   console.log('\n🔄 Vision-to-Patterns Sync');
   console.log(`   Lookback: ${lookbackDays} days`);

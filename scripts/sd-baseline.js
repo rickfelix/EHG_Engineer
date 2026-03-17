@@ -14,16 +14,13 @@
  *   rebaseline - Create new baseline and mark current as superseded
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import readline from 'readline';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // ANSI color codes
 const colors = {

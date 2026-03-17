@@ -5,7 +5,7 @@
  * Enforces checklist completion before allowing handoffs
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import DynamicChecklistGenerator from './dynamic-checklist-generator.js';
 import SubAgentEnforcementSystem from './subagent-enforcement-system.js';
 import { checkRCAGate } from './root-cause-agent.js';
@@ -17,10 +17,7 @@ dotenv.config();
 class HandoffValidator {
   constructor() {
     // Use service role key for full access to LEO tables (anon key blocked by RLS on some tables)
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
     
     this.subAgentEnforcer = new SubAgentEnforcementSystem();
     

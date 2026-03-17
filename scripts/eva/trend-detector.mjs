@@ -10,16 +10,13 @@
  * domain, not per item. Cost target: <$0.10 per run using Haiku.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { getClassificationClient } from '../../lib/llm/client-factory.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const WINDOW_DAYS = 14; // Look back 14 days (expand from 7 if few items)
 const MIN_ITEMS_FOR_LLM = 3; // Don't run LLM with fewer items

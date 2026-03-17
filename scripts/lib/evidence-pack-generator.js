@@ -13,11 +13,11 @@
  * @version 1.0.0
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,10 +43,7 @@ export class EvidencePackGenerator {
     };
 
     // Initialize Supabase client
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     // Collect evidence during session
     this.evidence = {

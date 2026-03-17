@@ -12,7 +12,7 @@
  * Output: Quality check record stored in srip_quality_checks
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -243,10 +243,7 @@ const DOMAIN_SCORERS = [
  */
 export async function runQualityCheck({ synthesisPromptId, supabase }) {
   if (!supabase) {
-    supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
   }
 
   console.log('\n   SRIP Quality Check');

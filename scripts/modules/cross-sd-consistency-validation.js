@@ -15,7 +15,7 @@
  * @see SD-LEO-PROTOCOL-V434-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -205,10 +205,7 @@ export async function validateCrossSDConsistency(sdId, options = {}) {
   };
 
   // Initialize Supabase client
-  const supabase = supabaseClient || createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   try {
     // Fetch current SD with PRD

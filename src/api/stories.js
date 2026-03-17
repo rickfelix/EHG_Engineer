@@ -3,17 +3,14 @@
  * Handles story generation, listing, and verification
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 // Initialize Supabase client with service role
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // Schema validation
 const GenerateSchema = z.object({

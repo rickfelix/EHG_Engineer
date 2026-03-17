@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -8,10 +8,7 @@ dotenv.config();
 
 class BoundaryExamplesGenerator {
   constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseClient();
     this.scriptsDir = path.join(process.cwd(), 'scripts');
   }
 

@@ -17,7 +17,7 @@
  * @module scripts/sd-from-feedback
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import readline from 'readline';
 // SD-LEO-SDKEY-001: Centralized SD key generation
@@ -25,10 +25,7 @@ import { generateSDKey } from './modules/sd-key-generator.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // Feedback type to SD type mapping
 const FEEDBACK_TYPE_MAP = {

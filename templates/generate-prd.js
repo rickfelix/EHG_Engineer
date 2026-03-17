@@ -6,17 +6,14 @@
  * Usage: node templates/generate-prd.js [SD-ID] [--force]
  */
 
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import LEOProtocolOrchestrator from '../scripts/leo-protocol-orchestrator.js';
-import { createClient } from '@supabase/supabase-js';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 class UniversalPRDGenerator {
   constructor() {

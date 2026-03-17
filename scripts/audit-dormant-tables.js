@@ -7,7 +7,7 @@
  * and cross-referencing with codebase references.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -16,10 +16,7 @@ import dotenv from 'dotenv';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
 function findCodeReferences(tableName, rootDir) {
   const refs = [];

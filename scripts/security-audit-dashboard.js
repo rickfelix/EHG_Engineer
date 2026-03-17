@@ -12,17 +12,14 @@
  * Usage: node scripts/security-audit-dashboard.js [--json]
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const JSON_MODE = process.argv.includes('--json');
 const ROOT = resolve(import.meta.dirname, '..');

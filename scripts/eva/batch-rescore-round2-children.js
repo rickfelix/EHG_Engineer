@@ -7,16 +7,13 @@
  * that have zero vision scores or only test/sync scores.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { scoreSD } from './vision-scorer.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const DRY_RUN = process.argv.includes('--dry-run');
 

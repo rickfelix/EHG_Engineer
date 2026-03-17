@@ -11,8 +11,8 @@
  * Story: US-001 - Natural Language Code Search
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { test, expect, describe, beforeAll, afterAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import { searchCode, getIndexStatus, getCodebaseStats } from '../../lib/semantic-search-client.js';
 import dotenv from 'dotenv';
 
@@ -61,10 +61,7 @@ describe('Semantic Search E2E', () => {
 
   beforeAll(async () => {
     // Initialize Supabase client with service role (for test data insertion)
-    supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    supabase = createSupabaseServiceClient();
 
     // Verify database migration applied
     const { error: tableError } = await supabase

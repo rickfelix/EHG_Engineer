@@ -22,7 +22,7 @@
  * @version 1.0.0
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import dotenv from 'dotenv';
@@ -61,10 +61,7 @@ class IntelligentBranchCleanup {
       verbose: options.verbose || false
     };
 
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     this.stats = {
       analyzed: 0,

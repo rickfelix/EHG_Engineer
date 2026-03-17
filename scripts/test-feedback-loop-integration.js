@@ -10,9 +10,9 @@
  * - Database recording
  */
 
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import SessionManagerSubAgent from './session-manager-subagent.js';
 import HookSubAgentActivator from './hook-subagent-activator.js';
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -26,10 +26,7 @@ const __dirname = dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'example-key'
-);
+const supabase = createSupabaseClient();
 
 class FeedbackLoopIntegrationTests {
   constructor() {

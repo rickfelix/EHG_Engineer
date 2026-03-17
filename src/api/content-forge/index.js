@@ -9,14 +9,11 @@
  *   GET /api/v2/brand-genome/:id - Get brand genome by ID
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // ============================================================
 // VALIDATION SCHEMAS

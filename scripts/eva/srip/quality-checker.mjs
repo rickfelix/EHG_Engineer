@@ -9,7 +9,7 @@
  * Output: domain_scores, overall_score, gaps[], passed flag → stored in srip_quality_checks
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { getValidationClient } from '../../../lib/llm/client-factory.js';
 
@@ -27,10 +27,7 @@ const QUALITY_DOMAINS = [
 const DEFAULT_PASS_THRESHOLD = 70;
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 // ============================================================================

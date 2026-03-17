@@ -14,6 +14,7 @@
  * - Falls back to skip-and-continue if resolution fails
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { checkGovernancePolicies } from '../../lib/governance-policy-checker.js';
 
@@ -21,7 +22,6 @@ import { checkGovernancePolicies } from '../../lib/governance-policy-checker.js'
  * @module blocker-resolution
  */
 
-import { createClient } from '@supabase/supabase-js';
 // Note: getNextReadyChild and getOrchestratorContext imported in cli-main.js for integration
 
 // Configuration constants (exported for use in other modules)
@@ -517,10 +517,7 @@ export async function executeBlockerResolution(params) {
  * @returns {object} Supabase client
  */
 export function createSupabaseClient() {
-  return createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  return createSupabaseServiceClient();
 }
 
 export default {

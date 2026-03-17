@@ -7,16 +7,13 @@
  *   node scripts/create-department.js
  *   npm run dept:create
  */
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { createClient } from '@supabase/supabase-js';
 import { createInterface } from 'readline';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 function prompt(rl, question) {
   return new Promise(resolve => rl.question(question, resolve));

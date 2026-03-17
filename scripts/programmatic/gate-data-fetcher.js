@@ -13,9 +13,9 @@
  * Output (stdout): JSON { handoffs, user_stories, retrospective, vision_score, prd_summary }
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
 import { parseArgs } from 'node:util';
-import { createClient } from '@supabase/supabase-js';
 import { runProgrammaticTask } from '../../lib/programmatic/tool-loop.js';
 import { createSupabaseTool } from '../../lib/programmatic/tools/supabase-tool.js';
 
@@ -32,10 +32,7 @@ if (!sdId) {
   process.exit(1);
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const tools = [createSupabaseTool(supabase)];
 

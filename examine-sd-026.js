@@ -1,12 +1,9 @@
 #!/usr/bin/env node
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from './lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 console.log('Examining SD-026 for actual scope...\n');
 

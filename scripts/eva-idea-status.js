@@ -10,16 +10,13 @@
  *   npm run eva:ideas:status
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { createClient } from '@supabase/supabase-js';
 
 async function main() {
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   console.log('');
   console.log('='.repeat(60));

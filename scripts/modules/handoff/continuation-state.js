@@ -14,10 +14,10 @@
  * @see docs/plans/SD-LEO-INFRA-HARDENING-001-plan.md
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createClient } from '@supabase/supabase-js';
 import os from 'os';
 import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../.env') });
@@ -32,10 +32,7 @@ const STATE_FILE = path.join(__dirname, '../../../.claude/continuation-state.jso
 let _supabase = null;
 function getSupabase() {
   if (!_supabase && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    _supabase = createClient(
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    _supabase = createSupabaseServiceClient();
   }
   return _supabase;
 }

@@ -13,7 +13,7 @@
  * @see SD-LEO-PROTOCOL-V434-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -434,10 +434,7 @@ Please respond in JSON format:
  * @returns {Promise<Object>} Save result
  */
 export async function saveReviewRequest(reviewRequest, supabaseClient = null) {
-  const supabase = supabaseClient || createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   // Store in metadata or dedicated table
   // For now, we'll attach to the PRD's metadata

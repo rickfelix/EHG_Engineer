@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from './lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 async function getSDDetails() {
     console.log('Querying SD-SETTINGS-2025-10-12...\n');

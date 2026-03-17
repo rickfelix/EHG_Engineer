@@ -9,7 +9,7 @@
  * Idempotent via source_id (brainstorm_session_id).
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -36,10 +36,7 @@ export function qualifiesForRoadmap(brainstorm) {
  * @returns {Promise<{created: boolean, skipped: boolean, item_id?: string, reason?: string}>}
  */
 export async function createRoadmapItemFromBrainstorm(brainstormId, options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   // Fetch brainstorm
   const { data: brainstorm, error: bErr } = await supabase
@@ -131,10 +128,7 @@ export async function createRoadmapItemFromBrainstorm(brainstormId, options = {}
  * @returns {Promise<object[]>}
  */
 export async function queryRoadmapItemsWithMetadata(options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   let roadmapId = options.roadmapId;
   if (!roadmapId) {
@@ -185,10 +179,7 @@ export async function queryRoadmapItemsWithMetadata(options = {}) {
  * @returns {Promise<{processed: number, created: number, skipped: number}>}
  */
 export async function processAllPendingBrainstorms(options = {}) {
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   // Find brainstorms with vision+arch that are chairman-reviewed
   const { data: brainstorms } = await supabase

@@ -6,9 +6,9 @@
  * Switch between different application contexts
  */
 
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import fs from 'fs/promises';
 import path from 'path';
-import { createClient  } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -23,10 +23,7 @@ class ContextSwitcher {
     this.contextPath = path.join(__dirname, '../.leo-context');
     this.registryPath = path.join(__dirname, '../applications/registry.json');
     this.envPath = path.join(__dirname, '../.env');
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseClient();
   }
 
   async getCurrentContext() {

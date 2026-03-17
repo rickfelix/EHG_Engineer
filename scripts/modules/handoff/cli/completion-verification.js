@@ -8,7 +8,7 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { getSDWorkflow } from './sd-workflow.js';
 
 /**
@@ -19,10 +19,7 @@ import { getSDWorkflow } from './sd-workflow.js';
  * @returns {Promise<Object>} - Completion verification result
  */
 export async function verifySDCompletion(sdId) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // Get SD details (supports UUID and sd_key)
   const { data: sd, error: sdError } = await supabase
@@ -78,10 +75,7 @@ export async function verifySDCompletion(sdId) {
  * @returns {Promise<Object>} - Result with sds array or error
  */
 export async function getPendingApprovalSDs() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')

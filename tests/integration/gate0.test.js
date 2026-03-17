@@ -12,8 +12,8 @@
  * - TS-10: Gate 0 executes in CI/CD and blocks merge when score <85%
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execSync } from 'child_process';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -26,16 +26,7 @@ const rootDir = path.resolve(__dirname, '../..');
 dotenv.config({ path: path.join(rootDir, '.env') });
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  }
-);
+const supabase = createSupabaseServiceClient();
 
 describe('Gate 0: Static Analysis Verification - Integration Tests', () => {
   let testSDLegacyId = null;

@@ -16,7 +16,7 @@
  * @version 1.0.0
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { getLLMClient } from '../../../lib/llm/client-factory.js';
 
@@ -39,10 +39,7 @@ export class ShippingDecisionEvaluator {
     this.openai = getLLMClient({ purpose: 'validation' });
 
     // Initialize Supabase
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     // Scoring band thresholds
     this.bandThresholds = {

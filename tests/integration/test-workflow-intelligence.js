@@ -17,7 +17,7 @@
  * Added: 2025-01-15 (SD-DESIGN-WORKFLOW-REVIEW-001 - Phase 3)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execute as executeDesignSubAgent } from '../../lib/sub-agents/design.js';
 import { getCacheStats, clearCache } from '../../lib/workflow-review/pattern-cache.js';
 import path from 'path';
@@ -32,10 +32,7 @@ const __dirname = path.dirname(__filename);
 const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
 
 // Use SERVICE_ROLE_KEY for test data setup (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabaseAdmin = createSupabaseServiceClient();
 
 const TEST_SD_ID = 'SD-INT-WORKFLOW-001';
 const TEST_PRD_UUID = crypto.randomUUID();

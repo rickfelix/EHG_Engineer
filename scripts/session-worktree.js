@@ -12,6 +12,7 @@
  *   npm run session:worktree -- --cleanup --sd-key <key>
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import {
   createWorktree,
   symlinkNodeModules,
@@ -148,10 +149,7 @@ async function main() {
       const dotenv = await import('dotenv');
       dotenv.config();
       const { createClient } = await import('@supabase/supabase-js');
-      supabase = createClient(
-        process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
+      supabase = createSupabaseServiceClient();
     } catch {
       console.log('Note: Supabase unavailable - SD completion check skipped');
     }

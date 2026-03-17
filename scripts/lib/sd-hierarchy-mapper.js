@@ -5,14 +5,14 @@
  * and determining execution order for continuous LEO Protocol execution.
  *
  * Usage:
- *   import { mapHierarchy, getDepthFirstOrder, getNextIncomplete } from './sd-hierarchy-mapper.js';
+ *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { mapHierarchy, getDepthFirstOrder, getNextIncomplete } from './sd-hierarchy-mapper.js';
  *
  *   const hierarchy = await mapHierarchy('SD-PARENT-001');
  *   const order = getDepthFirstOrder(hierarchy);
  *   const next = getNextIncomplete(hierarchy);
  */
 
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -31,10 +31,7 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /** Maximum supported hierarchy depth */
 export const MAX_HIERARCHY_DEPTH = 6;

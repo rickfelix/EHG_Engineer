@@ -3,15 +3,12 @@
  * LEO Protocol Integration for Automated Pipeline Monitoring
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
 const { executeSubAgent } = require('../../lib/sub-agent-executor.js');
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Verify GitHub webhook signature

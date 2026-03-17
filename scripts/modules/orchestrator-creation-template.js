@@ -24,17 +24,14 @@
  *   - plan-to-children-enricher.js: For enrichChildrenFromPlan()
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import { inheritStrategicFields, inferSDType } from './child-sd-template.js';
 import { enrichChildrenFromPlan } from './plan-to-children-enricher.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Template function - customize for your orchestrator

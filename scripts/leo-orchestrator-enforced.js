@@ -6,6 +6,7 @@
  * SD-LEO-003 Implementation
  */
 
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import LEOProtocolOrchestrator from './leo-protocol-orchestrator.js';
 import SubAgentActivationSystem from './activate-sub-agents.js';
 import HandoffValidator from './handoff-validator.js';
@@ -13,8 +14,7 @@ import UniversalPhaseExecutor from '../templates/execute-phase.js';
 import UniversalPRDGenerator from '../templates/generate-prd.js';
 import UniversalHandoffCreator from '../templates/create-handoff.js';
 // createClient is imported dynamically in markSDComplete
-// import { createClient } from '@supabase/supabase-js';
-import chalk from 'chalk';
+// import chalk from 'chalk';
 import fs from 'fs/promises';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -100,10 +100,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
         // Track if we found git evidence during EXEC phase validation
         if (phase === 'EXEC') {
           const { createClient } = await import('@supabase/supabase-js');
-          const supabase = createClient(
-            process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-          );
+          const supabase = createSupabaseClient();
 
           const { data: sd } = await supabase
             .from('strategic_directives_v2')
@@ -167,10 +164,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
 
       // Create Supabase client using environment variables
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      );
+      const supabase = createSupabaseClient();
 
       // Update SD to completed status with is_working_on: false
       const { error: sdError } = await supabase

@@ -7,7 +7,7 @@
  * Impact: Saves 10-15 minutes of debugging build failures.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseClient } from '../../../lib/supabase-client.js';
 import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -30,10 +30,7 @@ const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 export async function checkCrossSDDependencies(sd_id, targetApp = 'ehg') {
   console.log(`🔍 Dependency Checker: Analyzing cross-SD dependencies for ${sd_id}...`);
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY
-  );
+  const supabase = createSupabaseClient();
 
   // Get other in-progress SDs
   const { data: inProgressSDs, error } = await supabase

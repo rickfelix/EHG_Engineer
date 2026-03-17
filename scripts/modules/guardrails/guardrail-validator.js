@@ -19,8 +19,8 @@
  * Part of SD-MAN-ORCH-VISION-HEAL-SCORE-93-001-01-A
  */
 
-import { createClient } from '@supabase/supabase-js';
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 const GUARDRAIL_DEFINITIONS = [
   { id: 'GR-001', name: 'spending_threshold', keywords: ['spend', 'cost', 'budget', 'payment', 'purchase', 'billing'] },
   { id: 'GR-002', name: 'external_communication', keywords: ['email', 'notification', 'external', 'communication', 'message', 'slack'] },
@@ -49,10 +49,7 @@ export async function validateGuardrails({
   logger = console,
   dryRun = false,
 } = {}) {
-  const supabase = supabaseClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   const violations = [];
   const warnings = [];

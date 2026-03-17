@@ -5,12 +5,12 @@
  * Re-reads CLAUDE.md, validates work against requirements, and logs checkpoints.
  *
  * Usage:
- *   import { checkpoint, reloadProtocol, validatePhase } from './leo-checkpoint.js';
+ *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { checkpoint, reloadProtocol, validatePhase } from './leo-checkpoint.js';
  *
  *   await checkpoint(sdId, 'LEAD-TO-PLAN', { notes: 'PRD generated' });
  */
 
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -30,10 +30,7 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 // Protocol file paths (cross-platform)
 const PROTOCOL_FILES = {

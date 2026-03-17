@@ -7,7 +7,7 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../../../lib/supabase-client.js';
 import HandoffValidator from '../../../../handoff-validator.js';
 import { validateUserStoriesForHandoff, getUserStoryImprovementGuidance } from '../../../user-story-quality-validation.js';
 import { validatePRDForHandoff, getPRDImprovementGuidance } from '../../../prd-quality-validation.js';
@@ -38,10 +38,7 @@ dotenv.config({ path: path.resolve(EHG_ENGINEER_ROOT, '.env') });
  */
 export class PlanToExecVerifier {
   constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
+    this.supabase = createSupabaseServiceClient();
 
     this.handoffValidator = new HandoffValidator();
     this.prdRequirements = PRD_REQUIREMENTS;

@@ -10,7 +10,7 @@
  * @see docs/discovery/auto-proceed-enhancement-discovery.md D07, D08, D17
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolver.js';
 import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
@@ -774,10 +774,7 @@ export async function executeOrchestratorCompletionHook(
   console.log(`   Children Completed: ${childCount}`);
 
   // Get or create Supabase client
-  const supabase = options.supabase || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const supabase = options.supabase || createSupabaseServiceClient();
 
   // Generate correlation ID for tracing
   const correlationId = `orch-${orchestratorId}-${Date.now()}`;

@@ -9,16 +9,13 @@
  * 3. Existing operations (handoff.js, sub-agent execution) still work
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('SD-LEO-FIX-ID-FORMAT-001: Foreign Key Constraint Validation', () => {
 

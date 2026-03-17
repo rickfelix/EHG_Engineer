@@ -12,13 +12,10 @@
  *   node scripts/heal-empty-metrics.js --fix     # Check and fix issues
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 const FIX_MODE = process.argv.includes('--fix');
 

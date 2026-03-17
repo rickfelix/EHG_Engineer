@@ -10,16 +10,13 @@
  * - TS-5: Missing policy fallback works gracefully
  */
 
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('LEO Effort Policy System', () => {
   describe('TS-1: Policy Lookup Returns Correct Data', () => {

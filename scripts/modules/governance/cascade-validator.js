@@ -14,8 +14,8 @@
  *   - Extended bidirectional Strategy/Vision validation
  */
 
-import { createClient } from '@supabase/supabase-js';
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 /**
  * Validate cascade alignment for a new SD.
  *
@@ -32,10 +32,7 @@ export async function validateCascade({
   logger = console,
   dryRun = false,
 } = {}) {
-  const supabase = supabaseClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   const violations = [];
   const warnings = [];
@@ -319,10 +316,7 @@ export async function validateCascadeAtHandoff({
   supabase: supabaseClient,
   logger = console,
 } = {}) {
-  const supabase = supabaseClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = supabaseClient || createSupabaseServiceClient();
 
   const warnings = [];
   const violations = [];

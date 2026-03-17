@@ -17,7 +17,7 @@
  *   node scripts/eva/process-gap-reporter.mjs --days 60
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -258,10 +258,7 @@ if (isMain) {
   const daysArg = args.find(a => a.startsWith('--days=')) || args.find((a, i) => a === '--days' && args[i + 1]);
   const lookbackDays = daysArg ? parseInt(daysArg.replace('--days=', '') || args[args.indexOf('--days') + 1]) : 30;
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const supabase = createSupabaseServiceClient();
 
   // Register process gap handlers for logging
   registerVisionProcessGapDetectedHandlers();

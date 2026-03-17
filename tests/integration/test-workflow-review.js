@@ -12,7 +12,7 @@
  * Usage: node tests/integration/test-workflow-review.js
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { execute as executeDesignSubAgent } from '../../lib/sub-agents/design.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,10 +27,7 @@ const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
 
 // Use SERVICE_ROLE_KEY for test data setup (bypasses RLS)
 // SECURITY: Safe for tests since this is server-side only
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabaseAdmin = createSupabaseServiceClient();
 
 const TEST_SD_ID = 'SD-WFR-TEST-001';
 const TEST_PRD_UUID = crypto.randomUUID();

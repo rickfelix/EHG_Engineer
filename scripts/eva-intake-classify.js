@@ -18,8 +18,8 @@
  *   node scripts/eva-intake-classify.js --item <id>    # Classify a single item by ID
  */
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import {
   classifyItem,
   getUnclassifiedItems,
@@ -32,10 +32,7 @@ import { validateClassification } from '../lib/integrations/intake-taxonomy.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 async function showStats() {
   const { count: todoistTotal } = await supabase

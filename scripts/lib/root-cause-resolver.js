@@ -12,7 +12,8 @@
  * 4. Return result (fixed or needs skip)
  *
  * Usage:
- *   import { analyzeFailure, attemptFix } from './root-cause-resolver.js';
+ *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
+import { analyzeFailure, attemptFix } from './root-cause-resolver.js';
  *
  *   const result = await analyzeFailure(error, { sdId, phase, context });
  *   if (result.rootCause) {
@@ -20,7 +21,6 @@
  *   }
  */
 
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -39,10 +39,7 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 /**
  * Explorer focus areas for root cause analysis

@@ -8,16 +8,13 @@
  * - Error handling returns clean error objects
  */
 
+import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { describe, it, expect } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createSupabaseServiceClient();
 
 describe('Flywheel Analytics - Database Views', () => {
   describe('eva_interactions table', () => {

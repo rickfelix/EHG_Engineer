@@ -19,18 +19,15 @@
  * ============================================================================
  */
 
+import { createSupabaseClient } from '../lib/supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabase = createSupabaseClient();
 
 const LOG_FILE = path.join(process.cwd(), '.claude/logs/context-usage.jsonl');
 const STATE_FILE = path.join(process.cwd(), '.claude/logs/.sync-state.json');

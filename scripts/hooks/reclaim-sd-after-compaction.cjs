@@ -23,7 +23,8 @@ const path = require('path');
 const os = require('os');
 
 // Load env
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
+ });
 
 const UNIFIED_STATE_FILE = path.resolve(__dirname, '../../.claude/unified-session-state.json');
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
@@ -31,11 +32,7 @@ const MAX_STATE_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 let supabase = null;
 try {
-  const { createClient } = require('@supabase/supabase-js');
-  supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+    supabase = createSupabaseServiceClient();
 } catch {
   // Supabase not available
 }
