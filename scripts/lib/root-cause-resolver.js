@@ -12,8 +12,7 @@
  * 4. Return result (fixed or needs skip)
  *
  * Usage:
- *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-import { analyzeFailure, attemptFix } from './root-cause-resolver.js';
+ *   import { analyzeFailure, attemptFix } from './root-cause-resolver.js';
  *
  *   const result = await analyzeFailure(error, { sdId, phase, context });
  *   if (result.rootCause) {
@@ -23,6 +22,7 @@ import { analyzeFailure, attemptFix } from './root-cause-resolver.js';
 
 import fs from 'fs';
 import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

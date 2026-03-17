@@ -11,13 +11,13 @@
  * - Requires LEAD-FINAL-APPROVAL handoff (not just status change)
  *
  * Usage:
- *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
+ *   import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
  *   const result = await enforceChildProgressionGate(childSdId);
  *   if (!result.canProceed) process.exit(1);
  */
 
 import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 dotenv.config();
 
 const supabase = createSupabaseServiceClient();

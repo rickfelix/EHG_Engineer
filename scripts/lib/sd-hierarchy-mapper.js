@@ -5,8 +5,7 @@
  * and determining execution order for continuous LEO Protocol execution.
  *
  * Usage:
- *   import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
-import { mapHierarchy, getDepthFirstOrder, getNextIncomplete } from './sd-hierarchy-mapper.js';
+ *   import { mapHierarchy, getDepthFirstOrder, getNextIncomplete } from './sd-hierarchy-mapper.js';
  *
  *   const hierarchy = await mapHierarchy('SD-PARENT-001');
  *   const order = getDepthFirstOrder(hierarchy);
@@ -15,6 +14,7 @@ import { mapHierarchy, getDepthFirstOrder, getNextIncomplete } from './sd-hierar
 
 import fs from 'fs';
 import dotenv from 'dotenv';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
