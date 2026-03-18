@@ -278,7 +278,8 @@ describe('ValidatorRegistry', () => {
       expect(typeof fallback).toBe('function');
       const result = await fallback();
       expect(result.passed).toBe(true);
-      expect(result.score).toBe(100);
+      // Fallback validators return a penalized score of 50, not 100
+      expect(result.score).toBe(50);
       expect(result.details.isFallback).toBe(true);
     });
 

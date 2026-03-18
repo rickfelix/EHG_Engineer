@@ -6,7 +6,20 @@
  * Tests selecting next ready child SD from orchestrator parent
  */
 
-// Jest provides describe, it, expect, beforeEach globally
+import { vi, describe, it, expect } from 'vitest';
+
+// Mock urgency-scorer to avoid importing real module
+vi.mock('../../../scripts/modules/handoff/auto-proceed/urgency-scorer.js', () => ({
+  sortByUrgency: vi.fn((items) => items), // pass through unchanged
+  scoreToBand: vi.fn(() => 'normal')
+}));
+
+// Mock dependency-dag to avoid importing real module
+vi.mock('../../../lib/orchestrator/dependency-dag.js', () => ({
+  buildDependencyDAG: vi.fn(),
+  detectCycles: vi.fn(),
+  computeRunnableSet: vi.fn()
+}));
 
 import {
   isChildSD,
@@ -60,108 +73,36 @@ describe('Child SD Selector', () => {
         sequence_rank: 2
       };
 
+      // Production code now uses:
+      //   .from('strategic_directives_v2')
+      //   .select(long column list)
+      //   .eq('parent_sd_id', parentSdId)
+      //   .in('status', ['draft', 'active'])
+      // then optionally .neq('id', excludeCompletedId)
+      // and awaits the result directly (no .order().limit() chain)
       const mockSupabase = {
-        from: (table) => {
-          if (table === 'strategic_directives_v2') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  in: () => ({
-                    neq: () => ({
-                      order: () => ({
-                        order: () => ({
-                          order: () => ({
-                            limit: () => Promise.resolve({ data: [mockChild], error: null })
-                          })
-                        })
-                      })
-                    })
-                  })
-                })
-              })
-            };
-          }
-          return {};
-        }
-      };
-
-      const result = await getNextReadyChild(mockSupabase, 'parent-1', 'child-1');
-
-      expect(result.sd).toEqual(mockChild);
-      expect(result.allComplete).toBe(false);
-      expect(result.reason).toBe('Next child found');
-    });
-
-    it('should return allComplete=true when all children are completed', async () => {
-      const mockSupabase = {
-        from: (table) => {
-          if (table === 'strategic_directives_v2') {
-            return {
-              select: () => ({
-                eq: (field, value) => {
-                  // First query: looking for ready children
-                  if (field === 'parent_sd_id') {
-                    return {
-                      in: () => ({
-                        order: () => ({
-                          order: () => ({
-                            order: () => ({
-                              limit: () => Promise.resolve({ data: [], error: null })
-                            })
-                          })
-                        })
-                      }),
-                      // Second query: getting all children
-                    };
-                  }
-                  return {
-                    in: () => ({
-                      order: () => ({
-                        order: () => ({
-                          order: () => ({
-                            limit: () => Promise.resolve({ data: [], error: null })
-                          })
-                        })
-                      })
-                    })
-                  };
-                }
-              })
-            };
-          }
-          return {};
-        }
-      };
-
-      // Simplified mock that returns empty for ready children, then all completed
-      const simpleMock = {
         from: () => ({
           select: () => ({
             eq: () => ({
               in: () => ({
-                neq: () => ({
-                  order: () => ({
-                    order: () => ({
-                      order: () => ({
-                        limit: () => Promise.resolve({ data: [], error: null })
-                      })
-                    })
-                  })
-                }),
-                order: () => ({
-                  order: () => ({
-                    order: () => ({
-                      limit: () => Promise.resolve({ data: [], error: null })
-                    })
-                  })
-                })
+                neq: () => Promise.resolve({ data: [mockChild], error: null })
               })
             })
           })
         })
       };
 
-      // For this test, we need a mock that handles both query paths
+      const result = await getNextReadyChild(mockSupabase, 'parent-1', 'child-1');
+
+      // The result.sd will include urgency fields added by the production code
+      expect(result.sd).toBeTruthy();
+      expect(result.sd.id).toBe('child-2');
+      expect(result.sd.sd_key).toBe('SD-CHILD-002');
+      expect(result.allComplete).toBe(false);
+      expect(result.reason).toContain('Next child found');
+    });
+
+    it('should return allComplete=true when all children are completed', async () => {
       let queryCount = 0;
       const dualMock = {
         from: () => ({
@@ -169,20 +110,12 @@ describe('Child SD Selector', () => {
             eq: () => {
               queryCount++;
               if (queryCount === 1) {
-                // First query: looking for ready children (returns empty)
+                // First query: looking for ready children with .in('status', ...)
                 return {
-                  in: () => ({
-                    order: () => ({
-                      order: () => ({
-                        order: () => ({
-                          limit: () => Promise.resolve({ data: [], error: null })
-                        })
-                      })
-                    })
-                  })
+                  in: () => Promise.resolve({ data: [], error: null })
                 };
               } else {
-                // Second query: getting all children (all completed)
+                // Second query: getting all children (no .in, just .eq)
                 return Promise.resolve({
                   data: [
                     { id: 'c1', status: 'completed' },
@@ -212,15 +145,7 @@ describe('Child SD Selector', () => {
               if (queryCount === 1) {
                 // First query: looking for ready children (returns empty)
                 return {
-                  in: () => ({
-                    order: () => ({
-                      order: () => ({
-                        order: () => ({
-                          limit: () => Promise.resolve({ data: [], error: null })
-                        })
-                      })
-                    })
-                  })
+                  in: () => Promise.resolve({ data: [], error: null })
                 };
               } else {
                 // Second query: getting all children (some blocked)
@@ -246,19 +171,12 @@ describe('Child SD Selector', () => {
     });
 
     it('should handle query errors gracefully', async () => {
+      // Production code: the first query uses .eq().in() and awaits directly
       const mockSupabase = {
         from: () => ({
           select: () => ({
             eq: () => ({
-              in: () => ({
-                order: () => ({
-                  order: () => ({
-                    order: () => ({
-                      limit: () => Promise.resolve({ data: null, error: { message: 'DB error' } })
-                    })
-                  })
-                })
-              })
+              in: () => Promise.resolve({ data: null, error: { message: 'DB error' } })
             })
           })
         })
@@ -288,17 +206,14 @@ describe('Child SD Selector', () => {
       ];
 
       const mockSupabase = {
-        from: (table) => ({
+        from: () => ({
           select: () => ({
-            eq: () => {
-              // Check if this is the parent or children query
-              return {
-                single: () => Promise.resolve({ data: mockParent, error: null }),
-                order: () => ({
-                  order: () => Promise.resolve({ data: mockChildren, error: null })
-                })
-              };
-            }
+            eq: () => ({
+              single: () => Promise.resolve({ data: mockParent, error: null }),
+              order: () => ({
+                order: () => Promise.resolve({ data: mockChildren, error: null })
+              })
+            })
           })
         })
       };
