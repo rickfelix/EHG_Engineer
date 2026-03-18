@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-18T21:13:15.267Z
+**Generated**: 2026-03-18T21:27:24.934Z
 **Rows**: 11
 **RLS**: Enabled (2 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (24 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -42,6 +42,7 @@
 | blocking | `boolean` | YES | `false` | When true, this decision blocks downstream SD progression. Set by chairman-sla-enforcer.js when SLA is violated with blockOnViolation=true. Read by enforceDecisionSLAs() to skip further escalation on already-blocking decisions. SD-MAN-GEN-CORRECTIVE-VISION-GAP-014 |
 | decision_type | `text` | YES | - | - |
 | context | `jsonb` | YES | - | - |
+| attempt_number | `integer(32)` | **NO** | `1` | Attempt number for decision re-entry. Enables immutable history — each retry creates a new row instead of updating. |
 
 ## Constraints
 
@@ -51,6 +52,9 @@
 ### Foreign Keys
 - `chairman_decisions_preference_ref_id_fkey`: preference_ref_id → chairman_preferences(id)
 - `chairman_decisions_venture_id_fkey`: venture_id → ventures(id)
+
+### Unique Constraints
+- `uq_chairman_decision_attempt`: UNIQUE (venture_id, lifecycle_stage, attempt_number)
 
 ### Check Constraints
 - `chairman_decisions_decision_check`: CHECK (((decision)::text = ANY (ARRAY['pass'::text, 'revise'::text, 'kill'::text, 'conditional_pass'::text, 'go'::text, 'conditional_go'::text, 'no_go'::text, 'complete'::text, 'continue'::text, 'blocked'::text, 'fail'::text, 'approve'::text, 'conditional'::text, 'reject'::text, 'release'::text, 'hold'::text, 'cancel'::text, 'no-go'::text, 'pivot'::text, 'expand'::text, 'sunset'::text, 'exit'::text, 'proceed'::text, 'fix'::text, 'pause'::text, 'override'::text, 'pending'::text, 'terminate'::text, 'review'::text, 'advisory'::text])))
@@ -103,6 +107,10 @@
 - `idx_chairman_decisions_venture`
   ```sql
   CREATE INDEX idx_chairman_decisions_venture ON public.chairman_decisions USING btree (venture_id)
+  ```
+- `uq_chairman_decision_attempt`
+  ```sql
+  CREATE UNIQUE INDEX uq_chairman_decision_attempt ON public.chairman_decisions USING btree (venture_id, lifecycle_stage, attempt_number)
   ```
 
 ## RLS Policies
