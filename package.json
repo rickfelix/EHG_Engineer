@@ -330,6 +330,7 @@
     "governance": "node scripts/governance.js",
     "governance:list": "node scripts/governance.js list",
     "governance:validate": "node scripts/governance.js validate",
+    "governance:stages": "node scripts/governance-stages.js",
     "governance:violations": "node scripts/governance.js violations",
     "governance:stats": "node scripts/governance.js stats",
     "governance:constitutions": "node scripts/governance.js constitutions",
