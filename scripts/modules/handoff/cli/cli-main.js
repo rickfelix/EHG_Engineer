@@ -13,7 +13,8 @@ import dotenv from 'dotenv';
 
 // AUTO-PROCEED continuation imports
 import { getNextReadyChild, getOrchestratorContext } from '../child-sd-selector.js';
-import { resolveAutoProceed } from '../auto-proceed-resolver.js';
+import { resolveAutoProceed, getChainOrchestrators } from '../auto-proceed-resolver.js';
+import { findNextAvailableOrchestrator } from '../orchestrator-completion-hook.js';
 
 // SD-MAN-FEAT-CORRECTIVE-VISION-GAP-007: Handoff sequence enforcement
 import { getWorkflowForType } from './workflow-definitions.js';
@@ -810,6 +811,7 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
     }
 
     // SD-LEO-ENH-AUTO-PROCEED-001-05: Handle orchestrator chaining for top-level SDs
+    // SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001: Extended to support standalone SD chaining
     if (!completedSD.parent_sd_id) {
       // Check if this was an orchestrator that completed with chaining enabled
       const chainingInfo = currentResult.result?.orchestratorChaining;
@@ -826,7 +828,33 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
         continue; // Continue the loop for the new orchestrator's children
       }
 
-      console.log('   ℹ️  Top-level SD completed - no continuation needed');
+      // SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001: Standalone SD chaining
+      // When a standalone (non-orchestrator) top-level SD completes, check if
+      // chain_orchestrators is enabled and find the next available SD to chain to.
+      const chainingConfig = await getChainOrchestrators(system.supabase);
+      if (chainingConfig.chainOrchestrators) {
+        const { orchestrator: nextSD, reason } = await findNextAvailableOrchestrator(
+          system.supabase,
+          currentSdId
+        );
+
+        if (nextSD) {
+          console.log('\n🔗 STANDALONE SD CHAINING: Auto-continuing to next SD');
+          console.log(`   Next: ${nextSD.sd_key || nextSD.id}`);
+          console.log(`   Title: ${nextSD.title}`);
+          console.log('   ➡️  Starting LEAD-TO-PLAN...');
+          console.log('');
+
+          currentSdId = nextSD.id;
+          currentHandoffType = 'LEAD-TO-PLAN';
+          currentResult = await handleExecuteCommand('LEAD-TO-PLAN', nextSD.id, args);
+          continue;
+        }
+
+        console.log(`\n⏸️  STANDALONE CHAINING: No next SD available (${reason})`);
+      } else {
+        console.log('   ℹ️  Top-level SD completed - chaining disabled');
+      }
       break;
     }
 
