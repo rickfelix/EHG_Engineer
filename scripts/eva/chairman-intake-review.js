@@ -75,6 +75,28 @@ async function getUnreviewedItems() {
   return data || [];
 }
 
+/**
+ * Find orphaned items: reviewed by chairman (chairman_reviewed_at set)
+ * but never fully processed (status still 'pending', processed_at null).
+ * These items were reviewed in a prior session that didn't complete post-processing.
+ * SD-LEO-FIX-DISTILL-ORPHAN-RECOVERY-001
+ */
+async function getOrphanedItems() {
+  const { data, error } = await supabase
+    .from('eva_todoist_intake')
+    .select('id, title, chairman_reviewed_at')
+    .eq('status', 'pending')
+    .not('chairman_reviewed_at', 'is', null)
+    .is('processed_at', null)
+    .order('chairman_reviewed_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching orphaned items:', error.message);
+    return [];
+  }
+  return data || [];
+}
+
 function formatItemForReview(item, index, total) {
   const lines = [
     `## Item ${index + 1} of ${total}: ${item.title}`,
@@ -133,12 +155,14 @@ async function storeReviewDecision(itemId, intent, reviewMethod = 'auto') {
   }
 
   // Auto-review: preserve the AI capture-intent (constrained to idea/insight/reference/question/value),
-  // just stamp chairman_reviewed_at to mark the item as reviewed.
+  // stamp chairman_reviewed_at and set status=processed so the post-processor can find it.
   // The action-intent mapping (idea→build, etc.) is derived at query time via CAPTURE_TO_ACTION_MAP.
+  // SD-LEO-FIX-DISTILL-ORPHAN-RECOVERY-001: status must be 'processed' or post-processor query misses it.
   const { error } = await supabase
     .from('eva_todoist_intake')
     .update({
       chairman_reviewed_at: new Date().toISOString(),
+      status: 'processed',
     })
     .eq('id', itemId);
 
@@ -186,6 +210,27 @@ async function main() {
     console.log('  --skip-review flag set. Bypassing chairman review.');
     console.log('══════════════════════════════════════════════════════');
     process.exit(0);
+  }
+
+  // Pre-flight: detect orphaned items (SD-LEO-FIX-DISTILL-ORPHAN-RECOVERY-001)
+  const orphans = await getOrphanedItems();
+  if (orphans.length > 0) {
+    console.log(`  ⚠️  ${orphans.length} orphaned item(s) detected (reviewed but never processed)`);
+    // Auto-recover orphans by setting status to 'processed' so post-processor picks them up
+    let recovered = 0;
+    for (const orphan of orphans) {
+      if (!dryRun) {
+        const { error } = await supabase
+          .from('eva_todoist_intake')
+          .update({ status: 'processed' })
+          .eq('id', orphan.id);
+        if (!error) recovered++;
+      } else {
+        console.log(`    [DRY RUN] Would recover orphan: ${orphan.title}`);
+        recovered++;
+      }
+    }
+    console.log(`  ✅ Recovered ${recovered}/${orphans.length} orphan(s) → status=processed`);
   }
 
   const items = await getUnreviewedItems();
@@ -264,6 +309,7 @@ async function main() {
 // Export for programmatic use
 export {
   getUnreviewedItems,
+  getOrphanedItems,
   formatItemForReview,
   buildIntentOptions,
   inferAIRecommendation,
