@@ -11,38 +11,42 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import crypto from 'node:crypto';
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// Hard gate stages — must match CHAIRMAN_GATES.BLOCKING in stage-execution-worker.js
+const HARD_GATE_STAGES = new Set([3, 5, 10, 22, 23, 24]);
+
 // Pipeline stage definitions (25 stages)
 const PIPELINE_STAGES = [
-  { num: 1, name: 'Ideation', hardGate: false },
-  { num: 2, name: 'Research', hardGate: false },
-  { num: 3, name: 'Validation', hardGate: true },
-  { num: 4, name: 'Market Analysis', hardGate: false },
-  { num: 5, name: 'Business Model', hardGate: true },
-  { num: 6, name: 'Competitor Analysis', hardGate: false },
-  { num: 7, name: 'MVP Definition', hardGate: false },
-  { num: 8, name: 'Technical Assessment', hardGate: false },
-  { num: 9, name: 'Financial Modeling', hardGate: true },
-  { num: 10, name: 'Team Formation', hardGate: false },
-  { num: 11, name: 'Prototype', hardGate: false },
-  { num: 12, name: 'User Testing', hardGate: false },
-  { num: 13, name: 'Pivot/Persevere', hardGate: true },
-  { num: 14, name: 'Go-to-Market', hardGate: false },
-  { num: 15, name: 'Launch Prep', hardGate: false },
-  { num: 16, name: 'Soft Launch', hardGate: false },
-  { num: 17, name: 'Metrics Review', hardGate: true },
-  { num: 18, name: 'Scale Planning', hardGate: false },
-  { num: 19, name: 'Funding Strategy', hardGate: false },
-  { num: 20, name: 'Partnership', hardGate: false },
-  { num: 21, name: 'Growth Phase', hardGate: false },
-  { num: 22, name: 'Optimization', hardGate: false },
-  { num: 23, name: 'Expansion', hardGate: false },
-  { num: 24, name: 'Maturity', hardGate: false },
-  { num: 25, name: 'Exit Strategy', hardGate: true },
-];
+  { num: 1, name: 'Ideation' },
+  { num: 2, name: 'Research' },
+  { num: 3, name: 'Validation' },
+  { num: 4, name: 'Market Analysis' },
+  { num: 5, name: 'Business Model' },
+  { num: 6, name: 'Competitor Analysis' },
+  { num: 7, name: 'MVP Definition' },
+  { num: 8, name: 'Technical Assessment' },
+  { num: 9, name: 'Financial Modeling' },
+  { num: 10, name: 'Team Formation' },
+  { num: 11, name: 'Prototype' },
+  { num: 12, name: 'User Testing' },
+  { num: 13, name: 'Pivot/Persevere' },
+  { num: 14, name: 'Go-to-Market' },
+  { num: 15, name: 'Launch Prep' },
+  { num: 16, name: 'Soft Launch' },
+  { num: 17, name: 'Metrics Review' },
+  { num: 18, name: 'Scale Planning' },
+  { num: 19, name: 'Funding Strategy' },
+  { num: 20, name: 'Partnership' },
+  { num: 21, name: 'Growth Phase' },
+  { num: 22, name: 'Optimization' },
+  { num: 23, name: 'Expansion' },
+  { num: 24, name: 'Maturity' },
+  { num: 25, name: 'Exit Strategy' },
+].map(s => ({ ...s, hardGate: HARD_GATE_STAGES.has(s.num) }));
 
 async function getConfig() {
   const { data, error } = await supabase
@@ -58,14 +62,27 @@ async function getConfig() {
 async function saveOverrides(overrides) {
   const { error } = await supabase
     .from('chairman_dashboard_config')
-    .upsert({
-      config_key: 'default',
-      company_id: '00000000-0000-0000-0000-000000000000',
+    .update({
       stage_overrides: overrides,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'company_id,config_key' });
+    })
+    .eq('config_key', 'default');
 
   if (error) throw new Error(`Save error: ${error.message}`);
+}
+
+async function emitGovernanceEvent(stageNum, oldValue, newValue, actor) {
+  try {
+    await supabase.from('eva_event_log').insert({
+      event_type: 'governance_override_changed',
+      trigger_source: 'manual',
+      correlation_id: crypto.randomUUID(),
+      status: 'succeeded',
+      metadata: { stage_number: stageNum, old_value: oldValue, new_value: newValue, actor, source: 'governance-stages-cli' },
+    });
+  } catch (err) {
+    console.warn(`Event emission warning: ${err.message}`);
+  }
 }
 
 async function listStages() {
@@ -147,11 +164,20 @@ async function setStage(stageNum, mode, reason) {
   }
 
   await saveOverrides(overrides);
+  const oldValue = autoProceed ? 'manual' : 'auto';
+  const newValue = autoProceed ? 'auto' : 'manual';
+  await emitGovernanceEvent(stageNum, oldValue, newValue, 'chairman');
   console.log(`Stage ${stageNum} (${stage.name}) set to ${mode.toUpperCase()}`);
 }
 
 async function resetAll() {
+  const config = await getConfig();
+  const previousOverrides = config.stage_overrides || {};
   await saveOverrides({});
+  for (const key of Object.keys(previousOverrides)) {
+    const num = parseInt(key.replace('stage_', ''), 10);
+    if (!isNaN(num)) await emitGovernanceEvent(num, 'manual', 'auto', 'chairman');
+  }
   console.log('All stage overrides reset to default (AUTO)');
 }
 
