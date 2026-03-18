@@ -28,6 +28,10 @@ on:
           - app
           - both
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   update-schema-docs:
     name: Regenerate Schema Documentation

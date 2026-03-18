@@ -2,6 +2,18 @@ name: Security Review
 on:
   pull_request:
     types: [opened, synchronize]
+    paths:
+      - 'lib/agents/**'
+      - 'scripts/**'
+      - 'supabase/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.env*'
+      - '.github/workflows/security-review.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   security-scan:

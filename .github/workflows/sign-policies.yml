@@ -18,6 +18,10 @@ permissions:
   packages: write
   attestations: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sign-policy-bundle:
     name: Sign and Attest Policy Bundle

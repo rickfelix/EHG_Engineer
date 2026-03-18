@@ -16,6 +16,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-sd:
     name: Validate SD Phase
@@ -28,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Extract SD ID from PR
         id: extract-sd

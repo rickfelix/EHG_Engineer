@@ -9,6 +9,10 @@ on:
       - '**/*.js'
       - '**/*.jsx'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-lovable-imports:
     name: Check for Lovable Imports

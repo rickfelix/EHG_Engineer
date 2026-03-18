@@ -5,6 +5,10 @@ on:
   issue_comment:
     types: [created]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   agentic-review:
     # Only run on PRs or when @claude is mentioned in PR comments

@@ -30,6 +30,10 @@ on:
 env:
   PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/ms-playwright
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-and-verify:
     name: Run Tests & Verify Stories

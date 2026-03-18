@@ -20,6 +20,10 @@ on:
       - 'tools/gates/**'
       - 'database/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   detect-prds:
     name: Detect PRDs to Validate
