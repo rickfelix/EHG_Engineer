@@ -25,7 +25,7 @@ const SD = {
   key_changes: [{ change: 'Fix retrospective.js action item merge condition', file: 'retrospective.js' }],
   success_criteria: [
     'Action items have verification field on all items',
-    'RETROSPECTIVE_QUALITY_GATE passes ≥55/100 on first attempt',
+    'RETROSPECTIVE_QUALITY_GATE passes >=55/100 on first attempt',
   ],
   strategic_objectives: ['Eliminate manual retrospective patching'],
   risks: [{ risk: 'Edge case in merge condition', mitigation: 'Added OR clause for verification check' }],
@@ -33,31 +33,96 @@ const SD = {
 
 /**
  * Build a mock Supabase client that captures inserted retrospective data.
+ *
+ * The production code makes multiple calls to supabase.from():
+ *   1. from('issue_patterns').select().or().eq()  -- getIssuesForSD
+ *   2. from('retrospectives').select('id').eq().eq().order().limit().maybeSingle() -- existing check
+ *   3. from('retrospectives').insert(data).select()  -- or .update(data).eq().select()
+ *
  * Returns { supabase, getInserted } where getInserted() returns the last insert arg.
  */
 function buildMockSupabase() {
   let inserted = null;
 
   const supabase = {
-    from: vi.fn().mockReturnValue({
-      // issue_patterns query chain
-      select: vi.fn().mockReturnValue({
-        or: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-        }),
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    from: vi.fn().mockImplementation((table) => {
+      if (table === 'issue_patterns') {
+        return {
+          select: vi.fn().mockReturnValue({
+            or: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'retrospectives') {
+        return {
+          // For the existing-check query chain:
+          //   .select('id').eq().eq().order().limit().maybeSingle()
+          select: vi.fn().mockImplementation((cols) => {
+            if (cols === 'id') {
+              // This is the "check for existing" query
+              return {
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockReturnValue({
+                        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                      }),
+                    }),
+                  }),
+                }),
+              };
+            }
+            // Fallback for .insert().select() chain - returns the inserted data
+            return {
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockReturnValue({
+                      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }),
+          // For the insert chain: .insert(data).select()
+          insert: vi.fn().mockImplementation((data) => {
+            inserted = data;
+            return {
+              select: vi.fn().mockResolvedValue({ data: [{ id: 'retro-001', ...data }], error: null }),
+            };
+          }),
+          // For the update chain (if existing found): .update(data).eq().select()
+          update: vi.fn().mockImplementation((data) => {
+            inserted = data;
+            return {
+              eq: vi.fn().mockReturnValue({
+                select: vi.fn().mockResolvedValue({ data: [{ id: 'retro-001', ...data }], error: null }),
+              }),
+            };
+          }),
+        };
+      }
+      // Default fallback for any other table
+      return {
+        select: vi.fn().mockReturnValue({
+          or: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
           }),
         }),
-      }),
-      // retrospectives insert chain
-      insert: vi.fn().mockImplementation((data) => {
-        inserted = data;
-        return {
-          select: vi.fn().mockResolvedValue({ data: [{ id: 'retro-001', ...data }], error: null }),
-        };
-      }),
+      };
     }),
   };
 
