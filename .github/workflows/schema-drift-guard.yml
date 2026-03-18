@@ -11,6 +11,10 @@ on:
       - 'supabase/ehg_app/**'
       - 'supabase/ehg_engineer/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-drift-ehg-app:
     name: Check EHG App Schema Drift

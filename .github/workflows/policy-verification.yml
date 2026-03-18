@@ -15,6 +15,10 @@ on:
         required: false
         default: 'policies.tar.gz'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: Validate Policy Bundle

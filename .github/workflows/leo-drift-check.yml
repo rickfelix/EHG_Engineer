@@ -3,8 +3,24 @@ name: LEO Protocol Drift Check
 on:
   push:
     branches: [main, develop, 'feat/*']
+    paths:
+      - 'tools/gates/**'
+      - 'scripts/**'
+      - '.eslintrc*'
+      - 'package.json'
+      - '.github/workflows/leo-drift-check.yml'
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'tools/gates/**'
+      - 'scripts/**'
+      - '.eslintrc*'
+      - 'package.json'
+      - '.github/workflows/leo-drift-check.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   drift-check:

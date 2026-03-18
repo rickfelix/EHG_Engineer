@@ -17,6 +17,10 @@ on:
         description: 'Percentage of stories passing'
         value: ${{ jobs.check-gate.outputs.passing_pct }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-gate:
     name: Check Story Release Gate

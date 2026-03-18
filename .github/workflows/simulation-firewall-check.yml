@@ -21,6 +21,10 @@ on:
       - 'lib/genesis/**'
       - '.github/workflows/simulation-firewall-check.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   firewall-check:
     name: Verify Simulation Isolation

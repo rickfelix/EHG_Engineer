@@ -19,6 +19,10 @@ permissions:
   packages: write
   attestations: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sign-and-attest:
     name: Sign and Generate Provenance
