@@ -289,8 +289,8 @@ export async function displayExecutionResult(result, handoffType, sdId) {
 
     // SD-LEO-INFRA-HANDOFF-RESULT-SUMMARY-001: Machine-readable result summary
     // Emitted LAST so grep/tail can always find it regardless of output size
-    const displayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 0;
-    console.log(`\nHANDOFF_RESULT=PASS SD=${sdId} SCORE=${displayScore} PHASE=${handoffType.toUpperCase()}`);
+    const passDisplayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 0;
+    console.log(`\nHANDOFF_RESULT=PASS SD=${sdId} SCORE=${passDisplayScore} PHASE=${handoffType.toUpperCase()}`);
   } else {
     console.log('');
     console.log('❌ HANDOFF FAILED');
