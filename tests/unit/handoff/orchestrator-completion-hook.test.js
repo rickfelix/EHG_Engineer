@@ -314,7 +314,7 @@ describe('Orchestrator Completion Hook', () => {
         }
         if (table === 'claude_sessions') return chainable([]);
         if (table === 'strategic_directives_v2') {
-          return chainable([{ id: 'SD-NEXT-001', sd_key: 'SD-NEXT-001', title: 'Next Orchestrator' }]);
+          return chainable([{ id: 'SD-NEXT-001', sd_key: 'SD-NEXT-001', title: 'Next Orchestrator', parent_sd_id: null, priority: 5, category: 'test', current_phase: 'LEAD' }]);
         }
         return chainable([]);
       };
@@ -330,8 +330,7 @@ describe('Orchestrator Completion Hook', () => {
       expect(result.autoProceed).toBe(true);
       expect(result.chainContinue).toBe(true);
       expect(result.nextOrchestrator).toBe('SD-NEXT-001');
-      // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: With mock (no real session), legacy path
-      // sets claimed=false since sessionId couldn't be resolved from mock
+      // Legacy fallback: no session ID resolved → unclaimed but still chains
       expect(result.claimed).toBe(false);
     });
 

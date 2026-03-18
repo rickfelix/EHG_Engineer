@@ -1025,6 +1025,28 @@ export async function executeOrchestratorCompletionHook(
       orchestratorsOnly: true
     });
 
+    // Fallback: if sessionId couldn't be resolved, use legacy findNextAvailableOrchestrator
+    if (chainResult.exitCode === EXIT_CODES.EXIT_NO_SESSION && chainingResult.chainOrchestrators) {
+      const { orchestrator: fallbackOrch } = await findNextAvailableOrchestrator(supabase, orchestratorId);
+      if (fallbackOrch) {
+        hookDetails.chainedToOrchestrator = fallbackOrch.id;
+        hookDetails.chainedToSdKey = fallbackOrch.sd_key;
+        await recordHookEvent(supabase, orchestratorId, correlationId, hookDetails);
+        await emitChainingTelemetry(supabase, orchestratorId, fallbackOrch.id, 'chain', correlationId);
+        console.log(`\n   🔗 ORCHESTRATOR CHAINING (legacy): Auto-continuing to ${fallbackOrch.sd_key}`);
+        console.log('═'.repeat(60));
+        return {
+          fired: true,
+          autoProceed: true,
+          chainContinue: true,
+          nextOrchestrator: fallbackOrch.id,
+          nextOrchestratorSdKey: fallbackOrch.sd_key,
+          claimed: false,
+          correlationId
+        };
+      }
+    }
+
     // Map chain result to telemetry
     const telemetryDecision = chainResult.chainContinue ? 'chain'
       : chainResult.exitCode === EXIT_CODES.EXIT_CHAINING_DISABLED ? 'pause_disabled'
