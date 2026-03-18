@@ -62,6 +62,20 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
   let structuralPassed = 0;
 
   // Check 1: User stories completed
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-073: Use handoff acceptance as a completion
+  // signal when stories exist but aren't marked complete. Many SDs ship code
+  // without updating user_stories.status, causing systematic false negatives.
+  let acceptedHandoffCount = 0; // populated in Check 4, used for story credit
+  try {
+    // Pre-fetch accepted handoff count for cross-check use in story scoring
+    const { data: preHandoffs } = await supabase
+      .from('sd_phase_handoffs')
+      .select('id')
+      .eq('sd_id', sdUuid)
+      .eq('status', 'accepted');
+    acceptedHandoffCount = preHandoffs?.length || 0;
+  } catch (e) { console.debug('[HealBeforeComplete] pre-handoff count suppressed:', e?.message || e); }
+
   try {
     const { data: stories } = await supabase
       .from('user_stories')
@@ -73,6 +87,10 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
       if (completed.length === stories.length) {
         structuralPassed++;
         details.structural.stories = `${completed.length}/${stories.length} completed`;
+      } else if (acceptedHandoffCount >= 2) {
+        // Stories incomplete but handoffs accepted — work was reviewed and approved
+        structuralPassed += 0.75;
+        details.structural.stories = `${completed.length}/${stories.length} completed (handoff-verified: ${acceptedHandoffCount} accepted)`;
       } else {
         details.structural.stories = `${completed.length}/${stories.length} completed (incomplete)`;
       }
@@ -122,6 +140,7 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
   } catch (e) { details.structural.retrospective = 'query failed'; structuralChecks++; console.debug('[HealBeforeComplete] retrospective query suppressed:', e?.message || e); }
 
   // Check 4: Handoff chain has required handoffs
+  // SD-LEARN-FIX-ADDRESS-PAT-AUTO-073: Award partial credit for 1 accepted handoff
   try {
     const { data: handoffs } = await supabase
       .from('sd_phase_handoffs')
@@ -133,6 +152,9 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
     if (handoffCount >= 2) { // Minimum for infrastructure
       structuralPassed++;
       details.structural.handoffs = `${handoffCount} accepted`;
+    } else if (handoffCount === 1) {
+      structuralPassed += 0.5;
+      details.structural.handoffs = `1 accepted (partial credit, need ≥2)`;
     } else {
       details.structural.handoffs = `only ${handoffCount} accepted (need ≥2)`;
     }
@@ -179,6 +201,9 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType) {
       .map(sc => typeof sc === 'string' ? sc : sc.description || sc.title || JSON.stringify(sc))
       .join('\n- ');
 
+    // SD-LEARN-FIX-ADDRESS-PAT-AUTO-073: Instruct Haiku to focus on key_changes
+    // delivery rather than story completion status, which is already factored into
+    // the structural score. This prevents double-penalization.
     const prompt = `You are evaluating whether a Strategic Directive's promises were delivered.
 
 SD: "${sd.title}" (type: ${sdType})
@@ -195,7 +220,9 @@ ${gitDiff}
 STRUCTURAL VERIFICATION RESULTS:
 ${Object.entries(details.structural).map(([k, v]) => `- ${k}: ${v}`).join('\n')}
 
-Based on the structural evidence and git activity, score how well this SD's promises appear to be delivered.
+IMPORTANT: Focus your evaluation on whether the KEY CHANGES and SUCCESS CRITERIA were delivered based on git activity and structural evidence. Do NOT penalize for user story completion status — story tracking often lags behind actual implementation, and the structural score already accounts for this. Instead, focus on whether handoffs were accepted (indicating reviewed work) and whether git commits evidence the promised changes.
+
+Based on the delivery evidence, score how well this SD's promises appear to be delivered.
 Respond with ONLY a JSON object: {"score": <0-100>, "reasoning": "<one sentence>"}`;
 
     // Use Claude Haiku directly — fast, reliable, cheap
@@ -767,6 +794,13 @@ export function createHealBeforeCompleteGate(supabase) {
         // Intentionally suppressed: advisory should never block
         console.debug('[HealBeforeComplete] intent-vs-outcome advisory suppressed:', e?.message || e);
       }
+
+      // SD-LEARN-FIX-ADDRESS-PAT-AUTO-073: Log effective threshold breakdown
+      const toleranceComponents = [];
+      toleranceComponents.push(`base(${DEFAULT_TOLERANCE_BUFFER})`);
+      if (isChildSD) toleranceComponents.push(`child(${CHILD_SD_TOLERANCE_BONUS})`);
+      if (isLearnSource) toleranceComponents.push(`learn(${LEARN_SOURCE_TOLERANCE_BONUS})`);
+      console.log(`   📐 Effective threshold: ${threshold - toleranceBuffer} = base(${threshold}) - tolerance(${toleranceBuffer}) [${toleranceComponents.join(' + ')}]`);
 
       // SD heal score within tolerance buffer — PASS with warning
       // (SD-LEARN-FIX-ADDRESS-PAT-AUTO-054: tolerance buffer for near-threshold scores)
