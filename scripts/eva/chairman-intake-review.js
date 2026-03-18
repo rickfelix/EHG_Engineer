@@ -133,12 +133,14 @@ async function storeReviewDecision(itemId, intent, reviewMethod = 'auto') {
   }
 
   // Auto-review: preserve the AI capture-intent (constrained to idea/insight/reference/question/value),
-  // just stamp chairman_reviewed_at to mark the item as reviewed.
+  // stamp chairman_reviewed_at and set status=processed so the post-processor can find it.
   // The action-intent mapping (idea→build, etc.) is derived at query time via CAPTURE_TO_ACTION_MAP.
+  // SD-LEO-FIX-DISTILL-ORPHAN-RECOVERY-001: status must be 'processed' or post-processor query misses it.
   const { error } = await supabase
     .from('eva_todoist_intake')
     .update({
       chairman_reviewed_at: new Date().toISOString(),
+      status: 'processed',
     })
     .eq('id', itemId);
 
