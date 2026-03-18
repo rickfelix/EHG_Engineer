@@ -14,10 +14,11 @@ export { createUserStoryExistenceGate } from './user-story-existence.js';
 export { createDocumentationLinkValidationGate } from './documentation-link-validation.js';
 export { createHealBeforeCompleteGate } from './heal-before-complete.js';
 export { createAcceptanceCriteriaValidationGate } from './acceptance-criteria-validation.js';
-export { createSuccessMetricsAchievementGate } from './success-metrics-achievement.js';
-export { createVisionCompletionScoreGate } from './vision-completion-score.js';
+// SD-LEO-INFRA-MERGE-REDUNDANT-HANDOFF-001: Merged SUCCESS_METRICS gates
+export { createSuccessMetricsGate, createSuccessMetricsAchievementGate, createSuccessMetricsVerificationGate } from './success-metrics-gate.js';
+// SD-LEO-INFRA-MERGE-REDUNDANT-HANDOFF-001: vision-completion-score merged into heal-before-complete (advisory section)
+// createVisionCompletionScoreGate removed — heal-before-complete already checks vision advisory
 export { createArchitecturePlanValidationGate } from './architecture-plan-validation.js';
-export { createSuccessMetricsVerificationGate } from './success-metrics-verification.js';
 export { createSmokeTestEvidenceGate } from './smoke-test-evidence.js';
 export { createFailureChainOrderingGate } from './failure-chain-ordering.js';
 
