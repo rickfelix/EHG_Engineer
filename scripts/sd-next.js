@@ -36,7 +36,7 @@ async function emitSessionSettings() {
   try {
     const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return;
+    if (!url || !key) return null;
 
     const supabase = createClient(url, key);
     const { data } = await resolveOwnSession(supabase, {
@@ -53,9 +53,12 @@ async function emitSessionSettings() {
 
     const autoProceed = data?.metadata?.auto_proceed ?? true;
     const chainOrchestrators = data?.metadata?.chain_orchestrators ?? globalChaining;
-    console.log(`SESSION_SETTINGS:${JSON.stringify({ auto_proceed: autoProceed, chain_orchestrators: chainOrchestrators })}`);
+    const settings = { auto_proceed: autoProceed, chain_orchestrators: chainOrchestrators };
+    console.log(`SESSION_SETTINGS:${JSON.stringify(settings)}`);
+    return settings;
   } catch {
     // Non-fatal — settings query failure doesn't block queue display
+    return null;
   }
 }
 
@@ -72,7 +75,16 @@ runSDNext()
 
     // Emit session settings so autonomous flows see both auto_proceed
     // AND chain_orchestrators without a separate query.
-    await emitSessionSettings();
+    const sessionSettings = await emitSessionSettings();
+
+    // SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001: Emit CHAIN_CLAIM instruction
+    // when auto_proceed + chain_orchestrators are both enabled and there's a
+    // recommended SD to start. This enables programmatic consumers to auto-claim.
+    if (result && result.action === 'start' && result.sd_id && sessionSettings) {
+      if (sessionSettings.auto_proceed && sessionSettings.chain_orchestrators) {
+        console.log(`CHAIN_CLAIM:${result.sd_id}`);
+      }
+    }
   })
   .catch(err => {
     console.error(`${colors.red}Error: ${err.message}${colors.reset}`);
