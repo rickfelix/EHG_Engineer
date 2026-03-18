@@ -18,8 +18,8 @@ import { generateAndEmitSummary, createCollector } from '../session-summary/inde
 import { execSync } from 'child_process';
 import { verifyPipelineFlow, requiresPipelineFlowVerification } from '../../../lib/pipeline-flow-verifier.js';
 import { runGapAnalysis } from '../../../lib/gap-detection/index.js';
-// SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Auto-claim during orchestrator chaining
-import { claimGuard } from '../../../lib/claim-guard.mjs';
+// SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001: Standalone auto-chain executor
+import { executeAutoChain, EXIT_CODES } from './auto-chain-executor.js';
 // SD-MAN-ORCH-SCOPE-COMPLEXITY-ANALYSIS-001-B: Integration verification at orchestrator boundary
 import { verifyIntegration, formatGateResult } from '../../gates/integration-verification-gate.js';
 
@@ -981,99 +981,72 @@ export async function executeOrchestratorCompletionHook(
     await displayQueue(supabase);
     hookDetails.queueDisplayed = true;
 
-    // Check for orchestrator chaining (SD-LEO-ENH-AUTO-PROCEED-001-05)
+    // SD-LEO-INFRA-IMPLEMENT-STANDALONE-AUTO-001: Delegate to AutoChainExecutor
     const chainingResult = await getChainOrchestrators(supabase);
     hookDetails.chainOrchestratorsEnabled = chainingResult.chainOrchestrators;
 
-    if (chainingResult.chainOrchestrators) {
-      // SD-MAN-INFRA-CLAIM-AUTO-PROCEED-001: Find next available orchestrator and auto-claim it.
-      // Uses a fallback loop (max 3 candidates) to gracefully handle claim conflicts.
-      const MAX_CLAIM_ATTEMPTS = 3;
-      let claimed = false;
-      let claimedOrchestrator = null;
+    // Resolve session ID for claim swap
+    let sessionId = null;
+    try {
+      const { getTerminalId } = await import('../../../lib/terminal-identity.js');
+      const termId = getTerminalId();
+      const { data: sessionData } = await supabase
+        .from('claude_sessions')
+        .select('session_id')
+        .eq('terminal_id', termId)
+        .in('status', ['active', 'idle'])
+        .order('heartbeat_at', { ascending: false })
+        .limit(1)
+        .single();
+      sessionId = sessionData?.session_id;
+    } catch (e) {
+      console.debug('[OrchestratorCompletionHook] session resolve suppressed:', e?.message || e);
+    }
 
-      // Resolve our session ID for claimGuard
-      let sessionId = null;
-      try {
-        const { getTerminalId } = await import('../../../lib/terminal-identity.js');
-        const termId = getTerminalId();
-        const { data: sessionData } = await supabase
-          .from('claude_sessions')
-          .select('session_id')
-          .eq('terminal_id', termId)
-          .in('status', ['active', 'idle'])
-          .order('heartbeat_at', { ascending: false })
-          .limit(1)
-          .single();
-        sessionId = sessionData?.session_id;
-      } catch (e) {
-        // Intentionally suppressed: fallback, proceed without claiming
-        console.debug('[OrchestratorCompletionHook] session claim fallback suppressed:', e?.message || e);
-      }
+    // Resolve sd_key for the completed orchestrator
+    let completedSdKey = null;
+    try {
+      const { data: sdData } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .eq('id', orchestratorId)
+        .single();
+      completedSdKey = sdData?.sd_key;
+    } catch {
+      // Non-fatal
+    }
 
-      for (let attempt = 1; attempt <= MAX_CLAIM_ATTEMPTS; attempt++) {
-        const { orchestrator: nextOrchestrator, reason } = await findNextAvailableOrchestrator(supabase, orchestratorId);
+    const chainResult = await executeAutoChain(supabase, {
+      completedSdId: orchestratorId,
+      completedSdKey,
+      sessionId,
+      chainEnabled: chainingResult.chainOrchestrators,
+      autoProceed: true,
+      orchestratorsOnly: true
+    });
 
-        if (!nextOrchestrator) {
-          console.log('\n   🔗 ORCHESTRATOR CHAINING: No next orchestrator available');
-          console.log(`   📍 Reason: ${reason}`);
-          await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_no_orchestrator', correlationId);
-          break;
-        }
+    // Map chain result to telemetry
+    const telemetryDecision = chainResult.chainContinue ? 'chain'
+      : chainResult.exitCode === EXIT_CODES.EXIT_CHAINING_DISABLED ? 'pause_disabled'
+      : chainResult.exitCode === EXIT_CODES.EXIT_EMPTY_QUEUE ? 'pause_no_orchestrator'
+      : 'pause_all_claimed';
+    await emitChainingTelemetry(supabase, orchestratorId, chainResult.nextSdId, telemetryDecision, correlationId);
 
-        // Attempt to claim the next orchestrator
-        if (sessionId) {
-          const claimResult = await claimGuard(nextOrchestrator.sd_key, sessionId, { autoFallback: true });
-          if (claimResult.success) {
-            claimed = true;
-            claimedOrchestrator = nextOrchestrator;
-            console.log(`\n   🔗 ORCHESTRATOR CHAINING: Auto-continuing to ${nextOrchestrator.sd_key}`);
-            console.log(`   📍 Next: ${nextOrchestrator.title}`);
-            console.log(`   🔒 Claimed: ${nextOrchestrator.sd_key} (auto-claim via chaining)`);
-            break;
-          } else if (claimResult.fallback) {
-            console.log(`   ⚠️  Claim attempt ${attempt}/${MAX_CLAIM_ATTEMPTS}: ${nextOrchestrator.sd_key} claimed by ${claimResult.owner?.session_id?.substring(0, 20) || 'another session'} — trying next`);
-            continue;
-          }
-        } else {
-          // No session ID available — proceed without claiming (legacy behavior)
-          claimedOrchestrator = nextOrchestrator;
-          console.log(`\n   🔗 ORCHESTRATOR CHAINING: Auto-continuing to ${nextOrchestrator.sd_key}`);
-          console.log(`   📍 Next: ${nextOrchestrator.title}`);
-          break;
-        }
-      }
+    if (chainResult.chainContinue) {
+      hookDetails.chainedToOrchestrator = chainResult.nextSdId;
+      hookDetails.chainedToSdKey = chainResult.nextSdKey;
+      await recordHookEvent(supabase, orchestratorId, correlationId, hookDetails);
+      console.log('═'.repeat(60));
 
-      if (claimedOrchestrator) {
-        // Record the chaining decision
-        hookDetails.chainedToOrchestrator = claimedOrchestrator.id;
-        hookDetails.chainedToSdKey = claimedOrchestrator.sd_key;
-
-        // Record hook event before returning
-        await recordHookEvent(supabase, orchestratorId, correlationId, hookDetails);
-
-        // Emit telemetry event for chaining
-        await emitChainingTelemetry(supabase, orchestratorId, claimedOrchestrator.id, 'chain', correlationId);
-
-        console.log('═'.repeat(60));
-
-        return {
-          fired: true,
-          autoProceed: true,
-          chainContinue: true,
-          nextOrchestrator: claimedOrchestrator.id,
-          nextOrchestratorSdKey: claimedOrchestrator.sd_key,
-          claimed,
-          correlationId
-        };
-      } else {
-        // All candidates exhausted or no candidates available
-        console.log('\n   🔗 ORCHESTRATOR CHAINING: All candidates claimed or unavailable');
-        await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_all_claimed', correlationId);
-      }
-    } else {
-      // Emit telemetry for pause decision (chaining disabled)
-      await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_disabled', correlationId);
+      return {
+        fired: true,
+        autoProceed: true,
+        chainContinue: true,
+        nextOrchestrator: chainResult.nextSdId,
+        nextOrchestratorSdKey: chainResult.nextSdKey,
+        claimed: true,
+        correlationId
+      };
     }
 
     // Clear AUTO-PROCEED state now that orchestrator is complete (and not chaining)
