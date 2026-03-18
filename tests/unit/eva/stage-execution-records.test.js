@@ -259,4 +259,56 @@ describe('Stage Execution Records (SD-VW-BACKEND-EXEC-RECORDS-001)', () => {
       expect(failCall).toBeTruthy();
     });
   });
+
+  describe('_refreshLock (SD-VW-BACKEND-LOCK-HEARTBEAT-001)', () => {
+    it('updates orchestrator_lock_acquired_at with matching lockId', async () => {
+      // Override to return 1 matching row
+      const chain = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({ data: [{ id: 'venture-123' }], error: null }),
+      };
+      supabase.from = vi.fn((table) => {
+        if (table === 'ventures') return chain;
+        return createMockSupabase().from(table);
+      });
+
+      worker = new StageExecutionWorker({ supabase, logger });
+      const refreshed = await worker._refreshLock('venture-123', 'lock-uuid-abc');
+
+      expect(refreshed).toBe(true);
+      expect(chain.update).toHaveBeenCalledWith(
+        expect.objectContaining({ orchestrator_lock_acquired_at: expect.any(String) })
+      );
+      // Verify lock_id condition was applied
+      expect(chain.eq).toHaveBeenCalledWith('orchestrator_lock_id', 'lock-uuid-abc');
+    });
+
+    it('returns false when lock_id does not match (lock was released)', async () => {
+      const chain = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({ data: [], error: null }),
+      };
+      supabase.from = vi.fn(() => chain);
+
+      worker = new StageExecutionWorker({ supabase, logger });
+      const refreshed = await worker._refreshLock('venture-123', 'stale-lock-id');
+
+      expect(refreshed).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('lock may have been released'));
+    });
+
+    it('throws on database error', async () => {
+      const chain = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        select: vi.fn().mockResolvedValue({ data: null, error: { message: 'connection failed' } }),
+      };
+      supabase.from = vi.fn(() => chain);
+
+      worker = new StageExecutionWorker({ supabase, logger });
+      await expect(worker._refreshLock('venture-123', 'lock-id')).rejects.toThrow('Lock refresh DB error');
+    });
+  });
 });
