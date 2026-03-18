@@ -32,10 +32,8 @@ import {
   createDocumentationLinkValidationGate,
   createHealBeforeCompleteGate,
   createAcceptanceCriteriaValidationGate,
-  createSuccessMetricsAchievementGate,
-  createVisionCompletionScoreGate,
+  createSuccessMetricsGate,
   createArchitecturePlanValidationGate,
-  createSuccessMetricsVerificationGate,
   createSmokeTestEvidenceGate,
   createFailureChainOrderingGate,
   // Semantic Validation Gates (SD-LEO-FEAT-SEMANTIC-VALIDATION-GATES-002)
@@ -240,8 +238,8 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // SD heal score must meet threshold (93) before final approval
     gates.push(createHealBeforeCompleteGate(this.supabase));
 
-    // Vision completion re-score (advisory — detects vision regression)
-    gates.push(createVisionCompletionScoreGate(this.supabase));
+    // SD-LEO-INFRA-MERGE-REDUNDANT-HANDOFF-001: vision-completion-score merged into
+    // heal-before-complete (advisory vision section already handles vision scoring)
 
     // Sub-agent orchestration
     gates.push(createSubAgentOrchestrationGate(this.supabase));
@@ -268,11 +266,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // Acceptance criteria validation (blocking — every story must have criteria)
     gates.push(createAcceptanceCriteriaValidationGate(this.supabase));
 
-    // Success metrics achievement (blocking — actuals must be recorded)
-    gates.push(createSuccessMetricsAchievementGate(this.supabase));
-
-    // Success metrics verification (Gap 2 — independently measures verifiable metrics)
-    gates.push(createSuccessMetricsVerificationGate(this.supabase));
+    // SD-LEO-INFRA-MERGE-REDUNDANT-HANDOFF-001: Consolidated success metrics gate
+    // (achievement + verification in single gate with shared DB query)
+    gates.push(createSuccessMetricsGate(this.supabase));
 
     // Documentation link validation gate (SD-LEO-ORCH-QUALITY-GATE-ENHANCEMENTS-001-D)
     gates.push(createDocumentationLinkValidationGate(this.supabase));
