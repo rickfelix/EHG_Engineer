@@ -30,6 +30,63 @@ dotenv.config();
 
 const supabase = createSupabaseServiceClient();
 
+const MAX_FALLBACK_ATTEMPTS = 3;
+
+/**
+ * Check if auto-proceed is active for the current session.
+ * Returns true by default (auto-proceed is ON unless explicitly disabled).
+ */
+async function getSessionAutoProceed(sessionId) {
+  try {
+    const { data } = await supabase
+      .from('claude_sessions')
+      .select('metadata')
+      .eq('session_id', sessionId)
+      .single();
+    return data?.metadata?.auto_proceed ?? true;
+  } catch {
+    return true; // Default ON
+  }
+}
+
+/**
+ * Get the next workable SD from the queue, excluding specified SD keys.
+ * Returns { sdKey, title, phase } or null if no workable SDs remain.
+ *
+ * SD-LEO-INFRA-PRE-CLAIM-CHECK-001: Used by auto-fallback when claim conflicts occur.
+ */
+async function getNextWorkableSD(excludeKeys = []) {
+  // Get all active sessions to identify claimed SDs
+  const { data: activeSessions } = await supabase
+    .from('claude_sessions')
+    .select('sd_id')
+    .not('sd_id', 'is', null)
+    .in('status', ['active', 'idle']);
+
+  const claimedSdKeys = new Set((activeSessions || []).map(s => s.sd_id));
+
+  // Query for workable SDs: not completed, not cancelled, not blocked
+  const { data: candidates } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, title, current_phase, status, priority, progress_percentage')
+    .in('status', ['draft', 'active', 'planning', 'ready', 'in_progress'])
+    .not('sd_key', 'is', null)
+    .order('priority', { ascending: true })
+    .order('created_at', { ascending: true })
+    .limit(20);
+
+  if (!candidates || candidates.length === 0) return null;
+
+  // Filter: exclude specified keys, exclude claimed SDs, exclude blocked
+  for (const sd of candidates) {
+    if (excludeKeys.includes(sd.sd_key)) continue;
+    if (claimedSdKeys.has(sd.sd_key)) continue;
+    return { sdKey: sd.sd_key, title: sd.title, phase: sd.current_phase };
+  }
+
+  return null;
+}
+
 /**
  * Map a phase to the appropriate CLAUDE_*.md context file.
  */
@@ -394,36 +451,32 @@ async function main() {
   }
 
   // 3. SD-LEO-INFRA-CLAIM-GUARD-001: Use centralized claimGuard
-  const claimResult = await claimGuard(effectiveId, session.session_id);
+  // SD-LEO-INFRA-PRE-CLAIM-CHECK-001: Auto-fallback on claim conflict
+  const autoProceed = await getSessionAutoProceed(session.session_id);
+  const fallbackEnabled = autoProceed || process.argv.includes('--fallback');
+  let claimResult = await claimGuard(effectiveId, session.session_id, { autoFallback: fallbackEnabled });
+  const skippedSDs = [];
 
   if (!claimResult.success) {
-    console.log(formatClaimFailure(claimResult));
-
     // PID-based liveness check for enhanced diagnostics (same machine only)
     let autoReleased = false;
     if (claimResult.owner) {
       const sameHost = claimResult.owner.hostname === os.hostname();
-      // Extract PID from session ID if available (format: win-cc-{ssePort}-{pid})
       const pidMatch = claimResult.owner.session_id?.match(/-(\d+)$/);
       const ownerPid = pidMatch ? parseInt(pidMatch[1]) : null;
 
       if (sameHost && ownerPid) {
         const pidAlive = isProcessRunning(ownerPid);
         if (pidAlive) {
-          console.log(`\n${colors.red}${colors.bold}🔒 PROCESS IS RUNNING (PID: ${ownerPid})${colors.reset}`);
-          console.log(`${colors.red}   Another Claude Code instance is actively using this SD.${colors.reset}`);
+          console.log(`\n${colors.yellow}🔒 ${effectiveId} claimed by active process (PID: ${ownerPid})${colors.reset}`);
         } else {
-          console.log(`\n${colors.green}${colors.bold}💀 PROCESS EXITED (PID: ${ownerPid} is dead) — auto-releasing orphaned claim${colors.reset}`);
-
-          // Auto-release the orphaned claim and retry
+          console.log(`\n${colors.green}💀 PROCESS EXITED (PID: ${ownerPid} is dead) — auto-releasing orphaned claim${colors.reset}`);
           const { error: releaseError } = await supabase.rpc('release_sd', {
             p_session_id: claimResult.owner.session_id,
             p_reason: 'manual'
           });
 
-          if (releaseError) {
-            console.log(`${colors.yellow}   ⚠️  Auto-release failed: ${releaseError.message}${colors.reset}`);
-          } else {
+          if (!releaseError) {
             console.log(`${colors.green}   ✅ Orphaned claim released. Retrying...${colors.reset}`);
             autoReleased = true;
           }
@@ -432,19 +485,71 @@ async function main() {
     }
 
     if (autoReleased) {
-      // Retry the claim after releasing the orphaned session
-      const retryResult = await claimGuard(effectiveId, session.session_id);
-      if (retryResult.success) {
+      claimResult = await claimGuard(effectiveId, session.session_id);
+      if (claimResult.success) {
         console.log(`${colors.green}   ✅ Claim acquired on retry${colors.reset}`);
-        // Replace claimResult for downstream use
-        Object.assign(claimResult, retryResult);
-      } else {
-        console.log(`${colors.red}   ❌ Retry failed: ${retryResult.error}${colors.reset}`);
-        console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
+      }
+    }
+
+    // SD-LEO-INFRA-PRE-CLAIM-CHECK-001: Auto-fallback to next workable SD
+    if (!claimResult.success && fallbackEnabled) {
+      skippedSDs.push({ sdKey: effectiveId, reason: claimResult.error, owner: claimResult.owner?.session_id });
+      console.log(`\n${colors.cyan}🔄 AUTO-FALLBACK: ${effectiveId} is claimed — searching for next workable SD...${colors.reset}`);
+
+      const excludeKeys = [effectiveId];
+      let fallbackAttempt = 0;
+      let fallbackSuccess = false;
+
+      while (fallbackAttempt < MAX_FALLBACK_ATTEMPTS) {
+        fallbackAttempt++;
+        const nextSD = await getNextWorkableSD(excludeKeys);
+
+        if (!nextSD) {
+          console.log(`${colors.yellow}   ⚠️  No more workable SDs in queue (attempt ${fallbackAttempt}/${MAX_FALLBACK_ATTEMPTS})${colors.reset}`);
+          break;
+        }
+
+        console.log(`${colors.dim}   Attempt ${fallbackAttempt}/${MAX_FALLBACK_ATTEMPTS}: Trying ${nextSD.sdKey} — ${nextSD.title}${colors.reset}`);
+        claimResult = await claimGuard(nextSD.sdKey, session.session_id, { autoFallback: true });
+
+        if (claimResult.success) {
+          // Update effectiveId and SD details to the fallback SD
+          effectiveId = nextSD.sdKey;
+          const fallbackSd = await getSDDetails(nextSD.sdKey);
+          if (fallbackSd && !fallbackSd.error) {
+            Object.assign(sd, fallbackSd);
+          }
+          fallbackSuccess = true;
+          console.log(`${colors.green}   ✅ Claimed fallback SD: ${nextSD.sdKey}${colors.reset}`);
+          break;
+        }
+
+        skippedSDs.push({ sdKey: nextSD.sdKey, reason: claimResult.error, owner: claimResult.owner?.session_id });
+        excludeKeys.push(nextSD.sdKey);
+        console.log(`${colors.yellow}   ⚠️  ${nextSD.sdKey} also claimed — skipping${colors.reset}`);
+      }
+
+      if (!fallbackSuccess) {
+        console.log(`\n${colors.red}${colors.bold}❌ AUTO-FALLBACK EXHAUSTED${colors.reset}`);
+        console.log(`   Attempted ${skippedSDs.length} SD(s), all claimed or unavailable:`);
+        skippedSDs.forEach(s => {
+          console.log(`   ${colors.dim}• ${s.sdKey} — ${s.reason}${s.owner ? ` (by ${s.owner})` : ''}${colors.reset}`);
+        });
+        console.log(`\n${colors.bold}Action:${colors.reset} Wait for a session to release, or run ${colors.cyan}npm run sd:next${colors.reset} to review the queue.`);
         console.log('═'.repeat(50));
         process.exit(1);
       }
-    } else {
+
+      // Show summary of skipped SDs
+      if (skippedSDs.length > 0) {
+        console.log(`\n${colors.cyan}📋 Fallback Summary:${colors.reset}`);
+        skippedSDs.forEach(s => {
+          console.log(`   ${colors.dim}⏭️  Skipped ${s.sdKey} — ${s.reason}${colors.reset}`);
+        });
+      }
+    } else if (!claimResult.success) {
+      // Non-fallback path: show error and exit (original behavior)
+      console.log(formatClaimFailure(claimResult));
       console.log(`\n${colors.bold}Action:${colors.reset} Pick a different SD with ${colors.cyan}npm run sd:next${colors.reset}`);
       console.log('═'.repeat(50));
       process.exit(1);
