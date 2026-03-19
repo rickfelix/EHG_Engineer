@@ -115,7 +115,7 @@ function isBoilerplate(text, patterns) {
  * @param {string} options.sdType - SD type for type-aware penalty adjustment
  * @returns {Object} { valid: boolean, issues: array, warnings: array, score: number }
  */
-function validatePRDHeuristic(prd, options = {}) {
+export function validatePRDHeuristic(prd, options = {}) {
   const prdId = prd?.id || 'Unknown';
   const sdType = (options.sdType || '').toLowerCase();
   const issues = [];
@@ -499,6 +499,7 @@ export function getPRDImprovementGuidance(validationResult) {
 
 export default {
   validatePRDQuality,
+  validatePRDHeuristic,
   validatePRDForHandoff,
   getPRDImprovementGuidance
 };
