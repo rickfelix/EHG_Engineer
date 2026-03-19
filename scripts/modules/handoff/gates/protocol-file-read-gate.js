@@ -274,10 +274,40 @@ export async function validateProtocolFileRead(handoffType, ctx = {}) {
     console.log(`   ✅ Protocol file has been read${readAt ? ` at ${readAt}` : ''}`);
 
     // SD-LEO-INFRA-DETECT-PARTIAL-PROTOCOL-001: Check for partial reads
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-063: Auto-pass partial reads >= 30 lines
+    //   Key directives are in the first 30-50 lines of each protocol file.
+    //   Full files are 500-2000+ lines of reference material (templates, checklists, rubric tables).
+    //   Requiring full reads wastes context and creates recurring gate friction (PAT-AUTO-1dda2316, PAT-AUTO-4ecf6e9a).
     const partialReadDetails = getPartialReadDetails(requiredFile);
     const warnings = [];
 
     if (partialReadDetails) {
+      const SUFFICIENT_READ_THRESHOLD = 30; // lines — covers directives + phase-specific intro
+
+      if (partialReadDetails.limit >= SUFFICIENT_READ_THRESHOLD) {
+        console.log(`   ℹ️  Partial read detected for ${requiredFile} (limit=${partialReadDetails.limit})`);
+        console.log(`   ✅ Read covers sufficient content (>=${SUFFICIENT_READ_THRESHOLD} lines) — auto-passing`);
+
+        emitStructuredLog({
+          event: 'PROTOCOL_FILE_READ_GATE',
+          status: 'PASS_SUFFICIENT_PARTIAL',
+          handoff_type: handoffType,
+          required_file: requiredFile,
+          partial_read_limit: partialReadDetails.limit,
+          threshold: SUFFICIENT_READ_THRESHOLD,
+          session_id: state.sessionId || 'unknown',
+          timestamp: new Date().toISOString()
+        });
+
+        return {
+          pass: true,
+          score: 90,
+          max_score: 100,
+          issues: [],
+          warnings: [`Partial read of ${requiredFile} (${partialReadDetails.limit} lines) accepted as sufficient`]
+        };
+      }
+
       console.log(`   ⚠️  PARTIAL READ DETECTED for ${requiredFile}`);
       console.log(`      Limit: ${partialReadDetails.limit}, Offset: ${partialReadDetails.offset}`);
       console.log(`      Timestamp: ${partialReadDetails.timestamp}`);

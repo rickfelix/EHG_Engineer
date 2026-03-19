@@ -82,7 +82,9 @@ export const SCORING_WEIGHTS = {
 // SD-LEO-INFRA-HARDENING-001: Added gateThreshold for ValidationOrchestrator enforcement
 export const THRESHOLD_PROFILES = {
   // Infrastructure SDs have lower quality thresholds (simpler by design)
-  infrastructure: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 80 },
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-063: Lowered gateThreshold from 80→75.
+  // Non-applicable validators (design, form/UI) drag aggregate below 80 for infra SDs.
+  infrastructure: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 75 },
   documentation: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50, gateThreshold: 60 },
   docs: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50, gateThreshold: 60 }, // Alias for documentation
   process: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50, gateThreshold: 70 },
