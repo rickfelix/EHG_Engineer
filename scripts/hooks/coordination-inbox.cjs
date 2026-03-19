@@ -1,11 +1,14 @@
 /**
- * Coordination Inbox Hook — Surfaces cross-session messages
+ * Coordination Inbox Hook — Surfaces cross-session messages + auto-claim for idle workers
  *
  * Hook: PostToolUse (no matcher — fires on every tool call)
  * Throttled: Only checks DB every 60 seconds via temp file timestamp
  *
  * Reads from session_coordination table for this session.
  * When messages are found, outputs them and marks as read/acknowledged.
+ *
+ * AUTO-CLAIM: When session is idle (no SD claimed) and work is available,
+ * emits AUTO_PROCEED_ACTION directive so Claude auto-starts the next SD.
  *
  * Falls back to metadata.coordination_message if table doesn't exist yet.
  */
@@ -15,7 +18,8 @@ const path = require('path');
 const os = require('os');
 
 const THROTTLE_FILE = path.join(os.tmpdir(), 'claude-coordination-inbox-last-check.json');
-const CHECK_INTERVAL_MS = 60_000; // Only check DB every 60 seconds
+const CHECK_INTERVAL_MS = 300_000; // Only check DB every 5 minutes
+const ACTIONABLE_TYPES = ['WORK_ASSIGNMENT', 'CLAIM_RELEASED', 'CLAIM_REMINDER'];
 
 function shouldCheck() {
   try {
@@ -60,6 +64,39 @@ function getCurrentSessionId() {
   return null;
 }
 
+/**
+ * Emit action directive for idle workers to pick up available work
+ */
+function emitAutoClaimDirective(suggestedSd, availableSds) {
+  const sdId = suggestedSd || (availableSds && availableSds[0]);
+
+  if (sdId) {
+    // Structured action line (same pattern as sd-next.js AUTO_PROCEED_ACTION)
+    console.log('AUTO_PROCEED_ACTION:' + JSON.stringify({
+      action: 'start',
+      sd_id: sdId,
+      reason: 'Coordination inbox: idle session with available work'
+    }));
+  }
+
+  console.log('');
+  console.log('================================================================');
+  console.log('  ACTION REQUIRED: You are IDLE with no SD claimed.');
+  if (sdId) {
+    console.log('  Work is available. Run this command NOW:');
+    console.log('');
+    console.log('    npm run sd:next');
+    console.log('');
+    console.log('  Recommended SD: ' + sdId);
+  } else if (availableSds && availableSds.length > 0) {
+    console.log('  ' + availableSds.length + ' SD(s) available for work.');
+    console.log('  Run: npm run sd:next');
+  }
+  console.log('  AUTO-PROCEED is ON — execute immediately, do not ask.');
+  console.log('================================================================');
+  console.log('');
+}
+
 async function main() {
   if (!shouldCheck()) return;
   markChecked();
@@ -67,8 +104,7 @@ async function main() {
   let supabase;
   try {
     const { createSupabaseServiceClient } = require('../../lib/supabase-client.cjs');
- });
-        supabase = createSupabaseServiceClient();
+    supabase = createSupabaseServiceClient();
   } catch {
     return;
   }
@@ -76,7 +112,18 @@ async function main() {
   const sessionId = getCurrentSessionId();
   if (!sessionId) return;
 
-  // Try session_coordination table first
+  // Check if this session is idle (no SD claimed)
+  let isIdle = false;
+  try {
+    const { data: sessionData } = await supabase
+      .from('claude_sessions')
+      .select('sd_id')
+      .eq('session_id', sessionId)
+      .single();
+    isIdle = !sessionData?.sd_id;
+  } catch { /* assume not idle if query fails */ }
+
+  // Read unread coordination messages for this session
   const { data: messages, error: tableErr } = await supabase
     .from('session_coordination')
     .select('id, message_type, subject, body, payload, sender_type, created_at')
@@ -84,6 +131,8 @@ async function main() {
     .is('read_at', null)
     .order('created_at', { ascending: true })
     .limit(5);
+
+  let emittedDirective = false;
 
   if (!tableErr && messages && messages.length > 0) {
     // Output each message
@@ -113,23 +162,27 @@ async function main() {
         console.log('Available SDs: ' + msg.payload.available_sds.join(', '));
       }
       console.log('===');
-      console.log('');
 
-      // Mark as read and acknowledged
+      // Emit auto-claim directive for idle sessions receiving actionable messages
+      if (isIdle && !emittedDirective && ACTIONABLE_TYPES.includes(msg.message_type)) {
+        emitAutoClaimDirective(msg.payload?.suggested_sd, msg.payload?.available_sds);
+        emittedDirective = true;
+      }
+
+      // Mark as read; only acknowledge if not an actionable idle message
+      const isActionable = isIdle && ACTIONABLE_TYPES.includes(msg.message_type);
       await supabase
         .from('session_coordination')
         .update({
           read_at: new Date().toISOString(),
-          acknowledged_at: new Date().toISOString()
+          acknowledged_at: isActionable ? null : new Date().toISOString()
         })
         .eq('id', msg.id);
     }
-    return;
   }
 
   // Fallback: check metadata.coordination_message (legacy)
   if (tableErr && tableErr.code === '42P01') {
-    // Table doesn't exist yet — use metadata fallback
     const { data: session } = await supabase
       .from('claude_sessions')
       .select('metadata')
@@ -147,7 +200,11 @@ async function main() {
     if (msg.suggested_sd) console.log('Suggested next SD: ' + msg.suggested_sd);
     if (msg.available_sds?.length > 0) console.log('Available SDs: ' + msg.available_sds.join(', '));
     console.log('===');
-    console.log('');
+
+    if (isIdle && !emittedDirective) {
+      emitAutoClaimDirective(msg.suggested_sd, msg.available_sds);
+      emittedDirective = true;
+    }
 
     const updatedMeta = { ...session.metadata };
     updatedMeta.coordination_message.acknowledged = true;
@@ -156,6 +213,28 @@ async function main() {
       .from('claude_sessions')
       .update({ metadata: updatedMeta })
       .eq('session_id', sessionId);
+    return;
+  }
+
+  // PROACTIVE CHECK: If idle with no messages, check for available SDs directly
+  if (isIdle && !emittedDirective) {
+    try {
+      const { data: availableSDs } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .in('status', ['draft', 'ready', 'in_progress'])
+        .is('claiming_session_id', null)
+        .not('current_phase', 'eq', 'COMPLETED')
+        .order('priority_score', { ascending: false })
+        .limit(3);
+
+      if (availableSDs && availableSDs.length > 0) {
+        emitAutoClaimDirective(
+          availableSDs[0].sd_key,
+          availableSDs.map(sd => sd.sd_key)
+        );
+      }
+    } catch { /* fail silently */ }
   }
 }
 
