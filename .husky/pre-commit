@@ -258,7 +258,10 @@ if [ ! -z "$STAGED_JS_FOR_PERSIST" ]; then
     # Check for direct inserts/upserts to eva_stage_gate_results
     DIRECT_GATE=$(git diff --cached -U0 "$file" 2>/dev/null | grep "^+" | grep -v "^+++" | grep -E "from\(['\"]eva_stage_gate_results['\"]" | grep -iE "\.(insert|upsert)" || true)
 
-    if [ ! -z "$DIRECT_ARTIFACT" ] || [ ! -z "$DIRECT_GATE" ]; then
+    # Check for direct .update({ current_lifecycle_stage }) on ventures table
+    DIRECT_STAGE=$(git diff --cached -U0 "$file" 2>/dev/null | grep "^+" | grep -v "^+++" | grep -E "update\(\{.*current_lifecycle_stage" || true)
+
+    if [ ! -z "$DIRECT_ARTIFACT" ] || [ ! -z "$DIRECT_GATE" ] || [ ! -z "$DIRECT_STAGE" ]; then
       PERSIST_VIOLATIONS="${PERSIST_VIOLATIONS}   - ${file}\n"
     fi
   done
