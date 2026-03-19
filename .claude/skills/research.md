@@ -4,7 +4,7 @@ description: Multi-model deep research using AI providers for exploration and an
 
 # /research - Deep Research Command
 
-**Command:** /research <question> [--context <context>]
+**Command:** /research <question> [--context <context>] [--deep]
 
 ## Overview
 
@@ -29,14 +29,20 @@ Use `/research` when you need to:
 
 Extract the question from `$ARGUMENTS`. If no arguments provided, use AskUserQuestion to get the research topic.
 
+Check for `--deep` flag in arguments. If present, enable deep research mode which uses extended thinking/reasoning models for more thorough analysis (higher token budget, longer timeouts).
+
 ### Step 2: Run the Research Engine
 
 ```javascript
 import { runResearch } from '../../lib/research/research-engine.js';
 
+const deep = "$ARGUMENTS".includes('--deep');
+const question = "$ARGUMENTS".replace('--deep', '').trim();
+
 const result = await runResearch({
-  question: "$ARGUMENTS",
-  context: additionalContext || undefined
+  question,
+  context: additionalContext || undefined,
+  deep
 });
 ```
 
