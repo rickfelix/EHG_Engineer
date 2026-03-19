@@ -41,6 +41,12 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 | `design-system` | Tailwind conventions, responsive design | Applying CSS/responsive styles |
 | `ux-workflows` | Loading, error, empty states, multi-step forms | Implementing user feedback |
 | `ui-testing` | data-testid, Playwright selectors, E2E patterns | Making components testable |
+| `ehg-design-parameters` | Tunable DESIGN_VARIANCE, MOTION_INTENSITY, VISUAL_DENSITY (1-10) | Per-venture aesthetic control |
+| `ehg-redesign-skill` | Audit-and-fix guidance for existing UI | Improving existing components |
+| `ehg-soft-skill` | Premium aesthetics: expensive typography, spring animations, depth | Building premium UI |
+| `ehg-minimalist-skill` | Editorial mode: monochrome palettes, Notion/Linear-inspired density | Minimal/clean interfaces |
+| `ehg-output-skill` | Completeness enforcement: no placeholders, no TODOs, no truncation | Ensuring complete output |
+| `ehg-design-anti-patterns` | Explicit ban list: Inter/Roboto fonts, purple gradients, generic SaaS hero | Avoiding generic aesthetics |
 
 ### Agent-Skill Workflow
 1. **Creative Phase**: Model invokes skills for design guidance (how to build)
