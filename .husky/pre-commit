@@ -237,6 +237,55 @@ fi
 echo "✅ No secrets detected in staged files"
 
 # ============================================================================
+# STAGE 1.5: Unified Persistence Service Enforcement (BLOCKING)
+# ============================================================================
+# SD-EVA-INFRA-UNIFIED-PERSIST-SVC-001: All writes to venture_artifacts and
+# eva_stage_gate_results must go through artifact-persistence-service.js.
+# Direct writes outside the service are blocked.
+# ============================================================================
+echo ""
+echo "🔍 Running artifact persistence service enforcement..."
+
+STAGED_JS_FOR_PERSIST=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|mjs|cjs)$' | grep -v 'artifact-persistence-service' | grep -v '__tests__' | grep -v 'test/' | grep -v 'tests/' | grep -v 'backfill-artifact-data' || true)
+
+if [ ! -z "$STAGED_JS_FOR_PERSIST" ]; then
+  PERSIST_VIOLATIONS=""
+
+  for file in $STAGED_JS_FOR_PERSIST; do
+    # Check for direct inserts/upserts to venture_artifacts
+    DIRECT_ARTIFACT=$(git diff --cached -U0 "$file" 2>/dev/null | grep "^+" | grep -v "^+++" | grep -E "from\(['\"]venture_artifacts['\"]" | grep -iE "\.(insert|upsert)" || true)
+
+    # Check for direct inserts/upserts to eva_stage_gate_results
+    DIRECT_GATE=$(git diff --cached -U0 "$file" 2>/dev/null | grep "^+" | grep -v "^+++" | grep -E "from\(['\"]eva_stage_gate_results['\"]" | grep -iE "\.(insert|upsert)" || true)
+
+    if [ ! -z "$DIRECT_ARTIFACT" ] || [ ! -z "$DIRECT_GATE" ]; then
+      PERSIST_VIOLATIONS="${PERSIST_VIOLATIONS}   - ${file}\n"
+    fi
+  done
+
+  if [ ! -z "$PERSIST_VIOLATIONS" ]; then
+    echo ""
+    echo "❌ BLOCKED: Direct writes to protected tables detected!"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "Files with direct writes (must use artifact-persistence-service.js):"
+    echo ""
+    echo -e "$PERSIST_VIOLATIONS"
+    echo ""
+    echo "💡 REMEDIATION:"
+    echo "   Use the unified persistence service instead:"
+    echo "   import { writeArtifact, recordGateResult, advanceStage }"
+    echo "     from 'lib/eva/artifact-persistence-service.js';"
+    echo ""
+    echo "   Emergency bypass (logged): git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
+echo "✅ Artifact persistence service enforcement passed"
+
+# ============================================================================
 # Auto-fix Linting Issues
 # ============================================================================
 echo "🔍 Running ESLint auto-fix on staged files..."
