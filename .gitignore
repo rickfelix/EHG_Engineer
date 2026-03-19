@@ -25,6 +25,9 @@ applications/*/.env.encrypted
 applications/*/.env.decrypted
 applications/*/.leo-sync/supabase/.temp/
 
+# Deep research output files (SD-LEO-FEAT-DEEP-RESEARCH-API-001)
+.research/
+
 # Vision/Architecture documents are DB-only — never commit markdown versions
 docs/plans/*-vision.md
 docs/plans/*-architecture.md
@@ -231,3 +234,4 @@ nul
 tests/e2e/ehg-app/.auth/
 tests/e2e/.auth/
 tests/uat/.auth/
+.research/
