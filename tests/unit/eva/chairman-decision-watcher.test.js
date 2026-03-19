@@ -210,4 +210,48 @@ describe('createOrReusePendingDecision', () => {
       summary: 'updated',
     });
   });
+
+  // SD-VW-FIX-WORKER-GATE-REENTRY-001: Test re-entry after approval
+  it('handles 23505 when existing decision is already approved', async () => {
+    let fromCallCount = 0;
+    const supabase = {
+      from: vi.fn().mockImplementation(() => {
+        fromCallCount++;
+        const chain = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          single: vi.fn().mockImplementation(() => {
+            if (fromCallCount === 1) {
+              // First: check for pending — none found
+              return Promise.resolve({ data: null });
+            }
+            if (fromCallCount === 2) {
+              // Second: check for pending after 23505 — none found
+              return Promise.resolve({ data: null });
+            }
+            // Third: check for approved/rejected — found
+            return Promise.resolve({ data: { id: 'approved-id' } });
+          }),
+          insert: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: null,
+                error: { code: '23505', message: 'unique_violation' },
+              }),
+            }),
+          }),
+        };
+        return chain;
+      }),
+    };
+
+    const result = await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 5, supabase, logger,
+    });
+    expect(result.id).toBe('approved-id');
+    expect(result.isNew).toBe(false);
+  });
 });
