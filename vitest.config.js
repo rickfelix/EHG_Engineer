@@ -43,6 +43,7 @@ export default defineConfig({
       '**/archive/**',
       '**/.worktrees/**',
       '**/.cursor/worktrees/**',
+      '**/.claude/worktrees/**',
     ],
     server: {
       deps: {
