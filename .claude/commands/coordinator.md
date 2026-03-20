@@ -16,6 +16,7 @@ Parse `$ARGUMENTS` to determine the subcommand:
 - `forecast` or `f` → Burn rate, velocity, and ETA for orchestrator + full queue
 - `predictions` or `p` → Predictive signals (capacity, unlock forecast, heartbeat aging)
 - `sweep` or `s` → Run stale session sweep (release dead claims, resolve conflicts, QA fixes)
+- `identity` or `id` → Assign colors and callsigns to active workers
 - `help` → Show usage help
 
 ARGUMENTS: $ARGUMENTS
@@ -37,6 +38,7 @@ Map the argument to the appropriate action:
 - `forecast`, `f` → dashboard forecast section
 - `predictions`, `p` → dashboard predictions section
 - `sweep`, `s` → run sweep script
+- `identity`, `id` → assign fleet identities
 - `all`, no args → full dashboard
 - `help` → show help
 
@@ -91,26 +93,38 @@ node scripts/stale-session-sweep.cjs
 ```
 Display the output and summarize actions taken.
 
-**Step 2: Run full dashboard to show current fleet status**
+**Step 2: Assign fleet identities (colors and callsigns)**
+```bash
+node scripts/assign-fleet-identities.cjs
+```
+This assigns each active worker a unique color and NATO callsign (Alpha, Bravo, Charlie...).
+Workers receive a `SET_IDENTITY` coordination message and their statusline updates automatically.
+Display the assignment table output.
+
+**Step 3: Run full dashboard to show current fleet status**
 ```bash
 node scripts/fleet-dashboard.cjs all
 ```
 Display the output.
 
-**Step 3: Set up automated cron loops using CronCreate**
+**Step 4: Set up automated cron loops using CronCreate**
 
-Create two recurring cron jobs:
+Create three recurring cron jobs:
 1. **Sweep every 5 minutes**: `cron: "*/5 * * * *"`, `prompt: "node scripts/stale-session-sweep.cjs"`, `recurring: true`
 2. **Dashboard every 5 minutes (offset by 2 min)**: `cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"`, `prompt: "node scripts/fleet-dashboard.cjs all"`, `recurring: true`
+3. **Identity refresh every 5 minutes (offset by 4 min)**: `cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"`, `prompt: "node scripts/assign-fleet-identities.cjs"`, `recurring: true`
 
-**Step 4: Confirm setup**
+The identity refresh loop detects new workers that joined since the last assignment and gives them a color/callsign. Existing assignments are preserved (the script reads current metadata and only assigns to workers without an identity).
+
+**Step 5: Confirm setup**
 
 Display:
 ```
 Coordinator initialized.
   Sweep loop: every 5 minutes (auto-releases dead claims, resolves conflicts, QA fixes)
   Dashboard loop: every 5 minutes (offset 2min from sweep)
-  Both loops auto-expire after 3 days or when this session exits.
+  Identity loop: every 5 minutes (offset 4min — assigns colors/callsigns to new workers)
+  All loops auto-expire after 3 days or when this session exits.
 
   Fleet is now running on autopilot. You will see sweep and dashboard output automatically.
   Use /coordinator help to see all subcommands.
@@ -125,6 +139,16 @@ node scripts/stale-session-sweep.cjs
 ```
 
 Display the output and summarize any actions taken (releases, conflict resolutions, QA fixes).
+
+#### For `identity` or `id`:
+
+```bash
+node scripts/assign-fleet-identities.cjs
+```
+
+Assigns colors and NATO callsigns to all active workers. New workers without an identity get the next available color/callsign. Workers receive a `SET_IDENTITY` coordination message and their statusline updates automatically on the next inbox check.
+
+Display the assignment table output.
 
 #### For `help`:
 
@@ -145,6 +169,7 @@ Subcommands:
   /coordinator forecast (f) Burn rate, velocity, ETA for orchestrator + full queue
   /coordinator predict  (p) Predictive signals — capacity, unlock forecast, aging
   /coordinator sweep    (s) Run stale session sweep — release dead, resolve conflicts
+  /coordinator identity (id) Assign colors and callsigns to active workers
   /coordinator help         Show this help
 
 Getting Started:

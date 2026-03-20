@@ -198,11 +198,29 @@ try {
   }
 } catch (_) { /* intentionally silent: auto-proceed display is optional */ }
 
+// Fleet identity (assigned by coordinator via assign-fleet-identities.cjs)
+let fleetCallsign = '';
+let fleetColor = '';
+try {
+  const identityFile = path.join(__dirname, 'fleet-identity.json');
+  if (fs.existsSync(identityFile)) {
+    const identity = JSON.parse(fs.readFileSync(identityFile, 'utf8'));
+    fleetCallsign = identity.callsign || '';
+    fleetColor = identity.color || '';
+  }
+} catch (_) { /* intentionally silent */ }
+
 // Project info
 const projectName = path.basename(cwd);
 let projectInfo = projectName;
 if (gitBranch && activeWorktreeSd) projectInfo = `${projectName}:${gitBranch}${gitDirty} [${activeWorktreeSd}]`;
 else if (gitBranch) projectInfo = `${projectName}:${gitBranch}${gitDirty}`;
+if (fleetCallsign) {
+  const FC = { red: `${ESC}[31m`, blue: `${ESC}[34m`, green: `${ESC}[32m`, yellow: `${ESC}[33m`,
+    purple: `${ESC}[35m`, orange: `${ESC}[38;5;208m`, pink: `${ESC}[38;5;213m`, cyan: `${ESC}[36m` };
+  const fc = FC[fleetColor] || '';
+  projectInfo = `${fc}${fleetCallsign}${fc ? RESET : ''} | ${projectInfo}`;
+}
 
 // Progress section (only show when WARNING or above)
 const progressSection = status === 'HEALTHY'
