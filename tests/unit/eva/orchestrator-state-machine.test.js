@@ -504,11 +504,12 @@ describe('markCompleted', () => {
   });
 
   it('should mark venture as completed when in processing state', async () => {
+    // markCompleted uses .eq(id).in(state, [processing, idle]) instead of .eq().eq()
     mockDb = {
       from: vi.fn().mockReturnValue({
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
               select: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
                   data: { id: 'venture-1', orchestrator_state: 'completed' },
@@ -530,7 +531,7 @@ describe('markCompleted', () => {
       from: vi.fn().mockReturnValue({
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockReturnValue({
               select: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({
                   data: null,
@@ -550,14 +551,14 @@ describe('markCompleted', () => {
 
   it('should verify lockId when provided', async () => {
     const eqCalls = [];
+    // markCompleted chain: .eq(id).in(state).eq(lockId) when lockId provided
     mockDb = {
       from: vi.fn().mockReturnValue({
         update: vi.fn().mockReturnValue({
           eq: vi.fn().mockImplementation((...args) => {
             eqCalls.push(args);
             return {
-              eq: vi.fn().mockImplementation((...args2) => {
-                eqCalls.push(args2);
+              in: vi.fn().mockImplementation((...inArgs) => {
                 return {
                   eq: vi.fn().mockImplementation((...args3) => {
                     eqCalls.push(args3);
