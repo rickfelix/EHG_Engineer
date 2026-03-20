@@ -215,7 +215,7 @@ The EHG Venture Factory uses a **Unified Platform Architecture** - one shared co
 | Venture metadata | `ventures` table | Row per venture |
 | Stage progress | `venture_stage_work` table | `venture_id` foreign key |
 | Artifacts (specs, manifests) | `venture_artifacts` table | `venture_id` foreign key |
-| System prompts (DB) | `venture_artifacts` | `artifact_type = 'system_prompt'` |
+| System prompts (DB) | `venture_artifacts` | `artifact_type = 'build_system_prompt'` |
 | System prompts (Files) | `.claude/prompts/` | Prefixed: `solara-coder.md` |
 | Strategic Directives | `strategic_directives_v2` | Named: `SD-SOLARA-SCHEMA-001` |
 | Produced code (MVP+) | Venture's own repo/deploy | Created at Stage 18, deployed at Stage 22 |
@@ -819,8 +819,8 @@ IF score < threshold                 IF score < threshold
 | **12** | Sales & Success Logic | `artifact_only` | No | Sales playbook, success metrics |
 
 **Critical Sequencing Logic**:
-1. Stage 10 creates the `strategic_narrative` FIRST - defining the founder's "why", the villain, the hero's journey, and brand archetype
-2. Stage 10 then creates the `marketing_manifest` - using the narrative to define voice, visual identity, and multimedia specs
+1. Stage 10 creates the `identity_persona_brand` FIRST - defining the founder's "why", the villain, the hero's journey, and brand archetype
+2. Stage 10 then creates the `identity_persona_brand` - using the narrative to define voice, visual identity, and multimedia specs
 3. Stage 11 uses BOTH the narrative (soul) and manifest (expression) to generate naming candidates
 
 > **"You cannot name the hero until you know their story."** - Chairman Override (2025-12-06)
@@ -1174,28 +1174,28 @@ CREATE TABLE venture_artifacts (
 
 | Stage | Artifact Type | Format |
 |-------|--------------|--------|
-| 1 | `idea_brief` | Markdown |
-| 2 | `critique_report` | JSON (multi-model responses) |
-| 3 | `validation_report` | JSON (scores, signals) |
-| 4 | `competitive_analysis` | Markdown + JSON data |
-| 5 | `financial_model` | JSON (projections, scenarios) |
-| 6 | `risk_matrix` | JSON (categorized risks) |
-| 7 | `pricing_model` | JSON (tiers, features, prices) |
-| 8 | `business_model_canvas` | JSON (9 BMC blocks) |
-| 9 | `exit_strategy` | Markdown |
-| 10 | `strategic_narrative` | JSON (origin_story, the_villain, heros_journey, brand_archetype) |
-| 10 | `marketing_manifest` | JSON (GenAI multimedia manifest - informed by narrative) |
-| 11 | `brand_guidelines` | Markdown + file_url (logo) |
-| 12 | `sales_playbook` | Markdown |
-| 13 | `tech_stack_decision` | JSON (choices + rationale) |
-| 14 | `data_model` | JSON (entities, relationships) |
-| 15 | `user_story_pack` | JSON (stories array) |
-| 16 | `api_contract` | JSON (OpenAPI spec) |
-| 16 | `schema_spec` | SQL + TypeScript |
-| 17 | `system_prompt` | JSON (agent configs) |
+| 1 | `truth_idea_brief` | Markdown |
+| 2 | `truth_ai_critique` | JSON (multi-model responses) |
+| 3 | `truth_validation_decision` | JSON (scores, signals) |
+| 4 | `truth_competitive_analysis` | Markdown + JSON data |
+| 5 | `truth_financial_model` | JSON (projections, scenarios) |
+| 6 | `engine_risk_matrix` | JSON (categorized risks) |
+| 7 | `engine_pricing_model` | JSON (tiers, features, prices) |
+| 8 | `engine_business_model_canvas` | JSON (9 BMC blocks) |
+| 9 | `engine_exit_strategy` | Markdown |
+| 10 | `identity_persona_brand` | JSON (origin_story, the_villain, heros_journey, brand_archetype) |
+| 10 | `identity_persona_brand` | JSON (GenAI multimedia manifest - informed by narrative) |
+| 11 | `identity_brand_guidelines` | Markdown + file_url (logo) |
+| 12 | `identity_gtm_sales_strategy` | Markdown |
+| 13 | `blueprint_product_roadmap` | JSON (choices + rationale) |
+| 14 | `blueprint_data_model` | JSON (entities, relationships) |
+| 15 | `blueprint_user_story_pack` | JSON (stories array) |
+| 16 | `blueprint_api_contract` | JSON (OpenAPI spec) |
+| 16 | `blueprint_schema_spec` | SQL + TypeScript |
+| 17 | `build_system_prompt` | JSON (agent configs) |
 | 17 | `environment_config` | JSON (env vars, CI/CD) |
-| 23 | `launch_checklist` | Markdown (checklist) |
-| 24 | `analytics_dashboard` | JSON (metrics, queries) |
+| 23 | `launch_marketing_checklist` | Markdown (checklist) |
+| 24 | `launch_analytics_dashboard` | JSON (metrics, queries) |
 | 25 | `media_pipeline_config` | JSON (GenAI orchestration) |
 
 ---
@@ -1420,7 +1420,7 @@ However, certain artifacts (especially System Prompts) need to exist as **files*
 │  ┌─────────────────────────┐         ┌─────────────────────────┐           │
 │  │ venture_artifacts       │         │ .claude/prompts/        │           │
 │  │   artifact_type:        │  ───►   │   solara-coder.md       │           │
-│  │     'system_prompt'     │  sync   │   solara-reviewer.md    │           │
+│  │     'build_system_prompt'     │  sync   │   solara-reviewer.md    │           │
 │  │   content: {...}        │         │   oracle-coder.md       │           │
 │  │   is_current: true      │         │                         │           │
 │  └─────────────────────────┘         └─────────────────────────┘           │
@@ -1445,7 +1445,7 @@ interface SystemPromptArtifact {
     agents: Array<{
       name: string;          // e.g., "solara-coder"
       role: string;          // e.g., "Implementation Agent"
-      system_prompt: string; // The actual prompt content
+      build_system_prompt: string; // The actual prompt content
       model: string;         // e.g., "claude-sonnet-4"
       temperature: number;
     }>;
@@ -1469,7 +1469,7 @@ async function syncSystemPrompts(): Promise<SyncResult> {
       metadata,
       ventures!inner(venture_code, name)
     `)
-    .eq('artifact_type', 'system_prompt')
+    .eq('artifact_type', 'build_system_prompt')
     .eq('is_current', true);
 
   const results: SyncResult = { synced: [], failed: [] };
@@ -1513,7 +1513,7 @@ function generatePromptFile(agent: Agent, ventureName: string): string {
 
 ---
 
-${agent.system_prompt}
+${agent.build_system_prompt}
 
 ---
 *Auto-generated by syncSystemPrompts() - Do not edit directly*
@@ -1559,7 +1559,7 @@ async function syncSystemPrompts(): Promise<SyncResult> {
       metadata,
       ventures!inner(venture_code, name)
     `)
-    .eq('artifact_type', 'system_prompt')
+    .eq('artifact_type', 'build_system_prompt')
     .eq('is_current', true)
     .eq('ventures.venture_code', activeVenture);  // FILTER BY ACTIVE VENTURE
 
@@ -1663,37 +1663,37 @@ npm run sync:prompts
 
 | Artifact Type | Storage | Sync to Filesystem? | Sync Location |
 |--------------|---------|---------------------|---------------|
-| `idea_brief` | DB only | No | - |
-| `critique_report` | DB only | No | - |
-| `validation_report` | DB only | No | - |
-| `competitive_analysis` | DB only | No | - |
-| `financial_model` | DB only | No | - |
-| `risk_matrix` | DB only | No | - |
-| `pricing_model` | DB only | No | - |
-| `business_model_canvas` | DB only | No | - |
-| `exit_strategy` | DB only | No | - |
-| `brand_guidelines` | DB + S3 | No | - |
-| `marketing_manifest` | DB only | No | - |
-| `sales_playbook` | DB only | No | - |
-| `tech_stack_decision` | DB only | No | - |
-| `data_model` | DB only | No | - |
-| `user_story_pack` | DB only | No | - |
-| `api_contract` | DB only | **Yes** | `docs/api/` |
-| `schema_spec` | DB only | **Yes** | `database/schemas/` |
-| `system_prompt` | DB only | **Yes** | `.claude/prompts/` |
+| `truth_idea_brief` | DB only | No | - |
+| `truth_ai_critique` | DB only | No | - |
+| `truth_validation_decision` | DB only | No | - |
+| `truth_competitive_analysis` | DB only | No | - |
+| `truth_financial_model` | DB only | No | - |
+| `engine_risk_matrix` | DB only | No | - |
+| `engine_pricing_model` | DB only | No | - |
+| `engine_business_model_canvas` | DB only | No | - |
+| `engine_exit_strategy` | DB only | No | - |
+| `identity_brand_guidelines` | DB + S3 | No | - |
+| `identity_persona_brand` | DB only | No | - |
+| `identity_gtm_sales_strategy` | DB only | No | - |
+| `blueprint_product_roadmap` | DB only | No | - |
+| `blueprint_data_model` | DB only | No | - |
+| `blueprint_user_story_pack` | DB only | No | - |
+| `blueprint_api_contract` | DB only | **Yes** | `docs/api/` |
+| `blueprint_schema_spec` | DB only | **Yes** | `database/schemas/` |
+| `build_system_prompt` | DB only | **Yes** | `.claude/prompts/` |
 | `environment_config` | DB only | **Yes** | `.env.example` |
-| `launch_checklist` | DB only | No | - |
-| `analytics_dashboard` | DB only | No | - |
+| `launch_marketing_checklist` | DB only | No | - |
+| `launch_analytics_dashboard` | DB only | No | - |
 
 ### 5.5 GenAI Marketing Manifest Strategy (The Manifest)
 
-The `marketing_manifest` artifact defines how GenAI tools generate **both text AND multimedia content**. This is the central configuration for all automated content generation.
+The `identity_persona_brand` artifact defines how GenAI tools generate **both text AND multimedia content**. This is the central configuration for all automated content generation.
 
 **Required Schema Fields:**
 
 ```json
 {
-  "artifact_type": "marketing_manifest",
+  "artifact_type": "identity_persona_brand",
   "venture_id": "uuid-of-solara",
   "content": {
     // === TEXT CONTENT CONFIG ===
@@ -2008,7 +2008,7 @@ stages:
     phase_name: "THE TRUTH"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["idea_brief"]
+    required_artifacts: ["truth_idea_brief"]
     advisory_enabled: false
 
   - stage_number: 2
@@ -2017,7 +2017,7 @@ stages:
     phase_name: "THE TRUTH"
     work_type: "automated_check"
     sd_required: false
-    required_artifacts: ["critique_report"]
+    required_artifacts: ["truth_ai_critique"]
     advisory_enabled: false
 
   - stage_number: 3
@@ -2026,7 +2026,7 @@ stages:
     phase_name: "THE TRUTH"
     work_type: "decision_gate"
     sd_required: false
-    required_artifacts: ["validation_report"]
+    required_artifacts: ["truth_validation_decision"]
     advisory_enabled: true
 
   - stage_number: 4
@@ -2035,7 +2035,7 @@ stages:
     phase_name: "THE TRUTH"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["competitive_analysis"]
+    required_artifacts: ["truth_competitive_analysis"]
     advisory_enabled: false
 
   - stage_number: 5
@@ -2044,7 +2044,7 @@ stages:
     phase_name: "THE TRUTH"
     work_type: "decision_gate"
     sd_required: false
-    required_artifacts: ["financial_model"]
+    required_artifacts: ["truth_financial_model"]
     advisory_enabled: true
 
   # PHASE 2: THE ENGINE
@@ -2054,7 +2054,7 @@ stages:
     phase_name: "THE ENGINE"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["risk_matrix"]
+    required_artifacts: ["engine_risk_matrix"]
     advisory_enabled: false
 
   - stage_number: 7
@@ -2063,7 +2063,7 @@ stages:
     phase_name: "THE ENGINE"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["pricing_model"]
+    required_artifacts: ["engine_pricing_model"]
     advisory_enabled: false
 
   - stage_number: 8
@@ -2072,7 +2072,7 @@ stages:
     phase_name: "THE ENGINE"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["business_model_canvas"]
+    required_artifacts: ["engine_business_model_canvas"]
     advisory_enabled: false
 
   - stage_number: 9
@@ -2081,7 +2081,7 @@ stages:
     phase_name: "THE ENGINE"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["exit_strategy"]
+    required_artifacts: ["engine_exit_strategy"]
     advisory_enabled: false
 
   # PHASE 3: THE IDENTITY
@@ -2091,18 +2091,18 @@ stages:
     phase_name: "THE IDENTITY"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["strategic_narrative", "marketing_manifest"]
+    required_artifacts: ["identity_persona_brand", "identity_persona_brand"]
     advisory_enabled: false
     # CRITICAL INSIGHT: We cannot name the hero until we know their story.
-    # The strategic_narrative artifact MUST be created FIRST, then marketing_manifest.
+    # The identity_persona_brand artifact MUST be created FIRST, then identity_persona_brand.
     #
-    # strategic_narrative JSON structure:
+    # identity_persona_brand JSON structure:
     #   origin_story: The Founder's 'Why' - the personal motivation and vision
     #   the_villain: The specific pain/enemy the user fights against
     #   heros_journey: The transformation from struggle to victory
     #   brand_archetype: One of 12 Jungian archetypes (The Rebel, The Sage, The Magician, etc.)
     #
-    # The marketing_manifest then uses this narrative to define the "Vibe" -
+    # The identity_persona_brand then uses this narrative to define the "Vibe" -
     # brand voice, visual identity, and multimedia generation specs.
 
   - stage_number: 11
@@ -2111,9 +2111,9 @@ stages:
     phase_name: "THE IDENTITY"
     work_type: "sd_required"
     sd_required: true
-    required_artifacts: ["brand_guidelines"]
+    required_artifacts: ["identity_brand_guidelines"]
     sd_suffix: "NAMING"
-    sd_template: "Execute strategic naming process for {venture_name}. Use the strategic_narrative (origin_story, villain, hero's journey, archetype) and marketing_manifest 'Vibe' to generate name candidates that embody the brand's story and soul."
+    sd_template: "Execute strategic naming process for {venture_name}. Use the identity_persona_brand (origin_story, villain, hero's journey, archetype) and identity_persona_brand 'Vibe' to generate name candidates that embody the brand's story and soul."
     advisory_enabled: false
     # SEQUENCING: This stage STRICTLY follows Stage 10.
     # You cannot name the hero until you know their story.
@@ -2124,7 +2124,7 @@ stages:
     phase_name: "THE IDENTITY"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["sales_playbook"]
+    required_artifacts: ["identity_gtm_sales_strategy"]
     advisory_enabled: false
 
   # PHASE 4: THE BLUEPRINT
@@ -2134,7 +2134,7 @@ stages:
     phase_name: "THE BLUEPRINT"
     work_type: "decision_gate"
     sd_required: false
-    required_artifacts: ["tech_stack_decision"]
+    required_artifacts: ["blueprint_product_roadmap"]
     advisory_enabled: false
 
   - stage_number: 14
@@ -2143,7 +2143,7 @@ stages:
     phase_name: "THE BLUEPRINT"
     work_type: "sd_required"
     sd_required: true
-    required_artifacts: ["data_model"]
+    required_artifacts: ["blueprint_data_model"]
     sd_suffix: "DATAMODEL"
     sd_template: "Design data model and architecture for {venture_name}"
     advisory_enabled: false
@@ -2154,7 +2154,7 @@ stages:
     phase_name: "THE BLUEPRINT"
     work_type: "sd_required"
     sd_required: true
-    required_artifacts: ["user_story_pack"]
+    required_artifacts: ["blueprint_user_story_pack"]
     sd_suffix: "STORIES"
     sd_template: "Create epic and user story breakdown for {venture_name}"
     advisory_enabled: false
@@ -2165,7 +2165,7 @@ stages:
     phase_name: "THE BLUEPRINT"
     work_type: "decision_gate"
     sd_required: true
-    required_artifacts: ["api_contract", "schema_spec"]
+    required_artifacts: ["blueprint_api_contract", "blueprint_schema_spec"]
     sd_suffix: "SCHEMA"
     sd_template: "Generate TypeScript interfaces and SQL schemas for {venture_name}"
     advisory_enabled: true
@@ -2177,7 +2177,7 @@ stages:
     phase_name: "THE BUILD LOOP"
     work_type: "sd_required"
     sd_required: true
-    required_artifacts: ["system_prompt", "environment_config"]
+    required_artifacts: ["build_system_prompt", "environment_config"]
     sd_suffix: "ENVCONFIG"
     sd_template: "Configure development environment and AI agents for {venture_name}"
     advisory_enabled: false
@@ -2244,7 +2244,7 @@ stages:
     phase_name: "LAUNCH & LEARN"
     work_type: "decision_gate"
     sd_required: false
-    required_artifacts: ["launch_checklist"]
+    required_artifacts: ["launch_marketing_checklist"]
     advisory_enabled: false
 
   - stage_number: 24
@@ -2253,7 +2253,7 @@ stages:
     phase_name: "LAUNCH & LEARN"
     work_type: "artifact_only"
     sd_required: false
-    required_artifacts: ["analytics_dashboard"]
+    required_artifacts: ["launch_analytics_dashboard"]
     advisory_enabled: false
 
   - stage_number: 25
@@ -2282,22 +2282,22 @@ stages:
 | ADR-002-006 | Archetype-based benchmarks | Different ventures have different healthy metrics | 2025-12-06 |
 | **ADR-002-007** | **Kill Switch with ventures.status** | **Board Feedback**: Chairman needs hard kill capability with auto-SD cancellation | 2025-12-06 |
 | **ADR-002-008** | **Decision time-boxing via decision_due_at** | **Board Feedback**: Governance requires time-boxed decision gates | 2025-12-06 |
-| **ADR-002-009** | **Distribution Layer in marketing_manifest** | **Board Feedback**: Must ship content, not just generate (LinkedIn, X, Resend, Vercel APIs) | 2025-12-06 |
+| **ADR-002-009** | **Distribution Layer in identity_persona_brand** | **Board Feedback**: Must ship content, not just generate (LinkedIn, X, Resend, Vercel APIs) | 2025-12-06 |
 | **ADR-002-010** | **Stage 10/11 Swap: Vibe before Name** | **Board Feedback**: Positioning & Manifest first, then Naming uses the Vibe | 2025-12-06 |
 | **ADR-002-011** | **.active_venture context file** | **Board Feedback**: Sync prompts per-venture to avoid folder pollution | 2025-12-06 |
-| **ADR-002-012** | **Strategic Narrative before Naming** | **Chairman Override**: "You cannot name the hero until you know their story" - Stage 10 requires strategic_narrative artifact BEFORE naming | 2025-12-06 |
+| **ADR-002-012** | **Strategic Narrative before Naming** | **Chairman Override**: "You cannot name the hero until you know their story" - Stage 10 requires identity_persona_brand artifact BEFORE naming | 2025-12-06 |
 
 ---
 
 ## 11. Strategic Narrative Artifact Schema
 
-The `strategic_narrative` artifact (Stage 10) defines the soul of the brand before any naming or visual identity work begins.
+The `identity_persona_brand` artifact (Stage 10) defines the soul of the brand before any naming or visual identity work begins.
 
 ### 11.1 JSON Schema
 
 ```json
 {
-  "artifact_type": "strategic_narrative",
+  "artifact_type": "identity_persona_brand",
   "venture_id": "uuid",
   "lifecycle_stage": 10,
   "title": "{venture_name} Strategic Narrative",
@@ -2363,16 +2363,16 @@ Stage 9 (Exit Strategy) COMPLETE
          ▼
 Stage 10: Strategic Narrative & Positioning
          │
-         ├── STEP 1: Create strategic_narrative artifact
+         ├── STEP 1: Create identity_persona_brand artifact
          │   (origin_story → the_villain → heros_journey → brand_archetype)
          │
-         ├── STEP 2: Create marketing_manifest artifact
+         ├── STEP 2: Create identity_persona_brand artifact
          │   (Uses narrative to define voice, visuals, multimedia specs)
          │
          ▼
 Stage 11: Strategic Naming
          │
-         └── USES: strategic_narrative.brand_archetype + marketing_manifest.voice
+         └── USES: identity_persona_brand.brand_archetype + identity_persona_brand.voice
              to generate name candidates that embody the story
 ```
 
@@ -2867,7 +2867,7 @@ cleanupLegacySDs();
 | **ADR-002-005** | **Platform-as-a-Factory Model** | Shared services (AI Gateway, Auth) consumed by ventures | 2025-12-06 |
 | **ADR-002-006** | **Hybrid Database Isolation** | Shared factory schema + per-venture schemas for customer data | 2025-12-06 |
 | **ADR-002-007** | **Kill Switch Governance** | ventures.status enum with decision_due_at dates and Kill Protocol | 2025-12-06 |
-| **ADR-002-008** | **Distribution Layer in GTM** | distribution_config artifact in marketing_manifest for growth | 2025-12-06 |
+| **ADR-002-008** | **Distribution Layer in GTM** | distribution_config artifact in identity_persona_brand for growth | 2025-12-06 |
 | **ADR-002-009** | **Stage 10/11 Swap** | Story (Narrative) before Name, not after | 2025-12-06 |
 | **ADR-002-010** | **Context Switch File** | .active_venture file for multi-venture session management | 2025-12-06 |
 | **ADR-002-011** | **Leo Dashboard Integration** | Unified Chairman Console vision for portfolio-wide visibility | 2025-12-06 |

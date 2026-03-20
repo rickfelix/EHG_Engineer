@@ -586,7 +586,7 @@ INSERT INTO tool_registry (tool_name, display_name, tool_category, implementatio
 ('market_data', 'Market Data API', 'research', 'api', '{"provider": "statista", "endpoint": "/data"}', 3),
 
 -- Analysis Tools
-('financial_model', 'Financial Modeling Engine', 'analysis', 'function', '{"module": "lib/tools/financial_model.ts"}', 3),
+('truth_financial_model', 'Financial Modeling Engine', 'analysis', 'function', '{"module": "lib/tools/truth_financial_model.ts"}', 3),
 ('sentiment_analyzer', 'Sentiment Analysis', 'analysis', 'api', '{"provider": "openai", "model": "gpt-4o-mini"}', 4),
 ('tam_calculator', 'TAM/SAM Calculator', 'analysis', 'function', '{"module": "lib/tools/tam_calculator.ts"}', 4),
 
@@ -876,7 +876,7 @@ const STANDARD_VENTURE_TEMPLATE: VentureTemplate = {
     {
       role: 'VP_STRATEGY',
       capabilities: ['market_analysis', 'competitive_intel', 'financial_modeling'],
-      tools: ['web_search', 'market_data', 'financial_model', 'tam_calculator'],
+      tools: ['web_search', 'market_data', 'truth_financial_model', 'tam_calculator'],
       stage_ownership: [1, 2, 3, 4, 5, 6, 7, 8, 9],
     },
     {
@@ -903,7 +903,7 @@ const STANDARD_VENTURE_TEMPLATE: VentureTemplate = {
     // VP_STRATEGY crews
     { role: 'MARKET_RESEARCH_CREW', executive_parent: 'VP_STRATEGY', capabilities: ['market_research'], tools: ['web_search', 'market_data'] },
     { role: 'COMPETITIVE_INTEL_CREW', executive_parent: 'VP_STRATEGY', capabilities: ['competitor_analysis'], tools: ['web_search', 'company_lookup'] },
-    { role: 'FINANCIAL_MODELING_CREW', executive_parent: 'VP_STRATEGY', capabilities: ['financial_analysis'], tools: ['financial_model', 'tam_calculator'] },
+    { role: 'FINANCIAL_MODELING_CREW', executive_parent: 'VP_STRATEGY', capabilities: ['financial_analysis'], tools: ['truth_financial_model', 'tam_calculator'] },
     { role: 'RISK_ASSESSMENT_CREW', executive_parent: 'VP_STRATEGY', capabilities: ['risk_analysis'], tools: ['web_search', 'document_writer'] },
     // VP_PRODUCT crews
     { role: 'NAMING_CREW', executive_parent: 'VP_PRODUCT', capabilities: ['brand_creation'], tools: ['web_search', 'document_writer'] },

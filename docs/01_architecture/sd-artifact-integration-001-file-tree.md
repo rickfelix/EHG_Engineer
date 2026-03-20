@@ -75,11 +75,11 @@ stages:
   1:
     name: "Draft Idea & Chairman Review"
     required_artifacts: []
-    optional_artifacts: [idea_brief]
+    optional_artifacts: [truth_idea_brief]
     gate_type: soft
   2:
     name: "AI Multi-Model Critique"
-    required_artifacts: [critique_report]
+    required_artifacts: [truth_ai_critique]
     optional_artifacts: [vision_visualization]
     gate_type: soft
   3:

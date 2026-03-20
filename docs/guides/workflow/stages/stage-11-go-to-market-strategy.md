@@ -57,8 +57,8 @@ This is an artifact-only stage focused on producing specific outputs.
 
 ## Artifacts
 
-- **`gtm_plan`**
-- **`marketing_manifest`**
+- **`identity_naming_visual`**
+- **`identity_persona_brand`**
 - **`brand_messaging_options`**
 
 ## Entry Gates
@@ -120,9 +120,7 @@ No specific exit gates defined.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
-- `venture_gtm_plan` (if separate table)
-- `venture_marketing_manifest` (if separate table)
+- `venture_stage_work` - Stage entry/completion tracking
 - `venture_brand_messaging_options` (if separate table)
 
 ## Related Documentation

@@ -596,7 +596,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 8000,
     timeout: 15,
     requiredCapabilities: ['ideation', 'critique', 'structuring'],
-    outputTypes: ['idea_canvas', 'problem_statement'],
+    outputTypes: ['idea_canvas', 'truth_problem_statement'],
   },
 
   MARKET_VALIDATION: {
@@ -625,7 +625,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     stages: [5],
     defaultTokenBudget: 15000,
     timeout: 20,
-    requiredCapabilities: ['unit_economics', 'financial_projection', 'sensitivity_analysis'],
+    requiredCapabilities: ['unit_economics', 'blueprint_financial_projection', 'sensitivity_analysis'],
     outputTypes: ['unit_economics_model', 'profitability_forecast'],
   },
 
@@ -636,7 +636,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 12000,
     timeout: 15,
     requiredCapabilities: ['risk_identification', 'mitigation_planning', 'probability_assessment'],
-    outputTypes: ['risk_matrix', 'mitigation_plan'],
+    outputTypes: ['engine_risk_matrix', 'mitigation_plan'],
   },
 
   PRICING_STRATEGY: {
@@ -646,7 +646,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 10000,
     timeout: 15,
     requiredCapabilities: ['pricing_models', 'value_analysis', 'competitive_pricing'],
-    outputTypes: ['pricing_model', 'price_sensitivity_analysis'],
+    outputTypes: ['engine_pricing_model', 'price_sensitivity_analysis'],
   },
 
   BUSINESS_MODEL: {
@@ -655,8 +655,8 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     stages: [8],
     defaultTokenBudget: 12000,
     timeout: 15,
-    requiredCapabilities: ['bmc_generation', 'value_proposition', 'channel_strategy'],
-    outputTypes: ['business_model_canvas', 'value_prop_canvas'],
+    requiredCapabilities: ['bmc_generation', 'truth_value_proposition', 'channel_strategy'],
+    outputTypes: ['engine_business_model_canvas', 'value_prop_canvas'],
   },
 
   EXIT_STRATEGY: {
@@ -676,7 +676,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 15000,
     timeout: 20,
     requiredCapabilities: ['name_generation', 'domain_checking', 'trademark_research'],
-    outputTypes: ['naming_tournament_results', 'brand_guidelines'],
+    outputTypes: ['naming_tournament_results', 'identity_brand_guidelines'],
   },
 
   GTM_STRATEGY: {
@@ -696,7 +696,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 15000,
     timeout: 20,
     requiredCapabilities: ['sales_process', 'objection_handling', 'success_metrics'],
-    outputTypes: ['sales_playbook', 'success_playbook'],
+    outputTypes: ['identity_gtm_sales_strategy', 'success_playbook'],
   },
 
   TECHNICAL_SPEC: {
@@ -706,7 +706,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 30000,
     timeout: 45,
     requiredCapabilities: ['system_architecture', 'api_design', 'database_design', 'ui_wireframing'],
-    outputTypes: ['system_architecture', 'api_spec', 'database_schema', 'wireframes', 'user_stories'],
+    outputTypes: ['system_architecture', 'api_spec', 'database_schema', 'blueprint_wireframes', 'user_stories'],
   },
 
   IMPLEMENTATION: {
@@ -726,7 +726,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 20000,
     timeout: 30,
     requiredCapabilities: ['uat_execution', 'bug_tracking', 'feedback_collection'],
-    outputTypes: ['uat_report', 'bug_list', 'user_feedback'],
+    outputTypes: ['launch_uat_report', 'bug_list', 'user_feedback'],
   },
 
   DEPLOYMENT: {
@@ -736,7 +736,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     defaultTokenBudget: 25000,
     timeout: 30,
     requiredCapabilities: ['deployment', 'monitoring', 'analytics', 'optimization'],
-    outputTypes: ['deployment_manifest', 'analytics_dashboard', 'optimization_report'],
+    outputTypes: ['deployment_manifest', 'launch_analytics_dashboard', 'optimization_report'],
   },
 
   // === NEW CREWS (OpenAI Codex Assessment - December 2025) ===
@@ -777,7 +777,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     ],
     outputTypes: [
       'onboarding_playbook',
-      'retention_playbook',
+      'launch_retention_playbook',
       'churn_response_playbook',
       'support_model_spec'
     ],
@@ -800,7 +800,7 @@ export const CREW_REGISTRY: Record<string, CrewConfig> = {
     outputTypes: [
       'experiment_backlog',
       'funnel_analysis',
-      'optimization_roadmap',
+      'launch_optimization_roadmap',
       'growth_metrics_dashboard'
     ],
     coExecutesWith: 'DEPLOYMENT',

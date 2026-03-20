@@ -58,7 +58,7 @@ This is an artifact-only stage focused on producing specific outputs.
 
 ## Artifacts
 
-- **`tech_stack_decision`**
+- **`blueprint_product_roadmap`**
 
 ## Entry Gates
 
@@ -121,8 +121,7 @@ No specific exit gates defined.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
-- `venture_tech_stack_decision` (if separate table)
+- `venture_stage_work` - Stage entry/completion tracking
 
 ## Related Documentation
 

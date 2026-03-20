@@ -66,7 +66,7 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 
 ## Data Flow (contract skeleton)
 - **Inputs**: ai_review_report.json from Stage 2, user_interview_data.json
-- **Outputs**: validation_report.json -> stored in DB, consumed by Stage 4 or triggers Kill/Revise
+- **Outputs**: truth_validation_decision.json -> stored in DB, consumed by Stage 4 or triggers Kill/Revise
 
 ## Rollback
 - Preserve all validation data for analysis

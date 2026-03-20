@@ -280,7 +280,7 @@ with the gate results.
 **Step 5b: Devil's Advocate**
 If the current stage is a kill or promotion gate stage, invoke the Devil's
 Advocate module for adversarial review. The review is advisory only -- it
-never blocks progression. The review is persisted as a `devils_advocate_review`
+never blocks progression. The review is persisted as a `system_devils_advocate_review`
 artifact.
 
 **Step 6: Decision Filter Engine**
@@ -516,7 +516,7 @@ Extension operates.
 ### Advisory Nature
 
 The Devil's Advocate is strictly advisory. Its result is:
-- Persisted as a `devils_advocate_review` artifact in `venture_artifacts`
+- Persisted as a `system_devils_advocate_review` artifact in `venture_artifacts`
 - Included in the stage result's `devilsAdvocateReview` field
 - Added to `gateResults` with `passed: true` (never blocks)
 - Logged for chairman review

@@ -218,7 +218,7 @@ Each component enriches the venture brief via LLM analysis:
 ### Outputs
 
 - **ventures table** -- New venture record with `current_lifecycle_stage: 1`, `company_id` (defaults to EHG)
-- **venture_artifacts** -- Stage 0 artifact (`lifecycle_stage: 0`, `artifact_type: 'stage_0_analysis'`)
+- **venture_artifacts** -- Stage 0 artifact (`lifecycle_stage: 0`, `artifact_type: 'intake_venture_analysis'`)
 - **venture_briefs** -- Detailed brief record with all synthesis fields
 - **ventures.metadata.stage_zero** -- Synthesis data embedded in venture metadata (fallback for Stage 1)
 
@@ -474,7 +474,7 @@ The `overallScore` is the rounded average of all six metrics.
 
 ### Generated Artifacts
 
-- **validation_report** -- Six-metric scores with kill gate decision
+- **truth_validation_decision** -- Six-metric scores with kill gate decision
 
 ### Derived Fields
 
@@ -547,7 +547,7 @@ Captures competitor cards with positioning, threat level, strengths/weaknesses, 
 
 ### Generated Artifacts
 
-- **competitive_analysis** -- Structured competitor landscape with SWOT per competitor
+- **truth_competitive_analysis** -- Structured competitor landscape with SWOT per competitor
 
 ### Derived Fields
 
@@ -623,7 +623,7 @@ The kill gate is evaluated by the exported `evaluateKillGate()` function. Kill t
 
 ### Generated Artifacts
 
-- **financial_model** -- Three-year P&L with break-even and ROI
+- **truth_financial_model** -- Three-year P&L with break-even and ROI
 
 ### Derived Fields
 

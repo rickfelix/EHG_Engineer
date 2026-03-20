@@ -407,19 +407,19 @@ interface OperationalHandoffPacket {
     };
   };
 
-  risk_register: RiskEntry[];
+  blueprint_risk_register: RiskEntry[];
 
   artifact_manifest: {
     by_stage: Record<string, string[]>;
     critical_artifacts: {
-      brand_guidelines: string;
-      gtm_plan: string;
-      sales_playbook: string;
-      api_contract: string;
-      schema_spec: string;
-      security_audit: string;
-      deployment_runbook: string;
-      assumptions_vs_reality_report: string;
+      identity_brand_guidelines: string;
+      identity_naming_visual: string;
+      identity_gtm_sales_strategy: string;
+      blueprint_api_contract: string;
+      blueprint_schema_spec: string;
+      build_security_audit: string;
+      launch_deployment_runbook: string;
+      launch_assumptions_vs_reality: string;
     };
   };
 }

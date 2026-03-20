@@ -148,7 +148,7 @@ stages:
       - Initial validation
       - Risk assessment
     artifacts:
-      - idea_brief
+      - truth_idea_brief
     metrics:
       - Idea quality score
       - Validation completeness
@@ -158,7 +158,7 @@ stages:
         - Title validated (3-120 chars)
         - Description validated (20-2000 chars)
         - Category assigned
-        - problem_statement populated  # IDEATION-GENESIS-AUDIT: Lock Chairman vision
+        - truth_problem_statement populated  # IDEATION-GENESIS-AUDIT: Lock Chairman vision
         - Chairman intent captured     # IDEATION-GENESIS-AUDIT: Immutable original recorded
 
   - id: 2
@@ -180,7 +180,7 @@ stages:
       - Contrarian analysis
       - Risk assessment
     artifacts:
-      - critique_report
+      - truth_ai_critique
     metrics:
       - Review thoroughness
       - Risk identification rate
@@ -215,7 +215,7 @@ stages:
       - User feedback
       - Feasibility assessment
     artifacts:
-      - validation_report
+      - truth_validation_decision
     metrics:
       - Validation score (1-10)
       - WTP confidence
@@ -257,7 +257,7 @@ stages:
       - Gap identification
       - Positioning strategy
     artifacts:
-      - competitive_analysis
+      - truth_competitive_analysis
     metrics:
       - Competitors identified
       - Gap opportunities scored
@@ -281,7 +281,7 @@ stages:
       - Unit economics
       - ROI projections
     artifacts:
-      - financial_model
+      - truth_financial_model
     metrics:
       - Gross margin target (40%+)
       - Breakeven months (<18)
@@ -325,7 +325,7 @@ stages:
       - Mitigation strategies
       - Contingency plans
     artifacts:
-      - risk_matrix
+      - engine_risk_matrix
     metrics:
       - Risks identified
       - Mitigation coverage
@@ -361,7 +361,7 @@ stages:
       - Tier structure
       - Discount policies
     artifacts:
-      - pricing_model
+      - engine_pricing_model
     metrics:
       - Price sensitivity analysis
       - Margin optimization
@@ -385,7 +385,7 @@ stages:
       - Value propositions
       - Revenue streams
     artifacts:
-      - business_model_canvas
+      - engine_business_model_canvas
     metrics:
       - BMC completeness
       - Strategic alignment
@@ -409,7 +409,7 @@ stages:
       - Valuation targets
       - Timeline planning
     artifacts:
-      - exit_strategy
+      - engine_exit_strategy
     metrics:
       - Exit scenarios defined
       - Valuation methodology
@@ -439,8 +439,8 @@ stages:
       - Visual identity specs
       - Cultural design style selection
     artifacts:
-      - brand_guidelines
-      - cultural_design_config
+      - identity_brand_guidelines
+      - identity_persona_brand
     metrics:
       - Name availability
       - Brand strength score
@@ -493,8 +493,8 @@ stages:
       - Marketing manifest
       - Channel strategy
     artifacts:
-      - gtm_plan
-      - marketing_manifest
+      - identity_naming_visual
+      - identity_persona_brand
       - brand_messaging_options  # Tournament output
     metrics:
       - Channel coverage
@@ -526,7 +526,7 @@ stages:
       - Success workflows
       - Support model
     artifacts:
-      - sales_playbook
+      - identity_gtm_sales_strategy
     metrics:
       - Process completeness
       - Handoff clarity
@@ -553,7 +553,7 @@ stages:
       - Architecture rationale
       - Trade-off analysis
     artifacts:
-      - tech_stack_decision
+      - blueprint_product_roadmap
     metrics:
       - Decision confidence
       - Future-proofing score
@@ -578,8 +578,8 @@ stages:
       - ERD diagrams
       - Schema specifications
     artifacts:
-      - data_model
-      - erd_diagram
+      - blueprint_data_model
+      - blueprint_erd_diagram
     metrics:
       - Entity coverage
       - Relationship clarity
@@ -604,7 +604,7 @@ stages:
       - User story pack
       - Acceptance criteria
     artifacts:
-      - user_story_pack
+      - blueprint_user_story_pack
     metrics:
       - Story completeness
       - INVEST compliance
@@ -629,8 +629,8 @@ stages:
       - SQL schemas
       - API contracts
     artifacts:
-      - api_contract
-      - schema_spec
+      - blueprint_api_contract
+      - blueprint_schema_spec
     metrics:
       - Schema completeness
       - Type coverage
@@ -669,8 +669,8 @@ stages:
       - System prompts
       - CI/CD pipeline
     artifacts:
-      - system_prompt
-      - cicd_config
+      - build_system_prompt
+      - build_cicd_config
     metrics:
       - Environment readiness
       - Agent effectiveness
@@ -743,7 +743,7 @@ stages:
       - Performance metrics
       - Security audit
     artifacts:
-      - security_audit
+      - build_security_audit
     metrics:
       - Security scan clean
       - Performance targets met
@@ -770,8 +770,8 @@ stages:
       - Bug fixes
       - UAT signoff
     artifacts:
-      - test_plan
-      - uat_report
+      - launch_test_plan
+      - launch_uat_report
     metrics:
       - Test coverage >= 80%
       - Bug resolution rate
@@ -797,7 +797,7 @@ stages:
       - Monitoring setup
       - Runbooks
     artifacts:
-      - deployment_runbook
+      - launch_deployment_runbook
     metrics:
       - Deployment success
       - Monitoring coverage
@@ -824,7 +824,7 @@ stages:
       - Launch metrics
       - User feedback
     artifacts:
-      - launch_checklist
+      - launch_marketing_checklist
     metrics:
       - Launch checklist complete
       - Initial users onboarded
@@ -852,7 +852,7 @@ stages:
       - Feedback reports
       - KPI tracking
     artifacts:
-      - analytics_dashboard
+      - launch_analytics_dashboard
     metrics:
       - DAU/MAU tracking
       - NPS score
@@ -883,8 +883,8 @@ stages:
       - Growth experiments
       - Assumptions vs Reality Report  # New output
     artifacts:
-      - optimization_roadmap
-      - assumptions_vs_reality_report  # New artifact
+      - launch_optimization_roadmap
+      - launch_assumptions_vs_reality  # New artifact
     metrics:
       - Performance improvements
       - Scale readiness
@@ -893,7 +893,7 @@ stages:
     assumption_set:
       action: "generate_calibration_report"
       note: "Generate Assumptions vs Reality Report comparing V1 beliefs against actual outcomes"
-      output_artifact: "assumptions_vs_reality_report"
+      output_artifact: "launch_assumptions_vs_reality"
 
 # Advisory Checkpoint Configuration
 # NOTE: Stage numbers below reference the IMPLEMENTED stage positions.

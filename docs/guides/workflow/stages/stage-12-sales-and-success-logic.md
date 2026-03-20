@@ -57,7 +57,7 @@ This is an artifact-only stage focused on producing specific outputs.
 
 ## Artifacts
 
-- **`sales_playbook`**
+- **`identity_gtm_sales_strategy`**
 
 ## Entry Gates
 
@@ -118,8 +118,7 @@ No specific exit gates defined.
 
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
-- `venture_stage_work` - Stage entry/completion tracking
-- `venture_sales_playbook` (if separate table)
+- `venture_stage_work` - Stage entry/completion tracking
 
 ## Related Documentation
 

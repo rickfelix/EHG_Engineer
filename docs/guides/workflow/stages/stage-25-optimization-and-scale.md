@@ -59,8 +59,8 @@ This stage requires a Strategic Directive (SD) to be created and executed.
 
 ## Artifacts
 
-- **`optimization_roadmap`**
-- **`assumptions_vs_reality_report`**
+- **`launch_optimization_roadmap`**
+- **`launch_assumptions_vs_reality`**
 
 ## Entry Gates
 
@@ -125,8 +125,7 @@ No specific exit gates defined.
 **Related Tables**:
 - `lifecycle_stage_config` - Stage definitions (25 stages, 6 phases)
 - `venture_stage_work` - Stage entry/completion tracking
-- `venture_optimization_roadmap` (if separate table)
-- `venture_assumptions_vs_reality_report` (if separate table)
+- `venture_optimization_roadmap` (if separate table)
 
 ## Related Documentation
 

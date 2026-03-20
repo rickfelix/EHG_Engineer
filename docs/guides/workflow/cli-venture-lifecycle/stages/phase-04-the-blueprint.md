@@ -180,7 +180,7 @@ The kill gate is evaluated by the exported `evaluateKillGate()` function. Kill t
 
 ### Generated Artifacts
 
-- **tech_stack_decision** -- Product roadmap with milestone timeline
+- **blueprint_product_roadmap** -- Product roadmap with milestone timeline
 
 ### Derived Fields
 
@@ -283,8 +283,8 @@ Technical architecture definition with required stack layers (frontend, backend,
 
 ### Generated Artifacts
 
-- **data_model** -- Architecture layers with integration map
-- **erd_diagram** -- Entity relationship diagram (via architecture analysis)
+- **blueprint_data_model** -- Architecture layers with integration map
+- **blueprint_erd_diagram** -- Entity relationship diagram (via architecture analysis)
 
 ### Derived Fields
 
@@ -357,7 +357,7 @@ Team structure, resource allocation, and skill gap analysis. This stage requires
 
 ### Generated Artifacts
 
-- **user_story_pack** -- Resource allocation plan with team structure
+- **blueprint_user_story_pack** -- Resource allocation plan with team structure
 
 ### Derived Fields
 
@@ -443,8 +443,8 @@ The Promotion Gate is evaluated by the exported `evaluatePromotionGate()` functi
 
 ### Generated Artifacts
 
-- **api_contract** -- Financial projections with runway analysis
-- **schema_spec** -- Financial schema specification
+- **blueprint_api_contract** -- Financial projections with runway analysis
+- **blueprint_schema_spec** -- Financial schema specification
 
 ### Derived Fields
 
@@ -455,7 +455,7 @@ The Promotion Gate is evaluated by the exported `evaluatePromotionGate()` functi
 | `break_even_month` | First month where cumulative profit >= 0 |
 | `total_projected_revenue` | Sum of all monthly revenue values |
 | `total_projected_costs` | Sum of all monthly cost values |
-| `promotion_gate` | Reality gate evaluation object |
+| `blueprint_promotion_gate` | Reality gate evaluation object |
 
 ### Break-Even Computation
 
@@ -493,7 +493,7 @@ The Chairman reviews financial projections and Promotion Gate results. Devil's A
 
 **What to produce**: Initial capital, monthly burn rate, 6+ months of revenue projections, and optional funding rounds.
 
-**How to validate**: Call `validate(data)`, then `computeDerived(data, { stage13, stage14, stage15 })`. The returned `promotion_gate.pass` boolean determines whether Phase 5 is unlocked. If `pass === false`, inspect `blockers` and `required_next_actions`.
+**How to validate**: Call `validate(data)`, then `computeDerived(data, { stage13, stage14, stage15 })`. The returned `blueprint_promotion_gate.pass` boolean determines whether Phase 5 is unlocked. If `pass === false`, inspect `blockers` and `required_next_actions`.
 
 ---
 
