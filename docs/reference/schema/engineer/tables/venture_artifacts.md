@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-20T09:41:46.332Z
-**Rows**: 3
-**RLS**: Enabled (5 policies)
+**Generated**: 2026-03-20T16:33:26.870Z
+**Rows**: 0
+**RLS**: Enabled (4 policies)
 
 > **This is a REFERENCE document** - Query database directly for validation
 
@@ -21,7 +21,7 @@
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | venture_id | `uuid` | **NO** | - | - |
 | lifecycle_stage | `integer(32)` | **NO** | - | - |
-| artifact_type | `character varying(50)` | **NO** | - | Artifact type using `{phase_prefix}_{descriptive_name}` convention. Enforced by CHECK constraint. See `lib/eva/artifact-types.js` for the centralized registry (single source of truth). Phase prefixes: `intake_` (Stage 0), `truth_` (S1-5), `engine_` (S6-9), `identity_` (S10-12), `blueprint_` (S13-16), `build_` (S17-20), `launch_` (S21-25), `system_` (cross-cutting). Valid types listed in [Artifact Types](#artifact-types) section below. |
+| artifact_type | `character varying(50)` | **NO** | - | Artifact type using `{phase_prefix}_{descriptive_name}` convention. Enforced by CHECK constraint (`venture_artifacts_artifact_type_check`). Phase prefixes: `intake_` (Stage 0), `truth_` (S1-5), `engine_` (S6-9), `identity_` (S10-12), `blueprint_` (S13-16), `build_` (S17-20), `launch_` (S21-25), `system_` (cross-cutting). See `lib/eva/artifact-types.js` for the centralized registry (single source of truth, SD-LEO-INFRA-EVA-ARTIFACT-NAMING-001). |
 | title | `character varying(255)` | **NO** | - | - |
 | content | `text` | YES | - | - |
 | file_url | `text` | YES | - | - |
@@ -44,25 +44,6 @@
 | source | `character varying(100)` | YES | - | - |
 | artifact_data | `jsonb` | YES | - | - |
 
-## Artifact Types
-
-> **Single source of truth**: `lib/eva/artifact-types.js`
->
-> All artifact types follow the `{phase_prefix}_{descriptive_name}` naming convention
-> (SD-LEO-INFRA-EVA-ARTIFACT-NAMING-001). A CHECK constraint on `venture_artifacts.artifact_type`
-> enforces only valid new names.
-
-| Phase | Prefix | Artifact Types |
-|-------|--------|----------------|
-| Stage 0 (Intake) | `intake_` | `intake_venture_analysis` |
-| THE TRUTH (S1-5) | `truth_` | `truth_idea_brief`, `truth_ai_critique`, `truth_validation_decision`, `truth_competitive_analysis`, `truth_financial_model`, `truth_problem_statement`, `truth_target_market_analysis`, `truth_value_proposition` |
-| THE ENGINE (S6-9) | `engine_` | `engine_risk_matrix`, `engine_pricing_model`, `engine_business_model_canvas`, `engine_exit_strategy`, `engine_risk_assessment`, `engine_revenue_model` |
-| THE IDENTITY (S10-12) | `identity_` | `identity_persona_brand`, `identity_brand_guidelines`, `identity_naming_visual`, `identity_brand_name`, `identity_gtm_sales_strategy` |
-| THE BLUEPRINT (S13-16) | `blueprint_` | `blueprint_product_roadmap`, `blueprint_technical_architecture`, `blueprint_data_model`, `blueprint_erd_diagram`, `blueprint_api_contract`, `blueprint_schema_spec`, `blueprint_risk_register`, `blueprint_user_story_pack`, `blueprint_wireframes`, `blueprint_financial_projection`, `blueprint_launch_readiness`, `blueprint_sprint_plan`, `blueprint_promotion_gate`, `blueprint_project_plan` |
-| THE BUILD (S17-20) | `build_` | `build_system_prompt`, `build_cicd_config`, `build_security_audit`, `build_mvp_build`, `build_test_coverage_report` |
-| LAUNCH & LEARN (S21-25) | `launch_` | `launch_test_plan`, `launch_uat_report`, `launch_deployment_runbook`, `launch_marketing_checklist`, `launch_analytics_dashboard`, `launch_health_scoring`, `launch_churn_triggers`, `launch_retention_playbook`, `launch_optimization_roadmap`, `launch_assumptions_vs_reality`, `launch_launch_metrics`, `launch_user_feedback_summary`, `launch_production_app` |
-| Cross-cutting | `system_` | `system_devils_advocate_review` |
-
 ## Constraints
 
 ### Primary Key
@@ -72,7 +53,7 @@
 - `venture_artifacts_venture_id_fkey`: venture_id -> ventures(id)
 
 ### Check Constraints
-- `venture_artifacts_artifact_type_check`: CHECK (artifact_type is one of the valid types listed above)
+- `venture_artifacts_artifact_type_check`: CHECK (((artifact_type)::text = ANY (ARRAY['intake_venture_analysis'::text, 'truth_idea_brief'::text, 'truth_ai_critique'::text, 'truth_validation_decision'::text, 'truth_competitive_analysis'::text, 'truth_financial_model'::text, 'truth_problem_statement'::text, 'truth_target_market_analysis'::text, 'truth_value_proposition'::text, 'engine_risk_matrix'::text, 'engine_pricing_model'::text, 'engine_business_model_canvas'::text, 'engine_exit_strategy'::text, 'engine_risk_assessment'::text, 'engine_revenue_model'::text, 'identity_persona_brand'::text, 'identity_brand_guidelines'::text, 'identity_naming_visual'::text, 'identity_brand_name'::text, 'identity_gtm_sales_strategy'::text, 'blueprint_product_roadmap'::text, 'blueprint_technical_architecture'::text, 'blueprint_data_model'::text, 'blueprint_erd_diagram'::text, 'blueprint_api_contract'::text, 'blueprint_schema_spec'::text, 'blueprint_risk_register'::text, 'blueprint_user_story_pack'::text, 'blueprint_wireframes'::text, 'blueprint_financial_projection'::text, 'blueprint_launch_readiness'::text, 'blueprint_sprint_plan'::text, 'blueprint_promotion_gate'::text, 'blueprint_project_plan'::text, 'build_system_prompt'::text, 'build_cicd_config'::text, 'build_security_audit'::text, 'build_mvp_build'::text, 'build_test_coverage_report'::text, 'launch_test_plan'::text, 'launch_uat_report'::text, 'launch_deployment_runbook'::text, 'launch_marketing_checklist'::text, 'launch_analytics_dashboard'::text, 'launch_health_scoring'::text, 'launch_churn_triggers'::text, 'launch_retention_playbook'::text, 'launch_optimization_roadmap'::text, 'launch_assumptions_vs_reality'::text, 'launch_launch_metrics'::text, 'launch_user_feedback_summary'::text, 'launch_production_app'::text, 'system_devils_advocate_review'::text])))
 - `venture_artifacts_epistemic_classification_check`: CHECK ((epistemic_classification = ANY (ARRAY['fact'::text, 'assumption'::text, 'simulation'::text, 'unknown'::text])))
 - `venture_artifacts_indexing_status_check`: CHECK ((indexing_status = ANY (ARRAY['pending'::text, 'indexed'::text, 'failed'::text, 'skipped'::text])))
 - `venture_artifacts_quality_score_check`: CHECK (((quality_score >= 0) AND (quality_score <= 100)))
@@ -137,17 +118,12 @@
 - **Roles**: {authenticated}
 - **With Check**: `fn_user_has_venture_access(venture_id)`
 
-### 3. venture_artifacts_modify (ALL)
-
-- **Roles**: {public}
-- **Using**: `true`
-
-### 4. venture_artifacts_select_policy (SELECT)
+### 3. venture_artifacts_select_policy (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `fn_user_has_venture_access(venture_id)`
 
-### 5. venture_artifacts_update_policy (UPDATE)
+### 4. venture_artifacts_update_policy (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `fn_user_has_venture_access(venture_id)`
