@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-20T09:41:46.332Z
+**Generated**: 2026-03-20T16:33:26.870Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -147,6 +147,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
+### trg_reject_s16_programmatic_approval
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION reject_s16_programmatic_approval()`
 
 ---
 

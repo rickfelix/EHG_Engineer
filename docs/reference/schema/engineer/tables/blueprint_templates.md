@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-20T09:41:46.332Z
+**Generated**: 2026-03-20T16:33:26.870Z
 **Rows**: 12
 **RLS**: Enabled (4 policies)
 
@@ -37,7 +37,7 @@
 - `blueprint_templates_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `blueprint_templates_artifact_type_check`: CHECK ((artifact_type = ANY (ARRAY['data_model'::text, 'erd_diagram'::text, 'user_story_pack'::text, 'api_contract'::text, 'schema_spec'::text, 'technical_architecture'::text, 'risk_register'::text, 'wireframes'::text, 'financial_projection'::text, 'launch_readiness'::text, 'sprint_plan'::text, 'promotion_gate'::text])))
+- `blueprint_templates_artifact_type_check`: CHECK ((artifact_type = ANY (ARRAY['blueprint_product_roadmap'::text, 'blueprint_technical_architecture'::text, 'blueprint_data_model'::text, 'blueprint_erd_diagram'::text, 'blueprint_financial_projection'::text, 'blueprint_launch_readiness'::text, 'blueprint_sprint_plan'::text, 'blueprint_promotion_gate'::text, 'blueprint_api_contract'::text, 'blueprint_schema_spec'::text, 'blueprint_user_story_pack'::text, 'blueprint_risk_register'::text])))
 
 ## Indexes
 
