@@ -8,9 +8,9 @@
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
-⚠️ **This is a REFERENCE document** - Query database directly for validation
+> **This is a REFERENCE document** - Query database directly for validation
 
-⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
+> **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
 
 ---
 
@@ -21,7 +21,7 @@
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | venture_id | `uuid` | **NO** | - | - |
 | lifecycle_stage | `integer(32)` | **NO** | - | - |
-| artifact_type | `character varying(50)` | **NO** | - | Types: idea_brief, critique_report, validation_report, competitive_analysis, financial_model, risk_matrix, pricing_model, business_model_canvas, exit_strategy, strategic_narrative, marketing_manifest, brand_name, brand_guidelines, sales_playbook, tech_stack_decision, data_model, erd_diagram, user_story_pack, api_contract, schema_spec, system_prompt, cicd_config, deployment_config, launch_checklist, analytics_dashboard, optimization_plan |
+| artifact_type | `character varying(50)` | **NO** | - | Artifact type using `{phase_prefix}_{descriptive_name}` convention. Enforced by CHECK constraint (`venture_artifacts_artifact_type_check`). Phase prefixes: `intake_` (Stage 0), `truth_` (S1-5), `engine_` (S6-9), `identity_` (S10-12), `blueprint_` (S13-16), `build_` (S17-20), `launch_` (S21-25), `system_` (cross-cutting). See `lib/eva/artifact-types.js` for the centralized registry (single source of truth, SD-LEO-INFRA-EVA-ARTIFACT-NAMING-001). |
 | title | `character varying(255)` | **NO** | - | - |
 | content | `text` | YES | - | - |
 | file_url | `text` | YES | - | - |
@@ -50,7 +50,7 @@
 - `venture_artifacts_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
-- `venture_artifacts_venture_id_fkey`: venture_id → ventures(id)
+- `venture_artifacts_venture_id_fkey`: venture_id -> ventures(id)
 
 ### Check Constraints
 - `venture_artifacts_artifact_type_check`: CHECK (((artifact_type)::text = ANY (ARRAY['intake_venture_analysis'::text, 'truth_idea_brief'::text, 'truth_ai_critique'::text, 'truth_validation_decision'::text, 'truth_competitive_analysis'::text, 'truth_financial_model'::text, 'truth_problem_statement'::text, 'truth_target_market_analysis'::text, 'truth_value_proposition'::text, 'engine_risk_matrix'::text, 'engine_pricing_model'::text, 'engine_business_model_canvas'::text, 'engine_exit_strategy'::text, 'engine_risk_assessment'::text, 'engine_revenue_model'::text, 'identity_persona_brand'::text, 'identity_brand_guidelines'::text, 'identity_naming_visual'::text, 'identity_brand_name'::text, 'identity_gtm_sales_strategy'::text, 'blueprint_product_roadmap'::text, 'blueprint_technical_architecture'::text, 'blueprint_data_model'::text, 'blueprint_erd_diagram'::text, 'blueprint_api_contract'::text, 'blueprint_schema_spec'::text, 'blueprint_risk_register'::text, 'blueprint_user_story_pack'::text, 'blueprint_wireframes'::text, 'blueprint_financial_projection'::text, 'blueprint_launch_readiness'::text, 'blueprint_sprint_plan'::text, 'blueprint_promotion_gate'::text, 'blueprint_project_plan'::text, 'build_system_prompt'::text, 'build_cicd_config'::text, 'build_security_audit'::text, 'build_mvp_build'::text, 'build_test_coverage_report'::text, 'launch_test_plan'::text, 'launch_uat_report'::text, 'launch_deployment_runbook'::text, 'launch_marketing_checklist'::text, 'launch_analytics_dashboard'::text, 'launch_health_scoring'::text, 'launch_churn_triggers'::text, 'launch_retention_playbook'::text, 'launch_optimization_roadmap'::text, 'launch_assumptions_vs_reality'::text, 'launch_launch_metrics'::text, 'launch_user_feedback_summary'::text, 'launch_production_app'::text, 'system_devils_advocate_review'::text])))
@@ -138,4 +138,4 @@
 
 ---
 
-[← Back to Schema Overview](../database-schema-overview.md)
+[< Back to Schema Overview](../database-schema-overview.md)
