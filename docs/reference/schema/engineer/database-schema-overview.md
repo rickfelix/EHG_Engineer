@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-19T21:08:37.155Z
+**Generated**: 2026-03-20T09:41:46.332Z
 **Tables**: 590
 **Source**: Supabase PostgreSQL introspection
 
@@ -83,7 +83,7 @@ Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [blueprint_board_submissions](tables/blueprint_board_submissions.md) | 0 | ✅ | 5 | Tracks blueprint submissions for board review (SD-BLUEPRINT-UI-001:US-002,US-003) |
 | [blueprint_quality_assessments](tables/blueprint_quality_assessments.md) | 0 | ✅ | 5 | Stores quality assessment results for blueprint artifacts per venture |
 | [blueprint_selection_signals](tables/blueprint_selection_signals.md) | 0 | ✅ | 3 | - |
-| [blueprint_templates](tables/blueprint_templates.md) | 11 | ✅ | 4 | Stores reusable blueprint templates for different artifact types and archetypes |
+| [blueprint_templates](tables/blueprint_templates.md) | 12 | ✅ | 4 | Stores reusable blueprint templates for different artifact types and archetypes |
 | [board_meeting_attendance](tables/board_meeting_attendance.md) | 0 | ✅ | 1 | Attendance and voting records for board meetings |
 | [board_meetings](tables/board_meetings.md) | 0 | ✅ | 1 | Board meetings with agenda, outcomes, and workflow linkage |
 | [board_members](tables/board_members.md) | 7 | ✅ | 2 | Board of Directors members with voting weights and expertise domains |
@@ -100,7 +100,7 @@ Lifecycle: discovered → evaluating → adapted/rejected → outdated |
 | [chairman_approval_requests](tables/chairman_approval_requests.md) | 0 | ✅ | 1 | Centralized queue for chairman approval decisions. SD-STAGE-13-001. |
 | [chairman_constraints](tables/chairman_constraints.md) | 10 | ✅ | 1 | Strategic constraints from the chairman applied to every venture during Stage 0 synthesis. Evolves over time from kill gate outcomes and retrospectives. |
 | [chairman_dashboard_config](tables/chairman_dashboard_config.md) | 1 | ✅ | 4 | Chairman dashboard configuration including per-stage auto-proceed overrides (SD-LEO-FEAT-PER-STAGE-AUTO-PROCEED-001) |
-| [chairman_decisions](tables/chairman_decisions.md) | 0 | ✅ | 2 | SD-HARDENING-V1-001: Chairman-only decision records.
+| [chairman_decisions](tables/chairman_decisions.md) | 2 | ✅ | 2 | SD-HARDENING-V1-001: Chairman-only decision records.
 RLS hardened - only chairman (fn_is_chairman()) can access.
 SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decisions.sql |
 | [chairman_directives](tables/chairman_directives.md) | 0 | ✅ | 4 | - |
@@ -212,7 +212,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_scheduler_metrics](tables/eva_scheduler_metrics.md) | 2,109 | ✅ | 2 | - |
 | [eva_scheduler_queue](tables/eva_scheduler_queue.md) | 1 | ✅ | 2 | - |
 | [eva_source_health](tables/eva_source_health.md) | 6 | ✅ | 2 | Data freshness tracking per EVA input source. Monitors sync status and health. |
-| [eva_stage_gate_results](tables/eva_stage_gate_results.md) | 0 | ✅ | 2 | Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score) |
+| [eva_stage_gate_results](tables/eva_stage_gate_results.md) | 6 | ✅ | 2 | Tracks EVA gate evaluations with kill gate enforcement (stages 3,5,13,23 require 70% score) |
 | [eva_sync_state](tables/eva_sync_state.md) | 4 | ✅ | 2 | - |
 | [eva_todoist_intake](tables/eva_todoist_intake.md) | 304 | ✅ | 2 | - |
 | [eva_trace_log](tables/eva_trace_log.md) | 0 | ✅ | 2 | - |
@@ -228,7 +228,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [eva_youtube_intake](tables/eva_youtube_intake.md) | 137 | ✅ | 2 | - |
 | [eva_youtube_scans](tables/eva_youtube_scans.md) | 1 | ✅ | 3 | Daily scan metadata for EVA YouTube Subscription Digest - tracks each automated scan run |
 | [eva_youtube_scores](tables/eva_youtube_scores.md) | 5 | ✅ | 3 | Per-video relevance scores from EVA scoring of YouTube subscription content |
-| [evaluation_profile_outcomes](tables/evaluation_profile_outcomes.md) | 49 | ✅ | 2 | Per-gate survival signals linking evaluation profile+version to venture outcomes at tracked boundaries |
+| [evaluation_profile_outcomes](tables/evaluation_profile_outcomes.md) | 60 | ✅ | 2 | Per-gate survival signals linking evaluation profile+version to venture outcomes at tracked boundaries |
 | [evaluation_profiles](tables/evaluation_profiles.md) | 9 | ✅ | 2 | Configurable evaluation weight profiles for EVA Stage 0 synthesis scoring |
 | [evidence_gate_mapping](tables/evidence_gate_mapping.md) | 8 | ✅ | 1 | - |
 | [exec_authorizations](tables/exec_authorizations.md) | 0 | ✅ | 2 | - |
@@ -352,12 +352,12 @@ Reference: docs/workflow/stages_v2.yaml |
 | [marketing_content](tables/marketing_content.md) | 0 | ✅ | 2 | - |
 | [marketing_content_queue](tables/marketing_content_queue.md) | 0 | ✅ | 2 | - |
 | [marketing_content_variants](tables/marketing_content_variants.md) | 0 | ✅ | 2 | - |
-| [mental_model_applications](tables/mental_model_applications.md) | 40 | ✅ | 4 | Tracks which models were applied to which ventures at which stages |
+| [mental_model_applications](tables/mental_model_applications.md) | 60 | ✅ | 4 | Tracks which models were applied to which ventures at which stages |
 | [mental_model_archetype_affinity](tables/mental_model_archetype_affinity.md) | 0 | ✅ | 2 | Which models work best for which venture archetypes |
 | [mental_model_effectiveness](tables/mental_model_effectiveness.md) | 0 | ✅ | 2 | Aggregate effectiveness scores correlated with venture outcomes |
 | [mental_models](tables/mental_models.md) | 18 | ✅ | 2 | Core mental model definitions for structured decision-making frameworks |
 | [missions](tables/missions.md) | 1 | ✅ | 1 | - |
-| [model_usage_log](tables/model_usage_log.md) | 3,490 | ✅ | 2 | RLS: Append-only for authenticated |
+| [model_usage_log](tables/model_usage_log.md) | 3,731 | ✅ | 2 | RLS: Append-only for authenticated |
 | [modeling_requests](tables/modeling_requests.md) | 0 | ✅ | 4 | Horizontal forecasting and modeling engine serving Stage 0 components including time-horizon positioning, build cost estimation, and market analysis |
 | [monthly_ceo_reports](tables/monthly_ceo_reports.md) | 0 | ✅ | 2 | Monthly CEO performance reports generated by the VentureCEORuntime agent |
 | [naming_favorites](tables/naming_favorites.md) | 0 | ✅ | 1 | - |
@@ -532,11 +532,11 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [stage13_valuations](tables/stage13_valuations.md) | 0 | ✅ | 1 | EVA-generated valuation models with confidence scores. SD-STAGE-13-001. |
 | [stage_config](tables/stage_config.md) | 25 | ❌ | 0 | Single source of truth for venture pipeline stage metadata. Replaces hardcoded stage config in application code. |
 | [stage_data_contracts](tables/stage_data_contracts.md) | 2 | ✅ | 2 | - |
-| [stage_events](tables/stage_events.md) | 0 | ✅ | 2 | - |
-| [stage_executions](tables/stage_executions.md) | 3 | ✅ | 1 | Per-execution tracking for stage-execution-worker. Each row is one processStage() attempt with heartbeat for crash detection. |
+| [stage_events](tables/stage_events.md) | 1 | ✅ | 2 | - |
+| [stage_executions](tables/stage_executions.md) | 5 | ✅ | 1 | Per-execution tracking for stage-execution-worker. Each row is one processStage() attempt with heartbeat for crash detection. |
 | [stage_of_death_predictions](tables/stage_of_death_predictions.md) | 0 | ✅ | 1 | - |
 | [stage_proving_journal](tables/stage_proving_journal.md) | 0 | ✅ | 1 | Records per-stage assessment results from venture proving runs. Each entry captures Plan Agent, Reality Agent, Gap Analyst outputs and chairman decisions. |
-| [stage_zero_requests](tables/stage_zero_requests.md) | 0 | ✅ | 4 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
+| [stage_zero_requests](tables/stage_zero_requests.md) | 1 | ✅ | 4 | Work queue for async Stage 0 opportunity analysis. UI inserts pending rows; Claude Code CLI claims and processes them. |
 | [story_test_mappings](tables/story_test_mappings.md) | 0 | ✅ | 2 | Links user stories to test results with traceability |
 | [strategic_directives_v2](tables/strategic_directives_v2.md) | 2,075 | ✅ | 7 | RLS enabled: service_role full access, authenticated read-only |
 | [strategic_roadmaps](tables/strategic_roadmaps.md) | 1 | ✅ | 2 | Top-level roadmap entities for wave-based planning. Linked to vision documents for strategic alignment. |
@@ -604,11 +604,11 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [user_organizations](tables/user_organizations.md) | 0 | ✅ | 1 | Multi-tenant user-organization membership for RLS policies |
 | [user_preferences](tables/user_preferences.md) | 2 | ✅ | 2 | - |
 | [user_stories](tables/user_stories.md) | 6,113 | ✅ | 3 | RLS enabled: service_role full access, authenticated read-only |
-| [validation_audit_log](tables/validation_audit_log.md) | 46,109 | ✅ | 1 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
+| [validation_audit_log](tables/validation_audit_log.md) | 46,265 | ✅ | 1 | Audit log for LEO Protocol validation failures including bypass detection, coverage validation, and gate failures |
 | [validation_evidence](tables/validation_evidence.md) | 0 | ✅ | 2 | - |
 | [validation_gate_registry](tables/validation_gate_registry.md) | 99 | ✅ | 2 | Database-first policy for validation gate applicability per SD type and validation profile. Part of SD-LEO-INFRA-VALIDATION-GATE-REGISTRY-001. |
 | [venture_archetypes](tables/venture_archetypes.md) | 14 | ✅ | 5 | Recurring venture patterns with visual themes and historical performance data. Stage 0 uses archetype recognition to trigger specific benchmarks, pitfalls, and strategies. |
-| [venture_artifacts](tables/venture_artifacts.md) | 4 | ✅ | 5 | - |
+| [venture_artifacts](tables/venture_artifacts.md) | 6 | ✅ | 5 | - |
 | [venture_asset_registry](tables/venture_asset_registry.md) | 0 | ✅ | 3 | Tracks assets owned by each venture for acquisition readiness assessment |
 | [venture_blueprints](tables/venture_blueprints.md) | 0 | ✅ | 1 | Pre-made venture templates for the Blueprint Browse entry path in Stage 0 |
 | [venture_briefs](tables/venture_briefs.md) | 1 | ✅ | 1 | Stage 0 output contract - structured brief produced by the synthesis engine that becomes Stage 1 input |
@@ -633,12 +633,12 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [venture_raid_summary](tables/venture_raid_summary.md) | 136 | ✅ | 1 | - |
 | [venture_separability_scores](tables/venture_separability_scores.md) | 0 | ✅ | 3 | - |
 | [venture_service_bindings](tables/venture_service_bindings.md) | 0 | ✅ | 3 | Which ventures consume which services, with pinned API version per binding. |
-| [venture_stage_transitions](tables/venture_stage_transitions.md) | 3 | ✅ | 1 | - |
-| [venture_stage_work](tables/venture_stage_work.md) | 0 | ✅ | 5 | - |
+| [venture_stage_transitions](tables/venture_stage_transitions.md) | 5 | ✅ | 1 | - |
+| [venture_stage_work](tables/venture_stage_work.md) | 10 | ✅ | 5 | - |
 | [venture_templates](tables/venture_templates.md) | 0 | ✅ | 2 | Reusable patterns extracted from ventures completing Stage 25 |
 | [venture_tiers](tables/venture_tiers.md) | 0 | ✅ | 3 | Business maturity tier tracking (seed/growth/scale/exit). Distinct from ventures.tier integer. |
 | [venture_token_budgets](tables/venture_token_budgets.md) | 0 | ✅ | 3 | INDUSTRIAL-HARDENING-v3.0: Venture-level token budget tracking. Enforces Economic Circuit Breaker policy. Default 100k tokens per venture. |
-| [venture_token_ledger](tables/venture_token_ledger.md) | 1,269 | ✅ | 4 | Golden Nugget: Token/compute investment tracking per venture |
+| [venture_token_ledger](tables/venture_token_ledger.md) | 1,410 | ✅ | 4 | Golden Nugget: Token/compute investment tracking per venture |
 | [venture_tool_quotas](tables/venture_tool_quotas.md) | 0 | ✅ | 1 | - |
 | [ventures](tables/ventures.md) | 1 | ✅ | 2 | - |
 | [vertical_complexity_multipliers](tables/vertical_complexity_multipliers.md) | 5 | ✅ | 2 | Industry vertical complexity factors for Truth Normalization (SD-HARDENING-V2) |
@@ -648,9 +648,9 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [voice_usage_metrics](tables/voice_usage_metrics.md) | 0 | ✅ | 3 | - |
 | [wizard_analytics](tables/wizard_analytics.md) | 62 | ✅ | 3 | - |
 | [work_item_thresholds](tables/work_item_thresholds.md) | 1 | ✅ | 2 | - |
-| [worker_heartbeats](tables/worker_heartbeats.md) | 53 | ✅ | 1 | - |
+| [worker_heartbeats](tables/worker_heartbeats.md) | 75 | ✅ | 1 | - |
 | [workflow_checkpoints](tables/workflow_checkpoints.md) | 2 | ✅ | 2 | Stores workflow state checkpoints for recovery |
-| [workflow_executions](tables/workflow_executions.md) | 907 | ✅ | 3 | - |
+| [workflow_executions](tables/workflow_executions.md) | 917 | ✅ | 3 | - |
 | [workflow_recovery_state](tables/workflow_recovery_state.md) | 0 | ✅ | 2 | Tracks recovery attempts and status |
 | [workflow_trace_log](tables/workflow_trace_log.md) | 274,654 | ✅ | 2 | Stores workflow telemetry spans for bottleneck detection (SD-LEO-ENH-WORKFLOW-TELEMETRY-AUTO-001A) |
 | [working_sd_sessions](tables/working_sd_sessions.md) | 0 | ✅ | 2 | - |

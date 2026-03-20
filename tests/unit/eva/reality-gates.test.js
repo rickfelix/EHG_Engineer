@@ -110,9 +110,9 @@ describe('RealityGates', () => {
   describe('evaluateRealityGate - artifact checks', () => {
     it('should PASS when all required artifacts exist with sufficient quality', async () => {
       const artifacts = [
-        { artifact_type: 'problem_statement', quality_score: 0.8, is_current: true },
-        { artifact_type: 'target_market_analysis', quality_score: 0.7, is_current: true },
-        { artifact_type: 'value_proposition', quality_score: 0.9, is_current: true },
+        { artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true },
+        { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true },
+        { artifact_type: 'truth_value_proposition', quality_score: 0.9, is_current: true },
       ];
       const result = await evaluateRealityGate({
         ventureId: 'v1',
@@ -127,7 +127,7 @@ describe('RealityGates', () => {
 
     it('should BLOCK when required artifact is missing', async () => {
       const artifacts = [
-        { artifact_type: 'problem_statement', quality_score: 0.8, is_current: true },
+        { artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true },
       ];
       const result = await evaluateRealityGate({
         ventureId: 'v1',
@@ -144,9 +144,9 @@ describe('RealityGates', () => {
 
     it('should BLOCK when quality score is below threshold', async () => {
       const artifacts = [
-        { artifact_type: 'problem_statement', quality_score: 0.3, is_current: true },
-        { artifact_type: 'target_market_analysis', quality_score: 0.5, is_current: true },
-        { artifact_type: 'value_proposition', quality_score: 0.6, is_current: true },
+        { artifact_type: 'truth_problem_statement', quality_score: 0.3, is_current: true },
+        { artifact_type: 'truth_target_market_analysis', quality_score: 0.5, is_current: true },
+        { artifact_type: 'truth_value_proposition', quality_score: 0.6, is_current: true },
       ];
       const result = await evaluateRealityGate({
         ventureId: 'v1',
@@ -163,9 +163,9 @@ describe('RealityGates', () => {
 
     it('should BLOCK when quality score is null', async () => {
       const artifacts = [
-        { artifact_type: 'problem_statement', quality_score: null, is_current: true },
-        { artifact_type: 'target_market_analysis', quality_score: 0.5, is_current: true },
-        { artifact_type: 'value_proposition', quality_score: 0.6, is_current: true },
+        { artifact_type: 'truth_problem_statement', quality_score: null, is_current: true },
+        { artifact_type: 'truth_target_market_analysis', quality_score: 0.5, is_current: true },
+        { artifact_type: 'truth_value_proposition', quality_score: 0.6, is_current: true },
       ];
       const result = await evaluateRealityGate({
         ventureId: 'v1',
@@ -198,9 +198,9 @@ describe('RealityGates', () => {
   describe('evaluateRealityGate - URL verification', () => {
     it('should PASS when URL is reachable', async () => {
       const artifacts = [
-        { artifact_type: 'mvp_build', quality_score: 0.8, file_url: 'https://app.example.com', is_current: true },
-        { artifact_type: 'test_coverage_report', quality_score: 0.7, is_current: true },
-        { artifact_type: 'deployment_runbook', quality_score: 0.6, is_current: true },
+        { artifact_type: 'build_mvp_build', quality_score: 0.8, file_url: 'https://app.example.com', is_current: true },
+        { artifact_type: 'build_test_coverage_report', quality_score: 0.7, is_current: true },
+        { artifact_type: 'launch_deployment_runbook', quality_score: 0.6, is_current: true },
       ];
       const httpClient = vi.fn().mockResolvedValue({ status: 200 });
       const result = await evaluateRealityGate({
@@ -217,9 +217,9 @@ describe('RealityGates', () => {
 
     it('should BLOCK when URL is unreachable', async () => {
       const artifacts = [
-        { artifact_type: 'mvp_build', quality_score: 0.8, file_url: 'https://app.example.com', is_current: true },
-        { artifact_type: 'test_coverage_report', quality_score: 0.7, is_current: true },
-        { artifact_type: 'deployment_runbook', quality_score: 0.6, is_current: true },
+        { artifact_type: 'build_mvp_build', quality_score: 0.8, file_url: 'https://app.example.com', is_current: true },
+        { artifact_type: 'build_test_coverage_report', quality_score: 0.7, is_current: true },
+        { artifact_type: 'launch_deployment_runbook', quality_score: 0.6, is_current: true },
       ];
       const httpClient = vi.fn().mockResolvedValue({ status: 500 });
       const result = await evaluateRealityGate({
@@ -237,9 +237,9 @@ describe('RealityGates', () => {
 
     it('should skip URL verification in simulation mode', async () => {
       const artifacts = [
-        { artifact_type: 'mvp_build', quality_score: 0.8, file_url: null, is_current: true },
-        { artifact_type: 'test_coverage_report', quality_score: 0.7, is_current: true },
-        { artifact_type: 'deployment_runbook', quality_score: 0.6, is_current: true },
+        { artifact_type: 'build_mvp_build', quality_score: 0.8, file_url: null, is_current: true },
+        { artifact_type: 'build_test_coverage_report', quality_score: 0.7, is_current: true },
+        { artifact_type: 'launch_deployment_runbook', quality_score: 0.6, is_current: true },
       ];
       const httpClient = vi.fn();
       const result = await evaluateRealityGate({

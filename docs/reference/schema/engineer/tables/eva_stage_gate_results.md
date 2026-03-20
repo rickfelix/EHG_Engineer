@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-03-19T21:08:37.155Z
+**Generated**: 2026-03-20T09:41:46.332Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -64,6 +64,10 @@
 - `idx_eva_gate_results_venture`
   ```sql
   CREATE INDEX idx_eva_gate_results_venture ON public.eva_stage_gate_results USING btree (venture_id, stage_number)
+  ```
+- `idx_eva_stage_gate_results_unique`
+  ```sql
+  CREATE UNIQUE INDEX idx_eva_stage_gate_results_unique ON public.eva_stage_gate_results USING btree (venture_id, stage_number, gate_type)
   ```
 
 ## RLS Policies
