@@ -154,7 +154,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
       // Create handoff proposal with valid artifacts
       const validArtifacts = [
         {
-          type: 'idea_brief',
+          type: 'truth_idea_brief',
           content: `This is a comprehensive idea brief for the test venture.
                     It describes the core value proposition and target market.
                     The solution addresses a specific pain point in the healthcare industry.
@@ -168,7 +168,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
           }
         },
         {
-          type: 'validation_report',
+          type: 'truth_validation_decision',
           content: `Validation Report for Test Venture
 
                     Score: 8/10
@@ -224,7 +224,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
   test.describe('Artifact Quality Validation', () => {
     test('GN-003: should reject artifacts with empty content', async () => {
       const emptyArtifact = {
-        type: 'idea_brief',
+        type: 'truth_idea_brief',
         content: '', // Empty content
         metadata: { title: 'Empty Brief' }
       };
@@ -259,8 +259,8 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
 
     test('GN-004: should reject artifacts below minimum length', async () => {
       const shortArtifact = {
-        type: 'financial_model',
-        content: 'Revenue: $100', // Too short (< 300 chars for financial_model)
+        type: 'truth_financial_model',
+        content: 'Revenue: $100', // Too short (< 300 chars for truth_financial_model)
         metadata: {}
       };
 
@@ -293,7 +293,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
     test('GN-005: should validate artifact quality scores meet threshold', async () => {
       // Test with valid financial model meeting quality standards
       const qualityFinancialModel = {
-        type: 'financial_model',
+        type: 'truth_financial_model',
         content: `Financial Model - Test Venture
 
         Revenue Projections:
@@ -355,7 +355,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
   test.describe('Semantic Entropy Validation', () => {
     test('GN-006: should reject artifacts with Lorem Ipsum content', async () => {
       const loremArtifact = {
-        type: 'idea_brief',
+        type: 'truth_idea_brief',
         content: `Lorem ipsum dolor sit amet, consectetur adipiscing elit.
                   Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
                   Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
@@ -391,7 +391,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
 
     test('GN-007: should reject artifacts with TODO/placeholder markers', async () => {
       const placeholderArtifact = {
-        type: 'validation_report',
+        type: 'truth_validation_decision',
         content: `Validation Report
 
         TODO: Add actual validation data
@@ -431,7 +431,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
 
     test('GN-008: should reject high buzzword density content', async () => {
       const buzzwordArtifact = {
-        type: 'idea_brief',
+        type: 'truth_idea_brief',
         content: `Our synergistic paradigm shift leverages disruptive innovation vectors.
                   We operationalize scalable solutions through holistic approaches.
                   Our core competency in thought leadership drives value-add.
@@ -473,7 +473,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
   test.describe('Epistemic Classification Validation', () => {
     test('GN-009: should validate risk matrix has epistemic classification', async () => {
       const riskMatrixWithEpistemic = {
-        type: 'risk_matrix',
+        type: 'engine_risk_matrix',
         content: `Risk Assessment Matrix
 
         FACTS (Verified Data):
@@ -532,7 +532,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
 
     test('GN-010: should reject risk matrix without epistemic classification', async () => {
       const riskMatrixNoEpistemic = {
-        type: 'risk_matrix',
+        type: 'engine_risk_matrix',
         content: `Risk Matrix
 
         Here are some risks:
@@ -677,7 +677,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
   test.describe('Exit Gate Validation', () => {
     test('GN-013: should validate title length gate', async () => {
       const artifactWithTitle = {
-        type: 'idea_brief',
+        type: 'truth_idea_brief',
         content: `This is a valid idea brief with substantial content.
                   It describes the venture concept and value proposition.
                   The solution addresses real customer pain points.
@@ -716,7 +716,7 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
 
     test('GN-014: should validate score threshold gate', async () => {
       const scoredArtifact = {
-        type: 'validation_report',
+        type: 'truth_validation_decision',
         content: `Validation Report with High Score
 
         Overall Score: 8/10

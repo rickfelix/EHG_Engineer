@@ -569,7 +569,7 @@ describe('separation-rehearsal', () => {
       const result = await rehearseSeparation(VENTURE_ID, 'dry_run', supabase);
 
       const stratDep = result.critical_dependencies.find(
-        (d) => d.type === 'exit_strategy',
+        (d) => d.type === 'engine_exit_strategy',
       );
       expect(stratDep).toBeDefined();
       expect(stratDep.name).toBe('Strategic Acquisition Alignment');

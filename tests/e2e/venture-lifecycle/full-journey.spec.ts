@@ -25,22 +25,22 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 
 // Stage configuration from lifecycle_stage_config
 const STAGES = [
-  { number: 1, name: 'Idea Capture', phase: 'THE TRUTH', artifacts: ['idea_brief'] },
-  { number: 2, name: 'Idea Analysis', phase: 'THE TRUTH', artifacts: ['critique_report'] },
-  { number: 3, name: 'Kill Gate', phase: 'THE TRUTH', artifacts: ['validation_report'], decision_gate: true },
-  { number: 4, name: 'Competitive Landscape', phase: 'THE TRUTH', artifacts: ['competitive_analysis'] },
-  { number: 5, name: 'Kill Gate (Financial)', phase: 'THE TRUTH', artifacts: ['financial_model'], decision_gate: true },
-  { number: 6, name: 'Risk Assessment', phase: 'THE ENGINE', artifacts: ['risk_matrix'] },
-  { number: 7, name: 'Revenue Architecture', phase: 'THE ENGINE', artifacts: ['pricing_model'] },
-  { number: 8, name: 'Business Model Canvas', phase: 'THE ENGINE', artifacts: ['business_model_canvas'] },
-  { number: 9, name: 'Exit Strategy', phase: 'THE ENGINE', artifacts: ['exit_strategy'] },
-  { number: 10, name: 'Customer & Brand Foundation', phase: 'THE IDENTITY', artifacts: ['brand_guidelines'], sd_required: true },
-  { number: 11, name: 'Naming & Visual Identity', phase: 'THE IDENTITY', artifacts: ['gtm_plan', 'marketing_manifest'] },
-  { number: 12, name: 'GTM & Sales Strategy', phase: 'THE IDENTITY', artifacts: ['sales_playbook'] },
-  { number: 13, name: 'Product Roadmap', phase: 'THE BLUEPRINT', artifacts: ['tech_stack_decision'], decision_gate: true },
-  { number: 14, name: 'Technical Architecture', phase: 'THE BLUEPRINT', artifacts: ['data_model', 'erd_diagram'], sd_required: true },
-  { number: 15, name: 'Risk Register', phase: 'THE BLUEPRINT', artifacts: ['user_story_pack'], sd_required: true },
-  { number: 16, name: 'Financial Projections', phase: 'THE BLUEPRINT', artifacts: ['api_contract', 'schema_spec'], sd_required: true, decision_gate: true },
+  { number: 1, name: 'Idea Capture', phase: 'THE TRUTH', artifacts: ['truth_idea_brief'] },
+  { number: 2, name: 'Idea Analysis', phase: 'THE TRUTH', artifacts: ['truth_ai_critique'] },
+  { number: 3, name: 'Kill Gate', phase: 'THE TRUTH', artifacts: ['truth_validation_decision'], decision_gate: true },
+  { number: 4, name: 'Competitive Landscape', phase: 'THE TRUTH', artifacts: ['truth_competitive_analysis'] },
+  { number: 5, name: 'Kill Gate (Financial)', phase: 'THE TRUTH', artifacts: ['truth_financial_model'], decision_gate: true },
+  { number: 6, name: 'Risk Assessment', phase: 'THE ENGINE', artifacts: ['engine_risk_matrix'] },
+  { number: 7, name: 'Revenue Architecture', phase: 'THE ENGINE', artifacts: ['engine_pricing_model'] },
+  { number: 8, name: 'Business Model Canvas', phase: 'THE ENGINE', artifacts: ['engine_business_model_canvas'] },
+  { number: 9, name: 'Exit Strategy', phase: 'THE ENGINE', artifacts: ['engine_exit_strategy'] },
+  { number: 10, name: 'Customer & Brand Foundation', phase: 'THE IDENTITY', artifacts: ['identity_brand_guidelines'], sd_required: true },
+  { number: 11, name: 'Naming & Visual Identity', phase: 'THE IDENTITY', artifacts: ['identity_naming_visual', 'identity_persona_brand'] },
+  { number: 12, name: 'GTM & Sales Strategy', phase: 'THE IDENTITY', artifacts: ['identity_gtm_sales_strategy'] },
+  { number: 13, name: 'Product Roadmap', phase: 'THE BLUEPRINT', artifacts: ['blueprint_product_roadmap'], decision_gate: true },
+  { number: 14, name: 'Technical Architecture', phase: 'THE BLUEPRINT', artifacts: ['blueprint_data_model', 'blueprint_erd_diagram'], sd_required: true },
+  { number: 15, name: 'Risk Register', phase: 'THE BLUEPRINT', artifacts: ['blueprint_user_story_pack'], sd_required: true },
+  { number: 16, name: 'Financial Projections', phase: 'THE BLUEPRINT', artifacts: ['blueprint_api_contract', 'blueprint_schema_spec'], sd_required: true, decision_gate: true },
   { number: 17, name: 'Pre-Build Checklist', phase: 'THE BUILD LOOP', artifacts: ['system_prompt', 'cicd_config'], sd_required: true },
   { number: 18, name: 'Sprint Planning', phase: 'THE BUILD LOOP', artifacts: [], sd_required: true },
   { number: 19, name: 'Build Execution', phase: 'THE BUILD LOOP', artifacts: [], sd_required: true },
@@ -101,31 +101,31 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
 
   function generateArtifactContent() {
     // Phase 1: THE TRUTH
-    artifactContent['idea_brief'] = { problem: 'Test problem', solution: 'Test solution', market: 'Test market' };
-    artifactContent['critique_report'] = { models_used: ['claude', 'gpt'], score: 7.5, top_5_risks: [{}, {}, {}, {}, {}] };
-    artifactContent['validation_report'] = { validation_score: 7.0, decision: 'advance' };
-    artifactContent['competitive_analysis'] = { competitors: [{ name: 'A' }, { name: 'B' }], market_gaps: ['Gap 1'] };
-    artifactContent['financial_model'] = { revenue: { year1: 500000 }, unit_economics: { gross_margin: 0.72, cac_ltv_ratio: 4.0, breakeven_months: 14 } };
+    artifactContent['truth_idea_brief'] = { problem: 'Test problem', solution: 'Test solution', market: 'Test market' };
+    artifactContent['truth_ai_critique'] = { models_used: ['claude', 'gpt'], score: 7.5, top_5_risks: [{}, {}, {}, {}, {}] };
+    artifactContent['truth_validation_decision'] = { validation_score: 7.0, decision: 'advance' };
+    artifactContent['truth_competitive_analysis'] = { competitors: [{ name: 'A' }, { name: 'B' }], market_gaps: ['Gap 1'] };
+    artifactContent['truth_financial_model'] = { revenue: { year1: 500000 }, unit_economics: { gross_margin: 0.72, cac_ltv_ratio: 4.0, breakeven_months: 14 } };
 
     // Phase 2: THE ENGINE
-    artifactContent['risk_matrix'] = { risks: [{ risk: 'R1', probability: 0.5, impact: 'high', mitigation: 'M1' }] };
-    artifactContent['pricing_model'] = { tiers: [{ name: 'Starter', price: 49 }, { name: 'Growth', price: 149 }] };
-    artifactContent['business_model_canvas'] = { key_partners: [], key_activities: [], value_propositions: [], customer_segments: [], channels: [], customer_relationships: [], revenue_streams: {}, cost_structure: {}, key_resources: [] };
-    artifactContent['exit_strategy'] = { exit_scenarios: [{ type: 'acquisition', valuation_range: { min: 10000000, max: 50000000 } }] };
+    artifactContent['engine_risk_matrix'] = { risks: [{ risk: 'R1', probability: 0.5, impact: 'high', mitigation: 'M1' }] };
+    artifactContent['engine_pricing_model'] = { tiers: [{ name: 'Starter', price: 49 }, { name: 'Growth', price: 149 }] };
+    artifactContent['engine_business_model_canvas'] = { key_partners: [], key_activities: [], value_propositions: [], customer_segments: [], channels: [], customer_relationships: [], revenue_streams: {}, cost_structure: {}, key_resources: [] };
+    artifactContent['engine_exit_strategy'] = { exit_scenarios: [{ type: 'acquisition', valuation_range: { min: 10000000, max: 50000000 } }] };
 
     // Phase 3: THE IDENTITY
-    artifactContent['brand_guidelines'] = { brand_name: { primary: 'TestBrand' }, visual_identity: {}, brand_voice: {} };
-    artifactContent['gtm_plan'] = { launch_strategy: { phases: [] }, target_markets: [] };
-    artifactContent['marketing_manifest'] = { positioning_statement: 'Test positioning statement for the venture', key_messages: [] };
-    artifactContent['sales_playbook'] = { sales_process: { stages: [] }, qualification_framework: {} };
+    artifactContent['identity_brand_guidelines'] = { brand_name: { primary: 'TestBrand' }, visual_identity: {}, brand_voice: {} };
+    artifactContent['identity_naming_visual'] = { launch_strategy: { phases: [] }, target_markets: [] };
+    artifactContent['identity_persona_brand'] = { positioning_statement: 'Test positioning statement for the venture', key_messages: [] };
+    artifactContent['identity_gtm_sales_strategy'] = { sales_process: { stages: [] }, qualification_framework: {} };
 
     // Phase 4: THE BLUEPRINT
-    artifactContent['tech_stack_decision'] = { final_stack: { frontend: 'React', backend: 'Node.js', database: 'PostgreSQL' }, decision_gate_status: 'approved' };
-    artifactContent['data_model'] = { entities: [{ name: 'users', fields: [] }], relationships: [] };
-    artifactContent['erd_diagram'] = { format: 'mermaid', diagram: 'erDiagram' };
-    artifactContent['user_story_pack'] = { epics: [{ id: 'E1', stories: [{ id: 'S1', invest_compliant: true }] }] };
-    artifactContent['api_contract'] = { openapi: '3.0.0', paths: {} };
-    artifactContent['schema_spec'] = { sql_schema: 'CREATE TABLE test', checklist: { all_entities_named: true, all_fields_typed: true, all_relationships_explicit: true, all_constraints_stated: true, api_contracts_generated: true, typescript_interfaces_generated: true } };
+    artifactContent['blueprint_product_roadmap'] = { final_stack: { frontend: 'React', backend: 'Node.js', database: 'PostgreSQL' }, decision_gate_status: 'approved' };
+    artifactContent['blueprint_data_model'] = { entities: [{ name: 'users', fields: [] }], relationships: [] };
+    artifactContent['blueprint_erd_diagram'] = { format: 'mermaid', diagram: 'erDiagram' };
+    artifactContent['blueprint_user_story_pack'] = { epics: [{ id: 'E1', stories: [{ id: 'S1', invest_compliant: true }] }] };
+    artifactContent['blueprint_api_contract'] = { openapi: '3.0.0', paths: {} };
+    artifactContent['blueprint_schema_spec'] = { sql_schema: 'CREATE TABLE test', checklist: { all_entities_named: true, all_fields_typed: true, all_relationships_explicit: true, all_constraints_stated: true, api_contracts_generated: true, typescript_interfaces_generated: true } };
 
     // Phase 5: THE BUILD LOOP
     artifactContent['system_prompt'] = { agent_config: { name: 'TestAgent' }, prompts: {} };

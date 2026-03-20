@@ -80,7 +80,7 @@ describe('Pattern Discovery - Output Formatter', () => {
     const { formatOutput } = await import('../../../scripts/proving-run/pattern-discovery/output-formatter.js');
 
     const result = formatOutput({
-      stageMap: { 1: { name: 'Draft Idea', phase: 'THE_TRUTH', gateType: null, workType: 'artifact_only', requiredArtifacts: ['idea_brief'] } },
+      stageMap: { 1: { name: 'Draft Idea', phase: 'THE_TRUTH', gateType: null, workType: 'artifact_only', requiredArtifacts: ['truth_idea_brief'] } },
       gitHistory: { 1: { engineer: { commitCount: 5, patterns: {} }, app: { commitCount: 3, patterns: {} } } },
       codebaseAnalysis: { 1: { code: { found: [], count: 0 }, db: { found: [], count: 0 }, service: { found: [], count: 0 }, tests: { found: [], count: 0 }, coverage: { code: false, db: false, service: false, tests: false, artifacts: true }, coveredDimensions: 1, coveragePercent: 20 } },
       patternClassification: { templates: [], coverageMatrix: {}, summary: { activeCategories: 0, totalReferenceFiles: 0 } },

@@ -544,10 +544,10 @@ describe('analyzeSuccessPatterns', () => {
     const db = createMockDb({
       venture_artifacts: {
         data: [
-          { venture_id: 'v1', artifact_type: 'business_model_canvas', quality_score: 85 },
-          { venture_id: 'v3', artifact_type: 'business_model_canvas', quality_score: 90 },
-          { venture_id: 'v1', artifact_type: 'competitive_analysis', quality_score: 80 },
-          { venture_id: 'v3', artifact_type: 'competitive_analysis', quality_score: 75 },
+          { venture_id: 'v1', artifact_type: 'engine_business_model_canvas', quality_score: 85 },
+          { venture_id: 'v3', artifact_type: 'engine_business_model_canvas', quality_score: 90 },
+          { venture_id: 'v1', artifact_type: 'truth_competitive_analysis', quality_score: 80 },
+          { venture_id: 'v3', artifact_type: 'truth_competitive_analysis', quality_score: 75 },
         ],
         error: null,
       },
@@ -557,7 +557,7 @@ describe('analyzeSuccessPatterns', () => {
     const result = await analyzeSuccessPatterns(db, VENTURE_IDS, ALL_VENTURES);
 
     expect(result.length).toBeGreaterThanOrEqual(2);
-    const bmcPattern = result.find((p) => p.pattern.includes('business_model_canvas'));
+    const bmcPattern = result.find((p) => p.pattern.includes('engine_business_model_canvas'));
     expect(bmcPattern).toBeDefined();
     expect(bmcPattern.type).toBe('artifact');
     expect(bmcPattern.confidence).toBe(0.67); // 2/3 successful ventures (v1@20, v3@25, v5@15+active)

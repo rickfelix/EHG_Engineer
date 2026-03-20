@@ -21,7 +21,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const STAGE_ARTIFACTS = { 1: 'idea_brief', 2: 'critique_report', 3: 'validation_report' };
+const STAGE_ARTIFACTS = { 1: 'truth_idea_brief', 2: 'truth_ai_critique', 3: 'truth_validation_decision' };
 
 const testData = { ventureId: null, companyId: null, artifactIds: [], decisionIds: [] };
 
@@ -90,12 +90,12 @@ async function run() {
       assert.strictEqual(venture.orchestrator_state, 'idle');
     });
 
-    await test('Create stage 1 artifact (idea_brief)', async () => {
+    await test('Create stage 1 artifact (truth_idea_brief)', async () => {
       const artifact = await insertArtifact(testData.ventureId, 1, STAGE_ARTIFACTS[1]);
       assert.ok(artifact.id);
       const { data } = await supabase.from('venture_artifacts').select('lifecycle_stage, artifact_type, artifact_data, is_current').eq('id', artifact.id).single();
       assert.strictEqual(data.lifecycle_stage, 1);
-      assert.strictEqual(data.artifact_type, 'idea_brief');
+      assert.strictEqual(data.artifact_type, 'truth_idea_brief');
       assert.ok(data.is_current);
       assert.ok(data.artifact_data.idea_name);
     });
@@ -106,10 +106,10 @@ async function run() {
       assert.strictEqual(data.current_lifecycle_stage, 2);
     });
 
-    await test('Create stage 2 artifact (critique_report)', async () => {
+    await test('Create stage 2 artifact (truth_ai_critique)', async () => {
       const artifact = await insertArtifact(testData.ventureId, 2, STAGE_ARTIFACTS[2]);
       const { data } = await supabase.from('venture_artifacts').select('lifecycle_stage, artifact_type, artifact_data').eq('id', artifact.id).single();
-      assert.strictEqual(data.artifact_type, 'critique_report');
+      assert.strictEqual(data.artifact_type, 'truth_ai_critique');
       assert.ok(data.artifact_data.strengths);
     });
 
@@ -153,9 +153,9 @@ async function run() {
     await test('Artifacts exist for all stages 1-3', async () => {
       const { data } = await supabase.from('venture_artifacts').select('lifecycle_stage, artifact_type, is_current').eq('venture_id', testData.ventureId).order('lifecycle_stage');
       assert.strictEqual(data.length, 3);
-      assert.strictEqual(data[0].artifact_type, 'idea_brief');
-      assert.strictEqual(data[1].artifact_type, 'critique_report');
-      assert.strictEqual(data[2].artifact_type, 'validation_report');
+      assert.strictEqual(data[0].artifact_type, 'truth_idea_brief');
+      assert.strictEqual(data[1].artifact_type, 'truth_ai_critique');
+      assert.strictEqual(data[2].artifact_type, 'truth_validation_decision');
       assert.ok(data.every(a => a.is_current));
     });
 

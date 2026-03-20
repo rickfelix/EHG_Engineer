@@ -3,10 +3,10 @@
  * "Kochel Firewall" - Technical specification phase
  *
  * Tests the technical planning phase:
- * - Stage 13: Product Roadmap (DECISION_GATE, requires: tech_stack_decision)
- * - Stage 14: Technical Architecture (SD_REQUIRED, requires: data_model, erd_diagram)
- * - Stage 15: Risk Register (SD_REQUIRED, requires: user_story_pack)
- * - Stage 16: Financial Projections (DECISION_GATE, SD_REQUIRED, requires: api_contract, schema_spec)
+ * - Stage 13: Product Roadmap (DECISION_GATE, requires: blueprint_product_roadmap)
+ * - Stage 14: Technical Architecture (SD_REQUIRED, requires: blueprint_data_model, blueprint_erd_diagram)
+ * - Stage 15: Risk Register (SD_REQUIRED, requires: blueprint_user_story_pack)
+ * - Stage 16: Financial Projections (DECISION_GATE, SD_REQUIRED, requires: blueprint_api_contract, blueprint_schema_spec)
  */
 
 import { test, expect } from '@playwright/test';
@@ -140,7 +140,7 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'tech_stack_decision',
+          document_type: 'blueprint_product_roadmap',
           title: 'Tech Stack Decision',
           content: techStackDecision,
           status: 'complete'
@@ -218,7 +218,7 @@ test.describe('Phase 4: THE BLUEPRINT (Stages 13-16)', () => {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'data_model',
+          document_type: 'blueprint_data_model',
           title: 'Data Model',
           content: dataModel,
           status: 'complete'
@@ -265,7 +265,7 @@ erDiagram
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'erd_diagram',
+          document_type: 'blueprint_erd_diagram',
           title: 'ERD Diagram',
           content: erdDiagram,
           status: 'complete'
@@ -360,7 +360,7 @@ erDiagram
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'user_story_pack',
+          document_type: 'blueprint_user_story_pack',
           title: 'User Story Pack',
           content: userStoryPack,
           status: 'complete'
@@ -441,7 +441,7 @@ erDiagram
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'api_contract',
+          document_type: 'blueprint_api_contract',
           title: 'API Contract',
           content: apiContract,
           status: 'complete'
@@ -507,7 +507,7 @@ export interface Venture {
         .from('venture_documents')
         .insert({
           venture_id: testVentureId,
-          document_type: 'schema_spec',
+          document_type: 'blueprint_schema_spec',
           title: 'Schema Specification',
           content: schemaSpec,
           status: 'complete'
@@ -531,12 +531,12 @@ export interface Venture {
         .select('document_type')
         .eq('venture_id', testVentureId)
         .in('document_type', [
-          'tech_stack_decision',
-          'data_model',
-          'erd_diagram',
-          'user_story_pack',
-          'api_contract',
-          'schema_spec'
+          'blueprint_product_roadmap',
+          'blueprint_data_model',
+          'blueprint_erd_diagram',
+          'blueprint_user_story_pack',
+          'blueprint_api_contract',
+          'blueprint_schema_spec'
         ]);
 
       expect(artifacts?.length).toBe(6);
